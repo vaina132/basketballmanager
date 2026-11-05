@@ -57,9 +57,23 @@ export interface PlayerStats {
 }
 
 export type MatchEventType =
-  | 'tipoff' | 'shot' | 'free-throw' | 'turnover' | 'foul' | 'rebound'
+  | 'tipoff' | 'pass' | 'shot' | 'free-throw' | 'turnover' | 'foul' | 'rebound'
   | 'period-end' | 'period-start' | 'final' | 'substitution' | 'tactics'
   | 'foul-out' | 'injury' | 'timeout' | 'command' | 'shot-clock' | 'held-ball';
+
+/** Court coordinates are normalized to the 28 by 15 metre playing surface. */
+export interface CourtPoint { x: number; y: number }
+export interface CourtPosition extends CourtPoint { playerId: string }
+export interface CourtBallPoint extends CourtPoint { height: number }
+/** Deterministic presentation data. Durations never advance the simulation clock. */
+export interface CourtScene {
+  kind: 'setup' | 'pass' | 'shot' | 'free-throw' | 'rebound' | 'turnover';
+  durationMs: number;
+  offense: Side;
+  start: CourtPosition[];
+  end: CourtPosition[];
+  ball: { from: CourtBallPoint; to: CourtBallPoint; arcHeight: number };
+}
 
 export interface MatchEvent {
   id: number;
@@ -68,10 +82,12 @@ export interface MatchEvent {
   type: MatchEventType;
   side?: Side;
   playerId?: string;
+  receiverId?: string;
   outgoingPlayerId?: string;
   text: string;
   score: Record<Side, number>;
   shot?: { x: number; y: number; made: boolean; value: 2 | 3 };
+  scene?: CourtScene;
 }
 
 export type InjuryMode = 'standard' | 'reduced' | 'off';

@@ -20,7 +20,9 @@ function checkJsonTree(root: unknown): void {
   let inspected = 0;
   while (pending.length > 0) {
     const { value, depth } = pending.pop()!;
-    if (++inspected > 100_000 || depth > 40) {
+    // Court scenes repeat ten actor positions per action; allow long overtime
+    // histories while retaining independent byte, depth and collection limits.
+    if (++inspected > 500_000 || depth > 40) {
       throw new Error('The match file has too many values or nested objects.');
     }
     if (value === null || typeof value !== 'object') continue;

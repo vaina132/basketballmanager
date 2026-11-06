@@ -170,6 +170,10 @@ The optional dismissal setting preserves the career world. If dismissal is enabl
 
 ## 11. Interface structure
 
+The interface is a basketball management game workspace. The user explicitly confirmed on 6 November 2026 that the overview and all future screens must serve gameplay decisions. Use compact navigation, clear state, readable tables, and working actions. Landing-page heroes, promotional slogans, oversized decorative artwork, roadmap banners, and future-feature advertising do not belong in gameplay screens.
+
+The following navigation describes the complete target game. During development, expose implemented destinations and omit unavailable systems from normal navigation. A concise factual exhibition/prototype label can explain the current scope; the detailed roadmap belongs in repository documentation.
+
 | Navigation item | Primary task |
 | --- | --- |
 | Home | Next fixture, urgent decisions, calendar, club pulse |
@@ -184,11 +188,15 @@ The optional dismissal setting preserves the career world. If dismissal is enabl
 | Club | Board, finances, facilities, supporters, history |
 | Settings | Career options, assistance, display, audio, save/import/export |
 
-Persistent top bar: club identity, game date, next event, Continue, search, and save status. Sidebar collapses for tablets. Home shows a small number of decision cards rather than every statistic.
+Persistent top bar: club identity, game date, next event, Continue, search, and save status as those systems become available. Show the actual simulated date, never the computer's date as a substitute, and expose Continue only when world progression exists. Sidebar collapses for tablets.
 
-Match screen: scoreboard/clock; diagonal court; compact lineup with condition/fouls; tactical controls; event feed; bench/substitution drawer. Critical availability is visible without opening the full player profile. The same player portrait/appearance definition appears in squad, reports, and court rendering.
+Home is the manager's desk: current fixture or result, availability and current lineup, concerns requiring attention, tactical instructions, and relevant recorded activity. Prioritize the next decision and provide a direct route to it. Keep summaries compact and use tables where they make comparison easier. Do not fabricate fixture dates, budgets, messages, standings, board reactions, or club activity to populate a dashboard. Empty states identify a real available action or simply state that nothing requires attention.
+
+Match screen: scoreboard/clock followed immediately by a large diagonal court across the available content width; playback controls and compact lineup with condition/fouls; secondary coaching controls and settings below the viewing area; event feed and bench/substitution drawer. Do not restore the standalone shot-clock/possession information panel removed at the user's request. Critical availability is visible without opening the full player profile. Current stamina is shown with bars, percentages and fatigue labels for active players and reserves; it is distinct from the permanent stamina attribute. The same player portrait/appearance definition appears in squad, reports, and court rendering.
 
 Every displayed estimate, rating range, star, and warning has a short explanation. Empty states state the next useful action. Sorting/filtering long tables should preserve selection and scroll. Use keyboard navigation, readable contrast, non-color status labels, and reduced-motion support.
+
+Interface acceptance applies to every screen: its information is drawn from authoritative game state; visible actions lead to implemented behavior; player identity, displayed lineup, condition, scores and eligibility remain coherent after substitution, pause/resume, save/load and navigation. Presentation cannot change sporting outcomes. Desktop and tablet layouts must retain readable information density and usable controls.
 
 ## 12. Realism and acceptance
 

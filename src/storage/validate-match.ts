@@ -1,4 +1,4 @@
-import type { MatchState } from '../domain/types';
+import type { CourtScene, MatchEvent, MatchState, Side } from '../domain/types';
 import { MAX_MATCH_PERIODS } from '../engine/match';
 
 const SIDES = ['home', 'away'] as const;
@@ -8,7 +8,7 @@ const STAT_KEYS = [
   'threePointersMade', 'threePointersAttempted', 'freeThrowsMade', 'freeThrowsAttempted',
   'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls', 'condition',
 ];
-const EVENT_TYPES = ['tipoff', 'shot', 'free-throw', 'turnover', 'foul', 'rebound', 'period-end', 'period-start', 'final', 'substitution', 'tactics', 'foul-out', 'injury', 'timeout', 'command', 'shot-clock', 'held-ball'];
+const EVENT_TYPES = ['tipoff', 'pass', 'shot', 'free-throw', 'turnover', 'foul', 'rebound', 'period-end', 'period-start', 'final', 'substitution', 'tactics', 'foul-out', 'injury', 'timeout', 'command', 'shot-clock', 'held-ball'];
 
 function fail(path: string, reason: string): never {
   throw new Error(`Invalid match save: ${path} ${reason}.`);
@@ -75,6 +75,89 @@ function score(value: unknown, path: string): { home: number; away: number } {
 
 function elapsed(period: number, clock: number): number {
   return period <= 4 ? period * 600 - clock : 2400 + (period - 4) * 300 - clock;
+}
+
+/** Presentation metadata is optional, but a supplied scene must be complete. */
+function courtScene(value: unknown, path: string, event: Record<string, unknown>, playerIds: Record<Side, Set<string>>): void {
+  const scene = record(value, path, ['kind', 'durationMs', 'offense', 'start', 'end', 'ball']);
+  const allowedKinds: Record<string, string> = {
+    tipoff: 'setup', command: 'setup', 'period-start': 'setup', substitution: 'setup', pass: 'pass', shot: 'shot',
+    'free-throw': 'free-throw', rebound: 'rebound', turnover: 'turnover', 'shot-clock': 'turnover',
+  };
+  if (!allowedKinds[event.type as string] || scene.kind !== allowedKinds[event.type as string]) fail(`${path}.kind`, 'does not match its action');
+  number(scene.durationMs, `${path}.durationMs`, 250, 3000);
+  choice(scene.offense, SIDES, `${path}.offense`);
+  if (['pass', 'shot', 'free-throw', 'turnover', 'shot-clock'].includes(event.type as string) && scene.offense !== event.side) fail(`${path}.offense`, 'must match the acting team');
+  const positionIds: Record<'start' | 'end', Set<string>> = { start: new Set(), end: new Set() };
+  for (const endpoint of ['start', 'end'] as const) {
+    const counts = { home: 0, away: 0 };
+    for (const [index, value] of array(scene[endpoint], `${path}.${endpoint}`, 0, 10).entries()) {
+      const positionPath = `${path}.${endpoint}[${index}]`;
+      const position = record(value, positionPath, ['playerId', 'x', 'y']);
+      const playerId = id(position.playerId, `${positionPath}.playerId`);
+      const side = SIDES.find((side) => playerIds[side].has(playerId));
+      if (!side) fail(positionPath, 'references an unknown player');
+      if (positionIds[endpoint].has(playerId)) fail(positionPath, 'duplicates an actor');
+      positionIds[endpoint].add(playerId);
+      if (++counts[side] > 5) fail(`${path}.${endpoint}`, 'places more than five players from one team on court');
+      number(position.x, `${positionPath}.x`, 0, 1, false);
+      number(position.y, `${positionPath}.y`, 0, 1, false);
+    }
+  }
+  if (positionIds.start.size !== positionIds.end.size || [...positionIds.start].some((playerId) => !positionIds.end.has(playerId))) fail(path, 'must preserve the same actors throughout an action');
+  const ball = record(scene.ball, `${path}.ball`, ['from', 'to', 'arcHeight']);
+  for (const endpoint of ['from', 'to']) {
+    const point = record(ball[endpoint], `${path}.ball.${endpoint}`, ['x', 'y', 'height']);
+    number(point.x, `${path}.ball.${endpoint}.x`, 0, 1, false);
+    number(point.y, `${path}.ball.${endpoint}.y`, 0, 1, false);
+    number(point.height, `${path}.ball.${endpoint}.height`, 0, 8, false);
+  }
+  number(ball.arcHeight, `${path}.ball.arcHeight`, 0, 8, false);
+  const validated = scene as unknown as CourtScene;
+  if (event.type === 'shot') {
+    const shot = event.shot as { x: number; y: number };
+    if (validated.ball.from.x !== shot.x || validated.ball.from.y !== shot.y) fail(`${path}.ball.from`, 'must match the recorded shot location');
+  }
+  if (event.type === 'pass') {
+    const passer = validated.start.find((actor) => actor.playerId === event.playerId);
+    const receiver = validated.end.find((actor) => actor.playerId === event.receiverId);
+    if (!passer || !receiver || validated.ball.from.x !== passer.x || validated.ball.from.y !== passer.y || validated.ball.to.x !== receiver.x || validated.ball.to.y !== receiver.y) fail(`${path}.ball`, 'must travel from the passer to the receiver');
+  }
+}
+
+/** Recover historical active players without assuming the original starting five. */
+function sceneLineups(events: MatchEvent[], currentLineups: Record<Side, string[]>, finished: boolean): void {
+  if (!events.some((event) => event.scene || event.type === 'pass')) return;
+  const active = { home: new Set(currentLineups.home), away: new Set(currentLineups.away) };
+  if (finished) {
+    // Finishing can remove excluded players without emitting another substitution.
+    // An exclusion after the player's last departure means they were still active.
+    const lastDepartures = new Map<string, number>();
+    for (const event of events) if (event.type === 'substitution') lastDepartures.set(event.outgoingPlayerId!, event.id);
+    for (const event of events) {
+      if ((event.type === 'foul-out' || event.type === 'injury') && event.id > (lastDepartures.get(event.playerId!) ?? 0)) active[event.side!].add(event.playerId!);
+    }
+  }
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]!;
+    if (event.type !== 'substitution') continue;
+    const lineup = active[event.side!];
+    if (event.playerId && !lineup.delete(event.playerId)) fail(`events[${index}]`, 'does not reconcile with subsequent active players');
+    if (lineup.has(event.outgoingPlayerId!)) fail(`events[${index}]`, 'removes a player who was already on the bench');
+    lineup.add(event.outgoingPlayerId!);
+    if (lineup.size > 5) fail(`events[${index}]`, 'does not reconcile with five active players');
+  }
+  for (const [index, event] of events.entries()) {
+    if (event.type === 'substitution') {
+      active[event.side!].delete(event.outgoingPlayerId!);
+      if (event.playerId) active[event.side!].add(event.playerId);
+    }
+    if (event.type === 'pass' && (!active[event.side!].has(event.playerId!) || !active[event.side!].has(event.receiverId!))) fail(`events[${index}]`, 'must pass between active players');
+    if (!event.scene) continue;
+    const expected = new Set([...active.home, ...active.away]);
+    const actual = event.scene.start.map((position) => position.playerId);
+    if (actual.length !== expected.size || actual.some((playerId) => !expected.has(playerId))) fail(`events[${index}].scene`, 'must show the active players at this point in the match');
+  }
 }
 
 /** Validates a complete rules-engine snapshot without coercion or mutation. */
@@ -318,7 +401,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
   const countedInjuries = new Set<string>();
   for (const [index, value] of events.entries()) {
     const path = `events[${index}]`;
-    const event = record(value, path, ['id', 'period', 'clockSeconds', 'type', 'text', 'score'], ['side', 'playerId', 'outgoingPlayerId', 'shot']);
+    const event = record(value, path, ['id', 'period', 'clockSeconds', 'type', 'text', 'score'], ['side', 'playerId', 'outgoingPlayerId', 'receiverId', 'shot', 'scene']);
     if (event.id !== index + 1) fail(`${path}.id`, 'must follow the event sequence');
     const eventPeriod = number(event.period, `${path}.period`, 1, period);
     const eventClock = number(event.clockSeconds, `${path}.clockSeconds`, 0, eventPeriod <= 4 ? 600 : 300);
@@ -339,7 +422,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     if (scoringDelta > 0 && (!['shot', 'free-throw'].includes(event.type as string) || (homeDelta > 0 && event.side !== 'home') || (awayDelta > 0 && event.side !== 'away'))) fail(`${path}.score`, 'changes without a scoring event for that team');
     if (event.type === 'free-throw' && scoringDelta > 1) fail(`${path}.score`, 'awards more than one point for a free throw');
     if (Object.hasOwn(event, 'side')) choice(event.side, SIDES, `${path}.side`);
-    if (['shot', 'free-throw', 'foul', 'rebound', 'turnover', 'foul-out', 'injury'].includes(event.type as string) && (!Object.hasOwn(event, 'side') || !Object.hasOwn(event, 'playerId'))) fail(path, 'is missing its team or player');
+    if (['pass', 'shot', 'free-throw', 'foul', 'rebound', 'turnover', 'foul-out', 'injury'].includes(event.type as string) && (!Object.hasOwn(event, 'side') || !Object.hasOwn(event, 'playerId'))) fail(path, 'is missing its team or player');
     if (event.type === 'substitution' && (!Object.hasOwn(event, 'side') || !Object.hasOwn(event, 'outgoingPlayerId'))) fail(path, 'is missing its team or outgoing player');
     if (event.type === 'timeout' && !Object.hasOwn(event, 'side')) fail(path, 'is missing the team taking its timeout');
     if (Object.hasOwn(event, 'playerId')) {
@@ -351,6 +434,10 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
       const outgoing = id(event.outgoingPlayerId, `${path}.outgoingPlayerId`);
       if (event.type !== 'substitution' || !SIDES.includes(event.side as 'home' | 'away') || !playerIds[event.side as 'home' | 'away'].has(outgoing) || outgoing === event.playerId) fail(path, 'has an invalid outgoing substitution player');
     }
+    if (Object.hasOwn(event, 'receiverId')) {
+      const receiverId = id(event.receiverId, `${path}.receiverId`);
+      if (event.type !== 'pass' || !playerIds[event.side as Side]?.has(receiverId) || receiverId === event.playerId) fail(`${path}.receiverId`, 'must identify a different player from the passing team');
+    } else if (event.type === 'pass') fail(path, 'is missing its receiving player');
     if (event.type === 'foul') {
       const playerId = event.playerId as string;
       const side = event.side as 'home' | 'away';
@@ -381,8 +468,10 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
       choice(shot.value, [2, 3], `${path}.shot.value`);
       if (scoringDelta !== (shot.made ? shot.value : 0)) fail(`${path}.score`, 'does not match the recorded shot');
     } else if (event.type === 'shot') fail(path, 'is missing shot geometry');
+    if (Object.hasOwn(event, 'scene')) courtScene(event.scene, `${path}.scene`, event, playerIds);
     priorScore = eventScore;
   }
+  sceneLineups(events as MatchEvent[], lineups as Record<Side, string[]>, state.status === 'finished');
   for (const playerId of allIds) {
     if (countedFouls[playerId] !== (stats[playerId] as MatchState['stats'][string]).fouls) fail(`stats.${playerId}.fouls`, 'does not match foul events');
   }

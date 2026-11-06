@@ -22,9 +22,13 @@ Data research and engine work can run in parallel. A small fictional dataset is 
 
 ### Progress on 6 November 2026
 
-Milestone 1 is implemented. Milestone 2 now has the `rules-2` action engine and its first FIBA 2024 rules subset, including coaching opportunities, eligibility, penalties, clocks, injuries and assistant substitutions. Its remaining rules coverage and calibration work are tracked in the [rules matrix](design/rules-coverage.md) and [implementation status](implementation-status.md). This is progress within Milestone 2, not a claim that its complete acceptance gate has passed. The downloaded EuroLeague/EuroCup reference records remain separate from the exhibition.
+Milestone 1 is implemented. Milestone 2 has the `rules-2` action engine and a tested FIBA 2024 subset, with additional shooting-foul, free-throw-window and late-timeout scenarios. Milestone 3 now has animated engine-authored court scenes, pause/resume, playback speeds, reduced-motion and text-only views. Both milestones remain partial: the action model, competition overrides and statistical calibration are still being developed. The [rules matrix](design/rules-coverage.md) and [implementation status](implementation-status.md) record the exact coverage. Downloaded EuroLeague/EuroCup reference records remain separate from the exhibition.
 
-Next work expands the action model and statistical calibration, then the event-driven match presentation and season/career systems in the order below. Competition-specific rules must be configured before those competitions become playable; EuroLeague's verified possession rules already differ from the exhibition baseline.
+The latest user-directed presentation increment places a larger, full-width court immediately below the score, removes the standalone shot-clock/possession panel, and moves coaching controls below the court. Home/away lineup and bench views show current stamina with visual bars and percentages. These layout changes leave the sporting engine unchanged.
+
+The user's subsequent interface direction applies to every increment: the overview must be a functional manager's desk and all screens must behave as management-game workspaces. Prioritize club state, availability, useful tables, the next decision and working actions. Remove landing-page promotions and keep the development roadmap in documentation. [Interface requirements](game-design.md#11-interface-structure) and [repository guidance](../AGENTS.md) record this direction for future work.
+
+Next engine work expands authored possession actions, spacing, defensive matchups and shot creation, then validates their statistical effects alongside remaining competition rules. Calibration and the season/career foundation continue in the dependency order below. Competition-specific rules must be configured before those competitions become playable; EuroLeague's verified possession rules already differ from the exhibition baseline. The current viewer interpolates recorded action scenes; it does not yet simulate continuous possession physics.
 
 ## 2. Milestone 0: design and evidence baseline
 
@@ -38,7 +42,7 @@ Exit evidence: agreed product choices documented; missing data explicitly record
 
 Build a TypeScript project and lean dark application shell around a clearly labeled fictional exhibition fixture. Implement stable IDs, player attributes, roster data, seeded randomness, a serializable match state, and one shared progression function for step, quarter skip and full simulation.
 
-Include a scoreboard, event history, basic box score, simple tactical inputs, eligibility-safe lineup selection and a diagonal development court. Add export/import of the complete fixture state with validation. Keep missing features visibly described as planned; no nonfunctional navigation masquerading as a management system.
+Include a scoreboard, event history, basic box score, simple tactical inputs, eligibility-safe lineup selection and a diagonal development court. Add export/import of the complete fixture state with validation. Describe missing features in development documentation and retain a concise factual prototype label; omit unavailable destinations from normal navigation.
 
 This fixture is a useful engineering checkpoint, not the calibrated final engine or a playable multi-league career. Its simplifications must be recorded in README and implementation status.
 
@@ -49,6 +53,7 @@ Acceptance:
 - Save/restore continues the same random stream and result.
 - Ties resolve through overtime; forbidden substitutions and malformed saves are rejected.
 - Type checking, relevant engine tests and production build pass.
+- The overview supports actual manager decisions using current match/club state. It contains no promotional hero, invented activity or nonfunctional destination; its actions and selected player remain coherent after navigation and save/load.
 
 ## 4. Milestone 2: legal, calibrated action engine
 
@@ -63,6 +68,8 @@ Acceptance: edge-case fixtures pass; matched commands remain playback-independen
 Build the final diagonal court renderer around engine events: coherent player positions, ball paths, pass/shot/rebound sequences, team direction, bench and appearance descriptors. Add playback speed, free pause, current-quarter skip, critical-event pause, queued substitutions, timeouts and optional detailed matchups.
 
 Match portrait and court appearance. Implement reduced-motion and text alternatives. Distinguish intent from guaranteed shot distribution in tactical explanations.
+
+Match-screen priority confirmed on 6 November: lead with the score and a large court; keep secondary controls below the viewing area; show player stamina clearly in both the active lineup and bench. A cleaner layout is an ongoing presentation requirement, separate from completion of the underlying action engine.
 
 Acceptance: player IDs and event geometry match rendering; pauses do not grant recovery; switching playback modes cannot change outcomes; desktop/tablet controls remain readable and usable.
 
@@ -104,7 +111,7 @@ Load the verified historical pack and permitted assets. Complete useful English 
 
 Run multi-season simulations across all competition tiers, checking statistical realism, financial health, youth quality, staffing, transfer behavior, league entry, save size and recovery. Review representative games visually and review tactics for universally dominant exploits.
 
-Exit evidence: release stories in the GDD pass; all agreed competitions are playable; data coverage and estimates are documented; local save/export recovery works; production build passes. User retains deployment responsibility.
+Exit evidence: release stories in the GDD pass; all agreed competitions are playable; data coverage and estimates are documented; local save/export recovery works; production build passes. Every management screen presents real game state and working decisions with readable desktop/tablet tables, keyboard access and consistent status after state changes. User retains deployment responsibility.
 
 ## 11. Work control
 

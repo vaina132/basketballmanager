@@ -1,0 +1,108 @@
+/* The match is the primary workspace; coaching sits beneath the court. */
+.match-screen .topbar { height: 62px; padding-inline: 28px; }
+.match-screen main { padding: 20px 28px 0; max-width: 1700px; }
+.match-screen .page-heading { margin-bottom: 16px; }
+.match-screen .page-heading .eyebrow { display: none; }
+.match-screen .page-heading h1 { margin: 0; font-size: 25px; letter-spacing: -.7px; }
+.match-screen .heading-meta { flex-direction: row; gap: 12px; align-items: center; }
+.match-screen .heading-meta .muted { font-size: 11px; }
+.match-screen .scoreboard { grid-template-columns: minmax(0,1fr) 210px minmax(0,1fr); align-items: center; padding: 16px 26px; margin-bottom: 14px; border-radius: 12px; }
+.match-screen .score-team { gap: 15px; }
+.match-screen .score-team h2 { font-size: 20px; margin-top: 7px; }
+.match-screen .score-team .eyebrow { font-size: 9px; letter-spacing: 1px; }
+.match-screen .team-caption { display: none; }
+.match-screen .scoreboard .club-mark-large { width: 55px; height: 60px; border-radius: 14px; }
+.match-screen .score-digits { font-size: 46px; line-height: 1.1; letter-spacing: -1.5px; gap: 17px; margin-top: 5px; }
+.match-screen .match-status { font-size: 9px; letter-spacing: 1px; }
+.match-screen .match-clock { font-size: 12px; margin-top: 4px; }
+.match-screen .court-panel { border-radius: 12px; background: radial-gradient(ellipse at 50% 25%,#303d31 0,#1b241e 70%); box-shadow: 0 12px 35px #00000014; }
+.match-screen .court-top { padding: 14px 22px; gap: 16px; border-bottom: 1px solid #ffffff08; }
+.court-title { display: flex; align-items: center; gap: 10px; }
+.court-title h2 { font-size: 17px; letter-spacing: -.3px; }
+.match-screen .court-view-label { font-size: 9px; letter-spacing: 1px; margin-left: 6px; color: #9fac9c; }
+.match-screen .viewer-options { padding: 0; gap: 18px; }
+.match-screen .viewer-options .segmented { background: #131c16a6; border-color: #ffffff12; }
+.match-screen .viewer-options .segmented button { min-height: 30px; font-size: 11px; padding: 6px 12px; }
+.match-screen .motion-option { font-size: 11px; color: #b4c0ae; }
+.match-screen .court-presentation .court-svg { width: 100%; height: auto; min-height: 0; max-height: 520px; margin: 0 auto; overflow: visible; }
+.match-screen .court-player { transition: none; }
+.match-screen .court-caption { min-height: 41px; padding: 7px 22px 12px; justify-content: center; }
+.match-screen .court-caption p { font-size: 12px; color: #d0d8c8; }
+.match-screen .event-chip { font-size: 9px; padding: 5px 7px; }
+.match-screen .playback { padding: 13px 22px; background: #152019b8; gap: 14px; }
+.match-screen .playback-main { gap: 10px; }
+.match-screen .playback .button { min-height: 40px; padding: 10px 18px; font-size: 12px; border-radius: 6px; }
+.match-screen .playback .icon-button { width: 38px; height: 38px; background: #ffffff05; border: 1px solid var(--border); }
+.match-screen .speed-control { padding: 3px; border-radius: 6px; }
+.match-screen .speed-control button { font-size: 12px; min-width: 31px; min-height: 30px; padding: 5px; border-radius: 3px; }
+.match-screen .playback-skip { gap: 20px; flex: none; }
+.match-screen .playback-skip .text-button { font-size: 12px; min-height: 36px; }
+.match-screen .court-panel .decision-banner { margin: 0 18px 12px; padding: 14px 16px; }
+.match-screen .court-panel .result-note { padding: 0 22px; }
+.match-screen .match-lower { grid-template-columns: minmax(0,1fr) 310px; margin-top: 18px; gap: 18px; }
+.match-screen .boxscore-panel, .match-screen .feed-panel { border-radius: 12px; }
+.match-screen .boxscore { font-size: 12px; }
+.match-screen .boxscore th { font-size: 9px; letter-spacing: .75px; color: #9dab96; }
+.match-screen .boxscore td { padding-block: 13px; }
+.match-screen .boxscore .player-name { font-size: 12px; }
+.match-screen .boxscore .stamina-cell { min-width: 100px; width: 120px; }
+.match-screen .boxscore .position-label { font-size: 9px; }
+.match-screen .feed-panel .section-heading > .muted { font-size: 8px; }
+.match-screen .feed-event p { font-size: 12px; }
+.match-screen .feed-score { font-size: 10px; color: #93a28a; }
+.match-screen .feed-time { font-size: 9px; }
+.match-screen .feed-time > span { font-size: 11px; }
+.match-screen .text-match-view { min-height: 400px; }
+
+@media (min-width: 1650px) {
+  .match-screen .court-presentation .court-svg { max-height: 580px; }
+}
+@media (max-width: 1150px) {
+  .match-screen .scoreboard { grid-template-columns: minmax(0,1fr) 165px minmax(0,1fr); padding-inline: 20px; }
+  .match-screen .score-team h2 { font-size: 17px; }
+  .match-screen .match-lower { grid-template-columns: 1fr; }
+  .match-screen .event-feed { display: grid; grid-template-columns: 1fr 1fr; column-gap: 26px; }
+  .match-screen .feed-panel .section-heading > .muted { display: block; }
+}
+@media (max-width: 850px) {
+  .match-screen main { padding: 16px 20px 0; }
+  .match-screen .topbar { padding-inline: 20px; }
+  .match-screen .scoreboard { grid-template-columns: minmax(0,1fr) 135px minmax(0,1fr); padding: 14px 17px; }
+  .match-screen .score-team { gap: 10px; }
+  .match-screen .score-team h2 { font-size: 15px; }
+  .match-screen .score-team .eyebrow { font-size: 8px; }
+  .match-screen .scoreboard .club-mark-large { width: 42px; height: 48px; border-radius: 10px; }
+  .match-screen .score-digits { font-size: 40px; gap: 12px; }
+  .match-screen .match-status { font-size: 8px; letter-spacing: .7px; }
+  .match-screen .court-top { padding: 12px 16px; gap: 10px; }
+  .match-screen .court-view-label { display: none; }
+  .match-screen .viewer-options { gap: 10px; }
+  .match-screen .playback { padding: 12px 16px; flex-wrap: wrap; }
+  .match-screen .playback-main { gap: 6px; }
+  .match-screen .playback .button { padding-inline: 12px; }
+  .match-screen .playback-skip { gap: 15px; margin-left: auto; }
+  .match-screen .court-caption { padding-inline: 16px; }
+}
+@media (max-width: 650px) {
+  .match-screen main { padding: 15px 12px 0; }
+  .match-screen .topbar { padding-inline: 12px; }
+  .match-screen .page-heading { margin-bottom: 12px; }
+  .match-screen .page-heading h1 { font-size: 22px; }
+  .match-screen .scoreboard { grid-template-columns: minmax(0,1fr) 105px minmax(0,1fr); padding: 14px 10px; }
+  .match-screen .score-team h2 { font-size: 12px; margin-top: 0; }
+  .match-screen .score-team .eyebrow { display: none; }
+  .match-screen .score-digits { font-size: 35px; }
+  .match-screen .match-status { font-size: 7px; letter-spacing: .3px; }
+  .match-screen .match-clock { font-size: 10px; }
+  .match-screen .court-top { flex-wrap: wrap; padding: 12px; }
+  .match-screen .viewer-options { flex: 1 1 100%; justify-content: space-between; }
+  .match-screen .court-caption { padding: 9px 12px; align-items: center; }
+  .match-screen .court-caption p { font-size: 11px; }
+  .match-screen .playback { padding: 12px; }
+  .match-screen .playback-main { width: 100%; }
+  .match-screen .playback-skip { width: 100%; justify-content: space-between; }
+  .match-screen .court-panel .decision-banner { margin: 0 12px 12px; }
+  .match-screen .event-feed { display: block; }
+  .match-screen .text-match-view { min-height: 320px; }
+  .match-screen .boxscore .stamina-cell { min-width: 90px; }
+}

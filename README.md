@@ -2,7 +2,7 @@
 
 A browser basketball management game in development. The design targets the top two men's divisions in Turkey, Spain, Greece, Germany, Italy and France, plus EuroLeague, EuroCup and Basketball Champions League.
 
-The playable development version is a **fictional exhibition simulation**. It includes a deterministic action engine, a tested subset of FIBA 2024 rules, coaching controls and local saves. The full club-management career remains in development.
+The playable development version is a **fictional exhibition simulation**. It includes a deterministic action engine, a tested subset of FIBA 2024 rules, a large animated diagonal court, live stamina bars, coaching controls and local saves. The game opens at a practical manager's desk with current match information, lineup condition and direct coaching actions. The full club-management career remains in development.
 
 Real reference data is now available separately: **double-click `Open real data.cmd`** in this folder to browse 40 clubs and 727 players from official 2025-26 EuroLeague/EuroCup records. No account or payment is needed. Search, player statistics and spreadsheet exports work offline after downloading. See [coverage and source details](docs/real-data.md); these records are not yet integrated into the career game.
 
@@ -44,9 +44,9 @@ npm run benchmark:match
 
 ## Project boundaries
 
-The exhibition supports watching/pausing, quarter skipping, instant simulation, tactical changes, queued substitutions and timeouts, foul-outs, team penalties, shot-clock resets, basic injuries, assistant rotations, squad profiles, box scores, and local save/import/export. Mandatory replacements pause every playback mode until resolved. Full competition-specific rules and continuous animated movement remain later work. See the status document for precise limits and verification results.
+The exhibition supports watching/pausing, quarter skipping, instant simulation, tactical changes, queued substitutions and timeouts, foul-outs, team penalties, shot-clock resets, basic injuries, assistant rotations, squad profiles, box scores, and local save/import/export. Mandatory replacements pause every playback mode until resolved. The court animates recorded setup, credited-assist passes, shots, free throws, rebounds, turnovers and substitutions; reduced-motion and text-only views use the same events. These are coarse action sequences. Full movement physics and competition-specific rules remain later work. See the status document for precise limits and verification results.
 
-Exhibition saves now use format 2 (`rules-2`). Earlier prototype saves are rejected with an explanatory message; they are not silently converted or overwritten on load. Keep older exported files if needed. This development save format is not yet a stable career format.
+Exhibition saves use format 2 (`rules-2`). Court scenes are optional event metadata, so earlier format-2 saves still load and use the static fallback for events without scenes. Saves restore the resolved sporting state; a partly watched animation resumes at that action's completed state. Format-1 prototype saves remain unsupported and are not overwritten on load. This development save format is not yet a stable career format.
 
 The agreed first release includes all twelve domestic divisions and the three European competitions. Smaller development fixtures do not reduce that scope. Realistic statistical behavior, the historical data pack and full competition rules require validation before release.
 

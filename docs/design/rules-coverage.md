@@ -2,7 +2,7 @@
 
 Research checked: 5 November 2026. This increment uses a **FIBA 2024 exhibition baseline**. It does not certify the rules of all fifteen planned competitions. Simulation probabilities, fatigue, injury incidence and coaching policies remain game models requiring calibration.
 
-Implementation review: 6 November 2026. The `rules-2` engine now implements the subset below. The engine author reported 27 passing focused rules tests and 11 passing foundation tests at this review; the integration run records the final whole-project test count in the implementation status.
+Implementation review: 6 November 2026. The `rules-2` engine implements the subset below. Nine follow-up scenarios now cover shooting-foul accounting, free-throw coaching windows and a queued timeout crossing 2:00. Court-scene and playback checks are separate from sporting-rule coverage; the implementation status records the final combined verification.
 
 ## Pinned sources
 
@@ -27,21 +27,21 @@ These are a compact summary, not a substitute for the referenced articles and in
 
 ## Acceptance matrix
 
-The following scenarios are acceptance requirements. Focused checks live in [rules.test.ts](../../tests/rules.test.ts), foundation checks in [match.test.ts](../../tests/match.test.ts), and persistence checks in [storage.test.ts](../../tests/storage.test.ts). “Partial” means the named checks establish a narrower implementation than the full article or scenario. It does not mean the remaining cases have passed.
+The following scenarios are acceptance requirements. Focused checks live in [rules.test.ts](../../tests/rules.test.ts) and [rules-followup.test.ts](../../tests/rules-followup.test.ts), foundation checks in [match.test.ts](../../tests/match.test.ts), and persistence checks in [storage.test.ts](../../tests/storage.test.ts). “Partial” means the named checks establish a narrower implementation than the full article or scenario. It does not mean the remaining cases have passed.
 
 | ID | Rule reference | Required scenario and engineering assertion | Verification status |
 | --- | --- | --- | --- |
 | R01 | OBR24 8.1, 8.7 | Regulation and repeated overtime finish at consistent boundaries in every playback mode. | Foundation tests: mode equality, quarter boundary, overtime and runaway guard |
 | R02 | OBR24 29.1.1–2 | Compare clock expiry before release, a timely release, rim contact and an airball; no invalid scoring event survives. | Partial: expired-clock turnover and clock-aware urgency tested; release/flight and airball cases remain abstract |
 | R03 | OBR24 29.2.2, 29.2.7 | Feed offensive rebound, defensive rebound and defensive-foul scenarios into the same clock reducer; both clocks stay nonnegative. | Focused tests: rim rebounds, non-rim block recovery, defensive-foul reset helper; full backcourt action model remains absent |
-| R04 | OBR24 34.2.1–2, 41.2 | Compare fourth/fifth defensive team fouls, team-control fouls, successful shots with fouls and unsuccessful shooting fouls. | Partial: fifth defensive foul and team-control exception tested; dedicated made/missed shooting-foul scenario matrix remains to expand |
+| R04 | OBR24 34.2.1–2, 41.2 | Compare fourth/fifth defensive team fouls, team-control fouls, successful shots with fouls and unsuccessful shooting fouls. | Focused tests cover fourth/fifth nonshooting awards, the team-control exception, made/missed two- and three-point shooting fouls, and-one awards, and no field-goal attempt for an unsuccessful fouled shot |
 | R05 | OBR24 41.1.3 | Compare quarter transition with overtime transition; repeated overtime preserves the correct penalty state. | Focused quarter-reset and first-overtime carry tests; repeated carry uses the same reviewed branch |
 | R06 | OBR24 4.1.2, 40.1 | A newly excluded player receives no later active exposure; re-entry is rejected and pending commands cannot restore eligibility. | Focused fifth-foul pause, replacement, no further exposure, rejected re-entry, assistant replacement and final-horn cleanup tests |
 | R07 | OBR24 21.1–2 | Depleted roster fixtures distinguish continued play from default; awarded results remain separate from player scoring totals. | Focused two-player continuation and both default-award cases; persistence test retains separate player totals |
 | R08 | OBR24 18.2.3–4, 19.2.2–3 | A command queued during play remains pending until the matching opportunity; a normal rebound opens neither a timeout nor substitution. | Focused live-ball queue/cancellation, whistle application and rebound-window checks |
 | R09 | OBRI24 18/19-4 | Test scoring and non-scoring teams independently after a field goal, including the response to an opponent's permitted substitution. | Focused manual and automatic reciprocal late-basket substitution/timeout tests |
-| R10 | OBR24 18.2.5–6; OBRI24 18/19-21–23 | Requests crossing 2:00 use the entitlement at grant time; halftime and each overtime do not inherit unused allowances. | Partial: separate allowance and final-two-minute arithmetic tests; actual request-crossing-boundary scenario remains to add |
-| R11 | OBRI24 18/19-1–2, 18/19-6 | A pre-tip request waits; first-free-throw and post-last-free-throw boundaries do not collapse into one generic dead ball. | Partial: pre-tip queue, shooter protection and outstanding free throws at horn tested; full inter-attempt opportunity matrix remains |
+| R10 | OBR24 18.2.5–6; OBRI24 18/19-21–23 | Requests crossing 2:00 use the entitlement at grant time; halftime and each overtime do not inherit unused allowances. | Allowance tests plus a naturally generated request before 2:00 granted after 2:00; the first unused slot is lost and a third late timeout is rejected |
+| R11 | OBRI24 18/19-1–2, 18/19-6 | A pre-tip request waits; first-free-throw and post-last-free-throw boundaries do not collapse into one generic dead ball. | Focused tests cover pre-tip queue, pre-first-throw timeout/non-shooter substitution, both teams queued between attempts, granting after the last made throw, and retaining requests during the live rebound after the last miss; shooter protection and horn penalties also covered |
 | R12 | OBR24 19.2.4, 19.3.8, 43.2.1 | Test attempted immediate substitution reversal and mandatory replacement of a pending free-throw shooter. | Focused reversal lock, ordinary shooter protection and mandatory injured-shooter replacement tests |
 | R13 | OBR24 12.6.2–6 | Alternate initial control winner; test period start, held ball, ordinary possession change and interrupted arrow administration. | Partial: period-arrow and held-ball retained-clock tests; throw-in interruption exceptions are not modeled |
 | R14 | OBR24 5.2–8 | Injury stoppage and mandatory replacement preserve exposure, clock and pending penalties; reduced-injury mode changes both teams equally. | Partial: in-match removal, mandatory replacement, shared setting and saved generated injury tested; no treatment/return or rehabilitation model; incidence remains provisional |
@@ -64,7 +64,7 @@ EuroLeague's separate [2025–26 rules update](https://mediacentre.euroleague.ne
 
 ## Explicitly outside the verified subset
 
-The current action representation uses integer elapsed seconds and resolves a shot and its outcome together. A successful boundary shot is treated as released before the horn; it is not a separately timed ball-flight simulation. Unblocked misses and missed free throws assume rim contact, while blocked-shot offensive recoveries retain the remaining shot clock. The possession-arrow throw-in administration is atomic. Injuries are detected at action boundaries, remove the player for the rest of the exhibition, and do not yet model treatment or return.
+The current action representation uses integer elapsed seconds and resolves a shot and its outcome together. A successful boundary shot is treated as released before the horn; it is not a separately timed ball-flight simulation. Saved court trajectories animate that resolved event in presentation time and do not add a new release-time or collision ruling. Unblocked misses and missed free throws assume rim contact, while blocked-shot offensive recoveries retain the remaining shot clock. The possession-arrow throw-in administration is atomic. Injuries are detected at action boundaries, remove the player for the rest of the exhibition, and do not yet model treatment or return.
 
 The assistant's condition and foul-trouble thresholds are provisional coaching policies, not derived basketball rules. The diagnostic [benchmark script](../../scripts/benchmark-match.mjs) records distributions and accounting checks; its optional official-source shooting-rate comparison does not validate those policies or the fictional roster's strength.
 
@@ -72,7 +72,7 @@ Until implemented and tested, the engine must not claim coverage for:
 
 - Technical, unsportsmanlike, disqualifying and fighting penalties; simultaneous or offsetting penalties; coach and bench sanctions.
 - Replay reviews, coach challenges, correctable errors, equipment faults and referee discretion.
-- Lane violations, goaltending, interference, detailed release/flight geometry, footwork, eight-second backcourt progression, and three-/five-second violations.
+- Lane violations, goaltending, interference, separately timed release/flight adjudication, footwork, eight-second backcourt progression, and three-/five-second violations.
 - All throw-in locations and the late-game advance-to-frontcourt choice; possession-arrow interruption exceptions beyond implemented scenarios.
 - Competition media timeouts, registration rules, pregame forfeits, disciplinary consequences and standings awards.
 - Empirically calibrated injury risk, rehabilitation, tactics, fatigue, player strength or scoring distributions.

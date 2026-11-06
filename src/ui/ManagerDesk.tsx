@@ -1,0 +1,93 @@
+import type { MatchState, Side } from '../domain/types'
+import { isPlayerEligible } from '../engine/match'
+import { Avatar } from './Avatar'
+import { Icon } from './Icon'
+import { StaminaMeter } from './StaminaMeter'
+import './manager-desk.css'
+
+interface ManagerDeskProps {
+  match: MatchState
+  onOpenMatch: () => void
+  onOpenSquad: () => void
+  onSelectPlayer: (id: string) => void
+  onOpenCoaching: () => void
+}
+
+const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
+const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
+const setting = (value: number, low: string, high: string) => value < .34 ? low : value > .66 ? high : 'Balanced'
+
+export function ManagerDesk({ match, onOpenMatch, onOpenSquad, onSelectPlayer, onOpenCoaching }: ManagerDeskProps) {
+  const complete = match.status === 'finished'
+  const ready = match.status === 'ready'
+  const needsReplacement = !complete && match.requiredSubstitutions.length > 0
+  const score = match.result?.officialScore ?? match.score
+  const active = match.lineups.home.flatMap(id => match.home.players.filter(player => player.id === id))
+  const eligible = match.home.players.filter(player => isPlayerEligible(match, player.id))
+  const availableBench = eligible.filter(player => !match.lineups.home.includes(player.id))
+  const injured = match.home.players.filter(player => match.injuries[player.id])
+  const foulTrouble = active.filter(player => match.stats[player.id].fouls === 4)
+  const tired = active.filter(player => match.stats[player.id].condition < 75 && isPlayerEligible(match, player.id))
+  const lineupEnergy = active.length ? Math.round(active.reduce((sum, player) => sum + match.stats[player.id].condition, 0) / active.length) : null
+  const playerName = (id: string, side: Side = 'home') => match[side].players.find(player => player.id === id)?.name ?? id
+  const status = complete ? 'FULL TIME' : needsReplacement ? 'REPLACEMENT REQUIRED' : ready ? 'PRE-MATCH' : 'MATCH PAUSED'
+  const notices: { key: string; title: string; detail: string; urgent?: boolean; action: string; open: () => void }[] = []
+
+  if (needsReplacement) notices.push({ key: 'replacement', title: 'Replace an unavailable player', detail: match.requiredSubstitutions.map(item => `${playerName(item.playerId, item.side)}: ${item.reason === 'injured' ? 'injured' : 'five fouls'}`).join('; '), urgent: true, action: 'Choose replacement', open: onOpenCoaching })
+  if (injured.length) notices.push({ key: 'injuries', title: `${injured.length} injured ${injured.length === 1 ? 'player' : 'players'}`, detail: injured.map(player => player.name).join(', '), action: 'Review squad', open: onOpenSquad })
+  if (!complete && foulTrouble.length) notices.push({ key: 'fouls', title: 'Foul trouble', detail: foulTrouble.map(player => `${player.name} · 4 fouls`).join('; '), action: 'Manage rotation', open: onOpenCoaching })
+  if (tired.length) notices.push({ key: 'fatigue', title: complete ? 'Post-match fatigue' : 'Players tiring', detail: tired.map(player => `${player.name} · ${Math.round(match.stats[player.id].condition)}%`).join('; '), action: complete ? 'Review squad' : 'Manage rotation', open: complete ? onOpenSquad : onOpenCoaching })
+  if (!complete && match.pendingSubstitutions.home.length) notices.push({ key: 'queued', title: 'Substitutions queued', detail: match.pendingSubstitutions.home.map(change => `${playerName(change.outId)} → ${playerName(change.inId)}`).join('; '), action: 'Review changes', open: onOpenCoaching })
+  if (!complete && match.timeoutRequested.home) notices.push({ key: 'timeout', title: 'Timeout requested', detail: 'Waiting for the next permitted stoppage.', action: 'Review request', open: onOpenCoaching })
+
+  const activity = match.events.filter(event => event.type !== 'tipoff' && !(event.type === 'command' && event.scene?.kind === 'setup')).slice(-5).reverse()
+  const displayName = complete ? 'Final lineup' : ready ? 'Starting five' : 'On the floor'
+
+  return <div className="manager-desk">
+    <section className="desk-fixture panel" aria-label="Current fixture">
+      <div className="desk-fixture-label"><span>EXHIBITION</span><strong className={needsReplacement ? 'desk-status-urgent' : ''}>{status}</strong></div>
+      <div className="desk-fixture-content">
+        <div className="desk-fixture-team"><span className="desk-club-code" style={{ color: match.home.color }}>{match.home.shortName}</span><div><strong>{match.home.name}</strong><span>Home · Your team</span></div></div>
+        <div className="desk-fixture-score"><strong aria-label={`Score: ${score.home} to ${score.away}`}>{score.home}<span>:</span>{score.away}</strong><span>{ready ? 'Awaiting tipoff' : complete ? match.result?.kind === 'default' ? 'Awarded by default' : `${period(match.period)} · Final` : `${period(match.period)} · ${clock(match.clockSeconds)}`}</span></div>
+        <div className="desk-fixture-team desk-fixture-away"><span className="desk-club-code" style={{ color: match.away.color }}>{match.away.shortName}</span><div><strong>{match.away.name}</strong><span>Away</span></div></div>
+        <button className="button primary desk-match-action" onClick={needsReplacement ? onOpenCoaching : onOpenMatch}>{complete ? 'View result' : needsReplacement ? 'Resolve replacement' : 'Go to match'}<Icon name="arrow" size={16} /></button>
+      </div>
+    </section>
+
+    <dl className="desk-squad-status" aria-label="Squad status">
+      <div><dt>Eligible players</dt><dd>{eligible.length}<small> / {match.home.players.length}</small></dd></div>
+      <div><dt>Available reserves</dt><dd>{availableBench.length}</dd></div>
+      <div><dt>Lineup stamina</dt><dd>{lineupEnergy === null ? '—' : `${lineupEnergy}%`}</dd></div>
+      <div><dt>Substitutions</dt><dd className="desk-policy-value">{match.autoSubstitutions.home ? 'Assistant' : 'Manual'}</dd></div>
+    </dl>
+
+    <div className="desk-columns">
+      <section className="desk-lineup panel" aria-labelledby="desk-lineup-heading">
+        <div className="desk-panel-heading"><h2 id="desk-lineup-heading">{displayName}</h2><button className="text-button" onClick={onOpenSquad}>Full squad<Icon name="chevron" size={15} /></button></div>
+        <div className="desk-table-scroll"><table className="desk-lineup-table"><thead><tr><th>Player</th><th>Position</th><th>Stamina</th><th>Fouls</th></tr></thead><tbody>{active.map(player => {
+          const unavailable = match.injuries[player.id] ? 'Injured' : match.stats[player.id].fouls >= 5 ? 'Fouled out' : null
+          return <tr key={player.id} data-player-id={player.id}><td><button className="desk-player" onClick={() => onSelectPlayer(player.id)} aria-label={`View ${player.name}`}><Avatar player={player} color={match.home.color} size={31} /><span><strong>{player.name}</strong><small>#{player.number}{unavailable && <em>{unavailable}</em>}</small></span></button></td><td>{player.position}</td><td><StaminaMeter value={match.stats[player.id].condition} label={`${player.name} stamina`} compact /></td><td className={match.stats[player.id].fouls >= 4 ? 'desk-warning-value' : ''}>{match.stats[player.id].fouls}</td></tr>
+        })}</tbody></table></div>
+        {!active.length && <p className="desk-empty">No players on court.</p>}
+        <div className="desk-reserves"><span>Available bench</span><div>{availableBench.map(player => <button key={player.id} onClick={() => onSelectPlayer(player.id)} title={`${player.name} · ${player.position} · ${Math.round(match.stats[player.id].condition)}% stamina`}>{player.name.split(' ').at(-1)}<small>{Math.round(match.stats[player.id].condition)}%</small></button>)}{!availableBench.length && <span>No eligible reserves</span>}</div></div>
+      </section>
+
+      <div className="desk-side-column">
+        <section className="desk-attention panel" aria-labelledby="desk-attention-heading">
+          <div className="desk-panel-heading"><h2 id="desk-attention-heading">{complete ? 'Match review' : 'Attention'}</h2><span className="desk-count">{notices.length}</span></div>
+          {notices.length ? <ul className="desk-notices">{notices.map(notice => <li key={notice.key} className={notice.urgent ? 'desk-notice-urgent' : ''}><div><strong>{notice.title}</strong><p>{notice.detail}</p></div><button className="text-button" onClick={notice.open}>{notice.action}<Icon name="chevron" size={14} /></button></li>)}</ul> : <div className="desk-clear"><Icon name="check" size={18} /><div><strong>{complete ? 'Match complete' : 'No urgent decisions'}</strong><p>{complete ? 'The result and player statistics are ready to review.' : `${eligible.length} eligible players. Your current lineup is available.`}</p></div></div>}
+        </section>
+
+        <section className="desk-instructions panel" aria-labelledby="desk-instructions-heading">
+          <div className="desk-panel-heading"><h2 id="desk-instructions-heading">Team instructions</h2><button className="text-button" onClick={onOpenCoaching}>{complete ? 'View instructions' : 'Edit instructions'}<Icon name="chevron" size={15} /></button></div>
+          <dl className="desk-tactics"><div><dt>Tempo</dt><dd>{setting(match.tactics.home.tempo, 'Patient', 'Fast')}</dd></div><div><dt>Outside emphasis</dt><dd>{Math.round(match.tactics.home.outsideShare * 100)}%</dd></div><div><dt>Defensive pressure</dt><dd>{setting(match.tactics.home.pressure, 'Contain', 'Aggressive')}</dd></div><div><dt>Rotation control</dt><dd>{match.autoSubstitutions.home ? 'Assistant' : 'You'}</dd></div></dl>
+        </section>
+      </div>
+    </div>
+
+    <section className="desk-activity panel" aria-labelledby="desk-activity-heading">
+      <div className="desk-panel-heading"><h2 id="desk-activity-heading">Recent activity</h2><span className="desk-section-note">Current match</span></div>
+      {activity.length ? <ol>{activity.map(event => <li key={event.id}><time>{period(event.period)}<span>{clock(event.clockSeconds)}</span></time><p>{event.text}</p><span className="desk-activity-score">{event.score.home}–{event.score.away}</span></li>)}</ol> : <p className="desk-empty">No match actions yet. Review your lineup and instructions before tipoff.</p>}
+    </section>
+  </div>
+}

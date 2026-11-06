@@ -278,3 +278,15 @@ Validate replay/save continuity, mode equality, legal clock transitions, and sco
 Use synthetic players and a clearly identified limited rules subset for that milestone. Keep a coverage list distinguishing implemented, simplified, and unsupported rules.
 Expand through tested possession actions, eligibility and foul rules, coaching commands, fatigue/injuries, competition-specific statistics, and the full selected rulesets.
 The first working fixture is an engine prototype; it is not the full twelve-division game and is not evidence of realistic basketball calibration.
+
+## 14. Implemented court presentation, 6 November 2026
+
+The current `rules-2` exhibition writes optional court scenes into its event history. Each scene identifies its actors and attacking side, their start/end positions, a ball path and a presentation duration. The viewer interpolates these saved values for setup, credited-assist passes, shots, free throws, rebounds, turnovers and substitutions. Player portraits and court figures share the same player identity and appearance fields; the bench display follows the relevant lineup.
+
+These scenes are coarse descriptions produced by the engine. Recorded passes currently describe credited assists, not every pass in a possession. Formation positions, linear player paths and ball arcs do not yet form a continuous spacing, collision or defensive-movement simulation. A visible ball flight does not change the existing action-level ruling about release before a clock signal. The [rules matrix](rules-coverage.md) identifies that remaining distinction.
+
+Presentation time is separate from sporting time. Pause/resume and speed changes move the visual playhead without changing the resolved event, random stream, fatigue or game clocks. Reduced-motion and text-only views consume the same events. Skipping settles the presentation and advances the shared engine; mandatory replacement decisions interrupt all playback modes. New-match and load/import operations reset the visual playhead.
+
+The save envelope and engine identifiers remain format 2 / `rules-2`. Earlier format-2 events may omit court scenes and use a static fallback. New saves validate and retain scene actors, coordinates and durations alongside the sporting state. The partially watched visual playhead is not saved: loading resumes the completed sporting action. Format-1 prototype saves remain unsupported.
+
+This increment advances Milestones 2 and 3 without completing either gate. Statistical calibration, richer possession creation, precise release/flight adjudication, competition overrides and the complete movement model remain open. The real reference-data browser is still separate from the playable exhibition.

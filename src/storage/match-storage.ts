@@ -5,7 +5,7 @@ import { validateMatchState } from './validate-match';
 export const MAX_SAVE_BYTES = 5 * 1024 * 1024;
 const FORMAT = 'basketball-manager-exhibition';
 const FORMAT_VERSION = 2;
-const ENGINE_VERSION = 'rules-2';
+const ENGINE_VERSIONS = ['rules-2', 'possession-3'];
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 function checkSize(text: string): void {
@@ -44,7 +44,7 @@ export function serializeMatch(state: MatchState): string {
   const text = JSON.stringify({
     format: FORMAT,
     formatVersion: FORMAT_VERSION,
-    engineVersion: ENGINE_VERSION,
+    engineVersion: state.engineVersion,
     state,
   });
   checkSize(text);
@@ -72,10 +72,13 @@ export function parseMatch(text: string): MatchState {
   if (envelope.format === FORMAT && (envelope.formatVersion === 1 || envelope.engineVersion === 'prototype-1')) {
     throw new Error('This exhibition was saved with the earlier prototype engine. Keep it as a backup and start a new exhibition with the current rules engine. Your stored save has not been changed.');
   }
-  if (envelope.format !== FORMAT || envelope.formatVersion !== FORMAT_VERSION || envelope.engineVersion !== ENGINE_VERSION) {
+  if (envelope.format !== FORMAT || envelope.formatVersion !== FORMAT_VERSION || !ENGINE_VERSIONS.includes(envelope.engineVersion as string)) {
     throw new Error('This match file uses an unsupported save format or engine version.');
   }
   validateMatchState(envelope.state);
+  if (envelope.engineVersion !== envelope.state.engineVersion) {
+    throw new Error('The match file engine version does not match its saved state.');
+  }
   return envelope.state;
 }
 

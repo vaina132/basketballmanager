@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { MatchState, Side } from '../src/domain/types';
 import {
-  canSubstituteNow, createMatch, remainingTimeouts, requestTimeout,
+  canSubstituteNow, createMatch as createVersionedMatch, remainingTimeouts, requestTimeout,
   setAutoSubstitutions, setInjuryMode, stepMatch, substitutePlayer,
 } from '../src/engine/match';
+
+// Preserve the legacy sporting contract independently of the current default engine.
+const createMatch = (seed = 42) => createVersionedMatch(seed, 'rules-2');
 
 const other = (side: Side): Side => side === 'home' ? 'away' : 'home';
 const sides = ['home', 'away'] as const;

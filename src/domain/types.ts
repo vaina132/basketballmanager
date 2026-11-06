@@ -1,4 +1,5 @@
 export type Side = 'home' | 'away';
+export type EngineVersion = 'rules-2' | 'possession-3';
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 
 export interface PlayerAttributes {
@@ -57,7 +58,7 @@ export interface PlayerStats {
 }
 
 export type MatchEventType =
-  | 'tipoff' | 'pass' | 'shot' | 'free-throw' | 'turnover' | 'foul' | 'rebound'
+  | 'tipoff' | 'pass' | 'drive' | 'shot' | 'free-throw' | 'turnover' | 'foul' | 'rebound'
   | 'period-end' | 'period-start' | 'final' | 'substitution' | 'tactics'
   | 'foul-out' | 'injury' | 'timeout' | 'command' | 'shot-clock' | 'held-ball';
 
@@ -67,7 +68,7 @@ export interface CourtPosition extends CourtPoint { playerId: string }
 export interface CourtBallPoint extends CourtPoint { height: number }
 /** Deterministic presentation data. Durations never advance the simulation clock. */
 export interface CourtScene {
-  kind: 'setup' | 'pass' | 'shot' | 'free-throw' | 'rebound' | 'turnover';
+  kind: 'setup' | 'pass' | 'drive' | 'shot' | 'free-throw' | 'rebound' | 'turnover';
   durationMs: number;
   offense: Side;
   start: CourtPosition[];
@@ -84,9 +85,10 @@ export interface MatchEvent {
   playerId?: string;
   receiverId?: string;
   outgoingPlayerId?: string;
+  assistPlayerId?: string;
   text: string;
   score: Record<Side, number>;
-  shot?: { x: number; y: number; made: boolean; value: 2 | 3 };
+  shot?: { x: number; y: number; made: boolean; value: 2 | 3; defenderId?: string; contest?: 'open' | 'pressured' | 'contested'; distanceM?: number };
   scene?: CourtScene;
 }
 
@@ -102,10 +104,21 @@ export interface FreeThrowSequence { side: Side; shooterId: string; total: 1 | 2
 export interface TimeoutUsage { firstHalf: number; secondHalf: number; overtime: number; lateFourth: number }
 export interface MatchResult { winner: Side; kind: 'normal' | 'default'; officialScore: Record<Side, number> }
 
+/** Sporting positions and control at a resolved live-action boundary. */
+export interface PossessionPlay {
+  offense: Side;
+  handlerId: string;
+  passerId: string | null;
+  actions: number;
+  positions: CourtPosition[];
+  matchups: { attackerId: string; defenderId: string }[];
+}
+
 /** Serializable, deterministic action-boundary snapshot. No wall-clock state. */
 export interface MatchState {
   schemaVersion: 2;
-  engineVersion: 'rules-2';
+  engineVersion: EngineVersion;
+  possessionPlay?: PossessionPlay | null;
   seed: number;
   rngState: number;
   home: Team;

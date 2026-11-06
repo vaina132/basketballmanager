@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { CourtScene, MatchState } from '../src/domain/types';
-import { createMatch, isPlayerEligible, setAutoSubstitutions, setInjuryMode, setTactics, simulateToEnd, simulateToQuarterEnd, stepMatch, substitutePlayer } from '../src/engine/match';
+import { createMatch as createVersionedMatch, isPlayerEligible, setAutoSubstitutions, setInjuryMode, setTactics, simulateToEnd, simulateToQuarterEnd, stepMatch, substitutePlayer } from '../src/engine/match';
 import { MAX_SAVE_BYTES, parseMatch, serializeMatch } from '../src/storage/match-storage';
+
+// Preserve the legacy sporting contract independently of the current default engine.
+const createMatch = (seed = 42) => createVersionedMatch(seed, 'rules-2');
+
 
 function automatic(seed: number): MatchState {
   return setAutoSubstitutions(setInjuryMode(createMatch(seed), 'off'), 'home', true);

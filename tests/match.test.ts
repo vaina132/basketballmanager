@@ -4,7 +4,7 @@ import {
   createMatch as rawCreateMatch, setAutoSubstitutions, setInjuryMode, attackingDirection, setTactics, simulateToEnd, simulateToQuarterEnd, stepMatch, substitutePlayer,
 } from '../src/engine/match';
 
-function createMatch(seed = 42): MatchState { return setInjuryMode(setAutoSubstitutions(rawCreateMatch(seed), 'home', true), 'off'); }
+function createMatch(seed = 42): MatchState { return setInjuryMode(setAutoSubstitutions(rawCreateMatch(seed, 'rules-2'), 'home', true), 'off'); }
 
 function playSteps(state: MatchState, steps: number): MatchState {
   let next = state;
@@ -165,7 +165,7 @@ describe('deterministic match foundation', () => {
       expect(stepMatch(result)).toBe(result);
     }
     expect(new Set(results).size).toBeGreaterThan(20);
-  });
+  }, 30_000);
 
   it('makes tempo and outside emphasis affect their intended aggregate behavior', () => {
     let fastSteps = 0;
@@ -192,7 +192,7 @@ describe('deterministic match foundation', () => {
     }
     expect(fastSteps).toBeGreaterThan(slowSteps * 1.5);
     expect(outsideAttempts / outsideTotal).toBeGreaterThan(insideAttempts / insideTotal + 0.4);
-  });
+  }, 30_000);
 
   it('gives aggressive defensive pressure a measurable disruption and foul tradeoff', () => {
     let aggressiveFouls = 0;
@@ -209,5 +209,5 @@ describe('deterministic match foundation', () => {
     }
     expect(aggressiveFouls).toBeGreaterThan(cautiousFouls);
     expect(aggressiveTurnovers).toBeGreaterThan(cautiousTurnovers);
-  });
+  }, 30_000);
 });

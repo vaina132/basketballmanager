@@ -6,6 +6,7 @@ import {
   setTactics, substitutePlayer,
 } from '../engine/match'
 import { Icon } from './Icon'
+import { ShotCreation } from './ShotCreation'
 import './match-coaching.css'
 
 type Apply = (action: (state: MatchState) => MatchState) => void
@@ -26,7 +27,7 @@ export function RequiredDecision({ match, apply }: { match: MatchState; apply: A
   </section>
 }
 
-export function MatchCoaching({ match, apply }: { match: MatchState; apply: Apply }) {
+export function MatchCoaching({ match, analysisMatch = match, apply }: { match: MatchState; analysisMatch?: MatchState; apply: Apply }) {
   const [outgoing, setOutgoing] = useState('')
   const [incoming, setIncoming] = useState('')
   const complete = match.status === 'finished'
@@ -75,6 +76,7 @@ export function MatchCoaching({ match, apply }: { match: MatchState; apply: Appl
         <p className="coach-help" aria-live="polite">{match.timeoutRequested.home ? 'Requested. Waiting for the next timeout opportunity.' : match.status === 'ready' ? 'Available after tipoff.' : 'Call the team together at the next timeout opportunity.'}</p>
       </div>
     </div>
+    <ShotCreation match={analysisMatch} />
     <MatchPolicies match={match} apply={apply} />
   </section>
 }

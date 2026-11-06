@@ -55,6 +55,12 @@ function scene(kind: CourtScene['kind'], offense: Side, durationMs: number, star
   return { kind, offense, durationMs, start: start.map(point => ({ ...point })), end: end.map(point => ({ ...point })), ball: { from: { ...from }, to: { ...to }, arcHeight } };
 }
 
+/** Modern sporting actions supply their own authoritative positions and ball path. */
+export function actionScene(kind: CourtScene['kind'], offense: Side, start: CourtPosition[], end: CourtPosition[], from: CourtBallPoint, to: CourtBallPoint, arcHeight = .15): CourtScene {
+  const duration = kind === 'shot' || kind === 'free-throw' ? 1100 : kind === 'pass' ? 600 : kind === 'drive' ? 950 : 750;
+  return scene(kind, offense, duration, start, end, from, to, arcHeight);
+}
+
 export function hoopPosition(state: MatchState, offense: Side): CourtPoint {
   return { x: direction(state, offense) === 1 ? 26.425 / 28 : 1.575 / 28, y: 0.5 };
 }

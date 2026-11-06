@@ -2,7 +2,7 @@
 
 Research checked: 5 November 2026. This increment uses a **FIBA 2024 exhibition baseline**. It does not certify the rules of all fifteen planned competitions. Simulation probabilities, fatigue, injury incidence and coaching policies remain game models requiring calibration.
 
-Implementation review: 6 November 2026. The `rules-2` engine implements the subset below. Nine follow-up scenarios now cover shooting-foul accounting, free-throw coaching windows and a queued timeout crossing 2:00. Court-scene and playback checks are separate from sporting-rule coverage; the implementation status records the final combined verification.
+Implementation review: 6 November 2026. The legacy `rules-2` engine and new `possession-3` engine share the rules layer described below. The original rule scenarios remain pinned to `rules-2` to preserve the compatibility baseline. New possession scenarios additionally exercise clock and horn boundaries, period progression, foul-outs, mandatory replacements, legal coaching windows, accounting and mode equality. Nine earlier follow-up scenarios cover shooting-foul accounting, free-throw coaching windows and a queued timeout crossing 2:00. Court-scene and playback checks remain separate from sporting-rule coverage; the implementation status records combined verification. This increment does not add competition-specific rule overrides.
 
 ## Pinned sources
 

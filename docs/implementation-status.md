@@ -6,14 +6,17 @@ Updated: 6 November 2026.
 
 The product discovery has eighteen answers. Core design, world/match specifications, source strategy, architecture and milestone plan are recorded in this repository. Coefficients are proposals and require calibration. The historical database audit is incomplete.
 
-## Implemented: exhibition, rules and court playback
+## Implemented: exhibition, possession actions and court playback
 
 Milestone 1 is complete. Milestone 2 has a working, tested FIBA 2024 rules subset, and Milestone 3 has animated court playback. Both remain partial; their full action-model, calibration and presentation acceptance gates are still open.
 
 - React/TypeScript/Vite application with working Overview, Squad and Match center screens. It opens at a manager's desk showing the current fixture/result, eligible players, active lineup, stamina, real decisions, instructions and recent match activity. Player links open the selected profile; alerts lead to the relevant coaching control. Double-click **Start game.cmd** to launch the local development game.
 - Shared club navigation contains only working screens. Promotional panels, slogans and roadmap content were removed from gameplay. The squad workspace includes search, all/on-court/bench/unavailable filters and live stamina. The interface direction is recorded in [repository guidance](../AGENTS.md).
 - Two explicitly fictional ten-player teams, seven active 1-20 attributes, centimetres/kilograms, and consistent code-drawn portraits and court appearance.
-- Deterministic, serializable action engine: four ten-minute quarters, five-minute overtime, shared watched/stepped/quarter/instant progression, and a bounded overtime guard.
+- New exhibitions use deterministic `possession-3`: separate advances/setups, passes, drives and shots; four ten-minute quarters, five-minute overtime, shared watched/stepped/quarter/instant progression, and a bounded overtime guard. Existing `rules-2` saves retain their original engine.
+- Live possessions save the handler, most recent passer, action count, player positions and defensive assignments. A completed pass precedes its later shooting outcome and can lead to a miss. Assists follow the actual last pass, including a made shooting-foul basket, and clear after an intervening drive, whistle, substitution or possession change.
+- Formation spacing, shot distance, defender separation, assigned defensive ability/height, shooter skill and fatigue influence shot outcomes. Rebounds consider proximity to the landing point. Tempo affects action timing; outside emphasis changes spacing and choices; pressure affects contests, disruption, fouls and exertion. These coefficients remain provisional.
+- Compact shot-creation feedback beneath coaching reports completed passes, drives, open/contested attempts and three-point attempts from recorded home-team events. It follows the displayed action boundary, avoiding premature results during playback.
 - Explicit live-ball, dead-ball, free-throw and period-end states; 24-second possessions, 14-second offensive-rebound resets, defensive-foul clock handling, clock-aware shot decisions, held balls and a FIBA possession arrow. Attacking direction changes after halftime.
 - Offensive, nonshooting defensive and shooting personal fouls; fifth-team-foul penalty, fourth-quarter foul carryover into overtime, and personal exclusion at five fouls. Free throws resolve individually while the game clock is stopped.
 - Substitutions and timeout requests queue for their permitted opportunities, with cancellation, timeout budgets, late-game restrictions and substitution reversal locks.
@@ -21,9 +24,9 @@ Milestone 1 is complete. Milestone 2 has a working, tested FIBA 2024 rules subse
 - Saved assistant substitution policy handles fatigue and foul trouble consistently in every playback mode. Basic exposure-based match injuries use standard/reduced/off settings equally for both teams; incidence remains uncalibrated and this does not implement career rehabilitation.
 - The match screen gives the court the full content width immediately below the scoreboard. The separate shot-clock/possession rules panel has been removed; playback stays with the court, and coaching controls and match settings sit below it. Required replacement decisions remain explicit.
 - A lineup dock switches between home and away players and expands to show the bench. Current stamina appears as a visual bar, percentage and fatigue label beside each player, with injury/foul-out indicators. Box scores also show stamina. Bars read live match condition, rather than the player's permanent stamina attribute.
-- The engine records court scenes with actor identities, start/end positions, ball paths and presentation durations. The diagonal viewer interpolates setup, credited-assist passes, shots, free throws, rebounds, turnovers and substitutions. Formation and ball paths are coarse action descriptions, not a continuous physics model; unrecorded passes are not invented by the viewer.
+- The engine records court scenes with actor identities, start/end positions, ball paths and presentation durations. The diagonal viewer interpolates setup, completed passes, drives, shots, free throws, rebounds, turnovers and substitutions. Shot scenes share the release positions and defender separation used by the simulation. Movement between action endpoints remains interpolated; there is no continuous physics model, and the viewer does not invent unrecorded passes.
 - Court playback has pause/resume, speed controls, reduced-motion and text-only views. Presentation time does not consume sporting randomness, change game clocks or grant recovery. Critical replacement decisions take precedence over playback.
-- Local IndexedDB saves and JSON import/export retain format 2 / rules-2, including optional scene metadata. Earlier format-2 saves without scenes remain loadable, with a static fallback for those events. Saves preserve the resolved action state, queued commands, pending free throws, injuries, timeouts, random state and critical decisions; the partial visual playhead is not serialized. Format-1 prototype saves remain unsupported and are not rewritten on load.
+- Local IndexedDB saves and JSON import/export retain format 2 with an explicit `possession-3` or `rules-2` identifier. Old matches are never silently migrated. Modern saves validate live handlers, geometry, matchups, historical shot defenders and assist chains. Optional scenes may be absent in either engine, using a static fallback without affecting sporting results. Saves preserve resolved action state, queued commands, pending free throws, injuries, timeouts, random state and critical decisions; the partial visual playhead is not serialized. Format-1 prototype saves remain unsupported and are not rewritten on load.
 
 ## Implemented: official reference data acquisition
 
@@ -35,51 +38,67 @@ Milestone 1 is complete. Milestone 2 has a working, tested FIBA 2024 rules subse
 
 ## Verification completed
 
-The latest manager-desk and squad increment changes presentation only; the sporting engine and save format remain unchanged. The following checks passed against the updated interface:
+The possession-action increment changes new-match simulation behavior and preserves the original engine for existing saves. The following checks passed:
 
-- `npm.cmd test`: **156 tests pass** (57 engine/rules/court, 86 persistence, 9 data importer, 4 playback). These include nine new focused rule scenarios and backward compatibility for format-2 events without court scenes.
+- `npm.cmd test -- --maxWorkers=1`: **223 tests pass across 10 files** (76 engine/rules/court, 134 persistence, 9 data importer, 4 playback). The 19 new action tests cover direct-pass assists including an and-one, interrupted actions at the horn, geometric shot context, isolated tactics, shared rules, mode equality and independence from presentation metadata. The 48 new persistence checks cover exact live-possession resume and malformed imports. The original 100-seed `rules-2` hash remains unchanged.
 - `npm.cmd run build`: type checking and production build pass.
-- Browser QA in headless Microsoft Edge: **59 journey checks pass** (16 coaching/save, 14 animated-playback, 13 layout/stamina and 16 manager-desk/squad journeys). Coverage includes queued commands, required replacements, local save/export/import, player and ball movement, pause/resume and speed changes, withholding shot results until presentation, reduced-motion/text-only views, matching results across playback modes, the final action, navigation, court placement, active/bench/opponent stamina, fatigue labels, actor/card synchronization during assistant substitutions, and responsive layout. Manager-desk checks cover linked player selection, squad filters/search, instruction edits, critical-decision navigation, loading saved state, completed results and pausing when leaving the court.
-- Visually inspected the revised desktop and tablet screens. At a 1440px viewport, the court spans the content width directly below the score with a 14px gap. Checked 1024px, 768px and 390px widths without page overflow; player bars match saved condition and remain stable while paused.
-- Browser journey produced no uncaught exceptions or console errors. Local documentation links were checked.
+- Browser QA in headless Microsoft Edge: **71 journey checks pass** (16 coaching/save, 14 animated-playback, 13 layout/stamina, 16 manager-desk/squad and 12 new possession journeys). New checks cover a save after a pass, animated drives and paused feedback, withholding unfinished shot results, exact resumption and legacy continuation. Existing checks retain queued commands, mandatory replacements, mode changes, final playback, player navigation, squad filters/search and completed results.
+- Visually inspected desktop and tablet match screens with creation feedback. The court remains full width directly beneath the score, with stamina beside the active players. Checked 1440px, 1024px, 768px and 390px widths without page overflow. Browser journeys produced no uncaught exceptions or console errors.
+- Modern completed-save samples remained below the existing 5 MB limit. Both engine versions validate optional scenes, and modern sporting outcomes are unchanged when scenes are removed. Local documentation links were checked.
 - Offline real-data browser: **13 checks pass**, including actual source counts, search, filters, selected-player totals, sorting, pagination, four CSV exports and desktop/tablet layout. No automatic HTTP requests or JavaScript errors; screenshots visually inspected.
 - All eight stored source documents match their recorded hashes and byte counts; a cached importer rerun produces identical normalized JSON. All 651 statistical records pass shooting arithmetic and identity checks.
 
 The browser QA was a local development check; its generated screenshots, downloaded test saves and browser profile are ignored under `.artifacts/`.
 
-## Simulation diagnostic, rules-2
+## Simulation diagnostic, possession-3
 
-Run `npm.cmd run benchmark:match -- --matches 100 --injury-matches 20` to reproduce the current diagnostic. It writes `.artifacts/match-benchmark.json`, including source hashes, distributions, approximate intervals for mean outcomes and optional comparisons with the downloaded official reference pack. It makes no network requests.
+Run `npm.cmd run benchmark:match -- --matches 100 --injury-matches 20` to reproduce the current diagnostic. It writes `.artifacts/match-benchmark.json`, including source hashes, distributions, approximate intervals for mean outcomes, action/shot context, 30 paired seeds for each tactical control, and optional comparisons with the downloaded official reference pack. It makes no network requests. `--tactic-matches 0` disables the paired comparisons for a shorter diagnostic.
 
-The 6 November run used seeds 1-100, the two fictional clubs, assistant substitutions for both teams and injuries off. The court-scene increment preserves the previous rules-only statistical results. The current engine source hash starts `151662b5c79b`.
+The 6 November run used seeds 1-100, the two fictional clubs, assistant substitutions for both teams and injuries off. The engine source hash starts `8aabc3babcb0`; the possession-helper hash starts `7c2f1561ac7c`.
 
-| Metric | Current baseline |
+| Metric | Current diagnostic |
 | --- | ---: |
-| Mean team score | 78.00 |
-| Approximate 95% interval for the mean team score across simulation seeds | 76.24-79.76 |
-| Mean estimated possessions per team | 72.59 |
-| Field-goal / three-point / free-throw percentage | 45.23% / 32.61% / 77.49% |
-| Mean fouls / turnovers per team | 15.39 / 11.46 |
-| Shot-clock violations across 100 games | 72 |
-| Games requiring overtime | 6 |
+| Mean team score | 88.42 |
+| Approximate 95% interval for mean team score across simulation seeds | 86.95-89.89 |
+| Mean estimated possessions per team | 72.16 |
+| Field-goal / three-point / free-throw percentage | 48.81% / 32.76% / 78.35% |
+| Mean fouls / turnovers per team | 12.15 / 4.97 |
+| Completed passes / drives per game, both teams | 68.97 / 52.89 |
+| Recorded shots lacking defender/contest context | 0 |
+| Shot-clock violations across 100 games | 26 |
+| Games requiring overtime | 0 |
 | Default results / accounting failures | 0 / 0 |
 
-This is a diagnostic baseline, not validated basketball realism. The possession count uses the box-score estimate `FGA + 0.44 × FTA - offensive rebounds + turnovers`. Aggregate official-source shooting rates are compared descriptively; no player-rating fit or held-out validation has been completed. The fictional player population, near-even assistant minutes, foul-out distribution, injury hazard and tactical effects still require broader calibration. The separate 20-match standard-injury diagnostic recorded zero injuries over 133.33 player-hours, which is too small a sample to establish incidence. Generated injury and mandatory-replacement scenarios are covered separately by the rules and save tests.
+An initial timing diagnostic exposed roughly 100 estimated possessions and 124 points per team. Longer setup and decision windows, a smaller tempo timing range, and earlier shot-clock urgency corrected that volume without changing shooting coefficients. This is an engineering correction, not an empirical fit.
+
+The isolated comparisons change only the named control, using the same 30 seeds at its minimum and maximum. Tempo changes both teams; outside emphasis and pressure change home only. Other instructions stay at their defaults:
+
+| Control | Minimum | Maximum |
+| --- | ---: | ---: |
+| Tempo: combined field-goal attempts per 40 minutes | 129.38 | 152.10 |
+| Outside emphasis: home three-point attempt share | 22.84% | 67.11% |
+| Home pressure: home fouls per 40 minutes | 8.50 | 16.46 |
+| Home pressure: away turnovers per 40 minutes | 3.03 | 6.56 |
+| Home pressure: mean final home-roster condition | 92.51% | 90.94% |
+
+These results establish responsive controls and consistent accounting, not validated basketball realism. The possession estimate is `FGA + 0.44 * FTA - offensive rebounds + turnovers`. Paired tactics change later random draw sequences; the report describes simulation-seed variability, not real-world causal estimates. Aggregate official-source shooting rates are compared descriptively; no player-rating fit or held-out validation has been completed. Pass/assist frequency, turnovers, foul mix, shot selection, rotations, fatigue and injury incidence remain calibration targets. The separate 20-match standard-injury diagnostic recorded zero injuries over 133.33 player-hours, too little exposure to establish incidence; generated injury and replacement scenarios are tested separately.
+
+Legacy `rules-2` compatibility remains pinned to its original 100-seed hash, `960af650db6c2c013ef37690b3dbdcbf874cf43b358b1dff8efa2a3262a5b9aa`. Its previous mean score was 78.00 and estimated possessions 72.59. Existing matches continue with that engine; new exhibitions intentionally produce different actions and outcomes.
 
 ## Explicit limits of this milestone
 
 This is a FIBA 2024 exhibition subset, not certification for all planned competitions. EuroLeague has verified differences in jump balls, period possession and technical-foul totals. The [rules evidence matrix](design/rules-coverage.md) separates tested scenarios from partial or missing coverage.
 
-Technical/unsportsmanlike/disqualifying fouls, combined penalties, reviews, lane violations, goaltending, separately timed release/flight adjudication, three-/five-/eight-second violations, all throw-in locations and the late-game frontcourt advance choice remain unimplemented. Possession creation and shot resolution are coarse actions. The court's saved trajectories illustrate those resolved actions; collision, spacing and continuous defensive movement do not yet determine their outcomes. The deterministic injury and fatigue models, tactical coefficients and player strength require statistical calibration.
+Technical/unsportsmanlike/disqualifying fouls, combined penalties, reviews, lane violations, goaltending, separately timed release/flight adjudication, three-/five-/eight-second violations, all throw-in locations and the late-game frontcourt advance choice remain unimplemented. Possession creation and shot resolution remain discrete actions. Authoritative spacing and assigned defenders now affect outcomes, but continuous movement, collisions, screens, help rotations, switches and zone defense remain unimplemented. The current three-point classification uses basket distance and authored perimeter positions that avoid the corner-line exception; full arbitrary-location court adjudication remains open. The deterministic injury and fatigue models, tactical coefficients and player strength require statistical calibration.
 
 There is no playable league/career, complete game-ready historical database, commercial/facilities system, training, academy, staff hiring, transfer market, board/press, or season rollover yet. Unimplemented management systems are omitted from navigation. Acquired reference records have not been converted into career squads or skill ratings. The first-release requirement remains twelve domestic divisions and three European competitions.
 
-The prototype runs short match simulations on the main thread. Workers, career save migrations, revision recovery, autosaves and multi-tab write coordination remain future work. Current saves contain one exhibition snapshot and are not a stable long-term career format. Format-1 prototype matches cannot be resumed under rules-2.
+The prototype runs short match simulations on the main thread. Workers, career save migrations, revision recovery, autosaves and multi-tab write coordination remain future work. Current saves contain one exhibition snapshot and are not a stable long-term career format. Format-1 prototype matches cannot be resumed under either supported engine.
 
 ## Next dependencies
 
 1. Extend the downloaded reference data to the missing competitions, reconstruct opening-day rosters, and resolve intended-use permissions before bundling a career database. The [data acquisition plan](data-acquisition.md) records immediate free and paid routes.
-2. Expand engine-authored possession actions, spacing, defensive matchups and shot creation beyond the current coarse court scenes. Continue competition-specific rules and statistical calibration using the repeatable match benchmark and verified evidence. The screen redesign does not complete these engine dependencies.
+2. Calibrate the new possession model against verified team/game denominators, broaden off-ball creation and defensive decisions, and implement competition-specific rules. Repeatable diagnostics now expose action counts, shot context and isolated tactical effects; they do not complete these acceptance gates.
 3. Extend the world, competition and career layers following the [implementation plan](implementation-plan.md).
 
 ## First-release scope still required

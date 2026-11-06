@@ -1,8 +1,9 @@
 ﻿/** Deterministic FIBA-2024 rules subset. Probability, fatigue and injury parameters remain uncalibrated. */
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../data/fictional-teams';
-import type { InjuryMode, MatchEvent, MatchState, Player, PlayerStats, Side, Tactics } from '../domain/types';
+import type { CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, PossessionPlay, Side, Tactics } from '../domain/types';
 import { nextRandom, normalizeSeed } from './random';
-import { freeThrowPosition, passScene, reboundScene, setupScene, shotScene, turnoverScene } from './court-events';
+import { actionScene, freeThrowPosition, passScene, reboundScene, setupScene, shotScene, turnoverScene } from './court-events';
+import { basketPoint, courtDistance, createPossessionPlay, matchedDefender, moveForAction, positionOf, possessionFormation, shotContext } from './possession';
 export const MAX_MATCH_PERIODS = 24;
 const MAX_SIMULATION_STEPS = 20_000;
 const SIDES: readonly Side[] = ['home', 'away'];
@@ -17,6 +18,7 @@ function emptyStats(): PlayerStats {
 }
 function copy(state: MatchState): MatchState {
   return { ...state, score: { ...state.score },
+    ...(state.engineVersion === 'possession-3' ? { possessionPlay: state.possessionPlay ? { ...state.possessionPlay, positions: state.possessionPlay.positions.map(point => ({ ...point })), matchups: state.possessionPlay.matchups.map(pair => ({ ...pair })) } : null } : {}),
     lineups: { home: [...state.lineups.home], away: [...state.lineups.away] },
     tactics: { home: { ...state.tactics.home }, away: { ...state.tactics.away } },
     stats: Object.fromEntries(Object.entries(state.stats).map(([id, value]) => [id, { ...value }])),
@@ -71,10 +73,19 @@ export function canSubstituteNow(state: MatchState, side: Side, outId?: string):
   return true;
 }
 function whistle(state: MatchState, reason: 'whistle' | 'free-throws' | 'timeout' = 'whistle'): void {
+  clearPossessionPlay(state);
   state.phase = state.freeThrows ? 'free-throws' : 'dead-ball';
   state.stoppage = { reason, substitutionSides: ['home', 'away'], timeoutSides: state.stepCount > 0 && state.clockSeconds > 0 ? ['home', 'away'] : [] };
 }
-function resetPossession(state: MatchState, side: Side, shotClock = 24): void { state.possession = side; state.shotClockSeconds = shotClock; state.frontcourt = false; }
+function clearPossessionPlay(state: MatchState): void { if (state.engineVersion === 'possession-3') state.possessionPlay = null; }
+function resetPossession(state: MatchState, side: Side, shotClock = 24): void {
+  const positions = state.possessionPlay?.positions;
+  state.possession = side; state.shotClockSeconds = shotClock; state.frontcourt = false;
+  if (state.engineVersion === 'possession-3') {
+    state.possessionPlay = createPossessionPlay(state);
+    if (positions) state.possessionPlay.positions = positions.map(point => ({ ...point }));
+  }
+}
 function madeBasketWindow(state: MatchState, scoring: Side): void {
   const receiving = other(scoring); resetPossession(state, receiving); state.phase = 'live-ball';
   state.stoppage = { reason: 'made-basket', substitutionSides: lateGame(state) ? [receiving] : [], timeoutSides: [receiving] };
@@ -102,7 +113,8 @@ function applySubstitution(state: MatchState, side: Side, outId: string, inId: s
   state.lineups[side][index] = inId;
   if (mandatory && state.freeThrows?.shooterId === outId) state.freeThrows.shooterId = inId;
   state.substitutionLocks = [...new Set([...state.substitutionLocks, outId, inId])];
-  emit(state, { type: 'substitution', side, playerId: inId, outgoingPlayerId: outId, text: `${incoming.name} replaces ${outgoing.name}${mandatory ? ' after becoming ineligible' : ''}.`, scene: setupScene(state, state.possession, state.lineups[state.possession][0]!) });
+  const scene = state.engineVersion === 'possession-3' ? lineupScene(state, outId, inId) : setupScene(state, state.possession, state.lineups[state.possession][0]!);
+  emit(state, { type: 'substitution', side, playerId: inId, outgoingPlayerId: outId, text: `${incoming.name} replaces ${outgoing.name}${mandatory ? ' after becoming ineligible' : ''}.`, scene });
 }
 function bestReplacement(state: MatchState, side: Side, outgoing: Player): Player | undefined {
   return state[side].players.filter(p => !state.lineups[side].includes(p.id) && isPlayerEligible(state, p.id)).sort((a, b) => replacementScore(b) - replacementScore(a) || a.id.localeCompare(b.id))[0];
@@ -110,6 +122,7 @@ function bestReplacement(state: MatchState, side: Side, outgoing: Player): Playe
 }
 function clearCommands(state: MatchState): void { state.pendingSubstitutions = { home: [], away: [] }; state.timeoutRequested = { home: false, away: false }; state.requiredSubstitutions = []; }
 function finishDefault(state: MatchState, losing: Side): void {
+  clearPossessionPlay(state);
   const winner = other(losing), officialScore = state.score[winner] > state.score[losing] ? { ...state.score } : { [winner]: 2, [losing]: 0 } as Record<Side, number>;
   for (const side of SIDES) state.lineups[side] = state.lineups[side].filter(id => isPlayerEligible(state, id));
   state.result = { winner, kind: 'default', officialScore }; state.status = 'finished'; state.freeThrows = null; state.stoppage = null; state.phase = 'dead-ball'; clearCommands(state);
@@ -125,7 +138,7 @@ function resolveEligibility(state: MatchState): void {
       else if (incoming) state.requiredSubstitutions.push({ side, playerId: outId, reason });
       else {
         state.lineups[side] = state.lineups[side].filter(id => id !== outId);
-        emit(state, { type: 'substitution', side, outgoingPlayerId: outId, text: `${player(state, side, outId).name} leaves; no eligible substitute remains.`, ...(SIDES.every(team => state.lineups[team].length >= 2) ? { scene: setupScene(state, state.possession, state.lineups[state.possession][0]!) } : {}) });
+        emit(state, { type: 'substitution', side, outgoingPlayerId: outId, text: `${player(state, side, outId).name} leaves; no eligible substitute remains.`, ...(SIDES.every(team => state.lineups[team].length >= 2) ? { scene: state.engineVersion === 'possession-3' ? lineupScene(state) : setupScene(state, state.possession, state.lineups[state.possession][0]!) } : {}) });
         if (state.freeThrows?.shooterId === outId) { const replacement = state.lineups[side].find(id => isPlayerEligible(state, id)); if (replacement) state.freeThrows.shooterId = replacement; }
       }
     }
@@ -228,7 +241,7 @@ function creditAssist(state: MatchState, shooter: Player, teammates: Player[]): 
 function startFreeThrows(state: MatchState, side: Side, shooter: Player, total: 1 | 2 | 3): void { state.freeThrows = { side, shooterId: shooter.id, total, remaining: total }; whistle(state, 'free-throws'); }
 function finishPeriod(state: MatchState): void {
   if (state.clockSeconds !== 0 || state.freeThrows || state.phase === 'period-end' || state.status === 'finished') return;
-  state.phase = 'period-end'; state.shotClockSeconds = 0;
+  clearPossessionPlay(state); state.phase = 'period-end'; state.shotClockSeconds = 0;
   state.stoppage = { reason: 'period-end', substitutionSides: ['home', 'away'], timeoutSides: [] }; state.timeoutRequested = { home: false, away: false };
   emit(state, { type: 'period-end', text: state.period <= 4 ? `End of quarter ${state.period}.` : `End of overtime ${state.period - 4}.` });
   if (state.period >= 4 && state.score.home !== state.score.away) {
@@ -321,6 +334,183 @@ function resolveShot(state: MatchState, offense: Side, shooter: Player, attacker
   }
   if (fouled) startFreeThrows(state, offense, shooter, made ? 1 : value); else if (made) madeBasketWindow(state, offense); else if (state.clockSeconds > 0) rebound(state, offense, !blocked);
 }
+const ballAt = (point: CourtPoint, height = 1.25) => ({ x: point.x, y: point.y, height });
+function settledScene(play: PossessionPlay): CourtScene {
+  const ball = ballAt(positionOf(play, play.handlerId));
+  return actionScene('setup', play.offense, play.positions, play.positions, ball, ball);
+}
+/** Only animation starts may consult prior scenes. Sporting positions never do. */
+function visualStart(state: MatchState, fallback: CourtPosition[]): CourtPosition[] {
+  let previous: CourtPosition[] | undefined;
+  for (let index = state.events.length - 1; index >= 0; index -= 1) if (state.events[index]!.scene) { previous = state.events[index]!.scene!.end; break; }
+  return fallback.map(point => ({ ...(previous?.find(p => p.playerId === point.playerId) ?? point) }));
+}
+function visualBallStart(state: MatchState, fallback: CourtPoint): ReturnType<typeof ballAt> {
+  for (let index = state.events.length - 1; index >= 0; index -= 1) {
+    const scene = state.events[index]!.scene;
+    if (scene) return { ...scene.ball.to };
+  }
+  return ballAt(fallback);
+}
+function lineupScene(state: MatchState, outId?: string, inId?: string): CourtScene {
+  const old = state.possessionPlay, play = createPossessionPlay(state, old?.handlerId === outId ? inId : old?.handlerId);
+  play.positions = play.positions.map(point => ({ ...(old?.positions.find(p => p.playerId === point.playerId) ?? point) }));
+  if (old && outId && inId) {
+    const outgoing = old.positions.find(point => point.playerId === outId), incoming = play.positions.find(point => point.playerId === inId);
+    if (outgoing && incoming) { incoming.x = outgoing.x; incoming.y = outgoing.y; }
+  }
+  state.possessionPlay = state.freeThrows || state.phase === 'period-end' || state.requiredSubstitutions.length ? null : play;
+  return actionScene('setup', play.offense, visualStart(state, play.positions), play.positions, visualBallStart(state, positionOf(play, play.handlerId)), ballAt(positionOf(play, play.handlerId)));
+}
+function installControl(state: MatchState, side: Side, handlerId: string, positions: CourtPosition[], frontcourt: boolean, clock = 24): void {
+  resetPossession(state, side, clock); state.frontcourt = frontcourt;
+  state.possessionPlay = createPossessionPlay(state, handlerId);
+  state.possessionPlay.positions = positions.map(point => ({ ...point }));
+  state.phase = 'live-ball'; state.stoppage = null;
+}
+function possessionTurnover(state: MatchState, play: PossessionPlay, shotClock = false): void {
+  const offense = play.offense, defense = other(offense), handler = player(state, offense, play.handlerId), defender = matchedDefender(state, play);
+  const stolen = !shotClock && draw(state) < .68;
+  state.stats[handler.id]!.turnovers += 1;
+  if (stolen) state.stats[defender.id]!.steals += 1;
+  const from = ballAt(positionOf(play, handler.id)), to = stolen ? ballAt(positionOf(play, defender.id)) : { ...from, y: from.y < .5 ? 0 : 1, height: .2 };
+  installControl(state, defense, defender.id, play.positions, false);
+  if (!stolen) whistle(state);
+  emit(state, { type: shotClock ? 'shot-clock' : 'turnover', side: offense, playerId: handler.id,
+    text: shotClock ? `${state[offense].name} fail to release a shot before the shot-clock signal. Turnover.` : stolen ? `${defender.name} steals the ball from ${handler.name}.` : `${handler.name} loses the ball out of bounds.`,
+    scene: actionScene('turnover', offense, play.positions, play.positions, from, to, .1) });
+}
+function possessionRebound(state: MatchState, play: PossessionPlay, landing: CourtPoint, rimContact = true): void {
+  const offense = play.offense, defense = other(offense), attackers = activePlayers(state, offense), defenders = activePlayers(state, defense);
+  const proximity = (candidate: Player) => 1 / (1 + courtDistance(positionOf(play, candidate.id), landing) * .2);
+  const strength = (players: Player[]) => players.reduce((total, p) => total + p.attributes.rebounding * proximity(p), 0) / Math.max(1, players.length);
+  const offensive = draw(state) < clamp(.25 + (strength(attackers) - strength(defenders)) * .014 + (attackers.length - defenders.length) * .035, .12, .46);
+  const side = offensive ? offense : defense;
+  const rebounder = choose(state, offensive ? attackers : defenders, p => p.attributes.rebounding * proximity(p));
+  const positions = play.positions.map(point => point.playerId === rebounder.id ? { ...point, ...landing } : { ...point });
+  state.stats[rebounder.id]!.rebounds += 1;
+  installControl(state, side, rebounder.id, positions, offensive, offensive ? rimContact ? 14 : state.shotClockSeconds : 24);
+  emit(state, { type: 'rebound', side, playerId: rebounder.id, text: `${rebounder.name} collects the ${offensive ? 'offensive' : 'defensive'} rebound.`,
+    scene: actionScene('rebound', offense, play.positions, positions, ballAt(landing, .45), ballAt(landing), .12) });
+}
+function resolvePossessionShot(state: MatchState, play: PossessionPlay, rushed: boolean): void {
+  const offense = play.offense, defense = other(offense), shooter = player(state, offense, play.handlerId), stats = state.stats[shooter.id]!;
+  const context = shotContext(state, play), defender = matchedDefender(state, play), three = context.value === 3;
+  const fouled = draw(state) < clamp(.055 + state.tactics[defense].pressure * .065 + (three ? 0 : .025) - Math.max(0, context.separationM - 1.5) * .025, .025, .16);
+  const blocked = !fouled && draw(state) < clamp(.008 + defender.attributes.defense * .0012 + Math.max(0, defender.heightCm - shooter.heightCm) * .0008 - Math.max(0, context.separationM - .75) * .012, .002, .065);
+  const made = !blocked && draw(state) < context.makeChance * (fouled ? .65 : 1) - (rushed ? .06 : 0);
+  const origin = positionOf(play, shooter.id), hoop = basketPoint(state, offense);
+  const landing: CourtPoint = made ? hoop : { x: clamp(hoop.x - attackingDirection(state, offense) * (.5 + draw(state) * 1.4) / 28, .025, .975), y: clamp(.5 + (draw(state) - .5) * .22, .08, .92) };
+  // A final completed pass is credited only if no drive, whistle or control
+  // change intervened. It exists before this attempt's outcome is sampled.
+  const passerId = made ? play.passerId : null;
+  if (!fouled || made) {
+    stats.fieldGoalsAttempted += 1; if (three) stats.threePointersAttempted += 1;
+    if (made) { stats.fieldGoalsMade += 1; if (three) stats.threePointersMade += 1; creditPoints(state, offense, shooter, context.value); }
+    if (blocked) state.stats[defender.id]!.blocks += 1;
+    if (passerId) state.stats[passerId]!.assists += 1;
+    emit(state, { type: 'shot', side: offense, playerId: shooter.id, ...(passerId ? { assistPlayerId: passerId } : {}),
+      text: blocked ? `${defender.name} blocks ${shooter.name}.` : `${shooter.name} ${made ? 'makes' : 'misses'} ${context.contest === 'open' ? 'an open' : `a ${context.contest}`} ${three ? 'three-pointer' : 'two-point shot'}${state.clockSeconds === 0 ? ' released before the period horn' : ''}.`,
+      shot: { x: origin.x, y: origin.y, made, value: context.value, defenderId: context.defenderId, contest: context.contest, distanceM: context.distanceM },
+      scene: actionScene('shot', offense, play.positions, play.positions, ballAt(origin, 2.1), ballAt(landing, made ? 3.05 : .45), made ? 3.1 : 2.8) });
+  }
+  if (fouled) { personalFoul(state, defense, defender, `${defender.name} fouls ${shooter.name} on the shot.`); startFreeThrows(state, offense, shooter, made ? 1 : context.value); }
+  else if (made) madeBasketWindow(state, offense);
+  else if (state.clockSeconds > 0) possessionRebound(state, play, landing, !blocked);
+}
+function resolvePossessionAction(state: MatchState): void {
+  const restarted = !state.possessionPlay;
+  const play = state.possessionPlay ?? createPossessionPlay(state); state.possessionPlay = play;
+  const offense = play.offense, defense = other(offense), handler = player(state, offense, play.handlerId), defender = matchedDefender(state, play);
+  const tactics = state.tactics[offense], pressure = state.tactics[defense].pressure;
+  const distance = courtDistance(positionOf(play, handler.id), basketPoint(state, offense));
+  let action: 'advance' | 'pass' | 'drive' | 'shot';
+  if (restarted || !state.frontcourt) action = 'advance';
+  // Leave room to release after the longer creation windows. A new pass or
+  // drive with only a few seconds left should not routinely strand the ball.
+  else if (state.shotClockSeconds <= 8 || play.actions >= 4) action = 'shot';
+  else {
+    const roll = draw(state), shootChance = distance < 4.5 ? .66 : clamp(.12 + play.actions * .12 + tactics.outsideShare * .13, .12, .68);
+    action = roll < shootChance ? 'shot' : roll < shootChance + (1 - shootChance) * (.3 + tactics.outsideShare * .58) ? 'pass' : 'drive';
+  }
+  // Include organizing, reading the defense and executing each action. Tempo
+  // changes these windows modestly; animation duration is unrelated to them.
+  const actionSeconds = action === 'advance' || action === 'drive' ? 6 : 5;
+  let proposed = clamp(Math.round(actionSeconds + (.5 - tactics.tempo) + (draw(state) - .5) * 2), 1, action === 'advance' ? 8 : 7);
+  const rushed = action === 'shot' && state.shotClockSeconds <= 5;
+  if (action === 'shot' && state.shotClockSeconds <= 8 && state.shotClockSeconds > 1) proposed = Math.min(proposed, state.shotClockSeconds - 1);
+  const shotClockExpired = proposed >= state.shotClockSeconds && state.shotClockSeconds < state.clockSeconds;
+  const seconds = Math.min(state.clockSeconds, state.shotClockSeconds, proposed);
+  if (seconds <= 0) throw new Error('A live action must have time on both clocks.');
+  exposure(state, seconds); state.clockSeconds -= seconds; state.shotClockSeconds -= seconds; state.stepCount += 1; state.phase = 'live-ball'; state.stoppage = null;
+  if (shotClockExpired) possessionTurnover(state, play, true);
+  else if (seconds < proposed || state.clockSeconds === 0 && action !== 'shot') {
+    emit(state, { type: 'command', side: offense, playerId: handler.id, text: `The period horn interrupts ${handler.name}'s ${action === 'advance' ? 'advance' : action === 'shot' ? 'shot preparation' : action}.`, scene: settledScene(play) });
+  } else if (action === 'advance') {
+    const start = restarted ? visualStart(state, play.positions) : play.positions;
+    const positions = moveForAction(state, play, 'advance');
+    const from = visualBallStart(state, start.find(point => point.playerId === handler.id)!), to = ballAt(positions.find(point => point.playerId === handler.id)!);
+    play.positions = positions; play.actions += 1; play.passerId = null; state.frontcourt = true;
+    emit(state, { type: 'command', side: offense, playerId: handler.id, text: `${handler.name} brings ${state[offense].name} into their half-court offense.`, scene: actionScene('setup', offense, start, positions, from, to) });
+  } else {
+    const fatigue = (100 - state.stats[handler.id]!.condition) / 100;
+    const turnoverChance = clamp((action === 'shot' ? .008 : .018) + pressure * .024 + (defender.attributes.defense - handler.attributes.passing) * .002 + fatigue * .014, .006, .095);
+    const foulChance = (action === 'drive' ? .028 : .012) + pressure * .018;
+    const roll = draw(state);
+    if (roll < turnoverChance) possessionTurnover(state, play);
+    else if (roll < turnoverChance + .007) {
+      personalFoul(state, offense, handler, `${handler.name} commits a team-control offensive foul. No free throws.`);
+      state.stats[handler.id]!.turnovers += 1; resetPossession(state, defense); whistle(state);
+    } else if (roll < turnoverChance + .007 + foulChance) {
+      personalFoul(state, defense, defender, `${defender.name} commits a non-shooting defensive foul on ${handler.name}.`);
+      if (state.teamFouls[defense] >= 5) startFreeThrows(state, offense, handler, 2);
+      else { state.shotClockSeconds = defensiveFoulShotClock(state.shotClockSeconds, state.frontcourt); whistle(state); }
+    } else if (roll < turnoverChance + .011 + foulChance) {
+      const receiving = state.possessionArrow; state.possessionArrow = other(receiving);
+      if (receiving !== offense) resetPossession(state, receiving);
+      whistle(state); emit(state, { type: 'held-ball', side: receiving, text: `Held ball. The possession arrow awards the throw-in to ${state[receiving].name}.` });
+    } else if (action === 'shot') resolvePossessionShot(state, play, rushed);
+    else {
+      const receiver = action === 'pass' ? choose(state, activePlayers(state, offense).filter(p => p.id !== handler.id), p => {
+        const rangePreference = tactics.outsideShare * p.attributes.threePoint + (1 - tactics.outsideShare) * p.attributes.twoPoint;
+        const rolePreference = p.position === 'PF' || p.position === 'C' ? 1.5 - tactics.outsideShare : .5 + tactics.outsideShare;
+        const separation = courtDistance(positionOf(play, p.id), positionOf(play, matchedDefender(state, play, p.id).id));
+        return rangePreference * rolePreference * clamp(.8 + separation * .15, .8, 1.35);
+      }) : handler;
+      const start = play.positions, positions = moveForAction(state, play, action, receiver.id, draw(state));
+      const from = ballAt(positionOf(play, handler.id)), to = ballAt(positions.find(point => point.playerId === receiver.id)!);
+      play.positions = positions; play.handlerId = receiver.id; play.passerId = action === 'pass' ? handler.id : null; play.actions += 1;
+      emit(state, { type: action, side: offense, playerId: handler.id, ...(action === 'pass' ? { receiverId: receiver.id } : {}),
+        text: action === 'pass' ? `${handler.name} finds ${receiver.name} with the pass.` : `${handler.name} drives toward the basket.`, scene: actionScene(action, offense, start, positions, from, to, action === 'pass' ? .35 : .08) });
+    }
+  }
+  sampleInjuries(state, seconds); finishPeriod(state); resolveEligibility(state);
+}
+function resolvePossessionFreeThrow(state: MatchState): void {
+  const sequence = state.freeThrows!, shooter = player(state, sequence.side, sequence.shooterId), stats = state.stats[shooter.id]!;
+  if (!isPlayerEligible(state, shooter.id)) throw new Error('Replace the ineligible free-throw shooter first.');
+  const location = freeThrowPosition(state, sequence.side);
+  const positions = possessionFormation(state, sequence.side, true);
+  for (const side of SIDES) positions.filter(point => state.lineups[side].includes(point.playerId) && point.playerId !== shooter.id).forEach((point, index) => {
+    const x = .87 - Math.floor(index / 2) * .045 - (side === sequence.side ? .02 : 0);
+    point.x = attackingDirection(state, sequence.side) === 1 ? x : 1 - x; point.y = index % 2 ? .69 : .31;
+  });
+  Object.assign(positions.find(point => point.playerId === shooter.id)!, location);
+  const play = { ...createPossessionPlay({ ...state, possession: sequence.side }, shooter.id), positions };
+  emit(state, { type: 'command', side: sequence.side, playerId: shooter.id, text: `${shooter.name} sets at the free-throw line.`,
+    scene: actionScene('setup', sequence.side, visualStart(state, positions), positions, visualBallStart(state, location), ballAt(location)) });
+  const made = draw(state) < clamp(.45 + shooter.attributes.freeThrow * .025 - (100 - stats.condition) / 100 * .021, .4, .95);
+  stats.freeThrowsAttempted += 1; if (made) { stats.freeThrowsMade += 1; creditPoints(state, sequence.side, shooter, 1); }
+  const hoop = basketPoint(state, sequence.side), landing = made ? hoop : { x: hoop.x - attackingDirection(state, sequence.side) / 28, y: .46 + draw(state) * .08 };
+  const index = sequence.total - sequence.remaining + 1;
+  emit(state, { type: 'free-throw', side: sequence.side, playerId: shooter.id, text: `${shooter.name} ${made ? 'makes' : 'misses'} free throw ${index} of ${sequence.total}.`,
+    scene: actionScene('free-throw', sequence.side, positions, positions, ballAt(location, 2.1), ballAt(landing, made ? 3.05 : .45), 2.7) });
+  sequence.remaining -= 1; state.stoppage = null;
+  if (sequence.remaining > 0) return;
+  state.freeThrows = null;
+  if (state.clockSeconds === 0) { finishPeriod(state); return; }
+  if (made) { resetPossession(state, other(sequence.side)); whistle(state); } else possessionRebound(state, play, landing);
+}
 function beginPeriod(state: MatchState): void {
   if (state.period >= MAX_MATCH_PERIODS) throw new Error('Simulation stopped after 20 overtimes; no winner was fabricated.');
   state.period += 1; state.clockSeconds = state.period <= 4 ? 600 : 300;
@@ -331,9 +521,10 @@ function beginPeriod(state: MatchState): void {
   recovery(state, state.period === 3 ? 8 : 3);
   emit(state, { type: 'period-start', text: state.period <= 4 ? `Quarter ${state.period} begins.` : `Overtime ${state.period - 4} begins.` });
 }
-export function createMatch(seed = 42): MatchState {
+export function createMatch(seed = 42, engineVersion: EngineVersion = 'possession-3'): MatchState {
+  if (engineVersion !== 'rules-2' && engineVersion !== 'possession-3') throw new Error('Choose a supported match engine.');
   const state: MatchState = {
-    schemaVersion: 2, engineVersion: 'rules-2', seed, rngState: normalizeSeed(seed), home: FICTIONAL_HOME, away: FICTIONAL_AWAY, score: { home: 0, away: 0 },
+    schemaVersion: 2, engineVersion, seed, rngState: normalizeSeed(seed), home: FICTIONAL_HOME, away: FICTIONAL_AWAY, score: { home: 0, away: 0 },
     period: 1, clockSeconds: 600, status: 'ready', phase: 'dead-ball', possession: 'home', possessionArrow: 'away', shotClockSeconds: 24, frontcourt: false, teamFouls: { home: 0, away: 0 },
     timeoutUsage: { home: { firstHalf: 0, secondHalf: 0, overtime: 0, lateFourth: 0 }, away: { firstHalf: 0, secondHalf: 0, overtime: 0, lateFourth: 0 } },
     timeoutRequested: { home: false, away: false }, pendingSubstitutions: { home: [], away: [] }, requiredSubstitutions: [], freeThrows: null,
@@ -342,7 +533,9 @@ export function createMatch(seed = 42): MatchState {
     tactics: { home: { ...DEFAULT_TACTICS }, away: { ...DEFAULT_TACTICS } }, stats: Object.fromEntries([...FICTIONAL_HOME.players, ...FICTIONAL_AWAY.players].map(p => [p.id, emptyStats()])), events: [], stepCount: 0,
   };
   state.possession = draw(state) < 0.5 ? 'home' : 'away'; state.possessionArrow = other(state.possession);
-  emit(state, { type: 'tipoff', side: state.possession, text: `${state[state.possession].name} win the opening tip. FIBA-2024 exhibition rules subset.`, scene: setupScene(state, state.possession, state.lineups[state.possession][0]!) }); return state;
+  if (engineVersion === 'possession-3') state.possessionPlay = createPossessionPlay(state);
+  const scene = state.possessionPlay ? settledScene(state.possessionPlay) : setupScene(state, state.possession, state.lineups[state.possession][0]!);
+  emit(state, { type: 'tipoff', side: state.possession, text: `${state[state.possession].name} win the opening tip. FIBA-2024 exhibition rules subset.`, scene }); return state;
 }
 /** One deterministic live action or free throw; critical decisions stop every playback mode. */
 export function stepMatch(state: MatchState): MatchState {
@@ -352,7 +545,8 @@ export function stepMatch(state: MatchState): MatchState {
   serviceStoppage(next); if (next.requiredSubstitutions.length) return next;
   if (next.phase === 'period-end' || next.clockSeconds === 0 && !next.freeThrows) beginPeriod(next);
   next.status = 'playing';
-  if (next.freeThrows) resolveFreeThrow(next); else { next.stoppage = null; resolveAction(next); }
+  if (next.freeThrows) { if (next.engineVersion === 'possession-3') resolvePossessionFreeThrow(next); else resolveFreeThrow(next); }
+  else { next.stoppage = null; if (next.engineVersion === 'possession-3') resolvePossessionAction(next); else resolveAction(next); }
   if (!next.result) serviceStoppage(next); return next;
 }
 export function simulateToQuarterEnd(state: MatchState): MatchState {

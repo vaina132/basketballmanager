@@ -1,6 +1,9 @@
 ﻿import { describe, expect, it } from 'vitest';
 import type { MatchState, Side } from '../src/domain/types';
-import { attackingDirection, canSubstituteNow, cancelSubstitution, cancelTimeoutRequest, createMatch, defensiveFoulShotClock, isPlayerEligible, remainingTimeouts, requestTimeout, setAutoSubstitutions, setInjuryMode, simulateToEnd, simulateToQuarterEnd, stepMatch, substitutePlayer } from '../src/engine/match';
+import { attackingDirection, canSubstituteNow, cancelSubstitution, cancelTimeoutRequest, createMatch as createVersionedMatch, defensiveFoulShotClock, isPlayerEligible, remainingTimeouts, requestTimeout, setAutoSubstitutions, setInjuryMode, simulateToEnd, simulateToQuarterEnd, stepMatch, substitutePlayer } from '../src/engine/match';
+
+// Preserve the legacy sporting contract independently of the current default engine.
+const createMatch = (seed = 42) => createVersionedMatch(seed, 'rules-2');
 
 const other = (side: Side): Side => side === 'home' ? 'away' : 'home';
 const fixture = (seed = 42) => setInjuryMode(createMatch(seed), 'off');

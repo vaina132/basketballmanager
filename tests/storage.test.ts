@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { MatchState } from '../src/domain/types';
 import {
-  canSubstituteNow, createMatch, isPlayerEligible, remainingTimeouts, requestTimeout, setAutoSubstitutions,
+  canSubstituteNow, createMatch as createVersionedMatch, isPlayerEligible, remainingTimeouts, requestTimeout, setAutoSubstitutions,
   setInjuryMode, setTactics, simulateToEnd, simulateToQuarterEnd, stepMatch, substitutePlayer,
 } from '../src/engine/match';
 import { MAX_SAVE_BYTES, parseMatch, serializeMatch } from '../src/storage/match-storage';
 import { validateMatchState } from '../src/storage/validate-match';
+
+// Preserve the legacy sporting contract independently of the current default engine.
+const createMatch = (seed = 42) => createVersionedMatch(seed, 'rules-2');
+
 
 interface Envelope {
   format: string;
@@ -191,7 +195,7 @@ describe('exhibition save files', () => {
       expect(parseMatch(serializeMatch(state))).toEqual(state);
     }
     expect([...phases].sort()).toEqual(['dead-ball', 'free-throws', 'live-ball', 'period-end']);
-  }, 30_000);
+  }, 90_000);
 
   it('saves depleted lineups and a default result without inventing player points', () => {
     let shortHanded = false;

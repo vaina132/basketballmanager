@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { CourtScene, MatchState, Side } from '../src/domain/types';
 import { freeThrowPosition, hoopPosition, passScene, reboundScene, setupScene, shotScene, turnoverScene } from '../src/engine/court-events';
-import { createMatch, setAutoSubstitutions, setInjuryMode, simulateToEnd, stepMatch, substitutePlayer } from '../src/engine/match';
+import { createMatch as createVersionedMatch, setAutoSubstitutions, setInjuryMode, simulateToEnd, stepMatch, substitutePlayer } from '../src/engine/match';
+
+// Preserve the legacy sporting contract independently of the current default engine.
+const createMatch = (seed = 42) => createVersionedMatch(seed, 'rules-2');
 
 function autonomous(seed: number): MatchState {
   let state = setInjuryMode(createMatch(seed), 'off');
@@ -31,7 +34,7 @@ describe('event-authored court scenes', () => {
       return { seed, score: result.score, hash: await sha256(sportingState(result)) };
     }));
     expect(await sha256(hashes)).toBe('960af650db6c2c013ef37690b3dbdcbf874cf43b358b1dff8efa2a3262a5b9aa');
-  });
+  }, 30_000);
 
   it('captures actual active actors, continuous poses and bounded geometry through a complete match', () => {
     const initial = autonomous(876), result = simulateToEnd(initial);

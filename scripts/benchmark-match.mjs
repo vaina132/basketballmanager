@@ -9,11 +9,11 @@ const artifactRoot = path.join(repositoryRoot, '.artifacts');
 const sides = ['home', 'away'];
 
 function parseArguments(args) {
-  const options = { matches: 100, injuryMatches: 0, output: '.artifacts/match-benchmark.json' };
+  const options = { matches: 100, injuryMatches: 0, tacticMatches: 30, output: '.artifacts/match-benchmark.json' };
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === '--help') return { help: true };
-    if (!['--matches', '--injury-matches', '--output'].includes(arg)) throw new Error(`Unknown option: ${arg}`);
+    if (!['--matches', '--injury-matches', '--tactic-matches', '--output'].includes(arg)) throw new Error(`Unknown option: ${arg}`);
     const value = args[++i];
     if (!value || value.startsWith('--')) throw new Error(`Missing value after ${arg}.`);
     if (arg === '--output') options.output = value;
@@ -23,7 +23,7 @@ function parseArguments(args) {
       const minimum = arg === '--matches' ? 1 : 0;
       const maximum = arg === '--matches' ? 1000 : 100;
       if (count < minimum || count > maximum) throw new Error(`${arg} must be between ${minimum} and ${maximum}.`);
-      options[arg === '--matches' ? 'matches' : 'injuryMatches'] = count;
+      options[arg === '--matches' ? 'matches' : arg === '--injury-matches' ? 'injuryMatches' : 'tacticMatches'] = count;
     }
   }
   const outputPath = path.resolve(repositoryRoot, options.output);
@@ -62,11 +62,59 @@ function distribution(values, matchMeans = values) {
 function ratio(numerator, denominator) { return denominator > 0 ? rounded(numerator / denominator) : null; }
 function ensure(condition, message) { if (!condition) throw new Error(message); }
 async function sourceHashes() {
-  const names = ['src/engine/match.ts', 'src/engine/random.ts', 'src/data/fictional-teams.ts'];
+  const names = ['src/engine/match.ts', 'src/engine/possession.ts', 'src/engine/court-events.ts', 'src/engine/random.ts', 'src/domain/types.ts', 'src/data/fictional-teams.ts', 'scripts/benchmark-match.mjs'];
   return Object.fromEntries(await Promise.all(names.map(async name => [name, createHash('sha256').update(await fs.readFile(path.join(repositoryRoot, name))).digest('hex')])));
 }
 function elapsedSeconds(state) {
   return state.period <= 4 ? state.period * 600 - state.clockSeconds : 2400 + (state.period - 4) * 300 - state.clockSeconds;
+}
+
+function runTacticContrasts(engine, count) {
+  if (!count) return null;
+  const specifications = [
+    { control: 'tempo', sides, low: 0, high: 1 },
+    { control: 'outsideShare', sides: ['home'], low: 0, high: 1 },
+    { control: 'pressure', sides: ['home'], low: 0, high: 1 },
+  ];
+  const measure = state => {
+    const sum = (side, field) => state[side].players.reduce((total, player) => total + state.stats[player.id][field], 0);
+    const elapsed = elapsedSeconds(state);
+    const homeAttempts = sum('home', 'fieldGoalsAttempted');
+    return {
+      actionsPer40Minutes: state.stepCount * 2400 / elapsed,
+      fieldGoalAttemptsPer40Minutes: (homeAttempts + sum('away', 'fieldGoalsAttempted')) * 2400 / elapsed,
+      homeThreePointAttemptShare: homeAttempts ? sum('home', 'threePointersAttempted') / homeAttempts : 0,
+      homeFoulsPer40Minutes: sum('home', 'fouls') * 2400 / elapsed,
+      awayTurnoversPer40Minutes: sum('away', 'turnovers') * 2400 / elapsed,
+      homeRosterMeanFinalCondition: sum('home', 'condition') / state.home.players.length,
+    };
+  };
+  return {
+    matchesPerSetting: count, seedRange: [1, count], injuryMode: 'off', autoSubstitutions: { home: true, away: true },
+    method: 'Paired seed runs change only the named control. Other instructions retain their defaults. Each reported difference is high minus low for the same seed. Divergent actions consume randomness differently; this is a behavioral diagnostic, not a controlled real-world experiment or fitted calibration.',
+    contrasts: specifications.map(specification => {
+      const pairs = [];
+      for (let seed = 1; seed <= count; seed += 1) {
+        const results = [specification.low, specification.high].map(value => {
+          let state = engine.setInjuryMode(engine.createMatch(seed), 'off');
+          for (const side of sides) state = engine.setAutoSubstitutions(state, side, true);
+          for (const side of specification.sides) state = engine.setTactics(state, side, { [specification.control]: value });
+          state = engine.simulateToEnd(state);
+          ensure(state.status === 'finished', `Tactic contrast ${specification.control}, seed ${seed} did not finish.`);
+          return measure(state);
+        });
+        pairs.push({ seed, low: results[0], high: results[1] });
+      }
+      return {
+        ...specification,
+        metrics: Object.fromEntries(Object.keys(pairs[0].low).map(metric => [metric, {
+          low: distribution(pairs.map(pair => pair.low[metric])),
+          high: distribution(pairs.map(pair => pair.high[metric])),
+          pairedDifference: distribution(pairs.map(pair => pair.high[metric] - pair.low[metric])),
+        }])),
+      };
+    }),
+  };
 }
 
 function runSample(engine, count, injuryMode) {
@@ -79,6 +127,8 @@ function runSample(engine, count, injuryMode) {
   const defaultSeeds = [];
   const invariantFailures = [];
   const elapsedPlayerHours = [];
+  const actions = { eventCounts: {}, shotsByContest: {}, shotsByValue: { 2: 0, 3: 0 }, assistedMadeShots: 0, completedPasses: 0, drives: 0, missingShotContext: 0 };
+  const shotDistances = [];
 
   for (let seed = 1; seed <= count; seed += 1) {
     const minuteStart = playerMinutes.length, reboundRateStart = offensiveReboundRates.length;
@@ -99,6 +149,20 @@ function runSample(engine, count, injuryMode) {
     shotClockViolations += match.events.filter(event => event.type === 'shot-clock').length;
     const boards = { home: { offensive: 0, defensive: 0 }, away: { offensive: 0, defensive: 0 } };
     for (const event of match.events) {
+      actions.eventCounts[event.type] = (actions.eventCounts[event.type] ?? 0) + 1;
+      if (event.type === 'pass') actions.completedPasses += 1;
+      if (event.type === 'drive') actions.drives += 1;
+      if (event.shot) {
+        const contest = event.shot.contest ?? 'unspecified';
+        actions.shotsByContest[contest] = (actions.shotsByContest[contest] ?? 0) + 1;
+        actions.shotsByValue[event.shot.value] += 1;
+        if (Number.isFinite(event.shot.distanceM)) shotDistances.push(event.shot.distanceM);
+        if (!event.shot.defenderId || !event.shot.contest || !Number.isFinite(event.shot.distanceM)) actions.missingShotContext += 1;
+        if (event.assistPlayerId) {
+          ensure(event.shot.made, `${prefix}: assist credited on a missed shot.`);
+          actions.assistedMadeShots += 1;
+        }
+      }
       if (event.type !== 'rebound') continue;
       ensure(sides.includes(event.side), `${prefix}: rebound has no valid team.`);
       if (/\boffensive rebound\b/i.test(event.text)) boards[event.side].offensive += 1;
@@ -121,8 +185,10 @@ function runSample(engine, count, injuryMode) {
       check(played <= elapsed * 5 && played >= 0, 'court exposure is bounded by elapsed time');
       check(points === match.score[side], 'player scoring reconciles with played score');
       check(points === 2 * sum('fieldGoalsMade') + sum('threePointersMade') + sum('freeThrowsMade'), 'shooting arithmetic reconciles');
+      check(sum('fieldGoalsAttempted') === match.events.filter(event => event.side === side && event.shot).length, 'shot events reconcile with counted field-goal attempts');
       check(sum('rebounds') === boards[side].offensive + boards[side].defensive, 'rebound events reconcile with player totals');
       check(values.every(stats => stats.fouls <= 5), 'no player exceeds the foul limit');
+      check(sum('assists') === match.events.filter(event => event.side === side && event.assistPlayerId).length, 'actual passer credits reconcile with assist statistics');
       if (match.result.kind === 'normal') check(match.result.officialScore[side] === points, 'normal result equals played score');
       teamScores.push(match.score[side]);
       const possessions = sum('fieldGoalsAttempted') + 0.44 * sum('freeThrowsAttempted') - boards[side].offensive + sum('turnovers');
@@ -169,6 +235,7 @@ function runSample(engine, count, injuryMode) {
       offensiveReboundRate: ratio(totals.offensiveRebounds, totals.offensiveRebounds + totals.defensiveRebounds),
     },
     totals, overtimeGames, defaults, defaultSeeds, shotClockViolations,
+    actions: { ...actions, shotDistanceMetres: distribution(shotDistances, []), passesPerMatch: ratio(actions.completedPasses, count), drivesPerMatch: ratio(actions.drives, count) },
     exposure: { totalPlayerHours: rounded(totalPlayerHours), shortHandedTeamSamples, maxCourtAccountingErrorSeconds },
     injuries: { count: injuryCount, perMatch: distribution(injuriesPerMatch), per1000PlayerHours: ratio(injuryCount * 1000, totalPlayerHours) },
     rotation: [...playerSamples.entries()].map(([playerId, sample]) => ({ playerId, side: sample.side, name: sample.name, minutes: distribution(sample.minutes) })),
@@ -253,21 +320,22 @@ async function readOfficialReference(baseline) {
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   if (options.help) {
-    console.log('Usage: node scripts/benchmark-match.mjs [--matches 1..1000] [--injury-matches 0..100] [--output .artifacts/name.json]');
+    console.log('Usage: node scripts/benchmark-match.mjs [--matches 1..1000] [--injury-matches 0..100] [--tactic-matches 0..100] [--output .artifacts/name.json]');
     return;
   }
   const server = await createServer({ configFile: false, root: repositoryRoot, server: { middlewareMode: true, watch: null }, appType: 'custom', logLevel: 'error' });
   try {
     const hashes = await sourceHashes();
     const engine = await server.ssrLoadModule('/src/engine/match.ts');
-    for (const name of ['createMatch', 'setAutoSubstitutions', 'setInjuryMode', 'simulateToEnd']) ensure(typeof engine[name] === 'function', `Engine is not ready: missing ${name}.`);
+    for (const name of ['createMatch', 'setAutoSubstitutions', 'setInjuryMode', 'setTactics', 'simulateToEnd']) ensure(typeof engine[name] === 'function', `Engine is not ready: missing ${name}.`);
     const version = engine.createMatch(1).engineVersion;
-    ensure(version === 'rules-2', `Expected rules-2 engine; found ${version}.`);
+    ensure(version === 'possession-3', `Expected current possession-3 engine; found ${version}.`);
     const baseline = runSample(engine, options.matches, 'off');
     const injuryDiagnostic = options.injuryMatches > 0 ? runSample(engine, options.injuryMatches, 'standard') : null;
+    const tacticContrasts = runTacticContrasts(engine, options.tacticMatches);
     ensure(JSON.stringify(hashes) === JSON.stringify(await sourceHashes()), 'Engine source changed during the benchmark. Rerun after edits finish.');
     const report = {
-      benchmarkVersion: 1, generatedAt: new Date().toISOString(), engineVersion: version, sourceHashes: hashes,
+      benchmarkVersion: 2, generatedAt: new Date().toISOString(), engineVersion: version, sourceHashes: hashes,
       dataset: 'The two bundled fictional exhibition teams; default tactics; full automatic substitutions for both teams.',
       purpose: 'Repeatable diagnostic and accounting checks. This is not a real-world calibration or evidence of realistic injury incidence.',
       methods: {
@@ -278,9 +346,10 @@ async function main() {
         percentages: 'Fractions from 0 to 1, with shooting rates weighted by aggregate attempts; null when denominator is zero.',
         scores: 'Played scores are used for distributions and box-score reconciliation. Official default awards are stored separately by the engine.',
         injuryExposure: 'Per 1,000 player-hours of simulated on-court exposure; small diagnostic sample, no epidemiological claim.',
+        actions: 'Counts of authoritative action events, including completed passes and drives. Recorded shot events correspond to counted field-goal attempts; missed shots with a shooting foul are represented by foul/free-throw events and are absent from shot-context counts. Shot-distance distribution has no independent-match confidence interval.',
       },
       officialComparison: await readOfficialReference(baseline),
-      baseline, injuryDiagnostic,
+      baseline, injuryDiagnostic, tacticContrasts,
     };
     await writeReport(options.outputPath, report);
     const failures = baseline.invariantFailures.length + (injuryDiagnostic?.invariantFailures.length ?? 0);

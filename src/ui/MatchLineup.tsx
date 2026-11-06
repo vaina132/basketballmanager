@@ -18,8 +18,9 @@ function LineupPlayer({ player, match, side, active }: { player: Player; match: 
   </article>
 }
 
-export function MatchLineup({ match }: { match: MatchState }) {
-  const [side, setSide] = useState<Side>('home')
+export function MatchLineup({ match, managedSide = 'home' }: { match: MatchState; managedSide?: Side }) {
+  const [showOpponent, setShowOpponent] = useState(false)
+  const side: Side = showOpponent ? managedSide === 'home' ? 'away' : 'home' : managedSide
   const [benchOpen, setBenchOpen] = useState(false)
   const benchId = useId()
   const team = match[side]
@@ -32,7 +33,7 @@ export function MatchLineup({ match }: { match: MatchState }) {
   return <section className="match-lineup" aria-label="Player stamina">
     <div className="lineup-toolbar">
       <div className="lineup-title"><span className="lineup-live-dot" /><h3>On the floor</h3><span>Stamina</span></div>
-      <div className="lineup-team-switch" aria-label="Lineup team">{(['home', 'away'] as const).map(value => <button key={value} type="button" onClick={() => setSide(value)} aria-pressed={side === value} className={side === value ? 'selected' : ''}><span style={{ backgroundColor: match[value].color }} />{match[value].shortName}<small>{value === 'home' ? 'Your team' : 'Opponent'}</small></button>)}</div>
+      <div className="lineup-team-switch" aria-label="Lineup team">{(['home', 'away'] as const).map(value => <button key={value} type="button" onClick={() => setShowOpponent(value !== managedSide)} aria-pressed={side === value} className={side === value ? 'selected' : ''}><span style={{ backgroundColor: match[value].color }} />{match[value].shortName}<small>{value === managedSide ? 'Your team' : 'Opponent'}</small></button>)}</div>
       <button className="lineup-bench-toggle" type="button" aria-expanded={benchOpen} aria-controls={benchId} onClick={() => setBenchOpen(value => !value)}>{benchOpen ? 'Hide bench' : 'Show bench'} <span>{bench.length}</span><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
     </div>
     <div className="lineup-grid" aria-label={`${team.name} on court`}>{active.map(player => <LineupPlayer key={player.id} player={player} match={match} side={side} active />)}</div>

@@ -1,135 +1,143 @@
-/* Shared management-game shell. Screens present state and working commands. */
-.game-shell .sidebar { width: 200px; padding: 25px 15px 20px; }
-.game-shell .brand { font-size: 16px; gap: 9px; }
-.game-shell .brand small { font-size: 6px; letter-spacing: 1.65px; }
-.game-shell .brand-symbol svg { width: 27px; height: 27px; }
-.game-shell .main-shell { margin-left: 200px; }
-.club-context { display: flex; align-items: center; gap: 10px; margin: 28px 0 22px; padding: 16px 0; border-block: 1px solid var(--border); }
-.club-context .club-mark { width: 38px; height: 43px; border-radius: 8px; }
-.club-context strong { font-size: 12px; font-weight: 600; }
-.club-context > div > span { display: block; color: var(--muted); font-size: 11px; margin-top: 5px; }
-.game-shell .main-nav { gap: 5px; }
-.game-shell .nav-item { font-size: 13px; padding: 12px 10px; border-radius: 5px; }
-.game-shell .sidebar-bottom { padding: 20px 8px 0; }
-.session-mode { display: flex; gap: 8px; align-items: center; font-size: 12px; color: #bbc8b3; }
-.game-shell .sidebar-bottom > p { margin-top: 6px; font-size: 11px; color: #93a18d; }
-.game-shell .manager { font-size: 12px; margin-top: 18px; padding-top: 18px; }
-.game-shell .manager small { font-size: 10px; color: #8fa087; }
-.game-shell .topbar { position: sticky; top: 0; z-index: 12; height: 58px; padding-inline: 24px; }
-.game-context { display: flex; align-items: center; gap: 14px; min-width: 0; font-size: 12px; }
+/* Shared management-game shell: compact navigation and a persistent command bar. */
+.game-shell .skip-link { top: 0; transform: translateY(-150%); white-space: nowrap; }
+.game-shell .skip-link:focus { top: 8px; transform: none; }
+.game-shell .sidebar:focus-within { z-index: 20; }
+.game-shell .sidebar { width: 176px; padding: 16px 8px 12px; }
+.game-shell .brand { font-size: 14px; gap: 7px; padding-inline: 5px; }
+.game-shell .brand small { font-size: 6px; letter-spacing: 1.3px; }
+.game-shell .brand-symbol svg { width: 25px; height: 25px; }
+.game-shell .main-shell { margin-left: 176px; }
+.club-context { display: flex; align-items: center; gap: 8px; margin: 16px 0 12px; padding: 12px 5px; border-block: 1px solid var(--border); }
+.club-context .club-mark { width: 30px; height: 36px; }
+.club-context .club-mark svg { width: 18px; height: 18px; }
+.club-context strong { display: block; font-size: 12px; font-weight: 600; line-height: 1.35; }
+.club-context > div > span { display: block; color: var(--muted); font-size: 10px; margin-top: 3px; }
+.game-shell .main-nav { gap: 2px; }
+.game-shell .nav-item { font-size: 12px; min-height: 38px; padding: 8px; border-radius: 1px; }
+.game-shell .nav-item > svg { width: 18px; height: 18px; }
+.game-shell .sidebar-bottom { padding: 14px 5px 0; }
+.session-mode { display: flex; gap: 7px; align-items: center; font-size: 11px; color: var(--text); }
+.game-shell .sidebar-bottom > p { margin-top: 4px; font-size: 10px; color: var(--muted); }
+.game-shell .manager { font-size: 11px; margin-top: 12px; padding-top: 12px; }
+.game-shell .manager small { font-size: 10px; color: var(--muted); line-height: 1.3; }
+.game-shell .topbar { position: sticky; top: 0; z-index: 12; height: 48px; padding-inline: 16px; }
+.game-context { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 12px; }
 .game-context strong { font-weight: 600; }
 .game-context > span { color: var(--muted); }
-.game-context > span:first-of-type { color: #546551; }
-.session-status { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #aebea4; white-space: nowrap; }
-.game-shell .topbar .button { font-size: 12px; min-height: 34px; padding: 8px 12px; }
-.game-shell main { padding: 20px 24px 0; max-width: 1700px; scroll-margin-top: 12px; }
-.game-shell .page-heading { margin-bottom: 16px; }
-.game-shell .page-heading h1 { margin: 0; font-size: 23px; letter-spacing: -.5px; }
-.game-shell .heading-meta { flex-direction: row; align-items: center; gap: 12px; }
+.game-context > span:first-of-type { color: #566170; }
+.session-status { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.game-shell .topbar .button { font-size: 12px; min-height: 30px; padding: 5px 10px; }
+.game-shell main { padding: 14px 16px 0; max-width: 1800px; scroll-margin-top: 60px; }
+.game-shell .page-heading { margin-bottom: 12px; min-height: 24px; }
+.game-shell .page-heading h1 { margin: 0; font-size: 19px; letter-spacing: -.3px; }
+.game-shell .heading-meta { align-items: center; gap: 10px; }
 .game-shell .heading-meta .pill { font-size: 9px; }
 .game-shell .heading-meta .muted { font-size: 11px; }
-.game-shell .workspace-footer { border-top: 1px solid var(--border); margin-top: 18px; padding: 15px 0 22px; font-size: 11px; }
-.game-session-actions { display: flex; align-items: center; gap: 22px; }
+.game-shell .workspace-footer { border-top: 1px solid var(--border); margin-top: 12px; padding: 8px 0 14px; font-size: 11px; }
+.game-session-actions { display: flex; align-items: center; gap: 20px; }
 .game-shell .workspace-footer .text-button { font-size: 11px; min-height: 30px; }
-.game-shell .save-tools { gap: 20px; }
+.game-shell .save-tools { gap: 16px; }
 .simulation-options { position: relative; font-size: 11px; color: var(--muted); }
 .simulation-options summary { cursor: pointer; padding: 8px 0; }
-.simulation-options summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-.simulation-options .seed-controls { position: absolute; z-index: 20; bottom: calc(100% + 6px); left: 0; width: 240px; background: #263127; border: 1px solid #ffffff22; box-shadow: 0 8px 25px #0006; border-radius: 6px; padding: 15px; display: grid; grid-template-columns: 1fr 75px; gap: 10px; }
-.simulation-options label { font-size: 11px; letter-spacing: 0; color: var(--text); }
+.simulation-options .seed-controls { position: absolute; z-index: 20; bottom: calc(100% + 6px); left: 0; width: 240px; background: var(--surface-2); border: 1px solid #566170; border-radius: 2px; padding: 12px; display: grid; grid-template-columns: 1fr 75px; gap: 10px; }
+.simulation-options label { font-size: 11px; color: var(--text); }
 .simulation-options input { width: 100%; font-size: 12px; }
 .simulation-options p { grid-column: 1 / -1; font-size: 11px; line-height: 1.5; }
-
-/* The squad is a roster workspace with selection, filters and current condition. */
-.game-shell .squad-summary { padding: 16px 20px; margin-bottom: 16px; }
-.game-shell .squad-summary h2 { font-size: 17px; }
-.game-shell .stat > strong { font-size: 22px; }
-.game-shell .stat > .eyebrow { font-size: 9px; letter-spacing: .7px; }
-.game-shell .squad-layout { grid-template-columns: minmax(0,1fr) 290px; gap: 16px; }
-.game-shell .roster-panel { padding: 18px 0 10px; }
-.game-shell .roster-panel > .section-heading { padding: 0 18px 16px; }
-.game-shell .roster-panel > .section-heading h2 { font-size: 16px; }
-.roster-toolbar { display: flex; align-items: center; gap: 12px; padding: 0 18px 14px; flex-wrap: wrap; }
-.roster-filters { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--border); background: #121a1480; border-radius: 5px; }
-.roster-filters button { font-size: 11px; padding: 7px 9px; border-radius: 3px; background: transparent; color: var(--muted); }
-.roster-filters button[aria-pressed=true] { background: #344230; color: var(--text); }
-.roster-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 120px; margin-left: auto; border: 1px solid var(--border); border-radius: 5px; padding: 8px 9px; background: #121a1480; color: var(--muted); }
-.roster-search input { border: 0; outline-offset: 0; background: transparent; color: var(--text); width: 100%; min-width: 0; font-size: 12px; }
+/* A dense roster with a selected-player inspector. */
+.game-shell .squad-summary { padding: 10px 14px; margin-bottom: 10px; }
+.game-shell .squad-summary h2 { font-size: 15px; }
+.game-shell .squad-summary > div:last-child { gap: 24px; }
+.game-shell .stat > strong { font-size: 18px; }
+.game-shell .stat > .eyebrow { font-size: 9px; letter-spacing: .5px; }
+.game-shell .squad-layout { grid-template-columns: minmax(0,1fr) 260px; gap: 10px; }
+.game-shell .roster-panel { padding: 0 0 8px; }
+.game-shell .roster-panel > .section-heading { padding: 7px 14px; border-bottom: 1px solid var(--border); min-height: 38px; }
+.game-shell .roster-panel > .section-heading h2 { font-size: 13px; }
+.roster-toolbar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.roster-filters { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--border); background: var(--bg); border-radius: 2px; }
+.roster-filters button { font-size: 11px; padding: 6px 8px; background: transparent; color: var(--muted); border-bottom: 2px solid transparent; }
+.roster-filters button[aria-pressed=true] { background: var(--surface-3); color: var(--text); border-bottom-color: var(--accent); }
+.roster-search { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 120px; margin-left: auto; border: 1px solid var(--border); border-radius: 2px; padding: 7px 9px; background: var(--bg); color: var(--muted); }
+.roster-search input { border: 0; outline-offset: 1px; background: transparent; color: var(--text); width: 100%; min-width: 0; font-size: 12px; }
 .roster-search input::placeholder { color: var(--muted); }
-.game-shell .roster th { font-size: 9px; letter-spacing: .7px; color: #9aaa90; }
-.game-shell .roster td { font-size: 12px; padding-block: 10px; }
+.game-shell .roster th { font-size: 10px; letter-spacing: .5px; }
+.game-shell .roster td { font-size: 12px; padding: 6px 10px; }
 .game-shell .roster-player strong { font-size: 12px; }
-.game-shell .roster-player small { font-size: 10px; margin-top: 4px; color: #8fa481; }
+.game-shell .roster-player small { font-size: 10px; margin-top: 2px; }
 .game-shell .roster-role { font-size: 11px; }
 .game-shell .roster-role.on-court { color: var(--accent); }
-.game-shell .roster td:nth-child(n+4) { text-align: right; }
+.game-shell .roster th:nth-child(n+4), .game-shell .roster td:nth-child(n+4) { text-align: right; }
 .game-shell .roster td:nth-child(4) { min-width: 90px; }
-.game-shell .roster .selected-row { background: #a8bd840e; box-shadow: inset 3px 0 var(--accent); }
-.roster-empty { padding: 28px 20px; font-size: 12px; color: var(--muted); }
-.game-shell .player-profile { padding: 20px; }
-.game-shell .profile-portrait { margin-bottom: 15px; }
-.game-shell .profile-portrait .avatar { width: 76px; height: 76px; }
-.game-shell .profile-number { font-size: 44px; top: 12px; color: #879c6d42; }
-.game-shell .player-profile > h2 { font-size: 22px; }
+.game-shell .roster .selected-row { background: var(--surface-2); box-shadow: inset 2px 0 var(--accent); }
+.roster-empty { padding: 20px 14px; font-size: 12px; color: var(--muted); }
+.game-shell .player-profile { padding: 14px; }
+.game-shell .profile-portrait { margin-bottom: 10px; }
+.game-shell .profile-portrait .avatar { width: 60px; height: 60px; }
+.game-shell .profile-number { font-size: 38px; top: 5px; color: #4d5968; }
+.game-shell .player-profile > h2 { font-size: 19px; margin: 6px 0; }
 .game-shell .player-profile > .eyebrow { font-size: 9px; }
 .game-shell .player-profile > .muted { font-size: 12px; }
 .game-shell .player-profile h3 { font-size: 13px; }
 .game-shell .attribute { font-size: 12px; }
-.game-shell .attribute-track { width: 50px; }
-.profile-condition { border-top: 1px solid var(--border); margin-top: 22px; padding-top: 16px; }
-.profile-condition > span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+.game-shell .attribute-track { width: 45px; }
+.profile-condition { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+.profile-condition > span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
 .profile-condition .stamina-meter { max-width: 200px; }
-
 @media(max-width:1150px) {
-  .game-shell .squad-layout { grid-template-columns: minmax(0,1fr) 245px; }
-  .game-shell .player-profile { padding: 18px; }
+  .game-shell .squad-layout { grid-template-columns: minmax(0,1fr) 235px; }
   .game-shell .attribute-track { width: 32px; }
 }
 @media(max-width:1050px) {
-  .game-shell .sidebar { width: 68px; padding: 22px 8px; }
-  .game-shell .main-shell { margin-left: 68px; }
-  .game-shell .club-context { display: none; }
-  .game-shell .main-nav { margin-top: 35px; gap: 10px; }
-  .game-shell .nav-item { padding: 13px 10px; }
+  .game-shell .sidebar { width: 64px; padding: 16px 7px; align-items: center; }
+  .game-shell .main-shell { margin-left: 64px; }
+  .game-shell .brand > div:last-child, .game-shell .club-context, .game-shell .nav-item > span, .game-shell .sidebar-bottom { display: none; }
+  .game-shell .main-nav { margin-top: 22px; gap: 5px; width: 100%; }
+  .game-shell .nav-item { padding: 12px; justify-content: center; }
+  .game-shell .nav-item > svg { width: 22px; height: 22px; }
 }
 @media(max-width:850px) {
-  .game-shell .topbar { padding-inline: 18px; }
-  .game-shell main { padding: 16px 18px 0; }
+  .game-shell .topbar { padding-inline: 12px; }
+  .game-shell main { padding: 12px 12px 0; }
   .game-shell .session-status { display: none; }
   .game-shell .squad-layout { grid-template-columns: 1fr; }
-  .game-shell .squad-summary > div:last-child { gap: 24px; }
   .game-shell .roster-player strong { white-space: normal; }
-  .game-shell .player-profile { display: grid; grid-template-columns: 120px 1fr; padding: 20px; }
-  .game-shell .profile-condition { grid-column: 1 / -1; }
-  .game-shell .attribute-track { width: 60px; }
-  .game-shell .roster td { padding-inline: 10px; }
+  .game-shell .player-profile { display: grid; grid-template-columns: 90px 1fr; column-gap: 14px; }
+  .game-shell .profile-portrait { grid-row: 1 / 5; }
+  .game-shell .profile-number { display: none; }
+  .game-shell .profile-divider, .game-shell .player-profile > .section-heading, .game-shell .attribute-list, .game-shell .profile-condition { grid-column: 1 / -1; }
+  .game-shell .attribute-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
+  .game-shell .attribute-track { width: 50px; }
 }
 @media(max-width:650px) {
-  .game-shell .sidebar { width: 54px; padding: 20px 6px; }
-  .game-shell .main-shell { margin-left: 54px; }
-  .game-shell .brand-symbol svg { width: 25px; height: 25px; }
-  .game-shell .nav-item { padding: 12px 7px; }
-  .game-shell .topbar { padding-inline: 12px; }
+  .game-shell .sidebar { width: 48px; padding: 16px 4px; }
+  .game-shell .main-shell { margin-left: 48px; }
+  .game-shell .brand { padding: 0; }
+  .game-shell .brand-symbol svg { width: 23px; height: 23px; }
+  .game-shell .nav-item { padding: 11px 7px; }
+  .game-shell .nav-item > svg { width: 20px; height: 20px; }
+  .game-shell .topbar { padding-inline: 10px; }
   .game-shell .topbar-actions { gap: 0; }
-  .game-context { font-size: 11px; gap: 8px; }
+  .game-context { font-size: 11px; }
   .game-context > span { display: none; }
-  .game-shell main { padding: 15px 12px 0; }
-  .game-shell .page-heading h1 { font-size: 21px; }
+  .game-shell main { padding: 12px 10px 0; }
+  .game-shell .page-heading h1 { font-size: 18px; }
   .game-shell .heading-meta { gap: 0; }
   .game-shell .heading-meta .muted { display: none; }
-  .game-shell .squad-summary { padding: 16px; }
-  .game-shell .squad-summary .stat > strong { font-size: 20px; }
+  .game-shell .heading-meta .pill { max-width: 125px; line-height: 1.4; }
+  .game-shell .squad-summary { padding: 10px 12px; }
+  .game-shell .squad-summary > div:first-child { flex-wrap: wrap; gap: 8px; }
+  .game-shell .squad-summary > div:last-child { gap: 18px; }
   .game-shell .stat > .eyebrow { font-size: 8px; }
-  .game-shell .squad-summary > div:last-child { gap: 16px; }
-  .roster-toolbar { padding-inline: 12px; }
+  .roster-toolbar { padding-inline: 10px; }
   .roster-filters { width: 100%; }
-  .roster-filters button { flex: 1; padding-inline: 7px; }
+  .roster-filters button { flex: 1; padding-inline: 5px; }
   .roster-search { flex-basis: 100%; }
   .game-shell .roster th:nth-child(3), .game-shell .roster td:nth-child(3) { display: none; }
-  .game-shell .roster th, .game-shell .roster td { padding-inline: 8px; }
+  .game-shell .roster th, .game-shell .roster td { padding-inline: 7px; }
   .game-shell .roster .avatar { width: 27px; height: 27px; }
-  .game-shell .roster td:nth-child(4) { min-width: 80px; }
-  .game-shell .workspace-footer { align-items: flex-start; gap: 10px; }
+  .game-shell .roster td:nth-child(4) { min-width: 75px; }
+  .game-shell .attribute-list { grid-template-columns: 1fr; }
+  .game-shell .workspace-footer { align-items: flex-start; gap: 4px; }
   .game-session-actions { gap: 16px; flex-wrap: wrap; }
   .game-shell .save-tools { gap: 18px; }
   .simulation-options .seed-controls { left: auto; right: 0; width: 220px; }

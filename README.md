@@ -2,7 +2,7 @@
 
 A browser basketball management game in development. The design targets the top two men's divisions in Turkey, Spain, Greece, Germany, Italy and France, plus EuroLeague, EuroCup and Basketball Champions League.
 
-The playable development version is a **fictional exhibition simulation**. It includes a deterministic possession engine with passing, drives, defensive matchups and shot creation, a tested subset of FIBA 2024 rules, a large animated diagonal court, live stamina bars, coaching controls and local saves. The game opens at a practical manager's desk with current match information, lineup condition and direct coaching actions. The full club-management career remains in development.
+The playable development version includes a **fictional six-club league season** and standalone exhibitions. Choose a club, coach its home and away games, complete ten matchdays, and review the league table, results and box scores. The possession engine includes passing, drives, defensive matchups, a tested subset of FIBA 2024 rules, a large animated diagonal court and live stamina bars. The game opens at a manager's desk with working squad and coaching actions. The full historical, multi-season management career remains in development.
 
 Real reference data is now available separately: **double-click `Open real data.cmd`** in this folder to browse 40 clubs and 727 players from official 2025-26 EuroLeague/EuroCup records. No account or payment is needed. Search, player statistics and spreadsheet exports work offline after downloading. See [coverage and source details](docs/real-data.md); these records are not yet integrated into the career game.
 
@@ -17,7 +17,9 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Build static assets with `npm run build`; the output is `dist/`. Deployment remains under the project owner's control.
+Open the local URL printed by Vite. Choose **Competitions**, select a club and press **Start season**. After each finished match, **Continue** records the matchday results and prepares the next fixture. **Save season**, export/import and **Load saved season** preserve progress. Season mode currently uses injuries off for every club while persistent health is being built.
+
+Build static assets with `npm run build`; the output is `dist/`. Deployment remains under the project owner's control.
 
 In Windows PowerShell, use `npm.cmd` in place of `npm` if execution policy blocks `npm.ps1`.
 
@@ -47,6 +49,8 @@ npm run benchmark:match
 The exhibition supports watching/pausing, quarter skipping, instant simulation, tactical changes, queued substitutions and timeouts, foul-outs, team penalties, shot-clock resets, basic injuries, assistant rotations, squad profiles, box scores, and local save/import/export. Mandatory replacements pause every playback mode until resolved. New exhibitions resolve separate advances, completed passes, drives and shots. Court spacing, the assigned defender, player attributes and fatigue influence shot creation. Completed passes can lead to makes or misses; qualifying made baskets credit the actual passer with an assist. The court animates those recorded actions alongside free throws, rebounds, turnovers and substitutions; reduced-motion and text-only views use the same events. Coaching feedback reports completed passes, drives and shot contests. These are discrete action sequences; full movement physics, competition-specific rules and statistical calibration remain later work. See the status document for precise limits and verification results.
 
 Exhibition saves use format 2. New matches use `possession-3` and save the live handler, passing context, positions and defensive assignments. Earlier `rules-2` matches retain their original engine and deterministic continuation; starting a new exhibition selects the new engine. Court scenes remain optional presentation metadata, with a static fallback for events without scenes. Saves restore the resolved sporting state; a partly watched animation resumes at that action's completed state. Format-1 prototype saves remain unsupported and are not overwritten on load. This development save format is not yet a stable career format.
+
+Season saves use a separate format-1 `basketball-manager-season` envelope and IndexedDB slot. They retain the active match, club instructions, lineup, condition, schedule and compact completed box scores. They do not overwrite the exhibition slot. Other matches run in a cancellable worker; the complete matchday is committed once. Completed seasons retain their results; **New season** starts a separate run. Rollover, aging, finances, recruitment and persistent health are not implemented yet.
 
 The agreed first release includes all twelve domestic divisions and the three European competitions. Smaller development fixtures do not reduce that scope. Realistic statistical behavior, the historical data pack and full competition rules require validation before release.
 

@@ -1,0 +1,11 @@
+.season-progress { display: flex; align-items: center; gap: 18px; min-height: 44px; padding: 5px 12px; margin-bottom: 12px; border-radius: 2px; }
+.season-progress > div { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.season-progress time { color: var(--text); font-weight: 600; }
+.season-progress span { color: var(--muted); font-size: 12px; }
+.season-progress .season-record { margin-left: auto; }
+.season-progress .season-record strong { font-size: 13px; font-variant-numeric: tabular-nums; }
+.season-progress .button { min-height: 32px; font-size: 12px; padding: 6px 11px; }
+.season-progress .button span { color: inherit; }
+.season-processing { display: flex; justify-content: center; gap: 18px; align-items: center; min-height: 44px; padding: 10px 12px; font-size: 12px; background: var(--surface-3); }
+@media (max-width: 850px) { .season-progress { gap: 10px; flex-wrap: wrap; } .season-progress > div { gap: 10px; } }
+@media (max-width: 520px) { .season-progress { padding: 8px 10px; } .season-progress > div:first-child { flex-basis: 100%; justify-content: space-between; } .season-progress .season-record { margin-left: 0; margin-right: auto; } .season-progress .season-record span { display: none; } .season-processing { align-items: flex-start; flex-direction: column; gap: 8px; } }

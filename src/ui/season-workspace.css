@@ -1,0 +1,85 @@
+.season-workspace{display:flex;flex-direction:column;gap:12px;min-width:0}
+.season-workspace .panel{border-radius:2px;min-width:0;overflow:hidden;background:var(--surface)}
+.season-workspace h2{font-size:14px;letter-spacing:0;font-weight:600}
+.season-intro{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 14px}
+.season-intro p{font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px}
+.season-setup-actions,.season-result-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.season-result-actions{justify-content:flex-end}
+.season-result-review{scroll-margin-top:78px;outline-offset:3px}
+.season-result-review:focus-visible{outline:2px solid var(--accent)}
+.season-setup-columns{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:12px;align-items:start}
+.season-club-picker fieldset{min-width:0;margin:0;padding:0;border:0}
+.season-club-picker legend{display:block;width:100%;padding:11px 14px;font-size:14px;font-weight:600;border-bottom:1px solid var(--border)}
+.season-club-options{display:flex;flex-direction:column}
+.season-club-option{display:flex;align-items:center;gap:11px;padding:11px 14px;border-bottom:1px solid var(--border);border-left:3px solid transparent;cursor:pointer;min-height:50px}
+.season-club-option.selected{background:#e5aa5509;border-left-color:var(--accent)}
+.season-club-option:hover{background:var(--surface-2)}
+.season-club-option input{accent-color:var(--accent);width:16px;height:16px;flex:none;margin:0}
+.season-club-name{display:inline-flex;align-items:center;gap:9px;min-width:0;text-align:left;font-weight:500;font-size:12px}
+.season-club-code{display:inline-flex;align-items:center;justify-content:center;width:26px;min-width:26px;height:26px;font-size:10px;font-weight:650;letter-spacing:.3px;border:1px solid var(--border);border-radius:2px;background:var(--surface-2)}
+.season-club-name>span:last-child{min-width:0;line-height:1.4}
+.season-club-name small{display:inline;color:var(--accent);font-weight:400;font-size:12px;margin-left:7px}
+.season-roster-count{margin-left:auto;white-space:nowrap;font-size:12px;color:var(--muted)}
+.season-start-controls{display:flex;align-items:flex-end;gap:14px;padding:12px 14px}
+.season-start-controls>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.season-start-controls label{font-size:12px;color:var(--muted)}
+.season-start-controls input{width:100px;max-width:100%;background:var(--sidebar);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:7px 9px;font-size:12px;min-height:34px}
+.season-start-controls .button{margin-left:auto;white-space:nowrap}
+.season-setting{font-size:12px;color:var(--muted);line-height:34px;white-space:nowrap}
+.season-error{font-size:12px;line-height:1.5;color:var(--accent);padding:0 14px 12px}
+.season-panel-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:11px 14px;border-bottom:1px solid var(--border)}
+.season-panel-heading p{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.5}
+.season-panel-heading>span{font-size:12px;color:var(--muted);text-align:right}
+.season-table-scroll{overflow-x:auto;max-width:100%}
+.season-workspace table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.season-workspace th,.season-workspace td{padding:5px 12px;height:38px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text)}
+.season-workspace th{font-weight:500}
+.season-workspace thead th{height:32px;font-size:11px;letter-spacing:.3px;color:var(--muted);text-align:left;background:var(--surface-2)}
+.season-workspace tbody th{font-size:12px;letter-spacing:normal;text-transform:none;color:var(--text);font-weight:500;background:transparent}
+.season-workspace tbody tr:last-child>*{border-bottom:0}
+.season-workspace th:first-child,.season-workspace td:first-child{padding-left:14px}
+.season-workspace th:last-child,.season-workspace td:last-child{padding-right:14px}
+.season-workspace tbody tr:hover{background:var(--surface-2)}
+.season-player-name{display:flex;align-items:center;gap:8px;text-align:left;font-weight:450}
+.season-player-name small{display:inline;color:var(--muted);font-size:12px;margin-left:7px}
+.season-preview-roster td:last-child,.season-preview-roster th:last-child{text-align:right}
+.season-preview-roster td{padding-top:5px;padding-bottom:5px}
+.season-matchday{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;gap:20px}
+.season-matchday-identity{display:flex;flex-direction:column;gap:7px;flex:none}
+.season-matchday-identity>.season-club-name{font-size:14px}
+.season-matchday-identity>span:last-child{display:flex;gap:10px;font-size:12px;color:var(--text)}
+.season-matchday-identity time{border-left:1px solid var(--border);padding-left:10px;color:var(--muted)}
+.season-matchday-action{display:flex;align-items:center;justify-content:flex-end;gap:16px}
+.season-matchday-action p{font-size:12px;color:var(--muted);line-height:1.5;max-width:330px}
+.season-matchday-action p span{color:var(--muted);padding:0 3px}
+.season-matchday-action p strong{color:var(--text);font-weight:600}
+.season-matchday-action .button{flex:none}
+.season-standings-table{min-width:650px}
+.season-standings-table th:nth-child(n+3),.season-standings-table td:nth-child(n+3){text-align:right;width:60px}
+.season-standings-table th:nth-child(2){width:100%}
+.season-standings-table tbody>tr>td:first-child{color:var(--muted);width:38px}
+.season-standings-table .season-wins{font-weight:650;color:var(--text)}
+.season-managed-row{background:#e5aa5507}
+.season-managed-row>td:first-child{border-left:3px solid var(--accent)}
+.season-table-note{font-size:12px;color:var(--muted);padding:9px 14px;border-top:1px solid var(--border);line-height:1.5}
+.season-fixtures-heading{flex-wrap:wrap}
+.season-fixture-filters{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
+.season-fixture-filters label{font-size:12px;color:var(--muted)}
+.season-fixture-filters select{background:var(--sidebar);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:6px 9px;font-size:12px;max-width:100%;min-height:32px}
+.season-fixtures-table{min-width:750px}
+.season-fixtures-table td>small{display:inline;font-size:12px;color:var(--muted);margin-left:8px}
+.season-fixtures-table th:nth-child(3),.season-fixtures-table td:nth-child(3){text-align:center}
+.season-fixture-score{font-weight:650;font-size:14px}
+.season-fixtures-table td:last-child{text-align:right}
+.season-fixtures-table .text-button{display:inline-flex;font-size:12px;white-space:nowrap;padding:4px 0;gap:4px}
+.season-scheduled{font-size:12px;color:var(--muted)}
+.season-result-tools{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:8px 14px;border-bottom:1px solid var(--border)}
+.season-result-tools>span{font-size:12px;color:var(--text)}
+.season-result-table{min-width:700px}
+.season-result-table th:not(:first-child),.season-result-table td{text-align:right}
+.season-result-table tbody th{text-align:left}
+.season-jersey{font-size:12px;color:var(--muted);min-width:24px}
+.season-points{color:var(--accent);font-weight:650}
+@media(max-width:1100px){.season-setup-columns{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.season-club-option{gap:9px}.season-roster-count{display:none}.season-start-controls{flex-wrap:wrap;gap:10px}.season-start-controls .button{margin-left:0}.season-setting{margin-left:auto}.season-matchday{align-items:flex-start}.season-matchday-action{align-items:flex-end;flex-direction:column;gap:10px}.season-matchday-action p{text-align:right}}
+@media(max-width:800px){.season-setup-columns{grid-template-columns:1fr}.season-club-options{display:grid;grid-template-columns:1fr 1fr}.season-club-option{min-height:50px}.season-roster-count{display:none}.season-start-controls{align-items:flex-end}.season-start-controls .button{margin-left:auto}.season-setting{margin-left:0}.season-matchday{gap:14px}.season-matchday-identity{flex:1;min-width:0}.season-matchday-identity>.season-club-name{font-size:13px}.season-matchday-action{max-width:50%}}
+@media(max-width:550px){.season-intro{align-items:flex-start;flex-direction:column}.season-club-options{display:flex}.season-roster-count{display:block}.season-start-controls .button{width:100%;margin:0;justify-content:center}.season-setting{margin-left:auto}.season-matchday{flex-direction:column;gap:12px}.season-matchday-action{flex-direction:row;align-items:center;justify-content:space-between;width:100%;max-width:none;gap:12px}.season-matchday-action p{text-align:left}.season-matchday-action .button{font-size:12px;padding:8px 10px}.season-fixture-filters{gap:8px}.season-fixture-filters .segmented{width:100%;margin-top:2px}.season-fixture-filters .segmented button{flex:1}.season-panel-heading{gap:10px}.season-result-review .season-panel-heading{align-items:flex-start}.season-result-review .season-panel-heading .text-button{font-size:12px}}

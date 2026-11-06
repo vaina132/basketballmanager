@@ -119,3 +119,14 @@ Use scenario and property/invariant tests for engine legality, accounting, eligi
 UI checks cover actual journeys: selecting a lineup, watching/skipping, making a legal substitution, recovering a save, scouting a player, negotiating and registering a signing. Avoid tests that merely duplicate implementation formulas or snapshot large unreviewed trees.
 
 Validate build and types on each implementation milestone. Browser QA should cover both a desktop and tablet layout when tooling is available; record limitations instead of claiming visual checks that were not performed.
+
+
+## 11. Current season implementation
+
+The development league uses `SeasonState` (`schemaVersion: 1`, `engineVersion: possession-3`, `dataPackId: development-league-1`). It owns the clubs, plans, conditions, deterministic schedule, compact results and one active match. App holds a discriminated exhibition/season session; in season mode its match view is a projection of `season.activeMatch`, not a second authoritative match copy.
+
+Each fixture has an independent seed derived from the season seed and fixture ID. Round completion computes the other two matches in a module Web Worker, then returns one new immutable season snapshot. A request identifier rejects stale replies. Cancellation terminates the worker and retains the previous completed match. Loading another session invalidates the worker; asynchronous reads also have a generation guard so they cannot overwrite later commands.
+
+The fictional calendar advances seven days after a committed round. Condition recovers by a provisional three points per day for every club, once; injuries are disabled uniformly until world-level health exists. All ten rounds can complete, but rollover is not implemented.
+
+Season files use the distinct `basketball-manager-season` format/version 1 and an 8 MB limit. They store full events only for the active game and compact player statistics for completed fixtures. Validation checks canonical fixture order/dates, membership, official/earned score accounting, the recovery boundary and the active match. IndexedDB uses `basketball-manager-seasons`, separately from the exhibition database. This is one manual save slot; transactional revisions, autosaves and multi-tab writer coordination remain target architecture.

@@ -172,6 +172,8 @@ The optional dismissal setting preserves the career world. If dismissal is enabl
 
 The interface is a basketball management game workspace. The user explicitly confirmed on 6 November 2026 that the overview and all future screens must serve gameplay decisions. Use compact navigation, clear state, readable tables, and working actions. Landing-page heroes, promotional slogans, oversized decorative artwork, roadmap banners, and future-feature advertising do not belong in gameplay screens.
 
+Use charcoal/slate surfaces with one amber accent, flat borders and small section bars. The command header and club rail stay compact. Group related information into management workspaces and retain readable player names and values while reducing decorative spacing. Team instructions use labeled sliders with visible values and keyboard support on the overview and match screen; both edit the same managed-club settings. Rotation control has two positions, Manual and Assistant. Disable match instructions after the final result.
+
 The following navigation describes the complete target game. During development, expose implemented destinations and omit unavailable systems from normal navigation. A concise factual exhibition/prototype label can explain the current scope; the detailed roadmap belongs in repository documentation.
 
 | Navigation item | Primary task |

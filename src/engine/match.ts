@@ -1,6 +1,6 @@
 ﻿/** Deterministic FIBA-2024 rules subset. Probability, fatigue and injury parameters remain uncalibrated. */
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../data/fictional-teams';
-import type { CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, PossessionPlay, Side, Tactics } from '../domain/types';
+import type { CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, PossessionPlay, Side, Tactics, Team } from '../domain/types';
 import { nextRandom, normalizeSeed } from './random';
 import { actionScene, freeThrowPosition, passScene, reboundScene, setupScene, shotScene, turnoverScene } from './court-events';
 import { basketPoint, courtDistance, createPossessionPlay, matchedDefender, moveForAction, positionOf, possessionFormation, shotContext } from './possession';
@@ -521,21 +521,59 @@ function beginPeriod(state: MatchState): void {
   recovery(state, state.period === 3 ? 8 : 3);
   emit(state, { type: 'period-start', text: state.period <= 4 ? `Quarter ${state.period} begins.` : `Overtime ${state.period - 4} begins.` });
 }
-export function createMatch(seed = 42, engineVersion: EngineVersion = 'possession-3'): MatchState {
+export interface FixtureMatchOptions {
+  lineups?: Partial<Record<Side, readonly string[]>>;
+  tactics?: Partial<Record<Side, Tactics>>;
+  conditions?: Readonly<Record<string, number>>;
+  autoSubstitutions?: Partial<Record<Side, boolean>>;
+  injuryMode?: InjuryMode;
+}
+
+function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team, away: Team, options: FixtureMatchOptions = {}): MatchState {
   if (engineVersion !== 'rules-2' && engineVersion !== 'possession-3') throw new Error('Choose a supported match engine.');
   const state: MatchState = {
-    schemaVersion: 2, engineVersion, seed, rngState: normalizeSeed(seed), home: FICTIONAL_HOME, away: FICTIONAL_AWAY, score: { home: 0, away: 0 },
+    schemaVersion: 2, engineVersion, seed, rngState: normalizeSeed(seed), home, away, score: { home: 0, away: 0 },
     period: 1, clockSeconds: 600, status: 'ready', phase: 'dead-ball', possession: 'home', possessionArrow: 'away', shotClockSeconds: 24, frontcourt: false, teamFouls: { home: 0, away: 0 },
     timeoutUsage: { home: { firstHalf: 0, secondHalf: 0, overtime: 0, lateFourth: 0 }, away: { firstHalf: 0, secondHalf: 0, overtime: 0, lateFourth: 0 } },
     timeoutRequested: { home: false, away: false }, pendingSubstitutions: { home: [], away: [] }, requiredSubstitutions: [], freeThrows: null,
-    stoppage: { reason: 'pre-game', substitutionSides: ['home', 'away'], timeoutSides: [] }, substitutionLocks: [], autoSubstitutions: { home: false, away: true }, injuryMode: 'standard', injuries: {}, courtSeconds: { home: 0, away: 0 }, result: null,
-    lineups: { home: FICTIONAL_HOME.players.slice(0, 5).map(p => p.id), away: FICTIONAL_AWAY.players.slice(0, 5).map(p => p.id) },
-    tactics: { home: { ...DEFAULT_TACTICS }, away: { ...DEFAULT_TACTICS } }, stats: Object.fromEntries([...FICTIONAL_HOME.players, ...FICTIONAL_AWAY.players].map(p => [p.id, emptyStats()])), events: [], stepCount: 0,
+    stoppage: { reason: 'pre-game', substitutionSides: ['home', 'away'], timeoutSides: [] }, substitutionLocks: [], autoSubstitutions: { home: false, away: true, ...options.autoSubstitutions }, injuryMode: options.injuryMode ?? 'standard', injuries: {}, courtSeconds: { home: 0, away: 0 }, result: null,
+    lineups: { home: [...(options.lineups?.home ?? home.players.slice(0, 5).map(p => p.id))], away: [...(options.lineups?.away ?? away.players.slice(0, 5).map(p => p.id))] },
+    tactics: { home: { ...DEFAULT_TACTICS, ...options.tactics?.home }, away: { ...DEFAULT_TACTICS, ...options.tactics?.away } }, stats: Object.fromEntries([...home.players, ...away.players].map(p => [p.id, { ...emptyStats(), condition: options.conditions?.[p.id] ?? 100 }])), events: [], stepCount: 0,
   };
   state.possession = draw(state) < 0.5 ? 'home' : 'away'; state.possessionArrow = other(state.possession);
   if (engineVersion === 'possession-3') state.possessionPlay = createPossessionPlay(state);
   const scene = state.possessionPlay ? settledScene(state.possessionPlay) : setupScene(state, state.possession, state.lineups[state.possession][0]!);
   emit(state, { type: 'tipoff', side: state.possession, text: `${state[state.possession].name} win the opening tip. FIBA-2024 exhibition rules subset.`, scene }); return state;
+}
+
+/** Existing exhibition construction remains stable for both supported engines. */
+export function createMatch(seed = 42, engineVersion: EngineVersion = 'possession-3'): MatchState {
+  return initializeMatch(seed, engineVersion, FICTIONAL_HOME, FICTIONAL_AWAY);
+}
+
+/** A scheduled game starts with fresh match statistics and explicit club preparation. */
+export function createFixtureMatch(seed: number, home: Team, away: Team, options: FixtureMatchOptions = {}): MatchState {
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a valid fixture seed.');
+  if (home.id === away.id) throw new Error('A fixture must contain two different clubs.');
+  const allIds = new Set<string>();
+  for (const [side, team] of [['home', home], ['away', away]] as const) {
+    if (team.players.length < 5 || team.players.length > 20) throw new Error('A fixture roster must contain five to twenty players.');
+    const ownIds = new Set(team.players.map(p => p.id));
+    for (const player of team.players) {
+      if (allIds.has(player.id)) throw new Error('Every fixture player must have a distinct identity.');
+      allIds.add(player.id);
+    }
+    const lineup = options.lineups?.[side] ?? team.players.slice(0, 5).map(p => p.id);
+    if (lineup.length !== 5 || new Set(lineup).size !== 5 || lineup.some(id => !ownIds.has(id))) throw new Error('A starting lineup must contain five distinct players from its club.');
+    const tactics = options.tactics?.[side];
+    if (tactics && (Object.keys(tactics).length !== 3 || ['tempo', 'outsideShare', 'pressure'].some(key => !Number.isFinite(tactics[key as keyof Tactics]) || tactics[key as keyof Tactics] < 0 || tactics[key as keyof Tactics] > 1))) throw new Error('Fixture tactics must contain three values between zero and one.');
+    if (options.autoSubstitutions?.[side] !== undefined && typeof options.autoSubstitutions[side] !== 'boolean') throw new Error('Choose a valid fixture assistant policy.');
+  }
+  for (const [id, condition] of Object.entries(options.conditions ?? {})) {
+    if (!allIds.has(id) || !Number.isFinite(condition) || condition < 0 || condition > 100) throw new Error('Fixture condition must identify its players and stay between zero and one hundred.');
+  }
+  if (options.injuryMode !== undefined && !['standard', 'reduced', 'off'].includes(options.injuryMode)) throw new Error('Choose a valid fixture injury setting.');
+  return initializeMatch(seed, 'possession-3', home, away, options);
 }
 /** One deterministic live action or free throw; critical decisions stop every playback mode. */
 export function stepMatch(state: MatchState): MatchState {

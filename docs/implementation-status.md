@@ -8,10 +8,11 @@ The product discovery has eighteen answers. Core design, world/match specificati
 
 ## Implemented: exhibition, possession actions and court playback
 
-Milestone 1 is complete. Milestone 2 has a working, tested FIBA 2024 rules subset, and Milestone 3 has animated court playback. Both remain partial; their full action-model, calibration and presentation acceptance gates are still open.
+Milestone 1 is complete. Milestone 2 has a working, tested FIBA 2024 rules subset, and Milestone 3 has animated court playback. Both remain partial; their full action-model, calibration and presentation acceptance gates are still open. Milestone 4 now has the playable season foundation described below.
 
-- React/TypeScript/Vite application with working Overview, Squad and Match center screens. It opens at a manager's desk showing the current fixture/result, eligible players, active lineup, stamina, real decisions, instructions and recent match activity. Player links open the selected profile; alerts lead to the relevant coaching control. Double-click **Start game.cmd** to launch the local development game.
+- React/TypeScript/Vite application with working Overview, Squad, Match center and Competitions screens. It opens at a manager's desk showing the current fixture/result, eligible players, active lineup, stamina, real decisions, instructions and recent match activity. Player links open the selected profile; alerts lead to the relevant coaching control. Double-click **Start game.cmd** to launch the local development game.
 - Shared club navigation contains only working screens. Promotional panels, slogans and roadmap content were removed from gameplay. The squad workspace includes search, all/on-court/bench/unavailable filters and live stamina. The interface direction is recorded in [repository guidance](../AGENTS.md).
+- A compact charcoal/slate interface with amber selections, flat panels, a small club rail and command header, dense roster/competition tables and joined match stamina strips. Team instructions can be changed directly on the overview using Tempo, Outside emphasis, Defensive pressure and Manual/Assistant rotation sliders. Overview and match controls share managed-side commands and save state; completed matches disable edits.
 - Two explicitly fictional ten-player teams, seven active 1-20 attributes, centimetres/kilograms, and consistent code-drawn portraits and court appearance.
 - New exhibitions use deterministic `possession-3`: separate advances/setups, passes, drives and shots; four ten-minute quarters, five-minute overtime, shared watched/stepped/quarter/instant progression, and a bounded overtime guard. Existing `rules-2` saves retain their original engine.
 - Live possessions save the handler, most recent passer, action count, player positions and defensive assignments. A completed pass precedes its later shooting outcome and can lead to a miss. Assists follow the actual last pass, including a made shooting-foul basket, and clear after an intervening drive, whistle, substitution or possession change.
@@ -28,6 +29,18 @@ Milestone 1 is complete. Milestone 2 has a working, tested FIBA 2024 rules subse
 - Court playback has pause/resume, speed controls, reduced-motion and text-only views. Presentation time does not consume sporting randomness, change game clocks or grant recovery. Critical replacement decisions take precedence over playback.
 - Local IndexedDB saves and JSON import/export retain format 2 with an explicit `possession-3` or `rules-2` identifier. Old matches are never silently migrated. Modern saves validate live handlers, geometry, matchups, historical shot defenders and assist chains. Optional scenes may be absent in either engine, using a static fallback without affecting sporting results. Saves preserve resolved action state, queued commands, pending free throws, injuries, timeouts, random state and critical decisions; the partial visual playhead is not serialized. Format-1 prototype saves remain unsupported and are not rewritten on load.
 
+## Implemented: first playable season foundation
+
+- **Competitions** opens club selection for a clearly fictional six-club development league with sixty players. The simulated calendar starts on 5 September 2026 and has ten weekly rounds / thirty fixtures; each club hosts and visits every opponent once. This is not a historical competition configuration.
+- The managed club can be home or away. Scoreboard ownership, squad/profile selection, tactics, substitutions, timeouts, mandatory decisions, stamina and creation feedback all follow that club without reversing the fixture venue.
+- Every game uses `possession-3`. Fixture seeds depend only on the season seed and fixture ID. Other clubs' games use assistant substitutions; the manager chooses manual or assistant control for their club. Match probability coefficients are unchanged by this increment.
+- **Continue** requires the current match to finish, resolves the other two fixtures in a Web Worker, and commits all three results together. Cancellation preserves the finished match and posts no partial results. Repeated progression cannot post the same round twice.
+- Dates advance by seven days. Final lineups, instructions, assistant policy and match condition carry forward. Every club receives the same provisional three condition points per rest day, capped at 100; recovery happens once. Match fouls and box scores reset at the next kickoff.
+- Injuries are **off for all season clubs** until persistent health and rehabilitation exist. This setting is locked in season coaching. The exhibition retains its separate injury options.
+- Standings derive from committed results, ranked by wins, overall point difference, points scored and stable club ID. These published development-league tie-breaks are not claimed to reproduce any real league. Current-day results remain marked pending until Continue commits the round.
+- Fixture filters show one/all matchdays and all/the managed club. Completed games have compact player box scores, official scores and overtime/default details. A completed season retains its final table and results; starting another run is explicit. There is no season rollover yet.
+- Separate format-1 season saves use an 8 MB limit and their own IndexedDB slot; exhibition saves keep their existing envelope and slot. Import validates the canonical clubs/calendar, current fixture, result arithmetic, recovery boundary and embedded match. Old asynchronous loads cannot overwrite newer state. Switching to an exhibition saves the season first.
+
 ## Implemented: official reference data acquisition
 
 - Downloaded official 2025-26 EuroLeague and EuroCup records: 40 clubs, 727 unique players, 741 registrations and 651 player/competition statistical totals.
@@ -38,15 +51,17 @@ Milestone 1 is complete. Milestone 2 has a working, tested FIBA 2024 rules subse
 
 ## Verification completed
 
-The possession-action increment changes new-match simulation behavior and preserves the original engine for existing saves. The following checks passed:
+The season increment adds the world loop while preserving the existing match model. The following checks passed:
 
-- `npm.cmd test -- --maxWorkers=1`: **223 tests pass across 10 files** (76 engine/rules/court, 134 persistence, 9 data importer, 4 playback). The 19 new action tests cover direct-pass assists including an and-one, interrupted actions at the horn, geometric shot context, isolated tactics, shared rules, mode equality and independence from presentation metadata. The 48 new persistence checks cover exact live-possession resume and malformed imports. The original 100-seed `rules-2` hash remains unchanged.
-- `npm.cmd run build`: type checking and production build pass.
-- Browser QA in headless Microsoft Edge: **71 journey checks pass** (16 coaching/save, 14 animated-playback, 13 layout/stamina, 16 manager-desk/squad and 12 new possession journeys). New checks cover a save after a pass, animated drives and paused feedback, withholding unfinished shot results, exact resumption and legacy continuation. Existing checks retain queued commands, mandatory replacements, mode changes, final playback, player navigation, squad filters/search and completed results.
-- Visually inspected desktop and tablet match screens with creation feedback. The court remains full width directly beneath the score, with stamina beside the active players. Checked 1440px, 1024px, 768px and 390px widths without page overflow. Browser journeys produced no uncaught exceptions or console errors.
-- Modern completed-save samples remained below the existing 5 MB limit. Both engine versions validate optional scenes, and modern sporting outcomes are unchanged when scenes are removed. Local documentation links were checked.
+- `npm.cmd test -- --maxWorkers=1`: **291 tests pass across 12 files**. The 11 new season tests cover full seasons for each of six managed clubs, schedule conservation, away-side control, progression equivalence, atomic result commits and fatigue carryover. The 57 new persistence tests cover exact season resumption, all ten matchdays, required replacements, official default awards and malformed files. All 223 prior checks remain passing, including the original 100-seed `rules-2` hash.
+- `npm.cmd run build`: type checking and production build pass, with a separate season worker bundle. A browser smoke test of the production bundle completed a matchday through that worker.
+- Browser QA in headless Microsoft Edge: **88 journey checks pass** (the existing 71 plus 17 season journeys). Season coverage includes club selection, away tactics/substitutions, separate local save slots, valid/invalid import, downloaded export, an intentionally paused/cancelled worker, exact round commits, delayed-import protection, standings/fixture filters, result-review focus, completing all ten matchdays, retained final results and mandatory away replacements.
+- Desktop/tablet season and match screens were visually inspected. Standings row labels and result-player names use explicit readable body typography. The large court remains directly below the score with stamina alongside active players. Layouts fit 1440px, 1024px, 768px and 390px viewports without page overflow. Browser journeys produced no uncaught exceptions or console errors.
+- A full 30-result season with its final replay serialized to **950,883 bytes**, below the 8 MB limit. Only the current game retains full animation history; completed fixtures keep compact statistics. Local documentation links were checked.
 - Offline real-data browser: **13 checks pass**, including actual source counts, search, filters, selected-player totals, sorting, pagination, four CSV exports and desktop/tablet layout. No automatic HTTP requests or JavaScript errors; screenshots visually inspected.
 - All eight stored source documents match their recorded hashes and byte counts; a cached importer rerun produces identical normalized JSON. All 651 statistical records pass shooting arithmetic and identity checks.
+
+The subsequent interface refresh passed the production build, 11 targeted instruction journeys (keyboard input, both managed sides, state invariants, local/file persistence, mandatory replacements, completed matches and next-fixture carryover), and all 13 match/stamina UI regression journeys. The four main screens were checked at 1440, 1024, 768 and 390 pixels; completed-season tables and result reviews were also inspected. These UI checks produced no page overflow, uncaught exceptions or console errors. No match probability or persistence-format changes were introduced by the interface refresh.
 
 The browser QA was a local development check; its generated screenshots, downloaded test saves and browser profile are ignored under `.artifacts/`.
 
@@ -54,7 +69,7 @@ The browser QA was a local development check; its generated screenshots, downloa
 
 Run `npm.cmd run benchmark:match -- --matches 100 --injury-matches 20` to reproduce the current diagnostic. It writes `.artifacts/match-benchmark.json`, including source hashes, distributions, approximate intervals for mean outcomes, action/shot context, 30 paired seeds for each tactical control, and optional comparisons with the downloaded official reference pack. It makes no network requests. `--tactic-matches 0` disables the paired comparisons for a shorter diagnostic.
 
-The 6 November run used seeds 1-100, the two fictional clubs, assistant substitutions for both teams and injuries off. The engine source hash starts `8aabc3babcb0`; the possession-helper hash starts `7c2f1561ac7c`.
+The possession increment's 6 November run used seeds 1-100, the two fictional clubs, assistant substitutions for both teams and injuries off. That run recorded engine source hash `8aabc3babcb0` and possession-helper hash `7c2f1561ac7c`. The subsequent generic fixture factory changes construction, without changing the probability model.
 
 | Metric | Current diagnostic |
 | --- | ---: |
@@ -91,15 +106,15 @@ This is a FIBA 2024 exhibition subset, not certification for all planned competi
 
 Technical/unsportsmanlike/disqualifying fouls, combined penalties, reviews, lane violations, goaltending, separately timed release/flight adjudication, three-/five-/eight-second violations, all throw-in locations and the late-game frontcourt advance choice remain unimplemented. Possession creation and shot resolution remain discrete actions. Authoritative spacing and assigned defenders now affect outcomes, but continuous movement, collisions, screens, help rotations, switches and zone defense remain unimplemented. The current three-point classification uses basket distance and authored perimeter positions that avoid the corner-line exception; full arbitrary-location court adjudication remains open. The deterministic injury and fatigue models, tactical coefficients and player strength require statistical calibration.
 
-There is no playable league/career, complete game-ready historical database, commercial/facilities system, training, academy, staff hiring, transfer market, board/press, or season rollover yet. Unimplemented management systems are omitted from navigation. Acquired reference records have not been converted into career squads or skill ratings. The first-release requirement remains twelve domestic divisions and three European competitions.
+The fictional development season is playable. There is no configured real domestic/European league, full career, complete game-ready historical database, commercial/facilities system, training, academy, staff hiring, transfer market, board/press, persistent health or season rollover yet. Unimplemented management systems are omitted from navigation. Acquired reference records have not been converted into career squads or skill ratings. The first-release requirement remains twelve domestic divisions and three European competitions.
 
-The prototype runs short match simulations on the main thread. Workers, career save migrations, revision recovery, autosaves and multi-tab write coordination remain future work. Current saves contain one exhibition snapshot and are not a stable long-term career format. Format-1 prototype matches cannot be resumed under either supported engine.
+Watched and skipped managed matches still run on the main thread; background matchday completion now runs in a cancellable worker. Career save migrations, revision recovery, autosaves and multi-tab write coordination remain future work. Season and exhibition saves are separate development formats, not stable long-term career formats. Format-1 prototype matches cannot be resumed under either supported engine.
 
 ## Next dependencies
 
 1. Extend the downloaded reference data to the missing competitions, reconstruct opening-day rosters, and resolve intended-use permissions before bundling a career database. The [data acquisition plan](data-acquisition.md) records immediate free and paid routes.
 2. Calibrate the new possession model against verified team/game denominators, broaden off-ball creation and defensive decisions, and implement competition-specific rules. Repeatable diagnostics now expose action counts, shot context and isolated tactical effects; they do not complete these acceptance gates.
-3. Extend the world, competition and career layers following the [implementation plan](implementation-plan.md).
+3. Extend the working season foundation with persistent health, validated real competition rules/calendars and registration, followed by season rollover and the management layers in the [implementation plan](implementation-plan.md).
 
 ## First-release scope still required
 

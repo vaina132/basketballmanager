@@ -20,7 +20,7 @@ function corrupt(text: string, change: (envelope: Envelope) => void): string {
 }
 
 beforeAll(() => {
-  initial = createSeason(37, selectedClub);
+  initial = createSeason(37, selectedClub, 'off');
   completedMatch = finish(initial);
   nextRound = advanceSeason(completedMatch);
   initialText = serializeSeason(initial);
@@ -68,7 +68,7 @@ describe('season persistence boundaries', () => {
   it('preserves a mandatory away-team replacement and resumes only after that decision', () => {
     let critical: SeasonState | undefined;
     for (let seed = 1; seed <= 30 && !critical; seed += 1) {
-      const candidate = createSeason(seed, selectedClub);
+      const candidate = createSeason(seed, selectedClub, 'off');
       candidate.activeMatch = simulateToEnd(candidate.activeMatch);
       if (candidate.activeMatch.requiredSubstitutions.length) critical = candidate;
     }

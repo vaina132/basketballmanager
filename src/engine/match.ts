@@ -31,6 +31,7 @@ function copy(state: MatchState): MatchState {
     stoppage: state.stoppage ? { ...state.stoppage, substitutionSides: [...state.stoppage.substitutionSides], timeoutSides: [...state.stoppage.timeoutSides] } : null,
     substitutionLocks: [...state.substitutionLocks], autoSubstitutions: { ...state.autoSubstitutions },
     injuries: Object.fromEntries(Object.entries(state.injuries).map(([id, injury]) => [id, { ...injury }])),
+    ...(state.preExistingInjuries ? { preExistingInjuries: [...state.preExistingInjuries] } : {}),
     courtSeconds: { ...state.courtSeconds }, result: state.result ? { ...state.result, officialScore: { ...state.result.officialScore } } : null,
   };
 }
@@ -215,7 +216,7 @@ function sampleInjuries(state: MatchState, seconds: number): void {
     if (draw(state) >= chance || !exposed.length) continue;
     const injured = choose(state, exposed, p => 1 + (100 - state.stats[p.id]!.condition) / 100), kind = draw(state) < 0.5 ? 'ankle' : 'muscle';
     state.injuries[injured.id] = { kind, occurredAtSeconds: elapsed(state) };
-    emit(state, { type: 'injury', side, playerId: injured.id, text: `${injured.name} leaves with a ${kind} problem and cannot return in this exhibition.` });
+    emit(state, { type: 'injury', side, playerId: injured.id, text: `${injured.name} leaves with a ${kind} problem and cannot return in this ${state.engineVersion === 'rules-2' ? 'exhibition' : 'match'}.` });
     if (!state.freeThrows && side !== state.possession) state.shotClockSeconds = defensiveFoulShotClock(state.shotClockSeconds, state.frontcourt);
     whistle(state, state.freeThrows ? 'free-throws' : 'whistle');
   }
@@ -527,6 +528,7 @@ export interface FixtureMatchOptions {
   conditions?: Readonly<Record<string, number>>;
   autoSubstitutions?: Partial<Record<Side, boolean>>;
   injuryMode?: InjuryMode;
+  preExistingInjuries?: Readonly<Record<string, 'ankle' | 'muscle'>>;
 }
 
 function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team, away: Team, options: FixtureMatchOptions = {}): MatchState {
@@ -540,7 +542,19 @@ function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team,
     lineups: { home: [...(options.lineups?.home ?? home.players.slice(0, 5).map(p => p.id))], away: [...(options.lineups?.away ?? away.players.slice(0, 5).map(p => p.id))] },
     tactics: { home: { ...DEFAULT_TACTICS, ...options.tactics?.home }, away: { ...DEFAULT_TACTICS, ...options.tactics?.away } }, stats: Object.fromEntries([...home.players, ...away.players].map(p => [p.id, { ...emptyStats(), condition: options.conditions?.[p.id] ?? 100 }])), events: [], stepCount: 0,
   };
+  // Carried health never consumes an injury roll or creates a new injury event.
+  // Use roster order for deterministic metadata and reserve selection.
+  const unavailable = [...home.players, ...away.players].filter(p => Object.hasOwn(options.preExistingInjuries ?? {}, p.id));
+  if (unavailable.length) {
+    state.preExistingInjuries = unavailable.map(p => p.id);
+    for (const p of unavailable) state.injuries[p.id] = { kind: options.preExistingInjuries![p.id]!, occurredAtSeconds: 0 };
+    for (const side of SIDES) state.lineups[side] = [...new Set([...state.lineups[side], ...state[side].players.map(p => p.id)])].filter(id => isPlayerEligible(state, id)).slice(0, 5);
+  }
   state.possession = draw(state) < 0.5 ? 'home' : 'away'; state.possessionArrow = other(state.possession);
+  // The development league retains the existing two-player default threshold.
+  // No live action or fabricated court exposure precedes a pre-match default.
+  const shortSide = SIDES.find(side => state.lineups[side].length < 2);
+  if (shortSide) { finishDefault(state, shortSide); return state; }
   if (engineVersion === 'possession-3') state.possessionPlay = createPossessionPlay(state);
   const scene = state.possessionPlay ? settledScene(state.possessionPlay) : setupScene(state, state.possession, state.lineups[state.possession][0]!);
   emit(state, { type: 'tipoff', side: state.possession, text: `${state[state.possession].name} win the opening tip. FIBA-2024 exhibition rules subset.`, scene }); return state;
@@ -571,6 +585,12 @@ export function createFixtureMatch(seed: number, home: Team, away: Team, options
   }
   for (const [id, condition] of Object.entries(options.conditions ?? {})) {
     if (!allIds.has(id) || !Number.isFinite(condition) || condition < 0 || condition > 100) throw new Error('Fixture condition must identify its players and stay between zero and one hundred.');
+  }
+  if (options.preExistingInjuries !== undefined) {
+    if (options.preExistingInjuries === null || typeof options.preExistingInjuries !== 'object' || Array.isArray(options.preExistingInjuries)) throw new Error('Fixture injuries must identify unavailable players.');
+    for (const [id, kind] of Object.entries(options.preExistingInjuries)) {
+      if (!allIds.has(id) || !['ankle', 'muscle'].includes(kind)) throw new Error('Fixture injuries must identify known players and supported injury kinds.');
+    }
   }
   if (options.injuryMode !== undefined && !['standard', 'reduced', 'off'].includes(options.injuryMode)) throw new Error('Choose a valid fixture injury setting.');
   return initializeMatch(seed, 'possession-3', home, away, options);

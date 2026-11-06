@@ -1,4 +1,4 @@
-import type { MatchResult, MatchState, PlayerStats, Side, Tactics, Team } from './types';
+import type { InjuryMode, MatchResult, MatchState, PlayerStats, Side, Tactics, Team } from './types';
 
 export interface ClubPlan {
   tactics: Tactics;
@@ -14,6 +14,20 @@ export interface FixtureResult {
   kind: MatchResult['kind'];
   periods: number;
   stats: Record<string, PlayerStats>;
+  /** All injured players at the final whistle, including carried absences. */
+  injuries: Record<string, SeasonInjury['kind']>;
+}
+
+/** A deterministic development-model recovery episode, not a medical diagnosis. */
+export interface SeasonInjury {
+  id: string;
+  playerId: string;
+  clubId: string;
+  kind: 'ankle' | 'muscle';
+  fixtureId: string;
+  occurredOn: string;
+  /** First simulated calendar day on which the player is available again. */
+  returnOn: string;
 }
 
 export interface SeasonFixture {
@@ -26,7 +40,7 @@ export interface SeasonFixture {
 }
 
 export interface SeasonState {
-  schemaVersion: 1;
+  schemaVersion: 2;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;
@@ -37,6 +51,8 @@ export interface SeasonState {
   clubs: readonly Team[];
   plans: Record<string, ClubPlan>;
   conditions: Record<string, number>;
+  injuryMode: InjuryMode;
+  injuries: SeasonInjury[];
   fixtures: SeasonFixture[];
   activeFixtureId: string;
   activeMatch: MatchState;

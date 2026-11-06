@@ -8,6 +8,7 @@ import { advanceSeason, createSchedule, createSeason, DAILY_RECOVERY, dateForRou
 
 const sides: Side[] = ['home', 'away'];
 function finishCurrent(state: SeasonState): SeasonState {
+  if (state.activeMatch.status === 'finished') return state;
   return { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
 }
 function sum(match: MatchState, side: Side, stat: keyof PlayerStats): number {
@@ -49,7 +50,7 @@ describe('development league schedule and initialization', () => {
       expect(state.activeMatch[side].id).toBe(club.id);
       expect(state.activeMatch.autoSubstitutions[side]).toBe(false);
       expect(state.activeMatch.autoSubstitutions[opponent]).toBe(true);
-      expect(state.activeMatch.injuryMode).toBe('off');
+      expect(state.activeMatch.injuryMode).toBe('standard');
       expect(state.activeMatch.seed).toBe(fixtureSeed(12, getActiveFixture(state).id));
       expect(state.activeMatch.status).toBe('ready');
       expect(Object.values(state.conditions).every(condition => condition === 100)).toBe(true);
@@ -190,7 +191,7 @@ describe('atomic season progression', () => {
     const state = createSeason(1);
     const fixtures: SeasonFixture[] = state.fixtures.slice(0, 3).map((fixture, index) => ({
       ...fixture,
-      result: { score: { home: 80 + index * 10, away: 70 + index * 10 }, officialScore: { home: 80 + index * 10, away: 70 + index * 10 }, winnerClubId: fixture.homeClubId, kind: 'normal', periods: 4, stats: {} },
+      result: { score: { home: 80 + index * 10, away: 70 + index * 10 }, officialScore: { home: 80 + index * 10, away: 70 + index * 10 }, winnerClubId: fixture.homeClubId, kind: 'normal', periods: 4, stats: {}, injuries: {} },
     }));
     const table = getStandings({ clubs: state.clubs, fixtures });
     expect(table.slice(0, 3).map(row => row.clubId)).toEqual([...fixtures].reverse().map(fixture => fixture.homeClubId));

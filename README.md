@@ -17,7 +17,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Choose **Competitions**, select a club and press **Start season**. After each finished match, **Continue** records the matchday results and prepares the next fixture. **Save season**, export/import and **Load saved season** preserve progress. Season mode currently uses injuries off for every club while persistent health is being built.
+Open the local URL printed by Vite. Choose **Competitions**, select a club and press **Start season**. After each finished match, **Continue** records the matchday results and prepares the next fixture. **Save season**, export/import and **Load saved season** preserve progress. Choose Standard, Reduced or Off injuries when starting a season; the setting applies to every club. Injuries carry between fixtures, recovering players are kept out of the lineup, and Squad shows a medical report with return dates and history. Existing season saves keep injuries off when loaded.
 
 Build static assets with `npm run build`; the output is `dist/`. Deployment remains under the project owner's control.
 
@@ -50,7 +50,7 @@ The exhibition supports watching/pausing, quarter skipping, instant simulation, 
 
 Exhibition saves use format 2. New matches use `possession-3` and save the live handler, passing context, positions and defensive assignments. Earlier `rules-2` matches retain their original engine and deterministic continuation; starting a new exhibition selects the new engine. Court scenes remain optional presentation metadata, with a static fallback for events without scenes. Saves restore the resolved sporting state; a partly watched animation resumes at that action's completed state. Format-1 prototype saves remain unsupported and are not overwritten on load. This development save format is not yet a stable career format.
 
-Season saves use a separate format-1 `basketball-manager-season` envelope and IndexedDB slot. They retain the active match, club instructions, lineup, condition, schedule and compact completed box scores. They do not overwrite the exhibition slot. Other matches run in a cancellable worker; the complete matchday is committed once. Completed seasons retain their results; **New season** starts a separate run. Rollover, aging, finances, recruitment and persistent health are not implemented yet.
+Season saves use a separate format-2 `basketball-manager-season` envelope and IndexedDB slot. They retain the active match, club instructions, lineup, condition, injury/recovery history, schedule and compact completed box scores. Valid format-1 seasons migrate with their existing injury-free behavior and exact active match intact. They do not overwrite the exhibition slot. Other matches run in a cancellable worker; the complete matchday is committed once. Completed seasons retain their results; **New season** starts a separate run. Rollover, aging, finances, recruitment and detailed rehabilitation/staff decisions are not implemented yet. Injury incidence and the initial calendar-based recovery durations remain provisional game models.
 
 The agreed first release includes all twelve domestic divisions and the three European competitions. Smaller development fixtures do not reduce that scope. Realistic statistical behavior, the historical data pack and full competition rules require validation before release.
 

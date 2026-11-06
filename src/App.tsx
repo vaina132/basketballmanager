@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import type { MatchState, Player, Side } from './domain/types'
+import type { InjuryMode, MatchState, Player, Side } from './domain/types'
 import { createMatch, isPlayerEligible, simulateToEnd, simulateToQuarterEnd, stepMatch } from './engine/match'
 import { loadLocalMatch, MAX_SAVE_BYTES, parseMatch, saveLocalMatch, serializeMatch } from './storage/match-storage'
 import { Avatar } from './ui/Avatar'
@@ -16,6 +16,7 @@ import type { SeasonState } from './domain/season'
 import { createSeason, getActiveFixture, getStandings, managedSide as seasonManagedSide } from './world/season'
 import { loadLocalSeason, MAX_SEASON_SAVE_BYTES, parseSeason, saveLocalSeason, serializeSeason } from './storage/season-storage'
 import { SeasonWorkspace } from './ui/SeasonWorkspace'
+import { PlayerHealthSummary, SeasonMedicalReport } from './ui/SeasonMedicalReport'
 import type { SeasonReply } from './world/season.worker'
 import './ui/season-progress.css'
 
@@ -250,9 +251,9 @@ export default function App() {
     }
     install({ kind: 'exhibition', match: createMatch(seed) }); setNotice({ message: current.kind === 'season' ? 'Season saved. New exhibition ready.' : 'New exhibition ready.' }); if (setupRef.current) setupRef.current.open = false
   }
-  function startSeason(seed: number, clubId: string) {
+  function startSeason(seed: number, clubId: string, injuryMode: InjuryMode) {
     if (seasonWorker.current) return
-    try { install({ kind: 'season', season: createSeason(seed, clubId) }); navigate('home'); setNotice({ message: 'Season ready. Review your lineup before the opening match.' }) }
+    try { install({ kind: 'season', season: createSeason(seed, clubId, injuryMode) }); navigate('home'); setNotice({ message: 'Season ready. Review your lineup before the opening match.' }) }
     catch (error) { setNotice({ message: messageOf(error), error: true }) }
   }
   function cancelAdvance() {
@@ -304,7 +305,7 @@ export default function App() {
         {season && page !== 'season' && <SeasonProgress season={season} showMatchAction={page === 'squad'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} />}
         {page === 'season' && <SeasonWorkspace season={season} onStart={startSeason} onOpenMatch={() => navigate('match')} onAdvance={advance} onLoad={loadSeason} busy={advancing} />}
 
-        {page === 'home' && <ManagerDesk match={match} managedSide={managedSide} apply={apply} fixtureLabel={season ? `Development League / Matchday ${season.round}` : undefined} onOpenMatch={() => navigate('match')} onOpenSquad={() => navigate('squad')} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} onOpenCoaching={() => navigate('match', needsReplacement ? '#player-in' : complete ? '.coaching-workbench' : '#tempo')} />}
+        {page === 'home' && <ManagerDesk season={season} match={match} managedSide={managedSide} apply={apply} fixtureLabel={season ? `Development League / Matchday ${season.round}` : undefined} onOpenMatch={() => navigate('match')} onOpenSquad={() => navigate('squad')} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} onOpenCoaching={() => navigate('match', needsReplacement ? '#player-in' : complete ? '.coaching-workbench' : '#tempo')} />}
 
         {page === 'match' && <>
           <section className="scoreboard panel" aria-label="Match scoreboard"><div className="score-team home-team"><ClubMark name={match.home.shortName} color={match.home.color} large /><div><span className="eyebrow">{managedSide === 'home' ? 'YOUR TEAM / HOME' : 'OPPOSITION / HOME'}</span><h2>{match.home.name}</h2></div></div><div className="score-middle"><div className={`match-status ${playing ? 'is-playing' : ''}`}><span className="status-dot" />{complete && !playback.busy ? 'FULL TIME' : complete && playback.busy ? playing ? 'FINAL PLAY' : 'REPLAY PAUSED' : needsReplacement ? 'REPLACEMENT NEEDED' : playing ? 'IN PLAY' : match.stepCount === 0 ? 'READY FOR TIPOFF' : 'PAUSED'}</div><div className="score-digits" aria-live="off"><span>{displayScore.home}</span><span className="score-divider">:</span><span>{displayScore.away}</span></div><div className="match-clock">{periodLabel(match.period)}<span />{clock(match.clockSeconds)}</div></div><div className="score-team away-team"><div><span className="eyebrow">{managedSide === 'away' ? 'YOUR TEAM / AWAY' : 'OPPOSITION / AWAY'}</span><h2>{match.away.name}</h2></div><ClubMark name={match.away.shortName} color={match.away.color} large /></div></section>
@@ -326,7 +327,8 @@ export default function App() {
               <td><button className="roster-player" onClick={() => setSelectedPlayer(player.id)} aria-pressed={chosenPlayer.id === player.id}><Avatar player={player} color={managedTeam.color} size={34} /><span><strong>{player.name}</strong><small>#{player.number} / {player.position}</small></span></button></td>
               <td><span className={`roster-role ${match.lineups[managedSide].includes(player.id) ? 'on-court' : ''}`}>{!isPlayerEligible(match, player.id) ? match.injuries[player.id] ? 'Injured' : 'Fouled out' : match.lineups[managedSide].includes(player.id) ? 'On court' : 'Bench'}</span></td><td>{player.heightCm} <span className="muted">cm</span></td><td><StaminaMeter value={match.stats[player.id].condition} label={`${player.name} stamina`} compact /></td><td>{match.stats[player.id].points}</td><td>{match.stats[player.id].fouls}</td>
             </tr>)}</tbody></table>{rosterPlayers.length === 0 && <p className="roster-empty">No players match this filter.</p>}</div>
-          </section><PlayerProfile player={chosenPlayer} match={match} managedSide={managedSide} /></div>
+          </section><PlayerProfile player={chosenPlayer} match={match} managedSide={managedSide} season={season} /></div>
+          {season && <SeasonMedicalReport season={season} onSelectPlayer={id => { setSelectedPlayer(id); document.querySelector<HTMLElement>('.player-profile')?.focus() }} />}
         </>}
 
         <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />{season ? 'Save & open exhibition' : 'New exhibition'}</button><details ref={setupRef} className="simulation-options" hidden={!!season}><summary>Match setup</summary><div className="seed-controls"><label htmlFor="match-seed">Simulation seed</label><input id="match-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-label="New match random seed" /><p>Use the same seed to replay the same starting conditions.</p></div></details></div><div className="save-tools"><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button><input ref={importRef} type="file" accept=".json,application/json" onChange={importSave} className="visually-hidden" aria-label="Import game save" /></div></footer>
@@ -337,9 +339,9 @@ export default function App() {
 }
 
 
-function PlayerProfile({ player, match, managedSide }: { player: Player; match: MatchState; managedSide: Side }) {
+function PlayerProfile({ player, match, managedSide, season }: { player: Player; match: MatchState; managedSide: Side; season: SeasonState | null }) {
   const attributes = [['Two-point shooting', player.attributes.twoPoint], ['Three-point shooting', player.attributes.threePoint], ['Free throws', player.attributes.freeThrow], ['Passing', player.attributes.passing], ['Defense', player.attributes.defense], ['Rebounding', player.attributes.rebounding], ['Stamina', player.attributes.stamina]] as const
-  return <aside className="panel player-profile" tabIndex={-1} aria-label={`${player.name} profile`}><div className="profile-portrait"><Avatar player={player} color={match[managedSide].color} size={108} /><span className="profile-number">{player.number}</span></div><span className="eyebrow accent">{player.position} · {match[managedSide].name}</span><h2>{player.name}</h2><p className="muted">{player.heightCm} cm · {player.weightKg} kg</p><div className="profile-divider" /><div className="section-heading"><h3>Player attributes</h3><span className="muted">1—20</span></div><div className="attribute-list">{attributes.map(([name, rating]) => <div className="attribute" key={name}><span>{name}</span><div className="attribute-track"><span style={{ width: `${rating * 5}%` }} /></div><strong>{rating}</strong></div>)}</div><div className="profile-condition"><span>Current stamina</span><StaminaMeter value={match.stats[player.id].condition} label={`${player.name} current stamina`} /></div></aside>
+  return <aside className="panel player-profile" tabIndex={-1} aria-label={`${player.name} profile`}><div className="profile-portrait"><Avatar player={player} color={match[managedSide].color} size={108} /><span className="profile-number">{player.number}</span></div><span className="eyebrow accent">{player.position} · {match[managedSide].name}</span><h2>{player.name}</h2><p className="muted">{player.heightCm} cm · {player.weightKg} kg</p>{season && <PlayerHealthSummary season={season} playerId={player.id} />}<div className="profile-divider" /><div className="section-heading"><h3>Player attributes</h3><span className="muted">1—20</span></div><div className="attribute-list">{attributes.map(([name, rating]) => <div className="attribute" key={name}><span>{name}</span><div className="attribute-track"><span style={{ width: `${rating * 5}%` }} /></div><strong>{rating}</strong></div>)}</div><div className="profile-condition"><span>Current stamina</span><StaminaMeter value={match.stats[player.id].condition} label={`${player.name} current stamina`} /></div></aside>
 }
 
 

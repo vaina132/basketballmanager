@@ -243,7 +243,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     'pendingSubstitutions', 'requiredSubstitutions', 'freeThrows', 'stoppage', 'substitutionLocks',
     'autoSubstitutions', 'injuryMode', 'injuries', 'courtSeconds', 'result',
     ...(modern ? ['possessionPlay'] : []),
-  ]);
+  ], modern ? ['preExistingInjuries'] : []);
   if (state.schemaVersion !== 2 || !['rules-2', 'possession-3'].includes(state.engineVersion as string)) fail('state', 'uses an unsupported schema or engine version');
   number(state.seed, 'seed', 0, 0xffff_ffff);
   number(state.rngState, 'rngState', 1, 0xffff_ffff);
@@ -263,8 +263,9 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
   const currentScore = score(state.score, 'score');
   if (state.status === 'ready' && (period !== 1 || clock !== 600 || steps !== 0)) fail('ready match', 'must be at its initial clock');
   if (state.status === 'ready' && (currentScore.home !== 0 || currentScore.away !== 0)) fail('ready match', 'must begin with a zero score');
-  if (state.status !== 'ready' && steps === 0) fail('stepCount', 'must advance when a match has started');
-  if (state.status !== 'ready' && played === 0) fail('clockSeconds', 'must advance when a match has started');
+  const preMatchDefault = modern && Object.hasOwn(state, 'preExistingInjuries') && state.status === 'finished' && steps === 0 && played === 0;
+  if (!preMatchDefault && state.status !== 'ready' && steps === 0) fail('stepCount', 'must advance when a match has started');
+  if (!preMatchDefault && state.status !== 'ready' && played === 0) fail('clockSeconds', 'must advance when a match has started');
   if (state.phase === 'period-end' && clock !== 0) fail('phase', 'cannot end a period with time remaining');
   if (state.phase === 'live-ball' && clock === 0) fail('phase', 'cannot be live with an expired game clock');
   let result: Record<string, unknown> | null = null;
@@ -284,6 +285,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
       if (officialScore.home !== expected.home || officialScore.away !== expected.away) fail('result.officialScore', 'must preserve a leading winner or award 2-0 after a default');
     }
   }
+  if (preMatchDefault && (result?.kind !== 'default' || currentScore.home !== 0 || currentScore.away !== 0)) fail('result', 'must be a scoreless pre-match default');
   if ((state.status === 'finished') !== (result !== null)) fail('result', 'must exist exactly when the match is finished');
 
   const allIds = new Set<string>();
@@ -323,12 +325,21 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
   const tactics = record(state.tactics, 'tactics', SIDES);
   const stats = record(state.stats, 'stats', [...allIds]);
   const injuries = record(state.injuries, 'injuries');
+  const preExisting = new Set<string>();
+  if (Object.hasOwn(state, 'preExistingInjuries')) {
+    for (const value of array(state.preExistingInjuries, 'preExistingInjuries', 1, allIds.size)) {
+      const playerId = id(value, 'preExistingInjuries');
+      if (!allIds.has(playerId) || preExisting.has(playerId) || !Object.hasOwn(injuries, playerId)) fail('preExistingInjuries', 'must identify distinct known injured players');
+      preExisting.add(playerId);
+    }
+  }
   for (const [playerId, value] of Object.entries(injuries)) {
     if (!allIds.has(playerId)) fail('injuries', 'references an unknown player');
     const injury = record(value, `injuries.${playerId}`, ['kind', 'occurredAtSeconds']);
     choice(injury.kind, ['ankle', 'muscle'], `injuries.${playerId}.kind`);
     number(injury.occurredAtSeconds, `injuries.${playerId}.occurredAtSeconds`, 0, played);
-    if (state.status === 'ready') fail('injuries', 'must be empty before play begins');
+    if (preExisting.has(playerId) && injury.occurredAtSeconds !== 0) fail(`injuries.${playerId}`, 'must record carried unavailability at zero elapsed match time');
+    if (state.status === 'ready' && !preExisting.has(playerId)) fail('injuries', 'cannot introduce a new injury before play begins');
   }
   const courtSeconds = record(state.courtSeconds, 'courtSeconds', SIDES);
   const teamFouls = record(state.teamFouls, 'teamFouls', SIDES);
@@ -341,7 +352,9 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     if (new Set(lineup).size !== lineup.length || lineup.some((playerId) => typeof playerId !== 'string' || !playerIds[side].has(playerId))) {
       fail(`lineups.${side}`, 'must contain unique players from that team');
     }
-    if (state.status === 'ready' && lineup.length !== 5) fail(`lineups.${side}`, 'must start with five players');
+    if (lineup.some(playerId => preExisting.has(playerId as string))) fail(`lineups.${side}`, 'cannot include a player unavailable before tipoff');
+    const availableAtStart = [...playerIds[side]].filter(playerId => !preExisting.has(playerId)).length;
+    if (state.status === 'ready' && lineup.length !== Math.min(5, availableAtStart)) fail(`lineups.${side}`, 'must start with five players unless carried injuries leave fewer available');
     number(courtSeconds[side], `courtSeconds.${side}`, 0, played * 5);
     number(teamFouls[side], `teamFouls.${side}`, 0, playerIds[side].size * 5);
     boolean(timeoutRequested[side], `timeoutRequested.${side}`);
@@ -363,7 +376,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
         else number(entry[key], `${path}.${key}`, 0, key === 'secondsPlayed' ? played : key === 'fouls' ? 5 : 1_000_000);
       }
       const stat = entry as unknown as MatchState['stats'][string];
-      if (state.status === 'ready' && STAT_KEYS.some((key) => key !== 'condition' && entry[key] !== 0)) fail(path, 'must start with zero match statistics');
+      if ((state.status === 'ready' || preMatchDefault || preExisting.has(playerId)) && STAT_KEYS.some((key) => key !== 'condition' && entry[key] !== 0)) fail(path, 'must have zero statistics before play or while unavailable before tipoff');
       if (stat.fieldGoalsMade > stat.fieldGoalsAttempted || stat.threePointersMade > stat.threePointersAttempted || stat.freeThrowsMade > stat.freeThrowsAttempted) fail(path, 'has more made shots than attempts');
       if (stat.threePointersMade > stat.fieldGoalsMade || stat.threePointersAttempted > stat.fieldGoalsAttempted || stat.fieldGoalsMade - stat.threePointersMade > stat.fieldGoalsAttempted - stat.threePointersAttempted) fail(path, 'has inconsistent two-point and three-point totals');
       if (stat.points !== 2 * stat.fieldGoalsMade + stat.threePointersMade + stat.freeThrowsMade) fail(path, 'has points inconsistent with shooting totals');
@@ -472,7 +485,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     home: { firstHalf: 0, secondHalf: 0, overtime: 0, lateFourth: 0 },
     away: { firstHalf: 0, secondHalf: 0, overtime: 0, lateFourth: 0 },
   };
-  const countedInjuries = new Set<string>();
+  const countedInjuries = new Set<string>(preExisting);
   for (const [index, value] of events.entries()) {
     const path = `events[${index}]`;
     const event = record(value, path, ['id', 'period', 'clockSeconds', 'type', 'text', 'score'], ['side', 'playerId', 'outgoingPlayerId', 'receiverId', 'shot', 'scene', ...(modern ? ['assistPlayerId'] : [])]);
@@ -484,7 +497,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     priorElapsed = eventElapsed;
     choice(event.type, EVENT_TYPES, `${path}.type`);
     if (!modern && event.type === 'drive') fail(`${path}.type`, 'is not supported by the saved engine');
-    if (index === 0 && (event.type !== 'tipoff' || eventPeriod !== 1 || eventClock !== 600)) fail('first event', 'must describe the initial tipoff');
+    if (index === 0 && (event.type !== (preMatchDefault ? 'final' : 'tipoff') || eventPeriod !== 1 || eventClock !== 600)) fail('first event', 'must describe the initial tipoff or a pre-match default');
     if (event.type === 'final' && (state.status !== 'finished' || index !== events.length - 1)) fail(path, 'has a final event before the match ends');
     string(event.text, `${path}.text`, 1000);
     const eventScore = score(event.score, `${path}.score`);
@@ -559,6 +572,10 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
       countedAssists[assister] += 1;
     }
     if (Object.hasOwn(event, 'scene')) courtScene(event.scene, `${path}.scene`, event, playerIds);
+    const actorIds = [event.playerId, event.outgoingPlayerId, event.receiverId, event.assistPlayerId, (event.shot as MatchEvent['shot'])?.defenderId];
+    const scene = event.scene as MatchEvent['scene'];
+    if (scene) actorIds.push(...scene.start.map(point => point.playerId), ...scene.end.map(point => point.playerId));
+    if (actorIds.some(playerId => typeof playerId === 'string' && preExisting.has(playerId))) fail(path, 'cannot involve a player unavailable before tipoff');
     priorScore = eventScore;
   }
   sceneLineups(events as MatchEvent[], lineups as Record<Side, string[]>, state.status === 'finished', modern, state.possessionPlay as MatchState['possessionPlay']);

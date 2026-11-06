@@ -1,0 +1,28 @@
+.medical-report { margin-top: 10px; min-width: 0; overflow: hidden; }
+.medical-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.medical-heading h2 { font-size: 13px; }
+.medical-heading > div > span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.medical-table { min-width: 590px; }
+.medical-table th { font-size: 10px; text-transform: uppercase; }
+.medical-table td { padding-block: 6px; font-size: 12px; }
+.medical-table th:first-child, .medical-table td:first-child { padding-left: 14px; }
+.medical-player { color: var(--text); font-size: 12px; }
+.medical-player strong { font-weight: 500; }
+.medical-unavailable { color: var(--accent); }
+.medical-cleared { color: var(--green); }
+.medical-empty { padding: 12px 14px; color: var(--muted); font-size: 12px; }
+.medical-note { border-top: 1px solid var(--border); display: flex; gap: 14px; padding: 9px 14px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.medical-note > span { flex: none; color: var(--text); }
+.profile-health { grid-column: 1 / -1; border-left: 2px solid var(--accent); padding-left: 10px; margin-top: 14px; }
+.profile-health > strong { display: block; font-size: 12px; color: var(--accent); font-weight: 600; }
+.profile-health > span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.profile-health dl { display: grid; gap: 5px; margin: 10px 0 0; font-size: 11px; }
+.profile-health dl > div { display: flex; justify-content: space-between; gap: 8px; }
+.profile-health dt { color: var(--muted); }
+.profile-health dd { margin: 0; font-variant-numeric: tabular-nums; }
+.season-start-controls select { background: var(--sidebar); color: var(--text); border: 1px solid var(--border); border-radius: 2px; min-height: 34px; padding: 7px 9px; font-size: 12px; }
+.season-setup-note { padding: 0 14px 12px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+@media(max-width:650px) {
+  .medical-heading { flex-wrap: wrap; padding: 10px; }
+  .medical-note { flex-direction: column; gap: 4px; padding: 9px 10px; }
+}

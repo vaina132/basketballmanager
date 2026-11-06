@@ -1,7 +1,8 @@
 import type { ClubPlan, FixtureResult, SeasonFixture, SeasonState, Standing } from '../domain/season';
-import type { MatchState, Side, Team } from '../domain/types';
+import type { InjuryMode, MatchState, Side, Team } from '../domain/types';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_DATA_PACK_ID, DEVELOPMENT_START_DATE } from '../data/development-league';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
+import { injuriesFromMatch, isRecovering } from './health';
 
 export const SEASON_ROUNDS = 10;
 export const ROUND_INTERVAL_DAYS = 7;
@@ -59,7 +60,7 @@ export function managedSide(season: SeasonState): Side {
   throw new Error('The active fixture must include the managed club.');
 }
 
-function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId'>, fixture: SeasonFixture): MatchState {
+function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries'>, fixture: SeasonFixture): MatchState {
   const home = season.clubs.find(club => club.id === fixture.homeClubId);
   const away = season.clubs.find(club => club.id === fixture.awayClubId);
   if (!home || !away) throw new Error('A fixture refers to a missing club.');
@@ -69,23 +70,25 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
     tactics: { home: homePlan.tactics, away: awayPlan.tactics },
     autoSubstitutions: { home: home.id === season.managedClubId ? homePlan.autoSubstitutions : true, away: away.id === season.managedClubId ? awayPlan.autoSubstitutions : true },
     conditions: Object.fromEntries([...home.players, ...away.players].map(player => [player.id, season.conditions[player.id]!])),
-    injuryMode: 'off',
+    injuryMode: season.injuryMode,
+    preExistingInjuries: Object.fromEntries(season.injuries.filter(injury => [home.id, away.id].includes(injury.clubId) && isRecovering(injury, fixture.date)).map(injury => [injury.playerId, injury.kind])),
   });
 }
 
-export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id): SeasonState {
+export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard'): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   if (!DEVELOPMENT_CLUBS.some(club => club.id === managedClubId)) throw new Error('Choose a club from the development league.');
+  if (!['standard', 'reduced', 'off'].includes(injuryMode)) throw new Error('Choose a valid season injury setting.');
   const clubs = DEVELOPMENT_CLUBS;
   const fixtures = createSchedule(clubs);
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId))!;
   const preparation = {
-    seed, clubs, managedClubId,
+    seed, clubs, managedClubId, injuryMode, injuries: [],
     plans: Object.fromEntries(clubs.map(club => [club.id, defaultPlan(club, club.id !== managedClubId)])),
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   return {
-    schemaVersion: 1, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID,
+    schemaVersion: 2, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID,
     ...preparation, date: first.date, status: 'active', round: 1, fixtures,
     activeFixtureId: first.id, activeMatch: prepareMatch(preparation, first),
   };
@@ -97,6 +100,7 @@ function compactResult(match: MatchState): FixtureResult {
     score: { ...match.score }, officialScore: { ...match.result.officialScore }, winnerClubId: match[match.result.winner].id,
     kind: match.result.kind, periods: match.period,
     stats: Object.fromEntries(Object.entries(match.stats).map(([id, stats]) => [id, { ...stats }])),
+    injuries: Object.fromEntries(Object.entries(match.injuries).map(([id, injury]) => [id, injury.kind])),
   };
 }
 
@@ -104,6 +108,10 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
   if (fixture.result) throw new Error('This fixture result has already been committed.');
   if (match.home.id !== fixture.homeClubId || match.away.id !== fixture.awayClubId || match.seed !== fixtureSeed(season.seed, fixture.id)) throw new Error('The match does not belong to its season fixture.');
   fixture.result = compactResult(match);
+  for (const injury of injuriesFromMatch(season.seed, fixture, match)) {
+    if (season.injuries.some(existing => existing.id === injury.id || existing.playerId === injury.playerId && isRecovering(existing, fixture.date))) throw new Error('An unavailable player cannot receive a duplicate injury episode.');
+    season.injuries.push(injury);
+  }
   for (const side of SIDES) {
     const club = match[side], previous = season.plans[club.id]!;
     // Fouls reset next game. Keep the final lineup, filling any excluded-player
@@ -119,7 +127,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
   if (state.status === 'complete') throw new Error('This season is complete.');
   if (state.engineVersion !== 'possession-3' || state.activeMatch.engineVersion !== state.engineVersion) throw new Error('The season and its match must use the supported possession engine.');
   if (state.activeMatch.status !== 'finished' || state.activeMatch.requiredSubstitutions.length) throw new Error('Finish the current match and resolve required decisions before continuing.');
-  if (state.activeMatch.injuryMode !== 'off' || Object.keys(state.activeMatch.injuries).length) throw new Error('The development season uses the same injury-free match setting for every club.');
+  if (state.activeMatch.injuryMode !== state.injuryMode || state.injuryMode === 'off' && (state.injuries.length || Object.keys(state.activeMatch.injuries).length)) throw new Error('Every club must use the same season injury setting.');
   const current = getActiveFixture(state);
   managedSide(state);
   if (current.round !== state.round || current.date !== state.date || current.result) throw new Error('The current round is not awaiting this match result.');
@@ -128,6 +136,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
     fixtures: state.fixtures.map(fixture => ({ ...fixture })),
     plans: Object.fromEntries(Object.entries(state.plans).map(([id, plan]) => [id, { ...plan, tactics: { ...plan.tactics }, lineup: [...plan.lineup] }])),
     conditions: { ...state.conditions },
+    injuries: state.injuries.map(injury => ({ ...injury })),
   };
   for (const fixture of next.fixtures.filter(fixture => fixture.round === next.round)) {
     const match = fixture.id === next.activeFixtureId ? next.activeMatch : simulateToEnd(prepareMatch(next, fixture));

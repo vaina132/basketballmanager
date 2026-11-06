@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { SeasonFixture, SeasonState } from '../domain/season'
-import type { Side, Team } from '../domain/types'
+import type { InjuryMode, Side, Team } from '../domain/types'
 import { DEVELOPMENT_CLUBS } from '../data/development-league'
 import { getActiveFixture, getStandings } from '../world/season'
 import { Avatar } from './Avatar'
@@ -10,7 +10,7 @@ import './season-workspace.css'
 
 interface SeasonWorkspaceProps {
   season: SeasonState | null
-  onStart: (seed: number, clubId: string) => void
+  onStart: (seed: number, clubId: string, injuryMode: InjuryMode) => void
   onOpenMatch: () => void
   onAdvance: () => void
   onLoad: () => void
@@ -30,7 +30,7 @@ export function SeasonWorkspace(props: SeasonWorkspaceProps) {
   const [setupFor, setSetupFor] = useState<SeasonState | null>(null)
   const season = props.season
   if (!season || season.status === 'complete' && setupFor === season) return <SeasonSetup
-    onStart={(seed, clubId) => { props.onStart(seed, clubId); setSetupFor(null) }}
+    onStart={(seed, clubId, injuryMode) => { props.onStart(seed, clubId, injuryMode); setSetupFor(null) }}
     onLoad={() => { props.onLoad(); setSetupFor(null) }}
     onCancel={season ? () => setSetupFor(null) : undefined}
     busy={props.busy ?? false}
@@ -41,6 +41,7 @@ export function SeasonWorkspace(props: SeasonWorkspaceProps) {
 function SeasonSetup({ onStart, onLoad, onCancel, busy }: Pick<SeasonWorkspaceProps, 'onStart' | 'onLoad'> & { onCancel?: () => void; busy: boolean }) {
   const [clubId, setClubId] = useState(DEVELOPMENT_CLUBS[0]!.id)
   const [seedInput, setSeedInput] = useState('42')
+  const [injuryMode, setInjuryMode] = useState<InjuryMode>('standard')
   const [error, setError] = useState('')
   const club = DEVELOPMENT_CLUBS.find(team => team.id === clubId)!
   function start(event: FormEvent<HTMLFormElement>) {
@@ -51,7 +52,7 @@ function SeasonSetup({ onStart, onLoad, onCancel, busy }: Pick<SeasonWorkspacePr
       return
     }
     setError('')
-    onStart(seed, clubId)
+    onStart(seed, clubId, injuryMode)
   }
 
   return <div className="season-workspace season-setup">
@@ -72,9 +73,10 @@ function SeasonSetup({ onStart, onLoad, onCancel, busy }: Pick<SeasonWorkspacePr
           </div>
           <div className="season-start-controls">
             <div><label htmlFor="season-seed">Season seed</label><input id="season-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-describedby={error ? 'season-start-error' : undefined} aria-invalid={!!error} /></div>
-            <span className="season-setting">Injuries off</span>
+            <div><label htmlFor="season-injuries">Injuries</label><select id="season-injuries" value={injuryMode} onChange={event => setInjuryMode(event.target.value as InjuryMode)} aria-describedby="season-injury-help"><option value="standard">Standard</option><option value="reduced">Reduced</option><option value="off">Off</option></select></div>
             <button className="button primary" type="submit">Start season<Icon name="arrow" size={16} /></button>
           </div>
+          <p id="season-injury-help" className="season-setup-note">Applies to every club for the whole season. Injuries carry between matches.</p>
           {error && <p id="season-start-error" className="season-error" role="alert">{error}</p>}
         </fieldset>
       </form>

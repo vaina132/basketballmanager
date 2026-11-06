@@ -143,6 +143,8 @@ export interface MatchState {
   autoSubstitutions: Record<Side, boolean>;
   injuryMode: InjuryMode;
   injuries: Record<string, { kind: 'ankle' | 'muscle'; occurredAtSeconds: number }>;
+  /** Modern scheduled fixtures only: unavailable before tipoff, not new match injuries. */
+  preExistingInjuries?: string[];
   courtSeconds: Record<Side, number>;
   result: MatchResult | null;
   lineups: Record<Side, string[]>;

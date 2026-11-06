@@ -1,3 +1,6 @@
+import type { SeasonState } from '../domain/season'
+import { getPlayerHealth } from '../world/health'
+import { medicalDate } from './SeasonMedicalReport'
 import type { MatchState, Side } from '../domain/types'
 import { isPlayerEligible } from '../engine/match'
 import { Avatar } from './Avatar'
@@ -8,6 +11,7 @@ import './manager-desk.css'
 
 interface ManagerDeskProps {
   match: MatchState
+  season?: SeasonState | null
   managedSide?: Side
   fixtureLabel?: string
   apply: (action: (state: MatchState) => MatchState) => void
@@ -20,7 +24,7 @@ interface ManagerDeskProps {
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
 
-export function ManagerDesk({ match, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onSelectPlayer, onOpenCoaching }: ManagerDeskProps) {
+export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onSelectPlayer, onOpenCoaching }: ManagerDeskProps) {
   const team = match[managedSide]
   const complete = match.status === 'finished'
   const ready = match.status === 'ready'
@@ -38,7 +42,7 @@ export function ManagerDesk({ match, managedSide = 'home', fixtureLabel = 'EXHIB
   const notices: { key: string; title: string; detail: string; urgent?: boolean; action: string; open: () => void }[] = []
 
   if (needsReplacement) notices.push({ key: 'replacement', title: 'Replace an unavailable player', detail: match.requiredSubstitutions.map(item => `${playerName(item.playerId, item.side)}: ${item.reason === 'injured' ? 'injured' : 'five fouls'}`).join('; '), urgent: true, action: 'Choose replacement', open: onOpenCoaching })
-  if (injured.length) notices.push({ key: 'injuries', title: `${injured.length} injured ${injured.length === 1 ? 'player' : 'players'}`, detail: injured.map(player => player.name).join(', '), action: 'Review squad', open: onOpenSquad })
+  if (injured.length) notices.push({ key: 'injuries', title: `${injured.length} injured ${injured.length === 1 ? 'player' : 'players'}`, detail: injured.map(player => { const health = season ? getPlayerHealth(season, player.id) : null; return health ? `${player.name}: expected ${medicalDate(health.returnOn)}` : player.name }).join('; '), action: 'Review squad', open: onOpenSquad })
   if (!complete && foulTrouble.length) notices.push({ key: 'fouls', title: 'Foul trouble', detail: foulTrouble.map(player => `${player.name} · 4 fouls`).join('; '), action: 'Manage rotation', open: onOpenCoaching })
   if (tired.length) notices.push({ key: 'fatigue', title: complete ? 'Post-match fatigue' : 'Players tiring', detail: tired.map(player => `${player.name} · ${Math.round(match.stats[player.id].condition)}%`).join('; '), action: complete ? 'Review squad' : 'Manage rotation', open: complete ? onOpenSquad : onOpenCoaching })
   if (!complete && match.pendingSubstitutions[managedSide].length) notices.push({ key: 'queued', title: 'Substitutions queued', detail: match.pendingSubstitutions[managedSide].map(change => `${playerName(change.outId)} → ${playerName(change.inId)}`).join('; '), action: 'Review changes', open: onOpenCoaching })

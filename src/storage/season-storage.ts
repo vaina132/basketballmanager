@@ -1,8 +1,8 @@
-import type { FixtureResult, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
+import type { ArchivedFixture, FixtureResult, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import type { PlayerStats, Side, Team } from '../domain/types';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_DATA_PACK_ID } from '../data/development-league';
 import { MAX_MATCH_PERIODS } from '../engine/match';
-import { createSchedule, DAILY_RECOVERY, fixtureSeed, ROUND_INTERVAL_DAYS } from '../world/season';
+import { createSchedule, DAILY_RECOVERY, fixtureSeed, MAX_SEASON_NUMBER, ROUND_INTERVAL_DAYS } from '../world/season';
 import { createSeasonInjury, isRecovering } from '../world/health';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
@@ -62,13 +62,10 @@ function checkJsonTree(root: unknown): void {
   }
 }
 
-/** Completed matches retain accounting, not a second copy of their event history. */
-function validateResult(value: unknown, path: string, home: Team, away: Team, legacy: boolean): FixtureResult {
-  const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'stats', ...(legacy ? [] : ['injuries'])]);
-  const injuries = legacy ? {} : validateInjuryMap(fields.injuries, `${path}.injuries`, [...home.players, ...away.players].map(player => player.id));
+/** Both full current results and compact career archives retain official result rules. */
+function validateResultSummary(fields: Record<string, unknown>, path: string, home: Team, away: Team) {
   if (fields.kind !== 'normal' && fields.kind !== 'default') fail(`${path}.kind`, 'is unsupported');
   const periods = number(fields.periods, `${path}.periods`, fields.kind === 'normal' ? 4 : 1, MAX_MATCH_PERIODS);
-  const elapsedLimit = periods <= 4 ? periods * 600 : 2400 + (periods - 4) * 300;
   const earned = score(fields.score, `${path}.score`), official = score(fields.officialScore, `${path}.officialScore`);
   if (fields.winnerClubId !== home.id && fields.winnerClubId !== away.id) fail(`${path}.winnerClubId`, 'must identify a participating club');
   const winner: Side = fields.winnerClubId === home.id ? 'home' : 'away', loser: Side = winner === 'home' ? 'away' : 'home';
@@ -78,6 +75,15 @@ function validateResult(value: unknown, path: string, home: Team, away: Team, le
     const expected = earned[winner] > earned[loser] ? earned : { [winner]: 2, [loser]: 0 };
     if (!sameData(expected, official)) fail(`${path}.officialScore`, 'does not match the default award rule');
   }
+  return { periods, earned, loser };
+}
+
+/** Completed matches retain accounting, not a second copy of their event history. */
+function validateResult(value: unknown, path: string, home: Team, away: Team, legacy: boolean): FixtureResult {
+  const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'stats', ...(legacy ? [] : ['injuries'])]);
+  const injuries = legacy ? {} : validateInjuryMap(fields.injuries, `${path}.injuries`, [...home.players, ...away.players].map(player => player.id));
+  const { periods, earned, loser } = validateResultSummary(fields, path, home, away);
+  const elapsedLimit = periods <= 4 ? periods * 600 : 2400 + (periods - 4) * 300;
   const players = [...home.players, ...away.players];
   const stats = record(fields.stats, `${path}.stats`, players.map(player => player.id));
   const totals = { home: { points: 0, seconds: 0, eligible: 0, made: 0, assists: 0, steals: 0, blocks: 0, turnovers: 0, misses: 0 }, away: { points: 0, seconds: 0, eligible: 0, made: 0, assists: 0, steals: 0, blocks: 0, turnovers: 0, misses: 0 } };
@@ -110,6 +116,14 @@ function validateResult(value: unknown, path: string, home: Team, away: Team, le
   return fields as unknown as FixtureResult;
 }
 
+/** Old seasons deliberately omit player box scores; current fixtures still validate them. */
+function validateArchivedResult(value: unknown, path: string, home: Team, away: Team): ArchivedFixture['result'] {
+  const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'injuries']);
+  validateResultSummary(fields, path, home, away);
+  validateInjuryMap(fields.injuries, `${path}.injuries`, [...home.players, ...away.players].map(player => player.id));
+  return fields as unknown as ArchivedFixture['result'];
+}
+
 /** Compact result diagnoses identify both new injuries and players already unavailable. */
 function validateInjuryMap(value: unknown, path: string, playerIds: readonly string[]): Record<string, SeasonInjury['kind']> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(path, 'must be an object');
@@ -130,15 +144,17 @@ function requireNoPlay(stats: PlayerStats, path: string): void {
   if (STAT_KEYS.some(key => key !== 'condition' && stats[key] !== 0)) fail(path, 'must have zero personal statistics while recovering from an earlier injury');
 }
 
-/** Validate schema 1 using its original constraints before adding any new fields. */
-function validateState(value: unknown, legacy: boolean): void {
+/** Older schemas keep their original constraints before migration adds career fields. */
+function validateState(value: unknown, version: 1 | 2 | 3): void {
+  const legacy = version === 1, career = version === 3;
   checkJsonTree(value);
-  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries'])]);
-  if (state.schemaVersion !== (legacy ? 1 : 2) || state.engineVersion !== 'possession-3' || state.dataPackId !== DEVELOPMENT_DATA_PACK_ID) fail('state', 'uses an unsupported schema, engine or data pack');
+  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : [])]);
+  if (state.schemaVersion !== version || state.engineVersion !== 'possession-3' || state.dataPackId !== DEVELOPMENT_DATA_PACK_ID) fail('state', 'uses an unsupported schema, engine or data pack');
   const seed = number(state.seed, 'seed', 0, 0xffff_ffff), round = number(state.round, 'round', 1, 10);
+  const seasonNumber = career ? number(state.seasonNumber, 'seasonNumber', 1, MAX_SEASON_NUMBER) : 1;
   const injuryMode = legacy ? 'off' : state.injuryMode;
   if (!['standard', 'reduced', 'off'].includes(injuryMode as string)) fail('injuryMode', 'must be standard, reduced or off');
-  if (!legacy && (!Array.isArray(state.injuries) || state.injuries.length > 600)) fail('injuries', 'must be a bounded injury history');
+  if (!legacy && (!Array.isArray(state.injuries) || state.injuries.length > 600 * seasonNumber)) fail('injuries', 'must be a bounded injury history');
   if (state.status !== 'active' && state.status !== 'complete') fail('status', 'must be active or complete');
   if (state.status === 'complete' && round !== 10) fail('round', 'must reach the final matchday before completion');
   if (!sameData(state.clubs, DEVELOPMENT_CLUBS)) fail('clubs', 'must match the versioned development data pack');
@@ -156,9 +172,43 @@ function validateState(value: unknown, legacy: boolean): void {
     if (typeof plan.autoSubstitutions !== 'boolean' || club.id !== state.managedClubId && !plan.autoSubstitutions) fail(`plans.${club.id}.autoSubstitutions`, 'must be boolean and enabled for opponent clubs');
     for (const player of club.players) number(conditions[player.id], `conditions.${player.id}`, 0, 100, false);
   }
-  const schedule = createSchedule(clubs), fixtures = array(state.fixtures, 'fixtures', schedule.length);
-  const committedRound = state.status === 'complete' ? round : round - 1;
   const history: SeasonInjury[] = [];
+  const latestInjuries = new Map<string, SeasonInjury>();
+  function recordFixtureInjuries(result: ArchivedFixture['result'], expected: SeasonFixture, home: Team, away: Team, path: string, stats?: FixtureResult['stats']): void {
+    const carried = [...latestInjuries.values()].filter(injury => [home.id, away.id].includes(injury.clubId) && isRecovering(injury, expected.date));
+    for (const injury of carried) {
+      if (result.injuries[injury.playerId] !== injury.kind) fail(`${path}.result.injuries`, 'must retain every player still recovering at this fixture');
+      if (stats) requireNoPlay(stats[injury.playerId]!, `${path}.result.stats.${injury.playerId}`);
+    }
+    for (const [id, kind] of Object.entries(result.injuries)) {
+      if (carried.some(injury => injury.playerId === id)) continue;
+      if (injuryMode === 'off') fail(`${path}.result.injuries`, 'cannot record a new injury while injuries are off');
+      if (stats && stats[id]!.secondsPlayed === 0) fail(`${path}.result.injuries.${id}`, 'requires exposure in its originating fixture');
+      const club = home.players.some(player => player.id === id) ? home : away;
+      const injury = createSeasonInjury(seed, expected, club.id, id, kind);
+      history.push(injury);
+      latestInjuries.set(id, injury);
+    }
+  }
+  if (career) {
+    const archives = array(state.history, 'history', seasonNumber - 1);
+    for (const [archiveIndex, value] of archives.entries()) {
+      const path = `history[${archiveIndex}]`, archive = record(value, path, ['seasonNumber', 'fixtures']);
+      if (archive.seasonNumber !== archiveIndex + 1) fail(`${path}.seasonNumber`, 'must preserve every previous season in order');
+      const schedule = createSchedule(clubs, archiveIndex + 1);
+      const fixtures = array(archive.fixtures, `${path}.fixtures`, schedule.length);
+      for (const [index, value] of fixtures.entries()) {
+        const location = `${path}.fixtures[${index}]`, expected = schedule[index]!;
+        const fixture = record(value, location, ['id', 'round', 'date', 'homeClubId', 'awayClubId', 'result']);
+        for (const key of ['id', 'round', 'date', 'homeClubId', 'awayClubId'] as const) if (fixture[key] !== expected[key]) fail(location, 'does not match the versioned schedule');
+        const home = clubs.find(club => club.id === expected.homeClubId)!, away = clubs.find(club => club.id === expected.awayClubId)!;
+        const result = validateArchivedResult(fixture.result, `${location}.result`, home, away);
+        recordFixtureInjuries(result, expected, home, away, location);
+      }
+    }
+  }
+  const schedule = createSchedule(clubs, seasonNumber), fixtures = array(state.fixtures, 'fixtures', schedule.length);
+  const committedRound = state.status === 'complete' ? round : round - 1;
   for (const [index, value] of fixtures.entries()) {
     const path = `fixtures[${index}]`, expected = schedule[index]!;
     const fixture = record(value, path, ['id', 'round', 'date', 'homeClubId', 'awayClubId', 'result']);
@@ -167,20 +217,7 @@ function validateState(value: unknown, legacy: boolean): void {
       if (fixture.result === null) fail(`${path}.result`, 'is missing from a completed matchday');
       const home = clubs.find(club => club.id === expected.homeClubId)!, away = clubs.find(club => club.id === expected.awayClubId)!;
       const result = validateResult(fixture.result, `${path}.result`, home, away, legacy);
-      if (!legacy) {
-        const carried = history.filter(injury => [home.id, away.id].includes(injury.clubId) && isRecovering(injury, expected.date));
-        for (const injury of carried) {
-          if (result.injuries[injury.playerId] !== injury.kind) fail(`${path}.result.injuries`, 'must retain every player still recovering at this fixture');
-          requireNoPlay(result.stats[injury.playerId]!, `${path}.result.stats.${injury.playerId}`);
-        }
-        for (const [id, kind] of Object.entries(result.injuries)) {
-          if (carried.some(injury => injury.playerId === id)) continue;
-          if (injuryMode === 'off') fail(`${path}.result.injuries`, 'cannot record a new injury while injuries are off');
-          if (result.stats[id]!.secondsPlayed === 0) fail(`${path}.result.injuries.${id}`, 'requires exposure in its originating fixture');
-          const club = home.players.some(player => player.id === id) ? home : away;
-          history.push(createSeasonInjury(seed, expected, club.id, id, kind));
-        }
-      }
+      if (!legacy) recordFixtureInjuries(result, expected, home, away, path, result.stats);
     } else if (fixture.result !== null) fail(`${path}.result`, 'cannot be committed before its matchday');
   }
   if (!legacy) {
@@ -188,7 +225,8 @@ function validateState(value: unknown, legacy: boolean): void {
     for (const [index, injury] of injuries.entries()) record(injury, `injuries[${index}]`, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);
     const ids = injuries.map(injury => (injury as SeasonInjury).id);
     if (new Set(ids).size !== ids.length || !sameIds(ids, history.map(injury => injury.id))) fail('injuries', 'must match the committed fixture injury history exactly');
-    for (const injury of history) if (!sameData(injuries.find(entry => (entry as SeasonInjury).id === injury.id), injury)) fail(`injuries.${injury.id}`, 'has inconsistent identity, diagnosis, origin or recovery dates');
+    const byId = new Map(injuries.map(entry => [(entry as SeasonInjury).id, entry]));
+    for (const injury of history) if (!sameData(byId.get(injury.id), injury)) fail(`injuries.${injury.id}`, 'has inconsistent identity, diagnosis, origin or recovery dates');
   }
   const active = (fixtures as SeasonFixture[]).find(fixture => fixture.round === round && [fixture.homeClubId, fixture.awayClubId].includes(state.managedClubId as string))!;
   if (state.activeFixtureId !== active.id || state.date !== active.date) fail('activeFixtureId/date', 'must identify the managed club fixture on the current matchday');
@@ -230,11 +268,11 @@ function validateState(value: unknown, legacy: boolean): void {
 }
 
 /** Validate every reference and committed round before replacing any live season. */
-export function validateSeasonState(value: unknown): asserts value is SeasonState { validateState(value, false); }
+export function validateSeasonState(value: unknown): asserts value is SeasonState { validateState(value, 3); }
 
 export function serializeSeason(state: SeasonState): string {
   validateSeasonState(state);
-  const text = JSON.stringify({ format: FORMAT, formatVersion: 2, engineVersion: 'possession-3', state });
+  const text = JSON.stringify({ format: FORMAT, formatVersion: 3, engineVersion: 'possession-3', state });
   checkSize(text);
   return text;
 }
@@ -245,11 +283,18 @@ export function parseSeason(text: string): SeasonState {
   try { parsed = JSON.parse(text); } catch { throw new Error('This is not a valid JSON season file.'); }
   checkJsonTree(parsed);
   const envelope = record(parsed, 'envelope', ['format', 'formatVersion', 'engineVersion', 'state']);
-  if (envelope.format !== FORMAT || ![1, 2].includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
+  if (envelope.format !== FORMAT || ![1, 2, 3].includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
   if (envelope.formatVersion === 1) {
-    validateState(envelope.state, true);
-    const legacy = envelope.state as Omit<SeasonState, 'schemaVersion' | 'injuryMode' | 'injuries'>;
-    const upgraded: SeasonState = { ...legacy, schemaVersion: 2, injuryMode: 'off', injuries: [], fixtures: legacy.fixtures.map(fixture => ({ ...fixture, result: fixture.result ? { ...fixture.result, injuries: {} } : null })) };
+    validateState(envelope.state, 1);
+    const legacy = envelope.state as Omit<SeasonState, 'schemaVersion' | 'injuryMode' | 'injuries' | 'seasonNumber' | 'history'>;
+    const upgraded: SeasonState = { ...legacy, schemaVersion: 3, seasonNumber: 1, history: [], injuryMode: 'off', injuries: [], fixtures: legacy.fixtures.map(fixture => ({ ...fixture, result: fixture.result ? { ...fixture.result, injuries: {} } : null })) };
+    validateSeasonState(upgraded);
+    return upgraded;
+  }
+  if (envelope.formatVersion === 2) {
+    validateState(envelope.state, 2);
+    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'seasonNumber' | 'history'>;
+    const upgraded: SeasonState = { ...previous, schemaVersion: 3, seasonNumber: 1, history: [] };
     validateSeasonState(upgraded);
     return upgraded;
   }

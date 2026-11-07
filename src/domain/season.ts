@@ -39,12 +39,24 @@ export interface SeasonFixture {
   result: FixtureResult | null;
 }
 
+/** Past seasons retain scores and health provenance, without per-player box scores. */
+export interface ArchivedFixture extends Omit<SeasonFixture, 'result'> {
+  result: Omit<FixtureResult, 'stats'>;
+}
+
+export interface SeasonArchive {
+  seasonNumber: number;
+  fixtures: ArchivedFixture[];
+}
+
 export interface SeasonState {
-  schemaVersion: 2;
+  schemaVersion: 3;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;
   managedClubId: string;
+  seasonNumber: number;
+  history: SeasonArchive[];
   date: string;
   status: 'active' | 'complete';
   round: number;

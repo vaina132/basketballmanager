@@ -46,6 +46,7 @@ export default function App() {
   const managedSide = season ? seasonManagedSide(season) : 'home'
   const managedTeam = match[managedSide]
   const [advancing, setAdvancing] = useState(false)
+  const [seasonOperation, setSeasonOperation] = useState<'round' | 'rollover'>('round')
   const [leavingSeason, setLeavingSeason] = useState(false)
   const seasonWorker = useRef<Worker | null>(null)
   const seasonJob = useRef(0)
@@ -211,7 +212,7 @@ export default function App() {
       const text = current.kind === 'season' ? serializeSeason(current.season) : serializeMatch(current.match)
       const blob = new Blob([text], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
-      const link = document.createElement('a'); link.href = url; link.download = current.kind === 'season' ? `courtside-season-${current.season.seed}.json` : `courtside-match-${current.match.seed}.json`; link.click()
+      const link = document.createElement('a'); link.href = url; link.download = current.kind === 'season' ? `courtside-season-${current.season.seed}-year-${current.season.seasonNumber}.json` : `courtside-match-${current.match.seed}.json`; link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setNotice({ message: current.kind === 'season' ? 'Season exported. Keep the file to resume on another device.' : 'Match exported. Keep the file to resume on another device.' })
     } catch (error) { setNotice({ message: messageOf(error), error: true }) }
@@ -258,17 +259,20 @@ export default function App() {
   }
   function cancelAdvance() {
     seasonJob.current += 1; seasonWorker.current?.terminate(); seasonWorker.current = null; setAdvancing(false)
-    setNotice({ message: 'Matchday processing cancelled. Your finished match is preserved.' })
+    setNotice({ message: seasonOperation === 'rollover' ? 'Season transition cancelled. Your completed season is preserved.' : 'Matchday processing cancelled. Your finished match is preserved.' })
   }
-  function advance() {
+  function advance() { processSeason('round') }
+  function rollover() { processSeason('rollover') }
+  function processSeason(action: 'round' | 'rollover') {
     const current = sessionRef.current
-    if (seasonWorker.current || current.kind !== 'season' || current.season.status === 'complete') return
+    if (seasonWorker.current || current.kind !== 'season') return
+    if (action === 'rollover' ? current.season.status !== 'complete' : current.season.status === 'complete') return
     if (current.season.activeMatch.status !== 'finished') { navigate('match'); return }
     replacementRequest.current += 1
     setPlaying(false); settlePlayback()
     try {
       const worker = new Worker(new URL('./world/season.worker.ts', import.meta.url), { type: 'module' })
-      seasonWorker.current = worker; setAdvancing(true)
+      seasonWorker.current = worker; setSeasonOperation(action); setAdvancing(true)
       const requestId = ++seasonJob.current
       const finish = () => { worker.terminate(); seasonWorker.current = null; setAdvancing(false) }
       worker.onmessage = ({ data }: MessageEvent<SeasonReply>) => {
@@ -276,11 +280,11 @@ export default function App() {
         finish()
         if ('error' in data) { setNotice({ message: data.error, error: true }); return }
         install({ kind: 'season', season: data.state })
-        setNotice({ message: data.state.status === 'complete' ? 'Season complete. Final standings and all results are available.' : `Matchday ${data.state.round - 1} recorded. Your next fixture is ready.` })
+        setNotice({ message: action === 'rollover' ? `Season ${data.state.seasonNumber} ready. Your previous results are in Competitions.` : data.state.status === 'complete' ? 'Season complete. Final standings and all results are available.' : `Matchday ${data.state.round - 1} recorded. Your next fixture is ready.` })
         navigate(data.state.status === 'complete' ? 'season' : 'home')
       }
-      worker.onerror = () => { if (seasonWorker.current !== worker) return; finish(); setNotice({ message: 'Could not process the matchday. Your match is preserved; try Continue again.', error: true }) }
-      worker.postMessage({ requestId, state: current.season })
+      worker.onerror = () => { if (seasonWorker.current !== worker) return; finish(); setNotice({ message: action === 'rollover' ? 'Could not start the next season. Your completed season is preserved; try again.' : 'Could not process the matchday. Your match is preserved; try Continue again.', error: true }) }
+      worker.postMessage({ requestId, state: current.season, action })
     } catch (error) { seasonWorker.current?.terminate(); seasonWorker.current = null; setAdvancing(false); setNotice({ message: messageOf(error), error: true }) }
   }
   useEffect(() => () => { seasonWorker.current?.terminate() }, [])
@@ -298,12 +302,12 @@ export default function App() {
 
     <div className="main-shell">
       <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save season' : 'Save match'}</button></div></header>
-      {advancing && <div className="season-processing" role="status"><span>Processing matchday results...</span><button className="text-button" onClick={cancelAdvance}>Cancel</button></div>}
+      {advancing && <div className="season-processing" role="status"><span>{seasonOperation === 'rollover' ? 'Preparing next season...' : 'Processing matchday results...'}</span><button className="text-button" onClick={cancelAdvance}>Cancel</button></div>}
       <main id="main" tabIndex={-1} inert={advancing || leavingSeason}>
         <div className="page-heading"><h1>{pageNames[page]}</h1><div className="heading-meta"><span className="pill">{season || page === 'season' ? 'DEVELOPMENT LEAGUE' : 'EXHIBITION'}</span><span className="muted">{page === 'season' ? season ? season.date : 'Club selection' : `${match.home.shortName} vs ${match.away.shortName}`}</span></div></div>
 
-        {season && page !== 'season' && <SeasonProgress season={season} showMatchAction={page === 'squad'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} />}
-        {page === 'season' && <SeasonWorkspace season={season} onStart={startSeason} onOpenMatch={() => navigate('match')} onAdvance={advance} onLoad={loadSeason} busy={advancing} />}
+        {season && page !== 'season' && <SeasonProgress season={season} showMatchAction={page === 'squad'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} />}
+        {page === 'season' && <SeasonWorkspace season={season} onStart={startSeason} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} onLoad={loadSeason} busy={advancing} />}
 
         {page === 'home' && <ManagerDesk season={season} match={match} managedSide={managedSide} apply={apply} fixtureLabel={season ? `Development League / Matchday ${season.round}` : undefined} onOpenMatch={() => navigate('match')} onOpenSquad={() => navigate('squad')} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} onOpenCoaching={() => navigate('match', needsReplacement ? '#player-in' : complete ? '.coaching-workbench' : '#tempo')} />}
 
@@ -346,14 +350,15 @@ function PlayerProfile({ player, match, managedSide, season }: { player: Player;
 
 
 
-function SeasonProgress({ season, showMatchAction, canContinue, onCompetition, onOpenMatch, onAdvance }: { season: SeasonState; showMatchAction: boolean; canContinue: boolean; onCompetition: () => void; onOpenMatch: () => void; onAdvance: () => void }) {
+function SeasonProgress({ season, showMatchAction, canContinue, onCompetition, onOpenMatch, onAdvance, onRollover }: { season: SeasonState; showMatchAction: boolean; canContinue: boolean; onCompetition: () => void; onOpenMatch: () => void; onAdvance: () => void; onRollover: () => void }) {
   const fixture = getActiveFixture(season)
   const standing = getStandings(season).find(row => row.clubId === season.managedClubId)!
   const date = new Date(`${season.date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
   return <section className="season-progress panel" aria-label="Season progress">
-    <div><time dateTime={season.date}>{date}</time><span>{season.status === 'complete' ? 'Season complete' : `Matchday ${fixture.round} / 10`}</span></div>
+    <div><time dateTime={season.date}>{date}</time><span>{season.status === 'complete' ? `Season ${season.seasonNumber} complete` : `Season ${season.seasonNumber} / Matchday ${fixture.round} / 10`}</span></div>
     <div className="season-record"><strong>{standing.played ? `${standing.position} / 6` : 'Unplayed'}</strong><span>{standing.wins} W / {standing.losses} L</span></div>
     <button className="text-button" onClick={onCompetition}>League table<Icon name="chevron" size={14} /></button>
+    {season.status === 'complete' && <button className="button primary season-continue" onClick={onRollover}>Next season<Icon name="next" size={15} /></button>}
     {season.status !== 'complete' && (canContinue || showMatchAction) && <button className="button primary season-continue" onClick={canContinue ? onAdvance : onOpenMatch}>{canContinue ? season.round === 10 ? 'Finalize season' : 'Continue' : 'Go to match'}<Icon name="next" size={15} /></button>}
   </section>
 }

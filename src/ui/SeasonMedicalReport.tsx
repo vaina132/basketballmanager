@@ -4,7 +4,7 @@ import { daysUntilReturn, getPlayerHealth, getSeasonInjuries, isRecovering } fro
 import { Icon } from './Icon'
 import './season-medical.css'
 
-const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 export const medicalDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const injuryName = (kind: 'ankle' | 'muscle') => kind === 'ankle' ? 'Ankle injury' : 'Muscle injury'
 

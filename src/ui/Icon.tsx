@@ -1,12 +1,13 @@
 import type { CSSProperties } from 'react'
 
-export type IconName = 'home' | 'court' | 'people' | 'training' | 'search' | 'mail' | 'building' | 'settings' | 'play' | 'pause' | 'next' | 'skip' | 'restart' | 'save' | 'download' | 'upload' | 'arrow' | 'chevron' | 'check' | 'close' | 'ball' | 'clock' | 'swap'
+export type IconName = 'home' | 'court' | 'people' | 'training' | 'staff' | 'search' | 'mail' | 'building' | 'settings' | 'play' | 'pause' | 'next' | 'skip' | 'restart' | 'save' | 'download' | 'upload' | 'arrow' | 'chevron' | 'check' | 'close' | 'ball' | 'clock' | 'swap'
 
 const paths: Record<IconName, string> = {
   home: 'M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z',
   court: 'M3 4h18v16H3ZM12 4v16M3 8h4v8H3m18-8h-4v8h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
   people: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.87M13 3.13a4 4 0 0 1 0 7.75M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8',
   training: 'M6 4v16M3 7v10m15-13v16m3-13v10M6 12h12',
+  staff: 'M2 21v-2a4 4 0 0 1 4-4h3a4 4 0 0 1 4 4v2M7.5 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8M15 4h6v17h-4M16 8h2m-2 4h2',
   search: 'M21 21l-5-5M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15',
   mail: 'M3 5h18v14H3ZM3 5l9 8 9-8',
   building: 'M4 21V6l8-3 8 3v15M2 21h20M8 8h1m6 0h1M8 12h1m6 0h1m-6 9v-5h6v5',

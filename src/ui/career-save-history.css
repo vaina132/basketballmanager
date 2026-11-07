@@ -1,0 +1,28 @@
+.career-save-history{width:min(880px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);margin:auto;padding:0;border:2px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);font-size:12px;overflow:hidden}
+.career-save-history[open]{display:flex;flex-direction:column}
+.career-save-history>*{min-width:0}
+.career-save-history::backdrop{background:#05070bb8}
+.career-save-history-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2);flex:none}
+.career-save-history-heading h2{font-size:14px;font-weight:600}
+.career-save-history-heading>div{display:flex;align-items:center;gap:18px}
+.career-save-history-help,.career-save-history-note{padding:10px 14px;color:var(--muted);font-size:12px;line-height:1.5;flex:none}
+.career-save-history-note{border-top:1px solid var(--border)}
+.career-save-history-error{margin:0 14px 10px;padding:8px 10px;border-left:2px solid var(--accent);background:var(--surface-2);color:var(--accent);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.career-save-history-status{padding:0 14px 10px;font-size:12px;color:var(--muted);flex:none}
+.career-save-history-scroll{min-height:0;max-width:100%;overflow:auto;overscroll-behavior:contain}
+.career-save-history-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.career-save-history-table{min-width:750px;width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;text-align:left}
+.career-save-history-table thead th{height:34px;padding:7px 12px;background:var(--surface-2);font-size:12px;font-weight:500;letter-spacing:0;color:var(--muted);white-space:nowrap;border-bottom:1px solid var(--border)}
+.career-save-history-table tbody th,.career-save-history-table td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:12px;line-height:1.5;font-weight:400;letter-spacing:0;background:transparent;vertical-align:top;color:var(--text)}
+.career-save-history-table tbody tr:last-child>*{border-bottom:0}
+.career-save-history-table th:first-child,.career-save-history-table td:first-child{padding-left:14px}
+.career-save-history-table th:last-child,.career-save-history-table td:last-child{padding-right:14px;text-align:right;vertical-align:middle}
+.career-save-history-table tbody tr:hover{background:var(--surface-2)}
+.career-save-history-table strong{display:block;font-size:12px;font-weight:500}
+.career-save-history-table td>span,.career-save-history-table tbody th>span,.career-save-history-table tbody th>time{display:block;font-size:12px;color:var(--muted);white-space:nowrap}
+.career-save-history-table td>time{white-space:nowrap}
+.career-save-history-table td:nth-child(2){min-width:165px;max-width:240px}
+.career-save-entry-error{margin-top:4px;font-size:12px;line-height:1.5;color:var(--accent);overflow-wrap:anywhere}
+.career-save-unreadable>th:first-child{border-left:2px solid var(--accent)}
+.career-save-history-empty{padding:14px;color:var(--muted);font-size:12px;line-height:1.5}
+@media(max-width:600px){.career-save-history{width:calc(100vw - 20px);max-height:calc(100dvh - 20px)}.career-save-history-heading{gap:10px;padding:10px}.career-save-history-heading>div{gap:12px}.career-save-history-help,.career-save-history-note{padding:9px 10px}.career-save-history-error{margin-inline:10px}.career-save-history-status{padding-inline:10px}}

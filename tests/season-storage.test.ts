@@ -20,7 +20,7 @@ function corrupt(text: string, change: (envelope: Envelope) => void): string {
 }
 
 beforeAll(() => {
-  initial = createSeason(37, selectedClub, 'off');
+  initial = createSeason(37, selectedClub, 'off', false, false);
   completedMatch = finish(initial);
   nextRound = advanceSeason(completedMatch);
   initialText = serializeSeason(initial);
@@ -68,7 +68,7 @@ describe('season persistence boundaries', () => {
   it('preserves a mandatory away-team replacement and resumes only after that decision', () => {
     let critical: SeasonState | undefined;
     for (let seed = 1; seed <= 30 && !critical; seed += 1) {
-      const candidate = createSeason(seed, selectedClub, 'off');
+      const candidate = createSeason(seed, selectedClub, 'off', false, false);
       candidate.activeMatch = simulateToEnd(candidate.activeMatch);
       if (candidate.activeMatch.requiredSubstitutions.length) critical = candidate;
     }
@@ -146,9 +146,9 @@ describe('season persistence boundaries', () => {
 
 describe('malformed season imports', () => {
   const cases: Array<[string, (envelope: Envelope) => void]> = [
-    ['unsupported format version', e => { e.formatVersion = 4; }],
+    ['unsupported format version', e => { e.formatVersion = 6; }],
     ['unsupported envelope engine', e => { e.engineVersion = 'rules-2'; }],
-    ['unsupported state version', e => { (e.state as unknown as Record<string, unknown>).schemaVersion = 4; }],
+    ['unsupported state version', e => { (e.state as unknown as Record<string, unknown>).schemaVersion = 6; }],
     ['unknown data pack', e => { (e.state as unknown as Record<string, unknown>).dataPackId = 'real-league'; }],
     ['unknown state field', e => { (e.state as unknown as Record<string, unknown>).extra = true; }],
     ['invalid seed', e => { e.state.seed = -1; }],

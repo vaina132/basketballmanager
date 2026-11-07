@@ -12,14 +12,14 @@ const restore = (season: SeasonState) => parseSeason(serializeSeason(season));
 function legacyText(season: SeasonState): string {
   const legacy = structuredClone(season) as unknown as Record<string, unknown>;
   legacy.schemaVersion = 1;
-  delete legacy.seasonNumber; delete legacy.history;
+  delete legacy.seasonNumber; delete legacy.history; delete legacy.training; delete legacy.coaching;
   delete legacy.injuryMode; delete legacy.injuries;
   for (const fixture of legacy.fixtures as Array<{ result: Record<string, unknown> | null }>) if (fixture.result) delete fixture.result.injuries;
   return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 1, engineVersion: 'possession-3', state: legacy });
 }
 
 beforeAll(() => {
-  const season = createSeason(9, clubId, 'standard');
+  const season = createSeason(9, clubId, 'standard', false, false);
   let match = setAutoSubstitutions(season.activeMatch, managedSide(season), true);
   for (let count = 0; count < 2000 && !match.injuries[playerId] && match.status !== 'finished'; count += 1) match = stepMatch(match);
   expect(match.injuries[playerId]).toBeDefined();
@@ -30,9 +30,9 @@ beforeAll(() => {
 }, 30_000);
 
 describe('health-aware season persistence', () => {
-  it.each(['standard', 'reduced', 'off'] as const)('writes format 3 with a uniform %s injury mode', mode => {
-    const season = createSeason(17, clubId, mode), text = serializeSeason(season);
-    expect(JSON.parse(text).formatVersion).toBe(3);
+  it.each(['standard', 'reduced', 'off'] as const)('writes format 5 with a uniform %s injury mode', mode => {
+    const season = createSeason(17, clubId, mode, false, false), text = serializeSeason(season);
+    expect(JSON.parse(text).formatVersion).toBe(5);
     expect(restore(season)).toEqual(season);
     expect(restore(season).activeMatch.injuryMode).toBe(mode);
   });
@@ -120,7 +120,7 @@ describe('strict health history and eligibility validation', () => {
   });
 
   it('counts injuries as exclusions when validating a compact default result', () => {
-    const season = advanceSeason(finish(createSeason(37, clubId, 'standard')));
+    const season = advanceSeason(finish(createSeason(37, clubId, 'standard', false, false)));
     const fixture = season.fixtures.find(item => item.round === 1 && item.result && [item.homeClubId, item.awayClubId].some(id => ![season.activeMatch.home.id, season.activeMatch.away.id].includes(id)))!;
     const result = fixture.result!;
     const losingClub = season.clubs.find(club => [fixture.homeClubId, fixture.awayClubId].includes(club.id) && ![season.activeMatch.home.id, season.activeMatch.away.id].includes(club.id))!;
@@ -143,10 +143,10 @@ describe('strict health history and eligibility validation', () => {
 
 describe('explicit injury-free legacy migration', () => {
   it('upgrades schema 1 only in memory and preserves every active match field', () => {
-    const previous = advanceSeason(finish(createSeason(37, clubId, 'off')));
+    const previous = advanceSeason(finish(createSeason(37, clubId, 'off', false, false)));
     const text = legacyText(previous), snapshot = JSON.parse(text).state;
     const restored = parseSeason(text);
-    expect(restored.schemaVersion).toBe(3);
+    expect(restored.schemaVersion).toBe(5);
     expect(restored.injuryMode).toBe('off');
     expect(restored.injuries).toEqual([]);
     expect(restored.activeMatch).toEqual(snapshot.activeMatch);
@@ -155,17 +155,17 @@ describe('explicit injury-free legacy migration', () => {
     expect(restored.fixtures.filter(fixture => fixture.result).every(fixture => Object.keys(fixture.result!.injuries).length === 0)).toBe(true);
     expect(JSON.parse(text).state).toEqual(snapshot);
     expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(previous)));
-    expect(JSON.parse(serializeSeason(restored)).formatVersion).toBe(3);
+    expect(JSON.parse(serializeSeason(restored)).formatVersion).toBe(5);
   });
 
   it('migrates completed seasons without changing the retained final replay', () => {
-    let season = createSeason(5, clubId, 'off');
+    let season = createSeason(5, clubId, 'off', false, false);
     while (season.status !== 'complete') season = advanceSeason(finish(season));
     expect(parseSeason(legacyText(season))).toEqual(season);
   }, 30_000);
 
   it('runs strict original validation before adding default health fields', () => {
-    const season = advanceSeason(finish(createSeason(37, clubId, 'off')));
+    const season = advanceSeason(finish(createSeason(37, clubId, 'off', false, false)));
     const envelope = JSON.parse(legacyText(season));
     envelope.state.fixtures[0].result.score.home += 1;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/officialScore|points/);
@@ -176,10 +176,10 @@ describe('explicit injury-free legacy migration', () => {
   });
 
   it('rejects schema/envelope version mismatches instead of guessing a migration', () => {
-    const envelope = JSON.parse(serializeSeason(createSeason(17, clubId, 'off')));
+    const envelope = JSON.parse(serializeSeason(createSeason(17, clubId, 'off', false, false)));
     envelope.formatVersion = 1;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow();
-    const legacy = JSON.parse(legacyText(createSeason(17, clubId, 'off')));
+    const legacy = JSON.parse(legacyText(createSeason(17, clubId, 'off', false, false)));
     legacy.formatVersion = 2;
     expect(() => parseSeason(JSON.stringify(legacy))).toThrow();
   });

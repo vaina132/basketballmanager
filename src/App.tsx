@@ -14,17 +14,28 @@ import { StaminaMeter } from './ui/StaminaMeter'
 import { ManagerDesk } from './ui/ManagerDesk'
 import type { SeasonState } from './domain/season'
 import { createSeason, getActiveFixture, getStandings, managedSide as seasonManagedSide } from './world/season'
-import { loadLocalSeason, MAX_SEASON_SAVE_BYTES, parseSeason, saveLocalSeason, serializeSeason } from './storage/season-storage'
+import { MAX_SEASON_SAVE_BYTES, parseSeason, serializeSeason } from './storage/season-storage'
+import { readCareerSaves, loadCareerCheckpoint, saveCareerCheckpoint } from './storage/career-saves'
+import type { CareerSaveList } from './storage/career-saves'
+import { readSeasonJournal, SeasonSaveConflictError } from './storage/season-indexed-db'
+import type { CheckpointReason } from './storage/season-indexed-db'
+import { CareerSaveHistory } from './ui/CareerSaveHistory'
 import { SeasonWorkspace } from './ui/SeasonWorkspace'
+import { TrainingWorkspace } from './ui/TrainingWorkspace'
+import { SquadPerformance } from './ui/SquadPerformance'
+import { StaffWorkspace } from './ui/StaffWorkspace'
+import { enableCoaching, hireCoach, releaseCoach, setCoachAssignment, setCoachRenewal } from './world/coaching'
+import { enableTraining, setTrainingPlan } from './world/training'
+import type { TrainingPlan } from './domain/training'
 import { PlayerHealthSummary, SeasonMedicalReport } from './ui/SeasonMedicalReport'
 import type { SeasonReply } from './world/season.worker'
 import './ui/season-progress.css'
 
 
-type Page = 'home' | 'squad' | 'match' | 'season'
+type Page = 'home' | 'squad' | 'match' | 'season' | 'training' | 'staff'
 type GameSession = { kind: 'exhibition'; match: MatchState } | { kind: 'season'; season: SeasonState }
 type Notice = { message: string; error?: boolean }
-const pageNames: Record<Page, string> = { home: "Manager's desk", squad: 'Squad', match: 'Match center', season: 'Competitions' }
+const pageNames: Record<Page, string> = { home: "Manager's desk", squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', staff: 'Coaching staff' }
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const periodLabel = (period: number) => period <= 4 ? `Q${period}` : `OT${period - 4}`
 const messageOf = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.'
@@ -65,10 +76,21 @@ export default function App() {
   const [seedInput, setSeedInput] = useState('42')
   const [notice, setNotice] = useState<Notice | null>(null)
   const [saving, setSaving] = useState(false)
+  const persistenceBusy = useRef(false)
+  const savedRevision = useRef<number | null>(null)
+  const revisionRead = useRef<Promise<number> | null>(null)
+  const [checkpointIssue, setCheckpointIssue] = useState<string | null>(null)
+  const [saveHistoryOpen, setSaveHistoryOpen] = useState(false)
+  const [saveHistory, setSaveHistory] = useState<CareerSaveList | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const historyRequest = useRef(0)
   const [boxSide, setBoxSide] = useState<Side>('home')
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null)
   const [rosterFilter, setRosterFilter] = useState('all')
   const [rosterQuery, setRosterQuery] = useState('')
+  const [squadView, setSquadView] = useState<'selection' | 'performance'>('selection')
+  const [performancePlayer, setPerformancePlayer] = useState<string | null>(null)
   const [navigationTarget, setNavigationTarget] = useState<{ selector: string } | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
   const setupRef = useRef<HTMLDetailsElement>(null)
@@ -84,7 +106,7 @@ export default function App() {
     replaceSession(current.kind === 'season' ? { kind: 'season', season: { ...current.season, activeMatch: next } } : { kind: 'exhibition', match: next })
   }, [replaceSession])
   const apply = useCallback((action: (current: MatchState) => MatchState, animate = false, progression = false) => {
-    if (seasonWorker.current) return
+    if (seasonWorker.current || persistenceBusy.current) return
     try {
       const before = matchRef.current
       const next = action(before)
@@ -154,6 +176,7 @@ export default function App() {
   function navigate(nextPage: Page, selector = '#main') {
     setPlaying(false)
     settlePlayback()
+    if (nextPage === 'squad' && selector === '.player-profile') setSquadView('selection')
     setPage(nextPage)
     setNavigationTarget({ selector })
     if (setupRef.current) setupRef.current.open = false
@@ -169,36 +192,129 @@ export default function App() {
     return () => cancelAnimationFrame(frame)
   }, [page, navigationTarget])
 
+  // Read once per tab. Browsing history must never silently accept a newer writer.
+  function ensureSaveRevision(): Promise<number> {
+    if (savedRevision.current !== null) return Promise.resolve(savedRevision.current)
+    if (!revisionRead.current) revisionRead.current = readSeasonJournal().then(journal => {
+      savedRevision.current ??= journal.revision
+      return savedRevision.current
+    }).finally(() => { revisionRead.current = null })
+    return revisionRead.current
+  }
+  useEffect(() => { void ensureSaveRevision().catch(() => { /* A save/load action reports unavailable storage. */ }) }, [])
+
+  async function persistSeason(state: SeasonState, reason: Exclude<CheckpointReason, 'legacy'>): Promise<boolean> {
+    if (persistenceBusy.current) return false
+    persistenceBusy.current = true; setSaving(true); setPlaying(false); settlePlayback()
+    try {
+      const revision = await ensureSaveRevision()
+      const checkpoint = await saveCareerCheckpoint(state, revision, reason)
+      savedRevision.current = checkpoint.revision
+      setCheckpointIssue(null)
+      return true
+    } catch (error) {
+      const detail = messageOf(error)
+      setCheckpointIssue(error instanceof SeasonSaveConflictError ? detail : `${detail} Your game is still open. Save season to retry, or Export to keep a file backup.`)
+      setNotice({ message: reason === 'manual' ? 'Season was not saved. Your current game is still open.' : 'Automatic save failed. Your current game is still open.', error: true })
+      return false
+    } finally { persistenceBusy.current = false; setSaving(false) }
+  }
+  async function refreshSaveHistory() {
+    const request = ++historyRequest.current
+    setHistoryLoading(true); setHistoryError(null)
+    try {
+      const history = await readCareerSaves()
+      if (request !== historyRequest.current) return
+      setSaveHistory(history); setHistoryError(history.currentError)
+    } catch (error) { if (request === historyRequest.current) setHistoryError(messageOf(error)) }
+    finally { if (request === historyRequest.current) setHistoryLoading(false) }
+  }
+  function openSaveHistory() {
+    if (seasonWorker.current || persistenceBusy.current) return
+    replacementRequest.current += 1
+    setPlaying(false); settlePlayback(); setSaveHistoryOpen(true)
+    void refreshSaveHistory()
+  }
+  function closeSaveHistory() {
+    if (persistenceBusy.current) return
+    historyRequest.current += 1; setSaveHistoryOpen(false); setHistoryLoading(false)
+  }
+  async function restoreCheckpoint(revision: number) {
+    if (seasonWorker.current || persistenceBusy.current) return
+    const request = ++replacementRequest.current
+    persistenceBusy.current = true; setSaving(true); setPlaying(false); settlePlayback()
+    try {
+      const restored = await loadCareerCheckpoint(revision)
+      if (request !== replacementRequest.current) return
+      savedRevision.current = restored.revision
+      install({ kind: 'season', season: restored.state })
+      historyRequest.current += 1; setSaveHistoryOpen(false); setCheckpointIssue(null)
+      navigate('home'); setNotice({ message: 'Checkpoint restored. Your next save will create a new checkpoint.' })
+    } catch (error) { if (request === replacementRequest.current) setHistoryError(messageOf(error)) }
+    finally { persistenceBusy.current = false; setSaving(false) }
+  }
+  function updateTraining(plan?: TrainingPlan) {
+    if (seasonWorker.current || persistenceBusy.current) return
+    const current = sessionRef.current
+    if (current.kind !== 'season') return
+    try {
+      const next = plan ? setTrainingPlan(current.season, plan) : enableTraining(current.season)
+      setPlaying(false); settlePlayback()
+      replaceSession({ kind: 'season', season: next })
+      if (!plan) setNotice({ message: 'Training enabled. Your plans will apply between matchdays.' })
+    } catch (error) { setNotice({ message: messageOf(error), error: true }) }
+  }
+  function updateCoaching(action: (state: SeasonState) => SeasonState, message?: string) {
+    if (seasonWorker.current || persistenceBusy.current) return
+    const current = sessionRef.current
+    if (current.kind !== 'season') return
+    try {
+      const next = action(current.season)
+      setPlaying(false); settlePlayback()
+      replaceSession({ kind: 'season', season: next })
+      if (message) setNotice({ message })
+    } catch (error) { setNotice({ message: messageOf(error), error: true }) }
+  }
   function install(next: GameSession) {
     seasonJob.current += 1; seasonWorker.current?.terminate(); seasonWorker.current = null; setAdvancing(false)
-    setPlaying(false); resetPlayback(); setPresentationBase(null); replaceSession(next)
+    setPlaying(false); resetPlayback(); setPresentationBase(null); setCheckpointIssue(null); replaceSession(next)
+    if (next.kind === 'exhibition') setPage(current => current === 'training' || current === 'staff' ? 'home' : current)
     const active = next.kind === 'season' ? next.season.activeMatch : next.match
     setSeedInput(String(active.seed)); setBoxSide(next.kind === 'season' ? seasonManagedSide(next.season) : 'home')
-    setSelectedPlayer(null); setRosterFilter('all'); setRosterQuery('')
+    setSelectedPlayer(null); setRosterFilter('all'); setRosterQuery(''); setSquadView('selection'); setPerformancePlayer(null)
   }
   async function save() {
-    if (seasonWorker.current) return
-    setSaving(true)
-    try {
-      const current = sessionRef.current
-      if (current.kind === 'season') { await saveLocalSeason(current.season); setNotice({ message: 'Season saved on this device.' }) }
-      else { await saveLocalMatch(current.match); setNotice({ message: 'Match saved on this device.' }) }
-    } catch (error) { setNotice({ message: messageOf(error), error: true }) }
-    finally { setSaving(false) }
+    if (seasonWorker.current || persistenceBusy.current) return
+    replacementRequest.current += 1
+    const current = sessionRef.current
+    if (current.kind === 'season') {
+      if (await persistSeason(current.season, 'manual')) setNotice({ message: 'Season saved on this device.' })
+      return
+    }
+    persistenceBusy.current = true; setSaving(true); setPlaying(false); settlePlayback()
+    try { await saveLocalMatch(current.match); setNotice({ message: 'Match saved on this device.' }) }
+    catch (error) { setNotice({ message: messageOf(error), error: true }) }
+    finally { persistenceBusy.current = false; setSaving(false) }
   }
   async function loadSeason() {
-    if (seasonWorker.current) return
+    if (seasonWorker.current || persistenceBusy.current) return
     const request = ++replacementRequest.current
-    setPlaying(false)
+    setPlaying(false); settlePlayback()
     try {
-      const saved = await loadLocalSeason()
+      const saved = await readCareerSaves()
       if (request !== replacementRequest.current) return
-      if (!saved) { setNotice({ message: 'No saved season yet. Start a season and save it first.' }); return }
-      install({ kind: 'season', season: saved }); setNotice({ message: 'Saved season restored.' }); navigate('home')
+      if (saved.currentError) {
+        setSaveHistory(saved); setHistoryError(saved.currentError); setSaveHistoryOpen(true)
+        return
+      }
+      if (!saved.current) { setNotice({ message: 'No saved season yet. Start a season to create one.' }); return }
+      savedRevision.current = saved.revision
+      install({ kind: 'season', season: saved.current }); setCheckpointIssue(null)
+      setNotice({ message: 'Saved season restored.' }); navigate('home')
     } catch (error) { if (request !== replacementRequest.current) return; setNotice({ message: messageOf(error), error: true }) }
   }
   async function load() {
-    if (seasonWorker.current) return
+    if (seasonWorker.current || persistenceBusy.current) return
     if (sessionRef.current.kind === 'season') return loadSeason()
     const request = ++replacementRequest.current
     setPlaying(false)
@@ -206,7 +322,7 @@ export default function App() {
     catch (error) { if (request !== replacementRequest.current) return; setNotice({ message: messageOf(error), error: true }) }
   }
   function exportSave() {
-    if (seasonWorker.current) return
+    if (seasonWorker.current || persistenceBusy.current) return
     try {
       const current = sessionRef.current
       const text = current.kind === 'season' ? serializeSeason(current.season) : serializeMatch(current.match)
@@ -220,7 +336,7 @@ export default function App() {
   async function importSave(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file || seasonWorker.current) return
+    if (!file || seasonWorker.current || persistenceBusy.current) return
     const request = ++replacementRequest.current
     setPlaying(false)
     try {
@@ -237,27 +353,33 @@ export default function App() {
     } catch (error) { if (request !== replacementRequest.current) return; setNotice({ message: `Could not import save: ${messageOf(error)}`, error: true }) }
   }
   async function restart() {
-    if (seasonWorker.current) return
+    if (seasonWorker.current || persistenceBusy.current) return
     const seed = Number(seedInput)
     if (seedInput.trim() === '' || !Number.isSafeInteger(seed) || seed < 0 || seed > 4294967295) { setNotice({ message: 'Choose a whole-number seed between 0 and 4,294,967,295.', error: true }); return }
     const current = sessionRef.current
     const request = ++replacementRequest.current
     setPlaying(false); settlePlayback()
     if (current.kind === 'season') {
-      setLeavingSeason(true); setSaving(true)
-      try { await saveLocalSeason(current.season) }
-      catch (error) { setNotice({ message: messageOf(error), error: true }); setLeavingSeason(false); setSaving(false); return }
-      setLeavingSeason(false); setSaving(false)
+      setLeavingSeason(true)
+      const saved = await persistSeason(current.season, 'manual')
+      setLeavingSeason(false)
+      if (!saved) return
       if (request !== replacementRequest.current) return
     }
     install({ kind: 'exhibition', match: createMatch(seed) }); setNotice({ message: current.kind === 'season' ? 'Season saved. New exhibition ready.' : 'New exhibition ready.' }); if (setupRef.current) setupRef.current.open = false
   }
   function startSeason(seed: number, clubId: string, injuryMode: InjuryMode) {
-    if (seasonWorker.current) return
-    try { install({ kind: 'season', season: createSeason(seed, clubId, injuryMode) }); navigate('home'); setNotice({ message: 'Season ready. Review your lineup before the opening match.' }) }
+    if (seasonWorker.current || persistenceBusy.current) return
+    try {
+      const created = createSeason(seed, clubId, injuryMode)
+      install({ kind: 'season', season: created }); navigate('home')
+      setNotice({ message: 'Season ready. Review your lineup before the opening match.' })
+      void persistSeason(created, 'new-game')
+    }
     catch (error) { setNotice({ message: messageOf(error), error: true }) }
   }
   function cancelAdvance() {
+    if (persistenceBusy.current || !seasonWorker.current) return
     seasonJob.current += 1; seasonWorker.current?.terminate(); seasonWorker.current = null; setAdvancing(false)
     setNotice({ message: seasonOperation === 'rollover' ? 'Season transition cancelled. Your completed season is preserved.' : 'Matchday processing cancelled. Your finished match is preserved.' })
   }
@@ -265,7 +387,7 @@ export default function App() {
   function rollover() { processSeason('rollover') }
   function processSeason(action: 'round' | 'rollover') {
     const current = sessionRef.current
-    if (seasonWorker.current || current.kind !== 'season') return
+    if (seasonWorker.current || persistenceBusy.current || current.kind !== 'season') return
     if (action === 'rollover' ? current.season.status !== 'complete' : current.season.status === 'complete') return
     if (current.season.activeMatch.status !== 'finished') { navigate('match'); return }
     replacementRequest.current += 1
@@ -275,13 +397,14 @@ export default function App() {
       seasonWorker.current = worker; setSeasonOperation(action); setAdvancing(true)
       const requestId = ++seasonJob.current
       const finish = () => { worker.terminate(); seasonWorker.current = null; setAdvancing(false) }
-      worker.onmessage = ({ data }: MessageEvent<SeasonReply>) => {
+      worker.onmessage = async ({ data }: MessageEvent<SeasonReply>) => {
         if (data.requestId !== seasonJob.current || seasonWorker.current !== worker) return
         finish()
         if ('error' in data) { setNotice({ message: data.error, error: true }); return }
         install({ kind: 'season', season: data.state })
         setNotice({ message: action === 'rollover' ? `Season ${data.state.seasonNumber} ready. Your previous results are in Competitions.` : data.state.status === 'complete' ? 'Season complete. Final standings and all results are available.' : `Matchday ${data.state.round - 1} recorded. Your next fixture is ready.` })
         navigate(data.state.status === 'complete' ? 'season' : 'home')
+        await persistSeason(data.state, action === 'rollover' ? 'rollover' : 'matchday')
       }
       worker.onerror = () => { if (seasonWorker.current !== worker) return; finish(); setNotice({ message: action === 'rollover' ? 'Could not start the next season. Your completed season is preserved; try again.' : 'Could not process the matchday. Your match is preserved; try Continue again.', error: true }) }
       worker.postMessage({ requestId, state: current.season, action })
@@ -295,7 +418,7 @@ export default function App() {
       <div className="brand"><div className="brand-symbol"><Icon name="ball" size={29} /></div><div>COURTSIDE<small>BASKETBALL MANAGER</small></div></div>
       <div className="club-context"><ClubMark name={managedTeam.shortName} color={managedTeam.color} /><div><strong>{managedTeam.name}</strong><span>First team</span></div></div>
       <nav aria-label="Main navigation" className="main-nav">
-        {([{ id: 'home', label: 'Overview', icon: 'home' }, { id: 'squad', label: 'Squad', icon: 'people' }, { id: 'match', label: 'Match center', icon: 'court' }, { id: 'season', label: 'Competitions', icon: 'ball' }] as { id: Page; label: string; icon: IconName }[]).map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'active' : ''}`} onClick={() => navigate(item.id)} aria-label={item.label} title={item.label} aria-current={page === item.id ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span>{page === item.id && <span className="nav-current-dot" />}</button>)}
+        {([{ id: 'home', label: 'Overview', icon: 'home' }, { id: 'squad', label: 'Squad', icon: 'people' }, ...(season ? [{ id: 'training', label: 'Training', icon: 'training' }, { id: 'staff', label: 'Staff', icon: 'staff' }] : []), { id: 'match', label: 'Match center', icon: 'court' }, { id: 'season', label: 'Competitions', icon: 'ball' }] as { id: Page; label: string; icon: IconName }[]).map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'active' : ''}`} onClick={() => navigate(item.id)} disabled={saving || leavingSeason} aria-label={item.label} title={item.label} aria-current={page === item.id ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span>{page === item.id && <span className="nav-current-dot" />}</button>)}
       </nav>
       <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />{season ? 'Season' : 'Exhibition'}</div><p>Fictional squads</p><div className="manager"><span className="manager-avatar">YOU</span><div>Head coach<small>{managedTeam.name}</small></div></div></div>
     </aside>
@@ -303,11 +426,16 @@ export default function App() {
     <div className="main-shell">
       <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save season' : 'Save match'}</button></div></header>
       {advancing && <div className="season-processing" role="status"><span>{seasonOperation === 'rollover' ? 'Preparing next season...' : 'Processing matchday results...'}</span><button className="text-button" onClick={cancelAdvance}>Cancel</button></div>}
-      <main id="main" tabIndex={-1} inert={advancing || leavingSeason}>
+      {checkpointIssue && <div className="career-save-issue" role="alert"><span>{checkpointIssue}</span><button className="text-button" onClick={openSaveHistory} disabled={saving || advancing}>Save history</button><button className="text-button" onClick={exportSave} disabled={saving || advancing}>Export current</button></div>}
+      <main id="main" tabIndex={-1} inert={advancing || leavingSeason || saving}>
         <div className="page-heading"><h1>{pageNames[page]}</h1><div className="heading-meta"><span className="pill">{season || page === 'season' ? 'DEVELOPMENT LEAGUE' : 'EXHIBITION'}</span><span className="muted">{page === 'season' ? season ? season.date : 'Club selection' : `${match.home.shortName} vs ${match.away.shortName}`}</span></div></div>
 
-        {season && page !== 'season' && <SeasonProgress season={season} showMatchAction={page === 'squad'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} />}
-        {page === 'season' && <SeasonWorkspace season={season} onStart={startSeason} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} onLoad={loadSeason} busy={advancing} />}
+        {season && page !== 'season' && <SeasonProgress season={season} showMatchAction={page === 'squad' || page === 'training' || page === 'staff'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} />}
+        {page === 'season' && <SeasonWorkspace season={season} onStart={startSeason} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} onLoad={loadSeason} busy={advancing || saving} />}
+
+        {page === 'training' && season && <TrainingWorkspace season={season} onEnable={() => updateTraining()} onPlanChange={updateTraining} busy={advancing || saving} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} />}
+
+        {page === 'staff' && season && <StaffWorkspace key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}`} season={season} busy={advancing || saving} onOpenTraining={() => navigate('training')} onEnable={() => updateCoaching(enableCoaching, 'Coaching enabled for all clubs. Assignments will apply to future training weeks.')} onHire={(coachId, focus) => updateCoaching(state => hireCoach(state, coachId, focus), 'Coach recruited. The season fee is now committed.')} onRelease={contractId => updateCoaching(state => releaseCoach(state, contractId), 'Coach released. This season’s fee remains committed.')} onAssignment={(contractId, focus) => updateCoaching(state => setCoachAssignment(state, contractId, focus))} onRenewal={(contractId, renew) => updateCoaching(state => setCoachRenewal(state, contractId, renew))} />}
 
         {page === 'home' && <ManagerDesk season={season} match={match} managedSide={managedSide} apply={apply} fixtureLabel={season ? `Development League / Matchday ${season.round}` : undefined} onOpenMatch={() => navigate('match')} onOpenSquad={() => navigate('squad')} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} onOpenCoaching={() => navigate('match', needsReplacement ? '#player-in' : complete ? '.coaching-workbench' : '#tempo')} />}
 
@@ -324,6 +452,8 @@ export default function App() {
 
         {page === 'squad' && <>
           <div className="squad-summary panel"><div><ClubMark name={managedTeam.shortName} color={managedTeam.color} /><h2>{managedTeam.name}</h2><span className="pill">FIRST TEAM</span></div><div><Stat label="AVAILABLE" value={`${eligiblePlayers.length}/${managedTeam.players.length}`} /><Stat label="ON COURT" value={match.lineups[managedSide].length} /><Stat label="AVG. STAMINA" value={`${averageCondition}%`} /></div></div>
+          {season && <div className="squad-view-controls"><div className="segmented" role="group" aria-label="Squad view"><button aria-pressed={squadView === 'selection'} className={squadView === 'selection' ? 'selected' : ''} onClick={() => setSquadView('selection')}>Selection</button><button aria-pressed={squadView === 'performance'} className={squadView === 'performance' ? 'selected' : ''} onClick={() => { setSquadView('performance'); setPerformancePlayer(null) }}>Season statistics</button></div><span>{squadView === 'selection' ? 'Current fixture and availability' : 'Committed match results'}</span></div>}
+          {season && squadView === 'performance' ? <SquadPerformance key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}`} season={season} selectedPlayerId={performancePlayer} onSelectPlayer={setPerformancePlayer} busy={advancing || saving} /> : <>
           <div className="squad-layout"><section className="panel roster-panel">
             <div className="section-heading"><h2>Players</h2><button className="text-button" onClick={() => navigate('match', '#player-out')}>Manage rotation <Icon name="swap" size={15} /></button></div>
             <div className="roster-toolbar"><div className="roster-filters" aria-label="Filter squad">{[{id:'all',label:'All'},{id:'court',label:'On court'},{id:'bench',label:'Bench'},{id:'unavailable',label:'Unavailable'}].map(filter => <button key={filter.id} aria-pressed={rosterFilter === filter.id} onClick={() => setRosterFilter(filter.id)}>{filter.label}</button>)}</div><label className="roster-search"><Icon name="search" size={15}/><input type="search" placeholder="Find player" aria-label="Search squad" value={rosterQuery} onChange={event => setRosterQuery(event.target.value)}/></label></div>
@@ -331,21 +461,23 @@ export default function App() {
               <td><button className="roster-player" onClick={() => setSelectedPlayer(player.id)} aria-pressed={chosenPlayer.id === player.id}><Avatar player={player} color={managedTeam.color} size={34} /><span><strong>{player.name}</strong><small>#{player.number} / {player.position}</small></span></button></td>
               <td><span className={`roster-role ${match.lineups[managedSide].includes(player.id) ? 'on-court' : ''}`}>{!isPlayerEligible(match, player.id) ? match.injuries[player.id] ? 'Injured' : 'Fouled out' : match.lineups[managedSide].includes(player.id) ? 'On court' : 'Bench'}</span></td><td>{player.heightCm} <span className="muted">cm</span></td><td><StaminaMeter value={match.stats[player.id].condition} label={`${player.name} stamina`} compact /></td><td>{match.stats[player.id].points}</td><td>{match.stats[player.id].fouls}</td>
             </tr>)}</tbody></table>{rosterPlayers.length === 0 && <p className="roster-empty">No players match this filter.</p>}</div>
-          </section><PlayerProfile player={chosenPlayer} match={match} managedSide={managedSide} season={season} /></div>
+          </section><PlayerProfile player={chosenPlayer} match={match} managedSide={managedSide} season={season} onPerformance={() => { setPerformancePlayer(chosenPlayer.id); setSquadView('performance'); navigate('squad', '#player-performance-report') }} /></div>
           {season && <SeasonMedicalReport season={season} onSelectPlayer={id => { setSelectedPlayer(id); document.querySelector<HTMLElement>('.player-profile')?.focus() }} />}
+          </>}
         </>}
 
-        <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />{season ? 'Save & open exhibition' : 'New exhibition'}</button><details ref={setupRef} className="simulation-options" hidden={!!season}><summary>Match setup</summary><div className="seed-controls"><label htmlFor="match-seed">Simulation seed</label><input id="match-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-label="New match random seed" /><p>Use the same seed to replay the same starting conditions.</p></div></details></div><div className="save-tools"><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button><input ref={importRef} type="file" accept=".json,application/json" onChange={importSave} className="visually-hidden" aria-label="Import game save" /></div></footer>
+        <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />{season ? 'Save & open exhibition' : 'New exhibition'}</button><details ref={setupRef} className="simulation-options" hidden={!!season}><summary>Match setup</summary><div className="seed-controls"><label htmlFor="match-seed">Simulation seed</label><input id="match-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-label="New match random seed" /><p>Use the same seed to replay the same starting conditions.</p></div></details></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button><input ref={importRef} type="file" accept=".json,application/json" onChange={importSave} className="visually-hidden" aria-label="Import game save" /></div></footer>
       </main>
     </div>
+    {saveHistoryOpen && <CareerSaveHistory entries={saveHistory?.entries ?? []} loading={historyLoading} error={historyError} busy={saving} onRefresh={() => { void refreshSaveHistory() }} onRestore={revision => { void restoreCheckpoint(revision) }} onClose={closeSaveHistory} />}
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
   </div>
 }
 
 
-function PlayerProfile({ player, match, managedSide, season }: { player: Player; match: MatchState; managedSide: Side; season: SeasonState | null }) {
+function PlayerProfile({ player, match, managedSide, season, onPerformance }: { player: Player; match: MatchState; managedSide: Side; season: SeasonState | null; onPerformance: () => void }) {
   const attributes = [['Two-point shooting', player.attributes.twoPoint], ['Three-point shooting', player.attributes.threePoint], ['Free throws', player.attributes.freeThrow], ['Passing', player.attributes.passing], ['Defense', player.attributes.defense], ['Rebounding', player.attributes.rebounding], ['Stamina', player.attributes.stamina]] as const
-  return <aside className="panel player-profile" tabIndex={-1} aria-label={`${player.name} profile`}><div className="profile-portrait"><Avatar player={player} color={match[managedSide].color} size={108} /><span className="profile-number">{player.number}</span></div><span className="eyebrow accent">{player.position} · {match[managedSide].name}</span><h2>{player.name}</h2><p className="muted">{player.heightCm} cm · {player.weightKg} kg</p>{season && <PlayerHealthSummary season={season} playerId={player.id} />}<div className="profile-divider" /><div className="section-heading"><h3>Player attributes</h3><span className="muted">1—20</span></div><div className="attribute-list">{attributes.map(([name, rating]) => <div className="attribute" key={name}><span>{name}</span><div className="attribute-track"><span style={{ width: `${rating * 5}%` }} /></div><strong>{rating}</strong></div>)}</div><div className="profile-condition"><span>Current stamina</span><StaminaMeter value={match.stats[player.id].condition} label={`${player.name} current stamina`} /></div></aside>
+  return <aside className="panel player-profile" tabIndex={-1} aria-label={`${player.name} profile`}><div className="profile-portrait"><Avatar player={player} color={match[managedSide].color} size={108} /><span className="profile-number">{player.number}</span></div><span className="eyebrow accent">{player.position} · {match[managedSide].name}</span><h2>{player.name}</h2><p className="muted">{player.heightCm} cm · {player.weightKg} kg</p>{season && <PlayerHealthSummary season={season} playerId={player.id} />}<div className="profile-divider" /><div className="section-heading"><h3>Player attributes</h3><span className="muted">1—20</span></div><div className="attribute-list">{attributes.map(([name, rating]) => <div className="attribute" key={name}><span>{name}</span><div className="attribute-track"><span style={{ width: `${rating * 5}%` }} /></div><strong>{rating}</strong></div>)}</div><div className="profile-condition"><span>Current stamina</span><StaminaMeter value={match.stats[player.id].condition} label={`${player.name} current stamina`} /></div>{season && <button className="text-button profile-performance-link" onClick={onPerformance}>Season performance<Icon name="chevron" size={14} /></button>}</aside>
 }
 
 

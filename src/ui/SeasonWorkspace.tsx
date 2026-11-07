@@ -6,6 +6,7 @@ import { DEVELOPMENT_CLUBS } from '../data/development-league'
 import { getActiveFixture, getStandings, seasonLabel } from '../world/season'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
+import { SeasonLeaders } from './SeasonLeaders'
 import './season-workspace.css'
 
 interface SeasonWorkspaceProps {
@@ -120,6 +121,17 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
     reviewTrigger.current = null
   }
 
+  function openFixtureReview(fixtureId: string, trigger?: HTMLButtonElement) {
+    if (busy || archived || !season.fixtures.some(fixture => fixture.id === fixtureId && fixture.result)) return
+    reviewTrigger.current = trigger ?? (document.activeElement instanceof HTMLButtonElement ? document.activeElement : null)
+    setReviewId(fixtureId)
+    if (reviewId === fixtureId) {
+      const region = document.getElementById('season-result-review')
+      region?.focus({ preventScroll: true })
+      region?.scrollIntoView({ block: 'start' })
+    }
+  }
+
   return <div className="season-workspace">
     <section className="season-matchday panel" aria-label="Season progress">
       <div className="season-matchday-identity">
@@ -148,6 +160,8 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
       <p className="season-table-note">Ranked by wins, overall point difference, points scored, then club ID.</p>
     </section>
 
+    <SeasonLeaders key={selectedNumber} season={season} archived={archived} busy={busy} onReviewFixture={openFixtureReview} />
+
     <section className="season-fixtures panel" aria-labelledby="season-fixtures-title">
       <header className="season-panel-heading season-fixtures-heading"><h2 id="season-fixtures-title">Fixtures &amp; results</h2><div className="season-fixture-filters"><label htmlFor="season-matchday">Matchday</label><select id="season-matchday" value={round} onChange={event => setRound(event.target.value)}><option value="all">All matchdays</option>{Array.from({ length: totalRounds }, (_, index) => <option key={index + 1} value={index + 1}>Matchday {index + 1}</option>)}</select><div className="segmented" aria-label="Fixture clubs"><button aria-pressed={!ownFixtures} className={!ownFixtures ? 'selected' : ''} onClick={() => setOwnFixtures(false)}>All clubs</button><button aria-pressed={ownFixtures} className={ownFixtures ? 'selected' : ''} onClick={() => setOwnFixtures(true)}>Your club</button></div></div></header>
       <div className="season-table-scroll"><table className="season-fixtures-table"><thead><tr><th scope="col">Date</th><th scope="col">Home</th><th scope="col">Score</th><th scope="col">Away</th><th scope="col">Match</th></tr></thead><tbody>{fixtures.map(fixture => {
@@ -155,14 +169,14 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
         const score = fixture.result?.officialScore ?? (isActive && season.activeMatch.status !== 'ready' ? season.activeMatch.result?.officialScore ?? season.activeMatch.score : null)
         return <tr key={fixture.id} data-fixture-id={fixture.id} className={fixture.homeClubId === season.managedClubId || fixture.awayClubId === season.managedClubId ? 'season-managed-row' : ''}>
           <td><time dateTime={fixture.date}>{formatDate(fixture.date)}</time><small>Matchday {fixture.round}</small></td><td><ClubName club={club(fixture.homeClubId)} /></td><td className="season-fixture-score">{score ? `${score.home} : ${score.away}` : '—'}</td><td><ClubName club={club(fixture.awayClubId)} /></td>
-          <td>{fixture.result ? archived ? <span className="season-scheduled">{fixture.result.kind === 'default' ? 'Awarded by default' : fixture.result.periods > 4 ? `Full time · ${fixture.result.periods - 4} OT` : 'Full time'}</span> : <button className="text-button" aria-label={`Review ${club(fixture.homeClubId).shortName} vs ${club(fixture.awayClubId).shortName}`} onClick={event => { reviewTrigger.current = event.currentTarget; setReviewId(fixture.id) }} aria-expanded={reviewId === fixture.id} aria-controls="season-result-review">Review<Icon name="chevron" size={14} /></button> : isActive ? <button className="text-button" onClick={onOpenMatch} disabled={busy}>{matchFinished ? 'Played · pending' : season.activeMatch.status === 'ready' ? 'Pre-match' : 'In progress'}<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">Scheduled</span>}</td>
+          <td>{fixture.result ? archived ? <span className="season-scheduled">{fixture.result.kind === 'default' ? 'Awarded by default' : fixture.result.periods > 4 ? `Full time · ${fixture.result.periods - 4} OT` : 'Full time'}</span> : <button className="text-button" aria-label={`Review ${club(fixture.homeClubId).shortName} vs ${club(fixture.awayClubId).shortName}`} onClick={event => openFixtureReview(fixture.id, event.currentTarget)} aria-expanded={reviewId === fixture.id} aria-controls="season-result-review" disabled={busy}>Review<Icon name="chevron" size={14} /></button> : isActive ? <button className="text-button" onClick={onOpenMatch} disabled={busy}>{matchFinished ? 'Played · pending' : season.activeMatch.status === 'ready' ? 'Pre-match' : 'In progress'}<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">Scheduled</span>}</td>
         </tr>
       })}</tbody></table></div>
       {!fixtures.length && <p className="season-table-note">No fixtures match this filter.</p>}
       {archived && <p className="season-table-note">Archived seasons retain final standings and scores. Player box scores are available for the current season only.</p>}
     </section>
 
-    {review && <FixtureReview key={review.id} fixture={review} home={club(review.homeClubId)} away={club(review.awayClubId)} onClose={() => { setReviewId(null); reviewTrigger.current?.focus() }} />}
+    {review && <FixtureReview key={review.id} fixture={review} home={club(review.homeClubId)} away={club(review.awayClubId)} onClose={() => { setReviewId(null); if (reviewTrigger.current?.isConnected) reviewTrigger.current.focus(); else seasonSelector.current?.focus() }} />}
   </div>
 }
 

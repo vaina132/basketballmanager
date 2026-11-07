@@ -1,0 +1,46 @@
+.squad-view-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:7px 10px;border:1px solid var(--border);background:var(--surface-2)}
+.squad-view-controls>span{font-size:12px;color:var(--muted)}
+.squad-performance{display:flex;flex-direction:column;gap:12px;min-width:0}
+.squad-performance-panel,.player-performance-report{min-width:0;overflow:hidden;border-radius:2px}
+.squad-performance-heading,.player-performance-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:var(--surface-2);border-bottom:1px solid var(--border)}
+.squad-performance-heading>div:first-child{display:flex;flex-direction:column;gap:4px}
+.squad-performance-heading h2,.player-performance-heading h2{font-size:14px;font-weight:600}
+.squad-performance-heading span,.player-performance-heading p{font-size:12px;color:var(--muted);line-height:1.5}
+.squad-performance-filters{display:flex;align-items:center;flex-wrap:wrap;gap:14px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:12px}
+.squad-performance-filters label{display:flex;align-items:center;gap:8px}
+.squad-performance-filters input,.squad-performance-filters select{min-height:32px;padding:5px 8px;max-width:100%;border:1px solid var(--border);border-radius:2px;background:var(--sidebar);color:var(--text);font-size:12px}
+.squad-performance-filters input{width:180px}
+.squad-performance-filters>span{margin-left:auto;color:var(--muted)}
+.player-performance-report{scroll-margin-top:64px}
+.player-performance-report:focus-visible,.player-performance-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.player-performance-identity{display:flex;align-items:center;gap:10px;min-width:0}
+.player-performance-identity p{margin-top:3px}
+.player-performance-heading button{flex-shrink:0;font-size:12px}
+.player-performance-overview{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.player-performance-overview>div{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.player-performance-overview>div>strong{font-weight:500}
+.player-performance-overview>div>span{color:var(--muted)}
+.player-performance-overview dl{display:flex;gap:26px;margin:0}
+.player-performance-overview dt{font-size:11px;color:var(--muted)}
+.player-performance-overview dd{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;margin:4px 0 0}
+.player-performance-log-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 14px;background:var(--surface-2);border-bottom:1px solid var(--border)}
+.player-performance-log-heading h3{font-size:13px;font-weight:500}
+.player-performance-log-heading span{font-size:12px;color:var(--muted)}
+.player-performance-scroll{max-width:100%;overflow:auto;overscroll-behavior:contain}
+.player-performance-log{width:100%;min-width:1100px;border-collapse:collapse;text-align:right;font-size:12px;font-variant-numeric:tabular-nums}
+.player-performance-log thead th{padding:8px 10px;font-size:12px;font-weight:500;letter-spacing:0;color:var(--muted);background:var(--surface-2);white-space:nowrap}
+.player-performance-log tbody th,.player-performance-log td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;font-weight:400;letter-spacing:0;background:transparent;color:var(--text);white-space:nowrap}
+.player-performance-log tr>*:nth-child(-n+4){text-align:left}
+.player-performance-log tr>*:first-child{padding-left:14px}
+.player-performance-log tbody tr:last-child>*{border-bottom:0}
+.player-performance-log tbody tr:hover{background:var(--surface-2)}
+.player-performance-log small{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+.player-performance-log time{display:block}
+.player-performance-review{font-size:12px;margin-top:3px}
+.performance-result b{font-weight:600;margin-right:4px}
+.performance-win b{color:var(--accent)}
+.player-performance-note,.player-performance-empty{padding:10px 14px;font-size:12px;color:var(--muted);line-height:1.5}
+.player-performance-note{border-top:1px solid var(--border)}
+.profile-performance-link{width:100%;justify-content:space-between;margin-top:12px;font-size:12px}
+@media(max-width:900px){.squad-performance-heading{align-items:flex-start;flex-wrap:wrap}.player-performance-overview dl{gap:18px}}
+@media(max-width:600px){.squad-view-controls{flex-wrap:wrap}.squad-view-controls>span{display:none}.player-performance-overview{align-items:flex-start;flex-direction:column;gap:12px}.player-performance-overview dl{gap:26px}.player-performance-log-heading{align-items:flex-start;flex-direction:column;gap:4px}.squad-performance-filters{gap:8px}.squad-performance-filters label{width:100%;justify-content:space-between}.squad-performance-filters input,.squad-performance-filters select{width:180px}.squad-performance-filters>span{margin-left:0}}

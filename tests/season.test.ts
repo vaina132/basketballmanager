@@ -102,7 +102,7 @@ describe('atomic season progression', () => {
   });
 
   it('commits one whole round immutably, carries plans and recovers everyone exactly once', () => {
-    let state = createSeason(23, DEVELOPMENT_CLUBS[1]!.id);
+    let state = createSeason(23, DEVELOPMENT_CLUBS[1]!.id, 'standard', false);
     const side = managedSide(state);
     expect(side).toBe('away');
     state = { ...state, activeMatch: setTactics(state.activeMatch, side, { tempo: .9, pressure: .85 }) };

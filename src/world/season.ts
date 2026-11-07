@@ -3,6 +3,8 @@ import type { InjuryMode, MatchState, Side, Team } from '../domain/types';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_DATA_PACK_ID, DEVELOPMENT_START_DATE } from '../data/development-league';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { injuriesFromMatch, isRecovering } from './health';
+import { createTraining, developClub, processTrainingWeek } from './training';
+import { createCoaching, recruitAiCoaches, rolloverCoaching } from './coaching';
 
 export const SEASON_ROUNDS = 10;
 export const ROUND_INTERVAL_DAYS = 7;
@@ -82,12 +84,12 @@ export function managedSide(season: SeasonState): Side {
   throw new Error('The active fixture must include the managed club.');
 }
 
-function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries'>, fixture: SeasonFixture): MatchState {
+function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'>, fixture: SeasonFixture): MatchState {
   const home = season.clubs.find(club => club.id === fixture.homeClubId);
   const away = season.clubs.find(club => club.id === fixture.awayClubId);
   if (!home || !away) throw new Error('A fixture refers to a missing club.');
   const homePlan = season.plans[home.id]!, awayPlan = season.plans[away.id]!;
-  return createFixtureMatch(fixtureSeed(season.seed, fixture.id), home, away, {
+  return createFixtureMatch(fixtureSeed(season.seed, fixture.id), developClub(home, season.training), developClub(away, season.training), {
     lineups: { home: homePlan.lineup, away: awayPlan.lineup },
     tactics: { home: homePlan.tactics, away: awayPlan.tactics },
     autoSubstitutions: { home: home.id === season.managedClubId ? homePlan.autoSubstitutions : true, away: away.id === season.managedClubId ? awayPlan.autoSubstitutions : true },
@@ -97,20 +99,22 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   });
 }
 
-export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard'): SeasonState {
+export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   if (!DEVELOPMENT_CLUBS.some(club => club.id === managedClubId)) throw new Error('Choose a club from the development league.');
   if (!['standard', 'reduced', 'off'].includes(injuryMode)) throw new Error('Choose a valid season injury setting.');
+  if (typeof trainingEnabled !== 'boolean') throw new Error('Choose a valid training setting.');
+  if (typeof coachingEnabled !== 'boolean') throw new Error('Choose a valid coaching setting.');
   const clubs = DEVELOPMENT_CLUBS;
   const fixtures = createSchedule(clubs);
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId))!;
   const preparation = {
-    seed, clubs, managedClubId, injuryMode, injuries: [],
+    seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled),
     plans: Object.fromEntries(clubs.map(club => [club.id, defaultPlan(club, club.id !== managedClubId)])),
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   return {
-    schemaVersion: 3, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [],
+    schemaVersion: 5, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [],
     ...preparation, date: first.date, status: 'active', round: 1, fixtures,
     activeFixtureId: first.id, activeMatch: prepareMatch(preparation, first),
   };
@@ -153,7 +157,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
   const current = getActiveFixture(state);
   managedSide(state);
   if (current.round !== state.round || current.date !== state.date || current.result) throw new Error('The current round is not awaiting this match result.');
-  const next: SeasonState = {
+  let next: SeasonState = {
     ...state,
     fixtures: state.fixtures.map(fixture => ({ ...fixture })),
     plans: Object.fromEntries(Object.entries(state.plans).map(([id, plan]) => [id, { ...plan, tactics: { ...plan.tactics }, lineup: [...plan.lineup] }])),
@@ -168,9 +172,15 @@ export function advanceSeason(state: SeasonState): SeasonState {
     next.status = 'complete';
     return next;
   }
+  next = recruitAiCoaches(next);
   next.round += 1;
   next.date = dateForRound(next.round, next.seasonNumber);
-  for (const id of Object.keys(next.conditions)) next.conditions[id] = Math.min(100, Math.round((next.conditions[id]! + DAILY_RECOVERY * ROUND_INTERVAL_DAYS) * 1000) / 1000);
+  if (next.training.enabledSince) {
+    const trained = processTrainingWeek({ training: next.training, coaching: next.coaching, clubs: next.clubs, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
+    next.training = trained.training; next.conditions = trained.conditions;
+  } else {
+    for (const id of Object.keys(next.conditions)) next.conditions[id] = Math.min(100, Math.round((next.conditions[id]! + DAILY_RECOVERY * ROUND_INTERVAL_DAYS) * 1000) / 1000);
+  }
   const fixture = next.fixtures.find(fixture => fixture.round === next.round && [fixture.homeClubId, fixture.awayClubId].includes(next.managedClubId))!;
   next.activeFixtureId = fixture.id;
   next.activeMatch = prepareMatch(next, fixture);
@@ -210,12 +220,15 @@ export function rolloverSeason(state: SeasonState): SeasonState {
       };
     }),
   };
-  const next: SeasonState = {
+  let next: SeasonState = {
     ...state, seasonNumber, history: [...state.history, archive], fixtures, round: 1, date: first.date, status: 'active', activeFixtureId: first.id,
     plans: Object.fromEntries(Object.entries(state.plans).map(([id, plan]) => [id, { ...plan, tactics: { ...plan.tactics }, lineup: [...plan.lineup] }])),
     conditions: Object.fromEntries(Object.entries(state.conditions).map(([id, condition]) => [id, Math.min(100, Math.round((condition + DAILY_RECOVERY * recoveryDays) * 1000) / 1000)])),
     injuries: state.injuries.map(injury => ({ ...injury })),
+    training: { ...state.training, lastWeek: null },
+    coaching: rolloverCoaching(state.coaching, state.clubs, seasonNumber),
   };
+  next = recruitAiCoaches(next);
   next.activeMatch = prepareMatch(next, first);
   return next;
 }

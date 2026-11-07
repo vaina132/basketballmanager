@@ -108,6 +108,10 @@
   .game-shell .attribute-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
   .game-shell .attribute-track { width: 50px; }
 }
+.career-save-issue { display:flex; align-items:center; gap:14px; padding:10px 16px; border-bottom:1px solid var(--accent); background:var(--surface); font-size:12px; line-height:1.5; }
+.career-save-issue>span { flex:1; }
+.career-save-issue>.text-button { flex:none; font-size:12px; }
+@media(max-width:800px) { .career-save-issue { flex-wrap:wrap; gap:8px 16px; } .career-save-issue>span { flex-basis:100%; } }
 @media(max-width:650px) {
   .game-shell .sidebar { width: 48px; padding: 16px 4px; }
   .game-shell .main-shell { margin-left: 48px; }

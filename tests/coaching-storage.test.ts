@@ -21,7 +21,7 @@ function completeSeason(season: SeasonState): SeasonState {
 }
 function formatFour(season: SeasonState): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
-  state.schemaVersion = 4; delete state.coaching;
+  state.schemaVersion = 4; delete state.coaching; delete state.finance;
   const training = state.training as { lastWeek: null | Record<string, unknown> };
   if (training.lastWeek) {
     delete training.lastWeek.coaching;
@@ -31,7 +31,7 @@ function formatFour(season: SeasonState): string {
 }
 
 beforeAll(() => {
-  initial = createSeason(9, clubId, 'standard');
+  initial = createSeason(9, clubId, 'standard', true, true, false);
   starterId = getClubCoaching(initial.coaching, clubId)[0]!.id;
   initial = setCoachAssignment(initial, starterId, 'freeThrow');
   initial = hireCoach(initial, 'coach-09', 'freeThrow');
@@ -45,7 +45,7 @@ beforeAll(() => {
   edited = releaseCoach(edited, starterId);
   completed = completeSeason(edited); nextYear = rolloverSeason(completed);
 
-  let legacy = createSeason(37, clubId, 'off', true, false);
+  let legacy = createSeason(37, clubId, 'off', true, false, false);
   legacy = setTrainingPlan(legacy, { ...legacy.training.plans[clubId]!, delegated: false, intensity: 'light', focus: 'passing' });
   legacy = advanceSeason(finish(legacy));
   legacyLive = { ...legacy, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(legacy.activeMatch, managedSide(legacy), true)) };
@@ -53,9 +53,9 @@ beforeAll(() => {
 }, 60_000);
 
 describe('coaching-aware season persistence', () => {
-  it('writes format 5 with exact appointments, commitments and future instructions', () => {
+  it('writes format 6 with exact appointments, commitments and future instructions', () => {
     const text = serializeSeason(initial);
-    expect(JSON.parse(text).formatVersion).toBe(5);
+    expect(JSON.parse(text).formatVersion).toBe(6);
     expect(restore(initial)).toEqual(initial);
     expect(coachingCommitted(restore(initial).coaching, clubId)).toBe(10_500_000);
     expect(restore(initial).activeMatch).toEqual(initial.activeMatch);
@@ -71,7 +71,7 @@ describe('coaching-aware season persistence', () => {
   });
 
   it('reconciles apportioned coaching bonuses for balanced practice', () => {
-    let season = createSeason(37, clubId, 'off');
+    let season = createSeason(37, clubId, 'off', true, true, false);
     season = setTrainingPlan(season, { ...season.training.plans[clubId]!, delegated: false, intensity: 'heavy', focus: 'balanced' });
     const trained = advanceSeason(finish(season));
     const club = trained.clubs.find(club => club.id === clubId)!;
@@ -227,7 +227,7 @@ describe('strict coaching contract and training provenance validation', () => {
   });
 
   it('rejects four simultaneous coaches even when their combined fees fit the budget', () => {
-    const damaged = createSeason(17, clubId, 'off');
+    const damaged = createSeason(17, clubId, 'off', true, true, false);
     damaged.coaching.contracts = DEVELOPMENT_COACHES.slice(-4).map((coach, index): CoachingContract => ({ id: `coach-s1-c${index + 1}`, coachId: coach.id, clubId, seasonNumber: 1, startedRound: 1, releasedRound: null, focus: 'balanced', renew: true }));
     expect(coachingCommitted(damaged.coaching, clubId)).toBeLessThanOrEqual(COACHING_BUDGET);
     expect(() => validateSeasonState(damaged)).toThrow(/staff limit/);

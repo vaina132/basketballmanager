@@ -126,3 +126,6 @@
   .desk-activity time { gap: 5px; }
   .desk-activity-score { display: none; }
 }
+.desk-finance-values { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; padding: 12px; }
+.desk-finance-values dt { color: var(--muted); font-size: 11px; }
+.desk-finance-values dd { margin: 4px 0 0; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }

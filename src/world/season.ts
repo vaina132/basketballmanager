@@ -4,7 +4,8 @@ import { DEVELOPMENT_CLUBS, DEVELOPMENT_DATA_PACK_ID, DEVELOPMENT_START_DATE } f
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { injuriesFromMatch, isRecovering } from './health';
 import { createTraining, developClub, processTrainingWeek } from './training';
-import { createCoaching, recruitAiCoaches, rolloverCoaching } from './coaching';
+import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
+import { createFinance, enableFinance, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 
 export const SEASON_ROUNDS = 10;
 export const ROUND_INTERVAL_DAYS = 7;
@@ -99,12 +100,13 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   });
 }
 
-export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true): SeasonState {
+export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   if (!DEVELOPMENT_CLUBS.some(club => club.id === managedClubId)) throw new Error('Choose a club from the development league.');
   if (!['standard', 'reduced', 'off'].includes(injuryMode)) throw new Error('Choose a valid season injury setting.');
   if (typeof trainingEnabled !== 'boolean') throw new Error('Choose a valid training setting.');
   if (typeof coachingEnabled !== 'boolean') throw new Error('Choose a valid coaching setting.');
+  if (typeof financeEnabled !== 'boolean') throw new Error('Choose a valid club finance setting.');
   const clubs = DEVELOPMENT_CLUBS;
   const fixtures = createSchedule(clubs);
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId))!;
@@ -113,11 +115,12 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
     plans: Object.fromEntries(clubs.map(club => [club.id, defaultPlan(club, club.id !== managedClubId)])),
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
-  return {
-    schemaVersion: 5, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [],
+  const state: SeasonState = {
+    schemaVersion: 6, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], finance: createFinance(clubs, managedClubId),
     ...preparation, date: first.date, status: 'active', round: 1, fixtures,
     activeFixtureId: first.id, activeMatch: prepareMatch(preparation, first),
   };
+  return financeEnabled ? enableFinance(state) : state;
 }
 
 function compactResult(match: MatchState): FixtureResult {
@@ -168,6 +171,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
     const match = fixture.id === next.activeFixtureId ? next.activeMatch : simulateToEnd(prepareMatch(next, fixture));
     postMatch(next, fixture, match);
   }
+  next = processFinanceRound(next);
   if (next.round === SEASON_ROUNDS) {
     next.status = 'complete';
     return next;
@@ -181,6 +185,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
   } else {
     for (const id of Object.keys(next.conditions)) next.conditions[id] = Math.min(100, Math.round((next.conditions[id]! + DAILY_RECOVERY * ROUND_INTERVAL_DAYS) * 1000) / 1000);
   }
+  next = prepareFinanceRound(next);
   const fixture = next.fixtures.find(fixture => fixture.round === next.round && [fixture.homeClubId, fixture.awayClubId].includes(next.managedClubId))!;
   next.activeFixtureId = fixture.id;
   next.activeMatch = prepareMatch(next, fixture);
@@ -226,8 +231,10 @@ export function rolloverSeason(state: SeasonState): SeasonState {
     conditions: Object.fromEntries(Object.entries(state.conditions).map(([id, condition]) => [id, Math.min(100, Math.round((condition + DAILY_RECOVERY * recoveryDays) * 1000) / 1000)])),
     injuries: state.injuries.map(injury => ({ ...injury })),
     training: { ...state.training, lastWeek: null },
-    coaching: rolloverCoaching(state.coaching, state.clubs, seasonNumber),
+    coaching: { ...state.coaching, contracts: [] },
   };
+  next = startFinanceSeason(next);
+  next = renewSeasonCoaching(next, state.coaching);
   next = recruitAiCoaches(next);
   next.activeMatch = prepareMatch(next, first);
   return next;

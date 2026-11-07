@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { InjuryMode, MatchState, Player, Side } from './domain/types'
 import { createMatch, isPlayerEligible, simulateToEnd, simulateToQuarterEnd, stepMatch } from './engine/match'
@@ -24,6 +24,8 @@ import { SeasonWorkspace } from './ui/SeasonWorkspace'
 import { TrainingWorkspace } from './ui/TrainingWorkspace'
 import { SquadPerformance } from './ui/SquadPerformance'
 import { StaffWorkspace } from './ui/StaffWorkspace'
+import { ClubWorkspace } from './ui/ClubWorkspace'
+import { enableFinance, setTicketPlan } from './world/finance'
 import { enableCoaching, hireCoach, releaseCoach, setCoachAssignment, setCoachRenewal } from './world/coaching'
 import { enableTraining, setTrainingPlan } from './world/training'
 import type { TrainingPlan } from './domain/training'
@@ -32,10 +34,10 @@ import type { SeasonReply } from './world/season.worker'
 import './ui/season-progress.css'
 
 
-type Page = 'home' | 'squad' | 'match' | 'season' | 'training' | 'staff'
+type Page = 'home' | 'squad' | 'match' | 'season' | 'training' | 'staff' | 'club'
 type GameSession = { kind: 'exhibition'; match: MatchState } | { kind: 'season'; season: SeasonState }
 type Notice = { message: string; error?: boolean }
-const pageNames: Record<Page, string> = { home: "Manager's desk", squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', staff: 'Coaching staff' }
+const pageNames: Record<Page, string> = { home: "Manager's desk", squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', staff: 'Coaching staff', club: 'Club finances' }
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const periodLabel = (period: number) => period <= 4 ? `Q${period}` : `OT${period - 4}`
 const messageOf = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.'
@@ -264,7 +266,7 @@ export default function App() {
       if (!plan) setNotice({ message: 'Training enabled. Your plans will apply between matchdays.' })
     } catch (error) { setNotice({ message: messageOf(error), error: true }) }
   }
-  function updateCoaching(action: (state: SeasonState) => SeasonState, message?: string) {
+  function updateCareer(action: (state: SeasonState) => SeasonState, message?: string) {
     if (seasonWorker.current || persistenceBusy.current) return
     const current = sessionRef.current
     if (current.kind !== 'season') return
@@ -278,7 +280,7 @@ export default function App() {
   function install(next: GameSession) {
     seasonJob.current += 1; seasonWorker.current?.terminate(); seasonWorker.current = null; setAdvancing(false)
     setPlaying(false); resetPlayback(); setPresentationBase(null); setCheckpointIssue(null); replaceSession(next)
-    if (next.kind === 'exhibition') setPage(current => current === 'training' || current === 'staff' ? 'home' : current)
+    if (next.kind === 'exhibition') setPage(current => current === 'training' || current === 'staff' || current === 'club' ? 'home' : current)
     const active = next.kind === 'season' ? next.season.activeMatch : next.match
     setSeedInput(String(active.seed)); setBoxSide(next.kind === 'season' ? seasonManagedSide(next.season) : 'home')
     setSelectedPlayer(null); setRosterFilter('all'); setRosterQuery(''); setSquadView('selection'); setPerformancePlayer(null)
@@ -418,7 +420,7 @@ export default function App() {
       <div className="brand"><div className="brand-symbol"><Icon name="ball" size={29} /></div><div>COURTSIDE<small>BASKETBALL MANAGER</small></div></div>
       <div className="club-context"><ClubMark name={managedTeam.shortName} color={managedTeam.color} /><div><strong>{managedTeam.name}</strong><span>First team</span></div></div>
       <nav aria-label="Main navigation" className="main-nav">
-        {([{ id: 'home', label: 'Overview', icon: 'home' }, { id: 'squad', label: 'Squad', icon: 'people' }, ...(season ? [{ id: 'training', label: 'Training', icon: 'training' }, { id: 'staff', label: 'Staff', icon: 'staff' }] : []), { id: 'match', label: 'Match center', icon: 'court' }, { id: 'season', label: 'Competitions', icon: 'ball' }] as { id: Page; label: string; icon: IconName }[]).map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'active' : ''}`} onClick={() => navigate(item.id)} disabled={saving || leavingSeason} aria-label={item.label} title={item.label} aria-current={page === item.id ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span>{page === item.id && <span className="nav-current-dot" />}</button>)}
+        {([{ id: 'home', label: 'Overview', icon: 'home' }, { id: 'squad', label: 'Squad', icon: 'people' }, ...(season ? [{ id: 'training', label: 'Training', icon: 'training' }, { id: 'staff', label: 'Staff', icon: 'staff' }, { id: 'club', label: 'Club', icon: 'building' }] : []), { id: 'match', label: 'Match center', icon: 'court' }, { id: 'season', label: 'Competitions', icon: 'ball' }] as { id: Page; label: string; icon: IconName }[]).map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'active' : ''}`} onClick={() => navigate(item.id)} disabled={saving || leavingSeason} aria-label={item.label} title={item.label} aria-current={page === item.id ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span>{page === item.id && <span className="nav-current-dot" />}</button>)}
       </nav>
       <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />{season ? 'Season' : 'Exhibition'}</div><p>Fictional squads</p><div className="manager"><span className="manager-avatar">YOU</span><div>Head coach<small>{managedTeam.name}</small></div></div></div>
     </aside>
@@ -430,14 +432,16 @@ export default function App() {
       <main id="main" tabIndex={-1} inert={advancing || leavingSeason || saving}>
         <div className="page-heading"><h1>{pageNames[page]}</h1><div className="heading-meta"><span className="pill">{season || page === 'season' ? 'DEVELOPMENT LEAGUE' : 'EXHIBITION'}</span><span className="muted">{page === 'season' ? season ? season.date : 'Club selection' : `${match.home.shortName} vs ${match.away.shortName}`}</span></div></div>
 
-        {season && page !== 'season' && <SeasonProgress season={season} showMatchAction={page === 'squad' || page === 'training' || page === 'staff'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} />}
+        {season && page !== 'season' && <SeasonProgress season={season} showMatchAction={page === 'squad' || page === 'training' || page === 'staff' || page === 'club'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} />}
         {page === 'season' && <SeasonWorkspace season={season} onStart={startSeason} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} onLoad={loadSeason} busy={advancing || saving} />}
 
         {page === 'training' && season && <TrainingWorkspace season={season} onEnable={() => updateTraining()} onPlanChange={updateTraining} busy={advancing || saving} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} />}
 
-        {page === 'staff' && season && <StaffWorkspace key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}`} season={season} busy={advancing || saving} onOpenTraining={() => navigate('training')} onEnable={() => updateCoaching(enableCoaching, 'Coaching enabled for all clubs. Assignments will apply to future training weeks.')} onHire={(coachId, focus) => updateCoaching(state => hireCoach(state, coachId, focus), 'Coach recruited. The season fee is now committed.')} onRelease={contractId => updateCoaching(state => releaseCoach(state, contractId), 'Coach released. This season’s fee remains committed.')} onAssignment={(contractId, focus) => updateCoaching(state => setCoachAssignment(state, contractId, focus))} onRenewal={(contractId, renew) => updateCoaching(state => setCoachRenewal(state, contractId, renew))} />}
+        {page === 'staff' && season && <StaffWorkspace key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}`} season={season} busy={advancing || saving} onOpenTraining={() => navigate('training')} onEnable={() => updateCareer(enableCoaching, 'Coaching enabled for all clubs. Assignments will apply to future training weeks.')} onHire={(coachId, focus) => updateCareer(state => hireCoach(state, coachId, focus), 'Coach recruited. The season fee is now committed.')} onRelease={contractId => updateCareer(state => releaseCoach(state, contractId), 'Coach released. This season’s fee remains committed.')} onAssignment={(contractId, focus) => updateCareer(state => setCoachAssignment(state, contractId, focus))} onRenewal={(contractId, renew) => updateCareer(state => setCoachRenewal(state, contractId, renew))} />}
 
-        {page === 'home' && <ManagerDesk season={season} match={match} managedSide={managedSide} apply={apply} fixtureLabel={season ? `Development League / Matchday ${season.round}` : undefined} onOpenMatch={() => navigate('match')} onOpenSquad={() => navigate('squad')} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} onOpenCoaching={() => navigate('match', needsReplacement ? '#player-in' : complete ? '.coaching-workbench' : '#tempo')} />}
+        {page === 'club' && season && <ClubWorkspace key={`${season.seed}:${season.managedClubId}`} season={season} busy={advancing || saving} onEnable={() => updateCareer(enableFinance, 'Club finances enabled. Opening funds and existing coaching fees are recorded in the ledger.')} onPlanChange={plan => updateCareer(state => setTicketPlan(state, plan))} onOpenStaff={() => navigate('staff')} />}
+
+        {page === 'home' && <ManagerDesk season={season} match={match} managedSide={managedSide} apply={apply} fixtureLabel={season ? `Development League / Matchday ${season.round}` : undefined} onOpenMatch={() => navigate('match')} onOpenSquad={() => navigate('squad')} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} onOpenCoaching={() => navigate('match', needsReplacement ? '#player-in' : complete ? '.coaching-workbench' : '#tempo')} onOpenClub={() => navigate('club')} />}
 
         {page === 'match' && <>
           <section className="scoreboard panel" aria-label="Match scoreboard"><div className="score-team home-team"><ClubMark name={match.home.shortName} color={match.home.color} large /><div><span className="eyebrow">{managedSide === 'home' ? 'YOUR TEAM / HOME' : 'OPPOSITION / HOME'}</span><h2>{match.home.name}</h2></div></div><div className="score-middle"><div className={`match-status ${playing ? 'is-playing' : ''}`}><span className="status-dot" />{complete && !playback.busy ? 'FULL TIME' : complete && playback.busy ? playing ? 'FINAL PLAY' : 'REPLAY PAUSED' : needsReplacement ? 'REPLACEMENT NEEDED' : playing ? 'IN PLAY' : match.stepCount === 0 ? 'READY FOR TIPOFF' : 'PAUSED'}</div><div className="score-digits" aria-live="off"><span>{displayScore.home}</span><span className="score-divider">:</span><span>{displayScore.away}</span></div><div className="match-clock">{periodLabel(match.period)}<span />{clock(match.clockSeconds)}</div></div><div className="score-team away-team"><div><span className="eyebrow">{managedSide === 'away' ? 'YOUR TEAM / AWAY' : 'OPPOSITION / AWAY'}</span><h2>{match.away.name}</h2></div><ClubMark name={match.away.shortName} color={match.away.color} large /></div></section>

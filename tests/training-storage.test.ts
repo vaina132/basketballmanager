@@ -11,7 +11,7 @@ const restore = (season: SeasonState): SeasonState => parseSeason(serializeSeaso
 const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: season.activeMatch.status === 'finished' ? season.activeMatch : simulateToEnd(setAutoSubstitutions(season.activeMatch, managedSide(season), true)) });
 function oldFormat(season: SeasonState, version: 1 | 2 | 3): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
-  state.schemaVersion = version; delete state.training; delete state.coaching;
+  state.schemaVersion = version; delete state.training; delete state.coaching; delete state.finance;
   if (version < 3) { delete state.seasonNumber; delete state.history; }
   if (version === 1) {
     delete state.injuryMode; delete state.injuries;
@@ -21,7 +21,7 @@ function oldFormat(season: SeasonState, version: 1 | 2 | 3): string {
 }
 
 beforeAll(() => {
-  let season = createSeason(9, clubId, 'standard', true, false);
+  let season = createSeason(9, clubId, 'standard', true, false, false);
   season = setTrainingPlan(season, { ...season.training.plans[clubId]!, delegated: false, intensity: 'heavy', focus: 'freeThrow' });
   second = advanceSeason(finish(season));
   expect(second.training.lastWeek!.players['atl-8']!.availableDays).toBe(0);
@@ -29,16 +29,16 @@ beforeAll(() => {
   while (season.status !== 'complete') season = restore(advanceSeason(finish(season)));
   complete = season; nextYear = rolloverSeason(complete);
 
-  let legacy = advanceSeason(finish(createSeason(37, clubId, 'off', false, false)));
+  let legacy = advanceSeason(finish(createSeason(37, clubId, 'off', false, false, false)));
   legacyLive = { ...legacy, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(legacy.activeMatch, managedSide(legacy), true)) };
   while (legacy.status !== 'complete') legacy = advanceSeason(finish(legacy));
   legacyNextYear = rolloverSeason(legacy);
 }, 60_000);
 
 describe('training-aware season saves', () => {
-  it.each([true, false])('round-trips format 5 with training enabled=%s', enabled => {
-    const season = createSeason(7, clubId, 'off', enabled, false), text = serializeSeason(season);
-    expect(JSON.parse(text).formatVersion).toBe(5);
+  it.each([true, false])('round-trips format 6 with training enabled=%s', enabled => {
+    const season = createSeason(7, clubId, 'off', enabled, false, false), text = serializeSeason(season);
+    expect(JSON.parse(text).formatVersion).toBe(6);
     expect(restore(season)).toEqual(season);
     expect(season.training.enabledSince !== null).toBe(enabled);
   });
@@ -179,7 +179,7 @@ describe('training state and report tampering', () => {
   });
 
   it('rejects progression while training is disabled even with no report', () => {
-    const disabled = createSeason(7, clubId, 'off', false, false);
+    const disabled = createSeason(7, clubId, 'off', false, false, false);
     disabled.training.points['atl-9']!.passing = 1;
     expect(() => validateSeasonState(disabled)).toThrow(/training weeks/);
   });

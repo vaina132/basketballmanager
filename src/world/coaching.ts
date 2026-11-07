@@ -3,6 +3,7 @@ import type { SeasonState } from '../domain/season';
 import type { TrainingFocus } from '../domain/training';
 import type { PlayerAttributes, Team } from '../domain/types';
 import { DEVELOPMENT_COACHES } from '../data/development-coaches';
+import { getFinanceBalance, recordCoachFee } from './finance';
 
 export const COACHING_BUDGET = 15_000_000;
 export const MAX_COACHES = 3;
@@ -48,12 +49,31 @@ export function createCoaching(clubs: readonly Team[], seasonNumber = 1, round =
 
 export function enableCoaching(state: SeasonState): SeasonState {
   if (state.coaching.enabledSince) return state;
-  return { ...state, coaching: createCoaching(state.clubs, state.seasonNumber, state.round) };
+  if (state.status === 'complete') throw new Error('Start the next season before enabling coaching staff.');
+  if (!state.finance.enabledSince) return { ...state, coaching: createCoaching(state.clubs, state.seasonNumber, state.round) };
+  let next: SeasonState = { ...state, coaching: { model: 'coaching-1', enabledSince: { seasonNumber: state.seasonNumber, round: state.round }, contracts: [] } };
+  for (const [index, club] of state.clubs.entries()) {
+    const coach = DEVELOPMENT_COACHES[index]!;
+    if (canPayCoach(next, club.id, coach)) next = hireContractForClub(next, club.id, coach.id, 'balanced');
+  }
+  return next;
+}
+
+function canPayCoach(state: SeasonState, clubId: string, coach: Coach): boolean {
+  if (!state.finance.enabledSince) return true;
+  const balance = getFinanceBalance(state.finance, clubId);
+  return balance.unpaid === 0 && balance.cash >= coach.fee;
+}
+
+/** Contracts and their cash payment are one immutable operation for every club. */
+function hireContractForClub(state: SeasonState, clubId: string, coachId: string, focus: TrainingFocus): SeasonState {
+  const coaching = hireForClub(state.coaching, state.clubs, clubId, state.seasonNumber, state.round, coachId, focus);
+  return recordCoachFee({ ...state, coaching }, coaching.contracts.at(-1)!);
 }
 
 export function hireCoach(state: SeasonState, coachId: string, focus: TrainingFocus = 'balanced'): SeasonState {
   if (state.status === 'complete') throw new Error('Start the next season before recruiting a coach.');
-  return { ...state, coaching: hireForClub(state.coaching, state.clubs, state.managedClubId, state.seasonNumber, state.round, coachId, focus) };
+  return hireContractForClub(state, state.managedClubId, coachId, focus);
 }
 
 function managedContract(state: SeasonState, contractId: string): CoachingContract {
@@ -96,7 +116,7 @@ export function coachingRatingForAttribute(assignments: readonly CoachingWeekAss
 /** Recruit for marginal coverage of the club's training focuses, normalized by full-season fee. */
 export function recruitAiCoaches(state: SeasonState): SeasonState {
   if (!state.coaching.enabledSince || state.status === 'complete' || state.round === 10) return state;
-  let coaching = state.coaching;
+  let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     const plan = state.training.plans[club.id]!;
     const demand = Object.fromEntries(ATTRIBUTES.map(attribute => [attribute, 0])) as Record<keyof PlayerAttributes, number>;
@@ -106,10 +126,10 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
       if (focus === 'balanced') for (const attribute of ATTRIBUTES) demand[attribute] += 1 / ATTRIBUTES.length;
       else demand[focus] += 1;
     }
-    while (getClubCoaching(coaching, club.id).length < MAX_COACHES) {
-      const assignments = coachingAssignments(coaching, state.clubs, state.seasonNumber, state.round)![club.id]!;
-      const remaining = COACHING_BUDGET - coachingCommitted(coaching, club.id);
-      const candidates = availableCoaches(coaching).filter(coach => coach.fee <= remaining).flatMap(coach => FOCUSES.map(focus => ({ coach, focus, utility: ATTRIBUTES.reduce((sum, attribute) => {
+    while (getClubCoaching(next.coaching, club.id).length < MAX_COACHES) {
+      const assignments = coachingAssignments(next.coaching, state.clubs, state.seasonNumber, state.round)![club.id]!;
+      const remaining = COACHING_BUDGET - coachingCommitted(next.coaching, club.id);
+      const candidates = availableCoaches(next.coaching).filter(coach => coach.fee <= remaining && canPayCoach(next, club.id, coach)).flatMap(coach => FOCUSES.map(focus => ({ coach, focus, utility: ATTRIBUTES.reduce((sum, attribute) => {
         const current = coachingRatingForAttribute(assignments, attribute);
         const next = coachingRatingForAttribute([{ contractId: '', coachId: coach.id, focus }], attribute);
         return sum + demand[attribute] * Math.max(0, next - current);
@@ -117,10 +137,24 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
       candidates.sort((left, right) => right.utility - left.utility || compareText(left.coach.id, right.coach.id) || compareText(left.focus, right.focus));
       const selected = candidates[0];
       if (!selected || selected.utility <= 0) break;
-      coaching = hireForClub(coaching, state.clubs, club.id, state.seasonNumber, state.round, selected.coach.id, selected.focus);
+      next = hireContractForClub(next, club.id, selected.coach.id, selected.focus);
     }
   }
-  return coaching === state.coaching ? state : { ...state, coaching };
+  return next;
+}
+
+/** Funding arrives first; unaffordable renewals lapse without borrowing or disturbing other clubs. */
+export function renewSeasonCoaching(state: SeasonState, previous: SeasonCoaching): SeasonState {
+  if (state.status !== 'active' || state.round !== 1) throw new Error('Renew staff on the new season opening day.');
+  let next: SeasonState = { ...state, coaching: { ...previous, contracts: [] } };
+  if (!previous.enabledSince) return next;
+  for (const contract of previous.contracts.filter(contract => contract.releasedRound === null && contract.renew)) {
+    const coach = coachById(contract.coachId);
+    if (getClubCoaching(next.coaching, contract.clubId).length < MAX_COACHES && coachingCommitted(next.coaching, contract.clubId) + coach.fee <= COACHING_BUDGET && canPayCoach(next, contract.clubId, coach)) {
+      next = hireContractForClub(next, contract.clubId, contract.coachId, contract.focus);
+    }
+  }
+  return next;
 }
 
 /** Renewals start new obligations; last year's releases and fees do not carry into the new budget. */

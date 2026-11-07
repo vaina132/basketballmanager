@@ -18,7 +18,7 @@ function checkpoint(revision: number, state: SeasonState): SeasonCheckpoint {
 function previousFormat(state: SeasonState, version: 1 | 2): string {
   const value = structuredClone(state) as unknown as Record<string, unknown>;
   value.schemaVersion = version;
-  delete value.seasonNumber; delete value.history; delete value.training; delete value.coaching;
+  delete value.seasonNumber; delete value.history; delete value.training; delete value.coaching; delete value.finance;
   if (version === 1) {
     delete value.injuryMode; delete value.injuries;
     for (const fixture of value.fixtures as Array<{ result: Record<string, unknown> | null }>) if (fixture.result) delete fixture.result.injuries;
@@ -88,7 +88,7 @@ describe('validated career checkpoint listing', () => {
   });
 
   it.each([1, 2] as const)('exposes and migrates a legacy format %s current slot without writing or changing RNG', async version => {
-    const original = createSeason(21, 'atlantic-pilots', version === 1 ? 'off' : 'standard', false, false);
+    const original = createSeason(21, 'atlantic-pilots', version === 1 ? 'off' : 'standard', false, false, false);
     original.activeMatch = stepMatch(original.activeMatch);
     const serialized = previousFormat(original, version);
     storage.readSeasonJournal.mockResolvedValue({ revision: 0, current: serialized, checkpoints: [] });
@@ -158,7 +158,7 @@ describe('checkpoint restore and append', () => {
     expect(await saveCareerCheckpoint(state, 1, 'manual')).toEqual(saved);
     const serialized = storage.writeSeasonCheckpoint.mock.calls[0]![0] as string;
     expect(Object.keys(JSON.parse(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'state']);
-    expect(JSON.parse(serialized).formatVersion).toBe(5);
+    expect(JSON.parse(serialized).formatVersion).toBe(6);
     expect(parseSeason(serialized)).toEqual(state);
     expect(state).toEqual(before);
     expect(stepMatch(parseSeason(serialized).activeMatch)).toEqual(stepMatch(before.activeMatch));

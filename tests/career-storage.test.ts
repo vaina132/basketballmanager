@@ -21,7 +21,7 @@ function completeSeason(season: SeasonState): SeasonState {
 function previousFormat(season: SeasonState, version: 1 | 2): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
   state.schemaVersion = version;
-  delete state.seasonNumber; delete state.history; delete state.training; delete state.coaching;
+  delete state.seasonNumber; delete state.history; delete state.training; delete state.coaching; delete state.finance;
   if (version === 1) {
     delete state.injuryMode; delete state.injuries;
     for (const fixture of state.fixtures as Array<{ result: Record<string, unknown> | null }>) if (fixture.result) delete fixture.result.injuries;
@@ -30,7 +30,7 @@ function previousFormat(season: SeasonState, version: 1 | 2): string {
 }
 
 beforeAll(() => {
-  const first = createSeason(9, clubId, 'standard', false, false);
+  const first = createSeason(9, clubId, 'standard', false, false, false);
   let match = setAutoSubstitutions(first.activeMatch, managedSide(first), true);
   while (!match.injuries['atl-8'] && match.status !== 'finished') match = stepMatch(match);
   expect(match.injuries['atl-8']).toBeDefined();
@@ -44,9 +44,9 @@ beforeAll(() => {
 }, 60_000);
 
 describe('career save boundaries', () => {
-  it('writes format 5 with the original season table preserved after rollover', () => {
+  it('writes format 6 with the original season table preserved after rollover', () => {
     const text = serializeSeason(secondStart), restored = parseSeason(text);
-    expect(JSON.parse(text).formatVersion).toBe(5);
+    expect(JSON.parse(text).formatVersion).toBe(6);
     expect(restored).toEqual(secondStart);
     expect(restored.history).toHaveLength(1);
     expect(getStandings({ clubs: restored.clubs, fixtures: restored.history[0]!.fixtures })).toEqual(getStandings(firstComplete));
@@ -85,7 +85,7 @@ describe('career save boundaries', () => {
 
   it('retains one hundred compact prior seasons below the save limit without truncating results', () => {
     // A structural-size fixture, not one hundred newly simulated seasons.
-    const season = createSeason(7, clubId, 'off', false, false);
+    const season = createSeason(7, clubId, 'off', false, false, false);
     season.seasonNumber = 101;
     season.history = Array.from({ length: 100 }, (_, index): SeasonArchive => ({
       seasonNumber: index + 1,
@@ -112,7 +112,7 @@ describe('explicit career migrations', () => {
     const text = previousFormat(original, 2), snapshot = JSON.parse(text).state;
     const restored = parseSeason(text);
     expect(restored).toEqual(original);
-    expect(restored.schemaVersion).toBe(5);
+    expect(restored.schemaVersion).toBe(6);
     expect(restored.seasonNumber).toBe(1);
     expect(restored.history).toEqual([]);
     expect(restored.activeMatch).toEqual(snapshot.activeMatch);
@@ -129,7 +129,7 @@ describe('explicit career migrations', () => {
   });
 
   it('migrates format 1 through its injury-free rules into the first career season', () => {
-    const season = createSeason(37, clubId, 'off', false, false);
+    const season = createSeason(37, clubId, 'off', false, false, false);
     season.activeMatch = simulateToQuarterEnd(setAutoSubstitutions(season.activeMatch, managedSide(season), true));
     const restored = parseSeason(previousFormat(season, 1));
     expect(restored).toEqual(season);

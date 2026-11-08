@@ -2,6 +2,7 @@ import type { InjuryMode, MatchResult, MatchState, PlayerStats, Side, Tactics, T
 import type { SeasonTraining } from './training';
 import type { SeasonCoaching } from './coaching';
 import type { SeasonFinance } from './finance';
+import type { SeasonPayroll } from './payroll';
 
 export interface ClubPlan {
   tactics: Tactics;
@@ -53,7 +54,7 @@ export interface SeasonArchive {
 }
 
 export interface SeasonState {
-  schemaVersion: 6;
+  schemaVersion: 7;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;
@@ -71,6 +72,7 @@ export interface SeasonState {
   training: SeasonTraining;
   coaching: SeasonCoaching;
   finance: SeasonFinance;
+  payroll: SeasonPayroll;
   fixtures: SeasonFixture[];
   activeFixtureId: string;
   activeMatch: MatchState;

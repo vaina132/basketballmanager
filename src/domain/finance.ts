@@ -1,3 +1,5 @@
+import type { PayrollCharge } from './payroll';
+
 export interface FinancePlan {
   delegated: boolean;
   /** Ticket price in euro cents, in one-euro steps. */
@@ -9,12 +11,13 @@ export interface FinanceEntry {
   clubId: string;
   seasonNumber: number;
   round: number;
-  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching';
+  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'payroll';
   /** Income or cost in signed euro cents; cash effects also depend on unpaid obligations. */
   amount: number;
   sourceId: string;
   ticket: { fixtureId: string; price: number; attendance: number } | null;
   coach: { contractId: string; coachId: string } | null;
+  payroll: PayrollCharge | null;
 }
 
 export interface SeasonFinance {

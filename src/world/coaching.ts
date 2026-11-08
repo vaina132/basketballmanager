@@ -4,6 +4,7 @@ import type { TrainingFocus } from '../domain/training';
 import type { PlayerAttributes, Team } from '../domain/types';
 import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { getFinanceBalance, recordCoachFee } from './finance';
+import { getSpendableCash } from './payroll-policy';
 
 export const COACHING_BUDGET = 15_000_000;
 export const MAX_COACHES = 3;
@@ -62,7 +63,7 @@ export function enableCoaching(state: SeasonState): SeasonState {
 function canPayCoach(state: SeasonState, clubId: string, coach: Coach): boolean {
   if (!state.finance.enabledSince) return true;
   const balance = getFinanceBalance(state.finance, clubId);
-  return balance.unpaid === 0 && balance.cash >= coach.fee;
+  return balance.unpaid === 0 && getSpendableCash(state, clubId) >= coach.fee;
 }
 
 /** Contracts and their cash payment are one immutable operation for every club. */

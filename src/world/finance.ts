@@ -1,9 +1,11 @@
 import type { CoachingContract } from '../domain/coaching';
+import type { PayrollCharge } from '../domain/payroll';
 import type { FinanceBalance, FinanceEntry, FinanceLedgerRow, FinancePlan, GateForecast, SeasonFinance } from '../domain/finance';
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { getClubFinanceDefinition } from '../data/development-finances';
+import { getSpendableCash } from './payroll-policy';
 
 export { getClubFinanceDefinition } from '../data/development-finances';
 export type { FinanceBalance, FinanceLedgerRow, GateForecast } from '../domain/finance';
@@ -62,8 +64,15 @@ function append(state: SeasonState, entry: Omit<FinanceEntry, 'id'>): SeasonStat
   return { ...state, finance: { ...state.finance, ledger: [...state.finance.ledger, { ...entry, id: `finance-${state.finance.ledger.length + 1}` }] } };
 }
 
-function book(state: SeasonState, clubId: string, kind: FinanceEntry['kind'], amount: number, sourceId: string, ticket: FinanceEntry['ticket'] = null, coach: FinanceEntry['coach'] = null): SeasonState {
-  return append(state, { clubId, kind, amount, sourceId, seasonNumber: state.seasonNumber, round: state.round, ticket, coach });
+function book(state: SeasonState, clubId: string, kind: FinanceEntry['kind'], amount: number, sourceId: string, ticket: FinanceEntry['ticket'] = null, coach: FinanceEntry['coach'] = null, payroll: PayrollCharge | null = null): SeasonState {
+  return append(state, { clubId, kind, amount, sourceId, seasonNumber: state.seasonNumber, round: state.round, ticket, coach, payroll });
+}
+
+/** The payroll command owns its schedule; finance records the resulting mandatory obligation. */
+export function recordPayrollCharge(state: SeasonState, clubId: string, payroll: PayrollCharge, sourceId: string): SeasonState {
+  if (!state.finance.enabledSince) throw new Error('Enable club finances before recording wages.');
+  const amount = payroll.items.reduce((sum, item) => sum + item.amount, 0);
+  return book(state, clubId, 'payroll', amount === 0 ? 0 : -amount, sourceId, null, null, payroll);
 }
 
 function coachFee(contract: CoachingContract): number {
@@ -78,6 +87,7 @@ export function recordCoachFee(state: SeasonState, contract: CoachingContract): 
   if (contract.seasonNumber !== state.seasonNumber || !state.coaching.contracts.some(current => current.id === contract.id && current.clubId === contract.clubId && current.coachId === contract.coachId)) throw new Error('The coaching payment must belong to a current club contract.');
   const fee = coachFee(contract), balance = getFinanceBalance(state.finance, contract.clubId);
   if (balance.unpaid > 0 || balance.cash < fee) throw new Error('This club must settle unpaid costs and have enough cash before hiring a coach.');
+  if (getSpendableCash(state, contract.clubId) < fee) throw new Error('This club must protect remaining player wage commitments before hiring a coach.');
   return book(state, contract.clubId, 'coaching', -fee, `coaching-${contract.id}`, null, { contractId: contract.id, coachId: contract.coachId });
 }
 

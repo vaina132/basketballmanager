@@ -21,7 +21,7 @@ function completeSeason(season: SeasonState): SeasonState {
 }
 function formatFour(season: SeasonState): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
-  state.schemaVersion = 4; delete state.coaching; delete state.finance;
+  state.schemaVersion = 4; delete state.coaching; delete state.finance; delete state.payroll;
   const training = state.training as { lastWeek: null | Record<string, unknown> };
   if (training.lastWeek) {
     delete training.lastWeek.coaching;
@@ -53,9 +53,9 @@ beforeAll(() => {
 }, 60_000);
 
 describe('coaching-aware season persistence', () => {
-  it('writes format 6 with exact appointments, commitments and future instructions', () => {
+  it('writes format 7 with exact appointments, commitments and future instructions', () => {
     const text = serializeSeason(initial);
-    expect(JSON.parse(text).formatVersion).toBe(6);
+    expect(JSON.parse(text).formatVersion).toBe(7);
     expect(restore(initial)).toEqual(initial);
     expect(coachingCommitted(restore(initial).coaching, clubId)).toBe(10_500_000);
     expect(restore(initial).activeMatch).toEqual(initial.activeMatch);

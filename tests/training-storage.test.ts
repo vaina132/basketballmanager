@@ -11,7 +11,7 @@ const restore = (season: SeasonState): SeasonState => parseSeason(serializeSeaso
 const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: season.activeMatch.status === 'finished' ? season.activeMatch : simulateToEnd(setAutoSubstitutions(season.activeMatch, managedSide(season), true)) });
 function oldFormat(season: SeasonState, version: 1 | 2 | 3): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
-  state.schemaVersion = version; delete state.training; delete state.coaching; delete state.finance;
+  state.schemaVersion = version; delete state.training; delete state.coaching; delete state.finance; delete state.payroll;
   if (version < 3) { delete state.seasonNumber; delete state.history; }
   if (version === 1) {
     delete state.injuryMode; delete state.injuries;
@@ -36,9 +36,9 @@ beforeAll(() => {
 }, 60_000);
 
 describe('training-aware season saves', () => {
-  it.each([true, false])('round-trips format 6 with training enabled=%s', enabled => {
+  it.each([true, false])('round-trips format 7 with training enabled=%s', enabled => {
     const season = createSeason(7, clubId, 'off', enabled, false, false), text = serializeSeason(season);
-    expect(JSON.parse(text).formatVersion).toBe(6);
+    expect(JSON.parse(text).formatVersion).toBe(7);
     expect(restore(season)).toEqual(season);
     expect(season.training.enabledSince !== null).toBe(enabled);
   });

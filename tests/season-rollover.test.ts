@@ -69,7 +69,7 @@ describe('same-club career rollover', () => {
     const before = structuredClone(completed);
     const next = rolloverSeason(completed), archive = next.history[0]!;
     expect(completed).toEqual(before);
-    expect(next).toMatchObject({ schemaVersion: 6, seasonNumber: 2, round: 1, status: 'active', date: '2027-09-04', managedClubId: completed.managedClubId, seed: completed.seed });
+    expect(next).toMatchObject({ schemaVersion: 7, seasonNumber: 2, round: 1, status: 'active', date: '2027-09-04', managedClubId: completed.managedClubId, seed: completed.seed });
     expect(next.clubs).toEqual(completed.clubs);
     expect(next.history).toHaveLength(1);
     expect(archive.seasonNumber).toBe(1);

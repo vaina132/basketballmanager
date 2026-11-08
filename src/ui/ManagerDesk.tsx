@@ -1,6 +1,7 @@
 import type { SeasonState } from '../domain/season'
 import { getPlayerHealth } from '../world/health'
 import { getFinanceBalance } from '../world/finance'
+import { getPayrollReserve } from '../world/payroll'
 import { medicalDate } from './SeasonMedicalReport'
 import type { MatchState, Side } from '../domain/types'
 import { isPlayerEligible } from '../engine/match'
@@ -21,13 +22,14 @@ interface ManagerDeskProps {
   onSelectPlayer: (id: string) => void
   onOpenCoaching: () => void
   onOpenClub: () => void
+  onOpenPayroll: () => void
 }
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
 const money = (cents: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100)
 
-export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onSelectPlayer, onOpenCoaching, onOpenClub }: ManagerDeskProps) {
+export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll }: ManagerDeskProps) {
   const team = match[managedSide]
   const complete = match.status === 'finished'
   const ready = match.status === 'ready'
@@ -44,9 +46,11 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
   const status = complete ? 'FULL TIME' : needsReplacement ? 'REPLACEMENT REQUIRED' : ready ? 'PRE-MATCH' : 'MATCH PAUSED'
   const notices: { key: string; title: string; detail: string; urgent?: boolean; action: string; open: () => void }[] = []
   const finances = season?.finance.enabledSince ? getFinanceBalance(season.finance, season.managedClubId) : null
+  const wageReserve = season?.payroll.enabledSince ? getPayrollReserve(season, season.managedClubId) : null
 
   if (needsReplacement) notices.push({ key: 'replacement', title: 'Replace an unavailable player', detail: match.requiredSubstitutions.map(item => `${playerName(item.playerId, item.side)}: ${item.reason === 'injured' ? 'injured' : 'five fouls'}`).join('; '), urgent: true, action: 'Choose replacement', open: onOpenCoaching })
   if (finances?.unpaid) notices.push({ key: 'unpaid', title: 'Outstanding club costs', detail: `${money(finances.unpaid)} unpaid. New coaching appointments are blocked until these costs are covered.`, urgent: true, action: 'Review finances', open: onOpenClub })
+  if (finances && wageReserve !== null && wageReserve > finances.cash) notices.push({ key: 'wage-commitments', title: 'Wage commitments exceed cash', detail: `${money(wageReserve - finances.cash)} more is needed to cover remaining scheduled wages. Future income may reduce this shortfall.`, urgent: true, action: 'Review wages', open: onOpenPayroll })
   if (injured.length) notices.push({ key: 'injuries', title: `${injured.length} injured ${injured.length === 1 ? 'player' : 'players'}`, detail: injured.map(player => { const health = season ? getPlayerHealth(season, player.id) : null; return health ? `${player.name}: expected ${medicalDate(health.returnOn)}` : player.name }).join('; '), action: 'Review squad', open: onOpenSquad })
   if (!complete && foulTrouble.length) notices.push({ key: 'fouls', title: 'Foul trouble', detail: foulTrouble.map(player => `${player.name} · 4 fouls`).join('; '), action: 'Manage rotation', open: onOpenCoaching })
   if (tired.length) notices.push({ key: 'fatigue', title: complete ? 'Post-match fatigue' : 'Players tiring', detail: tired.map(player => `${player.name} · ${Math.round(match.stats[player.id].condition)}%`).join('; '), action: complete ? 'Review squad' : 'Manage rotation', open: complete ? onOpenSquad : onOpenCoaching })
@@ -95,7 +99,7 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
       <div className="desk-side-column">
         {finances && <section className="desk-finances panel" aria-labelledby="desk-finances-heading">
           <div className="desk-panel-heading"><h2 id="desk-finances-heading">Club finances</h2><button className="text-button" onClick={onOpenClub}>Ledger & tickets<Icon name="chevron" size={15} /></button></div>
-          <dl className="desk-finance-values"><div><dt>Available cash</dt><dd>{money(finances.cash)}</dd></div><div><dt>Unpaid costs</dt><dd className={finances.unpaid ? 'desk-warning-value' : ''}>{money(finances.unpaid)}</dd></div></dl>
+          <dl className="desk-finance-values"><div><dt>Cash</dt><dd>{money(finances.cash)}</dd></div><div><dt>Unpaid costs</dt><dd className={finances.unpaid ? 'desk-warning-value' : ''}>{money(finances.unpaid)}</dd></div>{wageReserve !== null && <><div><dt>Future wages</dt><dd><button className="text-button" onClick={onOpenPayroll}>{money(wageReserve)}<Icon name="chevron" size={14} /></button></dd></div><div><dt>Cash after wage reserve</dt><dd>{money(Math.max(0, finances.cash - wageReserve))}</dd></div></>}</dl>
         </section>}
         <section className="desk-attention panel" aria-labelledby="desk-attention-heading">
           <div className="desk-panel-heading"><h2 id="desk-attention-heading">{complete ? 'Match review' : 'Attention'}</h2><span className="desk-count">{notices.length}</span></div>

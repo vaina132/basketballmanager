@@ -6,7 +6,10 @@ import { DEVELOPMENT_COACHES } from '../src/data/development-coaches';
 import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match';
 import { coachingCommitted, enableCoaching, getClubCoaching, hireCoach, recruitAiCoaches, releaseCoach, renewSeasonCoaching, setCoachRenewal } from '../src/world/coaching';
 import { ANNUAL_SPONSORSHIP, createFinance, DEFAULT_TICKET_PRICE, enableFinance, financeLedgerRows, forecastGate, getClubFinanceDefinition, getFinanceBalance, MAX_TICKET_PRICE, OPENING_CASH, prepareFinanceRound, processFinanceRound, recommendTicketPrice, recordCoachFee, ROUND_OPERATING_COST, setTicketPlan, startFinanceSeason } from '../src/world/finance';
-import { advanceSeason, createSeason, getActiveFixture, managedSide, rolloverSeason } from '../src/world/season';
+import { advanceSeason, createSeason as createSeasonWithPayroll, getActiveFixture, managedSide, rolloverSeason } from '../src/world/season';
+
+// These cases isolate the pre-payroll financial model; payroll has its own integration suite.
+const createSeason: typeof createSeasonWithPayroll = (seed, club, injury, training, coaching, finance) => createSeasonWithPayroll(seed, club, injury, training, coaching, finance, false);
 
 const clubId = DEVELOPMENT_CLUBS[0]!.id;
 const otherId = DEVELOPMENT_CLUBS[1]!.id;
@@ -24,7 +27,7 @@ function finishSeason(initial: SeasonState): SeasonState {
 }
 /** Isolated balance/affordability fixtures; fabricated obligations are not claimed to be importable saves. */
 function expense(state: SeasonState, id: string, amount: number): SeasonState {
-  const entry: FinanceEntry = { id: `finance-${state.finance.ledger.length + 1}`, clubId: id, seasonNumber: state.seasonNumber, round: state.round, kind: 'operations', amount: -amount, sourceId: `test-cost-${state.finance.ledger.length}`, ticket: null, coach: null };
+  const entry: FinanceEntry = { id: `finance-${state.finance.ledger.length + 1}`, clubId: id, seasonNumber: state.seasonNumber, round: state.round, kind: 'operations', amount: -amount, sourceId: `test-cost-${state.finance.ledger.length}`, ticket: null, coach: null, payroll: null };
   return { ...state, finance: { ...state.finance, ledger: [...state.finance.ledger, entry] } };
 }
 
@@ -118,7 +121,7 @@ describe('fictional gates and locked ticket decisions', () => {
 describe('cash, unpaid obligations and staff affordability', () => {
   it('pays expenses from cash and applies later income to unpaid costs before increasing cash', () => {
     const base = createFinance(DEVELOPMENT_CLUBS, clubId);
-    const finance: SeasonFinance = { ...base, ledger: [100, -140, 25, 20, -10].map((amount, index) => ({ id: `finance-${index + 1}`, clubId, seasonNumber: 1, round: 1, kind: amount >= 0 ? 'sponsor' : 'operations', amount, sourceId: `test-${index}`, ticket: null, coach: null })) };
+    const finance: SeasonFinance = { ...base, ledger: [100, -140, 25, 20, -10].map((amount, index) => ({ id: `finance-${index + 1}`, clubId, seasonNumber: 1, round: 1, kind: amount >= 0 ? 'sponsor' : 'operations', amount, sourceId: `test-${index}`, ticket: null, coach: null, payroll: null })) };
     const before = structuredClone(finance);
     expect(getFinanceBalance(finance, clubId)).toEqual({ cash: 0, unpaid: 5 });
     const rows = financeLedgerRows(finance, clubId);

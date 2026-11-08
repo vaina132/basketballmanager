@@ -20,7 +20,7 @@ function completeSeason(state: SeasonState): SeasonState {
 }
 function formatFive(season: SeasonState): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
-  state.schemaVersion = 5; delete state.finance;
+  state.schemaVersion = 5; delete state.finance; delete state.payroll;
   return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 5, engineVersion: 'possession-3', state });
 }
 function renumber(state: SeasonState): void { state.finance.ledger.forEach((entry, index) => { entry.id = `finance-${index + 1}`; }); }
@@ -28,11 +28,11 @@ function firstEntry(state: SeasonState, kind: FinanceEntry['kind']): FinanceEntr
 function reject(state: SeasonState, change: (state: SeasonState) => void): void {
   const damaged = structuredClone(state); change(damaged);
   expect(() => validateSeasonState(damaged)).toThrow();
-  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 6, engineVersion: 'possession-3', state: damaged }))).toThrow();
+  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 7, engineVersion: 'possession-3', state: damaged }))).toThrow();
 }
 
 beforeAll(() => {
-  initial = createSeason(37, clubId, 'off');
+  initial = createSeason(37, clubId, 'off', true, true, true, false);
   second = advanceSeason(finish(initial));
   completed = completeSeason(second); nextYear = rolloverSeason(completed);
   const legacy = advanceSeason(finish(createSeason(37, clubId, 'off', true, true, false)));
@@ -41,9 +41,9 @@ beforeAll(() => {
 }, 60_000);
 
 describe('finance ledger persistence', () => {
-  it('writes format 6 with funding and full coaching commitments for every club', () => {
+  it('writes format 7 with funding and full coaching commitments for every club', () => {
     const text = serializeSeason(initial), before = structuredClone(initial);
-    expect(JSON.parse(text).formatVersion).toBe(6);
+    expect(JSON.parse(text).formatVersion).toBe(7);
     expect(restore(initial)).toEqual(initial);
     expect(initial.finance.ledger).toHaveLength(18);
     for (const club of initial.clubs) {

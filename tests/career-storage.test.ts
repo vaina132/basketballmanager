@@ -21,7 +21,7 @@ function completeSeason(season: SeasonState): SeasonState {
 function previousFormat(season: SeasonState, version: 1 | 2): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
   state.schemaVersion = version;
-  delete state.seasonNumber; delete state.history; delete state.training; delete state.coaching; delete state.finance;
+  delete state.seasonNumber; delete state.history; delete state.training; delete state.coaching; delete state.finance; delete state.payroll;
   if (version === 1) {
     delete state.injuryMode; delete state.injuries;
     for (const fixture of state.fixtures as Array<{ result: Record<string, unknown> | null }>) if (fixture.result) delete fixture.result.injuries;
@@ -44,9 +44,9 @@ beforeAll(() => {
 }, 60_000);
 
 describe('career save boundaries', () => {
-  it('writes format 6 with the original season table preserved after rollover', () => {
+  it('writes format 7 with the original season table preserved after rollover', () => {
     const text = serializeSeason(secondStart), restored = parseSeason(text);
-    expect(JSON.parse(text).formatVersion).toBe(6);
+    expect(JSON.parse(text).formatVersion).toBe(7);
     expect(restored).toEqual(secondStart);
     expect(restored.history).toHaveLength(1);
     expect(getStandings({ clubs: restored.clubs, fixtures: restored.history[0]!.fixtures })).toEqual(getStandings(firstComplete));
@@ -112,7 +112,7 @@ describe('explicit career migrations', () => {
     const text = previousFormat(original, 2), snapshot = JSON.parse(text).state;
     const restored = parseSeason(text);
     expect(restored).toEqual(original);
-    expect(restored.schemaVersion).toBe(6);
+    expect(restored.schemaVersion).toBe(7);
     expect(restored.seasonNumber).toBe(1);
     expect(restored.history).toEqual([]);
     expect(restored.activeMatch).toEqual(snapshot.activeMatch);

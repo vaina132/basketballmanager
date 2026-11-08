@@ -5,6 +5,7 @@ import type { TrainingFocus } from '../domain/training'
 import { COACHES } from '../data/development-coaches'
 import { availableCoaches, coachRating, coachingCommitted, COACHING_BUDGET, getClubCoaching, MAX_COACHES } from '../world/coaching'
 import { getFinanceBalance } from '../world/finance'
+import { getPayrollReserve, getSpendableCash } from '../world/payroll'
 import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES, TRAINING_FOCUS_LABELS } from '../world/training'
 import { Icon } from './Icon'
 import './staff-workspace.css'
@@ -55,6 +56,9 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
   const committed = coachingCommitted(season.coaching, club.id)
   const allocation = COACHING_BUDGET - committed
   const finances = season.finance.enabledSince === null ? null : getFinanceBalance(season.finance, club.id)
+  const payrollEnabled = season.payroll.enabledSince !== null
+  const wageReserve = getPayrollReserve(season, club.id)
+  const spendable = getSpendableCash(season, club.id)
   const available = availableCoaches(season.coaching)
   const candidates = available.filter(coach => coach.name.toLowerCase().includes(query.trim().toLowerCase())).sort((left, right) => {
     const value = sort.startsWith('rating') ? coachRating(left) - coachRating(right) : left.fee - right.fee
@@ -83,7 +87,7 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
     if (contracts.length >= MAX_COACHES) return `All ${MAX_COACHES} coaching roles are filled.`
     if (coach.fee > allocation) return `${money(coach.fee - allocation)} above the available allocation.`
     if (finances && finances.unpaid > 0) return `Clear ${money(finances.unpaid)} of unpaid costs before recruiting.`
-    if (finances && coach.fee > finances.cash) return `${money(coach.fee - finances.cash)} more cash is needed for this season fee.`
+    if (finances && coach.fee > spendable) return payrollEnabled ? `${money(coach.fee - spendable)} more spendable cash is needed after reserving future wages.` : `${money(coach.fee - finances.cash)} more cash is needed for this season fee.`
     return null
   }
 
@@ -104,13 +108,13 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
       {enabled && <dl className="staff-allocation"><div><dt>Coaching budget</dt><dd>{money(COACHING_BUDGET)}</dd></div><div><dt>Committed</dt><dd data-coaching-committed={committed}>{money(committed)}</dd></div><div><dt>Available allocation</dt><dd data-coaching-available={allocation}>{money(allocation)}</dd></div></dl>}
     </section>
 
-    {finances && <section className="staff-training-note panel" aria-label="Club cash"><p><strong>Cash available: <span data-staff-cash={finances.cash}>{money(finances.cash)}</span></strong> · Unpaid costs: <span data-staff-unpaid={finances.unpaid}>{money(finances.unpaid)}</span>. Hiring requires both coaching allocation and cash; the full season fee is charged immediately.</p></section>}
+    {finances && <section className="staff-training-note panel" aria-label="Club cash"><p><strong>Cash: <span data-staff-cash={finances.cash}>{money(finances.cash)}</span></strong> · Unpaid costs: <span data-staff-unpaid={finances.unpaid}>{money(finances.unpaid)}</span>{payrollEnabled && <> · Future wages reserved: <span data-staff-reserve={wageReserve}>{money(wageReserve)}</span> · Spendable: <span data-staff-spendable={spendable}>{money(spendable)}</span></>}. Hiring requires coaching allocation and {payrollEnabled ? 'cash after future wage reserves' : 'cash'}; the full season fee is charged immediately.</p></section>}
 
     {season.training.enabledSince === null && <section className="staff-training-note panel" aria-label="Training status"><p>Training is disabled. Enable it in Training for coaches to affect development.</p><button className="button small" onClick={onOpenTraining} disabled={busy}>Open training<Icon name="chevron" size={14} /></button></section>}
 
     {!enabled ? <section className="staff-enable panel" aria-labelledby="staff-enable-title">
       <header className="staff-heading"><h2 id="staff-enable-title">Training coaches</h2><span>Not enabled</span></header>
-      <div><p>{finances ? 'Enable coaching for every club. Each club receives a coaching allocation; starter coaches are appointed only where cash covers the full fee and no costs are unpaid. Unaffordable positions stay vacant. Assignments affect future training weeks.' : 'Enable coaching for every club. Each club receives one starter coach, whose full season fee uses part of its coaching allocation. Assignments affect future training weeks.'}{season.status === 'complete' && <span id="coaching-enable-reason" className="staff-assignment-note">Start next season before enabling coaching.</span>}</p><button id="enable-coaching" className="button primary" onClick={onEnable} disabled={busy || season.status === 'complete'} aria-describedby={season.status === 'complete' ? 'coaching-enable-reason' : undefined}>Enable coaching<Icon name="people" size={16} /></button></div>
+      <div><p>{finances ? 'Enable coaching for every club. Each club receives a coaching allocation; starter coaches require enough cash after future wage reserves and no unpaid costs. Unaffordable positions stay vacant. Assignments affect future training weeks.' : 'Enable coaching for every club. Each club receives one starter coach, whose full season fee uses part of its coaching allocation. Assignments affect future training weeks.'}{season.status === 'complete' && <span id="coaching-enable-reason" className="staff-assignment-note">Start next season before enabling coaching.</span>}</p><button id="enable-coaching" className="button primary" onClick={onEnable} disabled={busy || season.status === 'complete'} aria-describedby={season.status === 'complete' ? 'coaching-enable-reason' : undefined}>Enable coaching<Icon name="people" size={16} /></button></div>
     </section> : <>
       <section className="staff-current panel" aria-labelledby="staff-current-title">
         <header className="staff-heading"><h2 id="staff-current-title" ref={staffHeading} tabIndex={-1}>Current coaching staff</h2><span>{contracts.length} / {MAX_COACHES} roles filled</span></header>
@@ -129,7 +133,7 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
           <p>Release <strong>{releaseCoach.name}</strong>? The {money(releaseCoach.fee)} season fee stays committed. Available allocation remains {money(allocation)}.{finances && ' No cash is refunded.'}</p>
           <div><button className="button" onClick={() => onRelease(releaseContract.id)} aria-label={`Confirm release ${releaseCoach.name}`} disabled={busy}>Confirm release</button><button className="text-button" onClick={cancelRelease} disabled={busy}>Cancel</button></div>
         </div>}
-        <p className="staff-note">Season fees are reserved in full, including midseason hires and released contracts. {finances ? 'Renewals require available allocation and cash with no unpaid costs when the next season begins.' : 'Renewal reserves a new season fee when the next season begins.'}<span className="staff-assignment-note">Focused assignments use full skill strength; Balanced uses half strength for every skill. Only the best applicable coach counts.</span></p>
+        <p className="staff-note">Season fees are reserved in full, including midseason hires and released contracts. {finances ? 'Renewals require available allocation and cash after future wage reserves, with no unpaid costs, when the next season begins.' : 'Renewal reserves a new season fee when the next season begins.'}<span className="staff-assignment-note">Focused assignments use full skill strength; Balanced uses half strength for every skill. Only the best applicable coach counts.</span></p>
       </section>
 
       {released.length > 0 && <details className="staff-released panel"><summary>Released this season <span>{released.length} contracts · {money(released.reduce((total, contract) => total + coachById(contract.coachId).fee, 0))} retained</span></summary><div className="staff-table-scroll" tabIndex={0} role="region" aria-label="Released coaching contracts"><table><thead><tr><th scope="col">Coach</th><th scope="col">Released</th><th scope="col">Committed season fee</th></tr></thead><tbody>{released.map(contract => <tr key={contract.id}><th scope="row">{coachById(contract.coachId).name}</th><td>Matchday {contract.releasedRound}</td><td>{money(coachById(contract.coachId).fee)}</td></tr>)}</tbody></table></div></details>}
@@ -151,7 +155,7 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
         <header className="staff-heading"><div><h2 id="coach-candidate-title">{selected.name}</h2><span>Training coach · Season fee {money(selected.fee)}</span></div><button className="text-button" aria-label="Close coach details" onClick={closeCandidate} disabled={busy}><Icon name="close" size={14} />Close</button></header>
         <div className="staff-candidate-body"><dl className="staff-coach-skills">{TRAINING_ATTRIBUTES.map(attribute => <div key={attribute}><dt>{TRAINING_FOCUS_LABELS[attribute]}</dt><dd><CoachStars rating={selected.skills[attribute]} /></dd></div>)}</dl><div className="staff-hire-controls">
           <label htmlFor="coach-hire-focus">Initial assignment</label><select id="coach-hire-focus" value={hireFocus} onChange={event => setHireFocus(event.target.value as TrainingFocus)} disabled={busy}><FocusOptions /></select>
-          <dl className="staff-hire-budget"><div><dt>Allocation now</dt><dd>{money(allocation)}</dd></div><div><dt>{allocation >= selected.fee ? 'Allocation after hiring' : 'Allocation shortfall'}</dt><dd>{money(Math.abs(allocation - selected.fee))}</dd></div>{finances && <><div><dt>Cash now</dt><dd>{money(finances.cash)}</dd></div><div><dt>{finances.cash >= selected.fee ? 'Cash after hiring' : 'Cash shortfall'}</dt><dd>{money(Math.abs(finances.cash - selected.fee))}</dd></div></>}</dl>
+          <dl className="staff-hire-budget"><div><dt>Allocation now</dt><dd>{money(allocation)}</dd></div><div><dt>{allocation >= selected.fee ? 'Allocation after hiring' : 'Allocation shortfall'}</dt><dd>{money(Math.abs(allocation - selected.fee))}</dd></div>{finances && <><div><dt>Cash now</dt><dd>{money(finances.cash)}</dd></div><div><dt>{finances.cash >= selected.fee ? 'Cash after hiring' : 'Cash shortfall'}</dt><dd>{money(Math.abs(finances.cash - selected.fee))}</dd></div>{payrollEnabled && <><div><dt>Future wages reserved</dt><dd>{money(wageReserve)}</dd></div><div><dt>Spendable cash</dt><dd>{money(spendable)}</dd></div></>}</>}</dl>
           <p>Contract through this season. Renewal is selected for next season.</p>
           {hiringReason(selected) && <p id="coach-hire-reason" className="staff-hire-reason">{hiringReason(selected)}</p>}
           <button className="button primary" id="hire-coach" aria-label={`Hire ${selected.name} for ${money(selected.fee)}`} aria-describedby={hiringReason(selected) ? 'coach-hire-reason' : undefined} onClick={() => onHire(selected.id, hireFocus)} disabled={busy || !!hiringReason(selected)}>Hire for {money(selected.fee)}<Icon name="people" size={15} /></button>

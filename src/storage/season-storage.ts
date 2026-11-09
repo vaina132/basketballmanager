@@ -3,6 +3,8 @@ import type { FinanceBalance, FinanceEntry } from '../domain/finance';
 import type { PayrollItem, PlayerWageAgreement, SeasonPayroll } from '../domain/payroll';
 import type { SeasonTraining, TrainingPlan, TrainingPoints, TrainingWeekReport } from '../domain/training';
 import type { RosterSnapshot } from '../domain/roster';
+import type { SeasonEmployment, EmploymentContract } from '../domain/employment';
+import type { SeasonScouting } from '../domain/scouting';
 import type { CoachingWeekAssignment, SeasonCoaching } from '../domain/coaching';
 import type { PlayerStats, Side, Team } from '../domain/types';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_DATA_PACK_ID, DEVELOPMENT_START_DATE } from '../data/development-league';
@@ -18,6 +20,9 @@ import { createPayroll } from '../world/payroll';
 import { payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from '../world/payroll-policy';
 import { validateManagerProfile } from '../world/manager';
 import { createRosterSnapshots, rosterForRound } from '../world/rosters';
+import { createEmployment } from '../world/employment';
+import { createScouting } from '../world/scouting';
+import { contractForSeason, getContractedClubs, EMPLOYMENT_BUDGET, MIN_ROSTER_SIZE, MAX_ROSTER_SIZE, MAX_CONTRACT_WAGE, MAX_CONTRACT_SEASONS, WAGE_STEP, MIN_ROSTER_WAGE_RESERVE } from '../world/employment-policy';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
 
@@ -139,7 +144,7 @@ function validateArchivedResult(value: unknown, path: string, home: Team, away: 
   return fields as unknown as ArchivedFixture['result'];
 }
 
-/** Registration changes are not playable yet; this pack has six fixed opening squads. */
+/** Opening registrations are immutable within a season, including jersey assignments. */
 function validateRosters(value: unknown, path: string, clubs: readonly Team[], seasonNumber: number): RosterSnapshot[] {
   const expected = createRosterSnapshots(clubs, seasonNumber);
   if (!sameData(value, expected)) fail(path, 'must preserve the versioned opening roster snapshots and their identities exactly');
@@ -241,8 +246,203 @@ function validateTicketPrice(value: unknown, path: string): number {
   return price;
 }
 
+function clubsForEmploymentYear(employment: SeasonEmployment | undefined, seasonNumber: number): readonly Team[] {
+  return employment ? getContractedClubs({ employment, clubs: DEVELOPMENT_CLUBS }, seasonNumber) : DEVELOPMENT_CLUBS;
+}
+
+/** Retained employment records are the authority for historical and pending registrations. */
+function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string): SeasonEmployment {
+  const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market']);
+  if (fields.model !== 'employment-1') fail('employment.model', 'is unsupported');
+  if (typeof fields.delegated !== 'boolean') fail('employment.delegated', 'must be boolean');
+  if (!Array.isArray(fields.contracts) || fields.contracts.length > 20_000) fail('employment.contracts', 'must contain at most 20000 retained contracts');
+  if (fields.enabledSince === null) {
+    if (!sameData(fields, createEmployment())) fail('employment', 'must retain its empty default state while disabled');
+    return fields as unknown as SeasonEmployment;
+  }
+  const anchor = record(fields.enabledSince, 'employment.enabledSince', ['seasonNumber', 'round']);
+  const firstYear = number(anchor.seasonNumber, 'employment.enabledSince.seasonNumber', 1, seasonNumber);
+  const firstRound = number(anchor.round, 'employment.enabledSince.round', 1, firstYear === seasonNumber ? round : 10);
+  if (status === 'complete' && seasonNumber < MAX_SEASON_NUMBER) {
+    if (!sameData(fields.market, { seasonNumber: seasonNumber + 1 })) fail('employment.market', 'must identify the next season after the final matchday');
+  } else if (fields.market !== null) fail('employment.market', 'must be closed during the active season');
+  const catalog = DEVELOPMENT_CLUBS.flatMap(club => club.players.map(player => ({ player, clubId: club.id })));
+  const catalogById = new Map(catalog.map(entry => [entry.player.id, entry]));
+  const clubIds = DEVELOPMENT_CLUBS.map(club => club.id);
+  if (fields.contracts.length < catalog.length) fail('employment.contracts', 'must retain each opening employment agreement');
+  const validated: EmploymentContract[] = [];
+  let previousBoundary = firstYear * 10 + firstRound;
+  for (const [index, value] of fields.contracts.entries()) {
+    const path = `employment.contracts[${index}]`;
+    const entry = record(value, path, ['id', 'playerId', 'clubId', 'startsSeason', 'endsSeason', 'seasonWage', 'signedSeason', 'signedRound', 'kind']);
+    if (entry.id !== `employment-contract-${index + 1}`) fail(`${path}.id`, 'must use sequential contract identities');
+    const player = catalogById.get(entry.playerId as string)?.player;
+    if (!player) fail(`${path}.playerId`, 'must identify a player in the stable catalog');
+    if (!clubIds.includes(entry.clubId as string)) fail(`${path}.clubId`, 'must identify a club in this league');
+    const signedSeason = number(entry.signedSeason, `${path}.signedSeason`, firstYear, seasonNumber);
+    const signedRound = number(entry.signedRound, `${path}.signedRound`, 1, signedSeason === seasonNumber ? round : 10);
+    const boundary = signedSeason * 10 + signedRound;
+    if (boundary < previousBoundary) fail(path, 'must retain chronological signing order');
+    previousBoundary = boundary;
+    const startsSeason = number(entry.startsSeason, `${path}.startsSeason`, firstYear, Math.min(MAX_SEASON_NUMBER, seasonNumber + 1));
+    const endsSeason = number(entry.endsSeason, `${path}.endsSeason`, startsSeason, Math.min(MAX_SEASON_NUMBER, startsSeason + MAX_CONTRACT_SEASONS - 1));
+    const seasonWage = number(entry.seasonWage, `${path}.seasonWage`, getSeasonWage(player.id), MAX_CONTRACT_WAGE);
+    if (seasonWage % WAGE_STEP !== 0) fail(`${path}.seasonWage`, 'must use supported wage increments');
+    if (index < catalog.length) {
+      const expected = catalog[index]!;
+      if (entry.kind !== 'initial' || entry.playerId !== expected.player.id || entry.clubId !== expected.clubId || startsSeason !== firstYear || endsSeason !== firstYear || signedSeason !== firstYear || signedRound !== firstRound || seasonWage !== getSeasonWage(player.id)) fail(path, 'must preserve the opening squad and initial terms at activation');
+    } else {
+      if (startsSeason !== signedSeason + 1) fail(`${path}.startsSeason`, 'must start in the season following the signing');
+      const current = validated.find(contract => contract.playerId === player.id && contract.startsSeason <= signedSeason && contract.endsSeason >= signedSeason);
+      if (entry.kind === 'renewal') {
+        if (!current || current.clubId !== entry.clubId || current.endsSeason !== signedSeason) fail(path, 'must renew an expiring agreement at the same club');
+      } else if (entry.kind === 'free-agent') {
+        if (signedRound !== 10 || signedSeason === seasonNumber && status !== 'complete') fail(path, 'must be signed during a completed season\'s recruitment window');
+        if (current?.clubId === entry.clubId) fail(path, 'must record a same-club extension as a renewal');
+      } else fail(`${path}.kind`, 'must identify an initial agreement, renewal or free-agent signing');
+    }
+    if (validated.some(contract => contract.playerId === player.id && contract.startsSeason <= endsSeason && contract.endsSeason >= startsSeason)) fail(path, 'overlaps another employment agreement for this player');
+    const contract = entry as unknown as EmploymentContract;
+    validated.push(contract);
+    if (index >= catalog.length) for (let year = startsSeason; year <= endsSeason; year += 1) {
+      const annual = validated.filter(contract => contract.clubId === entry.clubId && contract.startsSeason <= year && contract.endsSeason >= year);
+      const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
+      if (annual.length > MAX_ROSTER_SIZE || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > EMPLOYMENT_BUDGET) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+    }
+  }
+  const employment = fields as unknown as SeasonEmployment;
+  for (let year = firstYear; year <= seasonNumber; year += 1) for (const clubId of clubIds) {
+    const registrations = validated.filter(contract => contract.clubId === clubId && contract.startsSeason <= year && contract.endsSeason >= year);
+    if (registrations.length < MIN_ROSTER_SIZE || registrations.length > MAX_ROSTER_SIZE) fail('employment.contracts', 'must retain a legal registered squad for every started season');
+  }
+  if (status === 'complete' && seasonNumber < MAX_SEASON_NUMBER) for (const clubId of clubIds) {
+    if (clubId === managedClubId && !employment.delegated) continue;
+    const retained = validated.filter(contract => contract.clubId === clubId && contract.startsSeason <= seasonNumber + 1 && contract.endsSeason >= seasonNumber + 1);
+    if (retained.length < MIN_ROSTER_SIZE) fail('employment.contracts', 'must retain the automatic minimum squad when the recruitment window opens');
+  }
+  return employment;
+}
+
+/** Reports preserve what was observed at a committed fixture, never current hidden ratings. */
+function validateScouting(value: unknown, state: SeasonState): SeasonScouting {
+  const fields = record(value, 'scouting', ['model', 'enabledSince', 'clubs']);
+  if (fields.model !== 'scouting-1') fail('scouting.model', 'is unsupported');
+  if (fields.enabledSince === null) {
+    if (!sameData(fields, createScouting(state.clubs, state.managedClubId))) fail('scouting', 'must retain empty default scouting offices while disabled');
+    return fields as unknown as SeasonScouting;
+  }
+  const anchor = record(fields.enabledSince, 'scouting.enabledSince', ['seasonNumber', 'round']);
+  const firstYear = number(anchor.seasonNumber, 'scouting.enabledSince.seasonNumber', 1, state.seasonNumber);
+  const firstRound = number(anchor.round, 'scouting.enabledSince.round', 1, firstYear === state.seasonNumber ? state.round : 10);
+  const firstBoundary = firstYear * 10 + firstRound;
+  const committedRound = state.status === 'complete' ? 10 : state.round - 1;
+  const catalog = DEVELOPMENT_CLUBS.flatMap(club => club.players);
+  const catalogById = new Map(catalog.map(player => [player.id, player]));
+  const clubIds = state.clubs.map(club => club.id);
+  const offices = record(fields.clubs, 'scouting.clubs', clubIds);
+  const registrations = new Map<number, readonly RosterSnapshot[]>(state.history.map(archive => [archive.seasonNumber, archive.rosters]));
+  registrations.set(state.seasonNumber, state.rosters);
+  const results = new Map<number, readonly (SeasonFixture | ArchivedFixture)[]>(state.history.map(archive => [archive.seasonNumber, archive.fixtures]));
+  results.set(state.seasonNumber, state.fixtures);
+  const observedRatings: Array<{ playerId: string; boundary: number; attributes: Record<string, unknown>; path: string }> = [];
+
+  function observation(value: unknown, path: string, review: boolean) {
+    const entry = record(value, path, ['playerId', 'seasonNumber', 'round', 'date', 'clubId', 'rosterId', 'attributes', ...(review ? ['outcome'] : [])]);
+    const player = catalogById.get(entry.playerId as string);
+    if (!player) fail(`${path}.playerId`, 'must identify a player in the stable catalog');
+    const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
+    const round = number(entry.round, `${path}.round`, 1, year === state.seasonNumber ? state.round : 10);
+    if (year * 10 + round < firstBoundary) fail(path, 'cannot precede scouting activation');
+    if (entry.date !== dateForRound(round, year)) fail(`${path}.date`, 'must identify the observed matchday');
+    const snapshot = registrations.get(year)?.find(roster => roster.clubId === entry.clubId && roster.fromRound <= round && roster.players.some(member => member.id === player.id));
+    if (!snapshot || entry.rosterId !== snapshot.id) fail(path, 'must identify the player\'s registered club and roster at observation');
+    if (review) {
+      if (year === state.seasonNumber && round > committedRound) fail(path, 'requires a committed fixture before a review is available');
+      const fixture = results.get(year)?.find(fixture => fixture.round === round && [fixture.homeClubId, fixture.awayClubId].includes(snapshot.clubId));
+      const stats = fixture?.result?.stats?.[player.id];
+      if (!stats) fail(path, 'must reference an available recorded player appearance');
+      const expectedOutcome = stats.secondsPlayed > 0 ? 'observed' : 'no-minutes';
+      if (entry.outcome !== expectedOutcome) fail(`${path}.outcome`, 'must match whether the player appeared in the recorded fixture');
+      if (expectedOutcome === 'no-minutes') {
+        if (entry.attributes !== null) fail(`${path}.attributes`, 'cannot reveal ratings without an observed appearance');
+        return { entry, player, year, round, snapshot };
+      }
+    }
+    const attributes = record(entry.attributes, `${path}.attributes`, TRAINING_ATTRIBUTES);
+    for (const attribute of TRAINING_ATTRIBUTES) {
+      const points = state.training.points[player.id]![attribute];
+      const current = Math.min(20, player.attributes[attribute] + Math.floor(points / 100));
+      const rating = number(attributes[attribute], `${path}.attributes.${attribute}`, player.attributes[attribute], current);
+      const week = state.training.lastWeek;
+      if (year === state.seasonNumber && round === state.round) {
+        if (rating !== current) fail(`${path}.attributes.${attribute}`, 'must reflect the current observed development');
+      } else if (year === state.seasonNumber && week?.afterRound === round) {
+        const prior = Math.min(20, player.attributes[attribute] + Math.floor((points - (week.players[player.id]?.gains[attribute] ?? 0)) / 100));
+        if (rating !== prior) fail(`${path}.attributes.${attribute}`, 'must preserve ratings before the following training interval');
+      }
+    }
+    observedRatings.push({ playerId: player.id, boundary: year * 10 + round, attributes, path });
+    return { entry, player, year, round, snapshot };
+  }
+
+  for (const club of state.clubs) {
+    const path = `scouting.clubs.${club.id}`;
+    const office = record(offices[club.id], path, ['delegated', 'shortlist', 'assignments', 'reviews', 'squadKnowledge']);
+    if (typeof office.delegated !== 'boolean') fail(`${path}.delegated`, 'must be boolean');
+    if (!Array.isArray(office.shortlist) || office.shortlist.length > catalog.length || new Set(office.shortlist).size !== office.shortlist.length || office.shortlist.some(id => typeof id !== 'string' || !catalogById.has(id))) fail(`${path}.shortlist`, 'must contain distinct known player identities');
+    if (!Array.isArray(office.assignments) || office.assignments.length > 2) fail(`${path}.assignments`, 'must contain at most two current matchday assignments');
+    const pending = new Set<string>();
+    for (const [index, value] of office.assignments.entries()) {
+      const location = `${path}.assignments[${index}]`;
+      const assignment = record(value, location, ['playerId', 'seasonNumber', 'round']);
+      if (state.status !== 'active' || assignment.seasonNumber !== state.seasonNumber || assignment.round !== state.round) fail(location, 'must identify the current active matchday');
+      const target = state.clubs.find(candidate => candidate.players.some(player => player.id === assignment.playerId));
+      if (!target || target.id === club.id || typeof assignment.playerId !== 'string' || pending.has(assignment.playerId)) fail(location, 'must identify a distinct registered player outside the observing club');
+      pending.add(assignment.playerId);
+    }
+    if (!Array.isArray(office.reviews) || office.reviews.length > 20_000) fail(`${path}.reviews`, 'must retain a bounded report history');
+    const missions = new Set<string>(), perRound = new Map<number, number>();
+    let previousBoundary = firstBoundary;
+    for (const [index, value] of office.reviews.entries()) {
+      const location = `${path}.reviews[${index}]`, report = observation(value, location, true);
+      if (report.snapshot.clubId === club.id) fail(location, 'must observe an outsider at the recorded boundary');
+      const boundary = report.year * 10 + report.round;
+      if (boundary < previousBoundary) fail(location, 'must retain chronological report order');
+      previousBoundary = boundary;
+      const mission = `${boundary}/${report.player.id}`;
+      if (missions.has(mission)) fail(location, 'duplicates a matchday assignment');
+      missions.add(mission);
+      const count = (perRound.get(boundary) ?? 0) + 1; perRound.set(boundary, count);
+      if (count > 2) fail(location, 'exceeds the two-assignment matchday capacity');
+    }
+    // Exact own-squad knowledge survives departure, anchored to the last season at this club.
+    const lastOwned = new Map<string, number>();
+    for (let year = firstYear; year <= state.seasonNumber; year += 1) {
+      const snapshot = registrations.get(year)?.find(roster => roster.clubId === club.id);
+      for (const player of snapshot?.players ?? []) lastOwned.set(player.id, year);
+    }
+    const knowledge = record(office.squadKnowledge, `${path}.squadKnowledge`, [...lastOwned.keys()]);
+    for (const [playerId, year] of lastOwned) {
+      const location = `${path}.squadKnowledge.${playerId}`, known = observation(knowledge[playerId], location, false);
+      const expectedRound = year === state.seasonNumber ? Math.max(1, committedRound, firstYear === year ? firstRound : 1) : 10;
+      if (known.player.id !== playerId || known.snapshot.clubId !== club.id || known.year !== year || known.round !== expectedRound) fail(location, 'must retain the latest observation while this player belonged to the club');
+    }
+  }
+  // Development only increases in this model; simultaneous observations share one actual squad.
+  const previousRatings = new Map<string, typeof observedRatings[number]>();
+  for (const observed of observedRatings.sort((left, right) => left.boundary - right.boundary)) {
+    const previous = previousRatings.get(observed.playerId);
+    if (previous) for (const attribute of TRAINING_ATTRIBUTES) {
+      const rating = observed.attributes[attribute] as number, earlier = previous.attributes[attribute] as number;
+      if (rating < earlier || observed.boundary === previous.boundary && rating !== earlier) fail(`${observed.path}.attributes.${attribute}`, 'must agree with simultaneous observations and preserve non-decreasing development');
+    }
+    previousRatings.set(observed.playerId, observed);
+  }
+  return fields as unknown as SeasonScouting;
+}
+
 /** Retained terms identify every obligation, including those from previous seasons. */
-function validatePayroll(value: unknown, clubs: readonly Team[], seasonNumber: number, round: number, managedClubId: string, ledgerLength: number): SeasonPayroll {
+function validatePayroll(value: unknown, clubs: readonly Team[], seasonNumber: number, round: number, managedClubId: string, ledgerLength: number, employment?: SeasonEmployment): SeasonPayroll {
   const fields = record(value, 'payroll', ['model', 'enabledSince', 'delegated', 'agreements']);
   if (fields.model !== 'payroll-1') fail('payroll.model', 'is unsupported');
   const delegated = record(fields.delegated, 'payroll.delegated', clubs.map(club => club.id));
@@ -256,13 +456,19 @@ function validatePayroll(value: unknown, clubs: readonly Team[], seasonNumber: n
   const firstYear = number(anchor.seasonNumber, 'payroll.enabledSince.seasonNumber', 1, seasonNumber);
   const firstRound = number(anchor.round, 'payroll.enabledSince.round', 1, firstYear === seasonNumber ? round : 10);
   number(anchor.ledgerIndex, 'payroll.enabledSince.ledgerIndex', 0, ledgerLength);
-  const players = clubs.flatMap(club => club.players.map(player => ({ clubId: club.id, playerId: player.id })));
-  const agreements = array(fields.agreements, 'payroll.agreements', (seasonNumber - firstYear + 1) * players.length);
+  const expectedAgreements: PlayerWageAgreement[] = [];
+  for (let year = firstYear; year <= seasonNumber; year += 1) {
+    const registered = clubsForEmploymentYear(employment, year);
+    for (const club of registered) for (const player of club.players) {
+      const contract = employment ? contractForSeason(employment, player.id, year) : undefined;
+      expectedAgreements.push({ id: `wage-s${year}-${player.id}`, playerId: player.id, clubId: club.id, seasonNumber: year, startsRound: year === firstYear ? firstRound : 1, seasonWage: contract?.seasonWage ?? getSeasonWage(player.id) });
+    }
+  }
+  const agreements = array(fields.agreements, 'payroll.agreements', expectedAgreements.length);
   for (const [index, value] of agreements.entries()) {
     const path = `payroll.agreements[${index}]`;
     const agreement = record(value, path, ['id', 'playerId', 'clubId', 'seasonNumber', 'startsRound', 'seasonWage']);
-    const player = players[index % players.length]!, year = firstYear + Math.floor(index / players.length);
-    const expected: PlayerWageAgreement = { id: `wage-s${year}-${player.playerId}`, ...player, seasonNumber: year, startsRound: year === firstYear ? firstRound : 1, seasonWage: getSeasonWage(player.playerId) };
+    const expected = expectedAgreements[index]!;
     if (!sameData(agreement, expected)) fail(path, 'must retain the canonical player, club, season and wage terms from activation onward');
   }
   return fields as unknown as SeasonPayroll;
@@ -513,8 +719,10 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
   }
   const coachingWeeks = coaching ? Math.min(weeks, completedDevelopmentWeeks(coaching.enabledSince, seasonNumber, round)) : 0;
   const playerIds = clubs.flatMap(club => club.players.map(player => player.id));
-  const points = record(fields.points, 'training.points', playerIds);
-  for (const player of clubs.flatMap(club => club.players)) {
+  // Free agents retain their development; registrations only determine who trains this week.
+  const catalog = DEVELOPMENT_CLUBS.flatMap(club => club.players);
+  const points = record(fields.points, 'training.points', catalog.map(player => player.id));
+  for (const player of catalog) {
     const entry = record(points[player.id], `training.points.${player.id}`, TRAINING_ATTRIBUTES);
     for (const attribute of TRAINING_ATTRIBUTES) number(entry[attribute], `training.points.${player.id}.${attribute}`, 0, Math.min(200, (20 - player.attributes[attribute]) * 100));
     if (TRAINING_ATTRIBUTES.reduce((total, attribute) => total + (entry[attribute] as number), 0) > weeks * 35 + coachingWeeks * 8) fail(`training.points.${player.id}`, 'exceeds available training weeks');
@@ -536,7 +744,7 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
   const appliedCoaching = coaching ? coachingForReport(report.coaching, coaching, clubs, seasonNumber, afterRound) : undefined;
   const priorCoachingWeeks = Math.max(0, coachingWeeks - (coaching && report.coaching !== null ? 1 : 0));
   const players = record(report.players, 'training.lastWeek.players', playerIds);
-  const pointsBefore: Record<string, TrainingPoints> = {}, conditionsBefore: Record<string, number> = {};
+  const pointsBefore: Record<string, TrainingPoints> = { ...training.points }, conditionsBefore: Record<string, number> = {};
   for (const club of clubs) {
     const fixture = fixtures.find(fixture => fixture.round === afterRound && [fixture.homeClubId, fixture.awayClubId].includes(club.id))!;
     for (const player of club.players) {
@@ -573,10 +781,10 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
 }
 
 /** Older schemas keep their original constraints before migration adds career fields. */
-function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9): void {
+function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11): void {
   const legacy = version === 1, career = version >= 3;
   checkJsonTree(value);
-  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : [])]);
+  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : [])]);
   if (state.schemaVersion !== version || state.engineVersion !== 'possession-3' || state.dataPackId !== DEVELOPMENT_DATA_PACK_ID) fail('state', 'uses an unsupported schema, engine or data pack');
   if (version >= 8 && state.manager !== null && !sameData(state.manager, validateManagerProfile(state.manager, DEVELOPMENT_START_DATE))) fail('manager', 'must contain normalized profile details valid at the initial career date');
   const seed = number(state.seed, 'seed', 0, 0xffff_ffff), round = number(state.round, 'round', 1, 10);
@@ -586,13 +794,18 @@ function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 
   if (!legacy && (!Array.isArray(state.injuries) || state.injuries.length > 600 * seasonNumber)) fail('injuries', 'must be a bounded injury history');
   if (state.status !== 'active' && state.status !== 'complete') fail('status', 'must be active or complete');
   if (state.status === 'complete' && round !== 10) fail('round', 'must reach the final matchday before completion');
-  if (!sameData(state.clubs, DEVELOPMENT_CLUBS)) fail('clubs', 'must match the versioned development data pack');
+  if (typeof state.managedClubId !== 'string' || !DEVELOPMENT_CLUBS.some(club => club.id === state.managedClubId)) fail('managedClubId', 'must identify a club in this league');
+  const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId) : undefined;
+  if (!sameData(state.clubs, clubsForEmploymentYear(employment, seasonNumber))) fail('clubs', 'must match the versioned player catalog and effective employment registrations');
   const clubs = state.clubs as readonly Team[], clubIds = clubs.map(club => club.id);
   const rosters = version >= 9 ? validateRosters(state.rosters, 'rosters', clubs, seasonNumber) : undefined;
   if (typeof state.managedClubId !== 'string' || !clubIds.includes(state.managedClubId)) fail('managedClubId', 'must identify a club in this league');
   const plans = record(state.plans, 'plans', clubIds);
-  const playerIds = clubs.flatMap(club => club.players.map(player => player.id));
+  const playerIds = DEVELOPMENT_CLUBS.flatMap(club => club.players.map(player => player.id));
   const conditions = record(state.conditions, 'conditions', playerIds);
+  for (const playerId of playerIds) number(conditions[playerId], `conditions.${playerId}`, 0, 100, false);
+  const registeredPlayers = new Set(clubs.flatMap(club => club.players.map(player => player.id)));
+  for (const playerId of playerIds) if (!registeredPlayers.has(playerId) && conditions[playerId] !== 100) fail(`conditions.${playerId}`, 'must retain offseason recovery while the player remains unregistered');
   for (const club of clubs) {
     const plan = record(plans[club.id], `plans.${club.id}`, ['tactics', 'lineup', 'autoSubstitutions']);
     const tactics = record(plan.tactics, `plans.${club.id}.tactics`, ['tempo', 'outsideShare', 'pressure']);
@@ -626,7 +839,7 @@ function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 
     for (const [archiveIndex, value] of archives.entries()) {
       const path = `history[${archiveIndex}]`, archive = record(value, path, ['seasonNumber', 'fixtures', ...(version >= 9 ? ['rosters'] : [])]);
       if (archive.seasonNumber !== archiveIndex + 1) fail(`${path}.seasonNumber`, 'must preserve every previous season in order');
-      const archivedRosters = version >= 9 ? validateRosters(archive.rosters, `${path}.rosters`, clubs, archiveIndex + 1) : undefined;
+      const archivedRosters = version >= 9 ? validateRosters(archive.rosters, `${path}.rosters`, clubsForEmploymentYear(employment, archiveIndex + 1), archiveIndex + 1) : undefined;
       const schedule = createSchedule(clubs, archiveIndex + 1);
       const fixtures = array(archive.fixtures, `${path}.fixtures`, schedule.length);
       let hasPlayerStats: boolean | undefined;
@@ -672,10 +885,15 @@ function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 
   if (version >= 7) {
     const finance = record(state.finance, 'finance', ['model', 'enabledSince', 'plans', 'roundPrices', 'ledger']);
     if (!Array.isArray(finance.ledger)) fail('finance.ledger', 'must be an array');
-    payroll = validatePayroll(state.payroll, clubs, seasonNumber, round, state.managedClubId, finance.ledger.length);
+    payroll = validatePayroll(state.payroll, clubs, seasonNumber, round, state.managedClubId, finance.ledger.length, employment);
+    if (employment?.enabledSince) {
+      const anchor = payroll.enabledSince;
+      if (!anchor || anchor.seasonNumber * 10 + anchor.round > employment.enabledSince.seasonNumber * 10 + employment.enabledSince.round) fail('employment.enabledSince', 'requires payroll active from the employment activation boundary');
+    }
   }
   if (version >= 6) validateFinance(state.finance, clubs, fixtures as SeasonFixture[], state.history as SeasonArchive[], coaching!, seasonNumber, round, state.status, state.managedClubId, payroll);
   const development = version >= 4 ? validateTraining(state.training, clubs, fixtures as SeasonFixture[], history, seasonNumber, round, coaching, rosters) : null;
+  if (version >= 11) validateScouting(state.scouting, state as unknown as SeasonState);
   if (state.activeFixtureId !== active.id || state.date !== active.date) fail('activeFixtureId/date', 'must identify the managed club fixture on the current matchday');
   validateMatchState(state.activeMatch);
   const match = state.activeMatch;
@@ -716,11 +934,11 @@ function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 
 }
 
 /** Validate every reference and committed round before replacing any live season. */
-export function validateSeasonState(value: unknown): asserts value is SeasonState { validateState(value, 9); }
+export function validateSeasonState(value: unknown): asserts value is SeasonState { validateState(value, 11); }
 
 export function serializeSeason(state: SeasonState): string {
   validateSeasonState(state);
-  const text = JSON.stringify({ format: FORMAT, formatVersion: 9, engineVersion: 'possession-3', state });
+  const text = JSON.stringify({ format: FORMAT, formatVersion: 11, engineVersion: 'possession-3', state });
   checkSize(text);
   return text;
 }
@@ -735,7 +953,7 @@ function migrateRosterHistory(previous: SeasonState, version: number): SeasonSta
   });
   const training = version >= 5 ? previous.training : version === 4 ? migrateTrainingCoaching(previous.training) : createTraining(clubs, false);
   return {
-    ...previous, schemaVersion: 9, seasonNumber, rosters,
+    ...previous, schemaVersion: 11, seasonNumber, rosters, employment: createEmployment(), scouting: createScouting(clubs, previous.managedClubId),
     manager: version >= 8 ? previous.manager : null,
     injuryMode: version >= 2 ? previous.injuryMode : 'off',
     injuries: version >= 2 ? previous.injuries : [],
@@ -760,12 +978,13 @@ export function parseSeason(text: string): SeasonState {
   try { parsed = JSON.parse(text); } catch { throw new Error('This is not a valid JSON season file.'); }
   checkJsonTree(parsed);
   const envelope = record(parsed, 'envelope', ['format', 'formatVersion', 'engineVersion', 'state']);
-  if (envelope.format !== FORMAT || ![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
-  const version = envelope.formatVersion as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+  if (envelope.format !== FORMAT || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
+  const version = envelope.formatVersion as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
   // Validate the original shape and accounting before adding any recoverable metadata.
   validateState(envelope.state, version);
-  if (version === 9) return envelope.state as SeasonState;
-  const upgraded = migrateRosterHistory(envelope.state as SeasonState, version);
+  if (version === 11) return envelope.state as SeasonState;
+  const previous = envelope.state as SeasonState;
+  const upgraded: SeasonState = version >= 9 ? { ...previous, schemaVersion: 11, employment: version >= 10 ? previous.employment : createEmployment(), scouting: createScouting(previous.clubs, previous.managedClubId) } : migrateRosterHistory(previous, version);
   validateSeasonState(upgraded);
   return upgraded;
 }

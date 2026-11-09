@@ -1,11 +1,11 @@
-/** Financial terms for the fixed development roster; this is not an employment expiry. */
+/** An annual payment schedule; employment duration is stored separately. */
 export interface PlayerWageAgreement {
   id: string;
   playerId: string;
   clubId: string;
   seasonNumber: number;
   startsRound: number;
-  /** Authored full-season gross wage, in euro cents. */
+  /** Contracted full-season gross wage, in euro cents. */
   seasonWage: number;
 }
 

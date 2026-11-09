@@ -89,7 +89,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
       <div className="season-matchday-action">
         <p>{complete ? <><strong>{champion!.name}</strong> win the development league.</> : matchFinished ? 'Match finished. Continue to complete this matchday and update the table.' : <>{club(active.homeClubId).name} <span>vs</span> {club(active.awayClubId).name}</>}</p>
         <div className="season-result-actions">{archived ? <button className="button" onClick={() => { selectSeason(season.seasonNumber); seasonSelector.current?.focus() }} disabled={busy}>Current season<Icon name="chevron" size={16} /></button> : complete ? <>
-          <button className="button primary" onClick={onRollover} disabled={busy}>{busy ? 'Preparing next season…' : 'Next season'}<Icon name="next" size={16} /></button>
+          <button className="button primary" onClick={onRollover} disabled={busy}>{busy ? 'Preparing next season…' : season.employment.enabledSince ? 'Review offseason' : 'Next season'}<Icon name="next" size={16} /></button>
           <button className="button" onClick={onOpenMatch} disabled={busy}>View last match<Icon name="court" size={16} /></button>
           <button className="text-button" onClick={onNewGame} disabled={busy}>New career</button>
         </> : <button className="button primary" onClick={matchFinished ? onAdvance : onOpenMatch} disabled={busy}>{busy ? 'Completing matchday…' : matchFinished ? season.round === totalRounds ? 'Finalize season' : 'Continue' : 'Go to match'}<Icon name={matchFinished ? 'next' : 'court'} size={16} /></button>}</div>

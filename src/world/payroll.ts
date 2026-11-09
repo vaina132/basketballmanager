@@ -2,6 +2,7 @@ import type { ClubPayrollSummary, PlayerPayroll, PlayerWageAgreement, SeasonPayr
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { getSeasonWage } from '../data/development-wages';
+import { contractForSeason } from './employment-policy';
 import { getFinanceBalance, recordPayrollCharge } from './finance';
 import { agreementCommitted, getPayrollReserve, getSpendableCash, isAgreementPrepaid, PAYROLL_AUTOMATION_CUSHION, PAYROLL_INSTALLMENTS, payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from './payroll-policy';
 
@@ -14,7 +15,11 @@ export function createPayroll(clubs: readonly Team[], managedClubId: string): Se
 }
 
 function seasonAgreements(state: SeasonState, startsRound: number): PlayerWageAgreement[] {
-  return state.clubs.flatMap(club => club.players.map(player => ({ id: `wage-s${state.seasonNumber}-${player.id}`, playerId: player.id, clubId: club.id, seasonNumber: state.seasonNumber, startsRound, seasonWage: getSeasonWage(player.id) })));
+  return state.clubs.flatMap(club => club.players.map(player => {
+    const contract = state.employment.enabledSince ? contractForSeason(state.employment, player.id, state.seasonNumber) : null;
+    if (state.employment.enabledSince && (!contract || contract.clubId !== club.id)) throw new Error('Every registered player needs an effective employment contract before payroll.');
+    return { id: `wage-s${state.seasonNumber}-${player.id}`, playerId: player.id, clubId: club.id, seasonNumber: state.seasonNumber, startsRound, seasonWage: contract?.seasonWage ?? getSeasonWage(player.id) };
+  }));
 }
 
 function installmentRecorded(state: SeasonState, clubId: string): boolean {
@@ -131,7 +136,7 @@ export function processPayrollRound(state: SeasonState): SeasonState {
   return next;
 }
 
-/** Annual payment schedules change; fixed-roster employment has no modeled expiry. */
+/** Create a new payment schedule from opening-day registrations and effective terms. */
 export function startPayrollSeason(state: SeasonState): SeasonState {
   if (!state.payroll.enabledSince) return state;
   if (state.status !== 'active' || state.round !== 1) throw new Error('Start the annual wage schedule on opening day.');

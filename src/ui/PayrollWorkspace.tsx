@@ -62,7 +62,7 @@ export function PayrollWorkspace({ season, busy = false, onEnable, onDelegationC
         {startedThisSeason !== null && startedThisSeason > 1 && <p className="payroll-note">Payroll started on Matchday {startedThisSeason}. Full-season wages show the annual rate; no charges were created for earlier matchdays.</p>}
         <p className="payroll-note">Charged means recorded obligations, which may include unpaid costs; Club shows the unpaid balance. Wages follow {PAYROLL_INSTALLMENTS} matchday installments per season. Injuries and missed games do not reduce wages.</p>
       </section>
-      <p className="payroll-model-note">Fictional wage estimates; fixed squad terms continue annually. Save season keeps changes before the next automatic checkpoint.</p>
+      <p className="payroll-model-note">{season.employment.enabledSince ? 'Player wages follow signed employment contracts. Renewals and recruitment are managed in Transfers.' : 'Fictional wage estimates; fixed squad terms continue annually.'} Save season keeps changes before the next automatic checkpoint.</p>
     </>}
     {selected && quote && <WageSettlement name={selected.name} quote={quote} cash={balance.cash} busy={busy} onClose={() => setReviewId(null)} onConfirm={() => { onPrepay(selected.id); setReviewId(null) }} />}
   </div>

@@ -8,6 +8,7 @@
 .medical-table th:first-child, .medical-table td:first-child { padding-left: 14px; }
 .medical-player { color: var(--text); font-size: 12px; }
 .medical-player strong { font-weight: 500; }
+.medical-table td > small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .medical-unavailable { color: var(--accent); }
 .medical-cleared { color: var(--green); }
 .medical-empty { padding: 12px 14px; color: var(--muted); font-size: 12px; }

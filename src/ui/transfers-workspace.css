@@ -1,0 +1,87 @@
+.transfers-workspace{display:flex;flex-direction:column;gap:12px;min-width:0}
+.transfers-workspace .panel{min-width:0;overflow:hidden;border-radius:2px}
+.transfers-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.transfers-heading h2{font-size:14px;font-weight:600;line-height:1.4}
+.transfers-heading span{font-size:12px;line-height:1.5;color:var(--muted)}
+.transfers-heading>div>span{display:block;margin-top:3px}
+#transfers-heading:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.transfers-start{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.transfers-start small{font-size:12px;line-height:1.4;color:var(--accent)}
+.transfers-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 20px;margin:0;padding:13px 14px;font-variant-numeric:tabular-nums}
+.transfers-summary dt{font-size:12px;line-height:1.4;color:var(--muted)}
+.transfers-summary dd{margin:6px 0 0;font-size:16px;font-weight:600;overflow-wrap:anywhere}
+.transfers-summary small{font-size:12px;font-weight:400;color:var(--muted);white-space:nowrap}
+.transfers-budget-note{display:flex;flex-wrap:wrap;gap:5px 20px;padding:9px 14px;border-top:1px solid var(--border);font-size:12px;line-height:1.5;color:var(--muted)}
+.transfers-enable>div{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:14px}
+.transfers-enable p{font-size:13px;line-height:1.6;color:var(--muted);max-width:850px}
+#contracts-enable-reason{color:var(--accent)}
+.transfers-policy-body{display:grid;grid-template-columns:minmax(240px,.7fr) minmax(0,1.3fr);gap:24px;align-items:center;padding:12px 14px}
+.transfers-policy-control{display:flex;flex-direction:column;gap:6px}
+.transfers-policy-control label{font-size:13px}
+.transfers-policy-control input{width:100%;min-width:0;height:20px;margin:3px 0;accent-color:var(--accent)}
+.transfers-policy-control>div{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted)}
+.transfers-policy-body p{font-size:12px;line-height:1.6;color:var(--muted)}
+.transfers-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 16px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.transfers-toolbar .segmented{flex-wrap:wrap}
+.transfers-toolbar .segmented button{font-size:12px;white-space:nowrap}
+.transfers-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.transfers-filters label{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+.transfers-filters input,.transfers-filters select,.contract-offer-field input[type=number],.contract-offer-field select{min-width:0;min-height:32px;padding:6px 8px;border:1px solid var(--border);border-radius:2px;background:var(--sidebar);color:var(--text);font-size:13px}
+.transfers-filters input{width:150px;max-width:100%}
+.transfers-table-scroll{position:relative;min-width:0;max-width:100%;overflow:auto;overscroll-behavior:contain}
+.transfers-table-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.transfers-table{width:100%;min-width:1020px;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;text-align:left}
+.transfers-table thead th{padding:9px 12px;background:var(--surface-2);font-size:12px;font-weight:500;letter-spacing:0;color:var(--muted);white-space:nowrap}
+.transfers-table tbody th,.transfers-table td{padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;letter-spacing:0;font-weight:400;background:transparent;color:var(--text);vertical-align:middle;line-height:1.4}
+.transfers-table th:first-child{padding-left:14px;min-width:215px;text-align:left}
+.transfers-table th:last-child,.transfers-table td:last-child{padding-right:14px}
+.transfers-table tbody tr:last-child>*{border-bottom:0}
+.transfers-table tbody tr:hover{background:var(--surface-2)}
+.transfers-table td:nth-child(3){white-space:nowrap}
+.transfers-player{display:flex;align-items:center;gap:9px}
+.transfers-player>span{display:flex;flex:none}
+.transfers-player strong{display:block;font-size:13px;font-weight:500}
+.transfers-player small{display:block;margin-top:3px;font-size:12px;color:var(--muted)}
+.transfers-player-report{background:none;padding:2px 0;text-align:left;color:var(--text)}
+.transfers-player-report:hover:not(:disabled){color:var(--accent)}
+.transfers-player-report>span:last-child{display:block;flex:1}
+.transfers-knowledge>span{display:block;font-size:12px}
+.transfers-knowledge .text-button{margin-top:5px;font-size:12px;line-height:1.5}
+#transfer-player-review:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.transfer-player-review-body{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(220px,.7fr);gap:24px;padding:14px}
+.transfer-player-review-actions{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-left:20px;border-left:1px solid var(--border)}
+.transfer-player-review-actions p{font-size:12px;line-height:1.6;color:var(--muted)}
+.transfer-player-review-actions strong{display:block;margin-top:4px;font-size:14px;font-weight:500;color:var(--text)}
+.transfer-player-review-actions .text-button{font-size:13px}
+.transfers-table .transfers-action{min-width:170px;max-width:230px;font-size:12px}
+.transfers-action small{display:block;margin-top:5px;font-size:12px;line-height:1.4;color:var(--muted)}
+.transfers-secured{color:var(--green)}
+.transfers-expiring{color:var(--accent)}
+.transfers-empty,.transfers-table .transfers-empty{padding:14px;font-size:13px;line-height:1.5;color:var(--muted)}
+.transfers-note{padding:10px 14px;border-top:1px solid var(--border);font-size:12px;line-height:1.6;color:var(--muted)}
+.transfers-model-note{padding:0 14px;font-size:12px;line-height:1.5;color:var(--muted)}
+.contract-offer{width:min(550px,calc(100vw - 24px));max-width:none;max-height:calc(100dvh - 24px);margin:auto;padding:0;border:2px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);overflow:hidden}
+.contract-offer[open],.contract-offer>form{display:flex;flex-direction:column;min-height:0}
+.contract-offer::backdrop{background:#05070bb8}
+.contract-offer>.transfers-heading,.contract-offer footer{flex:none}
+.contract-offer-body{position:relative;min-height:0;overflow:auto;padding:14px;font-size:13px}
+.contract-offer-body p{font-size:13px;line-height:1.6;color:var(--muted)}
+.contract-offer-body p+p{margin-top:10px}
+.contract-offer-facts{display:flex;flex-direction:column;gap:9px;margin:0 0 15px;font-size:13px;font-variant-numeric:tabular-nums}
+.contract-offer-facts>div{display:flex;justify-content:space-between;align-items:baseline;gap:14px}
+.contract-offer-facts dt{color:var(--muted);line-height:1.4}
+.contract-offer-facts dd{margin:0;font-weight:500;text-align:right}
+.contract-offer-total{padding:12px 0;margin:14px 0 12px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.contract-offer-field{display:flex;flex-direction:column;gap:7px;margin-top:14px}
+.contract-offer-field label{font-size:13px}
+.contract-offer-field input[type=range]{width:100%;min-width:0;height:20px;accent-color:var(--accent)}
+.contract-offer-field small{font-size:12px;line-height:1.5;color:var(--muted)}
+.contract-offer-body .contract-offer-reason{color:var(--accent)}
+.contract-offer-body .contract-accepted{color:var(--text)}
+.contract-offer-knowledge{padding-bottom:12px;margin-bottom:14px;border-bottom:1px solid var(--border)}
+.contract-offer-knowledge>div:last-child{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 14px;margin-top:9px}
+.contract-offer-knowledge .text-button{font-size:12px}
+.contract-offer footer{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:9px;padding:10px 14px;border-top:1px solid var(--border)}
+@media(max-width:1050px){.transfers-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.transfers-policy-body{grid-template-columns:minmax(220px,1fr) minmax(0,1fr);gap:20px}}
+@media(max-width:1050px){.transfer-player-review-body{grid-template-columns:1fr}.transfer-player-review-actions{padding:12px 0 0;border-left:0;border-top:1px solid var(--border)}}
+@media(max-width:650px){.transfers-heading{align-items:flex-start;flex-wrap:wrap;padding:10px;gap:9px}.transfers-start{align-items:flex-start}.transfers-summary{padding:12px 10px;gap:14px 12px}.transfers-summary dd{font-size:15px}.transfers-summary small{display:block;margin-top:4px}.transfers-policy-body{grid-template-columns:1fr;gap:12px;padding:12px 10px}.transfers-toolbar{padding:10px}.transfers-filters{width:100%}.transfers-filters label:first-child{flex:1}.transfers-filters input{width:100%}.transfers-note,.transfers-budget-note,.transfers-model-note{padding-inline:10px}.transfers-enable>div{padding:12px 10px}.contract-offer-body{padding:12px 10px}.contract-offer footer{padding:10px}.contract-offer footer .button{font-size:12px;padding-inline:9px}}

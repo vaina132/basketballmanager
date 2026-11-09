@@ -2,6 +2,7 @@ import type { SeasonState } from '../domain/season'
 import { getPlayerHealth } from '../world/health'
 import { getFinanceBalance } from '../world/finance'
 import { getPayrollReserve } from '../world/payroll'
+import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE } from '../world/employment-policy'
 import { medicalDate } from './SeasonMedicalReport'
 import type { MatchState, Side } from '../domain/types'
 import { isPlayerEligible } from '../engine/match'
@@ -23,13 +24,15 @@ interface ManagerDeskProps {
   onOpenCoaching: () => void
   onOpenClub: () => void
   onOpenPayroll: () => void
+  onOpenTransfers: () => void
+  onOpenScouting: () => void
 }
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
 const money = (cents: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100)
 
-export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll }: ManagerDeskProps) {
+export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenScouting }: ManagerDeskProps) {
   const team = match[managedSide]
   const complete = match.status === 'finished'
   const ready = match.status === 'ready'
@@ -47,6 +50,18 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
   const notices: { key: string; title: string; detail: string; urgent?: boolean; action: string; open: () => void }[] = []
   const finances = season?.finance.enabledSince ? getFinanceBalance(season.finance, season.managedClubId) : null
   const wageReserve = season?.payroll.enabledSince ? getPayrollReserve(season, season.managedClubId) : null
+
+  if (season?.employment.enabledSince) {
+    const nextSquad = getClubContractSummary(season, season.managedClubId)
+    const expiring = team.players.filter(player => !contractForSeason(season.employment, player.id, season.seasonNumber + 1)).length
+    if (season.status === 'complete') notices.push({ key: 'offseason', title: 'Prepare next season’s squad', detail: `${nextSquad.rosterSize} players signed for next season. ${Math.max(0, MIN_ROSTER_SIZE - nextSquad.rosterSize)} more needed to reach the minimum squad.`, urgent: nextSquad.rosterSize < MIN_ROSTER_SIZE, action: 'Review offseason', open: onOpenTransfers })
+    else if (expiring) notices.push({ key: 'contracts', title: `${expiring} contracts awaiting renewal`, detail: 'Unrenewed players leave at the end of this season. Renewals take effect next season.', action: 'Review contracts', open: onOpenTransfers })
+  }
+  if (season?.scouting.enabledSince) {
+    const latestRound = season.status === 'complete' ? season.round : season.round - 1
+    const reports = season.scouting.clubs[season.managedClubId]!.reviews.filter(report => report.seasonNumber === season.seasonNumber && report.round === latestRound)
+    if (reports.length) notices.push({ key: 'scouting', title: 'Scouting reviews available', detail: `${reports.filter(report => report.outcome === 'observed').length} skill reports from matchday ${latestRound}.${reports.some(report => report.outcome === 'no-minutes') ? ' Some targets did not play.' : ''}`, action: 'Review scouting', open: onOpenScouting })
+  }
 
   if (needsReplacement) notices.push({ key: 'replacement', title: 'Replace an unavailable player', detail: match.requiredSubstitutions.map(item => `${playerName(item.playerId, item.side)}: ${item.reason === 'injured' ? 'injured' : 'five fouls'}`).join('; '), urgent: true, action: 'Choose replacement', open: onOpenCoaching })
   if (finances?.unpaid) notices.push({ key: 'unpaid', title: 'Outstanding club costs', detail: `${money(finances.unpaid)} unpaid. New coaching appointments are blocked until these costs are covered.`, urgent: true, action: 'Review finances', open: onOpenClub })

@@ -134,3 +134,4 @@
 .desk-notice-detail{margin-top:6px;font-size:12px;color:var(--muted)}
 .desk-notice-detail summary{cursor:pointer;width:fit-content}
 .desk-notice-detail summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.desk-market{display:flex;align-items:center;gap:14px;padding:14px}.desk-market>svg{color:var(--accent);flex:none}.desk-market>div{min-width:0;flex:1}.desk-market h2{font-size:15px}.desk-market p{font-size:12px;color:var(--muted);margin-top:5px}.desk-market .button{flex:none}@media(max-width:650px){.desk-market{flex-wrap:wrap}.desk-market .button{width:100%}}

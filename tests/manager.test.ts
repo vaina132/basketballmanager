@@ -96,7 +96,7 @@ describe('manager identity and calendar age', () => {
 
 describe('manager profiles in saved careers', () => {
   it('writes format 9 with an optional known profile and exact match state', () => {
-    expect(JSON.parse(serializeSeason(current)).formatVersion).toBe(12);
+    expect(JSON.parse(serializeSeason(current)).formatVersion).toBe(13);
     expect(parseSeason(serializeSeason(live))).toEqual(live);
     expect(createSeason().manager).toBeNull();
     expect(parseSeason(serializeSeason(createSeason())).manager).toBeNull();
@@ -136,7 +136,7 @@ describe('manager profiles in saved careers', () => {
     if (change === 'bad date') state.manager!.dateOfBirth = '1990-02-30';
     if (change === 'control') state.manager!.nationality = 'A\nB';
     expect(() => validateSeasonState(state)).toThrow();
-    expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 12, engineVersion: 'possession-3', state }))).toThrow();
+    expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 13, engineVersion: 'possession-3', state }))).toThrow();
   });
 
   it.each([1, 2, 3, 4, 5, 6, 7])('migrates format %s with unknown manager and unchanged active-match RNG', version => {

@@ -7,6 +7,8 @@ import { contractForSeason, getAvailablePlayers, getClubContractSummary, getCont
 import { scoutingRecruitmentRating } from './scouting-policy';
 import { evaluateNegotiation } from './negotiations-policy';
 import { appendNegotiationResponse, getLatestNegotiation } from './negotiations';
+import { finishMarketWindow, prepareMarketWindow, scheduleMarketRecruitment, submitMarketOffer } from './market';
+import { getLiveMarketOffers } from './market-policy';
 
 export function createEmployment(): SeasonEmployment {
   return { model: 'employment-1', enabledSince: null, delegated: false, contracts: [], market: null };
@@ -25,15 +27,17 @@ export function enableEmployment(state: SeasonState): SeasonState {
   return state.status === 'complete' ? prepareEmploymentMarket(next) : next;
 }
 
-function offerForClub(state: SeasonState, clubId: string, playerId: string, seasonWage: number, seasons: number): SeasonState {
+/** Internal immediate response used by legacy/active renewals and the dated market resolver. */
+export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: string, seasonWage: number, seasons: number, resolvingOfferId?: string): SeasonState {
+  if (state.market?.enabledSince && state.status === 'complete' && !getLiveMarketOffers(state).some(offer => offer.id === resolvingOfferId && offer.clubId === clubId && offer.playerId === playerId && offer.seasonWage === seasonWage && offer.seasons === seasons && offer.status === 'pending' && offer.responseOn === state.date)) throw new Error('Send an offer and continue to its scheduled response before signing.');
   const enabled = state.negotiations.enabledSince !== null;
   const latest = enabled ? getLatestNegotiation(state, playerId, clubId) : null;
-  const duplicate = latest && latest.seasonNumber === state.seasonNumber && latest.round === state.round && latest.status === state.status && latest.offeredWage === seasonWage && latest.offeredSeasons === seasons;
+  const duplicate = latest && latest.seasonNumber === state.seasonNumber && latest.round === state.round && latest.status === state.status && latest.date === state.date && latest.offeredWage === seasonWage && latest.offeredSeasons === seasons;
   if (duplicate && latest.outcome === 'accepted') {
     const signed = state.employment.contracts.find(contract => contract.id === latest.contractId);
     if (signed && signed.playerId === playerId && signed.clubId === clubId && signed.startsSeason === state.seasonNumber + 1 && signed.endsSeason === state.seasonNumber + seasons && signed.seasonWage === seasonWage) return state;
   }
-  const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId);
+  const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId, resolvingOfferId);
   if (!quote.canOffer) throw new Error(quote.reason!);
   if (duplicate) return state;
   const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons) : null;
@@ -51,7 +55,7 @@ function offerForClub(state: SeasonState, clubId: string, playerId: string, seas
 }
 
 export function offerPlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number): SeasonState {
-  return offerForClub(state, state.managedClubId, playerId, seasonWage, seasons);
+  return state.market?.enabledSince && state.status === 'complete' ? submitMarketOffer(state, playerId, seasonWage, seasons) : commitPlayerOffer(state, state.managedClubId, playerId, seasonWage, seasons);
 }
 
 const rating = (player: Player): number => Object.values(player.attributes).reduce((sum, skill) => sum + skill, 0);
@@ -72,7 +76,7 @@ function retainPlayers(state: SeasonState, clubId: string, target: number): Seas
     const candidates = rankCandidates(next, clubId, club.players.filter(player => !contractForSeason(next.employment, player.id, next.seasonNumber + 1)));
     const player = candidates.find(player => quotePlayerContract(next, player.id, getSeasonWage(player.id), 1, clubId).canOffer);
     if (!player) break;
-    next = offerForClub(next, clubId, player.id, getSeasonWage(player.id), 1);
+    next = commitPlayerOffer(next, clubId, player.id, getSeasonWage(player.id), 1);
   }
   return next;
 }
@@ -82,7 +86,7 @@ function recruitPlayers(state: SeasonState, clubId: string, target: number): Sea
   while (getClubContractSummary(next, clubId).rosterSize < target) {
     const player = rankCandidates(next, clubId, getAvailablePlayers(next)).find(player => quotePlayerContract(next, player.id, getSeasonWage(player.id), 1, clubId).canOffer);
     if (!player) break;
-    next = offerForClub(next, clubId, player.id, getSeasonWage(player.id), 1);
+    next = commitPlayerOffer(next, clubId, player.id, getSeasonWage(player.id), 1);
   }
   return next;
 }
@@ -90,6 +94,7 @@ function recruitPlayers(state: SeasonState, clubId: string, target: number): Sea
 /** Deterministic AI retention happens once; completed rosters and match state stay untouched. */
 export function prepareEmploymentMarket(state: SeasonState): SeasonState {
   if (!state.employment.enabledSince || state.status !== 'complete' || state.seasonNumber >= 7974) return state;
+  if (state.market?.enabledSince) return prepareMarketWindow(state);
   if (state.employment.market) {
     if (state.employment.market.seasonNumber !== state.seasonNumber + 1) throw new Error('The recruitment window must prepare the next season.');
     return state;
@@ -108,6 +113,7 @@ export function setEmploymentDelegation(state: SeasonState, delegated: boolean):
   if (!state.employment.enabledSince) throw new Error('Enable player contracts before delegating recruitment.');
   if (typeof delegated !== 'boolean') throw new Error('Choose manual or delegated recruitment.');
   let next: SeasonState = { ...state, employment: { ...state.employment, delegated } };
+  if (state.market?.enabledSince && state.status === 'complete') return delegated ? scheduleMarketRecruitment(prepareMarketWindow(next)) : next;
   if (delegated) {
     next = prepareEmploymentMarket(next);
     next = retainPlayers(next, next.managedClubId, 10);
@@ -121,6 +127,12 @@ export function finalizeEmploymentMarket(state: SeasonState): SeasonState {
   if (!state.employment.enabledSince) return state;
   if (state.status !== 'complete') throw new Error('Finish the season before applying next-year registrations.');
   if (state.seasonNumber >= 7974) throw new Error('This career has reached the last supported season.');
+  if (state.market?.enabledSince) {
+    const next = finishMarketWindow(state);
+    const clubs = getContractedClubs(next, next.seasonNumber + 1);
+    if (clubs.some(club => club.players.length < MIN_ROSTER_SIZE || club.players.length > MAX_ROSTER_SIZE)) throw new Error('Every club needs eight to twelve signed players before the new season can begin.');
+    return { ...next, clubs, employment: { ...next.employment, market: null } };
+  }
   let next = prepareEmploymentMarket(state);
   if (next.employment.delegated) next = recruitPlayers(next, next.managedClubId, MIN_ROSTER_SIZE);
   if (getClubContractSummary(next, next.managedClubId).rosterSize < MIN_ROSTER_SIZE) throw new Error('Contract at least eight players for next season or delegate recruitment before starting the new season.');

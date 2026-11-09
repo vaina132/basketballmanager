@@ -2,6 +2,7 @@ import type { SeasonState } from '../domain/season'
 import { getPlayerHealth } from '../world/health'
 import { getFinanceBalance } from '../world/finance'
 import { getPayrollReserve } from '../world/payroll'
+import { getMarketOffers, getMarketWindow, getNextMarketDate, isMarketActive } from '../world/market-policy'
 import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE } from '../world/employment-policy'
 import { medicalDate } from './SeasonMedicalReport'
 import type { MatchState, Side } from '../domain/types'
@@ -34,6 +35,9 @@ const money = (cents: number) => new Intl.NumberFormat('en-GB', { style: 'curren
 
 export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenScouting }: ManagerDeskProps) {
   const team = match[managedSide]
+  const market = season && isMarketActive(season) ? getMarketWindow(season) : null
+  const marketOffers = market && season ? getMarketOffers(season, season.managedClubId, true) : []
+  const nextDecision = market && season ? getNextMarketDate(season) : null
   const complete = match.status === 'finished'
   const ready = match.status === 'ready'
   const needsReplacement = !complete && match.requiredSubstitutions.length > 0
@@ -41,7 +45,7 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
   const active = match.lineups[managedSide].flatMap(id => team.players.filter(player => player.id === id))
   const eligible = team.players.filter(player => isPlayerEligible(match, player.id))
   const availableBench = eligible.filter(player => !match.lineups[managedSide].includes(player.id))
-  const injured = team.players.filter(player => match.injuries[player.id])
+  const injured = team.players.filter(player => complete && season ? getPlayerHealth(season, player.id) : match.injuries[player.id])
   const foulTrouble = active.filter(player => match.stats[player.id].fouls === 4)
   const tired = active.filter(player => match.stats[player.id].condition < 75 && isPlayerEligible(match, player.id))
   const lineupEnergy = active.length ? Math.round(active.reduce((sum, player) => sum + match.stats[player.id].condition, 0) / active.length) : null
@@ -64,7 +68,7 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
   }
   if (season?.negotiations.enabledSince) {
     const latest = new Map(season.negotiations.records.filter(record => record.clubId === season.managedClubId && record.startsSeason === season.seasonNumber + 1).map(record => [record.playerId, record]))
-    const counters = [...latest.values()].filter(record => record.outcome === 'countered' && !contractForSeason(season.employment, record.playerId, season.seasonNumber + 1)).length
+    const counters = market ? marketOffers.filter(offer => offer.status === 'countered').length : [...latest.values()].filter(record => record.outcome === 'countered' && !contractForSeason(season.employment, record.playerId, season.seasonNumber + 1)).length
     if (counters) notices.push({ key: 'negotiations', title: `${counters} player ${counters === 1 ? 'counteroffer' : 'counteroffers'}`, detail: 'Review the proposed wages and contract lengths. These replies have not committed wages or reserved players.', action: 'Review offers', open: onOpenTransfers })
   }
 
@@ -81,8 +85,9 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
   const displayName = complete ? 'Final lineup' : ready ? 'Starting five' : 'On the floor'
 
   return <div className="manager-desk">
+    {market && <section className="desk-market panel" aria-label="Offseason recruitment"><Icon name="calendar" size={25} /><div><h2>Build next season's squad</h2><p>{marketOffers.length} outstanding {marketOffers.length === 1 ? 'offer' : 'offers'}{nextDecision ? ` ? Next decision ${medicalDate(nextDecision)}` : ' ? Recruitment closed'}</p></div><button className="button primary" onClick={onOpenTransfers}>Review recruitment<Icon name="chevron" size={15} /></button></section>}
     <section className="desk-fixture panel" aria-label="Current fixture">
-      <div className="desk-fixture-label"><span>{fixtureLabel}</span><strong className={needsReplacement ? 'desk-status-urgent' : ''}>{status}</strong></div>
+      <div className="desk-fixture-label"><span>{complete ? 'Last match ? ' : ''}{fixtureLabel}</span><strong className={needsReplacement ? 'desk-status-urgent' : ''}>{status}</strong></div>
       <div className="desk-fixture-content">
         <div className="desk-fixture-team"><span className="desk-club-code" style={{ color: match.home.color }}>{match.home.shortName}</span><div><strong>{match.home.name}</strong><span>{managedSide === 'home' ? 'Home · Your team' : 'Home'}</span></div></div>
         <div className="desk-fixture-score"><strong aria-label={`Score: ${score.home} to ${score.away}`}>{score.home}<span>:</span>{score.away}</strong><span>{ready ? 'Awaiting tipoff' : complete ? match.result?.kind === 'default' ? 'Awarded by default' : `${period(match.period)} · Final` : `${period(match.period)} · ${clock(match.clockSeconds)}`}</span></div>
@@ -92,9 +97,9 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
     </section>
 
     <dl className="desk-squad-status" aria-label="Squad status">
-      <div><dt>Eligible players</dt><dd>{eligible.length}<small> / {team.players.length}</small></dd></div>
-      <div><dt>Available reserves</dt><dd>{availableBench.length}</dd></div>
-      <div><dt>Lineup stamina</dt><dd>{lineupEnergy === null ? '—' : `${lineupEnergy}%`}</dd></div>
+      <div><dt>{complete ? 'Eligible at final whistle' : 'Eligible players'}</dt><dd>{eligible.length}<small> / {team.players.length}</small></dd></div>
+      <div><dt>{complete ? 'Final reserves' : 'Available reserves'}</dt><dd>{availableBench.length}</dd></div>
+      <div><dt>{complete ? 'Final lineup stamina' : 'Lineup stamina'}</dt><dd>{lineupEnergy === null ? '—' : `${lineupEnergy}%`}</dd></div>
       <div><dt>Substitutions</dt><dd className="desk-policy-value">{match.autoSubstitutions[managedSide] ? 'Assistant' : 'Manual'}</dd></div>
     </dl>
 

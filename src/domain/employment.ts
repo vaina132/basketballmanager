@@ -26,6 +26,8 @@ export interface ClubContractSummary {
   seasonNumber: number;
   rosterSize: number;
   seasonWages: number;
+  reservedWages: number;
+  reservedRosterSize: number;
   budget: number;
   remainingBudget: number;
   minimumReserve: number;

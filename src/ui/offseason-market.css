@@ -1,0 +1,64 @@
+.offseason-market h2{display:flex;align-items:center;gap:8px}
+.offseason-market h2 svg{color:var(--accent)}
+.market-current-date{font-size:15px;font-weight:600;white-space:nowrap}
+.market-calendar{display:grid;grid-template-columns:minmax(300px,1fr) auto;gap:24px;align-items:center;padding:14px;border-bottom:1px solid var(--border)}
+.market-window-track{display:grid;grid-template-columns:auto minmax(50px,1fr) auto;align-items:center;gap:14px}
+.market-window-track>div{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.market-window-track>div:last-child{text-align:right}
+.market-window-track span{color:var(--muted)}
+.market-window-track strong{font-size:13px;font-weight:500;white-space:nowrap}
+.market-window-track progress{width:100%;height:7px;accent-color:var(--accent);border:0;border-radius:4px;overflow:hidden}
+.market-window-track progress::-webkit-progress-bar{background:var(--surface-3)}
+.market-window-track progress::-webkit-progress-value{background:var(--accent)}
+.market-window-track progress::-moz-progress-bar{background:var(--accent)}
+.market-next-decision{display:flex;align-items:center;gap:16px;font-size:12px}
+.market-next-decision>span{display:grid;grid-template-columns:auto 1fr;gap:4px 7px;color:var(--muted)}
+.market-next-decision>span>svg{grid-row:1/3;align-self:center;color:var(--accent)}
+.market-next-decision strong{grid-column:2;color:var(--text);font-size:13px;font-weight:500}
+.market-offers-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px 0}
+.market-offers-heading h3{display:flex;gap:8px;font-size:13px;font-weight:600;align-items:center}
+.market-offers-heading h3>span{min-width:20px;padding:2px 5px;background:var(--surface-3);color:var(--accent);text-align:center;border-radius:2px}
+.market-offers-heading>span{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.market-offers-heading>span>strong{font-weight:500;color:var(--text)}
+.market-offer-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px 14px}
+.market-offer-card{padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:3px;min-width:0}
+.market-offer-countered{border-top:2px solid var(--accent)}
+.market-offer-player{display:flex;align-items:center;gap:10px;background:transparent;width:100%;text-align:left;padding:0;color:var(--text)}
+.market-offer-player>span:first-child{flex:none}
+.market-offer-player>span:nth-child(2){min-width:0;flex:1}
+.market-offer-player strong{display:block;font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.market-offer-player small{display:block;margin-top:5px;font-size:12px;color:var(--muted)}
+.market-offer-player>svg{flex:none;color:var(--muted)}
+.market-offer-terms{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;margin-top:12px}
+.market-offer-terms>strong{font-size:14px;font-weight:500}
+.market-offer-terms small,.market-offer-terms>span{font-size:12px;color:var(--muted);font-weight:400}
+.market-offer-deadline{display:flex;gap:8px;align-items:center;padding-top:12px;margin-top:12px;border-top:1px solid var(--border);font-size:12px}
+.market-offer-deadline>svg{flex:none;color:var(--accent)}
+.market-offer-deadline>div{display:flex;justify-content:space-between;gap:8px;flex:1;flex-wrap:wrap}
+.market-offer-deadline strong{font-weight:500;color:var(--accent)}
+.market-offer-deadline span{color:var(--muted)}
+.market-offer-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px}
+.market-offer-actions .text-button{font-size:12px}
+.market-empty{padding:12px 14px;color:var(--muted);font-size:13px;line-height:1.5}
+.market-recent,.market-help{border-top:1px solid var(--border)}
+.market-recent ol{list-style:none;margin:0;padding:0 14px 10px}
+.market-recent li{display:grid;grid-template-columns:minmax(0,1fr) 100px 110px;gap:12px;padding:9px 0;border-top:1px solid var(--border);font-size:12px}
+.market-recent li>strong{font-size:13px;font-weight:500}
+.market-recent li>span,.market-recent time{color:var(--muted)}
+.market-recent time{text-align:right}
+.market-recent .market-signed{color:var(--accent)}
+.market-help>div{padding:0 14px 12px;color:var(--muted);font-size:12px;line-height:1.6;max-width:1000px}
+.market-help p+p{margin-top:7px}
+.contract-market-status{padding:12px;margin-bottom:14px;border:1px solid var(--border);border-left:2px solid var(--accent);background:var(--surface-2)}
+.contract-market-status>div{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.contract-market-status h3{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600;color:var(--accent)}
+.contract-market-status p{font-size:12px;line-height:1.5;margin-top:8px;color:var(--muted)}
+.contract-market-status dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0 0;font-size:12px}
+.contract-market-status dt{color:var(--muted)}
+.contract-market-status dd{margin:5px 0 0;font-size:13px}
+.contract-market-status:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:1200px){.market-calendar{grid-template-columns:1fr;gap:14px}.market-next-decision{justify-content:space-between}.market-offer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.market-calendar{padding:12px 10px}.market-window-track{gap:8px;grid-template-columns:auto minmax(16px,1fr) auto}.market-next-decision{gap:10px;flex-wrap:wrap}.market-offers-heading{padding:12px 10px 0;align-items:flex-start;flex-direction:column}.market-offer-grid{padding:12px 10px;grid-template-columns:1fr}.market-empty{padding:12px 10px}.market-recent ol{padding-inline:10px}.market-recent li{grid-template-columns:minmax(0,1fr) auto;gap:5px 12px}.market-recent time{grid-column:1/-1;text-align:left}.market-help>div{padding-inline:10px}.contract-market-status{padding:10px}.contract-market-status>div{flex-wrap:wrap}}
+.contract-offer-dates{display:flex;align-items:center;gap:16px;padding:10px 0;font-size:12px;border-top:1px solid var(--border);color:var(--muted);flex-wrap:wrap}.contract-offer-dates>svg{color:var(--accent);flex:none}.contract-offer-dates strong{font-weight:500;color:var(--text);margin-left:5px}
+.contract-counter-deadline{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding:8px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:12px}.contract-counter-deadline>span{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--muted)}.contract-counter-deadline strong{font-weight:500;color:var(--text)}.contract-counter-deadline .text-button{font-size:12px;flex:none}.contract-offer-dates>span:first-child{color:var(--accent)}
+.contract-offer footer #contract-binding-notice{width:100%;margin:0;font-size:12px;line-height:1.5;color:var(--muted)}.contract-offer footer #contract-binding-notice strong{font-weight:500;color:var(--text)}

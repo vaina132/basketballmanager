@@ -1,7 +1,8 @@
 import type { SeasonState } from '../domain/season'
 import { advanceSeason, rolloverSeason } from './season'
+import { advanceMarket } from './market'
 
-export interface SeasonJob { requestId: number; state: SeasonState; action?: 'round' | 'rollover' }
+export interface SeasonJob { requestId: number; state: SeasonState; action?: 'round' | 'rollover' | 'market' }
 export type SeasonReply = { requestId: number; state: SeasonState } | { requestId: number; error: string }
 
 // A round or season boundary is computed in isolation. The UI installs its result once,
@@ -12,8 +13,8 @@ const scope = globalThis as unknown as {
 }
 scope.onmessage = ({ data }) => {
   try {
-    if (data.action !== undefined && data.action !== 'round' && data.action !== 'rollover') throw new Error('Unsupported season operation.')
-    const state = data.action === 'rollover' ? rolloverSeason(data.state) : advanceSeason(data.state)
+    if (data.action !== undefined && data.action !== 'round' && data.action !== 'rollover' && data.action !== 'market') throw new Error('Unsupported season operation.')
+    const state = data.action === 'rollover' ? rolloverSeason(data.state) : data.action === 'market' ? advanceMarket(data.state) : advanceSeason(data.state)
     scope.postMessage({ requestId: data.requestId, state })
   }
   catch (error) { scope.postMessage({ requestId: data.requestId, error: error instanceof Error ? error.message : 'Could not advance the season.' }) }

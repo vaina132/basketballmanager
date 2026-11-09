@@ -11,7 +11,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'atlantic-pilots';
 const finish = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status !== 'complete') state = advanceSeason(finish(state)); return state; }
-const envelope = (state: unknown, formatVersion = 12) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 13) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 
 let initial: SeasonState, offseason: SeasonState, recruited: SeasonState, second: SeasonState, secondWeek: SeasonState;
 let incomingId: string, renewedId: string;
@@ -77,7 +77,7 @@ describe('employment persistence across registrations', () => {
     const legacy = complete(createSeason(9, clubId, 'off'));
     const previous = rolloverSeason(legacy);
     const old = structuredClone(previous) as unknown as Record<string, unknown>;
-    delete old.employment; delete old.scouting; delete old.negotiations; old.schemaVersion = 9;
+    delete old.market; delete old.employment; delete old.scouting; delete old.negotiations; old.schemaVersion = 9;
     const restored = parseSeason(envelope(old, 9));
     expect(restored).toEqual(previous);
     expect(restored.employment.enabledSince).toBeNull();

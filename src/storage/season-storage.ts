@@ -4,7 +4,7 @@ import type { PayrollItem, PlayerWageAgreement, SeasonPayroll } from '../domain/
 import type { SeasonTraining, TrainingPlan, TrainingPoints, TrainingWeekReport } from '../domain/training';
 import type { CoachingWeekAssignment, SeasonCoaching } from '../domain/coaching';
 import type { PlayerStats, Side, Team } from '../domain/types';
-import { DEVELOPMENT_CLUBS, DEVELOPMENT_DATA_PACK_ID } from '../data/development-league';
+import { DEVELOPMENT_CLUBS, DEVELOPMENT_DATA_PACK_ID, DEVELOPMENT_START_DATE } from '../data/development-league';
 import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { getSeasonWage } from '../data/development-wages';
 import { MAX_MATCH_PERIODS } from '../engine/match';
@@ -15,6 +15,7 @@ import { coachingAssignments, COACHING_BUDGET, createCoaching, MAX_COACHES } fro
 import { ANNUAL_SPONSORSHIP, createFinance, forecastGate, MAX_TICKET_PRICE, OPENING_CASH, ROUND_OPERATING_COST, TICKET_PRICE_STEP } from '../world/finance';
 import { createPayroll } from '../world/payroll';
 import { payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from '../world/payroll-policy';
+import { validateManagerProfile } from '../world/manager';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
 
@@ -540,11 +541,12 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
 }
 
 /** Older schemas keep their original constraints before migration adds career fields. */
-function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7): void {
+function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8): void {
   const legacy = version === 1, career = version >= 3;
   checkJsonTree(value);
-  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : [])]);
+  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : [])]);
   if (state.schemaVersion !== version || state.engineVersion !== 'possession-3' || state.dataPackId !== DEVELOPMENT_DATA_PACK_ID) fail('state', 'uses an unsupported schema, engine or data pack');
+  if (version >= 8 && state.manager !== null && !sameData(state.manager, validateManagerProfile(state.manager, DEVELOPMENT_START_DATE))) fail('manager', 'must contain normalized profile details valid at the initial career date');
   const seed = number(state.seed, 'seed', 0, 0xffff_ffff), round = number(state.round, 'round', 1, 10);
   const seasonNumber = career ? number(state.seasonNumber, 'seasonNumber', 1, MAX_SEASON_NUMBER) : 1;
   const injuryMode = legacy ? 'off' : state.injuryMode;
@@ -672,11 +674,11 @@ function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7): void
 }
 
 /** Validate every reference and committed round before replacing any live season. */
-export function validateSeasonState(value: unknown): asserts value is SeasonState { validateState(value, 7); }
+export function validateSeasonState(value: unknown): asserts value is SeasonState { validateState(value, 8); }
 
 export function serializeSeason(state: SeasonState): string {
   validateSeasonState(state);
-  const text = JSON.stringify({ format: FORMAT, formatVersion: 7, engineVersion: 'possession-3', state });
+  const text = JSON.stringify({ format: FORMAT, formatVersion: 8, engineVersion: 'possession-3', state });
   checkSize(text);
   return text;
 }
@@ -687,46 +689,53 @@ export function parseSeason(text: string): SeasonState {
   try { parsed = JSON.parse(text); } catch { throw new Error('This is not a valid JSON season file.'); }
   checkJsonTree(parsed);
   const envelope = record(parsed, 'envelope', ['format', 'formatVersion', 'engineVersion', 'state']);
-  if (envelope.format !== FORMAT || ![1, 2, 3, 4, 5, 6, 7].includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
+  if (envelope.format !== FORMAT || ![1, 2, 3, 4, 5, 6, 7, 8].includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
   if (envelope.formatVersion === 1) {
     validateState(envelope.state, 1);
-    const legacy = envelope.state as Omit<SeasonState, 'schemaVersion' | 'injuryMode' | 'injuries' | 'seasonNumber' | 'history' | 'training' | 'coaching' | 'finance' | 'payroll'>;
-    const upgraded: SeasonState = { ...legacy, schemaVersion: 7, seasonNumber: 1, history: [], injuryMode: 'off', injuries: [], training: createTraining(legacy.clubs, false), coaching: createCoaching(legacy.clubs, 1, legacy.round, false), finance: createFinance(legacy.clubs, legacy.managedClubId), payroll: createPayroll(legacy.clubs, legacy.managedClubId), fixtures: legacy.fixtures.map(fixture => ({ ...fixture, result: fixture.result ? { ...fixture.result, injuries: {} } : null })) };
+    const legacy = envelope.state as Omit<SeasonState, 'schemaVersion' | 'injuryMode' | 'injuries' | 'seasonNumber' | 'history' | 'training' | 'coaching' | 'finance' | 'payroll' | 'manager'>;
+    const upgraded: SeasonState = { ...legacy, schemaVersion: 8, manager: null, seasonNumber: 1, history: [], injuryMode: 'off', injuries: [], training: createTraining(legacy.clubs, false), coaching: createCoaching(legacy.clubs, 1, legacy.round, false), finance: createFinance(legacy.clubs, legacy.managedClubId), payroll: createPayroll(legacy.clubs, legacy.managedClubId), fixtures: legacy.fixtures.map(fixture => ({ ...fixture, result: fixture.result ? { ...fixture.result, injuries: {} } : null })) };
     validateSeasonState(upgraded);
     return upgraded;
   }
   if (envelope.formatVersion === 2) {
     validateState(envelope.state, 2);
-    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'seasonNumber' | 'history' | 'training' | 'coaching' | 'finance' | 'payroll'>;
-    const upgraded: SeasonState = { ...previous, schemaVersion: 7, seasonNumber: 1, history: [], training: createTraining(previous.clubs, false), coaching: createCoaching(previous.clubs, 1, previous.round, false), finance: createFinance(previous.clubs, previous.managedClubId), payroll: createPayroll(previous.clubs, previous.managedClubId) };
+    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'seasonNumber' | 'history' | 'training' | 'coaching' | 'finance' | 'payroll' | 'manager'>;
+    const upgraded: SeasonState = { ...previous, schemaVersion: 8, manager: null, seasonNumber: 1, history: [], training: createTraining(previous.clubs, false), coaching: createCoaching(previous.clubs, 1, previous.round, false), finance: createFinance(previous.clubs, previous.managedClubId), payroll: createPayroll(previous.clubs, previous.managedClubId) };
     validateSeasonState(upgraded);
     return upgraded;
   }
   if (envelope.formatVersion === 3) {
     validateState(envelope.state, 3);
-    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'training' | 'coaching' | 'finance' | 'payroll'>;
-    const upgraded: SeasonState = { ...previous, schemaVersion: 7, training: createTraining(previous.clubs, false), coaching: createCoaching(previous.clubs, previous.seasonNumber, previous.round, false), finance: createFinance(previous.clubs, previous.managedClubId), payroll: createPayroll(previous.clubs, previous.managedClubId) };
+    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'training' | 'coaching' | 'finance' | 'payroll' | 'manager'>;
+    const upgraded: SeasonState = { ...previous, schemaVersion: 8, manager: null, training: createTraining(previous.clubs, false), coaching: createCoaching(previous.clubs, previous.seasonNumber, previous.round, false), finance: createFinance(previous.clubs, previous.managedClubId), payroll: createPayroll(previous.clubs, previous.managedClubId) };
     validateSeasonState(upgraded);
     return upgraded;
   }
   if (envelope.formatVersion === 4) {
     validateState(envelope.state, 4);
-    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'coaching' | 'finance' | 'payroll'>;
-    const upgraded: SeasonState = { ...previous, schemaVersion: 7, training: migrateTrainingCoaching(previous.training), coaching: createCoaching(previous.clubs, previous.seasonNumber, previous.round, false), finance: createFinance(previous.clubs, previous.managedClubId), payroll: createPayroll(previous.clubs, previous.managedClubId) };
+    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'coaching' | 'finance' | 'payroll' | 'manager'>;
+    const upgraded: SeasonState = { ...previous, schemaVersion: 8, manager: null, training: migrateTrainingCoaching(previous.training), coaching: createCoaching(previous.clubs, previous.seasonNumber, previous.round, false), finance: createFinance(previous.clubs, previous.managedClubId), payroll: createPayroll(previous.clubs, previous.managedClubId) };
     validateSeasonState(upgraded);
     return upgraded;
   }
   if (envelope.formatVersion === 5) {
     validateState(envelope.state, 5);
-    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'finance' | 'payroll'>;
-    const upgraded: SeasonState = { ...previous, schemaVersion: 7, finance: createFinance(previous.clubs, previous.managedClubId), payroll: createPayroll(previous.clubs, previous.managedClubId) };
+    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'finance' | 'payroll' | 'manager'>;
+    const upgraded: SeasonState = { ...previous, schemaVersion: 8, manager: null, finance: createFinance(previous.clubs, previous.managedClubId), payroll: createPayroll(previous.clubs, previous.managedClubId) };
     validateSeasonState(upgraded);
     return upgraded;
   }
   if (envelope.formatVersion === 6) {
     validateState(envelope.state, 6);
-    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'payroll'>;
-    const upgraded: SeasonState = { ...previous, schemaVersion: 7, finance: { ...previous.finance, ledger: previous.finance.ledger.map(entry => ({ ...entry, payroll: null })) }, payroll: createPayroll(previous.clubs, previous.managedClubId) };
+    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'payroll' | 'manager'>;
+    const upgraded: SeasonState = { ...previous, schemaVersion: 8, manager: null, finance: { ...previous.finance, ledger: previous.finance.ledger.map(entry => ({ ...entry, payroll: null })) }, payroll: createPayroll(previous.clubs, previous.managedClubId) };
+    validateSeasonState(upgraded);
+    return upgraded;
+  }
+  if (envelope.formatVersion === 7) {
+    validateState(envelope.state, 7);
+    const previous = envelope.state as Omit<SeasonState, 'schemaVersion' | 'manager'>;
+    const upgraded: SeasonState = { ...previous, schemaVersion: 8, manager: null };
     validateSeasonState(upgraded);
     return upgraded;
   }

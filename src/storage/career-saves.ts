@@ -15,6 +15,7 @@ interface CheckpointMetadata {
 export type CareerSaveEntry = CheckpointMetadata & ({
   valid: true;
   clubName: string;
+  managerName: string | null;
   seasonNumber: number;
   date: string;
   round: number;
@@ -24,6 +25,7 @@ export type CareerSaveEntry = CheckpointMetadata & ({
 } | {
   valid: false;
   clubName: 'Unknown club';
+  managerName: null;
   seasonNumber: null;
   date: null;
   round: null;
@@ -64,12 +66,13 @@ function describeCheckpoint(checkpoint: SeasonCheckpoint): CareerSaveEntry {
     return {
       ...metadata, valid: true,
       clubName: state.clubs.find(club => club.id === state.managedClubId)!.name,
+      managerName: state.manager?.name ?? null,
       seasonNumber: state.seasonNumber, date: state.date, round: state.round,
       status: state.status, matchStatus: state.activeMatch.status,
     };
   } catch (error) {
     return {
-      ...metadata, valid: false, clubName: 'Unknown club', seasonNumber: null,
+      ...metadata, valid: false, clubName: 'Unknown club', managerName: null, seasonNumber: null,
       date: null, round: null, status: null, matchStatus: null,
       error: `This checkpoint cannot be loaded. ${errorMessage(error)}`,
     };

@@ -20,7 +20,7 @@ function completeSeason(state: SeasonState): SeasonState {
 }
 function formatFive(season: SeasonState): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
-  state.schemaVersion = 5; delete state.finance; delete state.payroll;
+  state.schemaVersion = 5; delete state.finance; delete state.payroll; delete state.manager;
   return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 5, engineVersion: 'possession-3', state });
 }
 function renumber(state: SeasonState): void { state.finance.ledger.forEach((entry, index) => { entry.id = `finance-${index + 1}`; }); }
@@ -28,7 +28,7 @@ function firstEntry(state: SeasonState, kind: FinanceEntry['kind']): FinanceEntr
 function reject(state: SeasonState, change: (state: SeasonState) => void): void {
   const damaged = structuredClone(state); change(damaged);
   expect(() => validateSeasonState(damaged)).toThrow();
-  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 7, engineVersion: 'possession-3', state: damaged }))).toThrow();
+  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 8, engineVersion: 'possession-3', state: damaged }))).toThrow();
 }
 
 beforeAll(() => {
@@ -41,9 +41,9 @@ beforeAll(() => {
 }, 60_000);
 
 describe('finance ledger persistence', () => {
-  it('writes format 7 with funding and full coaching commitments for every club', () => {
+  it('writes format 8 with funding and full coaching commitments for every club', () => {
     const text = serializeSeason(initial), before = structuredClone(initial);
-    expect(JSON.parse(text).formatVersion).toBe(7);
+    expect(JSON.parse(text).formatVersion).toBe(8);
     expect(restore(initial)).toEqual(initial);
     expect(initial.finance.ledger).toHaveLength(18);
     for (const club of initial.clubs) {

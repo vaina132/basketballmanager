@@ -1,6 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import type { InjuryMode, MatchState, Player, Side } from './domain/types'
+import type { MatchState, Player, Side } from './domain/types'
+import type { ManagerProfile } from './domain/manager'
+import { managerAge, setManagerProfile } from './world/manager'
+import type { CareerSetup } from './ui/CareerStart'
 import { createMatch, isPlayerEligible, simulateToEnd, simulateToQuarterEnd, stepMatch } from './engine/match'
 import { loadLocalMatch, MAX_SAVE_BYTES, parseMatch, saveLocalMatch, serializeMatch } from './storage/match-storage'
 import { Avatar } from './ui/Avatar'
@@ -35,6 +38,7 @@ import './ui/season-progress.css'
 const StaffWorkspace = lazy(() => import('./ui/StaffWorkspace').then(module => ({ default: module.StaffWorkspace })))
 const ClubWorkspace = lazy(() => import('./ui/ClubWorkspace').then(module => ({ default: module.ClubWorkspace })))
 const PayrollWorkspace = lazy(() => import('./ui/PayrollWorkspace').then(module => ({ default: module.PayrollWorkspace })))
+const CareerStart = lazy(() => import('./ui/CareerStart').then(module => ({ default: module.CareerStart })))
 
 type Page = 'home' | 'squad' | 'match' | 'season' | 'training' | 'staff' | 'club'
 type GameSession = { kind: 'exhibition'; match: MatchState } | { kind: 'season'; season: SeasonState }
@@ -53,6 +57,9 @@ function Stat({ label, value, detail }: { label: string; value: string | number;
 }
 
 export default function App() {
+  const [entryView, setEntryView] = useState<'menu' | 'new-career' | 'profile' | null>('menu')
+  const [hasSession, setHasSession] = useState(false)
+  const [entryError, setEntryError] = useState<string | null>(null)
   const [session, setSession] = useState<GameSession>(() => ({ kind: 'exhibition', match: createMatch(42) }))
   const sessionRef = useRef(session)
   const season = session.kind === 'season' ? session.season : null
@@ -237,6 +244,7 @@ export default function App() {
     } catch (error) { if (request === historyRequest.current) setHistoryError(messageOf(error)) }
     finally { if (request === historyRequest.current) setHistoryLoading(false) }
   }
+  useEffect(() => { if (entryView === 'menu') void refreshSaveHistory() }, [entryView])
   function openSaveHistory() {
     if (seasonWorker.current || persistenceBusy.current) return
     replacementRequest.current += 1
@@ -290,6 +298,7 @@ export default function App() {
     const active = next.kind === 'season' ? next.season.activeMatch : next.match
     setSeedInput(String(active.seed)); setBoxSide(next.kind === 'season' ? seasonManagedSide(next.season) : 'home')
     setSelectedPlayer(null); setRosterFilter('all'); setRosterQuery(''); setSquadView('selection'); setPerformancePlayer(null)
+    setHasSession(true); setEntryView(null); setEntryError(null)
   }
   async function save() {
     if (seasonWorker.current || persistenceBusy.current) return
@@ -307,7 +316,7 @@ export default function App() {
   async function loadSeason() {
     if (seasonWorker.current || persistenceBusy.current) return
     const request = ++replacementRequest.current
-    setPlaying(false); settlePlayback()
+    persistenceBusy.current = true; setSaving(true); setPlaying(false); settlePlayback()
     try {
       const saved = await readCareerSaves()
       if (request !== replacementRequest.current) return
@@ -320,6 +329,7 @@ export default function App() {
       install({ kind: 'season', season: saved.current }); setCheckpointIssue(null)
       setNotice({ message: 'Saved season restored.' }); navigate('home')
     } catch (error) { if (request !== replacementRequest.current) return; setNotice({ message: messageOf(error), error: true }) }
+    finally { persistenceBusy.current = false; setSaving(false) }
   }
   async function load() {
     if (seasonWorker.current || persistenceBusy.current) return
@@ -352,7 +362,7 @@ export default function App() {
       const text = await file.text()
       if (request !== replacementRequest.current) return
       if (JSON.parse(text)?.format === 'basketball-manager-season') {
-        install({ kind: 'season', season: parseSeason(text) }); setNotice({ message: 'Season imported successfully.' })
+        install({ kind: 'season', season: parseSeason(text) }); navigate('home'); setNotice({ message: 'Season imported successfully. Save season to keep it on this device.' })
       } else {
         if (file.size > MAX_SAVE_BYTES) throw new Error(`Choose a match save under ${MAX_SAVE_BYTES / 1024 / 1024} MB.`)
         const imported = parseMatch(text); install({ kind: 'exhibition', match: imported })
@@ -362,8 +372,9 @@ export default function App() {
   }
   async function restart() {
     if (seasonWorker.current || persistenceBusy.current) return
-    const seed = Number(seedInput)
-    if (seedInput.trim() === '' || !Number.isSafeInteger(seed) || seed < 0 || seed > 4294967295) { setNotice({ message: 'Choose a whole-number seed between 0 and 4,294,967,295.', error: true }); return }
+    const requestedSeed = entryView === 'menu' ? '42' : seedInput
+    const seed = Number(requestedSeed)
+    if (requestedSeed.trim() === '' || !Number.isSafeInteger(seed) || seed < 0 || seed > 4294967295) { setNotice({ message: 'Choose a whole-number seed between 0 and 4,294,967,295.', error: true }); return }
     const current = sessionRef.current
     const request = ++replacementRequest.current
     setPlaying(false); settlePlayback()
@@ -374,17 +385,55 @@ export default function App() {
       if (!saved) return
       if (request !== replacementRequest.current) return
     }
-    install({ kind: 'exhibition', match: createMatch(seed) }); setNotice({ message: current.kind === 'season' ? 'Season saved. New exhibition ready.' : 'New exhibition ready.' }); if (setupRef.current) setupRef.current.open = false
+    install({ kind: 'exhibition', match: createMatch(seed) }); if (entryView) navigate('match'); setNotice({ message: current.kind === 'season' ? 'Season saved. New exhibition ready.' : 'New exhibition ready.' }); if (setupRef.current) setupRef.current.open = false
   }
-  function startSeason(seed: number, clubId: string, injuryMode: InjuryMode) {
+  function startSeason({ seed, clubId, injuryMode, manager }: CareerSetup) {
     if (seasonWorker.current || persistenceBusy.current) return
     try {
-      const created = createSeason(seed, clubId, injuryMode)
+      const created = createSeason(seed, clubId, injuryMode, true, true, true, true, manager)
       install({ kind: 'season', season: created }); navigate('home')
       setNotice({ message: 'Season ready. Review your lineup before the opening match.' })
       void persistSeason(created, 'new-game')
     }
-    catch (error) { setNotice({ message: messageOf(error), error: true }) }
+    catch (error) { setEntryError(messageOf(error)) }
+  }
+  async function openEntry(view: 'menu' | 'new-career') {
+    if (seasonWorker.current || persistenceBusy.current) return
+    const request = ++replacementRequest.current
+    setPlaying(false); settlePlayback(); setEntryError(null); setNotice(null)
+    const current = sessionRef.current
+    if (hasSession && current.kind === 'season' && entryView === null) {
+      if (!await persistSeason(current.season, 'manual') || request !== replacementRequest.current) return
+    }
+    setEntryView(view)
+  }
+  function resumeSession() {
+    if (seasonWorker.current || persistenceBusy.current || !hasSession) return
+    replacementRequest.current += 1
+    setEntryView(null); setEntryError(null); navigate(page)
+  }
+  function openManagerProfile() {
+    if (seasonWorker.current || persistenceBusy.current || sessionRef.current.kind !== 'season') return
+    replacementRequest.current += 1
+    setPlaying(false); settlePlayback(); setEntryError(null); setEntryView('profile')
+  }
+  async function saveManagerProfile(profile: ManagerProfile) {
+    if (seasonWorker.current || persistenceBusy.current) return
+    const current = sessionRef.current
+    if (current.kind !== 'season') return
+    try {
+      const next = setManagerProfile(current.season, profile)
+      replaceSession({ kind: 'season', season: next })
+      setEntryView(null); setEntryError(null); navigate(page)
+      if (await persistSeason(next, 'manual')) setNotice({ message: 'Manager profile saved.' })
+    } catch (error) { setEntryError(messageOf(error)) }
+  }
+  function cancelEntry() {
+    if (persistenceBusy.current) return
+    replacementRequest.current += 1
+    setEntryError(null)
+    if (entryView === 'profile') { setEntryView(null); navigate(page) }
+    else setEntryView('menu')
   }
   function cancelAdvance() {
     if (persistenceBusy.current || !seasonWorker.current) return
@@ -420,6 +469,15 @@ export default function App() {
   }
   useEffect(() => () => { seasonWorker.current?.terminate() }, [])
 
+  const savedCareer = saveHistory?.current
+  const careerSummary = (state: SeasonState) => ({ managerName: state.manager?.name ?? 'Manager profile not set', clubName: state.clubs.find(club => club.id === state.managedClubId)!.name, date: state.date })
+  const overlays = <>
+    <input ref={importRef} type="file" accept=".json,application/json" onChange={importSave} className="visually-hidden" aria-label="Import game save" />
+    {saveHistoryOpen && <CareerSaveHistory entries={saveHistory?.entries ?? []} loading={historyLoading} error={historyError} busy={saving} onRefresh={() => { void refreshSaveHistory() }} onRestore={revision => { void restoreCheckpoint(revision) }} onClose={closeSaveHistory} />}
+    {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
+  </>
+  if (entryView) return <><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense>{overlays}</>
+
   return <div className={`app-shell game-shell ${page === 'match' ? 'match-screen' : ''}`}>
     <aside className="sidebar">
       <a href="#main" className="skip-link">Skip to content</a>
@@ -428,11 +486,11 @@ export default function App() {
       <nav aria-label="Main navigation" className="main-nav">
         {([{ id: 'home', label: 'Overview', icon: 'home' }, { id: 'squad', label: 'Squad', icon: 'people' }, ...(season ? [{ id: 'training', label: 'Training', icon: 'training' }, { id: 'staff', label: 'Staff', icon: 'staff' }, { id: 'club', label: 'Club', icon: 'building' }] : []), { id: 'match', label: 'Match center', icon: 'court' }, { id: 'season', label: 'Competitions', icon: 'ball' }] as { id: Page; label: string; icon: IconName }[]).map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'active' : ''}`} onClick={() => navigate(item.id)} disabled={saving || leavingSeason} aria-label={item.label} title={item.label} aria-current={page === item.id ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span>{page === item.id && <span className="nav-current-dot" />}</button>)}
       </nav>
-      <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />{season ? 'Season' : 'Exhibition'}</div><p>Fictional squads</p><div className="manager"><span className="manager-avatar">YOU</span><div>Head coach<small>{managedTeam.name}</small></div></div></div>
+      <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />{season ? 'Season' : 'Exhibition'}</div><p>Fictional squads</p>{season ? <button id="manager-profile" className="manager manager-profile-button" onClick={openManagerProfile} disabled={saving || advancing} aria-label={season.manager ? 'Edit manager profile' : 'Set manager profile'}><span className="manager-avatar">{season.manager ? season.manager.name.split(/\s+/u).map(part => Array.from(part)[0]).slice(0, 2).join('').toUpperCase() : 'YOU'}</span><span className="manager-identity"><strong data-manager-name>{season.manager?.name ?? 'Set manager profile'}</strong><small>Head coach</small>{season.manager && <small data-manager-details>{managerAge(season.manager, season.date)} years · {season.manager.nationality}</small>}</span></button> : <div className="manager"><span className="manager-avatar">YOU</span><div>Head coach<small>{managedTeam.name}</small></div></div>}</div>
     </aside>
 
     <div className="main-shell">
-      <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save season' : 'Save match'}</button></div></header>
+      <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span><button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save season' : 'Save match'}</button></div></header>
       {advancing && <div className="season-processing" role="status"><span>{seasonOperation === 'rollover' ? 'Preparing next season...' : 'Processing matchday results...'}</span><button className="text-button" onClick={cancelAdvance}>Cancel</button></div>}
       {checkpointIssue && <div className="career-save-issue" role="alert"><span>{checkpointIssue}</span><button className="text-button" onClick={openSaveHistory} disabled={saving || advancing}>Save history</button><button className="text-button" onClick={exportSave} disabled={saving || advancing}>Export current</button></div>}
       <main id="main" tabIndex={-1} inert={advancing || leavingSeason || saving}>
@@ -440,7 +498,7 @@ export default function App() {
 
         {season && page !== 'season' && <SeasonProgress season={season} showMatchAction={page === 'squad' || page === 'training' || page === 'staff' || page === 'club'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} />}
         <Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
-        {page === 'season' && <SeasonWorkspace season={season} onStart={startSeason} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} onLoad={loadSeason} busy={advancing || saving} />}
+        {page === 'season' && <SeasonWorkspace season={season} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={rollover} onLoad={loadSeason} busy={advancing || saving} />}
 
         {page === 'training' && season && <TrainingWorkspace season={season} onEnable={() => updateTraining()} onPlanChange={updateTraining} busy={advancing || saving} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} />}
 
@@ -477,12 +535,11 @@ export default function App() {
           </>}
         </>}
 
-        <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />{season ? 'Save & open exhibition' : 'New exhibition'}</button><details ref={setupRef} className="simulation-options" hidden={!!season}><summary>Match setup</summary><div className="seed-controls"><label htmlFor="match-seed">Simulation seed</label><input id="match-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-label="New match random seed" /><p>Use the same seed to replay the same starting conditions.</p></div></details></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button><input ref={importRef} type="file" accept=".json,application/json" onChange={importSave} className="visually-hidden" aria-label="Import game save" /></div></footer>
+        <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />{season ? 'Save & open exhibition' : 'New exhibition'}</button>{season && <button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button>}<details ref={setupRef} className="simulation-options" hidden={!!season}><summary>Match setup</summary><div className="seed-controls"><label htmlFor="match-seed">Simulation seed</label><input id="match-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-label="New match random seed" /><p>Use the same seed to replay the same starting conditions.</p></div></details></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
         </Suspense>
       </main>
     </div>
-    {saveHistoryOpen && <CareerSaveHistory entries={saveHistory?.entries ?? []} loading={historyLoading} error={historyError} busy={saving} onRefresh={() => { void refreshSaveHistory() }} onRestore={revision => { void restoreCheckpoint(revision) }} onClose={closeSaveHistory} />}
-    {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
+    {overlays}
   </div>
 }
 

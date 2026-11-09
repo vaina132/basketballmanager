@@ -16,7 +16,7 @@ const finish = (state: SeasonState): SeasonState => state.activeMatch.status ===
 function completeSeason(state: SeasonState): SeasonState { while (state.status !== 'complete') state = advanceSeason(finish(state)); return state; }
 function formatSix(season: SeasonState): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
-  state.schemaVersion = 6; delete state.payroll;
+  state.schemaVersion = 6; delete state.payroll; delete state.manager;
   for (const entry of (state.finance as { ledger: Record<string, unknown>[] }).ledger) delete entry.payroll;
   return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 6, engineVersion: 'possession-3', state });
 }
@@ -26,7 +26,7 @@ function prepayment(state: SeasonState, id = clubId): FinanceEntry { return stat
 function reject(state: SeasonState, change: (state: SeasonState) => void): void {
   const damaged = structuredClone(state); change(damaged);
   expect(() => validateSeasonState(damaged)).toThrow();
-  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 7, engineVersion: 'possession-3', state: damaged }))).toThrow();
+  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 8, engineVersion: 'possession-3', state: damaged }))).toThrow();
 }
 
 beforeAll(() => {
@@ -47,8 +47,8 @@ beforeAll(() => {
 }, 120_000);
 
 describe('payroll-aware career persistence', () => {
-  it('writes format 7 with canonical terms and delegated prepayments without changing the roster', () => {
-    expect(JSON.parse(serializeSeason(initial)).formatVersion).toBe(7);
+  it('writes format 8 with canonical terms and delegated prepayments without changing the roster', () => {
+    expect(JSON.parse(serializeSeason(initial)).formatVersion).toBe(8);
     expect(initial.payroll.agreements).toHaveLength(60);
     expect(initial.payroll.enabledSince).toEqual({ seasonNumber: 1, round: 1, ledgerIndex: 18 });
     expect(restore(initial)).toEqual(initial);

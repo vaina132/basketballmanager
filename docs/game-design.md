@@ -63,7 +63,7 @@ If a draft subsection contradicts a confirmed decision, the confirmed decision g
 
 ## 4. Start a career
 
-The new-career flow selects a verified season pack, club, manager name, and career options. It shows the club's expected finish, finances, squad needs, facilities, rivalries, and board temperament in a concise preview.
+The main menu provides New career, Continue, Load saves, Import and exhibition access. The new-career flow selects a verified season pack, club, manager name, date of birth, nationality, and career options. Age follows the simulated date. The current development implementation offers its fictional pack only; real pack and league choices require verified integration. It shows the club's expected finish, finances, squad needs, facilities, rivalries, and board temperament in a concise preview.
 
 Default proposal: begin during preseason, at a documented common world date early enough for all selected competitions. An opening-day roster snapshot cannot be silently moved six weeks earlier: either reconstruct membership for the chosen start date or begin at the snapshot date. The exact start date follows the data audit.
 

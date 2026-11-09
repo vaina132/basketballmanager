@@ -3,6 +3,7 @@ import type { SeasonTraining } from './training';
 import type { SeasonCoaching } from './coaching';
 import type { SeasonFinance } from './finance';
 import type { SeasonPayroll } from './payroll';
+import type { ManagerProfile } from './manager';
 
 export interface ClubPlan {
   tactics: Tactics;
@@ -54,11 +55,12 @@ export interface SeasonArchive {
 }
 
 export interface SeasonState {
-  schemaVersion: 7;
+  schemaVersion: 8;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;
   managedClubId: string;
+  manager: ManagerProfile | null;
   seasonNumber: number;
   history: SeasonArchive[];
   date: string;

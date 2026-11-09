@@ -5,6 +5,7 @@ import { loadCareerCheckpoint, readCareerSaves, saveCareerCheckpoint } from '../
 import type { SeasonCheckpoint, SeasonJournal } from '../src/storage/season-indexed-db';
 import { loadLocalSeason, MAX_SEASON_SAVE_BYTES, parseSeason, saveLocalSeason, serializeSeason } from '../src/storage/season-storage';
 import { createSeason, managedSide } from '../src/world/season';
+import { setManagerProfile } from '../src/world/manager';
 
 const storage = vi.hoisted(() => ({
   readSeasonJournal: vi.fn(), writeSeasonCheckpoint: vi.fn(), readLocalSeason: vi.fn(), writeLocalSeason: vi.fn(),
@@ -18,7 +19,7 @@ function checkpoint(revision: number, state: SeasonState): SeasonCheckpoint {
 function previousFormat(state: SeasonState, version: 1 | 2): string {
   const value = structuredClone(state) as unknown as Record<string, unknown>;
   value.schemaVersion = version;
-  delete value.seasonNumber; delete value.history; delete value.training; delete value.coaching; delete value.finance; delete value.payroll;
+  delete value.seasonNumber; delete value.history; delete value.training; delete value.coaching; delete value.finance; delete value.payroll; delete value.manager;
   if (version === 1) {
     delete value.injuryMode; delete value.injuries;
     for (const fixture of value.fixtures as Array<{ result: Record<string, unknown> | null }>) if (fixture.result) delete fixture.result.injuries;
@@ -36,7 +37,8 @@ describe('validated career checkpoint listing', () => {
   });
 
   it('derives management labels from validated snapshots and preserves newest-first order', async () => {
-    const first = createSeason(12, 'atlantic-pilots'), latest = createSeason(71, 'aegean-waves');
+    const profile = { name: 'Anıl Türkmen', dateOfBirth: '1990-02-28', nationality: 'Turkish' };
+    const first = createSeason(12, 'atlantic-pilots'), latest = setManagerProfile(createSeason(71, 'aegean-waves'), profile);
     latest.activeMatch = simulateToQuarterEnd(setAutoSubstitutions(latest.activeMatch, managedSide(latest), true));
     const checkpoints = [checkpoint(7, latest), checkpoint(6, first)];
     const journal: SeasonJournal = { revision: 7, current: checkpoints[0]!.serialized, checkpoints };
@@ -47,7 +49,11 @@ describe('validated career checkpoint listing', () => {
     expect(list.current).toEqual(latest);
     expect(list.currentError).toBeNull();
     expect(list.entries.map(entry => entry.revision)).toEqual([7, 6]);
-    expect(list.entries[0]).toEqual({ revision: 7, savedAt: checkpoints[0]!.savedAt, reason: 'manual', valid: true, clubName: latest.clubs.find(club => club.id === latest.managedClubId)!.name, seasonNumber: 1, date: latest.date, round: 1, status: 'active', matchStatus: latest.activeMatch.status });
+    expect(list.entries[0]).toEqual({ revision: 7, savedAt: checkpoints[0]!.savedAt, reason: 'manual', valid: true, clubName: latest.clubs.find(club => club.id === latest.managedClubId)!.name, managerName: profile.name, seasonNumber: 1, date: latest.date, round: 1, status: 'active', matchStatus: latest.activeMatch.status });
+    expect(list.entries[1]!.managerName).toBeNull();
+    const restored = await loadCareerCheckpoint(7);
+    expect(restored.state.manager).toEqual(profile);
+    expect(restored.state.activeMatch).toEqual(latest.activeMatch);
     expect(journal).toEqual(before);
     expect(storage.writeSeasonCheckpoint).not.toHaveBeenCalled();
   });
@@ -58,7 +64,7 @@ describe('validated career checkpoint listing', () => {
     const list = await readCareerSaves();
     expect(list.current).toBeNull();
     expect(list.currentError).toMatch(/Choose a valid checkpoint/);
-    expect(list.entries[0]).toMatchObject({ revision: 4, valid: false, clubName: 'Unknown club', seasonNumber: null, date: null, round: null, status: null, matchStatus: null, error: expect.stringMatching(/cannot be loaded/) });
+    expect(list.entries[0]).toMatchObject({ revision: 4, valid: false, clubName: 'Unknown club', managerName: null, seasonNumber: null, date: null, round: null, status: null, matchStatus: null, error: expect.stringMatching(/cannot be loaded/) });
     expect(list.entries[1]).toMatchObject({ revision: 3, valid: true, date: state.date });
     expect(storage.writeSeasonCheckpoint).not.toHaveBeenCalled();
   });
@@ -158,7 +164,7 @@ describe('checkpoint restore and append', () => {
     expect(await saveCareerCheckpoint(state, 1, 'manual')).toEqual(saved);
     const serialized = storage.writeSeasonCheckpoint.mock.calls[0]![0] as string;
     expect(Object.keys(JSON.parse(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'state']);
-    expect(JSON.parse(serialized).formatVersion).toBe(7);
+    expect(JSON.parse(serialized).formatVersion).toBe(8);
     expect(parseSeason(serialized)).toEqual(state);
     expect(state).toEqual(before);
     expect(stepMatch(parseSeason(serialized).activeMatch)).toEqual(stepMatch(before.activeMatch));

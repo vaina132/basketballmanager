@@ -1,0 +1,172 @@
+import { useEffect, useRef, useState } from 'react'
+import type { FormEvent } from 'react'
+import type { ManagerProfile } from '../domain/manager'
+import type { InjuryMode } from '../domain/types'
+import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-league'
+import { managerAge, MAX_MANAGER_NAME_LENGTH, MAX_MANAGER_NATIONALITY_LENGTH, validateManagerProfile } from '../world/manager'
+import { Avatar } from './Avatar'
+import { Icon } from './Icon'
+import type { IconName } from './Icon'
+import './career-start.css'
+
+export interface CareerSetup {
+  manager: ManagerProfile
+  clubId: string
+  injuryMode: InjuryMode
+  seed: number
+}
+
+interface CareerSummary {
+  managerName: string
+  clubName: string
+  date: string
+}
+
+interface CareerStartProps {
+  view: 'menu' | 'new-career' | 'profile'
+  busy: boolean
+  error: string | null
+  hasSession: boolean
+  currentCareer: CareerSummary | null
+  savedCareer: CareerSummary | null
+  savesLoading: boolean
+  initialManager?: ManagerProfile | null
+  onContinue: () => void
+  onResume: () => void
+  onNewCareer: () => void
+  onLoad: () => void
+  onImport: () => void
+  onExhibition: () => void
+  onCancel: () => void
+  onExport?: () => void
+  onStart: (setup: CareerSetup) => void
+  onSaveProfile: (profile: ManagerProfile) => void
+}
+
+const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
+const emptyManager: ManagerProfile = { name: '', dateOfBirth: '', nationality: '' }
+const steps = ['Manager', 'Club', 'Review'] as const
+
+function ageAtStart(manager: ManagerProfile): number | null {
+  if (!manager.dateOfBirth) return null
+  try { return managerAge(manager, DEVELOPMENT_START_DATE) } catch { return null }
+}
+
+function EntryError({ message, revision = 0 }: { message: string | null; revision?: number }) {
+  const element = useRef<HTMLDivElement>(null)
+  useEffect(() => { if (message) element.current?.focus({ preventScroll: false }) }, [message, revision])
+  return message ? <div ref={element} id="career-start-error" className="career-start-error" role="alert" tabIndex={-1}>{message}</div> : null
+}
+
+function SavedDetails({ career }: { career: CareerSummary }) {
+  return <dl className="career-start-details"><dt>Manager</dt><dd>{career.managerName || 'Manager profile not set'}</dd><dt>Club</dt><dd>{career.clubName}</dd><dt>Game date</dt><dd><time dateTime={career.date}>{formatDate(career.date)}</time></dd></dl>
+}
+
+export function CareerStart(props: CareerStartProps) {
+  return <div className="career-start">
+    <header className="career-start-header"><div className="career-start-brand"><Icon name="ball" size={30} /><div>COURTSIDE<small>Basketball Manager</small></div></div><span className="career-start-edition">Development version<br />Fictional league</span></header>
+    <main className="career-start-body">
+      {props.view === 'menu' ? <CareerMenu {...props} /> : <CareerForm key={props.view} {...props} profileOnly={props.view === 'profile'} />}
+    </main>
+  </div>
+}
+
+function CareerMenu(props: CareerStartProps) {
+  const title = useRef<HTMLDivElement>(null)
+  useEffect(() => { if (!props.error) title.current?.focus({ preventScroll: true }) }, [])
+  const actions: { id: string; label: string; icon: IconName; run: () => void; disabled?: boolean; primary?: boolean }[] = [
+    { id: 'career-continue', label: props.savesLoading ? 'Checking saved career…' : 'Continue saved career', icon: 'play', run: props.onContinue, disabled: props.savesLoading || !props.savedCareer, primary: !!props.savedCareer },
+    ...(props.hasSession ? [{ id: 'career-resume', label: props.currentCareer ? 'Resume current career' : 'Resume exhibition', icon: 'arrow' as const, run: props.onResume }] : []),
+    { id: 'career-new', label: 'New career', icon: 'people', run: props.onNewCareer, primary: !props.savedCareer },
+    { id: 'career-load', label: 'Load saves', icon: 'save', run: props.onLoad },
+    { id: 'career-import', label: 'Import save file', icon: 'upload', run: props.onImport },
+    { id: 'career-exhibition', label: 'Exhibition match', icon: 'court', run: props.onExhibition },
+  ]
+  return <>
+    <div ref={title} className="career-start-title" tabIndex={-1}><div><h1>Main menu</h1><p>Choose a career or open a single match.</p></div></div>
+    <EntryError message={props.error} />
+    <div className="career-menu-layout">
+      <nav className="career-menu-actions" aria-label="Game menu">{actions.map(action => <button key={action.id} id={action.id} className={`career-menu-action${action.primary ? ' primary' : ''}`} onClick={action.run} disabled={props.busy || action.disabled}><Icon name={action.icon} size={18} /><span>{action.label}</span><Icon name="chevron" size={15} /></button>)}</nav>
+      <div className="career-menu-context">
+        <section className="panel" aria-labelledby="career-saved-title"><header className="career-start-panel-heading"><h2 id="career-saved-title">Latest local save</h2><Icon name="save" size={16} /></header>{props.savesLoading ? <p className="career-start-empty" role="status">Reading local saves…</p> : props.savedCareer ? <SavedDetails career={props.savedCareer} /> : <p className="career-start-empty">No saved career is available. Start a new career or import a season save file.</p>}</section>
+        {props.hasSession && <section className="panel" aria-labelledby="career-current-title"><header className="career-start-panel-heading"><h2 id="career-current-title">Current session</h2><span>{props.currentCareer ? 'Career' : 'Exhibition'}</span></header>{props.currentCareer ? <SavedDetails career={props.currentCareer} /> : <p className="career-start-empty">Your exhibition remains open. Resume to return to the match.</p>}{props.currentCareer && props.onExport && <div className="career-menu-panel-footer"><button id="career-export" className="text-button" onClick={props.onExport} disabled={props.busy}><Icon name="download" size={15} />Export current career</button></div>}</section>}
+        <p className="career-start-footnote">One local career slot keeps the five latest checkpoints. Export a save file to keep a separate career.</p>
+      </div>
+    </div>
+  </>
+}
+
+function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
+  const [manager, setManager] = useState<ManagerProfile>(() => ({ ...(props.initialManager ?? emptyManager) }))
+  const [step, setStep] = useState(0)
+  const [clubId, setClubId] = useState(DEVELOPMENT_CLUBS[0]!.id)
+  const [injuryMode, setInjuryMode] = useState<InjuryMode>('standard')
+  const [seed, setSeed] = useState('42')
+  const [issue, setIssue] = useState<{ message: string; revision: number } | null>(null)
+  const title = useRef<HTMLDivElement>(null)
+  const club = DEVELOPMENT_CLUBS.find(team => team.id === clubId)!
+  const age = ageAtStart(manager)
+  const error = props.error ?? issue?.message ?? null
+
+  useEffect(() => { if (!error) title.current?.focus({ preventScroll: false }) }, [step])
+
+  function reportError(error: unknown) {
+    setIssue(previous => ({ message: error instanceof Error ? error.message : 'Check the career details and try again.', revision: (previous?.revision ?? 0) + 1 }))
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (props.busy) return
+    try {
+      const validManager = validateManagerProfile(manager, DEVELOPMENT_START_DATE)
+      setManager(validManager)
+      if (props.profileOnly) { setIssue(null); props.onSaveProfile(validManager); return }
+      if (step === 0) { setIssue(null); setStep(1); return }
+      if (!DEVELOPMENT_CLUBS.some(team => team.id === clubId)) throw new Error('Choose a club from the development league.')
+      if (step === 1) { setIssue(null); setStep(2); return }
+      const seedValue = Number(seed)
+      if (!seed.trim() || !Number.isSafeInteger(seedValue) || seedValue < 0 || seedValue > 4294967295) throw new Error('Choose a whole-number seed between 0 and 4,294,967,295 in Advanced setup.')
+      setIssue(null)
+      props.onStart({ manager: validManager, clubId, injuryMode, seed: seedValue })
+    } catch (error) { reportError(error) }
+  }
+
+  function changeManager(field: keyof ManagerProfile, value: string) {
+    setManager(previous => ({ ...previous, [field]: value }))
+    setIssue(null)
+  }
+
+  return <>
+    <div ref={title} className="career-start-title" tabIndex={-1}><div><h1>{props.profileOnly ? 'Manager profile' : 'New career'}</h1><p>{props.profileOnly ? 'Set the identity used throughout your career.' : `Development League · ${formatDate(DEVELOPMENT_START_DATE)}`}</p></div></div>
+    {!props.profileOnly && <ol className="career-steps" aria-label="New career setup">{steps.map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined} className={index < step ? 'career-step-complete' : undefined}><span className="career-step-number" aria-hidden="true">{index < step ? <Icon name="check" size={14} /> : index + 1}</span><span>{label}</span></li>)}</ol>}
+    <EntryError message={error} revision={issue?.revision} />
+    <form className="career-setup-form" onSubmit={submit} noValidate>
+      <fieldset disabled={props.busy}>
+        {(props.profileOnly || step === 0) && <div className="career-identity-layout">
+          <section className="panel" aria-labelledby="career-manager-title"><header className="career-start-panel-heading"><h2 id="career-manager-title">Your manager</h2><Icon name="people" size={17} /></header><div className="career-identity-fields">
+            <div className="career-start-field career-start-field-wide"><label htmlFor="manager-name">Manager name</label><input id="manager-name" name="manager-name" autoComplete="name" value={manager.name} onChange={event => changeManager('name', event.target.value)} maxLength={MAX_MANAGER_NAME_LENGTH} aria-describedby="manager-name-help" required /><small id="manager-name-help">The name shown in your career.</small></div>
+            <div className="career-start-field"><label htmlFor="manager-birth-date">Date of birth</label><input id="manager-birth-date" name="manager-birth-date" type="date" autoComplete="bday" value={manager.dateOfBirth} onChange={event => changeManager('dateOfBirth', event.target.value)} aria-describedby="manager-age" required /><small id="manager-age" className="career-identity-age" aria-live="polite">{age === null ? 'Age 18–100 at career start.' : `${age} years old on ${formatDate(DEVELOPMENT_START_DATE)}.`}</small></div>
+            <div className="career-start-field"><label htmlFor="manager-nationality">Nationality</label><input id="manager-nationality" name="manager-nationality" value={manager.nationality} onChange={event => changeManager('nationality', event.target.value)} maxLength={MAX_MANAGER_NATIONALITY_LENGTH} aria-describedby="manager-nationality-help" required /><small id="manager-nationality-help">Enter any nationality.</small></div>
+          </div></section>
+          <section className="panel" aria-labelledby="career-world-title"><header className="career-start-panel-heading"><h2 id="career-world-title">{props.profileOnly ? 'Profile details' : 'Career start'}</h2></header>{props.profileOnly ? <p className="career-start-empty">Your name and nationality identify your manager. Age is calculated from your date of birth. Editing this profile preserves your club and career progress.</p> : <><dl className="career-start-details"><dt>Competition</dt><dd>Development League</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd><dt>Format</dt><dd>{DEVELOPMENT_CLUBS.length} clubs · 10 matchdays</dd><dt>Season</dt><dd>2026/27</dd></dl><p className="career-start-subnote">Fictional development clubs, players and financial estimates.</p></>}</section>
+        </div>}
+
+        {!props.profileOnly && step === 1 && <div className="career-club-layout">
+          <section className="panel" aria-labelledby="career-club-title"><header className="career-start-panel-heading"><h2 id="career-club-title">Choose your club</h2><span>{DEVELOPMENT_CLUBS.length} clubs</span></header><div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{DEVELOPMENT_CLUBS.map(team => <label className={`career-club-option${clubId === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={clubId === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players</small></span></label>)}</div></section>
+          <section className="panel" aria-labelledby="career-roster-title"><header className="career-start-panel-heading"><h2 id="career-roster-title">{club.name}</h2><span>First team</span></header><div className="career-start-roster-scroll" tabIndex={0} role="region" aria-label={`${club.name} roster preview`}><table className="career-start-roster"><thead><tr><th scope="col">Player</th><th scope="col">Position</th><th scope="col">Height</th></tr></thead><tbody>{club.players.map(player => <tr key={player.id}><td><span className="career-start-player"><span aria-hidden="true"><Avatar player={player} color={club.color} size={30} /></span><span>{player.name}<small>#{player.number}</small></span></span></td><td>{player.position}</td><td>{player.heightCm} cm</td></tr>)}</tbody></table></div></section>
+        </div>}
+
+        {!props.profileOnly && step === 2 && <>
+          <div className="career-review-layout">
+            <section className="panel" aria-labelledby="career-review-title"><header className="career-start-panel-heading"><h2 id="career-review-title">Career details</h2><Icon name="people" size={17} /></header><dl className="career-start-details"><dt>Manager</dt><dd>{manager.name}</dd><dt>Date of birth</dt><dd>{formatDate(manager.dateOfBirth)} · age {age}</dd><dt>Nationality</dt><dd>{manager.nationality}</dd><dt>Club</dt><dd>{club.name}</dd><dt>Competition</dt><dd>Development League · 2026/27</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd></dl><p className="career-start-subnote">Fictional development clubs, players and financial estimates.</p></section>
+            <section className="panel" aria-labelledby="career-options-title"><header className="career-start-panel-heading"><h2 id="career-options-title">Career options</h2><Icon name="settings" size={17} /></header><div className="career-review-options"><div className="career-start-field"><label htmlFor="career-injuries">Injury frequency</label><select id="career-injuries" value={injuryMode} onChange={event => setInjuryMode(event.target.value as InjuryMode)} aria-describedby="career-injuries-help"><option value="standard">Standard</option><option value="reduced">Reduced</option><option value="off">Off</option></select><small id="career-injuries-help">Applies equally to every club. Injuries carry between matches.</small></div><details className="career-advanced"><summary>Advanced setup</summary><div className="career-start-field"><label htmlFor="career-seed">Simulation seed</label><input id="career-seed" inputMode="numeric" value={seed} onChange={event => setSeed(event.target.value)} aria-describedby="career-seed-help" /><small id="career-seed-help">A whole number from 0 to 4,294,967,295. The same seed and decisions reproduce the same simulation.</small></div></details></div></section>
+          </div>
+          <p className="career-start-storage-note">Starting a career makes it the current local save. Load saves opens the five latest checkpoints. Export a save file from the main menu to keep a separate career.</p>
+        </>}
+
+        <footer className="career-setup-footer"><div>{!props.profileOnly && step > 0 && <button id="career-back" type="button" className="button" onClick={() => { setIssue(null); setStep(previous => previous - 1) }}>Back</button>}<button id="career-cancel" type="button" className="text-button" onClick={props.onCancel}>{props.profileOnly ? 'Cancel' : 'Main menu'}</button></div><button id={props.profileOnly ? 'career-save-profile' : step === 2 ? 'career-start' : 'career-next'} type="submit" className="button primary">{props.busy ? 'Please wait…' : props.profileOnly ? 'Save profile' : step === 2 ? 'Start career' : `Continue to ${steps[step + 1]!.toLowerCase()}`}<Icon name={props.profileOnly ? 'save' : 'arrow'} size={16} /></button></footer>
+      </fieldset>
+    </form>
+  </>
+}

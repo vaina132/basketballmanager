@@ -1,17 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
 import type { SeasonFixture, SeasonState } from '../domain/season'
-import type { InjuryMode, Side, Team } from '../domain/types'
-import { DEVELOPMENT_CLUBS } from '../data/development-league'
+import type { Side, Team } from '../domain/types'
 import { getActiveFixture, getStandings, seasonLabel } from '../world/season'
-import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { SeasonLeaders } from './SeasonLeaders'
 import './season-workspace.css'
 
 interface SeasonWorkspaceProps {
   season: SeasonState | null
-  onStart: (seed: number, clubId: string, injuryMode: InjuryMode) => void
+  onNewCareer: () => void
   onOpenMatch: () => void
   onAdvance: () => void
   onRollover: () => void
@@ -29,67 +26,12 @@ function ClubName({ club, yours = false }: { club: Team; yours?: boolean }) {
 }
 
 export function SeasonWorkspace(props: SeasonWorkspaceProps) {
-  const [setupFor, setSetupFor] = useState<SeasonState | null>(null)
+  if (!props.season) return <section className="panel season-intro" aria-label="Career required">
+    <div><h2>No active career</h2><p>Start a career to manage a club through the development league.</p></div>
+    <div className="season-setup-actions"><button className="button" onClick={props.onLoad} disabled={props.busy}>Load saved career</button><button className="button primary" onClick={props.onNewCareer} disabled={props.busy}>New career<Icon name="arrow" size={16} /></button></div>
+  </section>
   const season = props.season
-  if (!season || season.status === 'complete' && setupFor === season) return <SeasonSetup
-    onStart={(seed, clubId, injuryMode) => { props.onStart(seed, clubId, injuryMode); setSetupFor(null) }}
-    onLoad={() => { props.onLoad(); setSetupFor(null) }}
-    onCancel={season ? () => setSetupFor(null) : undefined}
-    busy={props.busy ?? false}
-  />
-  return <ActiveSeason key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}:${season.round}:${season.status}`} {...props} season={season} onNewGame={() => setSetupFor(season)} />
-}
-
-function SeasonSetup({ onStart, onLoad, onCancel, busy }: Pick<SeasonWorkspaceProps, 'onStart' | 'onLoad'> & { onCancel?: () => void; busy: boolean }) {
-  const [clubId, setClubId] = useState(DEVELOPMENT_CLUBS[0]!.id)
-  const [seedInput, setSeedInput] = useState('42')
-  const [injuryMode, setInjuryMode] = useState<InjuryMode>('standard')
-  const [error, setError] = useState('')
-  const club = DEVELOPMENT_CLUBS.find(team => team.id === clubId)!
-  function start(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const seed = Number(seedInput)
-    if (!seedInput.trim() || !Number.isSafeInteger(seed) || seed < 0 || seed > 4294967295) {
-      setError('Choose a whole-number seed between 0 and 4,294,967,295.')
-      return
-    }
-    setError('')
-    onStart(seed, clubId, injuryMode)
-  }
-
-  return <div className="season-workspace season-setup">
-    <section className="season-intro panel" aria-label="Season setup">
-      <div><h2>Development league</h2><p>Fictional development league · 6 clubs · 10 matchdays</p></div>
-      <div className="season-setup-actions">{onCancel && <button className="text-button" onClick={onCancel} disabled={busy}>Back to season</button>}<button className="button" onClick={onLoad} disabled={busy}><Icon name="save" size={16} />Load saved season</button></div>
-    </section>
-    <div className="season-setup-columns">
-      <form className="season-club-picker panel" onSubmit={start}>
-        <fieldset disabled={busy}>
-          <legend>Choose your club</legend>
-          <div className="season-club-options">
-            {DEVELOPMENT_CLUBS.map(team => <label className={`season-club-option${clubId === team.id ? ' selected' : ''}`} key={team.id}>
-              <input type="radio" name="season-club" value={team.id} checked={clubId === team.id} onChange={() => setClubId(team.id)} />
-              <ClubName club={team} />
-              <span className="season-roster-count">{team.players.length} players</span>
-            </label>)}
-          </div>
-          <div className="season-start-controls">
-            <div><label htmlFor="season-seed">Season seed</label><input id="season-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-describedby={error ? 'season-start-error' : undefined} aria-invalid={!!error} /></div>
-            <div><label htmlFor="season-injuries">Injuries</label><select id="season-injuries" value={injuryMode} onChange={event => setInjuryMode(event.target.value as InjuryMode)} aria-describedby="season-injury-help"><option value="standard">Standard</option><option value="reduced">Reduced</option><option value="off">Off</option></select></div>
-            <button className="button primary" type="submit">Start season<Icon name="arrow" size={16} /></button>
-          </div>
-          <p id="season-injury-help" className="season-setup-note">Applies to every club for the whole season. Injuries carry between matches.</p>
-          {error && <p id="season-start-error" className="season-error" role="alert">{error}</p>}
-        </fieldset>
-      </form>
-      <section className="season-preview-roster panel" aria-labelledby="season-roster-title">
-        <header className="season-panel-heading"><div><h2 id="season-roster-title">{club.name}</h2><p>First-team roster</p></div><span className="season-club-code" style={{ color: club.color }}>{club.shortName}</span></header>
-        <div className="season-table-scroll"><table><thead><tr><th scope="col">Player</th><th scope="col">Pos</th><th scope="col">Height</th></tr></thead><tbody>{club.players.map(player => <tr key={player.id}>
-          <td><span className="season-player-name"><Avatar player={player} color={club.color} size={28} /><span>{player.name}<small>#{player.number}</small></span></span></td><td>{player.position}</td><td>{player.heightCm} cm</td>
-        </tr>)}</tbody></table></div>
-      </section>
-    </div>
-  </div>
+  return <ActiveSeason key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}:${season.round}:${season.status}`} {...props} season={season} onNewGame={props.onNewCareer} />
 }
 
 function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, busy = false }: SeasonWorkspaceProps & { season: SeasonState; onNewGame: () => void }) {
@@ -147,7 +89,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
         <div className="season-result-actions">{archived ? <button className="button" onClick={() => { selectSeason(season.seasonNumber); seasonSelector.current?.focus() }} disabled={busy}>Current season<Icon name="chevron" size={16} /></button> : complete ? <>
           <button className="button primary" onClick={onRollover} disabled={busy}>{busy ? 'Preparing next season…' : 'Next season'}<Icon name="next" size={16} /></button>
           <button className="button" onClick={onOpenMatch} disabled={busy}>View last match<Icon name="court" size={16} /></button>
-          <button className="text-button" onClick={onNewGame} disabled={busy}>New game</button>
+          <button className="text-button" onClick={onNewGame} disabled={busy}>New career</button>
         </> : <button className="button primary" onClick={matchFinished ? onAdvance : onOpenMatch} disabled={busy}>{busy ? 'Completing matchday…' : matchFinished ? season.round === totalRounds ? 'Finalize season' : 'Continue' : 'Go to match'}<Icon name={matchFinished ? 'next' : 'court'} size={16} /></button>}</div>
       </div>
     </section>

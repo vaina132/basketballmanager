@@ -83,6 +83,11 @@
 .profile-condition { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
 .profile-condition > span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
 .profile-condition .stamina-meter { max-width: 200px; }
+.career-entry-loading { padding:32px; color:var(--muted); font-size:14px; }
+.game-shell .manager-profile-button { width:100%; border:0; background:transparent; color:var(--text); padding:8px 0; text-align:left; cursor:pointer; }
+.manager-identity { display:block; min-width:0; }
+.manager-identity strong { display:block; font-size:12px; overflow-wrap:anywhere; }
+.manager-identity small { display:block; margin-top:4px; font-size:11px; line-height:1.4; color:var(--muted); overflow-wrap:anywhere; }
 @media(max-width:1150px) {
   .game-shell .squad-layout { grid-template-columns: minmax(0,1fr) 235px; }
   .game-shell .attribute-track { width: 32px; }
@@ -121,6 +126,8 @@
   .game-shell .nav-item > svg { width: 20px; height: 20px; }
   .game-shell .topbar { padding-inline: 10px; }
   .game-shell .topbar-actions { gap: 0; }
+  .game-shell .topbar { flex-wrap:wrap; height:auto; min-height:54px; gap:7px; padding-block:8px; }
+  .game-shell .topbar-actions { gap:6px; margin-left:auto; }
   .game-context { font-size: 11px; }
   .game-context > span { display: none; }
   .game-shell main { padding: 12px 10px 0; }

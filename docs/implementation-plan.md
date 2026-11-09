@@ -42,6 +42,8 @@ The first finance increment adds manual/delegated ticket pricing, deterministic 
 
 The payroll increment adds ongoing player wage agreements, future wage commitments, ten matchday installments and optional discounted settlement. Human and AI decisions share cash/reserve checks, and older careers enable the system prospectively. This is the payment side of player contracts. The next prerequisite for genuine expiry and recruitment is historical roster ownership: fixture and training reports, injuries, performance totals and archives must identify the players registered at the time. A first offseason market can then implement actual departures, renewals and signings without rewriting historical results. Salary negotiation and employment expiry are not represented by inert controls in the current payroll screen.
 
+The career-entry increment adds a proper main menu and Manager, Club and Review setup, with name, date of birth, nationality and profile persistence. Existing careers can add or edit identity without resetting play. This closes the initial entry-flow gap while retaining the fictional development pack. Named independent career slots, real pack/league selection and the broader management modules remain open. The next management prerequisite remains historical roster ownership and then genuine contracts/recruitment; verified data, real competitions and match calibration are parallel unfinished tracks.
+
 ## 2. Milestone 0: design and evidence baseline
 
 Deliver the main GDD, specialist specifications, decision log, architecture and this plan. Capture the eighteen discovery answers, including a youth coach and direct/delegated business controls. Resolve contradictory ownership of form, condition, injuries and money.

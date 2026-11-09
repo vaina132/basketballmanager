@@ -1,4 +1,17 @@
+
 .transfers-workspace{display:flex;flex-direction:column;gap:12px;min-width:0}
+.transfers-squad-plan{display:flex;align-items:center;gap:24px;padding:16px}
+.transfers-squad-count{display:flex;align-items:center;gap:12px}
+.transfers-squad-count>svg{color:var(--accent)}
+.transfers-squad-count strong{display:block;font-size:24px;line-height:1.3}
+.transfers-squad-count small{font-size:14px;color:var(--muted);font-weight:400}
+.transfers-squad-count span,.transfers-squad-goal span{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.transfers-squad-slots{display:flex;gap:6px;flex-wrap:wrap}
+.transfers-squad-slots>span{display:flex;align-items:center;justify-content:center;width:38px;height:42px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px}
+.transfers-empty-slot{border-style:dashed!important;color:var(--muted);opacity:.6}
+.transfers-squad-goal{margin-left:auto;font-size:13px;white-space:nowrap}
+.transfers-squad-goal strong{color:var(--accent);font-weight:500}
+.transfer-unavailable>summary{font-size:12px;color:var(--muted);cursor:pointer;margin-top:5px}
 .transfers-workspace .panel{min-width:0;overflow:hidden;border-radius:2px}
 .transfers-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2)}
 .transfers-heading h2{font-size:14px;font-weight:600;line-height:1.4}
@@ -60,6 +73,16 @@
 .transfers-empty,.transfers-table .transfers-empty{padding:14px;font-size:13px;line-height:1.5;color:var(--muted)}
 .transfers-note{padding:10px 14px;border-top:1px solid var(--border);font-size:12px;line-height:1.6;color:var(--muted)}
 .transfers-model-note{padding:0 14px;font-size:12px;line-height:1.5;color:var(--muted)}
+.transfers-negotiations-enable{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:12px 14px}
+.transfers-negotiations-enable h2{font-size:14px;line-height:1.5;font-weight:600}
+.transfers-negotiations-enable p{margin-top:5px;font-size:12px;line-height:1.6;color:var(--muted)}
+.transfers-negotiations-enable .button{flex:none}
+.transfers-action .transfer-latest-response{margin:0 0 5px;color:var(--accent)}
+.negotiation-activity-table{min-width:900px}
+.transfers-conversations .transfers-table-scroll{max-height:390px}
+.negotiation-activity-table tbody th{font-weight:500}
+.negotiation-activity-table td>strong{font-size:13px;font-weight:500}
+.negotiation-activity-table small{display:block;margin-top:4px;font-size:12px;line-height:1.5;color:var(--muted);white-space:normal;max-width:340px}
 .contract-offer{width:min(550px,calc(100vw - 24px));max-width:none;max-height:calc(100dvh - 24px);margin:auto;padding:0;border:2px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);overflow:hidden}
 .contract-offer[open],.contract-offer>form{display:flex;flex-direction:column;min-height:0}
 .contract-offer::backdrop{background:#05070bb8}
@@ -81,7 +104,47 @@
 .contract-offer-knowledge{padding-bottom:12px;margin-bottom:14px;border-bottom:1px solid var(--border)}
 .contract-offer-knowledge>div:last-child{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 14px;margin-top:9px}
 .contract-offer-knowledge .text-button{font-size:12px}
+.contract-offer-assessment{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.contract-offer-assessment summary{font-size:13px;line-height:1.5;cursor:pointer}
+.contract-offer-assessment summary:hover{color:var(--accent)}
+.contract-offer-assessment summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.contract-offer-assessment .contract-offer-knowledge{margin:12px 0 0;padding-bottom:0;border-bottom:0}
 .contract-offer footer{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:9px;padding:10px 14px;border-top:1px solid var(--border)}
+.contract-offer-negotiations{width:min(620px,calc(100vw - 24px))}
+.contract-player-response{padding:12px;margin-bottom:14px;background:var(--surface-2);border:1px solid var(--border);border-left:2px solid var(--accent)}
+.contract-player-response:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.contract-player-response>div:first-child{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:8px}
+.contract-player-response h3{font-size:14px;font-weight:600;color:var(--accent)}
+.contract-player-response time{font-size:12px;color:var(--muted)}
+.contract-player-response p{font-size:12px;line-height:1.6}
+.contract-response-option{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:10px;margin-top:10px;border-top:1px solid var(--border);font-size:12px;line-height:1.5}
+.contract-response-option>span{min-width:0;color:var(--muted)}
+.contract-response-option strong{display:block;margin-top:4px;font-size:13px;font-weight:500;color:var(--text)}
+.contract-response-option .button{flex:none}
+.contract-demand-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:12px}
+.contract-demand-options span{display:block;color:var(--muted)}
+.contract-demand-options strong{display:block;margin-top:5px;font-size:12px;font-weight:500;line-height:1.5}
+.contract-negotiation-history{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;font-size:12px}
+.contract-negotiation-history summary{font-size:13px;line-height:1.5;cursor:pointer;outline-offset:3px}
+.contract-negotiation-history summary:hover{color:var(--accent)}
+.contract-negotiation-history ol{max-height:300px;overflow:auto;overscroll-behavior:contain;list-style:none;margin:10px 0 0;padding:0}
+.contract-negotiation-history ol:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.contract-negotiation-history li{padding:10px 0;border-bottom:1px solid var(--border)}
+.contract-negotiation-history li:last-child{border-bottom:0}
+.contract-negotiation-history li>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:5px}
+.contract-negotiation-history strong{font-size:13px;font-weight:500}
+.contract-negotiation-history time,.contract-negotiation-history small{font-size:12px;line-height:1.5;color:var(--muted)}
+.contract-negotiation-history small{display:block;margin-top:6px}
+.contract-negotiation-history li p{font-size:12px;line-height:1.5}
+.contract-negotiation-history li p+p{margin-top:5px}
 @media(max-width:1050px){.transfers-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.transfers-policy-body{grid-template-columns:minmax(220px,1fr) minmax(0,1fr);gap:20px}}
 @media(max-width:1050px){.transfer-player-review-body{grid-template-columns:1fr}.transfer-player-review-actions{padding:12px 0 0;border-left:0;border-top:1px solid var(--border)}}
+@media(max-width:800px){.transfers-negotiations-enable{align-items:flex-start;flex-direction:column;gap:12px}}
+@media(max-width:650px){.contract-response-option{align-items:flex-start;flex-direction:column;gap:8px}.contract-player-response{padding:10px}.transfers-negotiations-enable{padding:12px 10px}}
 @media(max-width:650px){.transfers-heading{align-items:flex-start;flex-wrap:wrap;padding:10px;gap:9px}.transfers-start{align-items:flex-start}.transfers-summary{padding:12px 10px;gap:14px 12px}.transfers-summary dd{font-size:15px}.transfers-summary small{display:block;margin-top:4px}.transfers-policy-body{grid-template-columns:1fr;gap:12px;padding:12px 10px}.transfers-toolbar{padding:10px}.transfers-filters{width:100%}.transfers-filters label:first-child{flex:1}.transfers-filters input{width:100%}.transfers-note,.transfers-budget-note,.transfers-model-note{padding-inline:10px}.transfers-enable>div{padding:12px 10px}.contract-offer-body{padding:12px 10px}.contract-offer footer{padding:10px}.contract-offer footer .button{font-size:12px;padding-inline:9px}}
+.transfers-workspace .transfers-policy-body{grid-template-columns:minmax(180px,1fr) 180px minmax(180px,1fr);align-items:center;gap:20px}
+.transfers-policy-body>h2{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:500}
+.transfers-policy-body>h2 svg{color:var(--accent);flex:none}
+.transfers-policy-body>span{font-size:12px;line-height:1.5;color:var(--muted)}
+@media(max-width:1050px){.transfers-squad-plan{flex-wrap:wrap}.transfers-squad-goal{margin-left:0}.transfers-workspace .transfers-policy-body{grid-template-columns:minmax(0,1fr) 180px}.transfers-policy-body>span{grid-column:1/-1}}
+@media(max-width:650px){.transfers-squad-plan{gap:14px;padding:12px 10px}.transfers-squad-slots{order:3;width:100%}.transfers-workspace .transfers-policy-body{grid-template-columns:1fr;gap:12px}.transfers-squad-goal{white-space:normal}}

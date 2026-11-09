@@ -1,5 +1,6 @@
 import type { MatchState, Side, Tactics } from '../domain/types'
 import { setAutoSubstitutions, setTactics } from '../engine/match'
+import { Icon } from './Icon'
 
 type Apply = (action: (state: MatchState) => MatchState) => void
 
@@ -31,7 +32,7 @@ export function TeamInstructions({ match, managedSide = 'home', apply, idPrefix 
       const description = value < 34 ? low : value > 66 ? high : 'Balanced'
       const controlId = `${idPrefix}${id}`
       return <div className="tactic" key={key}>
-        <div className="tactic-heading"><label htmlFor={controlId}>{label}</label><span className="instruction-value">{value}<small>{description}</small></span></div>
+        <div className="tactic-heading"><label className="instruction-icon-label" htmlFor={controlId}><Icon name={key === 'tempo' ? 'clock' : key === 'pressure' ? 'shield' : 'target'} size={16} />{label}</label><span className="instruction-value">{value}<small>{description}</small></span></div>
         <input id={controlId} type="range" min={0} max={100} step={5} value={value} aria-valuetext={`${value} of 100, ${description}`} onChange={event => changeTactic(key, Number(event.target.value) / 100)} disabled={disabled} />
         <div className="range-labels"><span>{low}</span><span>{high}</span></div>
       </div>

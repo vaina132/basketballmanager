@@ -1,0 +1,22 @@
+.club-budget-bar{margin:0 0 14px;border:1px solid var(--border);background:var(--surface);border-radius:3px;position:relative}
+.club-budget-values{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding-right:136px}
+.club-budget-value{display:flex;align-items:center;gap:11px;text-align:left;padding:9px 14px;background:transparent;min-width:0;border-right:1px solid var(--border)}
+.club-budget-value:hover{background:var(--surface-2)}
+.club-budget-value>svg{flex:none;color:var(--accent)}
+.club-budget-value small{display:block;color:var(--muted);font-size:12px;line-height:1.5}
+.club-budget-value strong{display:block;font-size:16px;line-height:1.45;font-weight:600;font-variant-numeric:tabular-nums}
+.club-budget-value em{font-size:12px;color:var(--muted);font-style:normal;font-weight:400}
+.budget-alert{font-size:11px;color:var(--accent);margin-left:auto}
+.club-budget-details>summary{position:absolute;right:0;top:0;min-height:62px;padding:12px;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--muted);width:136px}
+.club-budget-details>summary:hover,.club-budget-details[open]>summary{color:var(--accent);background:var(--surface-2)}
+.club-budget-breakdown{border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;padding:16px;font-size:12px}
+.club-budget-breakdown h3{display:flex;align-items:center;gap:7px;font-size:13px;margin:0 0 12px}
+.club-budget-breakdown h3 svg{color:var(--accent)}
+.club-budget-breakdown dl{margin:0;display:grid;gap:9px}
+.club-budget-breakdown dl>div{display:flex;justify-content:space-between;gap:12px}
+.club-budget-breakdown dt{color:var(--muted)}
+.club-budget-breakdown dd{margin:0;font-variant-numeric:tabular-nums;white-space:nowrap}
+.club-budget-breakdown p{line-height:1.6;color:var(--muted);margin:0}
+.club-budget-breakdown>p{grid-column:1/-1;border-top:1px solid var(--border);padding-top:10px}
+@media(max-width:1100px){.club-budget-values{padding-right:0}.club-budget-details>summary{position:static;min-height:0;width:auto;padding:7px 12px;border-top:1px solid var(--border)}.club-budget-value:last-child{border-right:0}.club-budget-value{gap:7px;padding:9px 10px}.club-budget-value strong{font-size:15px}.budget-alert{display:none}}
+@media(max-width:650px){.club-budget-values{grid-template-columns:1fr}.club-budget-value{border-right:0;border-bottom:1px solid var(--border);padding:7px 10px}.club-budget-value:last-child{border-bottom:0}.club-budget-value>span{display:flex;justify-content:space-between;align-items:center;gap:12px;flex:1}.club-budget-value strong{font-size:14px}.club-budget-value small{font-size:12px}.club-budget-breakdown{grid-template-columns:1fr;gap:16px}}

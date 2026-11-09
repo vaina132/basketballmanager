@@ -1,86 +1,129 @@
 .staff-workspace{display:flex;flex-direction:column;gap:12px;min-width:0}
-.staff-workspace .panel{min-width:0;overflow:hidden;border-radius:2px}
-.staff-context{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:12px 14px}
-.staff-context>div{display:flex;flex-direction:column;gap:5px}
-.staff-context strong{font-size:14px;font-weight:600}
-.staff-context span{font-size:12px;color:var(--muted)}
-.staff-allocation{display:flex;gap:24px;margin:0;font-variant-numeric:tabular-nums}
-.staff-allocation>div{display:flex;flex-direction:column;gap:5px}
-.staff-allocation dt{font-size:12px;color:var(--muted)}
-.staff-allocation dd{margin:0;font-size:14px;font-weight:600;white-space:nowrap}
-.staff-allocation>div:last-child dd{color:var(--accent)}
-.staff-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2)}
-.staff-heading h2{font-size:14px;font-weight:600}
-.staff-heading span{font-size:12px;line-height:1.5;color:var(--muted)}
-.staff-heading>div>span{display:block;margin-top:4px}
-.staff-training-note{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 14px}
-.staff-training-note p,.staff-enable p{font-size:12px;line-height:1.5;color:var(--muted)}
-.staff-enable>div{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px}
-.staff-enable p{max-width:680px}
-.staff-table-scroll{position:relative;min-width:0;max-width:100%;overflow:auto;overscroll-behavior:contain}
-.staff-table-scroll:focus-visible,.staff-candidate-detail:focus-visible,.staff-release-confirmation:focus-visible,#staff-current-title:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.staff-workspace table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;text-align:left}
-.staff-workspace thead th{height:34px;padding:7px 12px;background:var(--surface-2);font-size:12px;letter-spacing:0;font-weight:500;color:var(--muted);white-space:nowrap}
-.staff-workspace tbody th,.staff-workspace td{padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;letter-spacing:0;font-weight:400;background:transparent;color:var(--text);vertical-align:middle;text-align:left}
-.staff-workspace tbody tr:last-child>*{border-bottom:0}
-.staff-workspace tbody tr:hover{background:var(--surface-2)}
-.staff-workspace th:first-child,.staff-workspace td:first-child{padding-left:14px}
-.staff-workspace th:last-child,.staff-workspace td:last-child{padding-right:14px}
-.staff-workspace tbody th{font-weight:500}
-.staff-workspace td>small,.staff-workspace th>small{display:block;margin-top:3px;color:var(--muted);font-size:12px;line-height:1.4;font-weight:400}
-.staff-workspace select,.staff-workspace input[type=search]{min-width:0;max-width:100%;min-height:32px;padding:6px 8px;border:1px solid var(--border);border-radius:2px;background:var(--sidebar);color:var(--text);font-size:12px}
-.staff-current-table{min-width:780px}
-.staff-current-table select{width:165px}
-.staff-renew{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:12px;cursor:pointer}
-.staff-renew input{width:15px;height:15px;margin:0;accent-color:var(--accent)}
-.staff-fee{white-space:nowrap}
-.staff-note,.staff-save-note{font-size:12px;line-height:1.5;color:var(--muted);padding:9px 14px}
-.staff-note{border-top:1px solid var(--border)}
-.staff-save-note{padding-top:0;padding-bottom:0}
-.staff-empty{padding:14px;font-size:12px;color:var(--muted);line-height:1.5}
-.staff-release-confirmation{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:10px 14px;padding:10px 12px;border-left:2px solid var(--accent);background:var(--surface-2)}
-.staff-release-confirmation p{font-size:12px;line-height:1.5}
-.staff-release-confirmation strong{font-weight:600}
-.staff-release-confirmation>div{display:flex;align-items:center;gap:14px;flex:none}
-.staff-released>summary{padding:11px 14px;font-size:12px;cursor:pointer}
-.staff-released>summary>span{margin-left:10px;font-size:12px;color:var(--muted)}
-.staff-released[open]>summary{border-bottom:1px solid var(--border)}
-.staff-released table{min-width:500px}
-.staff-recruitment-filters{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border)}
-.staff-recruitment-filters label{display:flex;align-items:center;gap:8px;min-width:0;font-size:12px;color:var(--muted)}
-.staff-recruitment-filters input{width:220px}
-.staff-candidate-scroll{max-height:400px}
-.staff-candidates-table{min-width:760px}
-.staff-candidates-table thead th{position:sticky;top:0;z-index:1}
-.staff-candidate-name{font-size:12px;color:var(--text)}
-.staff-workspace .staff-hiring-unavailable{max-width:260px;color:var(--muted);line-height:1.4}
-.staff-workspace .staff-selected-candidate{background:#e5aa5510}
-.staff-selected-candidate>th:first-child{box-shadow:inset 2px 0 0 var(--accent)}
-.staff-selected-candidate .staff-candidate-name{color:var(--accent)}
+.staff-workspace .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.staff-workspace .panel{min-width:0;overflow:hidden;border-radius:3px}
+.staff-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.staff-heading h2{font-size:15px;font-weight:600}
+.staff-heading>div>span{display:block;margin-top:3px}
+.staff-heading span{font-size:12px;line-height:1.4;color:var(--muted)}
+.staff-role{display:block;margin-bottom:4px;color:var(--muted);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+.coach-portrait{display:block;flex:none;max-width:100%;height:auto;border:1px solid #ffffff0d;border-radius:3px}
+.staff-roster{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px}
+.staff-owned-card{display:flex;flex-direction:column;gap:14px;min-width:0;padding:14px;border:1px solid var(--border);border-top:2px solid var(--accent);background:var(--surface-2);border-radius:3px}
+.staff-owned-identity{display:flex;align-items:center;gap:12px;min-width:0}
+.staff-owned-identity>div{min-width:0}
+.staff-owned-identity h3{margin:0 0 7px;font-size:16px;font-weight:600;line-height:1.3}
+.staff-card-fee{display:block;margin-top:7px;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.staff-card-fee small{font-size:11px;font-weight:400;color:var(--muted)}
+.staff-slot-count{display:flex;align-items:center;gap:8px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.staff-slot-count>span{display:flex;gap:4px}
+.staff-slot-count i{display:block;width:8px;height:15px;border:1px solid var(--border);background:var(--sidebar)}
+.staff-slot-count i.filled{background:var(--accent);border-color:var(--accent)}
 .coach-rating{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;position:relative}
 .coach-stars{display:inline-flex;align-items:center;gap:1px}
-.coach-star{position:relative;display:inline-block;width:13px;height:16px;line-height:16px;font-size:15px;color:var(--muted)}
+.coach-star{position:relative;display:inline-block;width:14px;height:18px;line-height:18px;font-size:16px;color:var(--muted)}
 .coach-star-fill{position:absolute;top:0;left:0;overflow:hidden;white-space:nowrap;color:var(--accent);height:100%}
 .coach-rating-number{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
-.staff-candidate-detail{scroll-margin-top:70px}
-.staff-candidate-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,.9fr);gap:24px;padding:14px}
-.staff-coach-skills{display:flex;flex-direction:column;gap:10px;margin:0;min-width:0}
-.staff-coach-skills>div{display:flex;align-items:center;justify-content:space-between;gap:14px}
-.staff-coach-skills dt{font-size:12px}
-.staff-coach-skills dd{margin:0}
-.staff-owned-skills{margin-top:5px;font-size:12px;font-weight:400}
-.staff-owned-skills>summary{font-size:12px;line-height:1.4;color:var(--muted);cursor:pointer;outline-offset:2px}
-.staff-owned-skills>summary:hover{color:var(--accent)}
-.staff-owned-skills[open]>.staff-coach-skills{width:260px;gap:6px;margin-top:8px}
-.staff-assignment-note{display:block;margin-top:5px}
-.staff-hire-controls{display:flex;flex-direction:column;align-items:stretch;gap:9px;min-width:0}
-.staff-hire-controls>label{font-size:12px}
+.staff-skill-list{display:flex;flex-direction:column;gap:11px;margin:0;min-width:0}
+.staff-skill-list>div{display:grid;grid-template-columns:minmax(90px,.85fr) minmax(110px,1.2fr);align-items:center;gap:12px;min-width:0}
+.staff-skill-list dt{font-size:13px;color:var(--muted);line-height:1.35}
+.staff-skill-list dd{display:flex;align-items:center;gap:9px;margin:0;min-width:0}
+.staff-skill-bar{display:block;height:5px;min-width:24px;flex:1;border-radius:1px;overflow:hidden;background:#56606c55}
+.staff-skill-bar>span{display:block;height:100%;background:var(--accent)}
+.staff-skill-value{width:21px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums}
+.staff-skill-list.compact{gap:7px}
+.staff-skill-list.compact>div{grid-template-columns:minmax(0,1fr) minmax(60px,.9fr);gap:10px}
+.staff-skill-list.compact dt{font-size:12px}
+.staff-assignment-control{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+.staff-workspace select,.staff-workspace input[type=search]{min-width:0;max-width:100%;min-height:36px;padding:7px 9px;border:1px solid var(--border);border-radius:3px;background:var(--sidebar);color:var(--text);font-size:13px}
+.staff-contract-controls{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.staff-renew{display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;line-height:1.4}
+.staff-renew input{width:16px;height:16px;margin:0;accent-color:var(--accent);flex:none}
+.staff-contract-controls .text-button{font-size:12px}
+.staff-owned-skills{margin-top:auto;border-top:1px solid var(--border);padding-top:10px;font-size:12px}
+.staff-owned-skills>summary,.staff-explainer>summary,.staff-payment-details>summary{font-size:12px;line-height:1.5;color:var(--muted);cursor:pointer}
+.staff-owned-skills>summary:hover,.staff-explainer>summary:hover,.staff-payment-details>summary:hover{color:var(--accent)}
+.staff-owned-skills[open]>.staff-skill-list{margin-top:13px;gap:10px}
+.staff-owned-skills .staff-skill-list>div{display:flex;flex-direction:column;align-items:stretch;gap:4px}
+.staff-owned-skills .staff-skill-list dt{font-size:12px}
+.staff-owned-skills small{display:block;margin-top:13px;font-size:11px;color:var(--muted)}
+.staff-vacancy{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-width:0;min-height:290px;padding:24px 12px;border:1px dashed #65718180;border-radius:3px;background:#1d252e55;color:var(--text);cursor:pointer;text-align:center}
+.staff-vacancy:hover{background:var(--surface-2);border-color:var(--accent)}
+.staff-vacancy-image{display:flex;align-items:center;justify-content:center;position:relative;width:82px;height:94px;border:1px solid var(--border);border-radius:3px;background:var(--sidebar);color:var(--muted)}
+.staff-vacancy-image>span{position:absolute;right:-6px;bottom:-5px;display:flex;align-items:center;justify-content:center;width:25px;height:25px;border:1px solid var(--accent);border-radius:50%;background:var(--surface-2);color:var(--accent);font-size:22px}
+.staff-vacancy strong{display:block;font-size:14px;font-weight:500}
+.staff-vacancy small{display:block;margin-top:5px;color:var(--muted);font-size:12px}
+.staff-vacancy-action{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:15px;color:var(--accent);font-size:12px}
+.staff-explainer{border-top:1px solid var(--border);padding:10px 14px}
+.staff-explainer p{margin-top:8px;max-width:900px;font-size:12px;line-height:1.6;color:var(--muted)}
+.staff-release-confirmation{display:flex;align-items:center;gap:12px;margin:0 14px 14px;padding:12px;border:1px solid var(--border);border-left:2px solid var(--accent);background:var(--surface-2)}
+.staff-release-copy{flex:1;min-width:0}
+.staff-release-copy strong{font-size:14px;font-weight:600}
+.staff-release-copy p{margin-top:5px;font-size:12px;color:var(--muted);line-height:1.5}
+.staff-release-actions{display:flex;align-items:center;gap:14px;flex:none}
+.staff-training-alert{display:flex;align-items:center;gap:12px;padding:11px 14px;font-size:13px;color:var(--muted)}
+.staff-training-alert>span{flex:1}
+.staff-training-alert>.icon{color:var(--accent);flex:none}
+.staff-enable-main{display:flex;align-items:center;gap:22px;padding:22px}
+.staff-enable h2{font-size:18px;font-weight:600}
+.staff-enable p{font-size:13px;line-height:1.5;color:var(--muted);margin:7px 0 13px}
+.staff-enable .staff-explainer p{margin-bottom:0}
+.staff-released>summary{padding:11px 14px;font-size:13px;cursor:pointer}
+.staff-released>summary>span{margin-left:10px;font-size:12px;color:var(--muted)}
+.staff-released[open]>summary{border-bottom:1px solid var(--border)}
+.staff-released-list{padding:0 14px}
+.staff-released-list>div{display:flex;align-items:center;gap:12px;min-width:0;padding:9px 0;border-top:1px solid var(--border);font-size:12px}
+.staff-released-list>div:first-child{border-top:0}
+.staff-released-list strong{flex:1;font-size:13px;font-weight:500}
+.staff-released-list>div>span{color:var(--muted);font-variant-numeric:tabular-nums}
+.staff-candidate-detail{scroll-margin-top:110px;border-color:var(--accent)!important}
+.staff-candidate-body{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(220px,.8fr);gap:24px;padding:18px}
+.staff-candidate-profile{display:flex;align-items:flex-start;gap:22px;min-width:0}
+.staff-profile-portrait{display:flex;flex-direction:column;align-items:center;gap:10px;flex:none}
+.staff-candidate-profile>.staff-skill-list{flex:1;padding-top:3px}
+.staff-hire-controls{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0;padding-left:24px;border-left:1px solid var(--border)}
+.staff-offer-fee>span{display:block;font-size:12px;color:var(--muted)}
+.staff-offer-fee>strong{display:block;margin-top:3px;font-size:25px;font-weight:600;font-variant-numeric:tabular-nums}
+.staff-after-hire{display:flex;justify-content:space-between;gap:10px;margin-bottom:3px;font-size:12px}
+.staff-after-hire>span{color:var(--muted)}
+.staff-after-hire>strong{font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
+.staff-hire-controls>label{margin-bottom:-4px;font-size:12px;color:var(--muted)}
+.staff-hire-controls .button{justify-content:center;min-height:38px}
 .staff-hire-controls p{font-size:12px;line-height:1.5;color:var(--muted)}
 .staff-hire-controls .staff-hire-reason{color:var(--accent)}
-.staff-hire-controls .button{align-self:flex-start}
-.staff-hire-budget{display:flex;flex-direction:column;gap:7px;margin:3px 0;font-size:12px;font-variant-numeric:tabular-nums}
-.staff-hire-budget>div{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.staff-hire-budget dt{color:var(--muted)}
-.staff-hire-budget dd{margin:0;font-weight:500}
-@media(max-width:950px){.staff-context{align-items:flex-start;flex-direction:column;gap:14px}.staff-allocation{width:100%;gap:20px}.staff-allocation>div{flex:1}.staff-release-confirmation{align-items:flex-start;flex-direction:column;gap:10px}}
-@media(max-width:650px){.staff-context,.staff-heading,.staff-recruitment-filters{padding:10px}.staff-allocation{gap:10px}.staff-allocation dd{font-size:13px}.staff-allocation dt{line-height:1.4}.staff-training-note,.staff-enable>div{align-items:flex-start;flex-direction:column;padding:10px;gap:10px}.staff-recruitment-filters label{width:100%;justify-content:space-between}.staff-recruitment-filters input,.staff-recruitment-filters select{width:65%}.staff-candidate-body{grid-template-columns:1fr;gap:20px;padding:12px 10px}.staff-hire-controls{border-top:1px solid var(--border);padding-top:12px}.staff-note,.staff-save-note{padding-inline:10px}.staff-released>summary{padding:10px}.staff-released>summary>span{display:block;margin:5px 0 0}.staff-release-confirmation{margin:10px;padding:10px}.staff-heading{flex-wrap:wrap;gap:8px}}
+.staff-renewal-note{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.staff-renewal-note svg{color:var(--accent);flex:none}
+.staff-payment-details{border-top:1px solid var(--border);padding-top:8px}
+.staff-payment-details dl{display:flex;flex-direction:column;gap:8px;margin:10px 0;font-size:12px}
+.staff-payment-details dl>div{display:flex;justify-content:space-between;gap:10px}
+.staff-payment-details dt{color:var(--muted)}
+.staff-payment-details dd{margin:0;white-space:nowrap;font-variant-numeric:tabular-nums}
+.staff-recruitment-filters{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.staff-recruitment-filters label{display:flex;align-items:center;gap:8px;min-width:0;font-size:12px;color:var(--muted)}
+.staff-recruitment-filters label:first-child{flex:1}
+.staff-recruitment-filters input{width:240px}
+.staff-candidate-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px}
+.staff-candidate-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:3px;background:var(--surface-2)}
+.staff-candidate-card:hover{border-color:#647181}
+.staff-candidate-card.staff-selected-candidate{border-color:var(--accent);background:#e5aa550a}
+.staff-candidate-identity{display:flex;align-items:center;gap:11px;min-width:0;padding:0;border:0;background:none;color:var(--text);cursor:pointer;text-align:left}
+.staff-candidate-identity>span{display:flex;flex-direction:column;align-items:flex-start;gap:6px;flex:1;min-width:0}
+.staff-candidate-identity strong{font-size:15px;font-weight:600;line-height:1.3}
+.staff-candidate-identity small{font-size:11px;color:var(--muted);line-height:1.4}
+.staff-candidate-identity>svg:last-child{flex:none;color:var(--muted)}
+.staff-candidate-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:10px;border-top:1px solid var(--border)}
+.staff-candidate-footer .staff-card-fee{margin:0;font-size:14px}
+.staff-candidate-footer .button{white-space:nowrap;font-size:12px;gap:4px;min-height:32px}
+.staff-card-status{font-size:11px;color:var(--muted);margin-top:-5px}
+.staff-candidate-pages{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.staff-candidate-pages>div{display:flex;align-items:center;gap:12px}
+.staff-candidate-pages .button{min-height:32px;font-size:12px}
+.staff-candidate-pages button:first-child svg{transform:rotate(180deg)}
+.staff-save-note{display:flex;align-items:center;gap:7px;padding:0 2px;font-size:12px;color:var(--muted)}
+.staff-empty{padding:10px;font-size:13px;color:var(--muted);grid-column:1/-1}
+.staff-workspace button:focus-visible,.staff-workspace select:focus-visible,.staff-workspace input:focus-visible,.staff-workspace summary:focus-visible,.staff-candidate-detail:focus-visible,.staff-release-confirmation:focus-visible,#staff-current-title:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.staff-candidate-detail:focus-visible,.staff-release-confirmation:focus-visible{outline-offset:-3px}
+.staff-workspace button:disabled{cursor:not-allowed}
+@media(max-width:1180px){.staff-owned-card{padding:11px;gap:12px}.staff-owned-identity{gap:9px}.staff-owned-identity>.coach-portrait{width:62px}.staff-owned-identity h3{font-size:15px}.staff-candidate-identity{gap:8px}.staff-candidate-identity>.coach-portrait{width:54px}.staff-candidate-identity>svg:last-child{display:none}.staff-candidate-footer{flex-wrap:wrap}}
+@media(max-width:960px){.staff-candidate-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.staff-owned-identity{flex-direction:column;align-items:flex-start}.staff-owned-identity>.coach-portrait{width:76px}.staff-owned-card .staff-skill-list.compact>div{display:flex;flex-direction:column;align-items:stretch;gap:4px}.staff-contract-controls{align-items:flex-start;flex-direction:column}.staff-candidate-profile{flex-direction:column;gap:16px}.staff-candidate-profile>.staff-skill-list{width:100%}.staff-profile-portrait{flex-direction:row;align-items:flex-end}.staff-profile-portrait>.coach-portrait{width:80px}.staff-candidate-body{gap:18px}.staff-hire-controls{padding-left:18px}.staff-release-confirmation{flex-wrap:wrap}.staff-release-actions{margin-left:54px}}
+@media(max-width:650px){.staff-heading{padding:10px}.staff-heading h2{font-size:14px}.staff-heading>div>span{max-width:230px}.staff-roster,.staff-candidate-grid{grid-template-columns:1fr;padding:10px;gap:10px}.staff-owned-card{padding:13px}.staff-owned-identity{flex-direction:row;gap:13px}.staff-owned-identity>.coach-portrait{width:76px}.staff-owned-identity h3{font-size:16px}.staff-owned-card .staff-skill-list.compact>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(60px,.9fr);gap:10px}.staff-contract-controls{flex-direction:row;align-items:center}.staff-vacancy{flex-direction:row;justify-content:flex-start;gap:20px;min-height:104px;padding:14px 22px;text-align:left}.staff-vacancy-image{width:56px;height:64px}.staff-vacancy-image>svg{width:34px}.staff-vacancy-action{justify-content:flex-start;margin-top:9px}.staff-vacancy small{margin-top:3px}.staff-candidate-identity>.coach-portrait{width:64px}.staff-candidate-identity>svg:last-child{display:block}.staff-candidate-footer{flex-wrap:nowrap}.staff-candidate-body{grid-template-columns:1fr;padding:14px;gap:18px}.staff-candidate-profile{flex-direction:row;gap:14px}.staff-profile-portrait{flex-direction:column;align-items:center;gap:8px}.staff-profile-portrait>.coach-portrait{width:80px}.staff-profile-portrait .coach-rating{flex-direction:column;gap:1px}.staff-candidate-profile>.staff-skill-list>div{display:flex;flex-direction:column;align-items:stretch;gap:4px}.staff-candidate-profile .staff-skill-list dd{gap:5px}.staff-candidate-profile .staff-skill-list .coach-star{width:12px;font-size:14px}.staff-candidate-profile .staff-skill-list .coach-rating-number{display:none}.staff-hire-controls{padding:14px 0 0;border-left:0;border-top:1px solid var(--border)}.staff-recruitment-filters{flex-wrap:wrap;gap:10px;padding:10px}.staff-recruitment-filters label:first-child{flex-basis:100%}.staff-recruitment-filters input{width:100%}.staff-recruitment-filters label:last-child{margin-left:auto}.staff-recruitment-filters select{width:155px}.staff-released-list{padding:0 10px}.staff-released-list>div{flex-wrap:wrap;gap:8px}.staff-released-list strong{min-width:calc(100% - 50px)}.staff-released-list>div>span:first-of-type{margin-left:44px;flex:1}.staff-release-confirmation{margin:0 10px 10px;padding:10px}.staff-release-actions{margin-left:0;width:100%}.staff-released>summary{padding:10px}.staff-released>summary>span{display:block;margin:4px 0 0}.staff-training-alert{flex-wrap:wrap;padding:10px}.staff-training-alert .button{margin-left:32px}.staff-enable-main{padding:16px;gap:14px}.staff-enable-main>.coach-portrait{width:72px}.staff-enable h2{font-size:16px}.staff-enable p{font-size:12px}.staff-explainer{padding:10px}.staff-skill-list.compact dt{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.staff-workspace *{scroll-behavior:auto}}

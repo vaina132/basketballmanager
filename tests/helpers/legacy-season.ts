@@ -2,6 +2,7 @@ import type { SeasonState } from '../../src/domain/season';
 
 /** Recreate the actual pre-roster schema, including the archive data those versions discarded. */
 export function stripRosterHistory(state: Record<string, unknown>): void {
+  delete state.negotiations;
   delete state.scouting;
   delete state.employment;
   delete state.rosters;

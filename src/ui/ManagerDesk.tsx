@@ -62,6 +62,11 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
     const reports = season.scouting.clubs[season.managedClubId]!.reviews.filter(report => report.seasonNumber === season.seasonNumber && report.round === latestRound)
     if (reports.length) notices.push({ key: 'scouting', title: 'Scouting reviews available', detail: `${reports.filter(report => report.outcome === 'observed').length} skill reports from matchday ${latestRound}.${reports.some(report => report.outcome === 'no-minutes') ? ' Some targets did not play.' : ''}`, action: 'Review scouting', open: onOpenScouting })
   }
+  if (season?.negotiations.enabledSince) {
+    const latest = new Map(season.negotiations.records.filter(record => record.clubId === season.managedClubId && record.startsSeason === season.seasonNumber + 1).map(record => [record.playerId, record]))
+    const counters = [...latest.values()].filter(record => record.outcome === 'countered' && !contractForSeason(season.employment, record.playerId, season.seasonNumber + 1)).length
+    if (counters) notices.push({ key: 'negotiations', title: `${counters} player ${counters === 1 ? 'counteroffer' : 'counteroffers'}`, detail: 'Review the proposed wages and contract lengths. These replies have not committed wages or reserved players.', action: 'Review offers', open: onOpenTransfers })
+  }
 
   if (needsReplacement) notices.push({ key: 'replacement', title: 'Replace an unavailable player', detail: match.requiredSubstitutions.map(item => `${playerName(item.playerId, item.side)}: ${item.reason === 'injured' ? 'injured' : 'five fouls'}`).join('; '), urgent: true, action: 'Choose replacement', open: onOpenCoaching })
   if (finances?.unpaid) notices.push({ key: 'unpaid', title: 'Outstanding club costs', detail: `${money(finances.unpaid)} unpaid. New coaching appointments are blocked until these costs are covered.`, urgent: true, action: 'Review finances', open: onOpenClub })
@@ -96,7 +101,7 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
     <div className="desk-columns">
       <div className="desk-main-column">
         <section className="desk-lineup panel" aria-labelledby="desk-lineup-heading">
-          <div className="desk-panel-heading"><h2 id="desk-lineup-heading">{displayName}</h2><button className="text-button" onClick={onOpenSquad}>Full squad<Icon name="chevron" size={15} /></button></div>
+          <div className="desk-panel-heading"><h2 id="desk-lineup-heading"><Icon name="people" size={16} />{displayName}</h2><button className="text-button" onClick={onOpenSquad}>Full squad<Icon name="chevron" size={15} /></button></div>
           <div className="desk-table-scroll"><table className="desk-lineup-table"><thead><tr><th>Player</th><th>Position</th><th>Stamina</th><th>Fouls</th></tr></thead><tbody>{active.map(player => {
             const unavailable = match.injuries[player.id] ? 'Injured' : match.stats[player.id].fouls >= 5 ? 'Fouled out' : null
             return <tr key={player.id} data-player-id={player.id}><td><button className="desk-player" onClick={() => onSelectPlayer(player.id)} aria-label={`View ${player.name}`}><Avatar player={player} color={team.color} size={31} /><span><strong>{player.name}</strong><small>#{player.number}{unavailable && <em>{unavailable}</em>}</small></span></button></td><td>{player.position}</td><td><StaminaMeter value={match.stats[player.id].condition} label={`${player.name} stamina`} compact /></td><td className={match.stats[player.id].fouls >= 4 ? 'desk-warning-value' : ''}>{match.stats[player.id].fouls}</td></tr>
@@ -106,23 +111,19 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
         </section>
 
         <section className="desk-activity panel" aria-labelledby="desk-activity-heading">
-          <div className="desk-panel-heading"><h2 id="desk-activity-heading">Recent activity</h2><span className="desk-section-note">Current match</span></div>
+          <div className="desk-panel-heading"><h2 id="desk-activity-heading"><Icon name="clock" size={16} />Recent activity</h2><span className="desk-section-note">Current match</span></div>
           {activity.length ? <ol>{activity.map(event => <li key={event.id}><time>{period(event.period)}<span>{clock(event.clockSeconds)}</span></time><p>{event.text}</p><span className="desk-activity-score">{event.score.home}–{event.score.away}</span></li>)}</ol> : <p className="desk-empty">No match actions yet. Review your lineup and instructions before tipoff.</p>}
         </section>
       </div>
 
       <div className="desk-side-column">
-        {finances && <section className="desk-finances panel" aria-labelledby="desk-finances-heading">
-          <div className="desk-panel-heading"><h2 id="desk-finances-heading">Club finances</h2><button className="text-button" onClick={onOpenClub}>Ledger & tickets<Icon name="chevron" size={15} /></button></div>
-          <dl className="desk-finance-values"><div><dt>Cash</dt><dd>{money(finances.cash)}</dd></div><div><dt>Unpaid costs</dt><dd className={finances.unpaid ? 'desk-warning-value' : ''}>{money(finances.unpaid)}</dd></div>{wageReserve !== null && <><div><dt>Future wages</dt><dd><button className="text-button" onClick={onOpenPayroll}>{money(wageReserve)}<Icon name="chevron" size={14} /></button></dd></div><div><dt>Cash after wage reserve</dt><dd>{money(Math.max(0, finances.cash - wageReserve))}</dd></div></>}</dl>
-        </section>}
         <section className="desk-attention panel" aria-labelledby="desk-attention-heading">
           <div className="desk-panel-heading"><h2 id="desk-attention-heading">{complete ? 'Match review' : 'Attention'}</h2><span className="desk-count">{notices.length}</span></div>
-          {notices.length ? <ul className="desk-notices">{notices.map(notice => <li key={notice.key} className={notice.urgent ? 'desk-notice-urgent' : ''}><div><strong>{notice.title}</strong><p>{notice.detail}</p></div><button className="text-button" onClick={notice.open}>{notice.action}<Icon name="chevron" size={14} /></button></li>)}</ul> : <div className="desk-clear"><Icon name="check" size={18} /><div><strong>{complete ? 'Match complete' : 'No urgent decisions'}</strong><p>{complete ? 'The result and player statistics are ready to review.' : `${eligible.length} eligible players. Your current lineup is available.`}</p></div></div>}
+          {notices.length ? <ul className="desk-notices">{notices.map(notice => <li key={notice.key} className={notice.urgent ? 'desk-notice-urgent' : ''}><div><strong className="desk-notice-title"><Icon name={notice.key === 'scouting' ? 'search' : ['contracts', 'offseason', 'negotiations', 'unpaid', 'wage-commitments'].includes(notice.key) ? 'wallet' : notice.key === 'timeout' ? 'clock' : 'people'} size={15} />{notice.title}</strong>{notice.urgent || ['injuries', 'fatigue', 'fouls', 'queued'].includes(notice.key) ? <p>{notice.detail}</p> : <details className="desk-notice-detail"><summary>Details</summary><p>{notice.detail}</p></details>}</div><button className="text-button" onClick={notice.open}>{notice.action}<Icon name="chevron" size={14} /></button></li>)}</ul> : <div className="desk-clear"><Icon name="check" size={18} /><div><strong>{complete ? 'Match complete' : 'No urgent decisions'}</strong><p>{complete ? 'The result and player statistics are ready to review.' : `${eligible.length} eligible players. Your current lineup is available.`}</p></div></div>}
         </section>
 
         <section className="desk-instructions panel" aria-labelledby="desk-instructions-heading">
-          <div className="desk-panel-heading"><h2 id="desk-instructions-heading">Team instructions</h2><button className="text-button" onClick={onOpenCoaching}>Match coaching<Icon name="chevron" size={15} /></button></div>
+          <div className="desk-panel-heading"><h2 id="desk-instructions-heading"><Icon name="target" size={16} />Team instructions</h2><button className="text-button" onClick={onOpenCoaching}>Match coaching<Icon name="chevron" size={15} /></button></div>
           <TeamInstructions match={match} managedSide={managedSide} apply={apply} idPrefix="desk-" includeRotation />
         </section>
       </div>

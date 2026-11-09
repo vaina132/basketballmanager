@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-export type IconName = 'home' | 'court' | 'people' | 'training' | 'staff' | 'search' | 'mail' | 'building' | 'settings' | 'play' | 'pause' | 'next' | 'skip' | 'restart' | 'save' | 'download' | 'upload' | 'arrow' | 'chevron' | 'check' | 'close' | 'ball' | 'clock' | 'swap'
+export type IconName = 'home' | 'court' | 'people' | 'training' | 'staff' | 'search' | 'mail' | 'building' | 'settings' | 'play' | 'pause' | 'next' | 'skip' | 'restart' | 'save' | 'download' | 'upload' | 'arrow' | 'chevron' | 'check' | 'close' | 'ball' | 'clock' | 'swap' | 'wallet' | 'calendar' | 'target' | 'star' | 'filter' | 'shield'
 
 const paths: Record<IconName, string> = {
   home: 'M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z',
@@ -23,6 +23,12 @@ const paths: Record<IconName, string> = {
   ball: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M2 12h20M12 2v20M5 5a10 10 0 0 1 0 14M19 5a10 10 0 0 0 0 14',
   clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M12 7v5l3 2',
   swap: 'M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4',
+  wallet: 'M3 6h17v15H3V6Zm0 0V4l14-2v4m-2 6h7v5h-7Zm3 2.5h.01',
+  calendar: 'M4 5h16v16H4ZM8 2v6m8-6v6M4 10h16M8 14h2m4 0h2m-8 3h2',
+  target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 4a5 5 0 1 0 0 10 5 5 0 0 0 0-10m0 4v2m-1-1h2',
+  star: 'm12 3 2.8 5.7 6.3.9-4.5 4.4 1 6.2-5.6-3-5.6 3 1-6.2L3 9.6l6.2-.9Z',
+  filter: 'M3 5h18l-7 8v7l-4-2v-5ZM7 2v3m10-3v3',
+  shield: 'm12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6Zm-4 10 3 3 5-6',
 }
 
 export function Icon({ name, size = 20, style }: { name: IconName; size?: number; style?: CSSProperties }) {

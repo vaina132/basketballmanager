@@ -5,6 +5,8 @@ import { getDevelopmentPlayer } from '../data/development-players';
 import { getSeasonWage } from '../data/development-wages';
 import { contractForSeason, getAvailablePlayers, getClubContractSummary, getContractedClubs, MAX_ROSTER_SIZE, MIN_ROSTER_SIZE, quotePlayerContract } from './employment-policy';
 import { scoutingRecruitmentRating } from './scouting-policy';
+import { evaluateNegotiation } from './negotiations-policy';
+import { appendNegotiationResponse, getLatestNegotiation } from './negotiations';
 
 export function createEmployment(): SeasonEmployment {
   return { model: 'employment-1', enabledSince: null, delegated: false, contracts: [], market: null };
@@ -24,8 +26,19 @@ export function enableEmployment(state: SeasonState): SeasonState {
 }
 
 function offerForClub(state: SeasonState, clubId: string, playerId: string, seasonWage: number, seasons: number): SeasonState {
+  const enabled = state.negotiations.enabledSince !== null;
+  const latest = enabled ? getLatestNegotiation(state, playerId, clubId) : null;
+  const duplicate = latest && latest.seasonNumber === state.seasonNumber && latest.round === state.round && latest.status === state.status && latest.offeredWage === seasonWage && latest.offeredSeasons === seasons;
+  if (duplicate && latest.outcome === 'accepted') {
+    const signed = state.employment.contracts.find(contract => contract.id === latest.contractId);
+    if (signed && signed.playerId === playerId && signed.clubId === clubId && signed.startsSeason === state.seasonNumber + 1 && signed.endsSeason === state.seasonNumber + seasons && signed.seasonWage === seasonWage) return state;
+  }
   const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId);
   if (!quote.canOffer) throw new Error(quote.reason!);
+  if (duplicate) return state;
+  const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons) : null;
+  const contractCountBefore = state.employment.contracts.length;
+  if (decision && decision.outcome !== 'accepted') return appendNegotiationResponse(state, clubId, playerId, seasonWage, seasons, decision, null, contractCountBefore);
   const current = contractForSeason(state.employment, playerId, state.seasonNumber);
   const contract: EmploymentContract = {
     id: `employment-contract-${state.employment.contracts.length + 1}`, playerId, clubId,
@@ -33,7 +46,8 @@ function offerForClub(state: SeasonState, clubId: string, playerId: string, seas
     signedSeason: state.seasonNumber, signedRound: state.round,
     kind: current?.clubId === clubId ? 'renewal' : 'free-agent',
   };
-  return { ...state, employment: { ...state.employment, contracts: [...state.employment.contracts, contract] } };
+  const next = { ...state, employment: { ...state.employment, contracts: [...state.employment.contracts, contract] } };
+  return decision ? appendNegotiationResponse(next, clubId, playerId, seasonWage, seasons, decision, contract.id, contractCountBefore) : next;
 }
 
 export function offerPlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number): SeasonState {

@@ -1,4 +1,11 @@
 .training-workspace{display:flex;flex-direction:column;gap:12px;min-width:0}
+.training-heading h2{display:flex;align-items:center;gap:8px}
+.training-heading h2 svg{color:var(--accent)}
+.training-plan-note.training-plan-preview{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 16px;background:var(--surface-2)}
+.training-plan-preview>svg{color:var(--accent);flex:none}
+.training-plan-preview strong{font-size:14px;font-weight:600;color:var(--text)}
+.training-plan-preview>span{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
+.training-workspace .training-note{display:flex;align-items:center;gap:7px}
 .training-workspace .panel{min-width:0;overflow:hidden;border-radius:2px}
 .training-context{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 14px}
 .training-context>div{display:flex;align-items:center;flex-wrap:wrap;gap:12px}

@@ -174,6 +174,12 @@ The interface is a basketball management game workspace. The user explicitly con
 
 Use charcoal/slate surfaces with one amber accent, flat borders and small section bars. The command header and club rail stay compact. Group related information into management workspaces and retain readable player names and values while reducing decorative spacing. Team instructions use labeled sliders with visible values and keyboard support on the overview and match screen; both edit the same managed-club settings. Rotation control has two positions, Manual and Assistant. Disable match instructions after the final result.
 
+Prioritize portraits, meaningful icons, stamina/skill bars and direct actions over explanatory paragraphs. Reveal detailed records, accounting and help on demand while keeping urgent decisions visible. Nationality entry offers suggestions and accepts typed values. An optional Replay code repeats randomness with the same options and decisions; leaving it blank creates a fresh career and does not choose difficulty.
+
+Keep the club's budgets together at the top of career workspaces. The current model distinguishes cash after remaining wages, this season's available staff funds and next season's annual player wage room. The user explicitly retained these separate financial rules; display them clearly without combining them into one spending pool. Expanded details reconcile the same authoritative limits used by hiring and contract commands.
+
+Scouting provides age and position filters and an explicit discover → shortlist → observe → report → contract-review flow. Saving a target does not automatically assign an observation. Match substitutions work by dragging a reserve onto an active player or selecting both through touch, mouse or keyboard. The interface pauses and settles playback before submitting the existing command; legal stoppages, exclusions and pending-change cancellation remain authoritative.
+
 The following navigation describes the complete target game. During development, expose implemented destinations and omit unavailable systems from normal navigation. A concise factual exhibition/prototype label can explain the current scope; the detailed roadmap belongs in repository documentation.
 
 | Navigation item | Primary task |

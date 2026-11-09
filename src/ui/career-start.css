@@ -44,6 +44,7 @@
 .career-identity-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:18px 14px}
 .career-start-field{display:flex;flex-direction:column;gap:7px;min-width:0;font-size:13px}
 .career-start-field label{font-size:13px;font-weight:500}
+.career-field-optional{margin-left:6px;font-size:12px;font-weight:400;color:var(--muted)}
 .career-start-field input,.career-start-field select{width:100%;min-width:0;min-height:38px;padding:8px 10px;border:1px solid #46515e;border-radius:2px;background:var(--sidebar);color:var(--text);font-size:14px}
 .career-start-field input[aria-invalid=true]{border-color:var(--accent)}
 .career-start-field small{font-size:12px;line-height:1.5;color:var(--muted)}
@@ -76,6 +77,7 @@
 .career-advanced{border-top:1px solid var(--border);padding-top:12px;font-size:12px}
 .career-advanced summary{font-size:12px;color:var(--muted);cursor:pointer}
 .career-advanced summary:hover{color:var(--accent)}
+.career-advanced summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 .career-advanced>.career-start-field{margin-top:12px}
 .career-start-storage-note{padding:12px 14px;margin-top:18px;border-left:2px solid var(--accent);font-size:12px;line-height:1.6;color:var(--muted);background:var(--surface)}
 .career-setup-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}

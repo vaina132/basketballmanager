@@ -12,6 +12,7 @@ import { validateManagerProfile } from './manager';
 import { createRosterSnapshots, getFixtureTeams, rosterForRound } from './rosters';
 import { createEmployment, enableEmployment, finalizeEmploymentMarket, prepareEmploymentMarket } from './employment';
 import { createScouting, enableScouting, prepareScoutingAssignments, processScoutingRound, refreshSquadKnowledge } from './scouting';
+import { createNegotiations, enableNegotiations } from './negotiations';
 
 export const SEASON_ROUNDS = 10;
 export const ROUND_INTERVAL_DAYS = 7;
@@ -107,7 +108,7 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   });
 }
 
-export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false): SeasonState {
+export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   if (!DEVELOPMENT_CLUBS.some(club => club.id === managedClubId)) throw new Error('Choose a club from the development league.');
   if (!['standard', 'reduced', 'off'].includes(injuryMode)) throw new Error('Choose a valid season injury setting.');
@@ -117,6 +118,7 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
   if (typeof payrollEnabled !== 'boolean' || payrollEnabled && !financeEnabled) throw new Error('Player payroll requires enabled club finances and a valid payroll setting.');
   if (typeof employmentEnabled !== 'boolean' || employmentEnabled && !payrollEnabled) throw new Error('Player contracts require enabled payroll and a valid contract setting.');
   if (typeof scoutingEnabled !== 'boolean') throw new Error('Choose a valid scouting setting.');
+  if (typeof negotiationsEnabled !== 'boolean' || negotiationsEnabled && !employmentEnabled) throw new Error('Contract negotiations require enabled player contracts and a valid negotiation setting.');
   const managerProfile = manager === null ? null : validateManagerProfile(manager, DEVELOPMENT_START_DATE);
   const clubs = DEVELOPMENT_CLUBS;
   const fixtures = createSchedule(clubs);
@@ -127,14 +129,15 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: 11, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), scouting: createScouting(clubs, managedClubId),
+    schemaVersion: 12, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), scouting: createScouting(clubs, managedClubId), negotiations: createNegotiations(),
     ...preparation, date: first.date, status: 'active', round: 1, fixtures,
     activeFixtureId: first.id, activeMatch: prepareMatch(preparation, first),
   };
   const funded = financeEnabled ? enableFinance(state) : state;
   const paid = payrollEnabled ? preparePayrollRound(enablePayroll(funded)) : funded;
   const contracted = employmentEnabled ? enableEmployment(paid) : paid;
-  return scoutingEnabled ? enableScouting(contracted) : contracted;
+  const observed = scoutingEnabled ? enableScouting(contracted) : contracted;
+  return negotiationsEnabled ? enableNegotiations(observed) : observed;
 }
 
 function compactResult(match: MatchState, rosterIds: FixtureResult['rosterIds']): FixtureResult {

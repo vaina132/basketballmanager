@@ -22,10 +22,10 @@ interface TrainingWorkspaceProps {
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const workloadDescriptions = {
-  recovery: 'Rest and recovery. No skill practice; the greatest improvement in freshness.',
-  light: 'Slower skill development with more time to recover.',
-  standard: 'Steady skill development with limited recovery between matches.',
-  heavy: 'More practice when fresh, at the cost of freshness between matches.',
+  recovery: 'Rest up. No skill practice.',
+  light: 'Recover while building skills slowly.',
+  standard: 'Balance practice and recovery.',
+  heavy: 'More practice. More fatigue.',
 }
 
 function FocusOptions({ individual = false }: { individual?: boolean }) {
@@ -55,7 +55,7 @@ export function TrainingWorkspace({ season, onEnable, onPlanChange, onSelectPlay
       <div><p>Enable workload and focus planning for recovery and skill development. Starts with the next training week and applies to every club.</p><button id="enable-training" className="button primary" onClick={onEnable} disabled={busy}>Enable training<Icon name="training" size={16} /></button></div>
     </section> : <>
       <section className="training-plan panel" aria-labelledby="training-plan-title">
-        <header className="training-heading"><h2 id="training-plan-title">Weekly plan</h2><span>{plan.delegated ? 'Assistant control' : 'Manual control'}</span></header>
+        <header className="training-heading"><h2 id="training-plan-title"><Icon name="training" size={18} />Weekly plan</h2><span>{plan.delegated ? 'Assistant control' : 'Manual control'}</span></header>
         <div className="training-plan-controls">
           <div className="training-control">
             <div className="training-control-label"><label htmlFor="training-control">Training control</label><output htmlFor="training-control">{plan.delegated ? 'Assistant' : 'Manual'}</output></div>
@@ -72,11 +72,12 @@ export function TrainingWorkspace({ season, onEnable, onPlanChange, onSelectPlay
             <select id="training-focus" value={appliedPlan.focus} onChange={event => onPlanChange({ ...plan, focus: event.target.value as TrainingFocus })} disabled={busy || plan.delegated}><FocusOptions /></select>
           </div>
         </div>
-        <div className="training-plan-note"><p id="training-workload-help">{workloadDescriptions[appliedPlan.intensity]}</p>{plan.delegated && <p>Assistant workload is a forecast; the final choice follows the squad’s condition after the matchday. Individual focus still applies.</p>}{coaches.length > 0 && <p className="training-coaching-plan">Coaching for the next training week: {coaches.map(contract => `${COACHES.find(coach => coach.id === contract.coachId)!.name} (${TRAINING_FOCUS_LABELS[contract.focus]})`).join(' · ')}. The best applicable coach counts; assignments do not stack.</p>}</div>
+        <div className="training-plan-note training-plan-preview"><Icon name={appliedPlan.intensity === 'recovery' ? 'shield' : 'training'} size={25} /><div><strong>{TRAINING_INTENSITY_LABELS[appliedPlan.intensity]} · {TRAINING_FOCUS_LABELS[appliedPlan.focus]}</strong><p id="training-workload-help">{workloadDescriptions[appliedPlan.intensity]}</p></div><span>{coaches.length} {coaches.length === 1 ? 'coach' : 'coaches'}</span></div>
+        <details className="game-disclosure"><summary><Icon name="staff" size={15} />Plan details</summary><div className="training-plan-note">{plan.delegated && <p>The assistant chooses workload after the matchday. Individual focus still applies.</p>}{coaches.length > 0 && <p className="training-coaching-plan">{coaches.map(contract => `${COACHES.find(coach => coach.id === contract.coachId)!.name} (${TRAINING_FOCUS_LABELS[contract.focus]})`).join(' · ')}. The best applicable coach counts.</p>}<p>Training runs after Continue. Injuries and low condition reduce practice.</p></div></details>
       </section>
 
       <section className="training-roster panel" aria-labelledby="training-roster-title">
-        <header className="training-heading"><h2 id="training-roster-title">Individual training</h2><span>{nextDate ? 'Next week · availability forecast' : 'Plan for next season'}</span></header>
+        <header className="training-heading"><h2 id="training-roster-title"><Icon name="target" size={18} />Player development</h2><span>{nextDate ? 'Next week' : 'Next season'}</span></header>
         <div className="training-table-scroll" role="region" aria-label="Squad training plans" tabIndex={0}>
           <table className="training-roster-table"><thead><tr><th scope="col">Player</th><th scope="col">Condition</th><th scope="col">Individual focus</th><th scope="col">Target skill / progress</th><th scope="col">Eligible days</th></tr></thead><tbody>{club.players.map(player => {
             const individual = plan.individual[player.id] ?? 'team'
@@ -96,13 +97,14 @@ export function TrainingWorkspace({ season, onEnable, onPlanChange, onSelectPlay
             </tr>
           })}</tbody></table>
         </div>
-        <p className="training-note">Training runs when you continue to the next matchday. Players gain practice only on medically available days; match injuries can change this forecast. Low condition reduces training gains.</p>
+        <p className="training-note"><Icon name="calendar" size={14} />Practice begins after you Continue.</p>
       </section>
 
-      <section className="training-report panel" aria-labelledby="training-report-title">
+      <details className="training-report panel game-disclosure">
+        <summary><Icon name="training" size={17} />Last training week{week ? ` · Matchday ${week.afterRound}` : ' · No report yet'}</summary>
         <header className="training-heading"><h2 id="training-report-title">Last training week</h2>{week && <span><time dateTime={week.fromDate}>{formatDate(week.fromDate)}</time> – <time dateTime={week.toDate}>{formatDate(week.toDate)}</time> · After Matchday {week.afterRound}</span>}</header>
         {week ? <TrainingReport season={season} club={club} week={week} onSelectPlayer={onSelectPlayer} busy={busy} /> : <p className="training-empty">No training completed this season yet.</p>}
-      </section>
+      </details>
     </>}
   </div>
 }

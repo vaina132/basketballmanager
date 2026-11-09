@@ -7,6 +7,7 @@ import { availableCoaches, coachRating, coachingCommitted, COACHING_BUDGET, getC
 import { getFinanceBalance } from '../world/finance'
 import { getPayrollReserve, getSpendableCash } from '../world/payroll'
 import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES, TRAINING_FOCUS_LABELS } from '../world/training'
+import { CoachPortrait } from './CoachPortrait'
 import { Icon } from './Icon'
 import './staff-workspace.css'
 
@@ -21,11 +22,20 @@ interface StaffWorkspaceProps {
   busy?: boolean
 }
 
-const moneyFormatter = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 })
+const moneyFormatter = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
 const money = (cents: number) => moneyFormatter.format(cents / 100)
 const coachById = (id: string) => COACHES.find(coach => coach.id === id)!
 const compareNames = (left: Coach, right: Coach) => left.name.localeCompare(right.name, 'en') || left.id.localeCompare(right.id, 'en')
 type CoachSort = 'rating-desc' | 'rating-asc' | 'fee-asc' | 'fee-desc'
+const strongestSkills = (coach: Coach) => [...TRAINING_ATTRIBUTES].sort((left, right) => coach.skills[right] - coach.skills[left])
+
+function CoachSkills({ coach, compact = false }: { coach: Coach; compact?: boolean }) {
+  const skills = compact ? strongestSkills(coach).slice(0, 2) : TRAINING_ATTRIBUTES
+  return <dl className={`staff-skill-list${compact ? ' compact' : ''}`}>{skills.map(attribute => <div key={attribute}>
+    <dt>{TRAINING_FOCUS_LABELS[attribute]}</dt>
+    <dd><span className="staff-skill-bar" aria-hidden="true"><span style={{ width: `${coach.skills[attribute] * 10}%` }} /></span>{compact ? <span className="staff-skill-value" aria-label={`${coach.skills[attribute] / 2} out of 5 stars`}>{(coach.skills[attribute] / 2).toFixed(1)}</span> : <CoachStars rating={coach.skills[attribute]} />}</dd>
+  </div>)}</dl>
+}
 
 function CoachStars({ rating }: { rating: number }) {
   return <span className="coach-rating" role="img" aria-label={`${rating / 2} out of 5 stars`}>
@@ -41,6 +51,7 @@ function FocusOptions() {
 export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignment, onRenewal, onOpenTraining, busy = false }: StaffWorkspaceProps) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<CoachSort>('rating-desc')
+  const [candidatePage, setCandidatePage] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [hireFocus, setHireFocus] = useState<TrainingFocus>('balanced')
   const [releaseId, setReleaseId] = useState<string | null>(null)
@@ -59,12 +70,16 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
   const payrollEnabled = season.payroll.enabledSince !== null
   const wageReserve = getPayrollReserve(season, club.id)
   const spendable = getSpendableCash(season, club.id)
+  const staffBudget = finances ? finances.unpaid > 0 ? 0 : Math.min(allocation, spendable) : allocation
   const available = availableCoaches(season.coaching)
   const candidates = available.filter(coach => coach.name.toLowerCase().includes(query.trim().toLowerCase())).sort((left, right) => {
     const value = sort.startsWith('rating') ? coachRating(left) - coachRating(right) : left.fee - right.fee
     return (sort.endsWith('desc') ? -value : value) || compareNames(left, right)
   })
   const selected = available.find(coach => coach.id === selectedId) ?? null
+  const candidatePages = Math.max(1, Math.ceil(candidates.length / 6))
+  const visiblePage = Math.min(candidatePage, candidatePages - 1)
+  const visibleCandidates = candidates.slice(visiblePage * 6, visiblePage * 6 + 6)
   const releaseContract = contracts.find(contract => contract.id === releaseId) ?? null
   const releaseCoach = releaseContract ? coachById(releaseContract.coachId) : null
 
@@ -83,11 +98,11 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
   }, [releaseId, releaseContract?.id])
 
   function hiringReason(coach: Coach): string | null {
-    if (season.status === 'complete') return 'Start next season before recruiting.'
-    if (contracts.length >= MAX_COACHES) return `All ${MAX_COACHES} coaching roles are filled.`
-    if (coach.fee > allocation) return `${money(coach.fee - allocation)} above the available allocation.`
-    if (finances && finances.unpaid > 0) return `Clear ${money(finances.unpaid)} of unpaid costs before recruiting.`
-    if (finances && coach.fee > spendable) return payrollEnabled ? `${money(coach.fee - spendable)} more spendable cash is needed after reserving future wages.` : `${money(coach.fee - finances.cash)} more cash is needed for this season fee.`
+    if (season.status === 'complete') return 'Recruitment opens next season.'
+    if (contracts.length >= MAX_COACHES) return 'Release a coach to open a position.'
+    if (coach.fee > allocation) return `${money(coach.fee - allocation)} above the staff hiring limit.`
+    if (finances && finances.unpaid > 0) return `Settle ${money(finances.unpaid)} of unpaid costs before recruiting.`
+    if (finances && coach.fee > spendable) return `${money(coach.fee - spendable)} more available cash is needed.`
     return null
   }
 
@@ -102,67 +117,65 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
     releaseTrigger.current?.focus()
   }
 
+  function openCandidate(coach: Coach, trigger: HTMLButtonElement) {
+    candidateTrigger.current = trigger
+    if (selectedId === coach.id) { candidateRegion.current?.focus({ preventScroll: true }); candidateRegion.current?.scrollIntoView({ block: 'nearest' }) }
+    else { setHireFocus('balanced'); setSelectedId(coach.id) }
+  }
+
   return <div className="staff-workspace">
-    <section className="staff-context panel" aria-label="Coaching allocation">
-      <div><strong>{club.name}</strong><span>Training coaches · Season {season.seasonNumber}</span></div>
-      {enabled && <dl className="staff-allocation"><div><dt>Coaching budget</dt><dd>{money(COACHING_BUDGET)}</dd></div><div><dt>Committed</dt><dd data-coaching-committed={committed}>{money(committed)}</dd></div><div><dt>Available allocation</dt><dd data-coaching-available={allocation}>{money(allocation)}</dd></div></dl>}
-    </section>
-
-    {finances && <section className="staff-training-note panel" aria-label="Club cash"><p><strong>Cash: <span data-staff-cash={finances.cash}>{money(finances.cash)}</span></strong> · Unpaid costs: <span data-staff-unpaid={finances.unpaid}>{money(finances.unpaid)}</span>{payrollEnabled && <> · Future wages reserved: <span data-staff-reserve={wageReserve}>{money(wageReserve)}</span> · Spendable: <span data-staff-spendable={spendable}>{money(spendable)}</span></>}. Hiring requires coaching allocation and {payrollEnabled ? 'cash after future wage reserves' : 'cash'}; the full season fee is charged immediately.</p></section>}
-
-    {season.training.enabledSince === null && <section className="staff-training-note panel" aria-label="Training status"><p>Training is disabled. Enable it in Training for coaches to affect development.</p><button className="button small" onClick={onOpenTraining} disabled={busy}>Open training<Icon name="chevron" size={14} /></button></section>}
+    {season.training.enabledSince === null && <section className="staff-training-alert panel" aria-label="Training status"><Icon name="training" size={20} /><span>Enable training for coaches to develop your players.</span><button className="button small" onClick={onOpenTraining} disabled={busy}>Open training<Icon name="chevron" size={14} /></button></section>}
 
     {!enabled ? <section className="staff-enable panel" aria-labelledby="staff-enable-title">
-      <header className="staff-heading"><h2 id="staff-enable-title">Training coaches</h2><span>Not enabled</span></header>
-      <div><p>{finances ? 'Enable coaching for every club. Each club receives a coaching allocation; starter coaches require enough cash after future wage reserves and no unpaid costs. Unaffordable positions stay vacant. Assignments affect future training weeks.' : 'Enable coaching for every club. Each club receives one starter coach, whose full season fee uses part of its coaching allocation. Assignments affect future training weeks.'}{season.status === 'complete' && <span id="coaching-enable-reason" className="staff-assignment-note">Start next season before enabling coaching.</span>}</p><button id="enable-coaching" className="button primary" onClick={onEnable} disabled={busy || season.status === 'complete'} aria-describedby={season.status === 'complete' ? 'coaching-enable-reason' : undefined}>Enable coaching<Icon name="people" size={16} /></button></div>
+      <div className="staff-enable-main"><CoachPortrait coach={COACHES[0]} color={club.color} size={92} /><div><span className="staff-role">Training staff</span><h2 id="staff-enable-title">Build your coaching staff</h2><p>Three training positions. Assign specialists or balance their coverage.</p><button id="enable-coaching" className="button primary" onClick={onEnable} disabled={busy || season.status === 'complete'} aria-describedby={season.status === 'complete' ? 'coaching-enable-reason' : undefined}><Icon name="staff" size={16} />Enable coaching</button>{season.status === 'complete' && <p id="coaching-enable-reason">Start next season to enable coaching.</p>}</div></div>
+      <details className="staff-explainer"><summary>Appointment terms</summary><p>{finances ? 'Enables coaching for every club. Starter appointments require enough staff budget and available cash, with no unpaid costs. Unaffordable positions stay vacant.' : 'Enables coaching for every club. Each starter coach uses part of the club staff allocation.'} Assignments affect future training weeks.</p></details>
     </section> : <>
       <section className="staff-current panel" aria-labelledby="staff-current-title">
-        <header className="staff-heading"><h2 id="staff-current-title" ref={staffHeading} tabIndex={-1}>Current coaching staff</h2><span>{contracts.length} / {MAX_COACHES} roles filled</span></header>
-        {contracts.length ? <div className="staff-table-scroll" tabIndex={0} role="region" aria-label="Current coaching staff"><table className="staff-current-table"><thead><tr><th scope="col">Coach</th><th scope="col">Overall</th><th scope="col">Assignment</th><th scope="col">Season fee</th><th scope="col">Next season</th><th scope="col">Contract</th></tr></thead><tbody>{contracts.map(contract => {
+        <header className="staff-heading"><div><h2 id="staff-current-title" ref={staffHeading} tabIndex={-1}>Coaching staff</h2><span>{club.name} · Season {season.seasonNumber}</span></div><span className="staff-slot-count"><span aria-hidden="true">{Array.from({ length: MAX_COACHES }, (_, index) => <i className={index < contracts.length ? 'filled' : ''} key={index} />)}</span>{contracts.length} / {MAX_COACHES}</span></header>
+        <div className="staff-roster">{contracts.map(contract => {
           const coach = coachById(contract.coachId)
-          return <tr key={contract.id} data-contract-id={contract.id}>
-            <th scope="row">{coach.name}<small>Signed on Matchday {contract.startedRound}</small><details className="staff-owned-skills" data-coach-skills={contract.id}><summary aria-label={`${coach.name} coaching skills`}>Coaching skills</summary><dl className="staff-coach-skills">{TRAINING_ATTRIBUTES.map(attribute => <div key={attribute}><dt>{TRAINING_FOCUS_LABELS[attribute]}</dt><dd><CoachStars rating={coach.skills[attribute]} /></dd></div>)}</dl></details></th>
-            <td><CoachStars rating={coachRating(coach)} /></td>
-            <td><select data-coach-assignment={contract.id} aria-label={`${coach.name} assignment`} value={contract.focus} onChange={event => onAssignment(contract.id, event.target.value as TrainingFocus)} disabled={busy}><FocusOptions /></select></td>
-            <td className="staff-fee">{money(coach.fee)}</td>
-            <td><label className="staff-renew"><input type="checkbox" data-coach-renewal={contract.id} checked={contract.renew} onChange={event => onRenewal(contract.id, event.target.checked)} disabled={busy} aria-label={`Renew ${coach.name} next season`} />Renew</label></td>
-            <td><button className="text-button" data-release-coach={contract.id} onClick={event => { releaseTrigger.current = event.currentTarget; setReleaseId(contract.id) }} aria-label={`Release ${coach.name}`} disabled={busy}>Release</button></td>
-          </tr>
-        })}</tbody></table></div> : <p className="staff-empty">No training coaches signed.</p>}
-        {releaseContract && releaseCoach && <div ref={releaseRegion} className="staff-release-confirmation" id="coach-release-confirmation" tabIndex={-1} role="group" aria-label={`Release ${releaseCoach.name}`} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && !busy) { event.preventDefault(); event.stopPropagation(); cancelRelease() } }}>
-          <p>Release <strong>{releaseCoach.name}</strong>? The {money(releaseCoach.fee)} season fee stays committed. Available allocation remains {money(allocation)}.{finances && ' No cash is refunded.'}</p>
-          <div><button className="button" onClick={() => onRelease(releaseContract.id)} aria-label={`Confirm release ${releaseCoach.name}`} disabled={busy}>Confirm release</button><button className="text-button" onClick={cancelRelease} disabled={busy}>Cancel</button></div>
+          return <article className="staff-owned-card" key={contract.id} data-contract-id={contract.id}>
+            <div className="staff-owned-identity"><CoachPortrait coach={coach} color={club.color} size={80} /><div><span className="staff-role">Training coach</span><h3>{coach.name}</h3><CoachStars rating={coachRating(coach)} /><span className="staff-card-fee">{money(coach.fee)} <small>/ season</small></span></div></div>
+            <CoachSkills coach={coach} compact />
+            <label className="staff-assignment-control">Assignment<select data-coach-assignment={contract.id} aria-label={coach.name + ' assignment'} value={contract.focus} onChange={event => onAssignment(contract.id, event.target.value as TrainingFocus)} disabled={busy}><FocusOptions /></select></label>
+            <div className="staff-contract-controls"><label className="staff-renew"><input type="checkbox" data-coach-renewal={contract.id} checked={contract.renew} onChange={event => onRenewal(contract.id, event.target.checked)} disabled={busy} aria-label={'Renew ' + coach.name + ' next season'} />Renew next season</label><button className="text-button" data-release-coach={contract.id} onClick={event => { releaseTrigger.current = event.currentTarget; setReleaseId(contract.id) }} aria-label={'Release ' + coach.name} disabled={busy}>Release</button></div>
+            <details className="staff-owned-skills" data-coach-skills={contract.id}><summary aria-label={coach.name + ' coaching skills'}>Full skill profile</summary><CoachSkills coach={coach} /><small>Signed on Matchday {contract.startedRound}</small></details>
+          </article>
+        })}{Array.from({ length: Math.max(0, MAX_COACHES - contracts.length) }, (_, index) => <button className="staff-vacancy" key={'vacancy-' + index} onClick={() => { document.getElementById('coach-search')?.focus(); document.getElementById('staff-recruitment-title')?.scrollIntoView({ block: 'nearest' }) }} disabled={busy}><span className="staff-vacancy-image" aria-hidden="true"><Icon name="staff" size={46} /><span>+</span></span><span><strong>Vacant position</strong><small>Training coach</small><span className="staff-vacancy-action">Find a coach<Icon name="chevron" size={14} /></span></span></button>)}</div>
+        {releaseContract && releaseCoach && <div ref={releaseRegion} className="staff-release-confirmation" id="coach-release-confirmation" tabIndex={-1} role="group" aria-label={'Release ' + releaseCoach.name} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && !busy) { event.preventDefault(); event.stopPropagation(); cancelRelease() } }}>
+          <CoachPortrait coach={releaseCoach} size={42} /><div className="staff-release-copy"><strong>Release {releaseCoach.name}?</strong><p>{money(releaseCoach.fee)} remains committed.{finances && ' No refund.'}</p></div><div className="staff-release-actions"><button className="button" onClick={() => onRelease(releaseContract.id)} aria-label={'Confirm release ' + releaseCoach.name} disabled={busy}>Confirm release</button><button className="text-button" onClick={cancelRelease} disabled={busy}>Cancel</button></div>
         </div>}
-        <p className="staff-note">Season fees are reserved in full, including midseason hires and released contracts. {finances ? 'Renewals require available allocation and cash after future wage reserves, with no unpaid costs, when the next season begins.' : 'Renewal reserves a new season fee when the next season begins.'}<span className="staff-assignment-note">Focused assignments use full skill strength; Balanced uses half strength for every skill. Only the best applicable coach counts.</span></p>
+        <details className="staff-explainer"><summary>How assignments work</summary><p>Focused assignments use full skill strength. Balanced uses half strength across all skills. Only the strongest applicable coach counts, adding up to 25% extra practice. Season fees are charged in full; releasing a coach does not restore the budget. Renewals are checked against the new season's staff budget{finances ? ', available cash and unpaid costs' : ''} on opening day.</p></details>
       </section>
 
-      {released.length > 0 && <details className="staff-released panel"><summary>Released this season <span>{released.length} contracts · {money(released.reduce((total, contract) => total + coachById(contract.coachId).fee, 0))} retained</span></summary><div className="staff-table-scroll" tabIndex={0} role="region" aria-label="Released coaching contracts"><table><thead><tr><th scope="col">Coach</th><th scope="col">Released</th><th scope="col">Committed season fee</th></tr></thead><tbody>{released.map(contract => <tr key={contract.id}><th scope="row">{coachById(contract.coachId).name}</th><td>Matchday {contract.releasedRound}</td><td>{money(coachById(contract.coachId).fee)}</td></tr>)}</tbody></table></div></details>}
-
-      <section className="staff-recruitment panel" aria-labelledby="staff-recruitment-title">
-        <header className="staff-heading"><h2 id="staff-recruitment-title">Available coaches</h2><span>{candidates.length} matching coaches</span></header>
-        <div className="staff-recruitment-filters"><label htmlFor="coach-search">Find coach<input type="search" id="coach-search" value={query} onChange={event => setQuery(event.target.value)} disabled={busy} placeholder="Search by name" /></label><label htmlFor="coach-sort">Sort<select id="coach-sort" value={sort} onChange={event => setSort(event.target.value as CoachSort)} disabled={busy}><option value="rating-desc">Overall: highest first</option><option value="rating-asc">Overall: lowest first</option><option value="fee-asc">Fee: lowest first</option><option value="fee-desc">Fee: highest first</option></select></label></div>
-        <div className="staff-table-scroll staff-candidate-scroll" tabIndex={0} role="region" aria-label="Available training coaches"><table className="staff-candidates-table"><thead><tr><th scope="col">Coach</th><th scope="col">Overall</th><th scope="col">Strongest skill</th><th scope="col">Season fee</th><th scope="col">Recruitment</th></tr></thead><tbody>{candidates.map(coach => {
-          const strongest = TRAINING_ATTRIBUTES.reduce((best, attribute) => coach.skills[attribute] > coach.skills[best] ? attribute : best, TRAINING_ATTRIBUTES[0])
-          const reason = hiringReason(coach)
-          return <tr key={coach.id} className={selectedId === coach.id ? 'staff-selected-candidate' : ''}>
-            <th scope="row"><button className="text-button staff-candidate-name" data-candidate-coach={coach.id} aria-label={`Review ${coach.name}`} aria-expanded={selectedId === coach.id} aria-controls="coach-candidate-detail" onClick={event => { candidateTrigger.current = event.currentTarget; if (selectedId === coach.id) { candidateRegion.current?.focus({ preventScroll: true }); candidateRegion.current?.scrollIntoView({ block: 'nearest' }) } else { setHireFocus('balanced'); setSelectedId(coach.id) } }} disabled={busy}>{coach.name}<Icon name="chevron" size={13} /></button></th>
-            <td><CoachStars rating={coachRating(coach)} /></td><td>{TRAINING_FOCUS_LABELS[strongest]}<small>{(coach.skills[strongest] / 2).toFixed(1)} / 5 stars</small></td><td className="staff-fee">{money(coach.fee)}</td><td className={reason ? 'staff-hiring-unavailable' : ''}>{reason ?? 'Available to hire'}</td>
-          </tr>
-        })}{!candidates.length && <tr><td colSpan={5} className="staff-empty">No available coaches match this search.</td></tr>}</tbody></table></div>
-      </section>
+      {released.length > 0 && <details className="staff-released panel"><summary>Released this season <span>{released.length} · {money(released.reduce((total, contract) => total + coachById(contract.coachId).fee, 0))} retained</span></summary><div className="staff-released-list">{released.map(contract => <div key={contract.id}><CoachPortrait coach={coachById(contract.coachId)} size={36} /><strong>{coachById(contract.coachId).name}</strong><span>Matchday {contract.releasedRound}</span><span>{money(coachById(contract.coachId).fee)}</span></div>)}</div></details>}
 
       {selected && <section ref={candidateRegion} id="coach-candidate-detail" className="staff-candidate-detail panel" tabIndex={-1} aria-labelledby="coach-candidate-title" data-selected-coach={selected.id} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && !busy) { event.preventDefault(); event.stopPropagation(); closeCandidate() } }}>
-        <header className="staff-heading"><div><h2 id="coach-candidate-title">{selected.name}</h2><span>Training coach · Season fee {money(selected.fee)}</span></div><button className="text-button" aria-label="Close coach details" onClick={closeCandidate} disabled={busy}><Icon name="close" size={14} />Close</button></header>
-        <div className="staff-candidate-body"><dl className="staff-coach-skills">{TRAINING_ATTRIBUTES.map(attribute => <div key={attribute}><dt>{TRAINING_FOCUS_LABELS[attribute]}</dt><dd><CoachStars rating={selected.skills[attribute]} /></dd></div>)}</dl><div className="staff-hire-controls">
+        <header className="staff-heading"><div><h2 id="coach-candidate-title">Recruit {selected.name}</h2><span>Training coach</span></div><button className="text-button" aria-label="Close coach details" onClick={closeCandidate} disabled={busy}><Icon name="close" size={14} />Close</button></header>
+        <div className="staff-candidate-body"><div className="staff-candidate-profile"><div className="staff-profile-portrait"><CoachPortrait coach={selected} color={club.color} size={104} /><CoachStars rating={coachRating(selected)} /></div><CoachSkills coach={selected} /></div><div className="staff-hire-controls">
+          <div className="staff-offer-fee"><span>Season fee</span><strong>{money(selected.fee)}</strong></div><div className="staff-after-hire"><span>{staffBudget >= selected.fee ? 'Staff budget after hire' : 'Staff budget shortfall'}</span><strong>{money(Math.abs(staffBudget - selected.fee))}</strong></div>
           <label htmlFor="coach-hire-focus">Initial assignment</label><select id="coach-hire-focus" value={hireFocus} onChange={event => setHireFocus(event.target.value as TrainingFocus)} disabled={busy}><FocusOptions /></select>
-          <dl className="staff-hire-budget"><div><dt>Allocation now</dt><dd>{money(allocation)}</dd></div><div><dt>{allocation >= selected.fee ? 'Allocation after hiring' : 'Allocation shortfall'}</dt><dd>{money(Math.abs(allocation - selected.fee))}</dd></div>{finances && <><div><dt>Cash now</dt><dd>{money(finances.cash)}</dd></div><div><dt>{finances.cash >= selected.fee ? 'Cash after hiring' : 'Cash shortfall'}</dt><dd>{money(Math.abs(finances.cash - selected.fee))}</dd></div>{payrollEnabled && <><div><dt>Future wages reserved</dt><dd>{money(wageReserve)}</dd></div><div><dt>Spendable cash</dt><dd>{money(spendable)}</dd></div></>}</>}</dl>
-          <p>Contract through this season. Renewal is selected for next season.</p>
+          <span className="staff-renewal-note"><Icon name="check" size={14} />Renewal selected for next season</span>
           {hiringReason(selected) && <p id="coach-hire-reason" className="staff-hire-reason">{hiringReason(selected)}</p>}
-          <button className="button primary" id="hire-coach" aria-label={`Hire ${selected.name} for ${money(selected.fee)}`} aria-describedby={hiringReason(selected) ? 'coach-hire-reason' : undefined} onClick={() => onHire(selected.id, hireFocus)} disabled={busy || !!hiringReason(selected)}>Hire for {money(selected.fee)}<Icon name="people" size={15} /></button>
+          <button className="button primary" id="hire-coach" aria-label={'Hire ' + selected.name + ' for ' + money(selected.fee)} aria-describedby={hiringReason(selected) ? 'coach-hire-reason' : undefined} onClick={() => onHire(selected.id, hireFocus)} disabled={busy || !!hiringReason(selected)}><Icon name="staff" size={16} />Hire for {money(selected.fee)}</button>
+          <details className="staff-payment-details"><summary>Payment details</summary><dl><div><dt>Staff fees committed</dt><dd data-coaching-committed={committed}>{money(committed)}</dd></div><div><dt>Allocation remaining</dt><dd data-coaching-available={allocation}>{money(allocation)}</dd></div>{finances && <><div><dt>Club cash</dt><dd data-staff-cash={finances.cash}>{money(finances.cash)}</dd></div><div><dt>Unpaid costs</dt><dd data-staff-unpaid={finances.unpaid}>{money(finances.unpaid)}</dd></div>{payrollEnabled && <><div><dt>Wages reserved</dt><dd data-staff-reserve={wageReserve}>{money(wageReserve)}</dd></div><div><dt>Available cash</dt><dd data-staff-spendable={spendable}>{money(spendable)}</dd></div></>}</>}</dl><p>Full season fee, {finances ? 'paid' : 'committed'} when hired. Overall is the average of seven coaching skills.</p></details>
         </div></div>
-        <p className="staff-note">Overall averages the seven coaching skills. Focused assignments use full skill strength; Balanced uses half strength across every skill. The best applicable coach contributes up to 25% extra practice; coaches do not stack.</p>
       </section>}
-      <p className="staff-save-note">Save season keeps staff changes before the next automatic checkpoint.</p>
+
+      <section className="staff-recruitment panel" aria-labelledby="staff-recruitment-title">
+        <header className="staff-heading"><h2 id="staff-recruitment-title">Available coaches</h2><span>{candidates.length} coaches</span></header>
+        <div className="staff-recruitment-filters"><label htmlFor="coach-search"><Icon name="search" size={16} /><span className="sr-only">Find coach</span><input type="search" id="coach-search" value={query} onChange={event => { setQuery(event.target.value); setCandidatePage(0) }} disabled={busy} placeholder="Find a coach" /></label><label htmlFor="coach-sort"><span>Sort</span><select id="coach-sort" value={sort} onChange={event => { setSort(event.target.value as CoachSort); setCandidatePage(0) }} disabled={busy}><option value="rating-desc">Best overall</option><option value="rating-asc">Overall: low to high</option><option value="fee-asc">Lowest fee</option><option value="fee-desc">Highest fee</option></select></label></div>
+        <div className="staff-candidate-grid">{visibleCandidates.map(coach => {
+          const reason = hiringReason(coach)
+          return <article className={'staff-candidate-card' + (selectedId === coach.id ? ' staff-selected-candidate' : '')} key={coach.id}>
+            <button className="staff-candidate-identity" data-candidate-coach={coach.id} aria-label={'Review ' + coach.name} aria-expanded={selectedId === coach.id} aria-controls="coach-candidate-detail" onClick={event => openCandidate(coach, event.currentTarget)} disabled={busy}><CoachPortrait coach={coach} size={64} /><span><strong>{coach.name}</strong><CoachStars rating={coachRating(coach)} /><small>{TRAINING_FOCUS_LABELS[strongestSkills(coach)[0]]} specialist</small></span><Icon name="chevron" size={15} /></button>
+            <CoachSkills coach={coach} compact /><div className="staff-candidate-footer"><span className="staff-card-fee">{money(coach.fee)} <small>/ season</small></span><button className={'button small' + (reason ? '' : ' primary')} onClick={event => openCandidate(coach, event.currentTarget)} aria-label={(reason ? 'Review' : 'Recruit') + ' ' + coach.name} disabled={busy}>{reason ? 'View coach' : 'Recruit'}<Icon name="chevron" size={13} /></button></div>
+            {reason && <span className="staff-card-status">{contracts.length >= MAX_COACHES ? 'No vacant position' : season.status === 'complete' ? 'Recruit next season' : 'Outside current budget'}</span>}
+          </article>
+        })}{!candidates.length && <p className="staff-empty">No available coaches match this search.</p>}</div>
+        {candidates.length > 0 && <nav className="staff-candidate-pages" aria-label="Available coaches pages"><span aria-live="polite">{visiblePage * 6 + 1}–{Math.min(visiblePage * 6 + 6, candidates.length)} of {candidates.length}</span><div><button className="button small" aria-label="Previous coaches" disabled={busy || visiblePage === 0} onClick={() => setCandidatePage(visiblePage - 1)}><Icon name="chevron" size={13} />Previous</button><span>{visiblePage + 1} / {candidatePages}</span><button className="button small" aria-label="Next coaches" disabled={busy || visiblePage === candidatePages - 1} onClick={() => setCandidatePage(visiblePage + 1)}>Next<Icon name="chevron" size={13} /></button></div></nav>}
+      </section>
+      <p className="staff-save-note"><Icon name="save" size={14} />Save season to keep staff changes.</p>
     </>}
   </div>
 }

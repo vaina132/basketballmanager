@@ -48,7 +48,7 @@ beforeAll(() => {
 describe('career save boundaries', () => {
   it('writes format 9 with the original season table preserved after rollover', () => {
     const text = serializeSeason(secondStart), restored = parseSeason(text);
-    expect(JSON.parse(text).formatVersion).toBe(11);
+    expect(JSON.parse(text).formatVersion).toBe(12);
     expect(restored).toEqual(secondStart);
     expect(restored.history).toHaveLength(1);
     expect(getStandings({ clubs: restored.clubs, fixtures: restored.history[0]!.fixtures })).toEqual(getStandings(firstComplete));
@@ -116,7 +116,7 @@ describe('explicit career migrations', () => {
     const text = previousFormat(original, 2), snapshot = JSON.parse(text).state;
     const restored = parseSeason(text);
     expect(restored).toEqual(withUnavailableArchivedStats(original));
-    expect(restored.schemaVersion).toBe(11);
+    expect(restored.schemaVersion).toBe(12);
     expect(restored.seasonNumber).toBe(1);
     expect(restored.history).toEqual([]);
     expect(restored.activeMatch).toEqual(snapshot.activeMatch);

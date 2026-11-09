@@ -20,10 +20,10 @@ export function RequiredDecision({ match, managedSide = 'home', apply }: { match
   })
   return <section className="decision-banner" role="alert">
     <Icon name="swap" size={24} />
-    <div><strong>Replacement needed — match paused</strong><p>{names.join('; ')}. Choose a replacement below, or let your assistant make the change.</p></div>
+    <div><strong>Replacement needed</strong><p>{names.join('; ')}. Select a reserve below.</p></div>
     <div className="decision-actions">
-      {match.requiredSubstitutions.some(item => item.side === managedSide) && <a href="#player-in">Choose replacement</a>}
-      <button className="button" onClick={() => apply(state => [...new Set(state.requiredSubstitutions.map(item => item.side))].reduce((next, side) => setAutoSubstitutions(next, side, true), state))}>Enable assistant substitutions</button>
+      {match.requiredSubstitutions.some(item => item.side === managedSide) && <a href="#match-rotation">Choose replacement</a>}
+      <button className="button" onClick={() => apply(state => [...new Set(state.requiredSubstitutions.map(item => item.side))].reduce((next, side) => setAutoSubstitutions(next, side, true), state))}><Icon name="staff" size={16} />Ask assistant</button>
     </div>
   </section>
 }
@@ -48,12 +48,12 @@ export function MatchCoaching({ match, analysisMatch = match, managedSide = 'hom
     </header>
     <div className="coaching-columns">
       <div className="coach-tactics coaching-column">
-        <div className="section-heading"><h3>Game plan</h3><span className="coaching-section-number">01</span></div>
-        <TeamInstructions match={match} managedSide={managedSide} apply={apply} />
-        <p className="coach-help">Your instructions apply to the next play.</p>
+        <div className="section-heading"><h3><Icon name="court" size={16} />Game plan</h3></div>
+        <TeamInstructions match={match} managedSide={managedSide} apply={apply} includeRotation />
       </div>
-      <div className="coach-rotation coaching-column">
-        <div className="section-heading"><h3>{required ? 'Required replacement' : 'Substitutions'}</h3><span className="coaching-section-number">02</span></div>
+      <details className="coach-rotation coaching-column coaching-manual-pickers">
+        <summary><Icon name="swap" size={16} />Choose players by name</summary>
+        <div className="coaching-picker-body">
         <label className="field-label" htmlFor="player-out">COMING OFF</label>
         <select id="player-out" value={outId} onChange={event => setOutgoing(event.target.value)} disabled={complete || !!required}>
           {active.map(player => <option key={player.id} value={player.id}>#{player.number} {player.name} · {match.stats[player.id].fouls} fouls · {Math.round(match.stats[player.id].condition)}% stamina</option>)}
@@ -66,22 +66,21 @@ export function MatchCoaching({ match, analysisMatch = match, managedSide = 'hom
         <button className="button full-width" disabled={complete || !outId || !inId} onClick={() => apply(state => substitutePlayer(state, managedSide, outId, inId))}><Icon name="swap" size={16} />{immediate ? 'Make substitution' : 'Queue substitution'}</button>
         <p className="coach-help">{immediate ? 'A substitution opportunity is open.' : 'Your change will happen at the next legal stoppage.'}</p>
         {match.pendingSubstitutions[managedSide].length > 0 && <div className="queued-changes" aria-live="polite"><strong>Queued changes</strong>{match.pendingSubstitutions[managedSide].map(request => <div key={request.outId}><span>{playerName(request.outId)} → {playerName(request.inId)}</span><button className="text-button" aria-label={`Cancel substitution for ${playerName(request.outId)}`} onClick={() => apply(state => cancelSubstitution(state, managedSide, request.outId))}>Cancel</button></div>)}</div>}
-      </div>
+        </div>
+      </details>
       <div className="coach-timeout coaching-column">
-        <div className="section-heading"><h3>Timeout</h3><span className="coaching-section-number">03</span></div>
+        <div className="section-heading"><h3><Icon name="clock" size={16} />Timeout</h3></div>
         <div className="timeout-allowance"><Icon name="clock" size={25} /><div><strong>{timeouts}</strong><span>remaining this {match.period > 4 ? 'overtime' : 'half'}</span></div></div>
-        <button className="button full-width" disabled={complete || match.status === 'ready' || (!match.timeoutRequested[managedSide] && timeouts === 0)} onClick={() => apply(state => state.timeoutRequested[managedSide] ? cancelTimeoutRequest(state, managedSide) : requestTimeout(state, managedSide))}>{match.timeoutRequested[managedSide] ? 'Cancel timeout request' : 'Request timeout'}</button>
-        <p className="coach-help" aria-live="polite">{match.timeoutRequested[managedSide] ? 'Requested. Waiting for the next timeout opportunity.' : match.status === 'ready' ? 'Available after tipoff.' : 'Call the team together at the next timeout opportunity.'}</p>
+        <button className="button full-width" disabled={complete || match.status === 'ready' || (!match.timeoutRequested[managedSide] && timeouts === 0)} onClick={() => apply(state => state.timeoutRequested[managedSide] ? cancelTimeoutRequest(state, managedSide) : requestTimeout(state, managedSide))}><Icon name={match.timeoutRequested[managedSide] ? 'close' : 'clock'} size={17} />{match.timeoutRequested[managedSide] ? 'Cancel request' : 'Call timeout'}</button>
+        <p className="coach-help" aria-live="polite">{match.timeoutRequested[managedSide] ? 'Queued for the next opportunity.' : match.status === 'ready' ? 'Available after tipoff.' : 'Stops play at the next legal opportunity.'}</p>
       </div>
     </div>
-    <ShotCreation match={analysisMatch} managedSide={managedSide} />
-    <MatchPolicies match={match} managedSide={managedSide} lockInjuries={lockInjuries} apply={apply} />
+    <details className="coaching-extra"><summary><Icon name="target" size={16} />Match analysis & settings</summary><ShotCreation match={analysisMatch} managedSide={managedSide} /><MatchPolicies match={match} lockInjuries={lockInjuries} apply={apply} /></details>
   </section>
 }
 
-function MatchPolicies({ match, managedSide, lockInjuries, apply }: { match: MatchState; managedSide: Side; lockInjuries: boolean; apply: Apply }) {
-  return <div className="match-policies coach-assistant coaching-settings" aria-label="Match assistance and injury settings">
-    <div><label className="check-label"><input type="checkbox" checked={match.autoSubstitutions[managedSide]} onChange={event => apply(state => setAutoSubstitutions(state, managedSide, event.target.checked))} disabled={match.status === 'finished'} /><span>Assistant substitutions</span></label><p className="coach-help">Let your assistant manage tired players and required replacements.</p></div>
+function MatchPolicies({ match, lockInjuries, apply }: { match: MatchState; lockInjuries: boolean; apply: Apply }) {
+  return <div className="match-policies coaching-settings" aria-label="Match injury settings">
     <div><label className="field-label" htmlFor="injury-setting">INJURIES</label><select id="injury-setting" value={match.injuryMode} disabled={lockInjuries || match.status !== 'ready'} onChange={event => apply(state => setInjuryMode(state, event.target.value as InjuryMode))}><option value="standard">Standard</option><option value="reduced">Reduced</option><option value="off">Off</option></select><p className="coach-help">{lockInjuries ? 'Season setting. Applies to every club.' : 'Applies to both teams. Choose before tipoff.'}</p></div>
   </div>
 }

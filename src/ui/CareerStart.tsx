@@ -7,6 +7,7 @@ import { managerAge, MAX_MANAGER_NAME_LENGTH, MAX_MANAGER_NATIONALITY_LENGTH, va
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
+import { NATIONALITY_SUGGESTIONS } from './nationality-suggestions'
 import './career-start.css'
 
 export interface CareerSetup {
@@ -102,7 +103,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
   const [step, setStep] = useState(0)
   const [clubId, setClubId] = useState(DEVELOPMENT_CLUBS[0]!.id)
   const [injuryMode, setInjuryMode] = useState<InjuryMode>('standard')
-  const [seed, setSeed] = useState('42')
+  const [replayCode, setReplayCode] = useState('')
   const [issue, setIssue] = useState<{ message: string; revision: number } | null>(null)
   const title = useRef<HTMLDivElement>(null)
   const club = DEVELOPMENT_CLUBS.find(team => team.id === clubId)!
@@ -125,8 +126,9 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
       if (step === 0) { setIssue(null); setStep(1); return }
       if (!DEVELOPMENT_CLUBS.some(team => team.id === clubId)) throw new Error('Choose a club from the development league.')
       if (step === 1) { setIssue(null); setStep(2); return }
-      const seedValue = Number(seed)
-      if (!seed.trim() || !Number.isSafeInteger(seedValue) || seedValue < 0 || seedValue > 4294967295) throw new Error('Choose a whole-number seed between 0 and 4,294,967,295 in Advanced setup.')
+      const enteredCode = replayCode.trim()
+      if (enteredCode && (!/^\d+$/.test(enteredCode) || Number(enteredCode) > 4294967295)) throw new Error('Enter a replay code from 0 to 4,294,967,295 in Advanced setup, or leave it blank for a new career.')
+      const seedValue = enteredCode ? Number(enteredCode) : crypto.getRandomValues(new Uint32Array(1))[0]!
       setIssue(null)
       props.onStart({ manager: validManager, clubId, injuryMode, seed: seedValue })
     } catch (error) { reportError(error) }
@@ -147,7 +149,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
           <section className="panel" aria-labelledby="career-manager-title"><header className="career-start-panel-heading"><h2 id="career-manager-title">Your manager</h2><Icon name="people" size={17} /></header><div className="career-identity-fields">
             <div className="career-start-field career-start-field-wide"><label htmlFor="manager-name">Manager name</label><input id="manager-name" name="manager-name" autoComplete="name" value={manager.name} onChange={event => changeManager('name', event.target.value)} maxLength={MAX_MANAGER_NAME_LENGTH} aria-describedby="manager-name-help" required /><small id="manager-name-help">The name shown in your career.</small></div>
             <div className="career-start-field"><label htmlFor="manager-birth-date">Date of birth</label><input id="manager-birth-date" name="manager-birth-date" type="date" autoComplete="bday" value={manager.dateOfBirth} onChange={event => changeManager('dateOfBirth', event.target.value)} aria-describedby="manager-age" required /><small id="manager-age" className="career-identity-age" aria-live="polite">{age === null ? 'Age 18–100 at career start.' : `${age} years old on ${formatDate(DEVELOPMENT_START_DATE)}.`}</small></div>
-            <div className="career-start-field"><label htmlFor="manager-nationality">Nationality</label><input id="manager-nationality" name="manager-nationality" value={manager.nationality} onChange={event => changeManager('nationality', event.target.value)} maxLength={MAX_MANAGER_NATIONALITY_LENGTH} aria-describedby="manager-nationality-help" required /><small id="manager-nationality-help">Enter any nationality.</small></div>
+            <div className="career-start-field"><label htmlFor="manager-nationality">Nationality</label><input id="manager-nationality" name="manager-nationality" list="manager-nationality-options" autoComplete="off" placeholder="Type to find a nationality" value={manager.nationality} onChange={event => changeManager('nationality', event.target.value)} maxLength={MAX_MANAGER_NATIONALITY_LENGTH} aria-describedby="manager-nationality-help" required /><datalist id="manager-nationality-options">{NATIONALITY_SUGGESTIONS.map(item => <option key={item.nationality} value={item.nationality} label={item.place} />)}</datalist><small id="manager-nationality-help">Choose a suggestion or enter your own nationality. Multiple nationalities are welcome.</small></div>
           </div></section>
           <section className="panel" aria-labelledby="career-world-title"><header className="career-start-panel-heading"><h2 id="career-world-title">{props.profileOnly ? 'Profile details' : 'Career start'}</h2></header>{props.profileOnly ? <p className="career-start-empty">Your name and nationality identify your manager. Age is calculated from your date of birth. Editing this profile preserves your club and career progress.</p> : <><dl className="career-start-details"><dt>Competition</dt><dd>Development League</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd><dt>Format</dt><dd>{DEVELOPMENT_CLUBS.length} clubs · 10 matchdays</dd><dt>Season</dt><dd>2026/27</dd></dl><p className="career-start-subnote">Fictional development clubs, players and financial estimates.</p></>}</section>
         </div>}
@@ -160,7 +162,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
         {!props.profileOnly && step === 2 && <>
           <div className="career-review-layout">
             <section className="panel" aria-labelledby="career-review-title"><header className="career-start-panel-heading"><h2 id="career-review-title">Career details</h2><Icon name="people" size={17} /></header><dl className="career-start-details"><dt>Manager</dt><dd>{manager.name}</dd><dt>Date of birth</dt><dd>{formatDate(manager.dateOfBirth)} · age {age}</dd><dt>Nationality</dt><dd>{manager.nationality}</dd><dt>Club</dt><dd>{club.name}</dd><dt>Competition</dt><dd>Development League · 2026/27</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd></dl><p className="career-start-subnote">Fictional development clubs, players and financial estimates.</p></section>
-            <section className="panel" aria-labelledby="career-options-title"><header className="career-start-panel-heading"><h2 id="career-options-title">Career options</h2><Icon name="settings" size={17} /></header><div className="career-review-options"><div className="career-start-field"><label htmlFor="career-injuries">Injury frequency</label><select id="career-injuries" value={injuryMode} onChange={event => setInjuryMode(event.target.value as InjuryMode)} aria-describedby="career-injuries-help"><option value="standard">Standard</option><option value="reduced">Reduced</option><option value="off">Off</option></select><small id="career-injuries-help">Applies equally to every club. Injuries carry between matches.</small></div><details className="career-advanced"><summary>Advanced setup</summary><div className="career-start-field"><label htmlFor="career-seed">Simulation seed</label><input id="career-seed" inputMode="numeric" value={seed} onChange={event => setSeed(event.target.value)} aria-describedby="career-seed-help" /><small id="career-seed-help">A whole number from 0 to 4,294,967,295. The same seed and decisions reproduce the same simulation.</small></div></details></div></section>
+            <section className="panel" aria-labelledby="career-options-title"><header className="career-start-panel-heading"><h2 id="career-options-title">Career options</h2><Icon name="settings" size={17} /></header><div className="career-review-options"><div className="career-start-field"><label htmlFor="career-injuries">Injury frequency</label><select id="career-injuries" value={injuryMode} onChange={event => setInjuryMode(event.target.value as InjuryMode)} aria-describedby="career-injuries-help"><option value="standard">Standard</option><option value="reduced">Reduced</option><option value="off">Off</option></select><small id="career-injuries-help">Applies equally to every club. Injuries carry between matches.</small></div><details className="career-advanced"><summary>Advanced setup</summary><div className="career-start-field"><label htmlFor="career-seed">Replay code <span className="career-field-optional">Optional</span></label><input id="career-seed" inputMode="numeric" autoComplete="off" placeholder="Automatic · a fresh career every time" value={replayCode} onChange={event => setReplayCode(event.target.value)} aria-describedby="career-seed-help" /><small id="career-seed-help">Leave blank for a fresh career. Enter the same code with the same starting options and choices to reproduce a career’s random events. This does not change difficulty. Codes are whole numbers from 0 to 4,294,967,295.</small></div></details></div></section>
           </div>
           <p className="career-start-storage-note">Starting a career makes it the current local save. Load saves opens the five latest checkpoints. Export a save file from the main menu to keep a separate career.</p>
         </>}

@@ -146,10 +146,17 @@
   .game-shell .roster th:nth-child(3), .game-shell .roster td:nth-child(3) { display: none; }
   .game-shell .roster th, .game-shell .roster td { padding-inline: 7px; }
   .game-shell .roster .avatar { width: 27px; height: 27px; }
-  .game-shell .roster td:nth-child(4) { min-width: 75px; }
+  .game-shell .roster td:nth-child(5) { min-width: 75px; }
   .game-shell .attribute-list { grid-template-columns: 1fr; }
   .game-shell .workspace-footer { align-items: flex-start; gap: 4px; }
   .game-session-actions { gap: 16px; flex-wrap: wrap; }
   .game-shell .save-tools { gap: 18px; }
   .simulation-options .seed-controls { left: auto; right: 0; width: 220px; }
 }
+.instruction-icon-label{display:flex;align-items:center;gap:7px}
+.instruction-icon-label svg{color:var(--accent);flex:none}
+.game-disclosure>summary{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:11px 14px;color:var(--muted)}
+.game-disclosure>summary:hover,.game-disclosure[open]>summary{color:var(--accent)}
+.game-disclosure>summary svg{flex:none}
+.game-disclosure>summary:focus-visible{outline-offset:-3px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

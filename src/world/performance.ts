@@ -1,5 +1,6 @@
 import type { SeasonState } from '../domain/season';
 import type { MatchResult, Player, PlayerStats, Team } from '../domain/types';
+import { getFixtureTeams, getSeasonRosterData } from './rosters';
 
 export type PerformanceTotals = Omit<PlayerStats, 'condition'>;
 export type PerformanceMode = 'per-game' | 'totals' | 'per-40';
@@ -7,6 +8,8 @@ export type PerformanceMetric = 'games' | 'minutes' | 'points' | 'rebounds' | 'a
 export type PerformanceDirection = 'asc' | 'desc';
 
 export interface PlayerGameLog {
+  seasonNumber: number;
+  clubId: string;
   fixtureId: string;
   date: string;
   round: number;
@@ -22,6 +25,9 @@ export interface PlayerGameLog {
 }
 
 export interface SeasonPlayerPerformance {
+  /** A player can have separate club stints in the same season. */
+  key: string;
+  seasonNumber: number;
   player: Player;
   club: Team;
   clubGames: number;
@@ -39,28 +45,51 @@ const TOTAL_KEYS: readonly (keyof PerformanceTotals)[] = [
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
 const emptyTotals = (): PerformanceTotals => Object.fromEntries(TOTAL_KEYS.map(key => [key, 0])) as PerformanceTotals;
 
-/** Derive this season's performance only from results committed to the calendar. */
-export function getSeasonPerformance(season: SeasonState): SeasonPlayerPerformance[] {
-  const rows = season.clubs.flatMap(club => club.players.map((player): SeasonPlayerPerformance => ({ player, club, clubGames: 0, games: 0, totals: emptyTotals(), log: [] })));
-  const clubRows = new Map(season.clubs.map(club => [club.id, rows.filter(row => row.club.id === club.id)]));
+/** Missing legacy box scores are unavailable history, never zero performances. */
+export function getPerformanceCoverage(season: SeasonState, seasonNumber = season.seasonNumber): 'complete' | 'unavailable' {
+  const data = getSeasonRosterData(season, seasonNumber);
+  return data.fixtures.some(fixture => fixture.result !== null && fixture.result.stats === null) ? 'unavailable' : 'complete';
+}
+
+export function performanceRecordKey(seasonNumber: number, clubId: string, playerId: string): string {
+  return `${seasonNumber}:${clubId}:${playerId}`;
+}
+
+/** Attribute each committed box score to the squad recorded for that fixture. */
+export function getSeasonPerformance(season: SeasonState, seasonNumber = season.seasonNumber): SeasonPlayerPerformance[] {
+  const data = getSeasonRosterData(season, seasonNumber);
+  if (getPerformanceCoverage(season, seasonNumber) === 'unavailable') return [];
+  const records = new Map<string, SeasonPlayerPerformance>();
+  const clubGames = new Map(season.clubs.map(club => [club.id, data.fixtures.filter(fixture => fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(club.id)).length]));
+  // Snapshots preserve departed players and their identity without consulting today's squad.
+  for (const club of season.clubs) for (const roster of [...data.rosters].filter(roster => roster.clubId === club.id).sort((a, b) => a.fromRound - b.fromRound)) {
+    for (const player of roster.players) {
+      const key = performanceRecordKey(seasonNumber, club.id, player.id);
+      const existing = records.get(key);
+      if (existing) { existing.player = player; existing.club = { ...club, players: [...roster.players] }; }
+      else records.set(key, { key, seasonNumber, player, club: { ...club, players: [...roster.players] }, clubGames: clubGames.get(club.id)!, games: 0, totals: emptyTotals(), log: [] });
+    }
+  }
   // Sorting a copy makes totals/log order independent of the input fixture order.
-  const fixtures = season.fixtures.filter(fixture => fixture.result !== null).sort((left, right) => compareText(right.date, left.date) || right.round - left.round || compareText(left.id, right.id));
+  const fixtures = data.fixtures.filter(fixture => fixture.result !== null).sort((left, right) => compareText(right.date, left.date) || right.round - left.round || compareText(left.id, right.id));
   for (const fixture of fixtures) {
     const result = fixture.result!;
+    if (result.stats === null) throw new Error('Player statistics were not retained for this season.');
+    const teams = getFixtureTeams(season, fixture, seasonNumber);
     for (const home of [true, false]) {
       const clubId = home ? fixture.homeClubId : fixture.awayClubId;
       const side = home ? 'home' : 'away', opponent = home ? 'away' : 'home';
-      const participants = clubRows.get(clubId);
-      if (!participants) throw new Error('A committed performance result refers to an unknown club.');
-      for (const row of participants) {
+      for (const player of teams[side].players) {
+        const row = records.get(performanceRecordKey(seasonNumber, clubId, player.id));
+        if (!row) throw new Error('A committed performance result refers to an unknown roster member.');
         const source = result.stats[row.player.id];
         if (!source) throw new Error('A committed performance result is missing player statistics.');
         const stats = emptyTotals();
         for (const key of TOTAL_KEYS) { stats[key] = source[key]; row.totals[key] += source[key]; }
         const played = TOTAL_KEYS.some(key => stats[key] !== 0);
-        row.clubGames += 1;
         if (played) row.games += 1;
         row.log.push({
+          seasonNumber, clubId,
           fixtureId: fixture.id, date: fixture.date, round: fixture.round,
           opponentClubId: home ? fixture.awayClubId : fixture.homeClubId, home,
           result: result.winnerClubId === clubId ? 'W' : 'L',
@@ -71,7 +100,7 @@ export function getSeasonPerformance(season: SeasonState): SeasonPlayerPerforman
       }
     }
   }
-  return rows;
+  return [...records.values()];
 }
 
 /** Percentages use combined attempts; per-40 adjusts counting stats, never appearances or MPG. */

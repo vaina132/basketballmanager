@@ -1,3 +1,4 @@
+import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd, simulateToQuarterEnd, stepMatch } from '../src/engine/match';
@@ -11,7 +12,7 @@ const restore = (season: SeasonState): SeasonState => parseSeason(serializeSeaso
 const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: season.activeMatch.status === 'finished' ? season.activeMatch : simulateToEnd(setAutoSubstitutions(season.activeMatch, managedSide(season), true)) });
 function oldFormat(season: SeasonState, version: 1 | 2 | 3): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
-  state.schemaVersion = version; delete state.training; delete state.coaching; delete state.finance; delete state.payroll; delete state.manager;
+  state.schemaVersion = version; delete state.training; delete state.coaching; delete state.finance; delete state.payroll; delete state.manager; stripRosterHistory(state);
   if (version < 3) { delete state.seasonNumber; delete state.history; }
   if (version === 1) {
     delete state.injuryMode; delete state.injuries;
@@ -38,7 +39,7 @@ beforeAll(() => {
 describe('training-aware season saves', () => {
   it.each([true, false])('round-trips format 8 with training enabled=%s', enabled => {
     const season = createSeason(7, clubId, 'off', enabled, false, false), text = serializeSeason(season);
-    expect(JSON.parse(text).formatVersion).toBe(8);
+    expect(JSON.parse(text).formatVersion).toBe(9);
     expect(restore(season)).toEqual(season);
     expect(season.training.enabledSince !== null).toBe(enabled);
   });
@@ -111,10 +112,10 @@ describe('strict older format migration', () => {
 
   it('migrates a later format 3 career without discarding its archive or activating training', () => {
     const restored = parseSeason(oldFormat(legacyNextYear, 3));
-    expect(restored).toEqual(legacyNextYear);
+    expect(restored).toEqual(withUnavailableArchivedStats(legacyNextYear));
     expect(restored.history).toHaveLength(1);
     expect(restored.training.enabledSince).toBeNull();
-    expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(legacyNextYear)));
+    expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(withUnavailableArchivedStats(legacyNextYear))));
   });
 
   it.each([1, 2, 3] as const)('validates original format %s fields before adding training defaults', version => {

@@ -3,6 +3,7 @@ import type { SeasonFixture, SeasonState } from '../src/domain/season';
 import type { MatchState, PlayerStats, Side } from '../src/domain/types';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../src/data/development-league';
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../src/data/fictional-teams';
+import { rosterForRound } from '../src/world/rosters';
 import { createFixtureMatch, createMatch, setAutoSubstitutions, setTactics, simulateToEnd, simulateToQuarterEnd, stepMatch } from '../src/engine/match';
 import { advanceSeason, createSchedule, createSeason, DAILY_RECOVERY, dateForRound, fixtureSeed, getActiveFixture, getStandings, managedSide, ROUND_INTERVAL_DAYS } from '../src/world/season';
 
@@ -191,7 +192,7 @@ describe('atomic season progression', () => {
     const state = createSeason(1);
     const fixtures: SeasonFixture[] = state.fixtures.slice(0, 3).map((fixture, index) => ({
       ...fixture,
-      result: { score: { home: 80 + index * 10, away: 70 + index * 10 }, officialScore: { home: 80 + index * 10, away: 70 + index * 10 }, winnerClubId: fixture.homeClubId, kind: 'normal', periods: 4, stats: {}, injuries: {} },
+      result: { score: { home: 80 + index * 10, away: 70 + index * 10 }, officialScore: { home: 80 + index * 10, away: 70 + index * 10 }, winnerClubId: fixture.homeClubId, kind: 'normal', periods: 4, stats: {}, injuries: {}, rosterIds: { home: rosterForRound(state.rosters, fixture.homeClubId, fixture.round).id, away: rosterForRound(state.rosters, fixture.awayClubId, fixture.round).id } },
     }));
     const table = getStandings({ clubs: state.clubs, fixtures });
     expect(table.slice(0, 3).map(row => row.clubId)).toEqual([...fixtures].reverse().map(fixture => fixture.homeClubId));

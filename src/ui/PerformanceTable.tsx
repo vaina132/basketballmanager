@@ -7,7 +7,8 @@ import './performance.css'
 interface PerformanceTableProps {
   rows: readonly SeasonPlayerPerformance[]
   mode: PerformanceMode
-  onSelectPlayer: (id: string) => void
+  /** Selection identifies a season/club/player record, so club stints stay distinct. */
+  onSelectPlayer: (recordKey: string) => void
   selectedPlayerId?: string | null
   showClub?: boolean
   managedClubId?: string
@@ -69,7 +70,7 @@ export function PerformanceModeControl({ mode, onChange, busy = false, idPrefix 
 
 export function PerformanceLegend({ mode }: { mode: PerformanceMode }) {
   return <div className="performance-legend">
-    <p>{mode === 'totals' ? 'Totals cover recorded current-season appearances. MIN is total court time.' : mode === 'per-game' ? 'Per-game figures use each player’s appearances. Unused players are excluded from the average; MPG is minutes per appearance.' : 'Per 40 scales counting statistics to 40 minutes played; it is not a prediction. GP remains appearances and MPG remains minutes per appearance.'}</p>
+    <p>{mode === 'totals' ? 'Totals cover recorded appearances in the selected season. MIN is total court time.' : mode === 'per-game' ? 'Per-game figures use each player’s appearances. Unused players are excluded from the average; MPG is minutes per appearance.' : 'Per 40 scales counting statistics to 40 minutes played; it is not a prediction. GP remains appearances and MPG remains minutes per appearance.'}</p>
     <p>Shooting percentages use total makes divided by total attempts. — means no appearances, playing time or attempts for that statistic.</p>
   </div>
 }
@@ -94,8 +95,8 @@ export function PerformanceTable({ rows, mode, onSelectPlayer, selectedPlayerId,
           </button>
         </th>
       })}</tr></thead>
-      <tbody>{sorted.map(row => <tr key={row.player.id} data-player-id={row.player.id} className={[selectedPlayerId === row.player.id ? 'performance-selected-row' : '', managedClubId === row.club.id ? 'performance-managed-row' : ''].filter(Boolean).join(' ')}>
-        <th scope="row"><button type="button" className="performance-player" data-performance-player={row.player.id} aria-label={`View ${row.player.name} performance`} aria-current={selectedPlayerId === row.player.id ? 'true' : undefined} onClick={() => onSelectPlayer(row.player.id)} disabled={busy}>
+      <tbody>{sorted.map(row => <tr key={row.key} data-player-id={row.player.id} data-record-key={row.key} className={[selectedPlayerId === row.key ? 'performance-selected-row' : '', managedClubId === row.club.id ? 'performance-managed-row' : ''].filter(Boolean).join(' ')}>
+        <th scope="row"><button type="button" className="performance-player" data-performance-player={row.player.id} data-performance-key={row.key} aria-label={`View ${row.player.name}${showClub ? ` at ${row.club.name}` : ''} performance`} aria-current={selectedPlayerId === row.key ? 'true' : undefined} onClick={() => onSelectPlayer(row.key)} disabled={busy}>
           <span aria-hidden="true"><Avatar player={row.player} color={row.club.color} size={28} /></span><span><strong>{row.player.name}</strong><small>#{row.player.number} · {row.player.position}</small></span>
         </button></th>
         {showClub && <td className="performance-club"><abbr title={row.club.name} style={{ color: row.club.color }}>{row.club.shortName}</abbr></td>}

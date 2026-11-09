@@ -5,6 +5,7 @@ import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/ma
 import { getSeasonPerformance, isQualifiedLeader, leaderQualificationThreshold, LEADER_QUALIFICATION_TEXT, performanceValue, sortPerformance } from '../src/world/performance';
 import type { PerformanceMetric, PerformanceMode, SeasonPlayerPerformance } from '../src/world/performance';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
+import { rosterForRound } from '../src/world/rosters';
 
 function stats(change: Partial<PlayerStats> = {}): PlayerStats {
   const value: PlayerStats = { secondsPlayed: 0, points: 0, fieldGoalsMade: 0, fieldGoalsAttempted: 0, threePointersMade: 0, threePointersAttempted: 0, freeThrowsMade: 0, freeThrowsAttempted: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, turnovers: 0, fouls: 0, condition: 100, ...change };
@@ -18,7 +19,7 @@ function commit(state: SeasonState, round: number, changes: Record<string, Parti
   const home = state.clubs.find(team => team.id === fixture.homeClubId)!, away = state.clubs.find(team => team.id === fixture.awayClubId)!;
   const records = Object.fromEntries([...home.players, ...away.players].map(player => [player.id, stats(changes[player.id])]));
   const score = { home: home.players.reduce((sum, player) => sum + records[player.id]!.points, 0), away: away.players.reduce((sum, player) => sum + records[player.id]!.points, 0) };
-  const result: FixtureResult = { score, officialScore: { ...score }, winnerClubId: score.home >= score.away ? home.id : away.id, kind: 'normal', periods: 4, stats: records, injuries: {}, ...overrides };
+  const result: FixtureResult = { score, officialScore: { ...score }, winnerClubId: score.home >= score.away ? home.id : away.id, kind: 'normal', periods: 4, stats: records, injuries: {}, rosterIds: { home: rosterForRound(state.rosters, home.id, round).id, away: rosterForRound(state.rosters, away.id, round).id }, ...overrides };
   return { ...state, fixtures: state.fixtures.map(item => item.id === fixture.id ? { ...item, result } : item) };
 }
 

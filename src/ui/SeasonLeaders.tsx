@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SeasonState } from '../domain/season'
-import { getSeasonPerformance, isQualifiedLeader } from '../world/performance'
+import { getPerformanceCoverage, getSeasonPerformance, isQualifiedLeader } from '../world/performance'
+import { seasonLabel } from '../world/season'
 import type { PerformanceMode } from '../world/performance'
 import { PerformanceLegend, PerformanceModeControl, PerformanceTable } from './PerformanceTable'
 import { PlayerPerformanceReport } from './PlayerPerformanceReport'
@@ -8,12 +9,12 @@ import './season-leaders.css'
 
 interface SeasonLeadersProps {
   season: SeasonState
-  archived: boolean
+  seasonNumber: number
   busy?: boolean
   onReviewFixture?: (fixtureId: string) => void
 }
 
-export function SeasonLeaders({ season, archived, busy = false, onReviewFixture }: SeasonLeadersProps) {
+export function SeasonLeaders({ season, seasonNumber, busy = false, onReviewFixture }: SeasonLeadersProps) {
   const [clubFilter, setClubFilter] = useState('all')
   const [position, setPosition] = useState('all')
   const [query, setQuery] = useState('')
@@ -22,7 +23,8 @@ export function SeasonLeaders({ season, archived, busy = false, onReviewFixture 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const section = useRef<HTMLElement>(null)
   const selectionTrigger = useRef<HTMLElement | null>(null)
-  const rows = useMemo(() => archived ? [] : getSeasonPerformance(season), [archived, season.clubs, season.fixtures])
+  const coverage = getPerformanceCoverage(season, seasonNumber)
+  const rows = useMemo(() => getSeasonPerformance(season, seasonNumber), [season, seasonNumber])
   const search = query.trim().toLowerCase()
   const selectedClub = clubFilter === 'managed' ? season.managedClubId : clubFilter
   const matchingRows = rows.filter(row =>
@@ -31,7 +33,7 @@ export function SeasonLeaders({ season, archived, busy = false, onReviewFixture 
     (!search || row.player.name.toLowerCase().includes(search)),
   )
   const visibleRows = qualifiedOnly ? matchingRows.filter(isQualifiedLeader) : matchingRows
-  const selected = visibleRows.find(row => row.player.id === selectedId)
+  const selected = visibleRows.find(row => row.key === selectedId)
   const hasResults = rows.some(row => row.clubGames > 0)
   const hasFilters = clubFilter !== 'all' || position !== 'all' || query !== '' || !qualifiedOnly
 
@@ -43,8 +45,8 @@ export function SeasonLeaders({ season, archived, busy = false, onReviewFixture 
   }, [selectedId, selected])
 
   function selectPlayer(id: string) {
-    if (busy || !visibleRows.some(row => row.player.id === id)) return
-    selectionTrigger.current = section.current?.querySelector<HTMLElement>(`button[data-performance-player="${CSS.escape(id)}"]`) ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
+    if (busy || !visibleRows.some(row => row.key === id)) return
+    selectionTrigger.current = section.current?.querySelector<HTMLElement>(`button[data-performance-key="${CSS.escape(id)}"]`) ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
     setSelectedId(id)
     if (id === selectedId) {
       const report = document.getElementById('player-performance-report')
@@ -65,14 +67,14 @@ export function SeasonLeaders({ season, archived, busy = false, onReviewFixture 
     setClubFilter('all'); setPosition('all'); setQuery(''); setQualifiedOnly(true)
   }
 
-  if (archived) return <section className="season-leaders panel" aria-labelledby="season-leaders-title">
-    <header className="season-panel-heading"><h2 id="season-leaders-title">League player statistics</h2></header>
-    <p className="season-leaders-empty">Player statistics are not retained for archived seasons.</p>
+  if (coverage === 'unavailable') return <section className="season-leaders panel" aria-labelledby="season-leaders-title">
+    <header className="season-panel-heading"><h2 id="season-leaders-title">League player statistics</h2><span>{seasonLabel(seasonNumber)}</span></header>
+    <p className="season-leaders-empty">This save did not retain player statistics for this season. Final standings and team results are still available below.</p>
   </section>
 
   return <>
     <section ref={section} className="season-leaders panel" aria-labelledby="season-leaders-title">
-      <header className="season-panel-heading season-leaders-heading"><h2 id="season-leaders-title">League player statistics</h2><PerformanceModeControl mode={mode} onChange={setMode} busy={busy} idPrefix="league-leaders" /></header>
+      <header className="season-panel-heading season-leaders-heading"><div><h2 id="season-leaders-title">League player statistics</h2><p>{seasonLabel(seasonNumber)}{seasonNumber !== season.seasonNumber ? ' · Archived season' : ''}</p></div><PerformanceModeControl mode={mode} onChange={setMode} busy={busy} idPrefix="league-leaders" /></header>
       <div className="season-leader-controls">
         <label htmlFor="league-player-club"><span>Club</span><select id="league-player-club" value={clubFilter} onChange={event => setClubFilter(event.target.value)} disabled={busy}><option value="all">All clubs</option><option value="managed">Your club</option>{season.clubs.map(club => <option key={club.id} value={club.id}>{club.name}</option>)}</select></label>
         <label htmlFor="league-player-position"><span>Position</span><select id="league-player-position" value={position} onChange={event => setPosition(event.target.value)} disabled={busy}><option value="all">All positions</option>{(['PG', 'SG', 'SF', 'PF', 'C'] as const).map(value => <option key={value} value={value}>{value}</option>)}</select></label>
@@ -83,14 +85,14 @@ export function SeasonLeaders({ season, archived, busy = false, onReviewFixture 
       <p id="league-qualification-rule" className="season-leader-rule">Qualified: appearances in at least half of completed club games (rounded up), plus 5 minutes per completed club game. Applies to all views.</p>
       <div className="season-leader-result-count" role="status">{hasResults ? `${visibleRows.length} ${visibleRows.length === 1 ? 'player' : 'players'} shown` : 'No recorded matchdays yet'}</div>
       {!hasResults ? <p className="season-leaders-empty">Player statistics appear after you finish a match and Continue to record the matchday.</p> : visibleRows.length ? <>
-        <PerformanceTable rows={visibleRows} mode={mode} onSelectPlayer={selectPlayer} selectedPlayerId={selected?.player.id} showClub managedClubId={season.managedClubId} busy={busy} label="League player statistics" />
+        <PerformanceTable rows={visibleRows} mode={mode} onSelectPlayer={selectPlayer} selectedPlayerId={selected?.key} showClub managedClubId={season.managedClubId} busy={busy} label="League player statistics" />
         <PerformanceLegend mode={mode} />
       </> : <div className="season-leaders-empty">
         <p>{matchingRows.length && qualifiedOnly ? 'No players meet the qualification threshold with these filters.' : 'No players match these filters.'}</p>
         {matchingRows.length > 0 && qualifiedOnly && <button className="text-button" onClick={() => setQualifiedOnly(false)} disabled={busy}>Include unqualified players</button>}
       </div>}
-      <p className="season-table-note">Only recorded matchdays are included. Live matches and finished matches awaiting Continue are excluded.</p>
+      <p className="season-table-note">Records retain the club represented in each match. Only committed matchdays in the selected season are included.</p>
     </section>
-    {selected && <PlayerPerformanceReport key={selected.player.id} season={season} record={selected} onClose={closeReport} onReviewFixture={onReviewFixture ? fixtureId => { if (!busy) onReviewFixture(fixtureId) } : undefined} />}
+    {selected && <PlayerPerformanceReport key={selected.key} season={season} record={selected} onClose={closeReport} onReviewFixture={onReviewFixture ? fixtureId => { if (!busy) onReviewFixture(fixtureId) } : undefined} />}
   </>
 }

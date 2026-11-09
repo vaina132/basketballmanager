@@ -1,3 +1,4 @@
+import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { ManagerProfile } from '../src/domain/manager';
 import type { SeasonState } from '../src/domain/season';
@@ -14,7 +15,7 @@ const finish = (state: SeasonState): SeasonState => state.activeMatch.status ===
 function completeSeason(state: SeasonState): SeasonState { while (state.status !== 'complete') state = advanceSeason(finish(state)); return state; }
 function legacyText(season: SeasonState, version: number): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
-  state.schemaVersion = version; delete state.manager;
+  state.schemaVersion = version; delete state.manager; stripRosterHistory(state);
   if (version < 7) {
     delete state.payroll;
     for (const entry of (state.finance as { ledger: Record<string, unknown>[] }).ledger) delete entry.payroll;
@@ -94,8 +95,8 @@ describe('manager identity and calendar age', () => {
 });
 
 describe('manager profiles in saved careers', () => {
-  it('writes format 8 with an optional known profile and exact match state', () => {
-    expect(JSON.parse(serializeSeason(current)).formatVersion).toBe(8);
+  it('writes format 9 with an optional known profile and exact match state', () => {
+    expect(JSON.parse(serializeSeason(current)).formatVersion).toBe(9);
     expect(parseSeason(serializeSeason(live))).toEqual(live);
     expect(createSeason().manager).toBeNull();
     expect(parseSeason(serializeSeason(createSeason())).manager).toBeNull();
@@ -135,7 +136,7 @@ describe('manager profiles in saved careers', () => {
     if (change === 'bad date') state.manager!.dateOfBirth = '1990-02-30';
     if (change === 'control') state.manager!.nationality = 'A\nB';
     expect(() => validateSeasonState(state)).toThrow();
-    expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 8, engineVersion: 'possession-3', state }))).toThrow();
+    expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 9, engineVersion: 'possession-3', state }))).toThrow();
   });
 
   it.each([1, 2, 3, 4, 5, 6, 7])('migrates format %s with unknown manager and unchanged active-match RNG', version => {
@@ -149,10 +150,10 @@ describe('manager profiles in saved careers', () => {
   it.each(['live', 'complete', 'later year'] as const)('preserves format 7 %s payroll, training and future simulation', boundary => {
     const original = boundary === 'live' ? live : boundary === 'complete' ? completed : later;
     const restored = parseSeason(legacyText(original, 7));
-    expect(restored).toEqual({ ...original, manager: null });
-    if (original.status === 'complete') expect(rolloverSeason(restored)).toEqual({ ...rolloverSeason(original), manager: null });
-    else expect(advanceSeason(finish(restored))).toEqual({ ...advanceSeason(finish(original)), manager: null });
-    expect(setManagerProfile(restored, oldest)).toEqual(original);
+    expect(restored).toEqual({ ...withUnavailableArchivedStats(original), manager: null });
+    if (original.status === 'complete') expect(rolloverSeason(restored)).toEqual({ ...rolloverSeason(withUnavailableArchivedStats(original)), manager: null });
+    else expect(advanceSeason(finish(restored))).toEqual({ ...advanceSeason(finish(withUnavailableArchivedStats(original))), manager: null });
+    expect(setManagerProfile(restored, oldest)).toEqual(withUnavailableArchivedStats(original));
   });
 
   it('validates original format 7 fields before adding an unknown profile', () => {

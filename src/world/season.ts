@@ -9,6 +9,7 @@ import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coachin
 import { createFinance, enableFinance, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 import { createPayroll, enablePayroll, preparePayrollRound, processPayrollRound, startPayrollSeason } from './payroll';
 import { validateManagerProfile } from './manager';
+import { createRosterSnapshots, getFixtureTeams, rosterForRound } from './rosters';
 
 export const SEASON_ROUNDS = 10;
 export const ROUND_INTERVAL_DAYS = 7;
@@ -93,13 +94,14 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   const away = season.clubs.find(club => club.id === fixture.awayClubId);
   if (!home || !away) throw new Error('A fixture refers to a missing club.');
   const homePlan = season.plans[home.id]!, awayPlan = season.plans[away.id]!;
+  const registeredPlayers = new Set([...home.players, ...away.players].map(player => player.id));
   return createFixtureMatch(fixtureSeed(season.seed, fixture.id), developClub(home, season.training), developClub(away, season.training), {
     lineups: { home: homePlan.lineup, away: awayPlan.lineup },
     tactics: { home: homePlan.tactics, away: awayPlan.tactics },
     autoSubstitutions: { home: home.id === season.managedClubId ? homePlan.autoSubstitutions : true, away: away.id === season.managedClubId ? awayPlan.autoSubstitutions : true },
     conditions: Object.fromEntries([...home.players, ...away.players].map(player => [player.id, season.conditions[player.id]!])),
     injuryMode: season.injuryMode,
-    preExistingInjuries: Object.fromEntries(season.injuries.filter(injury => [home.id, away.id].includes(injury.clubId) && isRecovering(injury, fixture.date)).map(injury => [injury.playerId, injury.kind])),
+    preExistingInjuries: Object.fromEntries(season.injuries.filter(injury => registeredPlayers.has(injury.playerId) && isRecovering(injury, fixture.date)).map(injury => [injury.playerId, injury.kind])),
   });
 }
 
@@ -121,7 +123,7 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: 8, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId),
+    schemaVersion: 9, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId),
     ...preparation, date: first.date, status: 'active', round: 1, fixtures,
     activeFixtureId: first.id, activeMatch: prepareMatch(preparation, first),
   };
@@ -129,11 +131,11 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
   return payrollEnabled ? preparePayrollRound(enablePayroll(funded)) : funded;
 }
 
-function compactResult(match: MatchState): FixtureResult {
+function compactResult(match: MatchState, rosterIds: FixtureResult['rosterIds']): FixtureResult {
   if (match.status !== 'finished' || !match.result) throw new Error('Only a finished game can post a season result.');
   return {
     score: { ...match.score }, officialScore: { ...match.result.officialScore }, winnerClubId: match[match.result.winner].id,
-    kind: match.result.kind, periods: match.period,
+    kind: match.result.kind, periods: match.period, rosterIds,
     stats: Object.fromEntries(Object.entries(match.stats).map(([id, stats]) => [id, { ...stats }])),
     injuries: Object.fromEntries(Object.entries(match.injuries).map(([id, injury]) => [id, injury.kind])),
   };
@@ -142,7 +144,15 @@ function compactResult(match: MatchState): FixtureResult {
 function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchState): void {
   if (fixture.result) throw new Error('This fixture result has already been committed.');
   if (match.home.id !== fixture.homeClubId || match.away.id !== fixture.awayClubId || match.seed !== fixtureSeed(season.seed, fixture.id)) throw new Error('The match does not belong to its season fixture.');
-  fixture.result = compactResult(match);
+  const rosterIds = {} as FixtureResult['rosterIds'];
+  for (const side of SIDES) {
+    const snapshot = rosterForRound(season.rosters, match[side].id, fixture.round);
+    const registeredIds = new Set(snapshot.players.map(player => player.id));
+    const matchIds = match[side].players.map(player => player.id);
+    if (registeredIds.size !== snapshot.players.length || new Set(matchIds).size !== matchIds.length || matchIds.length !== registeredIds.size || matchIds.some(id => !registeredIds.has(id))) throw new Error('The match squad does not match its registered roster.');
+    rosterIds[side] = snapshot.id;
+  }
+  fixture.result = compactResult(match, rosterIds);
   for (const injury of injuriesFromMatch(season.seed, fixture, match)) {
     if (season.injuries.some(existing => existing.id === injury.id || existing.playerId === injury.playerId && isRecovering(existing, fixture.date))) throw new Error('An unavailable player cannot receive a duplicate injury episode.');
     season.injuries.push(injury);
@@ -187,7 +197,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
   next.round += 1;
   next.date = dateForRound(next.round, next.seasonNumber);
   if (next.training.enabledSince) {
-    const trained = processTrainingWeek({ training: next.training, coaching: next.coaching, clubs: next.clubs, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
+    const trained = processTrainingWeek({ training: next.training, coaching: next.coaching, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
     next.training = trained.training; next.conditions = trained.conditions;
   } else {
     for (const id of Object.keys(next.conditions)) next.conditions[id] = Math.min(100, Math.round((next.conditions[id]! + DAILY_RECOVERY * ROUND_INTERVAL_DAYS) * 1000) / 1000);
@@ -225,16 +235,18 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   const recoveryDays = (Date.parse(`${first.date}T00:00:00.000Z`) - Date.parse(`${state.date}T00:00:00.000Z`)) / DAY_MS;
   const archive = {
     seasonNumber: state.seasonNumber,
+    rosters: state.rosters.map(roster => ({ ...roster, players: roster.players.map(player => ({ ...player, attributes: { ...player.attributes } })) })),
     fixtures: state.fixtures.map((fixture): ArchivedFixture => {
       const result = fixture.result!;
+      getFixtureTeams(state, fixture);
       return {
         id: fixture.id, round: fixture.round, date: fixture.date, homeClubId: fixture.homeClubId, awayClubId: fixture.awayClubId,
-        result: { score: { ...result.score }, officialScore: { ...result.officialScore }, winnerClubId: result.winnerClubId, kind: result.kind, periods: result.periods, injuries: { ...result.injuries } },
+        result: { score: { ...result.score }, officialScore: { ...result.officialScore }, winnerClubId: result.winnerClubId, kind: result.kind, periods: result.periods, injuries: { ...result.injuries }, rosterIds: { ...result.rosterIds }, stats: Object.fromEntries(Object.entries(result.stats).map(([id, stats]) => [id, { ...stats }])) },
       };
     }),
   };
   let next: SeasonState = {
-    ...state, seasonNumber, history: [...state.history, archive], fixtures, round: 1, date: first.date, status: 'active', activeFixtureId: first.id,
+    ...state, seasonNumber, history: [...state.history, archive], rosters: createRosterSnapshots(state.clubs, seasonNumber), fixtures, round: 1, date: first.date, status: 'active', activeFixtureId: first.id,
     plans: Object.fromEntries(Object.entries(state.plans).map(([id, plan]) => [id, { ...plan, tactics: { ...plan.tactics }, lineup: [...plan.lineup] }])),
     conditions: Object.fromEntries(Object.entries(state.conditions).map(([id, condition]) => [id, Math.min(100, Math.round((condition + DAILY_RECOVERY * recoveryDays) * 1000) / 1000)])),
     injuries: state.injuries.map(injury => ({ ...injury })),

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { SeasonFixture, SeasonState } from '../domain/season'
+import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/season'
 import type { Side, Team } from '../domain/types'
 import { getActiveFixture, getStandings, seasonLabel } from '../world/season'
+import { getFixtureTeams } from '../world/rosters'
 import { Icon } from './Icon'
 import { SeasonLeaders } from './SeasonLeaders'
 import './season-workspace.css'
@@ -54,7 +55,8 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const matchFinished = season.activeMatch.status === 'finished'
   const champion = complete ? club(standings[0]!.clubId) : null
   const fixtures = selectedFixtures.filter(fixture => (round === 'all' || fixture.round === Number(round)) && (!ownFixtures || fixture.homeClubId === season.managedClubId || fixture.awayClubId === season.managedClubId))
-  const review = !archived && season.fixtures.find(fixture => fixture.id === reviewId && fixture.result)
+  const review = selectedFixtures.find(fixture => fixture.id === reviewId && fixture.result?.stats)
+  const reviewTeams = review ? getFixtureTeams(season, review, selectedNumber) : null
   const totalRounds = Math.max(...selectedFixtures.map(fixture => fixture.round))
 
   function selectSeason(number: number) {
@@ -64,7 +66,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   }
 
   function openFixtureReview(fixtureId: string, trigger?: HTMLButtonElement) {
-    if (busy || archived || !season.fixtures.some(fixture => fixture.id === fixtureId && fixture.result)) return
+    if (busy || !selectedFixtures.some(fixture => fixture.id === fixtureId && fixture.result?.stats)) return
     reviewTrigger.current = trigger ?? (document.activeElement instanceof HTMLButtonElement ? document.activeElement : null)
     setReviewId(fixtureId)
     if (reviewId === fixtureId) {
@@ -102,7 +104,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
       <p className="season-table-note">Ranked by wins, overall point difference, points scored, then club ID.</p>
     </section>
 
-    <SeasonLeaders key={selectedNumber} season={season} archived={archived} busy={busy} onReviewFixture={openFixtureReview} />
+    <SeasonLeaders key={selectedNumber} season={season} seasonNumber={selectedNumber} busy={busy} onReviewFixture={openFixtureReview} />
 
     <section className="season-fixtures panel" aria-labelledby="season-fixtures-title">
       <header className="season-panel-heading season-fixtures-heading"><h2 id="season-fixtures-title">Fixtures &amp; results</h2><div className="season-fixture-filters"><label htmlFor="season-matchday">Matchday</label><select id="season-matchday" value={round} onChange={event => setRound(event.target.value)}><option value="all">All matchdays</option>{Array.from({ length: totalRounds }, (_, index) => <option key={index + 1} value={index + 1}>Matchday {index + 1}</option>)}</select><div className="segmented" aria-label="Fixture clubs"><button aria-pressed={!ownFixtures} className={!ownFixtures ? 'selected' : ''} onClick={() => setOwnFixtures(false)}>All clubs</button><button aria-pressed={ownFixtures} className={ownFixtures ? 'selected' : ''} onClick={() => setOwnFixtures(true)}>Your club</button></div></div></header>
@@ -111,18 +113,18 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
         const score = fixture.result?.officialScore ?? (isActive && season.activeMatch.status !== 'ready' ? season.activeMatch.result?.officialScore ?? season.activeMatch.score : null)
         return <tr key={fixture.id} data-fixture-id={fixture.id} className={fixture.homeClubId === season.managedClubId || fixture.awayClubId === season.managedClubId ? 'season-managed-row' : ''}>
           <td><time dateTime={fixture.date}>{formatDate(fixture.date)}</time><small>Matchday {fixture.round}</small></td><td><ClubName club={club(fixture.homeClubId)} /></td><td className="season-fixture-score">{score ? `${score.home} : ${score.away}` : '—'}</td><td><ClubName club={club(fixture.awayClubId)} /></td>
-          <td>{fixture.result ? archived ? <span className="season-scheduled">{fixture.result.kind === 'default' ? 'Awarded by default' : fixture.result.periods > 4 ? `Full time · ${fixture.result.periods - 4} OT` : 'Full time'}</span> : <button className="text-button" aria-label={`Review ${club(fixture.homeClubId).shortName} vs ${club(fixture.awayClubId).shortName}`} onClick={event => openFixtureReview(fixture.id, event.currentTarget)} aria-expanded={reviewId === fixture.id} aria-controls="season-result-review" disabled={busy}>Review<Icon name="chevron" size={14} /></button> : isActive ? <button className="text-button" onClick={onOpenMatch} disabled={busy}>{matchFinished ? 'Played · pending' : season.activeMatch.status === 'ready' ? 'Pre-match' : 'In progress'}<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">Scheduled</span>}</td>
+          <td>{fixture.result ? fixture.result.stats ? <button className="text-button" aria-label={`Review ${club(fixture.homeClubId).shortName} vs ${club(fixture.awayClubId).shortName}`} onClick={event => openFixtureReview(fixture.id, event.currentTarget)} aria-expanded={reviewId === fixture.id} aria-controls="season-result-review" disabled={busy}>Review<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">{fixture.result.kind === 'default' ? 'Awarded by default' : fixture.result.periods > 4 ? `Full time · ${fixture.result.periods - 4} OT` : 'Full time'} · Box score unavailable</span> : isActive ? <button className="text-button" onClick={onOpenMatch} disabled={busy}>{matchFinished ? 'Played · pending' : season.activeMatch.status === 'ready' ? 'Pre-match' : 'In progress'}<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">Scheduled</span>}</td>
         </tr>
       })}</tbody></table></div>
       {!fixtures.length && <p className="season-table-note">No fixtures match this filter.</p>}
-      {archived && <p className="season-table-note">Archived seasons retain final standings and scores. Player box scores are available for the current season only.</p>}
+      {archived && <p className="season-table-note">Archived results use the squads recorded for each match. Older saves may contain team results without player box scores.</p>}
     </section>
 
-    {review && <FixtureReview key={review.id} fixture={review} home={club(review.homeClubId)} away={club(review.awayClubId)} onClose={() => { setReviewId(null); if (reviewTrigger.current?.isConnected) reviewTrigger.current.focus(); else seasonSelector.current?.focus() }} />}
+    {review && reviewTeams && <FixtureReview key={review.id} fixture={review} home={reviewTeams.home} away={reviewTeams.away} onClose={() => { setReviewId(null); if (reviewTrigger.current?.isConnected) reviewTrigger.current.focus(); else seasonSelector.current?.focus() }} />}
   </div>
 }
 
-function FixtureReview({ fixture, home, away, onClose }: { fixture: SeasonFixture; home: Team; away: Team; onClose: () => void }) {
+function FixtureReview({ fixture, home, away, onClose }: { fixture: SeasonFixture | ArchivedFixture; home: Team; away: Team; onClose: () => void }) {
   const [side, setSide] = useState<Side>('home')
   const region = useRef<HTMLElement>(null)
   useEffect(() => {
@@ -130,12 +132,14 @@ function FixtureReview({ fixture, home, away, onClose }: { fixture: SeasonFixtur
     region.current?.scrollIntoView({ block: 'start' })
   }, [])
   const result = fixture.result!
+  const statistics = result.stats
+  if (!statistics) return null
   const team = side === 'home' ? home : away
-  return <section ref={region} id="season-result-review" className="season-result-review panel" aria-labelledby="season-result-title" tabIndex={-1}>
+  return <section ref={region} id="season-result-review" className="season-result-review panel" aria-labelledby="season-result-title" tabIndex={-1} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }}>
     <header className="season-panel-heading"><div><h2 id="season-result-title">{home.shortName} {result.officialScore.home} : {result.officialScore.away} {away.shortName}</h2><p>{formatDate(fixture.date)} · Matchday {fixture.round} · {result.kind === 'default' ? 'Awarded by default' : result.periods > 4 ? `${result.periods - 4} overtime ${result.periods - 4 === 1 ? 'period' : 'periods'}` : 'Full time'}</p></div><button className="text-button" onClick={onClose} aria-label="Close result review"><Icon name="close" size={16} />Close</button></header>
     <div className="season-result-tools"><span>{team.name}</span><div className="segmented" aria-label="Result box score team">{(['home', 'away'] as const).map(value => <button key={value} onClick={() => setSide(value)} aria-pressed={side === value} className={side === value ? 'selected' : ''}>{value === 'home' ? home.shortName : away.shortName}</button>)}</div></div>
     <div className="season-table-scroll"><table className="season-result-table"><thead><tr><th scope="col">Player</th><th scope="col">Min</th><th scope="col">Pts</th><th scope="col">Reb</th><th scope="col">Ast</th><th scope="col">FG</th><th scope="col">3PT</th><th scope="col">FT</th><th scope="col">Fouls</th></tr></thead><tbody>{team.players.map(player => {
-      const stats = result.stats[player.id]!
+      const stats = statistics[player.id]!
       return <tr key={player.id}><th scope="row"><span className="season-player-name"><span className="season-jersey">#{player.number}</span>{player.name}</span></th><td>{minutes(stats.secondsPlayed)}</td><td className="season-points">{stats.points}</td><td>{stats.rebounds}</td><td>{stats.assists}</td><td>{stats.fieldGoalsMade}/{stats.fieldGoalsAttempted}</td><td>{stats.threePointersMade}/{stats.threePointersAttempted}</td><td>{stats.freeThrowsMade}/{stats.freeThrowsAttempted}</td><td>{stats.fouls}</td></tr>
     })}</tbody></table></div>
     {result.kind === 'default' && <p className="season-table-note">The table shows the awarded result. Player statistics retain points earned on court.</p>}

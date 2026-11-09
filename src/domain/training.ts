@@ -27,6 +27,7 @@ export interface TrainingWeekReport {
   afterRound: number;
   fromDate: string;
   toDate: string;
+  rosterIds: Record<string, string>;
   plans: Record<string, TrainingPlan>;
   players: Record<string, TrainingPlayerReport>;
   coaching: Record<string, CoachingWeekAssignment[]> | null;

@@ -1,3 +1,4 @@
+import { stripRosterHistory } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match';
@@ -12,7 +13,7 @@ const restore = (season: SeasonState) => parseSeason(serializeSeason(season));
 function legacyText(season: SeasonState): string {
   const legacy = structuredClone(season) as unknown as Record<string, unknown>;
   legacy.schemaVersion = 1;
-  delete legacy.seasonNumber; delete legacy.history; delete legacy.training; delete legacy.coaching; delete legacy.finance; delete legacy.payroll; delete legacy.manager;
+  delete legacy.seasonNumber; delete legacy.history; delete legacy.training; delete legacy.coaching; delete legacy.finance; delete legacy.payroll; delete legacy.manager; stripRosterHistory(legacy);
   delete legacy.injuryMode; delete legacy.injuries;
   for (const fixture of legacy.fixtures as Array<{ result: Record<string, unknown> | null }>) if (fixture.result) delete fixture.result.injuries;
   return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 1, engineVersion: 'possession-3', state: legacy });
@@ -30,9 +31,9 @@ beforeAll(() => {
 }, 30_000);
 
 describe('health-aware season persistence', () => {
-  it.each(['standard', 'reduced', 'off'] as const)('writes format 8 with a uniform %s injury mode', mode => {
+  it.each(['standard', 'reduced', 'off'] as const)('writes format 9 with a uniform %s injury mode', mode => {
     const season = createSeason(17, clubId, mode, false, false, false), text = serializeSeason(season);
-    expect(JSON.parse(text).formatVersion).toBe(8);
+    expect(JSON.parse(text).formatVersion).toBe(9);
     expect(restore(season)).toEqual(season);
     expect(restore(season).activeMatch.injuryMode).toBe(mode);
   });
@@ -146,7 +147,7 @@ describe('explicit injury-free legacy migration', () => {
     const previous = advanceSeason(finish(createSeason(37, clubId, 'off', false, false, false)));
     const text = legacyText(previous), snapshot = JSON.parse(text).state;
     const restored = parseSeason(text);
-    expect(restored.schemaVersion).toBe(8);
+    expect(restored.schemaVersion).toBe(9);
     expect(restored.injuryMode).toBe('off');
     expect(restored.injuries).toEqual([]);
     expect(restored.activeMatch).toEqual(snapshot.activeMatch);
@@ -155,7 +156,7 @@ describe('explicit injury-free legacy migration', () => {
     expect(restored.fixtures.filter(fixture => fixture.result).every(fixture => Object.keys(fixture.result!.injuries).length === 0)).toBe(true);
     expect(JSON.parse(text).state).toEqual(snapshot);
     expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(previous)));
-    expect(JSON.parse(serializeSeason(restored)).formatVersion).toBe(8);
+    expect(JSON.parse(serializeSeason(restored)).formatVersion).toBe(9);
   });
 
   it('migrates completed seasons without changing the retained final replay', () => {

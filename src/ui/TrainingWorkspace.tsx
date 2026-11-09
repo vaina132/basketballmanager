@@ -101,20 +101,24 @@ export function TrainingWorkspace({ season, onEnable, onPlanChange, onSelectPlay
 
       <section className="training-report panel" aria-labelledby="training-report-title">
         <header className="training-heading"><h2 id="training-report-title">Last training week</h2>{week && <span><time dateTime={week.fromDate}>{formatDate(week.fromDate)}</time> – <time dateTime={week.toDate}>{formatDate(week.toDate)}</time> · After Matchday {week.afterRound}</span>}</header>
-        {week ? <TrainingReport season={season} club={club} baseClub={baseClub} week={week} onSelectPlayer={onSelectPlayer} busy={busy} /> : <p className="training-empty">No training completed this season yet.</p>}
+        {week ? <TrainingReport season={season} club={club} week={week} onSelectPlayer={onSelectPlayer} busy={busy} /> : <p className="training-empty">No training completed this season yet.</p>}
       </section>
     </>}
   </div>
 }
 
-function TrainingReport({ season, club, baseClub, week, onSelectPlayer, busy }: { season: SeasonState; club: Team; baseClub: Team; week: TrainingWeekReport; onSelectPlayer: (id: string) => void; busy: boolean }) {
+function TrainingReport({ season, club, week, onSelectPlayer, busy }: { season: SeasonState; club: Team; week: TrainingWeekReport; onSelectPlayer: (id: string) => void; busy: boolean }) {
+  const roster = season.rosters.find(snapshot => snapshot.id === week.rosterIds[club.id] && snapshot.clubId === club.id)
+  if (!roster) return <p className="training-empty">The recorded squad for this training week is unavailable.</p>
+  const recordedBase = { ...club, players: roster.players }
+  const recordedClub = developClub(recordedBase, season.training)
   const previousPoints = Object.fromEntries(Object.entries(season.training.points).map(([id, points]) => [id, Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => [attribute, points[attribute] - (week.players[id]?.gains[attribute] ?? 0)]))])) as typeof season.training.points
-  const previousClub = developClub(baseClub, { ...season.training, points: previousPoints })
+  const previousClub = developClub(recordedBase, { ...season.training, points: previousPoints })
   const appliedCoaches = week.coaching?.[club.id] ?? null
   return <>
     {appliedCoaches !== null && <p className="training-coaching-report"><strong>Staff that week</strong> {appliedCoaches.length > 0 ? appliedCoaches.map(assignment => `${COACHES.find(coach => coach.id === assignment.coachId)!.name} (${TRAINING_FOCUS_LABELS[assignment.focus]})`).join(' · ') : 'No coaches assigned.'}</p>}
     <div className="training-table-scroll" role="region" aria-label="Completed weekly training" tabIndex={0}>
-    <table className="training-report-table"><thead><tr><th scope="col">Player</th><th scope="col">Applied plan</th><th scope="col">Eligible days</th><th scope="col">Skill progress</th><th scope="col">Condition</th></tr></thead><tbody>{club.players.map(player => {
+    <table className="training-report-table"><thead><tr><th scope="col">Player</th><th scope="col">Applied plan</th><th scope="col">Eligible days</th><th scope="col">Skill progress</th><th scope="col">Condition</th></tr></thead><tbody>{recordedClub.players.map(player => {
       const report = week.players[player.id]
       if (!report) return null
       const before = previousClub.players.find(previous => previous.id === player.id)!
@@ -124,7 +128,7 @@ function TrainingReport({ season, club, baseClub, week, onSelectPlayer, busy }: 
       const ratingGains = gains.filter(attribute => player.attributes[attribute] > before.attributes[attribute])
       const breakdown = <ul className="training-gains">{gains.map(attribute => <li key={attribute}><span>{TRAINING_FOCUS_LABELS[attribute]}</span><strong>+{report.gains[attribute]} practice</strong>{report.coachingGains[attribute] > 0 && <small className="training-coaching-skill">({report.coachingGains[attribute]} from coaching)</small>}</li>)}</ul>
       return <tr key={player.id} data-player-id={player.id}>
-        <th scope="row"><button className="text-button" onClick={() => onSelectPlayer(player.id)} disabled={busy}>{player.name}<Icon name="chevron" size={13} /></button></th>
+        <th scope="row">{club.players.some(current => current.id === player.id) ? <button className="text-button" onClick={() => onSelectPlayer(player.id)} disabled={busy}>{player.name}<Icon name="chevron" size={13} /></button> : <span>{player.name}</span>}</th>
         <td>{TRAINING_FOCUS_LABELS[report.focus]}<small>{TRAINING_INTENSITY_LABELS[report.intensity]}</small></td>
         <td>{report.availableDays} days</td>
         <td>{gains.length > 1 ? <details className="training-gain-details"><summary aria-label={`${player.name}: ${totalGains} practice points across ${gains.length} skills. Skill breakdown.`}>+{totalGains} practice across {gains.length} skills</summary>{breakdown}</details> : gains.length === 1 ? breakdown : <span className="training-no-gain">No practice gained</span>}{coachingGains > 0 && <p className="training-coaching-gain">Includes +{coachingGains} from coaching</p>}{ratingGains.map(attribute => <p className="training-rating-gain" key={attribute}>{TRAINING_FOCUS_LABELS[attribute]} {before.attributes[attribute]} → {player.attributes[attribute]} rating</p>)}</td>

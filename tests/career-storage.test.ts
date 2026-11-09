@@ -1,3 +1,5 @@
+import { createRosterSnapshots, rosterForRound } from '../src/world/rosters';
+import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonArchive, SeasonState } from '../src/domain/season';
 import { createFixtureMatch, setAutoSubstitutions, simulateToEnd, simulateToQuarterEnd, stepMatch } from '../src/engine/match';
@@ -21,7 +23,7 @@ function completeSeason(season: SeasonState): SeasonState {
 function previousFormat(season: SeasonState, version: 1 | 2): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
   state.schemaVersion = version;
-  delete state.seasonNumber; delete state.history; delete state.training; delete state.coaching; delete state.finance; delete state.payroll; delete state.manager;
+  delete state.seasonNumber; delete state.history; delete state.training; delete state.coaching; delete state.finance; delete state.payroll; delete state.manager; stripRosterHistory(state);
   if (version === 1) {
     delete state.injuryMode; delete state.injuries;
     for (const fixture of state.fixtures as Array<{ result: Record<string, unknown> | null }>) if (fixture.result) delete fixture.result.injuries;
@@ -44,13 +46,13 @@ beforeAll(() => {
 }, 60_000);
 
 describe('career save boundaries', () => {
-  it('writes format 8 with the original season table preserved after rollover', () => {
+  it('writes format 9 with the original season table preserved after rollover', () => {
     const text = serializeSeason(secondStart), restored = parseSeason(text);
-    expect(JSON.parse(text).formatVersion).toBe(8);
+    expect(JSON.parse(text).formatVersion).toBe(9);
     expect(restored).toEqual(secondStart);
     expect(restored.history).toHaveLength(1);
     expect(getStandings({ clubs: restored.clubs, fixtures: restored.history[0]!.fixtures })).toEqual(getStandings(firstComplete));
-    expect(restored.history[0]!.fixtures.every(fixture => !Object.hasOwn(fixture.result, 'stats'))).toBe(true);
+    expect(restored.history[0]!.fixtures.every(fixture => fixture.result.stats !== null)).toBe(true);
     expect(restored.activeFixtureId).toBe('dev-s2-r1-g1');
     expect(restored.date).toBe('2027-09-04');
   });
@@ -83,14 +85,16 @@ describe('career save boundaries', () => {
     expect(restore(thirdStart).injuries).toEqual(secondComplete.injuries);
   });
 
-  it('retains one hundred compact prior seasons below the save limit without truncating results', () => {
+  it('retains one hundred legacy compact prior seasons below the save limit without truncating results', () => {
     // A structural-size fixture, not one hundred newly simulated seasons.
     const season = createSeason(7, clubId, 'off', false, false, false);
     season.seasonNumber = 101;
+    season.rosters = createRosterSnapshots(season.clubs, season.seasonNumber);
     season.history = Array.from({ length: 100 }, (_, index): SeasonArchive => ({
       seasonNumber: index + 1,
+      rosters: createRosterSnapshots(season.clubs, index + 1),
       fixtures: createSchedule(season.clubs, index + 1).map((fixture, fixtureIndex) => ({
-        ...fixture, result: { ...structuredClone(secondStart.history[0]!.fixtures[fixtureIndex]!.result), injuries: {} },
+        ...fixture, result: { ...structuredClone(secondStart.history[0]!.fixtures[fixtureIndex]!.result), injuries: {}, stats: null, rosterIds: { home: rosterForRound(createRosterSnapshots(season.clubs, index + 1), fixture.homeClubId, fixture.round).id, away: rosterForRound(createRosterSnapshots(season.clubs, index + 1), fixture.awayClubId, fixture.round).id } },
       })),
     }));
     season.fixtures = createSchedule(season.clubs, season.seasonNumber);
@@ -111,13 +115,13 @@ describe('explicit career migrations', () => {
     const original = boundary === 'live' ? firstLive : boundary === 'recovering' ? firstSecondRound : firstComplete;
     const text = previousFormat(original, 2), snapshot = JSON.parse(text).state;
     const restored = parseSeason(text);
-    expect(restored).toEqual(original);
-    expect(restored.schemaVersion).toBe(8);
+    expect(restored).toEqual(withUnavailableArchivedStats(original));
+    expect(restored.schemaVersion).toBe(9);
     expect(restored.seasonNumber).toBe(1);
     expect(restored.history).toEqual([]);
     expect(restored.activeMatch).toEqual(snapshot.activeMatch);
     expect(restored.injuries).toEqual(snapshot.injuries);
-    expect(restored.fixtures).toEqual(snapshot.fixtures);
+    expect(restored.fixtures).toEqual(original.fixtures);
     expect(JSON.parse(text).state).toEqual(snapshot);
     if (boundary === 'complete') expect(rolloverSeason(restored)).toEqual(secondStart);
   });

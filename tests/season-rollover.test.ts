@@ -65,11 +65,11 @@ describe('same-club career rollover', () => {
     completed = freeze(finishSeason(createSeason(9, 'atlantic-pilots')));
   }, 30_000);
 
-  it('archives every final score and table without duplicated player statistics', () => {
+  it('archives every final score, roster and player box score without event history', () => {
     const before = structuredClone(completed);
     const next = rolloverSeason(completed), archive = next.history[0]!;
     expect(completed).toEqual(before);
-    expect(next).toMatchObject({ schemaVersion: 8, seasonNumber: 2, round: 1, status: 'active', date: '2027-09-04', managedClubId: completed.managedClubId, seed: completed.seed });
+    expect(next).toMatchObject({ schemaVersion: 9, seasonNumber: 2, round: 1, status: 'active', date: '2027-09-04', managedClubId: completed.managedClubId, seed: completed.seed });
     expect(next.clubs).toEqual(completed.clubs);
     expect(next.history).toHaveLength(1);
     expect(archive.seasonNumber).toBe(1);
@@ -78,8 +78,9 @@ describe('same-club career rollover', () => {
     for (let index = 0; index < archive.fixtures.length; index += 1) {
       const old = completed.fixtures[index]!, saved = archive.fixtures[index]!;
       expect(saved).toMatchObject({ id: old.id, date: old.date, homeClubId: old.homeClubId, awayClubId: old.awayClubId, round: old.round });
-      expect(saved.result).toEqual({ score: old.result!.score, officialScore: old.result!.officialScore, winnerClubId: old.result!.winnerClubId, kind: old.result!.kind, periods: old.result!.periods, injuries: old.result!.injuries });
-      expect(saved.result).not.toHaveProperty('stats');
+      expect(saved.result).toEqual(old.result);
+      expect(saved.result.stats).not.toBe(old.result!.stats);
+      expect(saved.result.rosterIds).not.toBe(old.result!.rosterIds);
       expect(saved.result).not.toHaveProperty('events');
       expect(saved.result.score).not.toBe(old.result!.score);
       expect(saved.result.injuries).not.toBe(old.result!.injuries);

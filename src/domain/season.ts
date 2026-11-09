@@ -4,6 +4,7 @@ import type { SeasonCoaching } from './coaching';
 import type { SeasonFinance } from './finance';
 import type { SeasonPayroll } from './payroll';
 import type { ManagerProfile } from './manager';
+import type { RosterSnapshot } from './roster';
 
 export interface ClubPlan {
   tactics: Tactics;
@@ -19,6 +20,7 @@ export interface FixtureResult {
   kind: MatchResult['kind'];
   periods: number;
   stats: Record<string, PlayerStats>;
+  rosterIds: Record<Side, string>;
   /** All injured players at the final whistle, including carried absences. */
   injuries: Record<string, SeasonInjury['kind']>;
 }
@@ -44,18 +46,19 @@ export interface SeasonFixture {
   result: FixtureResult | null;
 }
 
-/** Past seasons retain scores and health provenance, without per-player box scores. */
+/** Older imports lack box scores; newly archived seasons retain complete results. */
 export interface ArchivedFixture extends Omit<SeasonFixture, 'result'> {
-  result: Omit<FixtureResult, 'stats'>;
+  result: Omit<FixtureResult, 'stats'> & { stats: Record<string, PlayerStats> | null };
 }
 
 export interface SeasonArchive {
   seasonNumber: number;
+  rosters: RosterSnapshot[];
   fixtures: ArchivedFixture[];
 }
 
 export interface SeasonState {
-  schemaVersion: 8;
+  schemaVersion: 9;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;
@@ -67,6 +70,7 @@ export interface SeasonState {
   status: 'active' | 'complete';
   round: number;
   clubs: readonly Team[];
+  rosters: RosterSnapshot[];
   plans: Record<string, ClubPlan>;
   conditions: Record<string, number>;
   injuryMode: InjuryMode;

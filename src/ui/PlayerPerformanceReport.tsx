@@ -24,15 +24,15 @@ export function PlayerPerformanceReport({ season, record, onClose, onReviewFixtu
   useEffect(() => {
     region.current?.focus({ preventScroll: true })
     region.current?.scrollIntoView({ block: 'start' })
-  }, [record.player.id])
+  }, [record.key])
   const { player, club } = record
-  return <section ref={region} id="player-performance-report" className="player-performance-report panel" data-player-id={player.id} tabIndex={-1} aria-labelledby="player-performance-title" onKeyDown={event => { if (event.key === 'Escape' && onClose) { event.preventDefault(); event.stopPropagation(); onClose() } }}>
+  return <section ref={region} id="player-performance-report" className="player-performance-report panel" data-player-id={player.id} data-record-key={record.key} tabIndex={-1} aria-labelledby="player-performance-title" onKeyDown={event => { if (event.key === 'Escape' && onClose) { event.preventDefault(); event.stopPropagation(); onClose() } }}>
     <header className="player-performance-heading">
       <div className="player-performance-identity"><Avatar player={player} color={club.color} size={38} /><div><h2 id="player-performance-title">{player.name}</h2><p>{club.name} · #{player.number} · {player.position}</p></div></div>
       {onClose && <button className="text-button" onClick={onClose} aria-label="Close player performance"><Icon name="close" size={15} />Close</button>}
     </header>
     <div className="player-performance-overview">
-      <div><strong>{seasonLabel(season.seasonNumber)}</strong><span>{record.games} {record.games === 1 ? 'appearance' : 'appearances'} / {record.clubGames} club games</span></div>
+      <div><strong>{seasonLabel(record.seasonNumber)}</strong><span>{record.games} {record.games === 1 ? 'appearance' : 'appearances'} / {record.clubGames} club games</span></div>
       <dl>{([{ metric: 'minutes', label: 'MIN / G' }, { metric: 'points', label: 'PTS / G' }, { metric: 'rebounds', label: 'REB / G' }, { metric: 'assists', label: 'AST / G' }] as const).map(({ metric, label }) => <div key={metric}><dt>{label}</dt><dd>{formatPerformanceValue(performanceValue(record, metric, 'per-game'), metric, 'per-game')}</dd></div>)}</dl>
     </div>
     <div className="player-performance-log-heading"><h3>Match history</h3><span>Latest first · committed results</span></div>

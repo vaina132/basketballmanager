@@ -1,3 +1,4 @@
+import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { FinanceEntry } from '../src/domain/finance';
 import type { SeasonState } from '../src/domain/season';
@@ -20,7 +21,7 @@ function completeSeason(state: SeasonState): SeasonState {
 }
 function formatFive(season: SeasonState): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
-  state.schemaVersion = 5; delete state.finance; delete state.payroll; delete state.manager;
+  state.schemaVersion = 5; delete state.finance; delete state.payroll; delete state.manager; stripRosterHistory(state);
   return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 5, engineVersion: 'possession-3', state });
 }
 function renumber(state: SeasonState): void { state.finance.ledger.forEach((entry, index) => { entry.id = `finance-${index + 1}`; }); }
@@ -28,7 +29,7 @@ function firstEntry(state: SeasonState, kind: FinanceEntry['kind']): FinanceEntr
 function reject(state: SeasonState, change: (state: SeasonState) => void): void {
   const damaged = structuredClone(state); change(damaged);
   expect(() => validateSeasonState(damaged)).toThrow();
-  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 8, engineVersion: 'possession-3', state: damaged }))).toThrow();
+  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 9, engineVersion: 'possession-3', state: damaged }))).toThrow();
 }
 
 beforeAll(() => {
@@ -41,9 +42,9 @@ beforeAll(() => {
 }, 60_000);
 
 describe('finance ledger persistence', () => {
-  it('writes format 8 with funding and full coaching commitments for every club', () => {
+  it('writes format 9 with funding and full coaching commitments for every club', () => {
     const text = serializeSeason(initial), before = structuredClone(initial);
-    expect(JSON.parse(text).formatVersion).toBe(8);
+    expect(JSON.parse(text).formatVersion).toBe(9);
     expect(restore(initial)).toEqual(initial);
     expect(initial.finance.ledger).toHaveLength(18);
     for (const club of initial.clubs) {
@@ -122,13 +123,13 @@ describe('format 5 migration without financial side effects', () => {
   it.each(['live', 'complete', 'later year'] as const)('preserves the %s career and its future simulation exactly', boundary => {
     const original = boundary === 'live' ? legacyLive : boundary === 'complete' ? legacyComplete : rolloverSeason(legacyComplete);
     const serialized = formatFive(original), source = JSON.parse(serialized).state, restored = parseSeason(serialized);
-    expect(restored).toEqual(original);
+    expect(restored).toEqual(withUnavailableArchivedStats(original));
     expect(restored.finance).toEqual(createFinance(original.clubs, clubId));
-    expect(restored.training).toEqual(source.training);
+    expect(restored.training).toEqual(original.training);
     expect(restored.coaching).toEqual(source.coaching);
     expect(JSON.stringify(restored.activeMatch)).toBe(JSON.stringify(source.activeMatch));
-    if (original.status === 'complete') expect(rolloverSeason(restored)).toEqual(rolloverSeason(original));
-    else expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(original)));
+    if (original.status === 'complete') expect(rolloverSeason(restored)).toEqual(rolloverSeason(withUnavailableArchivedStats(original)));
+    else expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(withUnavailableArchivedStats(original))));
   });
 
   it.each(['extra finance', 'invalid coaching', 'invalid training', 'wrong original schema'])('validates format 5 %s before adding defaults', change => {

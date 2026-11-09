@@ -3,7 +3,9 @@ import type { SeasonTraining, TrainingFocus, TrainingIntensity, TrainingPlan, Tr
 import type { PlayerAttributes, Team } from '../domain/types';
 import { isRecovering } from './health';
 import type { SeasonCoaching } from '../domain/coaching';
+import type { RosterSnapshot } from '../domain/roster';
 import { coachingAssignments, coachingRatingForAttribute } from './coaching';
+import { createRosterSnapshots, rosterForRound } from './rosters';
 
 export const TRAINING_ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 export const TRAINING_FOCUSES = ['balanced', ...TRAINING_ATTRIBUTES] as const;
@@ -94,6 +96,7 @@ export interface TrainingWeekInput {
   fromDate: string;
   toDate: string;
   coaching?: SeasonCoaching;
+  rosters?: readonly RosterSnapshot[];
 }
 
 /** One authoritative weekly pass updates every club; it consumes no match RNG. */
@@ -106,8 +109,13 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
   const dates = trainingDates(fromDate, toDate);
   const nextConditions = { ...conditions }, nextPoints = { ...training.points };
   const appliedCoaching = input.coaching ? coachingAssignments(input.coaching, clubs, seasonNumber, afterRound) : null;
-  const report: TrainingWeekReport = { seasonNumber, afterRound, fromDate, toDate, plans: {}, players: {}, coaching: appliedCoaching };
+  const rosters = input.rosters ?? createRosterSnapshots(clubs, seasonNumber);
+  const report: TrainingWeekReport = { seasonNumber, afterRound, fromDate, toDate, rosterIds: {}, plans: {}, players: {}, coaching: appliedCoaching };
   for (const club of clubs) {
+    const registered = rosterForRound(rosters, club.id, afterRound);
+    const registeredIds = new Set(registered.players.map(player => player.id));
+    if (registeredIds.size !== registered.players.length || club.players.length !== registeredIds.size || club.players.some(player => !registeredIds.has(player.id))) throw new Error('Training must use the players registered for its completed interval.');
+    report.rosterIds[club.id] = registered.id;
     const plan = resolveTrainingPlan(training.plans[club.id]!, club, conditions);
     report.plans[club.id] = plan;
     for (const player of club.players) {

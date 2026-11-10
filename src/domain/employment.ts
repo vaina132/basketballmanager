@@ -9,7 +9,22 @@ export interface EmploymentContract {
   seasonWage: number;
   signedSeason: number;
   signedRound: number;
-  kind: 'initial' | 'renewal' | 'free-agent';
+  kind: 'initial' | 'renewal' | 'free-agent' | 'transfer';
+}
+
+/** Completed club sale; old agreements remain intact for historical registration and payroll. */
+export interface EmploymentTransfer {
+  id: string;
+  offerId: string;
+  playerId: string;
+  fromClubId: string;
+  toClubId: string;
+  seasonNumber: number;
+  completedOn: string;
+  startsSeason: number;
+  fee: number;
+  releasedContractIds: string[];
+  contractId: string;
 }
 
 export interface SeasonEmployment {
@@ -17,6 +32,7 @@ export interface SeasonEmployment {
   enabledSince: { seasonNumber: number; round: number } | null;
   delegated: boolean;
   contracts: EmploymentContract[];
+  transfers: EmploymentTransfer[];
   /** Completed-season rosters remain unchanged while next year's terms are agreed. */
   market: { seasonNumber: number } | null;
 }

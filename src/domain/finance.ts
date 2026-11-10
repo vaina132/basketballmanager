@@ -11,7 +11,7 @@ export interface FinanceEntry {
   clubId: string;
   seasonNumber: number;
   round: number;
-  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'payroll';
+  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'payroll' | 'transfer';
   /** Income or cost in signed euro cents; cash effects also depend on unpaid obligations. */
   amount: number;
   sourceId: string;

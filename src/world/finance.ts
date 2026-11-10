@@ -1,4 +1,5 @@
 import type { CoachingContract } from '../domain/coaching';
+import type { EmploymentTransfer } from '../domain/employment';
 import type { PayrollCharge } from '../domain/payroll';
 import type { FinanceBalance, FinanceEntry, FinanceLedgerRow, FinancePlan, GateForecast, SeasonFinance } from '../domain/finance';
 import type { SeasonState } from '../domain/season';
@@ -73,6 +74,16 @@ export function recordPayrollCharge(state: SeasonState, clubId: string, payroll:
   if (!state.finance.enabledSince) throw new Error('Enable club finances before recording wages.');
   const amount = payroll.items.reduce((sum, item) => sum + item.amount, 0);
   return book(state, clubId, 'payroll', amount === 0 ? 0 : -amount, sourceId, null, null, payroll);
+}
+
+/** Debit and credit the agreed fee once, after club and player consent have completed. */
+export function recordTransferFee(state: SeasonState, transfer: EmploymentTransfer): SeasonState {
+  const completed = state.employment.transfers.find(item => item.id === transfer.id);
+  if (!state.finance.enabledSince || !completed || completed.offerId !== transfer.offerId || completed.contractId !== transfer.contractId || completed.fromClubId !== transfer.fromClubId || completed.toClubId !== transfer.toClubId || completed.fee !== transfer.fee || completed.seasonNumber !== transfer.seasonNumber || completed.completedOn !== transfer.completedOn) throw new Error('A transfer payment requires the exact completed employment transfer.');
+  if (state.status !== 'complete' || transfer.seasonNumber !== state.seasonNumber || transfer.completedOn !== state.date || transfer.fromClubId === transfer.toClubId || !Number.isSafeInteger(transfer.fee) || transfer.fee <= 0) throw new Error('Choose a completed transfer in the current offseason.');
+  if (getFinanceBalance(state.finance, transfer.toClubId).unpaid > 0 || getSpendableCash(state, transfer.toClubId, transfer.offerId) < transfer.fee) throw new Error('The transfer fee exceeds the remaining budget after other commitments.');
+  const charged = book(state, transfer.toClubId, 'transfer', -transfer.fee, transfer.id);
+  return book(charged, transfer.fromClubId, 'transfer', transfer.fee, transfer.id);
 }
 
 function coachFee(contract: CoachingContract): number {

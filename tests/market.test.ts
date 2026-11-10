@@ -28,7 +28,7 @@ describe('dated offseason offers and reserved commitments', () => {
   it('lists approachable players again after a hold ends, while signed players stay unavailable', () => {
     const listed = (state: SeasonState, id = playerId) => getAvailablePlayers(state).some(player => player.id === id);
     expect(listed(completed)).toBe(true);
-    expect(listed(completed, getLiveMarketOffers(completed)[0]!.playerId)).toBe(false);
+    expect(listed(completed, getLiveMarketOffers(completed)[0]!.playerId)).toBe(true);
     const pending = submitMarketOffer(completed, playerId, getSeasonWage(playerId), 3);
     expect(listed(pending)).toBe(false);
     expect(listed(withdrawMarketOffer(pending, getMarketOffers(pending)[0]!.id))).toBe(true);
@@ -77,6 +77,8 @@ describe('dated offseason offers and reserved commitments', () => {
     expect(() => submitMarketOffer(state, ownIds[3]!, MAX_CONTRACT_WAGE, 3)).toThrow(/budget|allocation|reserve/i);
     expect(state).toEqual(before);
     for (const id of ownIds.slice(5)) state = submitMarketOffer(state, id, getSeasonWage(id), 1);
+    expect(quotePlayerContract(state, ownIds[3]!, 2_000_000, 1).canOffer).toBe(false);
+    state = advanceMarket(state);
     expect(quotePlayerContract(state, ownIds[3]!, 2_000_000, 1).canOffer).toBe(true);
     expect(quotePlayerContract(state, ownIds[3]!, 2_000_000, 2).canOffer).toBe(false);
   });
@@ -94,7 +96,9 @@ describe('dated offseason offers and reserved commitments', () => {
     expect(() => submitMarketOffer(state, playerId, MAX_CONTRACT_WAGE + 50_000, 3)).toThrow();
     expect(state).toEqual(before);
     const otherClub = completed.clubs.find(club => club.id !== clubId)!.id;
-    expect(() => submitMarketOffer(state, playerId, getSeasonWage(playerId), 1, otherClub)).toThrow(/offer|reserved|consider|pending/i);
+    const competed = submitMarketOffer(state, playerId, getSeasonWage(playerId), 1, otherClub);
+    expect(getMarketOffers(competed, clubId, true)).toEqual(getMarketOffers(state, clubId, true));
+    expect(getMarketOffers(competed, otherClub, true).some(offer => offer.playerId === playerId)).toBe(true);
   });
 
   it('counts pending players against the maximum squad size before any contract is signed', () => {

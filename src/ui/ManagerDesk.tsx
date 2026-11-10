@@ -2,7 +2,7 @@ import type { SeasonState } from '../domain/season'
 import { getPlayerHealth } from '../world/health'
 import { getFinanceBalance } from '../world/finance'
 import { getPayrollReserve } from '../world/payroll'
-import { getMarketOffers, getMarketWindow, getNextMarketDate, isMarketActive } from '../world/market-policy'
+import { getLiveMarketOffers, getMarketOffers, getMarketWindow, getNextMarketDate, isMarketActive } from '../world/market-policy'
 import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE } from '../world/employment-policy'
 import { medicalDate } from './SeasonMedicalReport'
 import type { MatchState, Side } from '../domain/types'
@@ -68,8 +68,14 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
   }
   if (season?.negotiations.enabledSince) {
     const latest = new Map(season.negotiations.records.filter(record => record.clubId === season.managedClubId && record.startsSeason === season.seasonNumber + 1).map(record => [record.playerId, record]))
-    const counters = market ? marketOffers.filter(offer => offer.status === 'countered').length : [...latest.values()].filter(record => record.outcome === 'countered' && !contractForSeason(season.employment, record.playerId, season.seasonNumber + 1)).length
-    if (counters) notices.push({ key: 'negotiations', title: `${counters} player ${counters === 1 ? 'counteroffer' : 'counteroffers'}`, detail: 'Review the proposed wages and contract lengths. These replies have not committed wages or reserved players.', action: 'Review offers', open: onOpenTransfers })
+    const counters = market ? marketOffers.filter(offer => offer.status === 'countered' && (!offer.transfer || offer.transfer.clubStatus === 'accepted')).length : [...latest.values()].filter(record => record.outcome === 'countered' && !contractForSeason(season.employment, record.playerId, season.seasonNumber + 1)).length
+    if (counters) notices.push({ key: 'negotiations', title: `${counters} player ${counters === 1 ? 'counteroffer' : 'counteroffers'}`, detail: market ? 'Review the proposed salary and contract length. Your original offer still reserves salary budget and a squad place until its deadline.' : 'Review the proposed salary and contract length. These replies have not committed salaries or reserved players.', action: 'Review offers', open: onOpenTransfers })
+    const lost = market ? getMarketOffers(season).filter(offer => offer.status === 'lost' && offer.closedOn === season.date).length : 0
+    if (lost) notices.push({ key: 'rival-offers', title: `${lost} ${lost === 1 ? 'player chose' : 'players chose'} another club`, detail: 'Your reserved salary budget and squad places have been released. Review the decisions and choose your next targets.', action: 'Review decisions', open: onOpenTransfers })
+    const clubCounters = marketOffers.filter(offer => offer.transfer?.clubStatus === 'countered').length
+    if (clubCounters) notices.push({ key: 'club-counteroffers', title: `${clubCounters} club ${clubCounters === 1 ? 'counteroffer' : 'counteroffers'}`, detail: 'The selling club has asked for a higher transfer fee. Review its price or withdraw your offer.', action: 'Review fees', open: onOpenTransfers })
+    const incoming = market ? getLiveMarketOffers(season).filter(offer => offer.transfer?.sellerClubId === season.managedClubId && offer.status === 'club-review').length : 0
+    if (incoming) notices.push({ key: 'incoming-transfers', title: `${incoming} incoming transfer ${incoming === 1 ? 'offer' : 'offers'}`, detail: 'Decide whether to accept the fee, reject the approach or ask for your club’s price. The sale completes only if the player also agrees.', urgent: true, action: 'Review incoming offers', open: onOpenTransfers })
   }
 
   if (needsReplacement) notices.push({ key: 'replacement', title: 'Replace an unavailable player', detail: match.requiredSubstitutions.map(item => `${playerName(item.playerId, item.side)}: ${item.reason === 'injured' ? 'injured' : 'five fouls'}`).join('; '), urgent: true, action: 'Choose replacement', open: onOpenCoaching })

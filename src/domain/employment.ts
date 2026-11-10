@@ -32,12 +32,27 @@ export interface EmploymentTransfer {
   payments: TransferPayment[];
 }
 
+/** Paid release of future terms; original agreements retain their historical meaning. */
+export interface EmploymentBuyout {
+  id: string;
+  playerId: string;
+  clubId: string;
+  seasonNumber: number;
+  completedOn: string;
+  startsSeason: number;
+  amount: number;
+  releasedContractIds: string[];
+  contractCountBefore: number;
+  negotiationCountBefore: number;
+}
+
 export interface SeasonEmployment {
   model: 'employment-1';
   enabledSince: { seasonNumber: number; round: number } | null;
   delegated: boolean;
   contracts: EmploymentContract[];
   transfers: EmploymentTransfer[];
+  buyouts: EmploymentBuyout[];
   /** Completed-season rosters remain unchanged while next year's terms are agreed. */
   market: { seasonNumber: number } | null;
 }

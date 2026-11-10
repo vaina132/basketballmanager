@@ -1,0 +1,86 @@
+import type { EmploymentBuyout } from '../domain/employment';
+import type { SeasonState } from '../domain/season';
+import { DEVELOPMENT_PLAYERS } from '../data/development-players';
+import { contractForSeason, effectiveContractsForSeason, getClubContractSummary, MIN_ROSTER_SIZE } from './employment-policy';
+import { getFinanceBalance, recordContractBuyout } from './finance';
+import { addMarketDays, getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
+import { getSpendableCash } from './payroll-policy';
+import { getTransferPaymentSummary } from './transfer-payments';
+
+export interface ContractBuyoutQuote {
+  playerId: string;
+  clubId: string;
+  startsSeason: number;
+  endsSeason: number;
+  amount: number;
+  releasedContractIds: string[];
+  contractCountBefore: number;
+  negotiationCountBefore: number;
+  seasonWageFreed: number;
+  rosterSizeAfter: number;
+  remainingBudgetAfter: number;
+  canBuyout: boolean;
+  reason: string | null;
+}
+
+/** The development settlement pays every remaining guaranteed future salary in full. */
+export function quoteContractBuyout(state: SeasonState, playerId: string, clubId = state.managedClubId): ContractBuyoutQuote {
+  const startsSeason = state.seasonNumber + 1;
+  const own = contractForSeason(state.employment, playerId, startsSeason);
+  const lastPossibleSeason = Math.max(startsSeason, ...state.employment.contracts.filter(contract => contract.playerId === playerId && contract.clubId === clubId).map(contract => contract.endsSeason));
+  const released = new Set<string>();
+  let amount = 0, endsSeason = startsSeason;
+  for (let year = startsSeason; year <= lastPossibleSeason; year += 1) {
+    for (const contract of effectiveContractsForSeason(state.employment, year)) if (contract.playerId === playerId && contract.clubId === clubId) {
+      released.add(contract.id);
+      amount += contract.seasonWage;
+      endsSeason = year;
+    }
+  }
+  const releasedContractIds = state.employment.contracts.filter(contract => released.has(contract.id)).map(contract => contract.id);
+  const contractCountBefore = state.employment.contracts.length, negotiationCountBefore = state.negotiations.records.length;
+  const record: EmploymentBuyout = {
+    id: `employment-buyout-${(state.employment.buyouts ?? []).length + 1}`, playerId, clubId,
+    seasonNumber: state.seasonNumber, completedOn: state.date, startsSeason, amount,
+    releasedContractIds, contractCountBefore, negotiationCountBefore,
+  };
+  const after = { ...state, employment: { ...state.employment, buyouts: [...(state.employment.buyouts ?? []), record] } };
+  const rosterSizeAfter = getClubContractSummary(after, clubId, startsSeason).rosterSize;
+  const cash = getSpendableCash(state, clubId), window = getMarketWindow(state);
+  let reason: string | null = null;
+  if (!state.employment.enabledSince || !state.finance.enabledSince || !state.payroll.enabledSince) reason = 'Enable player contracts, finances and payroll before buying out a contract.';
+  else if (!DEVELOPMENT_PLAYERS.some(player => player.id === playerId) || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a player and a club in this league.';
+  else if (!isMarketActive(state) || !isCompetitiveMarket(state) || !window || startsSeason > 7974) reason = 'Contract buyouts are available during the competitive offseason.';
+  else if (state.date >= window.closesOn) reason = 'The recruitment period has closed.';
+  else if (!own || own.clubId !== clubId || !releasedContractIds.length || amount <= 0) reason = 'Choose one of your players under contract for next season.';
+  else if (getLiveMarketOffers(state).some(offer => offer.playerId === playerId)) reason = 'Resolve or withdraw all open offers for this player before buying out the contract.';
+  else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before buying out a contract.';
+  else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before buying out a contract.';
+  else if (cash < amount) reason = 'The buyout exceeds the remaining budget after protecting salaries and transfer commitments.';
+  else if (rosterSizeAfter < MIN_ROSTER_SIZE && addMarketDays(state.date, 1) > window.closesOn) reason = 'Keep a reply day available to sign a replacement before recruitment closes.';
+  if (reason === null) for (let year = startsSeason; year <= endsSeason; year += 1) {
+    const summary = getClubContractSummary(after, clubId, year);
+    if (summary.seasonWages + summary.reservedWages + summary.minimumReserve > summary.budget) {
+      reason = `The buyout would leave too little salary budget to complete an eight-player squad in season ${year}.`;
+      break;
+    }
+  }
+  return {
+    playerId, clubId, startsSeason, endsSeason, amount, releasedContractIds, contractCountBefore, negotiationCountBefore,
+    seasonWageFreed: own?.clubId === clubId ? own.seasonWage : 0, rosterSizeAfter,
+    remainingBudgetAfter: Math.max(0, cash - amount), canBuyout: reason === null, reason,
+  };
+}
+
+/** Internal market command; release metadata and compensation are one immutable commit. */
+export function commitContractBuyout(state: SeasonState, playerId: string, clubId = state.managedClubId): SeasonState {
+  const quote = quoteContractBuyout(state, playerId, clubId);
+  if (!quote.canBuyout) throw new Error(quote.reason!);
+  const buyout: EmploymentBuyout = {
+    id: `employment-buyout-${(state.employment.buyouts ?? []).length + 1}`, playerId, clubId,
+    seasonNumber: state.seasonNumber, completedOn: state.date, startsSeason: quote.startsSeason,
+    amount: quote.amount, releasedContractIds: [...quote.releasedContractIds],
+    contractCountBefore: quote.contractCountBefore, negotiationCountBefore: quote.negotiationCountBefore,
+  };
+  return recordContractBuyout({ ...state, employment: { ...state.employment, buyouts: [...(state.employment.buyouts ?? []), buyout] } }, buyout);
+}

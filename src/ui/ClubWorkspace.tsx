@@ -28,7 +28,7 @@ const money = (cents: number) => moneyFormatter.format(cents / 100)
 const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${money(Math.abs(cents))}`
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
-const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', payroll: 'Player wages', transfer: 'Player transfer' }
+const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout' }
 
 export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onOpenPayroll, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
@@ -56,6 +56,10 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onO
   const ledger = financeLedgerRows(season.finance, club.id).filter(entry => (kind === 'all' || entry.kind === kind) && (period === 'all' || entry.seasonNumber === season.seasonNumber))
 
   function entryDetail(entry: FinanceEntry): string {
+    if (entry.kind === 'buyout') {
+      const buyout = season.employment.buyouts.find(item => item.id === entry.sourceId)
+      return buyout ? `${getDevelopmentPlayer(buyout.playerId).name} · Released from ${seasonLabel(buyout.startsSeason)}` : 'Player compensation'
+    }
     if (entry.kind === 'transfer') {
       const transfer = season.employment.transfers.find(item => getTransferPayments(item).some(payment => payment.id === entry.sourceId))
       if (!transfer) return 'Transfer fee'
@@ -121,9 +125,10 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onO
         <div className="club-ledger-scroll" tabIndex={0} role="region" aria-label="Club financial activity"><table className="club-finance-ledger"><thead><tr><th scope="col">Date</th><th scope="col">Activity</th><th scope="col">Income / cost</th><th scope="col">Cash change</th><th scope="col">Unpaid change</th></tr></thead><tbody>{ledger.map(entry => {
           const transfer = entry.kind === 'transfer' ? season.employment.transfers.find(item => getTransferPayments(item).some(payment => payment.id === entry.sourceId)) : null
           const payment = transfer ? getTransferPayments(transfer).find(item => item.id === entry.sourceId) : null
-          const date = payment?.paidOn ?? dateForRound(entry.round, entry.seasonNumber)
+          const buyout = entry.kind === 'buyout' ? season.employment.buyouts.find(item => item.id === entry.sourceId) : null
+          const date = buyout?.completedOn ?? payment?.paidOn ?? dateForRound(entry.round, entry.seasonNumber)
           return <tr key={entry.id} data-finance-entry={entry.id} data-finance-kind={entry.kind}>
-            <td><time dateTime={date}>{formatDate(date)}</time><small>{transfer && payment ? `Transfer payment ${payment.installmentIndex + 1}/${transfer.installments.length}` : `Matchday ${entry.round}`}</small></td><th scope="row">{kinds[entry.kind]}<small>{entryDetail(entry)}</small>{entry.payroll && <details className="club-payroll-breakdown" data-payroll-ledger={entry.id}><summary>Player charges</summary><ul>{entry.payroll.items.map(item => <li key={item.agreementId}><span>{getDevelopmentPlayer(item.playerId).name}</span><strong>{money(item.amount)}</strong>{item.discount > 0 && <small>Gross {money(item.gross)} · discount {money(item.discount)}</small>}</li>)}</ul></details>}</th>
+            <td><time dateTime={date}>{formatDate(date)}</time><small>{buyout ? 'Player compensation' : transfer && payment ? `Transfer payment ${payment.installmentIndex + 1}/${transfer.installments.length}` : `Matchday ${entry.round}`}</small></td><th scope="row">{kinds[entry.kind]}<small>{entryDetail(entry)}</small>{entry.payroll && <details className="club-payroll-breakdown" data-payroll-ledger={entry.id}><summary>Player charges</summary><ul>{entry.payroll.items.map(item => <li key={item.agreementId}><span>{getDevelopmentPlayer(item.playerId).name}</span><strong>{money(item.amount)}</strong>{item.discount > 0 && <small>Gross {money(item.gross)} · discount {money(item.discount)}</small>}</li>)}</ul></details>}</th>
             <td className={entry.amount < 0 ? 'club-finance-cost' : entry.amount > 0 ? 'club-finance-income' : ''}>{movement(entry.amount)}</td>
             <td><span className={entry.cashDelta < 0 ? 'club-finance-cost' : entry.cashDelta > 0 ? 'club-finance-income' : ''}>{movement(entry.cashDelta)}</span><small>Balance {money(entry.cashAfter)}</small></td>
             <td><span className={entry.unpaidDelta > 0 ? 'club-finance-cost' : entry.unpaidDelta < 0 ? 'club-finance-income' : ''}>{movement(entry.unpaidDelta)}</span><small>Balance {money(entry.unpaidAfter)}</small></td>

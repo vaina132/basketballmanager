@@ -3,7 +3,7 @@ import type { FinanceBalance, FinanceEntry } from '../domain/finance';
 import type { PayrollItem, PlayerWageAgreement, SeasonPayroll } from '../domain/payroll';
 import type { SeasonTraining, TrainingPlan, TrainingPoints, TrainingWeekReport } from '../domain/training';
 import type { RosterSnapshot } from '../domain/roster';
-import type { SeasonEmployment, EmploymentContract, EmploymentTransfer } from '../domain/employment';
+import type { SeasonEmployment, EmploymentContract, EmploymentTransfer, EmploymentBuyout } from '../domain/employment';
 import type { SeasonScouting } from '../domain/scouting';
 import type { SeasonNegotiations } from '../domain/negotiations';
 import type { MarketEvent, MarketWindow, SeasonMarket } from '../domain/market';
@@ -267,12 +267,15 @@ function migrateTransferPayments(employment: SeasonEmployment): SeasonEmployment
 }
 
 /** Retained employment records are the authority for historical and pending registrations. */
-function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 16): SeasonEmployment {
-  const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market', ...(version >= 15 ? ['transfers'] : [])]);
+function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 17): SeasonEmployment {
+  const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market', ...(version >= 15 ? ['transfers'] : []), ...(version >= 17 ? ['buyouts'] : [])]);
   const transfers = version >= 15 ? fields.transfers : [];
   if (!Array.isArray(transfers) || transfers.length > 20_000) fail('employment.transfers', 'must retain at most 20000 completed transfers');
   if (transfers.length && !datedMarket) fail('employment.transfers', 'requires the dated market and its retained club-consent journal');
-  const normalized = { ...fields, transfers } as unknown as SeasonEmployment;
+  const buyouts = version >= 17 ? fields.buyouts : [];
+  if (!Array.isArray(buyouts) || buyouts.length > 20_000) fail('employment.buyouts', 'must retain at most 20000 completed contract buyouts');
+  if (buyouts.length && !datedMarket) fail('employment.buyouts', 'requires the dated market and retained release commands');
+  const normalized = { ...fields, transfers, buyouts } as unknown as SeasonEmployment;
   if (fields.model !== 'employment-1') fail('employment.model', 'is unsupported');
   if (typeof fields.delegated !== 'boolean') fail('employment.delegated', 'must be boolean');
   if (!Array.isArray(fields.contracts) || fields.contracts.length > 20_000) fail('employment.contracts', 'must contain at most 20000 retained contracts');
@@ -331,10 +334,43 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
       }
     }
   }
+  let previousBuyoutDate = '', previousBuyoutContracts = catalog.length, previousBuyoutNegotiations = 0;
+  const releasedPlayers = new Set<string>();
+  for (const [index, raw] of buyouts.entries()) {
+    const path = `employment.buyouts[${index}]`;
+    const buyout = record(raw, path, ['id', 'playerId', 'clubId', 'seasonNumber', 'completedOn', 'startsSeason', 'amount', 'releasedContractIds', 'contractCountBefore', 'negotiationCountBefore']);
+    if (buyout.id !== `employment-buyout-${index + 1}`) fail(`${path}.id`, 'must use sequential buyout identities');
+    const year = number(buyout.seasonNumber, `${path}.seasonNumber`, firstYear, seasonNumber);
+    if (year === seasonNumber && status !== 'complete' || buyout.startsSeason !== year + 1 || year >= MAX_SEASON_NUMBER) fail(path, 'must release future employment after a completed season');
+    if (!catalogById.has(buyout.playerId as string) || !clubIds.includes(buyout.clubId as string)) fail(path, 'must identify a catalog player and club');
+    if (typeof buyout.completedOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(buyout.completedOn) || buyout.completedOn < dateForRound(10, year) || buyout.completedOn >= addMarketDays(dateForRound(10, year), MARKET_WINDOW_DAYS) || buyout.completedOn < previousBuyoutDate || !Number.isFinite(Date.parse(`${buyout.completedOn}T00:00:00Z`)) || new Date(`${buyout.completedOn}T00:00:00Z`).toISOString().slice(0, 10) !== buyout.completedOn) fail(`${path}.completedOn`, 'must retain a chronological offseason date before recruitment closes');
+    const contractCountBefore = number(buyout.contractCountBefore, `${path}.contractCountBefore`, previousBuyoutContracts, fields.contracts.length);
+    previousBuyoutContracts = contractCountBefore;
+    previousBuyoutNegotiations = number(buyout.negotiationCountBefore, `${path}.negotiationCountBefore`, previousBuyoutNegotiations, 20_000);
+    previousBuyoutDate = buyout.completedOn;
+    const playerBoundary = `${year}/${buyout.clubId}/${buyout.playerId}`;
+    if (releasedPlayers.has(playerBoundary)) fail(path, 'cannot release the same player from the same club twice in one window');
+    releasedPlayers.add(playerBoundary);
+    if (!Array.isArray(buyout.releasedContractIds) || !buyout.releasedContractIds.length || buyout.releasedContractIds.some(id => typeof id !== 'string') || new Set(buyout.releasedContractIds).size !== buyout.releasedContractIds.length) fail(`${path}.releasedContractIds`, 'must identify distinct released agreements');
+    number(buyout.amount, `${path}.amount`, 1, MAX_CONTRACT_WAGE * MAX_CONTRACT_SEASONS);
+    const contracts = fields.contracts.slice(0, contractCountBefore) as EmploymentContract[];
+    const employment = { ...normalized, contracts, transfers: (transfers as EmploymentTransfer[]).filter(transfer => contracts.some(contract => contract.id === transfer.contractId)), buyouts: buyouts.slice(0, index) as EmploymentBuyout[] };
+    const source = contractForSeason(employment, buyout.playerId as string, year + 1);
+    const released: EmploymentContract[] = [];
+    let amount = 0;
+    const through = year + MAX_CONTRACT_SEASONS;
+    for (let season = year + 1; season <= through; season += 1) {
+      const contract = contractForSeason(employment, buyout.playerId as string, season);
+      if (!contract || contract.clubId !== buyout.clubId) continue;
+      amount += contract.seasonWage;
+      if (!released.some(previous => previous.id === contract.id)) released.push(contract);
+    }
+    if (!source || source.clubId !== buyout.clubId || !sameData(buyout.releasedContractIds, contracts.filter(contract => released.some(item => item.id === contract.id)).map(contract => contract.id)) || buyout.amount !== amount) fail(path, 'must settle exactly the releasing club\'s effective remaining future salary at its recorded history prefix');
+  }
   const validated: EmploymentContract[] = [];
-  const prefixEmployment = (include?: EmploymentContract): SeasonEmployment => {
+  const prefixEmployment = (include?: EmploymentContract, buyoutLimit = validated.length): SeasonEmployment => {
     const contracts = include ? [...validated, include] : validated;
-    return { ...normalized, contracts, transfers: (transfers as EmploymentTransfer[]).filter(transfer => contracts.some(contract => contract.id === transfer.contractId)) };
+    return { ...normalized, contracts, transfers: (transfers as EmploymentTransfer[]).filter(transfer => contracts.some(contract => contract.id === transfer.contractId)), buyouts: (buyouts as EmploymentBuyout[]).filter(buyout => buyout.contractCountBefore <= buyoutLimit) };
   };
   let previousBoundary = firstYear * 10 + firstRound;
   for (const [index, value] of fields.contracts.entries()) {
@@ -363,12 +399,13 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
         if (!current || current.clubId !== entry.clubId || current.endsSeason !== signedSeason) fail(path, 'must renew an expiring agreement at the same club');
       } else if (entry.kind === 'free-agent') {
         if (signedRound !== 10 || signedSeason === seasonNumber && status !== 'complete') fail(path, 'must be signed during a completed season\'s recruitment window');
-        if (current?.clubId === entry.clubId) fail(path, 'must record a same-club extension as a renewal');
+        const releasedFuture = current && [...prefixEmployment().transfers, ...prefixEmployment().buyouts].some(release => release.startsSeason === signedSeason + 1 && release.releasedContractIds.includes(current.id));
+        if (current && current.clubId === entry.clubId && (current.endsSeason === signedSeason || !releasedFuture)) fail(path, 'must record an ordinary same-club extension as a renewal');
       } else if (entry.kind === 'transfer' && version >= 15) {
         const transfer = (transfers as EmploymentTransfer[]).find(item => item.contractId === entry.id);
         if (!transfer || transfer.playerId !== player.id || transfer.toClubId !== entry.clubId || transfer.seasonNumber !== signedSeason || signedRound !== 10 || transfer.startsSeason !== startsSeason) fail(path, 'must link the transferred player and buying club to a completed offseason transfer');
         const source = contractForSeason(prefixEmployment(), player.id, startsSeason);
-        const released = validated.filter(contract => contract.playerId === player.id && contract.clubId === transfer.fromClubId && contract.endsSeason >= startsSeason && !(prefixEmployment().transfers ?? []).some(previous => previous.releasedContractIds.includes(contract.id)));
+        const released = validated.filter(contract => contract.playerId === player.id && contract.clubId === transfer.fromClubId && contract.endsSeason >= startsSeason && ![...prefixEmployment().transfers, ...prefixEmployment().buyouts].some(previous => previous.releasedContractIds.includes(contract.id)));
         if (!source || source.clubId !== transfer.fromClubId || !sameData(transfer.releasedContractIds, released.map(contract => contract.id))) fail(path, 'must release exactly the effective future terms of the selling club');
       } else fail(`${path}.kind`, 'must identify an initial agreement, renewal, free-agent signing or transfer');
     }
@@ -376,7 +413,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     const contract = entry as unknown as EmploymentContract;
     validated.push(contract);
     if (index >= catalog.length) for (let year = startsSeason; year <= endsSeason; year += 1) {
-      const annual = effectiveContractsForSeason(prefixEmployment(), year).filter(contract => contract.clubId === entry.clubId);
+      const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
       if (annual.length > MAX_ROSTER_SIZE || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > EMPLOYMENT_BUDGET) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
@@ -418,6 +455,7 @@ function validateMarket(value: unknown, state: SeasonState, version: number): Se
   const negotiationAnchor = record(negotiation.enabledSince, 'negotiations.enabledSince', ['seasonNumber', 'round', 'contractCount']);
   const negotiationCount = number(anchor.negotiationCount, 'market.enabledSince.negotiationCount', 0, negotiation.records.length);
   const firstBoundary = firstYear * 10 + firstRound;
+  if ((state.employment.buyouts ?? []).some(buyout => buyout.seasonNumber < firstYear)) fail('employment.buyouts', 'cannot precede the first retained recruitment window');
   if ((state.employment.transfers ?? []).some(transfer => transfer.seasonNumber < firstYear)) fail('employment.transfers', 'cannot precede the first retained recruitment window');
   if (!state.employment.enabledSince || !state.payroll.enabledSince || !state.finance.enabledSince || !state.negotiations.enabledSince || state.negotiations.enabledSince.seasonNumber * 10 + state.negotiations.enabledSince.round > firstBoundary) fail('market.enabledSince', 'requires contracts, finances, payroll and negotiations active before market activation');
   const baselineContracts = number(negotiationAnchor.contractCount, 'negotiations.enabledSince.contractCount', 0, state.employment.contracts.length);
@@ -450,12 +488,13 @@ function validateMarket(value: unknown, state: SeasonState, version: number): Se
     const expectedContractCount = baselineContracts + beforeRecords.filter(entry => entry.outcome === 'accepted').length;
     if (window.negotiationCountBefore !== expectedNegotiationCount || window.contractCountBefore !== expectedContractCount) fail(path, 'must anchor the exact agreements and responses already present before the window');
     const beforeTransfers = (state.employment.transfers ?? []).filter(transfer => transfer.seasonNumber < year);
-    // Only transfer fees can book cash during recruitment. Later seasons and this
+    const beforeBuyouts = (state.employment.buyouts ?? []).filter(buyout => buyout.seasonNumber < year);
+    // Transfer payments and buyout settlements can book cash during recruitment. Later seasons and this
     // window's fees must not finance earlier proposals while replaying history.
     const beforePaymentIds = new Set(beforeTransfers.flatMap(transfer => transfer.payments.filter(payment => payment.paidOn <= openedOn).map(payment => payment.id)));
-    const beforeLedger = state.finance.ledger.filter(entry => entry.seasonNumber < year || entry.seasonNumber === year && (entry.kind !== 'transfer' || beforePaymentIds.has(entry.sourceId)));
+    const beforeLedger = state.finance.ledger.filter(entry => entry.seasonNumber < year || entry.seasonNumber === year && (entry.kind !== 'buyout' && (entry.kind !== 'transfer' || beforePaymentIds.has(entry.sourceId))));
     if (!sameData(beforeLedger, state.finance.ledger.slice(0, beforeLedger.length))) fail(path, 'must open after a contiguous financial history, before the transfer fees for this window');
-    const employment = { ...state.employment, contracts: state.employment.contracts.slice(0, expectedContractCount), transfers: beforeTransfers.map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => beforePaymentIds.has(payment.id)) })), market: { seasonNumber: year + 1 } };
+    const employment = { ...state.employment, contracts: state.employment.contracts.slice(0, expectedContractCount), transfers: beforeTransfers.map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => beforePaymentIds.has(payment.id)) })), buyouts: beforeBuyouts, market: { seasonNumber: year + 1 } };
     const initialWindow: MarketWindow = { seasonNumber: year, openedOn, closesOn, date: openedOn, contractCountBefore: expectedContractCount, negotiationCountBefore: expectedNegotiationCount, closed: false, competitionFromEvent, events: [], offers: [] };
     let replay: SeasonState = {
       ...state, seasonNumber: year, round: 10, status: 'complete', date: openedOn, employment,
@@ -470,7 +509,7 @@ function validateMarket(value: unknown, state: SeasonState, version: number): Se
       const eventPath = `${path}.events[${eventIndex}]`;
       if (!rawEvent || typeof rawEvent !== 'object' || Array.isArray(rawEvent)) fail(eventPath, 'must be a supported market command');
       const type = (rawEvent as Record<string, unknown>).type;
-      const event = record(rawEvent, eventPath, type === 'offer' ? ['type', 'id', 'date', 'clubId', 'playerId', 'seasonWage', 'seasons', ...(version >= 15 && Object.hasOwn(rawEvent, 'transferFee') ? ['transferFee'] : []), ...(version >= 16 && Object.hasOwn(rawEvent, 'transferPaymentPlan') ? ['transferPaymentPlan'] : [])] : type === 'withdraw' ? ['type', 'date', 'offerId'] : type === 'advance' ? ['type', 'date'] : version >= 15 && type === 'club-decision' ? ['type', 'date', 'offerId', 'response'] : []);
+      const event = record(rawEvent, eventPath, type === 'offer' ? ['type', 'id', 'date', 'clubId', 'playerId', 'seasonWage', 'seasons', ...(version >= 15 && Object.hasOwn(rawEvent, 'transferFee') ? ['transferFee'] : []), ...(version >= 16 && Object.hasOwn(rawEvent, 'transferPaymentPlan') ? ['transferPaymentPlan'] : [])] : type === 'withdraw' ? ['type', 'date', 'offerId'] : type === 'advance' ? ['type', 'date'] : version >= 15 && type === 'club-decision' ? ['type', 'date', 'offerId', 'response'] : version >= 17 && type === 'buyout' ? ['type', 'id', 'date', 'clubId', 'playerId'] : []);
       if (!validDate(event.date, openedOn, closesOn)) fail(`${eventPath}.date`, 'must be a real date inside the recruitment window');
       if (type === 'offer') {
         if (typeof event.id !== 'string' || typeof event.clubId !== 'string' || typeof event.playerId !== 'string') fail(eventPath, 'must identify an offer, player and club');
@@ -479,6 +518,7 @@ function validateMarket(value: unknown, state: SeasonState, version: number): Se
         if (Object.hasOwn(event, 'transferFee')) { const fee = number(event.transferFee, `${eventPath}.transferFee`, 100_000, 50_000_000); if (fee % 100_000) fail(`${eventPath}.transferFee`, 'must use thousand-euro steps'); }
         if (Object.hasOwn(event, 'transferPaymentPlan') && (!Object.hasOwn(event, 'transferFee') || !['upfront', 'two-payments', 'three-payments'].includes(event.transferPaymentPlan as string))) fail(`${eventPath}.transferPaymentPlan`, 'must identify a supported plan on a paid transfer offer');
       } else if (type === 'club-decision' && (typeof event.offerId !== 'string' || !['accept', 'reject', 'counter'].includes(event.response as string))) fail(eventPath, 'must identify a pending club decision and supported response');
+      else if (type === 'buyout' && (typeof event.id !== 'string' || typeof event.clubId !== 'string' || typeof event.playerId !== 'string')) fail(eventPath, 'must identify the release, player and club');
       else if (type === 'withdraw' && typeof event.offerId !== 'string') fail(`${eventPath}.offerId`, 'must identify a live proposal');
       try { replay = applyMarketEvent(replay, event as unknown as MarketEvent); }
       catch (error) { fail(eventPath, `does not follow the market rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
@@ -495,6 +535,7 @@ function validateMarket(value: unknown, state: SeasonState, version: number): Se
     if (!sameData(replay.employment.contracts, state.employment.contracts.slice(0, replay.employment.contracts.length))) fail(`${path}.offers`, 'must preserve the exact contracts signed by scheduled responses');
     const expectedTransfers = (state.employment.transfers ?? []).filter(transfer => transfer.seasonNumber <= year).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => payment.seasonNumber <= year) }));
     if (!sameData(replay.employment.transfers ?? [], expectedTransfers)) fail(`${path}.offers`, 'must explain every completed transfer and released agreement');
+    if (!sameData(replay.employment.buyouts ?? [], (state.employment.buyouts ?? []).filter(buyout => buyout.seasonNumber <= year))) fail(`${path}.events`, 'must explain every exact buyout settlement and released agreement');
     const throughLedger = state.finance.ledger.filter(entry => entry.seasonNumber <= year);
     if (!sameData(replay.finance.ledger, throughLedger)) fail(`${path}.offers`, 'must reproduce each transfer fee exactly once in the accounts of both clubs');
     if (year < state.seasonNumber) {
@@ -559,7 +600,7 @@ function validateNegotiations(value: unknown, state: SeasonState): SeasonNegotia
     if (entry.contractCountBefore !== prefix.length) fail(`${path}.contractCountBefore`, 'must identify the complete employment history when this offer was submitted');
     const replay: SeasonState = {
       ...state, seasonNumber: year, round, date: entry.date as string, status: entry.status,
-      employment: { ...state.employment, contracts: prefix, transfers: (state.employment.transfers ?? []).filter(transfer => prefix.some(contract => contract.id === transfer.contractId)), market: entry.status === 'complete' ? { seasonNumber: year + 1 } : null },
+      employment: { ...state.employment, contracts: prefix, transfers: (state.employment.transfers ?? []).filter(transfer => prefix.some(contract => contract.id === transfer.contractId)), buyouts: (state.employment.buyouts ?? []).filter(buyout => buyout.negotiationCountBefore <= index && buyout.completedOn <= (entry.date as string)), market: entry.status === 'complete' ? { seasonNumber: year + 1 } : null },
       negotiations: { model: 'negotiations-1', enabledSince: { seasonNumber: firstYear, round: firstRound, contractCount }, records: entries },
       market: createMarket(),
     };
@@ -779,6 +820,8 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     add({ clubId: transfer.fromClubId, seasonNumber: payment.seasonNumber, round: payment.round, kind: 'transfer', sourceId: payment.id, amount: payment.amount });
     add({ clubId: transfer.toClubId, seasonNumber: payment.seasonNumber, round: payment.round, kind: 'transfer', sourceId: payment.id, amount: -payment.amount });
   }
+  const buyoutRecords = new Map((employment?.buyouts ?? []).map(buyout => [buyout.id, buyout]));
+  for (const buyout of buyoutRecords.values()) add({ clubId: buyout.clubId, seasonNumber: buyout.seasonNumber, round: 10, kind: 'buyout', sourceId: buyout.id, amount: -buyout.amount });
 
   const wageGroups = new Map<string, PlayerWageAgreement[]>(), remainingWages = new Map<string, number>(), wageReserves = new Map<string, number>(), prepaid = new Set<string>();
   const wageGroup = (year: number, clubId: string) => `${year}/${clubId}`;
@@ -822,7 +865,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       if (index < payrollAnchor.ledgerIndex ? calendar > activationDate : calendar < activationDate) fail('payroll.enabledSince.ledgerIndex', 'must identify the ledger boundary on the activation date');
     }
     previousDate = calendar;
-    if (!['opening', 'sponsor', 'operations', 'tickets', 'coaching', ...(payroll ? ['payroll'] : []), ...(employment?.transfers ? ['transfer'] : [])].includes(entry.kind as string)) fail(`${path}.kind`, 'is unsupported');
+    if (!['opening', 'sponsor', 'operations', 'tickets', 'coaching', ...(payroll ? ['payroll'] : []), ...(employment?.transfers ? ['transfer'] : []), ...(employment?.buyouts ? ['buyout'] : [])].includes(entry.kind as string)) fail(`${path}.kind`, 'is unsupported');
     const kind = entry.kind as FinanceEntry['kind'];
     if (payrollAnchor && calendar === payrollAnchor.seasonNumber * 10 + payrollAnchor.round) {
       if ((kind === 'opening' || kind === 'sponsor') && index >= payrollAnchor.ledgerIndex) fail('payroll.enabledSince.ledgerIndex', 'must follow opening funds and sponsorship already booked at activation');
@@ -900,6 +943,14 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
         paidTransferTotals.set(receipt.transfer.id, (paidTransferTotals.get(receipt.transfer.id) ?? 0) - amount);
         paidTransferCounts.set(receipt.transfer.id, receipt.paymentIndex + 1);
       }
+      required.delete(key);
+    } else if (kind === 'buyout') {
+      if (entry.ticket !== null || entry.coach !== null) fail(path, 'must be a contract settlement without unrelated details');
+      const expected = required.get(key), buyout = buyoutRecords.get(entry.sourceId);
+      if (!expected || !buyout || expected.kind !== 'buyout' || expected.seasonNumber !== year || entryRound !== 10 || amount !== -buyout.amount) fail(path, 'must match exactly one recorded contract buyout settlement');
+      const balance = balances.get(entry.clubId)!;
+      const transferReserve = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id)).reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
+      if (balance.unpaid > 0 || balance.cash < -amount + wageReserve(year, entry.clubId, index) + transferReserve) fail(path, 'must settle the buyout using cash after protecting player wages and unpaid transfer commitments');
       required.delete(key);
     } else if (kind === 'coaching') {
       if (entry.ticket !== null) fail(`${path}.ticket`, 'must be empty for a coaching fee');
@@ -1115,7 +1166,7 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
 }
 
 /** Older schemas keep their original constraints before migration adds career fields. */
-function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16): void {
+function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17): void {
   const legacy = version === 1, career = version >= 3;
   checkJsonTree(value);
   const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : [])]);
@@ -1279,11 +1330,11 @@ function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 
 }
 
 /** Validate every reference and committed round before replacing any live season. */
-export function validateSeasonState(value: unknown): asserts value is SeasonState { validateState(value, 16); }
+export function validateSeasonState(value: unknown): asserts value is SeasonState { validateState(value, 17); }
 
 export function serializeSeason(state: SeasonState): string {
   validateSeasonState(state);
-  const text = JSON.stringify({ format: FORMAT, formatVersion: 16, engineVersion: 'possession-3', state });
+  const text = JSON.stringify({ format: FORMAT, formatVersion: 17, engineVersion: 'possession-3', state });
   checkSize(text);
   return text;
 }
@@ -1298,7 +1349,7 @@ function migrateRosterHistory(previous: SeasonState, version: number): SeasonSta
   });
   const training = version >= 5 ? previous.training : version === 4 ? migrateTrainingCoaching(previous.training) : createTraining(clubs, false);
   return {
-    ...previous, schemaVersion: 16, seasonNumber, rosters, employment: createEmployment(), scouting: createScouting(clubs, previous.managedClubId), negotiations: createNegotiations(), market: createMarket(),
+    ...previous, schemaVersion: 17, seasonNumber, rosters, employment: createEmployment(), scouting: createScouting(clubs, previous.managedClubId), negotiations: createNegotiations(), market: createMarket(),
     manager: version >= 8 ? previous.manager : null,
     injuryMode: version >= 2 ? previous.injuryMode : 'off',
     injuries: version >= 2 ? previous.injuries : [],
@@ -1338,18 +1389,18 @@ export function parseSeason(text: string): SeasonState {
   try { parsed = JSON.parse(text); } catch { throw new Error('This is not a valid JSON season file.'); }
   checkJsonTree(parsed);
   const envelope = record(parsed, 'envelope', ['format', 'formatVersion', 'engineVersion', 'state']);
-  if (envelope.format !== FORMAT || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
-  const version = envelope.formatVersion as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+  if (envelope.format !== FORMAT || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
+  const version = envelope.formatVersion as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17;
   // Validate the original shape and accounting before adding any recoverable metadata.
   validateState(envelope.state, version);
-  if (version === 16) return envelope.state as SeasonState;
+  if (version === 17) return envelope.state as SeasonState;
   const previous = envelope.state as SeasonState;
   const previousMarket = version >= 13 ? version < 15 ? migrateMarketTransfers(version < 14 ? migrateMarketCompetition(previous.market) : previous.market) : previous.market : createMarket();
   const upgraded: SeasonState = version >= 9 ? {
-    ...previous, schemaVersion: 16,
-    employment: version >= 10 ? migrateTransferPayments({ ...previous.employment, transfers: version >= 15 ? previous.employment.transfers : [] }) : createEmployment(),
+    ...previous, schemaVersion: 17,
+    employment: version >= 10 ? { ...(version < 16 ? migrateTransferPayments({ ...previous.employment, transfers: version >= 15 ? previous.employment.transfers : [] }) : previous.employment), buyouts: [] } : createEmployment(),
     scouting: version >= 11 ? previous.scouting : createScouting(previous.clubs, previous.managedClubId), negotiations: version >= 12 ? previous.negotiations : createNegotiations(),
-    market: { ...previousMarket, windows: previousMarket.windows.map(window => ({ ...window, offers: window.offers.map(offer => ({ ...offer, transfer: offer.transfer ? { ...offer.transfer, paymentPlan: 'upfront' as const } : null })) })) },
+    market: { ...previousMarket, windows: previousMarket.windows.map(window => ({ ...window, offers: window.offers.map(offer => ({ ...offer, transfer: offer.transfer ? { ...offer.transfer, paymentPlan: version < 16 ? 'upfront' as const : offer.transfer.paymentPlan } : null })) })) },
   } : migrateRosterHistory(previous, version);
   validateSeasonState(upgraded);
   return upgraded;

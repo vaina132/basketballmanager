@@ -23,7 +23,7 @@ export function contractForSeason(employment: SeasonEmployment, playerId: string
 }
 
 export function effectiveContractsForSeason(employment: SeasonEmployment, seasonNumber: number): EmploymentContract[] {
-  const released = new Set((employment.transfers ?? []).filter(transfer => transfer.startsSeason <= seasonNumber).flatMap(transfer => transfer.releasedContractIds));
+  const released = new Set([...(employment.transfers ?? []), ...(employment.buyouts ?? [])].filter(release => release.startsSeason <= seasonNumber).flatMap(release => release.releasedContractIds));
   return employment.contracts.filter(contract => contract.startsSeason <= seasonNumber && contract.endsSeason >= seasonNumber && !released.has(contract.id));
 }
 
@@ -66,6 +66,7 @@ export function quotePlayerContract(state: SeasonState, playerId: string, season
   else if (!Number.isInteger(seasons) || seasons < 1 || seasons > MAX_CONTRACT_SEASONS || endsSeason > 7974) reason = 'Choose a contract lasting one to three supported seasons.';
   else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > MAX_CONTRACT_WAGE || seasonWage % WAGE_STEP !== 0) reason = 'Choose an annual wage from €5,000 to €50,000 in €500 steps.';
   else if (seasonWage < askingWage && !state.negotiations.enabledSince) reason = 'The player will not accept less than his asking wage.';
+  else if ((state.employment.buyouts ?? []).some(buyout => buyout.playerId === playerId && buyout.clubId === clubId && buyout.seasonNumber === state.seasonNumber)) reason = 'A player you buy out cannot rejoin your club during the same offseason.';
   else if (paidTransfer) reason = transferOfferReason(state, playerId, transferFee, clubId, resolvingOfferId, transferPaymentPlan);
   else if (overlaps) reason = 'This player already has a contract covering the proposed seasons.';
   else if (state.status === 'active' && (current?.clubId !== clubId || current.endsSeason !== state.seasonNumber)) reason = 'During the season, renew only your own players whose contracts expire this year.';

@@ -1,5 +1,5 @@
 import type { CoachingContract } from '../domain/coaching';
-import type { EmploymentTransfer } from '../domain/employment';
+import type { EmploymentBuyout, EmploymentTransfer } from '../domain/employment';
 import type { PayrollCharge } from '../domain/payroll';
 import type { TransferPayment } from '../domain/transfer-payments';
 import type { FinanceBalance, FinanceEntry, FinanceLedgerRow, FinancePlan, GateForecast, SeasonFinance } from '../domain/finance';
@@ -9,6 +9,7 @@ import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { getClubFinanceDefinition } from '../data/development-finances';
 import { getPayrollReserve, getSpendableCash } from './payroll-policy';
 import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransferPaymentSummary, payTransferInstallment } from './transfer-payments';
+import { quoteContractBuyout } from './buyouts';
 
 export { getClubFinanceDefinition } from '../data/development-finances';
 export type { FinanceBalance, FinanceLedgerRow, GateForecast } from '../domain/finance';
@@ -76,6 +77,18 @@ export function recordPayrollCharge(state: SeasonState, clubId: string, payroll:
   if (!state.finance.enabledSince) throw new Error('Enable club finances before recording wages.');
   const amount = payroll.items.reduce((sum, item) => sum + item.amount, 0);
   return book(state, clubId, 'payroll', amount === 0 ? 0 : -amount, sourceId, null, null, payroll);
+}
+
+/** Compensation leaves the club once; no other club receives the player's settlement. */
+export function recordContractBuyout(state: SeasonState, buyout: EmploymentBuyout): SeasonState {
+  const records = state.employment.buyouts ?? [], recorded = records.at(-1);
+  if (!recorded || JSON.stringify(recorded) !== JSON.stringify(buyout) || buyout.id !== `employment-buyout-${records.length}`) throw new Error('A buyout payment requires the exact newly recorded contract release.');
+  if (state.finance.ledger.some(entry => entry.kind === 'buyout' && entry.sourceId === buyout.id)) throw new Error('This contract buyout has already been paid.');
+  const before = { ...state, employment: { ...state.employment, buyouts: records.slice(0, -1) } };
+  const quote = quoteContractBuyout(before, buyout.playerId, buyout.clubId);
+  if (!quote.canBuyout) throw new Error(quote.reason!);
+  if (state.status !== 'complete' || state.round !== 10 || buyout.seasonNumber !== state.seasonNumber || buyout.completedOn !== state.date || buyout.startsSeason !== quote.startsSeason || buyout.amount !== quote.amount || buyout.contractCountBefore !== quote.contractCountBefore || buyout.negotiationCountBefore !== quote.negotiationCountBefore || JSON.stringify(buyout.releasedContractIds) !== JSON.stringify(quote.releasedContractIds)) throw new Error('Pay exactly the remaining guaranteed salary for the recorded future terms.');
+  return book(state, buyout.clubId, 'buyout', -buyout.amount, buyout.id);
 }
 
 /** Completion pays only the first installment; the entire fee must already be affordable. */

@@ -56,7 +56,7 @@ beforeAll(() => {
 describe('coaching-aware season persistence', () => {
   it('writes format 9 with exact appointments, commitments and future instructions', () => {
     const text = serializeSeason(initial);
-    expect(JSON.parse(text).formatVersion).toBe(16);
+    expect(JSON.parse(text).formatVersion).toBe(17);
     expect(restore(initial)).toEqual(initial);
     expect(coachingCommitted(restore(initial).coaching, clubId)).toBe(10_500_000);
     expect(restore(initial).activeMatch).toEqual(initial.activeMatch);

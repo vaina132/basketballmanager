@@ -95,7 +95,7 @@ describe('employment across real season boundaries', () => {
   }, 30_000);
 
   it('lets an existing completed career opt in without rewriting its results or payment history', () => {
-    const legacy = { ...completed, employment: { model: 'employment-1' as const, enabledSince: null, delegated: false, contracts: [], transfers: [], market: null } };
+    const legacy = { ...completed, employment: { model: 'employment-1' as const, enabledSince: null, delegated: false, contracts: [], transfers: [], buyouts: [], market: null } };
     const enabled = enableEmployment(legacy);
     expect(enabled.activeMatch).toBe(legacy.activeMatch);
     expect(enabled.fixtures).toBe(legacy.fixtures);

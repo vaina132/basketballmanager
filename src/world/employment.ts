@@ -14,7 +14,7 @@ import { sellerReplacementReason } from './transfers-policy';
 import { getTransferPaymentSchedule } from './transfer-payments';
 
 export function createEmployment(): SeasonEmployment {
-  return { model: 'employment-1', enabledSince: null, delegated: false, contracts: [], transfers: [], market: null };
+  return { model: 'employment-1', enabledSince: null, delegated: false, contracts: [], transfers: [], buyouts: [], market: null };
 }
 
 /** Activation records existing employment without changing already agreed wages or prepared matches. */
@@ -26,7 +26,7 @@ export function enableEmployment(state: SeasonState): SeasonState {
     if (!agreement) throw new Error('Every current player needs an agreed seasonal wage before enabling contracts.');
     return { id: '', playerId: player.id, clubId: club.id, startsSeason: state.seasonNumber, endsSeason: state.seasonNumber, seasonWage: agreement.seasonWage, signedSeason: state.seasonNumber, signedRound: state.round, kind: 'initial' as const };
   })).map((contract, index) => ({ ...contract, id: `employment-contract-${index + 1}` }));
-  const next: SeasonState = { ...state, employment: { model: 'employment-1', enabledSince: { seasonNumber: state.seasonNumber, round: state.round }, delegated: false, contracts, transfers: [], market: null } };
+  const next: SeasonState = { ...state, employment: { model: 'employment-1', enabledSince: { seasonNumber: state.seasonNumber, round: state.round }, delegated: false, contracts, transfers: [], buyouts: [], market: null } };
   return state.status === 'complete' ? prepareEmploymentMarket(next) : next;
 }
 
@@ -39,7 +39,7 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
   const duplicate = latest && latest.seasonNumber === state.seasonNumber && latest.round === state.round && latest.status === state.status && latest.date === state.date && latest.offeredWage === seasonWage && latest.offeredSeasons === seasons;
   if (duplicate && latest.outcome === 'accepted') {
     const signed = state.employment.contracts.find(contract => contract.id === latest.contractId);
-    if (signed && signed.playerId === playerId && signed.clubId === clubId && signed.startsSeason === state.seasonNumber + 1 && signed.endsSeason === state.seasonNumber + seasons && signed.seasonWage === seasonWage) return state;
+    if (signed && signed.playerId === playerId && signed.clubId === clubId && signed.startsSeason === state.seasonNumber + 1 && signed.endsSeason === state.seasonNumber + seasons && signed.seasonWage === seasonWage && contractForSeason(state.employment, playerId, state.seasonNumber + 1)?.id === signed.id) return state;
   }
   const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId, resolvingOfferId, scheduled?.transfer?.fee, scheduled?.transfer?.paymentPlan ?? 'upfront');
   if (!quote.canOffer) throw new Error(quote.reason!);
@@ -56,7 +56,7 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
     id: `employment-contract-${state.employment.contracts.length + 1}`, playerId, clubId,
     startsSeason: quote.startsSeason, endsSeason: quote.endsSeason, seasonWage,
     signedSeason: state.seasonNumber, signedRound: state.round,
-    kind: scheduled?.transfer ? 'transfer' : current?.clubId === clubId ? 'renewal' : 'free-agent',
+    kind: scheduled?.transfer ? 'transfer' : current?.clubId === clubId && current.endsSeason === state.seasonNumber ? 'renewal' : 'free-agent',
   };
   let next = { ...state, employment: { ...state.employment, contracts: [...state.employment.contracts, contract] } };
   if (scheduled?.transfer) {

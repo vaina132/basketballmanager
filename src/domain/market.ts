@@ -36,6 +36,7 @@ export interface MarketOffer {
 
 export type MarketEvent =
   | { type: 'offer'; id: string; date: string; clubId: string; playerId: string; seasonWage: number; seasons: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan }
+  | { type: 'buyout'; id: string; date: string; clubId: string; playerId: string }
   | { type: 'withdraw'; date: string; offerId: string }
   | { type: 'club-decision'; date: string; offerId: string; response: 'accept' | 'reject' | 'counter' }
   | { type: 'advance'; date: string };

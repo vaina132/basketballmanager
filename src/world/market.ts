@@ -5,6 +5,7 @@ import { getSeasonWage } from '../data/development-wages';
 import { DEVELOPMENT_PLAYERS } from '../data/development-players';
 import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE, quotePlayerContract } from './employment-policy';
 import { commitPlayerOffer } from './employment';
+import { commitContractBuyout } from './buyouts';
 import { scoutingRecruitmentRating } from './scouting-policy';
 import { evaluateNegotiation } from './negotiations-policy';
 import { processTransferPayments } from './transfer-payments';
@@ -85,6 +86,11 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
     const offers = window.offers.map(item => item.id === previous?.id ? { ...item, status: 'replaced' as const, closedOn: state.date } : item);
     return replaceWindow(state, { ...window, events: [...window.events, { ...event }], offers: [...offers, offer] });
   }
+  if (event.type === 'buyout') {
+    if (event.id !== `employment-buyout-${(state.employment.buyouts ?? []).length + 1}`) throw new Error('Buyout identity is not sequential.');
+    const next = commitContractBuyout(state, event.playerId, event.clubId);
+    return replaceWindow(next, { ...window, events: [...window.events, { ...event }] });
+  }
   if (event.type === 'withdraw') {
     const offer = window.offers.find(item => item.id === event.offerId);
     if (!offer || !isLiveMarketOffer(offer)) throw new Error('Only an outstanding offer can be withdrawn.');
@@ -154,6 +160,12 @@ export function submitMarketOffer(state: SeasonState, playerId: string, seasonWa
 
 export function submitTransferOffer(state: SeasonState, playerId: string, seasonWage: number, seasons: number, fee: number, clubId = state.managedClubId, paymentPlan: TransferPaymentPlan = 'upfront'): SeasonState {
   return submitMarketOffer(state, playerId, seasonWage, seasons, clubId, fee, paymentPlan);
+}
+
+/** Review and payment use the same guards as replay; the calendar does not advance. */
+export function buyoutPlayerContract(state: SeasonState, playerId: string, clubId = state.managedClubId): SeasonState {
+  state = activateCompetition(state);
+  return applyMarketEvent(state, { type: 'buyout', id: `employment-buyout-${(state.employment.buyouts ?? []).length + 1}`, date: state.date, clubId, playerId });
 }
 
 export function decideClubTransfer(state: SeasonState, offerId: string, response: 'accept' | 'reject' | 'counter', clubId = state.managedClubId): SeasonState {

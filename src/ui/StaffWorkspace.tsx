@@ -3,16 +3,24 @@ import type { SeasonState } from '../domain/season'
 import type { Coach } from '../domain/coaching'
 import type { TrainingFocus } from '../domain/training'
 import { COACHES } from '../data/development-coaches'
-import { availableCoaches, coachRating, coachingCommitted, COACHING_BUDGET, getClubCoaching, MAX_COACHES } from '../world/coaching'
+import { availableCoaches, coachRating, getClubCoaching, MAX_COACHES } from '../world/coaching'
 import { getFinanceBalance } from '../world/finance'
 import { getPayrollReserve, getSpendableCash } from '../world/payroll'
 import { getTransferPaymentSummary } from '../world/transfer-payments'
 import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES, TRAINING_FOCUS_LABELS } from '../world/training'
+import { ScoutStaff, type ScoutStaffProps } from './ScoutStaff'
+import { FitnessStaff, type FitnessStaffProps } from './FitnessStaff'
+import { getClubFitnessCoach } from '../world/fitness-policy'
+import { getClubScouts } from '../world/scout-policy'
+import { STAFF_BUDGET, staffCommitted, remainingStaffBudget } from '../world/staff-policy'
+import { StaffStars } from './StaffRating'
 import { CoachPortrait } from './CoachPortrait'
 import { Icon } from './Icon'
 import './staff-workspace.css'
 
-interface StaffWorkspaceProps {
+interface StaffWorkspaceProps extends ScoutStaffProps, FitnessStaffProps {
+  role: 'coaches' | 'scouts' | 'fitness'
+  onRoleChange: (role: 'coaches' | 'scouts' | 'fitness') => void
   season: SeasonState
   onEnable: () => void
   onHire: (coachId: string, focus: TrainingFocus) => void
@@ -34,22 +42,20 @@ function CoachSkills({ coach, compact = false }: { coach: Coach; compact?: boole
   const skills = compact ? strongestSkills(coach).slice(0, 2) : TRAINING_ATTRIBUTES
   return <dl className={`staff-skill-list${compact ? ' compact' : ''}`}>{skills.map(attribute => <div key={attribute}>
     <dt>{TRAINING_FOCUS_LABELS[attribute]}</dt>
-    <dd><span className="staff-skill-bar" aria-hidden="true"><span style={{ width: `${coach.skills[attribute] * 10}%` }} /></span>{compact ? <span className="staff-skill-value" aria-label={`${coach.skills[attribute] / 2} out of 5 stars`}>{(coach.skills[attribute] / 2).toFixed(1)}</span> : <CoachStars rating={coach.skills[attribute]} />}</dd>
+    <dd><span className="staff-skill-bar" aria-hidden="true"><span style={{ width: `${coach.skills[attribute] * 10}%` }} /></span>{compact ? <span className="staff-skill-value" aria-label={`${coach.skills[attribute] / 2} out of 5 stars`}>{(coach.skills[attribute] / 2).toFixed(1)}</span> : <StaffStars rating={coach.skills[attribute]} />}</dd>
   </div>)}</dl>
 }
 
-function CoachStars({ rating }: { rating: number }) {
-  return <span className="coach-rating" role="img" aria-label={`${rating / 2} out of 5 stars`}>
-    <span className="coach-stars" aria-hidden="true">{Array.from({ length: 5 }, (_, index) => <span className="coach-star" key={index}><span>☆</span><span className="coach-star-fill" style={{ width: `${Math.max(0, Math.min(2, rating - index * 2)) * 50}%` }}>★</span></span>)}</span>
-    <span className="coach-rating-number" aria-hidden="true">{(rating / 2).toFixed(1)}</span>
-  </span>
-}
 
 function FocusOptions() {
   return <>{TRAINING_FOCUSES.map(focus => <option key={focus} value={focus}>{TRAINING_FOCUS_LABELS[focus]}</option>)}</>
 }
 
-export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignment, onRenewal, onOpenTraining, busy = false }: StaffWorkspaceProps) {
+export function StaffWorkspace(props: StaffWorkspaceProps) {
+  return <div className="staff-workspace"><section className="staff-role-selector panel" aria-label="Staff roles"><div className="segmented" role="group" aria-label="Choose staff role"><button id="staff-role-coaches" aria-pressed={props.role === 'coaches'} className={props.role === 'coaches' ? 'selected' : ''} onClick={() => props.onRoleChange('coaches')} disabled={props.busy}><Icon name="training" size={15} />Training coaches <span>{getClubCoaching(props.season.coaching, props.season.managedClubId).length}/3</span></button><button id="staff-role-scouts" aria-pressed={props.role === 'scouts'} className={props.role === 'scouts' ? 'selected' : ''} onClick={() => props.onRoleChange('scouts')} disabled={props.busy}><Icon name="search" size={15} />Scouts <span>{getClubScouts(props.season).length}/3</span></button><button id="staff-role-fitness" aria-pressed={props.role === 'fitness'} className={props.role === 'fitness' ? 'selected' : ''} onClick={() => props.onRoleChange('fitness')} disabled={props.busy}><Icon name="shield" size={15} />Fitness coach <span>{getClubFitnessCoach(props.season) ? 1 : 0}/1</span></button></div><span>Remaining staff budget <strong data-staff-role-budget={remainingStaffBudget(props.season, props.season.managedClubId)}>{money(remainingStaffBudget(props.season, props.season.managedClubId))}</strong></span></section>{props.role === 'scouts' ? <ScoutStaff {...props} /> : props.role === 'fitness' ? <FitnessStaff {...props} /> : <TrainingStaff {...props} />}</div>
+}
+
+function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRenewal, onOpenTraining, busy = false }: StaffWorkspaceProps) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<CoachSort>('rating-desc')
   const [candidatePage, setCandidatePage] = useState(0)
@@ -65,14 +71,14 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
   const enabled = season.coaching.enabledSince !== null
   const contracts = getClubCoaching(season.coaching, club.id)
   const released = season.coaching.contracts.filter(contract => contract.clubId === club.id && contract.releasedRound !== null)
-  const committed = coachingCommitted(season.coaching, club.id)
-  const allocation = COACHING_BUDGET - committed
+  const committed = staffCommitted(season, club.id)
+  const allocation = STAFF_BUDGET - committed
   const finances = season.finance.enabledSince === null ? null : getFinanceBalance(season.finance, club.id)
   const payrollEnabled = season.payroll.enabledSince !== null
   const wageReserve = getPayrollReserve(season, club.id)
   const spendable = getSpendableCash(season, club.id)
   const overdueTransfers = getTransferPaymentSummary(season, club.id).overdue
-  const staffBudget = finances ? finances.unpaid > 0 || overdueTransfers > 0 ? 0 : Math.min(allocation, spendable) : allocation
+  const staffBudget = remainingStaffBudget(season, club.id)
   const available = availableCoaches(season.coaching)
   const candidates = available.filter(coach => coach.name.toLowerCase().includes(query.trim().toLowerCase())).sort((left, right) => {
     const value = sort.startsWith('rating') ? coachRating(left) - coachRating(right) : left.fee - right.fee
@@ -138,7 +144,7 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
         <div className="staff-roster">{contracts.map(contract => {
           const coach = coachById(contract.coachId)
           return <article className="staff-owned-card" key={contract.id} data-contract-id={contract.id}>
-            <div className="staff-owned-identity"><CoachPortrait coach={coach} color={club.color} size={80} /><div><span className="staff-role">Training coach</span><h3>{coach.name}</h3><CoachStars rating={coachRating(coach)} /><span className="staff-card-fee">{money(coach.fee)} <small>/ season</small></span></div></div>
+            <div className="staff-owned-identity"><CoachPortrait coach={coach} color={club.color} size={80} /><div><span className="staff-role">Training coach</span><h3>{coach.name}</h3><StaffStars rating={coachRating(coach)} /><span className="staff-card-fee">{money(coach.fee)} <small>/ season</small></span></div></div>
             <CoachSkills coach={coach} compact />
             <label className="staff-assignment-control">Assignment<select data-coach-assignment={contract.id} aria-label={coach.name + ' assignment'} value={contract.focus} onChange={event => onAssignment(contract.id, event.target.value as TrainingFocus)} disabled={busy}><FocusOptions /></select></label>
             <div className="staff-contract-controls"><label className="staff-renew"><input type="checkbox" data-coach-renewal={contract.id} checked={contract.renew} onChange={event => onRenewal(contract.id, event.target.checked)} disabled={busy} aria-label={'Renew ' + coach.name + ' next season'} />Renew next season</label><button className="text-button" data-release-coach={contract.id} onClick={event => { releaseTrigger.current = event.currentTarget; setReleaseId(contract.id) }} aria-label={'Release ' + coach.name} disabled={busy}>Release</button></div>
@@ -155,7 +161,7 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
 
       {selected && <section ref={candidateRegion} id="coach-candidate-detail" className="staff-candidate-detail panel" tabIndex={-1} aria-labelledby="coach-candidate-title" data-selected-coach={selected.id} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && !busy) { event.preventDefault(); event.stopPropagation(); closeCandidate() } }}>
         <header className="staff-heading"><div><h2 id="coach-candidate-title">Recruit {selected.name}</h2><span>Training coach</span></div><button className="text-button" aria-label="Close coach details" onClick={closeCandidate} disabled={busy}><Icon name="close" size={14} />Close</button></header>
-        <div className="staff-candidate-body"><div className="staff-candidate-profile"><div className="staff-profile-portrait"><CoachPortrait coach={selected} color={club.color} size={104} /><CoachStars rating={coachRating(selected)} /></div><CoachSkills coach={selected} /></div><div className="staff-hire-controls">
+        <div className="staff-candidate-body"><div className="staff-candidate-profile"><div className="staff-profile-portrait"><CoachPortrait coach={selected} color={club.color} size={104} /><StaffStars rating={coachRating(selected)} /></div><CoachSkills coach={selected} /></div><div className="staff-hire-controls">
           <div className="staff-offer-fee"><span>Season fee</span><strong>{money(selected.fee)}</strong></div><div className="staff-after-hire"><span>{staffBudget >= selected.fee ? 'Staff budget after hire' : 'Staff budget shortfall'}</span><strong>{money(Math.abs(staffBudget - selected.fee))}</strong></div>
           <label htmlFor="coach-hire-focus">Initial assignment</label><select id="coach-hire-focus" value={hireFocus} onChange={event => setHireFocus(event.target.value as TrainingFocus)} disabled={busy}><FocusOptions /></select>
           <span className="staff-renewal-note"><Icon name="check" size={14} />Renewal selected for next season</span>
@@ -171,7 +177,7 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
         <div className="staff-candidate-grid">{visibleCandidates.map(coach => {
           const reason = hiringReason(coach)
           return <article className={'staff-candidate-card' + (selectedId === coach.id ? ' staff-selected-candidate' : '')} key={coach.id}>
-            <button className="staff-candidate-identity" data-candidate-coach={coach.id} aria-label={'Review ' + coach.name} aria-expanded={selectedId === coach.id} aria-controls="coach-candidate-detail" onClick={event => openCandidate(coach, event.currentTarget)} disabled={busy}><CoachPortrait coach={coach} size={64} /><span><strong>{coach.name}</strong><CoachStars rating={coachRating(coach)} /><small>{TRAINING_FOCUS_LABELS[strongestSkills(coach)[0]]} specialist</small></span><Icon name="chevron" size={15} /></button>
+            <button className="staff-candidate-identity" data-candidate-coach={coach.id} aria-label={'Review ' + coach.name} aria-expanded={selectedId === coach.id} aria-controls="coach-candidate-detail" onClick={event => openCandidate(coach, event.currentTarget)} disabled={busy}><CoachPortrait coach={coach} size={64} /><span><strong>{coach.name}</strong><StaffStars rating={coachRating(coach)} /><small>{TRAINING_FOCUS_LABELS[strongestSkills(coach)[0]]} specialist</small></span><Icon name="chevron" size={15} /></button>
             <CoachSkills coach={coach} compact /><div className="staff-candidate-footer"><span className="staff-card-fee">{money(coach.fee)} <small>/ season</small></span><button className={'button small' + (reason ? '' : ' primary')} onClick={event => openCandidate(coach, event.currentTarget)} aria-label={(reason ? 'Review' : 'Recruit') + ' ' + coach.name} disabled={busy}>{reason ? 'View coach' : 'Recruit'}<Icon name="chevron" size={13} /></button></div>
             {reason && <span className="staff-card-status">{contracts.length >= MAX_COACHES ? 'No vacant position' : season.status === 'complete' ? 'Recruit next season' : 'Outside current budget'}</span>}
           </article>

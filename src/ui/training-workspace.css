@@ -64,9 +64,9 @@
 .training-injured{color:var(--accent)}
 .training-report-table{min-width:800px}
 .training-report-table .text-button{font-size:12px;color:var(--text)}
-.training-report-table td:nth-child(3),.training-report-table td:last-child{white-space:nowrap}
-.training-report-table td:last-child{text-align:right}
-.training-report-table th:last-child{text-align:right}
+.training-report-table td:nth-child(3),.training-report-table td:nth-child(4){white-space:nowrap}
+.training-report-table td:nth-child(4){text-align:right}
+.training-report-table th:nth-child(4){text-align:right}
 .training-gains{display:flex;flex-direction:column;gap:3px;list-style:none;margin:0;padding:0;font-size:12px}
 .training-gains li{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px}
 .training-gains strong{font-size:12px;font-weight:500}
@@ -82,3 +82,6 @@
 .training-empty{padding:14px;font-size:12px;color:var(--muted);line-height:1.5}
 @media(max-width:1100px){.training-plan-controls{gap:18px;grid-template-columns:minmax(150px,.8fr) minmax(230px,1.2fr)}.training-focus-control{grid-column:1/-1;max-width:320px}}
 @media(max-width:650px){.training-context{align-items:flex-start;padding:10px}.training-context>div{flex-direction:column;align-items:flex-start;gap:5px}.training-heading{padding:10px;align-items:flex-start;flex-wrap:wrap;gap:6px}.training-heading>span{text-align:left}.training-plan-controls{grid-template-columns:1fr;padding:12px 10px;gap:18px}.training-focus-control{max-width:none}.training-plan-note,.training-note{padding:9px 10px}.training-enable>div{align-items:flex-start;flex-direction:column;padding:12px 10px;gap:12px}}
+
+.training-fitness{display:grid;grid-template-columns:minmax(210px,1fr) minmax(280px,1.2fr) auto;gap:12px 20px;align-items:center;padding:14px}.training-fitness-main{display:flex;gap:12px;align-items:center}.training-fitness-main>div{display:grid;gap:4px}.training-fitness h2{margin:0;font-size:12px;font-weight:400;color:var(--muted)}.training-fitness-main strong{font-size:15px}.training-fitness-main small{font-size:12px;color:var(--muted)}.training-fitness-vacant{display:grid;place-items:center;width:52px;height:58px;border:1px dashed var(--border);color:var(--muted)}.training-fitness:not(:has(.fitness-benefits)){grid-template-columns:1fr auto}.training-fitness-details{grid-column:1/-1;border-top:1px solid var(--border);padding-top:10px;font-size:12px;color:var(--muted)}.training-fitness-details summary{cursor:pointer;width:fit-content;min-height:24px}.training-fitness-details p{max-width:850px;line-height:1.6;margin:6px 0 0}.training-fitness-report{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}.training-fitness-report strong{font-size:13px;font-weight:500}.training-fitness-report p{font-size:12px;color:var(--muted);line-height:1.5;margin:4px 0 0}.training-fitness-gain{color:var(--accent)!important;white-space:nowrap}
+@media(max-width:1000px){.training-fitness{grid-template-columns:1fr auto}.training-fitness .fitness-benefits{grid-column:1/-1;grid-row:2;padding:10px 0;border-top:1px solid var(--border)}.training-fitness>button{grid-column:2;grid-row:1}}@media(max-width:500px){.training-fitness{gap:10px;padding:12px}.training-fitness-main{gap:8px}.training-fitness-main strong{font-size:14px}.training-fitness-main .coach-portrait{width:42px}.training-fitness>button{padding:7px}.training-fitness-report{align-items:flex-start}}

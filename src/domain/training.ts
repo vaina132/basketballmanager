@@ -1,5 +1,6 @@
 import type { PlayerAttributes } from './types';
 import type { CoachingWeekAssignment } from './coaching';
+import type { FitnessWeekAssignment } from './fitness';
 
 export type TrainingFocus = 'balanced' | keyof PlayerAttributes;
 export type TrainingIntensity = 'recovery' | 'light' | 'standard' | 'heavy';
@@ -20,6 +21,7 @@ export interface TrainingPlayerReport {
   conditionAfter: number;
   gains: TrainingPoints;
   coachingGains: TrainingPoints;
+  fitness?: { conditionWithoutCoach: number; conditionBenefit: number };
 }
 
 export interface TrainingWeekReport {
@@ -31,6 +33,7 @@ export interface TrainingWeekReport {
   plans: Record<string, TrainingPlan>;
   players: Record<string, TrainingPlayerReport>;
   coaching: Record<string, CoachingWeekAssignment[]> | null;
+  fitness?: Record<string, FitnessWeekAssignment | null>;
 }
 
 export interface SeasonTraining {

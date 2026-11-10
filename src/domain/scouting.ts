@@ -1,6 +1,7 @@
 import type { PlayerAttributes } from './types';
+import type { ScoutingObserver } from './scouts';
 
-export interface ScoutingAssignment { playerId: string; seasonNumber: number; round: number }
+export interface ScoutingAssignment { playerId: string; seasonNumber: number; round: number; observer?: ScoutingObserver }
 export interface SquadObservation {
   playerId: string;
   seasonNumber: number;
@@ -14,6 +15,7 @@ export interface SquadObservation {
 export interface ScoutingReview extends Omit<SquadObservation, 'attributes'> {
   outcome: 'observed' | 'no-minutes';
   attributes: PlayerAttributes | null;
+  observer?: ScoutingObserver;
 }
 export interface ClubScouting {
   delegated: boolean;
@@ -49,4 +51,5 @@ export interface ScoutingAssignmentQuote {
   clubId: string;
   canAssign: boolean;
   reason: string | null;
+  observer?: ScoutingObserver;
 }

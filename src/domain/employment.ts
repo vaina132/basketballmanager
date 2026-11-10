@@ -1,5 +1,10 @@
 import type { TransferInstallment, TransferPayment, TransferPaymentPlan } from './transfer-payments';
 
+export interface ContractOfferOptions {
+  releaseFee?: number;
+  transferMode?: 'negotiated' | 'release-clause';
+}
+
 /** Immutable employment terms. Seasonal payroll remains a separate payment schedule. */
 export interface EmploymentContract {
   id: string;
@@ -11,6 +16,8 @@ export interface EmploymentContract {
   endsSeason: number;
   /** Gross annual wage in euro cents. */
   seasonWage: number;
+  /** Optional fee agreed with this contract; absence preserves ordinary transfer negotiation. */
+  releaseFee?: number;
   signedSeason: number;
   signedRound: number;
   kind: 'initial' | 'renewal' | 'free-agent' | 'transfer' | 'midseason' | 'midseason-transfer';
@@ -28,6 +35,7 @@ export interface EmploymentTransfer {
   startsSeason: number;
   startsRound: number;
   fee: number;
+  mode?: 'release-clause';
   releasedContractIds: string[];
   contractId: string;
   paymentPlan: TransferPaymentPlan;
@@ -82,6 +90,7 @@ export interface PlayerContractQuote {
   seasons: number;
   seasonWage: number;
   askingWage: number;
+  releaseFee?: number;
   canOffer: boolean;
   reason: string | null;
 }

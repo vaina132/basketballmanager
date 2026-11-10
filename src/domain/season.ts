@@ -10,6 +10,8 @@ import type { SeasonScouting } from './scouting';
 import type { SeasonNegotiations } from './negotiations';
 import type { SeasonMarket } from './market';
 import type { SeasonRecruitment } from './recruitment';
+import type { SeasonScouts } from './scouts';
+import type { SeasonFitness } from './fitness';
 
 export interface ClubPlan {
   tactics: Tactics;
@@ -63,7 +65,7 @@ export interface SeasonArchive {
 }
 
 export interface SeasonState {
-  schemaVersion: 19;
+  schemaVersion: 22;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;
@@ -86,6 +88,8 @@ export interface SeasonState {
   payroll: SeasonPayroll;
   employment: SeasonEmployment;
   scouting: SeasonScouting;
+  scouts: SeasonScouts;
+  fitness: SeasonFitness;
   negotiations: SeasonNegotiations;
   market: SeasonMarket;
   recruitment: SeasonRecruitment;

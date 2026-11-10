@@ -4,6 +4,7 @@ export interface TransferProposal {
   sellerClubId: string;
   contractId: string;
   fee: number;
+  mode?: 'release-clause';
   paymentPlan: TransferPaymentPlan;
   requiredFee: number;
   clubStatus: 'pending' | 'review' | 'accepted' | 'countered' | 'rejected';
@@ -24,6 +25,7 @@ export interface MarketOffer {
   responseOn: string;
   expiresOn: string;
   seasonWage: number;
+  releaseFee?: number;
   seasons: number;
   status: 'pending' | 'countered' | 'accepted' | 'rejected' | 'withdrawn' | 'expired' | 'replaced' | 'lost' | 'club-review';
   respondedOn: string | null;
@@ -35,7 +37,7 @@ export interface MarketOffer {
 }
 
 export type MarketEvent =
-  | { type: 'offer'; id: string; date: string; clubId: string; playerId: string; seasonWage: number; seasons: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan }
+  | { type: 'offer'; id: string; date: string; clubId: string; playerId: string; seasonWage: number; seasons: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan; releaseFee?: number; transferMode?: 'release-clause' }
   | { type: 'buyout'; id: string; date: string; clubId: string; playerId: string }
   | { type: 'withdraw'; date: string; offerId: string }
   | { type: 'club-decision'; date: string; offerId: string; response: 'accept' | 'reject' | 'counter' }

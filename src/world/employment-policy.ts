@@ -1,4 +1,4 @@
-import type { ClubContractSummary, EmploymentContract, PlayerContractQuote, SeasonEmployment } from '../domain/employment';
+import type { ClubContractSummary, ContractOfferOptions, EmploymentContract, PlayerContractQuote, SeasonEmployment } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
@@ -8,6 +8,7 @@ import { getSeasonWage } from '../data/development-wages';
 import { getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { transferOfferReason } from './transfers-policy';
 import { getInSeasonOffers } from './recruitment-policy';
+import { offerOptionsReason } from './release-clauses';
 
 export const EMPLOYMENT_BUDGET = 24_000_000;
 export const MIN_ROSTER_SIZE = 8;
@@ -58,7 +59,7 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
 }
 
 /** Public offers and automation share ownership, term, roster and annual-budget guards. */
-export function quotePlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number, clubId = state.managedClubId, resolvingOfferId?: string, transferFee?: number, transferPaymentPlan: TransferPaymentPlan = 'upfront'): PlayerContractQuote {
+export function quotePlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number, clubId = state.managedClubId, resolvingOfferId?: string, transferFee?: number, transferPaymentPlan: TransferPaymentPlan = 'upfront', options: ContractOfferOptions = {}): PlayerContractQuote {
   const player = DEVELOPMENT_PLAYERS.find(candidate => candidate.id === playerId);
   const startsSeason = state.seasonNumber + 1, endsSeason = startsSeason + seasons - 1;
   const askingWage = player ? getSeasonWage(playerId) : 0;
@@ -74,12 +75,13 @@ export function quotePlayerContract(state: SeasonState, playerId: string, season
   if (!state.employment.enabledSince) reason = 'Enable player contracts before negotiating.';
   else if (!state.finance.enabledSince || !state.payroll.enabledSince) reason = 'Enable finances and player payroll before negotiating contracts.';
   else if (!player || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a development player and a club in this league.';
+  else if (offerOptionsReason(state, options, paidTransfer)) reason = offerOptionsReason(state, options, paidTransfer);
   else if (!Number.isInteger(seasons) || seasons < 1 || seasons > MAX_CONTRACT_SEASONS || endsSeason > 7974) reason = 'Choose a contract lasting one to three supported seasons.';
   else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > MAX_CONTRACT_WAGE || seasonWage % WAGE_STEP !== 0) reason = 'Choose an annual wage from €5,000 to €50,000 in €500 steps.';
   else if (seasonWage < askingWage && !state.negotiations.enabledSince) reason = 'The player will not accept less than his asking wage.';
   else if ((state.employment.buyouts ?? []).some(buyout => buyout.playerId === playerId && buyout.clubId === clubId && buyout.seasonNumber === state.seasonNumber)) reason = 'A player you buy out cannot rejoin your club during the same offseason.';
   else if (state.status === 'active' && getInSeasonOffers(state, undefined, true).some(offer => offer.playerId === playerId && offer.transfer?.sellerClubId === clubId)) reason = 'Resolve the current transfer proposals before renewing this player.';
-  else if (paidTransfer) reason = transferOfferReason(state, playerId, transferFee, clubId, resolvingOfferId, transferPaymentPlan);
+  else if (paidTransfer) reason = transferOfferReason(state, playerId, transferFee, clubId, resolvingOfferId, transferPaymentPlan, options);
   else if (overlaps) reason = 'This player already has a contract covering the proposed seasons.';
   else if (state.status === 'active' && (current?.clubId !== clubId || current.endsSeason !== state.seasonNumber)) reason = 'During the season, renew only your own players whose contracts expire this year.';
   else if (state.status === 'complete' && state.employment.market?.seasonNumber !== startsSeason) reason = 'Open the offseason recruitment window before offering contracts.';
@@ -94,7 +96,7 @@ export function quotePlayerContract(state: SeasonState, playerId: string, season
     const reserve = Math.max(0, MIN_ROSTER_SIZE - size) * MIN_ROSTER_WAGE_RESERVE + pendingShortfalls + proposalShortfall + outgoingReplacementReserve(state, clubId, year);
     if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > EMPLOYMENT_BUDGET) { reason = `This offer exceeds the season ${year} wage budget after protecting space for eight players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
   }
-  return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason };
+  return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
 }
 
 /** Players without an opening-day employer; current-season ownership is preserved. */

@@ -1,5 +1,5 @@
 import type { MarketOffer } from '../domain/market';
-import type { PlayerContractQuote } from '../domain/employment';
+import type { ContractOfferOptions, PlayerContractQuote } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
@@ -9,6 +9,7 @@ import { getFinanceBalance } from './finance';
 import { addMarketDays, getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary, TRANSFER_PAYMENT_PLANS } from './transfer-payments';
+import { releaseClauseTriggerReason } from './release-clauses';
 
 export const MIN_TRANSFER_FEE = 100_000;
 export const MAX_TRANSFER_FEE = 50_000_000;
@@ -31,7 +32,7 @@ export function getTransferCandidates(state: SeasonState, clubId = state.managed
 }
 
 /** Shared basic paid-offer guard; wage/roster checks remain in quotePlayerContract. */
-export function transferOfferReason(state: SeasonState, playerId: string, fee: number, buyerId: string, resolvingOfferId?: string, paymentPlan: TransferPaymentPlan = 'upfront'): string | null {
+export function transferOfferReason(state: SeasonState, playerId: string, fee: number, buyerId: string, resolvingOfferId?: string, paymentPlan: TransferPaymentPlan = 'upfront', options: ContractOfferOptions = {}): string | null {
   const window = getMarketWindow(state), contract = contractForSeason(state.employment, playerId, state.seasonNumber + 1);
   const own = getLiveMarketOffers(state).find(offer => offer.playerId === playerId && offer.clubId === buyerId);
   const resolving = !!resolvingOfferId && own?.id === resolvingOfferId && own.status === 'pending' && own.responseOn === state.date;
@@ -40,10 +41,15 @@ export function transferOfferReason(state: SeasonState, playerId: string, fee: n
   if ((state.employment.transfers ?? []).some(transfer => transfer.playerId === playerId && transfer.startsSeason === state.seasonNumber + 1)) return 'This player has already changed clubs this offseason.';
   if (!TRANSFER_PAYMENT_PLANS.includes(paymentPlan)) return 'Choose a supported transfer payment plan.';
   if (!Number.isSafeInteger(fee) || fee < MIN_TRANSFER_FEE || fee > MAX_TRANSFER_FEE || fee % TRANSFER_FEE_STEP !== 0) return 'Choose a transfer fee from €1,000 to €500,000 in €1,000 steps.';
+  if (options.transferMode === 'release-clause') { const reason = releaseClauseTriggerReason(state, playerId, fee, paymentPlan); if (reason) return reason; }
   if (resolving) {
-    if (!own?.transfer || own.transfer.clubStatus !== 'accepted' || own.transfer.contractId !== contract.id || own.transfer.sellerClubId !== contract.clubId || own.transfer.fee !== fee || (own.transfer.paymentPlan ?? 'upfront') !== paymentPlan) return 'The selling club must approve these transfer terms before the player can sign.';
+    if (!own?.transfer || own.transfer.clubStatus !== 'accepted' || own.transfer.contractId !== contract.id || own.transfer.sellerClubId !== contract.clubId || own.transfer.fee !== fee || (own.transfer.paymentPlan ?? 'upfront') !== paymentPlan || (own.transfer.mode ?? 'negotiated') !== (options.transferMode ?? 'negotiated')) return 'The selling club must approve these transfer terms before the player can sign.';
     if (state.date > window.closesOn || state.date > own.expiresOn) return 'The transfer offer has expired.';
-  } else if (addMarketDays(state.date, 2) > window.closesOn) return 'Allow a club decision and a player reply before recruitment closes.';
+  } else if (addMarketDays(state.date, options.transferMode === 'release-clause' ? 1 : 2) > window.closesOn) return options.transferMode === 'release-clause' ? 'Allow a player reply before recruitment closes.' : 'Allow a club decision and a player reply before recruitment closes.';
+  if (options.transferMode === 'release-clause') {
+    const reason = sellerReplacementReason(state, { id: own?.id ?? '', playerId, responseOn: resolving ? state.date : addMarketDays(state.date, 1), transfer: { sellerClubId: contract.clubId, contractId: contract.id, fee, paymentPlan, requiredFee: requiredTransferFee(state, playerId), clubStatus: 'accepted', clubResponseOn: state.date, clubRespondedOn: state.date, clubReason: null, counterFee: null, mode: 'release-clause' } });
+    if (reason) return reason;
+  }
   if (getFinanceBalance(state.finance, buyerId).unpaid > 0) return 'Settle unpaid club costs before offering a transfer fee.';
   if (getTransferPaymentSummary(state, buyerId).overdue > 0) return 'Settle overdue transfer payments before offering another transfer fee.';
   if (getSpendableCash(state, buyerId, own?.id) < fee) return 'The transfer fee exceeds the remaining budget after other commitments.';
@@ -51,6 +57,7 @@ export function transferOfferReason(state: SeasonState, playerId: string, fee: n
 }
 
 export interface TransferOfferQuote extends PlayerContractQuote {
+  transferMode?: 'release-clause';
   sellerClubId: string | null;
   contractId: string | null;
   requiredFee: number;
@@ -58,13 +65,13 @@ export interface TransferOfferQuote extends PlayerContractQuote {
   paymentPlan: TransferPaymentPlan;
 }
 
-export function quoteTransferOffer(state: SeasonState, playerId: string, seasonWage: number, seasons: number, fee: number, clubId = state.managedClubId, paymentPlan: TransferPaymentPlan = 'upfront'): TransferOfferQuote {
+export function quoteTransferOffer(state: SeasonState, playerId: string, seasonWage: number, seasons: number, fee: number, clubId = state.managedClubId, paymentPlan: TransferPaymentPlan = 'upfront', options: ContractOfferOptions = {}): TransferOfferQuote {
   const contract = contractForSeason(state.employment, playerId, state.seasonNumber + 1);
-  return { ...quotePlayerContract(state, playerId, seasonWage, seasons, clubId, undefined, fee, paymentPlan), sellerClubId: contract?.clubId ?? null, contractId: contract?.id ?? null, requiredFee: requiredTransferFee(state, playerId), fee, paymentPlan };
+  return { ...quotePlayerContract(state, playerId, seasonWage, seasons, clubId, undefined, fee, paymentPlan, options), sellerClubId: contract?.clubId ?? null, contractId: contract?.id ?? null, requiredFee: requiredTransferFee(state, playerId), fee, paymentPlan, ...(options.transferMode === 'release-clause' ? { transferMode: 'release-clause' as const } : {}) };
 }
 
 /** Protect replacements for every approved outgoing player, including concurrent sales. */
-export function sellerReplacementReason(state: SeasonState, offer: MarketOffer): string | null {
+export function sellerReplacementReason(state: SeasonState, offer: Pick<MarketOffer, 'id' | 'playerId' | 'responseOn' | 'transfer'>): string | null {
   const transfer = offer.transfer, window = getMarketWindow(state);
   if (!transfer || !window || !isMarketActive(state)) return 'Choose an open club transfer.';
   const target = contractForSeason(state.employment, offer.playerId, state.seasonNumber + 1);

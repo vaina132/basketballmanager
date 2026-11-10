@@ -2,6 +2,9 @@ import type { SeasonState } from '../domain/season'
 import type { TrainingFocus, TrainingPlan, TrainingWeekReport } from '../domain/training'
 import type { Team } from '../domain/types'
 import { COACHES } from '../data/development-coaches'
+import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness'
+import { getClubFitnessEffects } from '../world/fitness-policy'
+import { FitnessBenefits, FitnessPortrait, fitnessNumber } from './FitnessBenefits'
 import { getClubCoaching } from '../world/coaching'
 import { getSeasonInjuries, isRecovering } from '../world/health'
 import { dateForRound } from '../world/season'
@@ -14,6 +17,7 @@ import './training-workspace.css'
 interface TrainingWorkspaceProps {
   season: SeasonState
   onEnable: () => void
+  onOpenFitness: () => void
   onPlanChange: (plan: TrainingPlan) => void
   onSelectPlayer: (id: string) => void
   busy?: boolean
@@ -32,7 +36,7 @@ function FocusOptions({ individual = false }: { individual?: boolean }) {
   return <>{individual && <option value="team">Team focus</option>}{TRAINING_FOCUSES.map(focus => <option key={focus} value={focus}>{TRAINING_FOCUS_LABELS[focus]}</option>)}</>
 }
 
-export function TrainingWorkspace({ season, onEnable, onPlanChange, onSelectPlayer, busy = false }: TrainingWorkspaceProps) {
+export function TrainingWorkspace({ season, onEnable, onOpenFitness, onPlanChange, onSelectPlayer, busy = false }: TrainingWorkspaceProps) {
   const baseClub = season.clubs.find(club => club.id === season.managedClubId)!
   const club = developClub(baseClub, season.training)
   const enabled = season.training.enabledSince !== null
@@ -41,6 +45,8 @@ export function TrainingWorkspace({ season, onEnable, onPlanChange, onSelectPlay
   const appliedPlan = resolveTrainingPlan(plan, club, conditions)
   const injuries = getSeasonInjuries(season)
   const nextDate = season.round < 10 ? dateForRound(season.round + 1, season.seasonNumber) : null
+  const fitness = getClubFitnessEffects(season)
+  const fitnessCoach = fitness ? DEVELOPMENT_FITNESS_COACHES.find(coach => coach.id === fitness.coachId)! : null
   const week = season.training.lastWeek
   const coaches = season.coaching.enabledSince === null ? [] : getClubCoaching(season.coaching, club.id)
 
@@ -72,8 +78,15 @@ export function TrainingWorkspace({ season, onEnable, onPlanChange, onSelectPlay
             <select id="training-focus" value={appliedPlan.focus} onChange={event => onPlanChange({ ...plan, focus: event.target.value as TrainingFocus })} disabled={busy || plan.delegated}><FocusOptions /></select>
           </div>
         </div>
-        <div className="training-plan-note training-plan-preview"><Icon name={appliedPlan.intensity === 'recovery' ? 'shield' : 'training'} size={25} /><div><strong>{TRAINING_INTENSITY_LABELS[appliedPlan.intensity]} · {TRAINING_FOCUS_LABELS[appliedPlan.focus]}</strong><p id="training-workload-help">{workloadDescriptions[appliedPlan.intensity]}</p></div><span>{coaches.length} {coaches.length === 1 ? 'coach' : 'coaches'}</span></div>
+        <div className="training-plan-note training-plan-preview"><Icon name={appliedPlan.intensity === 'recovery' ? 'shield' : 'training'} size={25} /><div><strong>{TRAINING_INTENSITY_LABELS[appliedPlan.intensity]} · {TRAINING_FOCUS_LABELS[appliedPlan.focus]}</strong><p id="training-workload-help">{workloadDescriptions[appliedPlan.intensity]}</p></div><span>{coaches.length} {coaches.length === 1 ? 'training coach' : 'training coaches'}</span></div>
         <details className="game-disclosure"><summary><Icon name="staff" size={15} />Plan details</summary><div className="training-plan-note">{plan.delegated && <p>The assistant chooses workload after the matchday. Individual focus still applies.</p>}{coaches.length > 0 && <p className="training-coaching-plan">{coaches.map(contract => `${COACHES.find(coach => coach.id === contract.coachId)!.name} (${TRAINING_FOCUS_LABELS[contract.focus]})`).join(' · ')}. The best applicable coach counts.</p>}<p>Training runs after Continue. Injuries and low condition reduce practice.</p></div></details>
+      </section>
+
+      <section className="training-fitness panel" aria-labelledby="training-fitness-title" data-training-fitness={fitness?.coachId ?? 'none'}>
+        <div className="training-fitness-main">{fitnessCoach ? <FitnessPortrait coach={fitnessCoach} color={club.color} size={52} /> : <span className="training-fitness-vacant" aria-hidden="true"><Icon name="shield" size={28} /></span>}<div><h2 id="training-fitness-title">Fitness coach</h2><strong>{fitnessCoach?.name ?? 'No coach appointed'}</strong>{!fitnessCoach && <small>Recovery and workload support</small>}{fitness && !nextDate && <small>No training weeks left this season</small>}</div></div>
+        {fitness && <FitnessBenefits effects={fitness} />}
+        <button className="button small" id="training-open-fitness" onClick={onOpenFitness} disabled={busy}>{fitnessCoach ? 'Manage coach' : 'Recruit coach'}<Icon name="chevron" size={14} /></button>
+        {fitness && <details className="training-fitness-details"><summary>How fitness support works</summary><p>These are the coach's daily benefits on medically available training days. Recovery is capped at full condition. Injury return dates stay unchanged. The weekly report records the condition actually gained from this support.</p></details>}
       </section>
 
       <section className="training-roster panel" aria-labelledby="training-roster-title">
@@ -117,10 +130,13 @@ function TrainingReport({ season, club, week, onSelectPlayer, busy }: { season: 
   const previousPoints = Object.fromEntries(Object.entries(season.training.points).map(([id, points]) => [id, Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => [attribute, points[attribute] - (week.players[id]?.gains[attribute] ?? 0)]))])) as typeof season.training.points
   const previousClub = developClub(recordedBase, { ...season.training, points: previousPoints })
   const appliedCoaches = week.coaching?.[club.id] ?? null
+  const appliedFitness = week.fitness?.[club.id] ?? null
+  const reportCoach = appliedFitness ? DEVELOPMENT_FITNESS_COACHES.find(coach => coach.id === appliedFitness.coachId)! : null
   return <>
     {appliedCoaches !== null && <p className="training-coaching-report"><strong>Staff that week</strong> {appliedCoaches.length > 0 ? appliedCoaches.map(assignment => `${COACHES.find(coach => coach.id === assignment.coachId)!.name} (${TRAINING_FOCUS_LABELS[assignment.focus]})`).join(' · ') : 'No coaches assigned.'}</p>}
+    {reportCoach && <div className="training-fitness-report" data-report-fitness={reportCoach.id}><FitnessPortrait coach={reportCoach} size={38} /><div><strong>Fitness support: {reportCoach.name}</strong><p>Each player's condition includes the benefit shown below. It can be zero when fully rested or medically unavailable.</p></div></div>}
     <div className="training-table-scroll" role="region" aria-label="Completed weekly training" tabIndex={0}>
-    <table className="training-report-table"><thead><tr><th scope="col">Player</th><th scope="col">Applied plan</th><th scope="col">Eligible days</th><th scope="col">Skill progress</th><th scope="col">Condition</th></tr></thead><tbody>{recordedClub.players.map(player => {
+    <table className="training-report-table"><thead><tr><th scope="col">Player</th><th scope="col">Applied plan</th><th scope="col">Eligible days</th><th scope="col">Condition</th><th scope="col">Skill progress</th></tr></thead><tbody>{recordedClub.players.map(player => {
       const report = week.players[player.id]
       if (!report) return null
       const before = previousClub.players.find(previous => previous.id === player.id)!
@@ -133,8 +149,8 @@ function TrainingReport({ season, club, week, onSelectPlayer, busy }: { season: 
         <th scope="row">{club.players.some(current => current.id === player.id) ? <button className="text-button" onClick={() => onSelectPlayer(player.id)} disabled={busy}>{player.name}<Icon name="chevron" size={13} /></button> : <span>{player.name}</span>}</th>
         <td>{TRAINING_FOCUS_LABELS[report.focus]}<small>{TRAINING_INTENSITY_LABELS[report.intensity]}</small></td>
         <td>{report.availableDays} days</td>
+        <td><span aria-label={`${player.name} condition before ${Math.round(report.conditionBefore)} percent, after ${Math.round(report.conditionAfter)} percent`}>{Math.round(report.conditionBefore)}% → {Math.round(report.conditionAfter)}%</span>{appliedFitness && report.fitness && <small className="training-fitness-gain" data-fitness-benefit={report.fitness.conditionBenefit} title={`Condition without fitness support: ${fitnessNumber(report.fitness.conditionWithoutCoach)}%`}>Fitness +{fitnessNumber(report.fitness.conditionBenefit)} condition</small>}</td>
         <td>{gains.length > 1 ? <details className="training-gain-details"><summary aria-label={`${player.name}: ${totalGains} practice points across ${gains.length} skills. Skill breakdown.`}>+{totalGains} practice across {gains.length} skills</summary>{breakdown}</details> : gains.length === 1 ? breakdown : <span className="training-no-gain">No practice gained</span>}{coachingGains > 0 && <p className="training-coaching-gain">Includes +{coachingGains} from coaching</p>}{ratingGains.map(attribute => <p className="training-rating-gain" key={attribute}>{TRAINING_FOCUS_LABELS[attribute]} {before.attributes[attribute]} → {player.attributes[attribute]} rating</p>)}</td>
-        <td><span aria-label={`${player.name} condition before ${Math.round(report.conditionBefore)} percent, after ${Math.round(report.conditionAfter)} percent`}>{Math.round(report.conditionBefore)}% → {Math.round(report.conditionAfter)}%</span></td>
       </tr>
     })}</tbody></table>
     </div>

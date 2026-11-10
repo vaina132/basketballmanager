@@ -3,7 +3,9 @@ import type { FinanceEntry, FinancePlan } from '../domain/finance'
 import type { SeasonState } from '../domain/season'
 import { COACHES } from '../data/development-coaches'
 import { getDevelopmentPlayer } from '../data/development-players'
-import { coachingCommitted } from '../world/coaching'
+import { staffCommitted } from '../world/staff-policy'
+import { DEVELOPMENT_SCOUTS } from '../data/development-scouts'
+import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness'
 import { ANNUAL_SPONSORSHIP, financeLedgerRows, forecastGate, getClubFinanceDefinition, getFinanceBalance, MAX_TICKET_PRICE, OPENING_CASH, recommendTicketPrice, ROUND_OPERATING_COST, TICKET_PRICE_STEP } from '../world/finance'
 import { dateForRound, seasonLabel } from '../world/season'
 import { getPayrollReserve, getSpendableCash } from '../world/payroll'
@@ -11,6 +13,7 @@ import { getReservedInSeasonFees, getReservedInSeasonWages } from '../world/recr
 import { getReservedTransferFees } from '../world/market-policy'
 import { getTransferPayments, getTransferPaymentSummary } from '../world/transfer-payments'
 import { TransferPaymentsPanel } from './TransferPaymentsPanel'
+import { CashOutlook } from './CashOutlook'
 import { Icon } from './Icon'
 import './club-workspace.css'
 
@@ -20,6 +23,7 @@ interface ClubWorkspaceProps {
   onPlanChange: (plan: FinancePlan) => void
   onOpenStaff: () => void
   onOpenPayroll: () => void
+  onOpenTransfers: () => void
   busy?: boolean
 }
 
@@ -29,16 +33,16 @@ const money = (cents: number) => moneyFormatter.format(cents / 100)
 const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${money(Math.abs(cents))}`
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
-const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout' }
+const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout' }
 
-export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onOpenPayroll, busy = false }: ClubWorkspaceProps) {
+export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onOpenPayroll, onOpenTransfers, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
   const [period, setPeriod] = useState<'current' | 'all'>('current')
   const club = season.clubs.find(team => team.id === season.managedClubId)!
   const definition = getClubFinanceDefinition(club.id)
   const enabled = season.finance.enabledSince !== null
   const balance = getFinanceBalance(season.finance, club.id)
-  const committed = coachingCommitted(season.coaching, club.id)
+  const committed = staffCommitted(season, club.id)
   const payrollEnabled = season.payroll.enabledSince !== null
   const wageReserve = getPayrollReserve(season, club.id)
   const spendable = getSpendableCash(season, club.id)
@@ -82,6 +86,8 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onO
       const visitor = fixture ? season.clubs.find(team => team.id === fixture.awayClubId) : null
       return `${visitor ? `Home vs ${visitor.name} · ` : ''}${count(entry.ticket.attendance)} / ${count(definition.capacity)} attendance · ${money(entry.ticket.price)} per ticket`
     }
+    if (entry.fitness) return DEVELOPMENT_FITNESS_COACHES.find(coach => coach.id === entry.fitness!.coachId)?.name ?? 'Fitness coach fee'
+    if (entry.scout) return DEVELOPMENT_SCOUTS.find(scout => scout.id === entry.scout!.scoutId)?.name ?? 'Scout fee'
     if (entry.coach) return COACHES.find(coach => coach.id === entry.coach!.coachId)!.name
     if (entry.kind === 'sponsor') return `${definition.sponsor} · ${seasonLabel(entry.seasonNumber)}`
     if (entry.kind === 'operations') return `Matchday ${entry.round} club operations`
@@ -90,15 +96,16 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onO
 
   return <div className={`club-workspace${enabled ? ' club-finances-active' : ''}`}>
     <section className="club-finance-overview panel" aria-label="Club finances">
-      <header className="club-heading"><div><h2>{club.name}</h2><span>{seasonLabel(season.seasonNumber)} · <time dateTime={season.date}>{formatDate(season.date)}</time></span></div><div className="club-heading-actions"><button className="button small" onClick={onOpenPayroll} disabled={busy}>Player wages<Icon name="chevron" size={14} /></button><button className="button small" onClick={onOpenStaff} disabled={busy}>Open staff<Icon name="chevron" size={14} /></button></div></header>
-      {enabled && <details className="game-disclosure club-account-details"><summary><Icon name="wallet" size={16} />Accounts & commitments</summary><dl className="club-finance-summary"><div><dt>Bank balance</dt><dd data-finance-cash={balance.cash}>{money(balance.cash)}</dd></div><div><dt>Unpaid costs</dt><dd className={balance.unpaid > 0 ? 'club-finance-cost' : ''} data-finance-unpaid={balance.unpaid}>{money(balance.unpaid)}</dd></div><div><dt>Coaching committed</dt><dd>{money(committed)}</dd></div></dl>{payrollEnabled && <p className="club-payroll-summary"><span>Wages reserved <strong data-finance-wage-reserve={wageReserve}>{money(wageReserve)}</strong></span>{recruitmentReserve > 0 && <span>Pending recruitment salaries <strong data-finance-in-season-reserve={recruitmentReserve}>{money(recruitmentReserve)}</strong></span>}{recruitmentFees > 0 && <span>Pending midseason transfer fees <strong data-finance-in-season-fees={recruitmentFees}>{money(recruitmentFees)}</strong></span>}{transferReserve > 0 && <span>Pending transfer offers <strong data-finance-transfer-reserve={transferReserve}>{money(transferReserve)}</strong></span>}{transferPayments.outgoingRemaining > 0 && <span>Agreed fees remaining <strong data-finance-transfer-outstanding={transferPayments.outgoingRemaining}>{money(transferPayments.outgoingRemaining)}</strong></span>}<span>Remaining budget <strong data-finance-spendable={spendable}>{money(spendable)}</strong></span></p>}</details>}
+      <header className="club-heading"><div><h2>{club.name}</h2><span>{seasonLabel(season.seasonNumber)} · <time dateTime={season.date}>{formatDate(season.date)}</time></span></div><div className="club-heading-actions"><button className="button small" onClick={onOpenStaff} disabled={busy}>Open staff<Icon name="chevron" size={14} /></button></div></header>
+      {enabled && <CashOutlook season={season} busy={busy} onOpenPayroll={onOpenPayroll} onOpenTransfers={onOpenTransfers} />}
+      {enabled && <details className="game-disclosure club-account-details"><summary><Icon name="wallet" size={16} />Accounts & commitments</summary><dl className="club-finance-summary"><div><dt>Bank balance</dt><dd data-finance-cash={balance.cash}>{money(balance.cash)}</dd></div><div><dt>Unpaid costs</dt><dd className={balance.unpaid > 0 ? 'club-finance-cost' : ''} data-finance-unpaid={balance.unpaid}>{money(balance.unpaid)}</dd></div><div><dt>Staff fees committed</dt><dd>{money(committed)}</dd></div></dl>{payrollEnabled && <p className="club-payroll-summary"><span>Wages reserved <strong data-finance-wage-reserve={wageReserve}>{money(wageReserve)}</strong></span>{recruitmentReserve > 0 && <span>Pending recruitment salaries <strong data-finance-in-season-reserve={recruitmentReserve}>{money(recruitmentReserve)}</strong></span>}{recruitmentFees > 0 && <span>Pending midseason transfer fees <strong data-finance-in-season-fees={recruitmentFees}>{money(recruitmentFees)}</strong></span>}{transferReserve > 0 && <span>Pending transfer offers <strong data-finance-transfer-reserve={transferReserve}>{money(transferReserve)}</strong></span>}{transferPayments.outgoingRemaining > 0 && <span>Agreed fees remaining <strong data-finance-transfer-outstanding={transferPayments.outgoingRemaining}>{money(transferPayments.outgoingRemaining)}</strong></span>}<span>Remaining budget <strong data-finance-spendable={spendable}>{money(spendable)}</strong></span></p>}</details>}
     </section>
 
     {!enabled ? <section className="club-finance-enable panel" aria-labelledby="club-finance-enable-title">
       <header className="club-heading"><h2 id="club-finance-enable-title">Club finances</h2><span>Not enabled</span></header>
-      <div><p>Start every club with {money(OPENING_CASH)} in opening cash, sponsorship for the remaining season, and charges for existing coaching commitments. Ticket income and operating costs begin from the current matchday.</p>{season.status === 'complete' && <p id="finance-enable-reason">Start next season before enabling club finances.</p>}<button id="enable-finance" className="button primary" onClick={onEnable} disabled={busy || season.status === 'complete'} aria-describedby={season.status === 'complete' ? 'finance-enable-reason' : undefined}>Enable club finances<Icon name="building" size={16} /></button></div>
+      <div><p>Start every club with {money(OPENING_CASH)} in opening cash, sponsorship for the remaining season, and charges for existing staff commitments. Ticket income and operating costs begin from the current matchday.</p>{season.status === 'complete' && <p id="finance-enable-reason">Start next season before enabling club finances.</p>}<button id="enable-finance" className="button primary" onClick={onEnable} disabled={busy || season.status === 'complete'} aria-describedby={season.status === 'complete' ? 'finance-enable-reason' : undefined}>Enable club finances<Icon name="building" size={16} /></button></div>
     </section> : <>
-      {balance.unpaid > 0 && <p className="club-unpaid-note panel">{money(balance.unpaid)} of costs remain unpaid. New income clears unpaid costs first; coach recruitment requires these costs to be settled.</p>}
+      {balance.unpaid > 0 && <p className="club-unpaid-note panel">{money(balance.unpaid)} of costs remain unpaid. New income clears unpaid costs first; staff recruitment requires these costs to be settled.</p>}
 
       <section className="club-venue panel" aria-labelledby="club-venue-title">
         <header className="club-heading"><h2 id="club-venue-title">Venue &amp; sponsorship</h2></header>
@@ -137,7 +144,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onO
             <td><span className={entry.unpaidDelta > 0 ? 'club-finance-cost' : entry.unpaidDelta < 0 ? 'club-finance-income' : ''}>{movement(entry.unpaidDelta)}</span><small>Balance {money(entry.unpaidAfter)}</small></td>
           </tr>
         })}{!ledger.length && <tr><td colSpan={5} className="club-empty">No financial activity matches this view.</td></tr>}</tbody></table></div>
-        <p className="club-note">Income clears unpaid costs before adding to cash. Balances include all earlier activity, even when filtered. Coaching commitments track season allocation separately from cash.</p>
+        <p className="club-note">Income clears unpaid costs before adding to cash. Balances include all earlier activity, even when filtered. Staff commitments track season allocation separately from cash.</p>
       </details>
     </>}
     <p className="club-model-note">Fictional development finances. {payrollEnabled ? season.employment.enabledSince ? 'Player wages follow signed employment contracts.' : 'Player wages follow the fixed squad terms.' : 'Player payroll is not enabled.'}</p>

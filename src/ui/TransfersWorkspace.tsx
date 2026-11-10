@@ -1,3 +1,4 @@
+import type { ContractOfferOptions } from '../domain/employment'
 import { useEffect, useRef, useState } from 'react'
 import type { SeasonState } from '../domain/season'
 import type { TransferPaymentPlan } from '../domain/transfer-payments'
@@ -8,9 +9,9 @@ import { contractForSeason, getAvailablePlayers, getClubContractSummary, MAX_CON
 import { MAX_SEASON_NUMBER, seasonLabel as supportedSeasonLabel } from '../world/season'
 import { getPlayerKnowledge } from '../world/scouting-policy'
 import { getLatestNegotiation } from '../world/negotiations'
-import { getTransferCandidates, quoteTransferOffer, requiredTransferFee } from '../world/transfers-policy'
+import { getTransferCandidates, requiredTransferFee } from '../world/transfers-policy'
 import { getMarketOffers, getMarketStartReason } from '../world/market-policy'
-import { getInSeasonCandidates, getInSeasonOffers, getInSeasonTransferCandidates, quoteInSeasonOffer, quoteInSeasonTransferOffer, requiredInSeasonTransferFee } from '../world/recruitment-policy'
+import { getInSeasonCandidates, getInSeasonOffers, getInSeasonTransferCandidates, quoteInSeasonOffer } from '../world/recruitment-policy'
 import { InSeasonOfferDialog, InSeasonPlayers, InSeasonRecruitmentPanel } from './InSeasonRecruitment'
 import { Avatar } from './Avatar'
 import { BuyoutHistory, PlayerBuyout } from './PlayerBuyout'
@@ -18,6 +19,7 @@ import { Icon } from './Icon'
 import { knowledgeLabel, scoutingDate, ScoutingKnowledge } from './ScoutingKnowledge'
 import { negotiationOutcome, PlayerContractOffer } from './PlayerContractOffer'
 import { chosenMarketOffer, marketOfferStatus, OffseasonMarketPanel, RivalOfferBadge } from './OffseasonMarketPanel'
+import { ReleaseClauseValue, transferEntryQuote } from './ReleaseClause'
 import './transfers-workspace.css'
 
 interface TransfersWorkspaceProps {
@@ -26,17 +28,17 @@ interface TransfersWorkspaceProps {
   onEnable: () => void
   onEnableNegotiations: () => void
   onEnableInSeasonTransfers: () => void
-  onInSeasonTransferOffer: (playerId: string, seasonWage: number, seasons: number, fee: number, paymentPlan: TransferPaymentPlan) => void
+  onInSeasonTransferOffer: (playerId: string, seasonWage: number, seasons: number, fee: number, paymentPlan: TransferPaymentPlan, options?: ContractOfferOptions) => void
   onInSeasonClubDecision: (offerId: string, response: 'accept' | 'reject' | 'counter') => void
   onEnableInSeason: () => void
-  onInSeasonOffer: (playerId: string, seasonWage: number) => void
+  onInSeasonOffer: (playerId: string, seasonWage: number, options?: ContractOfferOptions) => void
   onWithdrawInSeasonOffer: (offerId: string) => void
   onOpenMatch: () => void
   onEnableMarket: () => void
   onAdvanceMarket: () => void
   onWithdrawOffer: (offerId: string) => void
   onDelegation: (delegated: boolean) => void
-  onOffer: (playerId: string, seasonWage: number, seasons: number, transferFee?: number, paymentPlan?: TransferPaymentPlan) => void
+  onOffer: (playerId: string, seasonWage: number, seasons: number, transferFee?: number, paymentPlan?: TransferPaymentPlan, options?: ContractOfferOptions) => void
   onClubDecision: (offerId: string, response: 'accept' | 'reject' | 'counter') => void
   onBuyout: (playerId: string) => void
   onStartSeason: () => void
@@ -95,7 +97,7 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
   const focusedCurrentContract = focused ? contractForSeason(season.employment, focused.id, season.seasonNumber) : null
   const focusedInSeason = !!focused && season.status === 'active' && focusedCurrentContract?.clubId !== club.id
   const focusedInSeasonPaid = focusedInSeason && !!focusedCurrentContract
-  const focusedQuote = focused ? focusedInSeasonPaid ? quoteInSeasonTransferOffer(season, focused.id, MIN_CONTRACT_WAGE, 1, requiredInSeasonTransferFee(season, focused.id)) : focusedInSeason ? quoteInSeasonOffer(season, focused.id, MIN_CONTRACT_WAGE) : focusedTransfer ? quoteTransferOffer(season, focused.id, MIN_CONTRACT_WAGE, 1, requiredTransferFee(season, focused.id)) : quotePlayerContract(season, focused.id, negotiations ? MIN_CONTRACT_WAGE : getSeasonWage(focused.id), 1) : null
+  const focusedQuote = focused ? focusedInSeasonPaid ? transferEntryQuote(season, focused.id, MIN_CONTRACT_WAGE, true) : focusedInSeason ? quoteInSeasonOffer(season, focused.id, MIN_CONTRACT_WAGE) : focusedTransfer ? transferEntryQuote(season, focused.id, MIN_CONTRACT_WAGE) : quotePlayerContract(season, focused.id, negotiations ? MIN_CONTRACT_WAGE : getSeasonWage(focused.id), 1) : null
   const focusedResponse = focused ? getLatestNegotiation(season, focused.id) : null
   const focusedOffer = focused ? (focusedInSeason ? inSeasonOffers : openOffers).find(offer => offer.playerId === focused.id) : null
   const shortlist = season.scouting.clubs[club.id]!.shortlist
@@ -165,16 +167,16 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
           const owner = season.clubs.find(team => team.players.some(member => member.id === player.id))
           const record = owner?.players.find(member => member.id === player.id) ?? player
           const paidApproach = marketOpen && datedMarket && !!next && next.clubId !== club.id
-          const quote = paidApproach ? quoteTransferOffer(season, player.id, MIN_CONTRACT_WAGE, 1, requiredTransferFee(season, player.id)) : quotePlayerContract(season, player.id, negotiations ? MIN_CONTRACT_WAGE : getSeasonWage(player.id), 1)
+          const quote = paidApproach ? transferEntryQuote(season, player.id, MIN_CONTRACT_WAGE) : quotePlayerContract(season, player.id, negotiations ? MIN_CONTRACT_WAGE : getSeasonWage(player.id), 1)
           const secured = next?.clubId === club.id
           const latest = getLatestNegotiation(season, player.id)
           const pendingOffer = openOffers.find(offer => offer.playerId === player.id)
           const action = pendingOffer ? 'Review offer' : paidApproach ? 'Offer transfer' : latest && latest.outcome !== 'accepted' ? 'Continue talks' : current?.clubId === club.id ? 'Renew' : 'Offer contract'
           return <tr key={player.id} data-contract-player={player.id}>
             <th scope="row"><button className="transfers-player transfers-player-report" aria-label={`Scouting report for ${player.name}`} data-transfer-scouting={player.id} onClick={() => onOpenScouting(player.id)} disabled={disabled}><span aria-hidden="true"><Avatar player={record} color={owner?.color ?? '#687385'} size={30} /></span><span><strong>{player.name}</strong><small>{player.position} · {player.heightCm} cm</small></span></button></th>
-            <td>{selectedView === 'transfer' ? season.clubs.find(team => team.id === next?.clubId)?.name : selectedView === 'market' ? owner?.name ?? 'Free agent' : displayed ? seasonLabel(displayed.endsSeason) : 'No contract'}</td>
+            <td>{selectedView === 'transfer' ? season.clubs.find(team => team.id === next?.clubId)?.name : selectedView === 'market' ? owner?.name ?? 'Free agent' : displayed ? seasonLabel(displayed.endsSeason) : 'No contract'}{(selectedView === 'transfer' ? next : displayed)?.releaseFee !== undefined && <ReleaseClauseValue fee={(selectedView === 'transfer' ? next : displayed)?.releaseFee} />}</td>
             <td>{money(selectedView === 'transfer' ? requiredTransferFee(season, player.id) : selectedView === 'market' ? getSeasonWage(player.id) : displayed?.seasonWage ?? 0)}</td>
-            <td>{selectedView === 'transfer' ? money(next?.seasonWage ?? 0) : !hasNextYear ? 'Calendar limit' : selectedView === 'next' && next ? seasonLabel(next.startsSeason) : secured ? <span className="transfers-secured">Signed · {money(next.seasonWage)}</span> : next ? `Joining ${season.clubs.find(team => team.id === next.clubId)!.name}` : pendingOffer ? <span className="transfers-secured">{marketOfferStatus(pendingOffer)}</span> : <span className="transfers-expiring">{selectedView === 'market' ? 'Available' : 'Not renewed'}</span>}{marketOpen && <RivalOfferBadge season={season} playerId={player.id} onReview={() => openOffer(player.id)} disabled={disabled} />}</td>
+            <td>{selectedView === 'transfer' ? money(next?.seasonWage ?? 0) : !hasNextYear ? 'Calendar limit' : selectedView === 'next' && next ? seasonLabel(next.startsSeason) : secured ? <span className="transfers-secured">Signed · {money(next.seasonWage)}</span> : next ? `Joining ${season.clubs.find(team => team.id === next.clubId)!.name}` : pendingOffer ? <span className="transfers-secured">{marketOfferStatus(pendingOffer)}</span> : <span className="transfers-expiring">{selectedView === 'market' ? 'Available' : 'Not renewed'}</span>}{selectedView !== 'next' && secured && next?.releaseFee !== undefined && next.id !== displayed?.id && <ReleaseClauseValue fee={next.releaseFee} />}{marketOpen && <RivalOfferBadge season={season} playerId={player.id} onReview={() => openOffer(player.id)} disabled={disabled} />}</td>
             <td className="transfers-knowledge"><span>{knowledgeLabel(getPlayerKnowledge(season, player.id))}</span><button className="text-button" data-transfer-shortlist={player.id} aria-pressed={shortlist.includes(player.id)} aria-label={`${shortlist.includes(player.id) ? 'Remove' : 'Add'} ${player.name} ${shortlist.includes(player.id) ? 'from' : 'to'} shortlist`} onClick={() => onShortlist(player.id, !shortlist.includes(player.id))} disabled={disabled || !scoutingEnabled}>{shortlist.includes(player.id) ? 'Shortlisted' : 'Add to shortlist'}</button></td>
             <td className="transfers-action">{latest && (!datedMarket || season.status !== 'complete') && <small className="transfer-latest-response">{negotiationOutcome(latest)}</small>}{!hasNextYear ? 'No further contracts' : selectedView === 'next' || secured ? <><span><Icon name="check" size={14} /> {seasonLabel(next!.endsSeason)}</span>{marketOpen && datedMarket && secured && <button className="text-button transfers-buyout-action" data-buyout-player={player.id} aria-label={`Buy out contract for ${player.name}`} onClick={() => setBuyoutId(player.id)} disabled={disabled}>Buy out<Icon name="chevron" size={13} /></button>}</> : <><button id={`transfer-player-${player.id}`} className="button small" aria-label={`${action} ${player.name}`} onClick={() => openOffer(player.id)} disabled={disabled || !quote.canOffer && !pendingOffer} aria-describedby={!quote.canOffer ? `contract-reason-${player.id}` : undefined}>{action}<Icon name="chevron" size={13} /></button>{!quote.canOffer && <details className="transfer-unavailable"><summary>Unavailable</summary><small id={`contract-reason-${player.id}`}>{quote.reason}</small></details>}</>}</td>
           </tr>

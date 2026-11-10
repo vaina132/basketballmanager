@@ -1,4 +1,4 @@
-export interface NegotiationTerms { seasonWage: number; seasons: number }
+export interface NegotiationTerms { seasonWage: number; seasons: number; releaseFee?: number }
 export interface NegotiationDecision {
   outcome: 'accepted' | 'countered' | 'rejected';
   reason: 'terms-met' | 'term-premium' | 'below-demand' | 'far-below-demand';
@@ -17,6 +17,7 @@ export interface NegotiationRecord extends NegotiationDecision {
   startsSeason: number;
   offeredWage: number;
   offeredSeasons: number;
+  releaseFee?: number;
   contractCountBefore: number;
   contractId: string | null;
 }

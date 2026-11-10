@@ -1,4 +1,4 @@
-import type { EmploymentContract, EmploymentTransfer, SeasonEmployment } from '../domain/employment';
+import type { ContractOfferOptions, EmploymentContract, EmploymentTransfer, SeasonEmployment } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import { getDevelopmentPlayer } from '../data/development-players';
@@ -32,22 +32,23 @@ export function enableEmployment(state: SeasonState): SeasonState {
 }
 
 /** Internal immediate response used by legacy/active renewals and the dated market resolver. */
-export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: string, seasonWage: number, seasons: number, resolvingOfferId?: string): SeasonState {
+export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: string, seasonWage: number, seasons: number, resolvingOfferId?: string, options: ContractOfferOptions = {}): SeasonState {
   const scheduled = getLiveMarketOffers(state).find(offer => offer.id === resolvingOfferId && offer.clubId === clubId && offer.playerId === playerId && offer.seasonWage === seasonWage && offer.seasons === seasons && offer.status === 'pending' && offer.responseOn === state.date);
+  if (scheduled) options = { ...(scheduled.releaseFee === undefined ? {} : { releaseFee: scheduled.releaseFee }), ...(scheduled.transfer?.mode ? { transferMode: scheduled.transfer.mode } : {}) };
   if (state.market?.enabledSince && state.status === 'complete' && !scheduled) throw new Error('Send an offer and continue to its scheduled response before signing.');
   const enabled = state.negotiations.enabledSince !== null;
   const latest = enabled ? getLatestNegotiation(state, playerId, clubId) : null;
-  const duplicate = latest && latest.seasonNumber === state.seasonNumber && latest.round === state.round && latest.status === state.status && latest.date === state.date && latest.offeredWage === seasonWage && latest.offeredSeasons === seasons;
+  const duplicate = latest && latest.seasonNumber === state.seasonNumber && latest.round === state.round && latest.status === state.status && latest.date === state.date && latest.offeredWage === seasonWage && latest.offeredSeasons === seasons && latest.releaseFee === options.releaseFee;
   if (duplicate && latest.outcome === 'accepted') {
     const signed = state.employment.contracts.find(contract => contract.id === latest.contractId);
-    if (signed && signed.playerId === playerId && signed.clubId === clubId && signed.startsSeason === state.seasonNumber + 1 && signed.endsSeason === state.seasonNumber + seasons && signed.seasonWage === seasonWage && contractForSeason(state.employment, playerId, state.seasonNumber + 1)?.id === signed.id) return state;
+    if (signed && signed.playerId === playerId && signed.clubId === clubId && signed.startsSeason === state.seasonNumber + 1 && signed.endsSeason === state.seasonNumber + seasons && signed.seasonWage === seasonWage && signed.releaseFee === options.releaseFee && contractForSeason(state.employment, playerId, state.seasonNumber + 1)?.id === signed.id) return state;
   }
-  const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId, resolvingOfferId, scheduled?.transfer?.fee, scheduled?.transfer?.paymentPlan ?? 'upfront');
+  const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId, resolvingOfferId, scheduled?.transfer?.fee, scheduled?.transfer?.paymentPlan ?? 'upfront', options);
   if (!quote.canOffer) throw new Error(quote.reason!);
   if (duplicate) return state;
-  const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons) : null;
+  const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons, options.releaseFee) : null;
   const contractCountBefore = state.employment.contracts.length;
-  if (decision && decision.outcome !== 'accepted') return appendNegotiationResponse(state, clubId, playerId, seasonWage, seasons, decision, null, contractCountBefore);
+  if (decision && decision.outcome !== 'accepted') return appendNegotiationResponse(state, clubId, playerId, seasonWage, seasons, decision, null, contractCountBefore, quote.startsSeason, options.releaseFee);
   if (scheduled?.transfer) {
     const saleReason = sellerReplacementReason(state, scheduled);
     if (saleReason) throw new Error(saleReason);
@@ -58,6 +59,7 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
     startsSeason: quote.startsSeason, startsRound: 1, endsSeason: quote.endsSeason, seasonWage,
     signedSeason: state.seasonNumber, signedRound: state.round,
     kind: scheduled?.transfer ? 'transfer' : current?.clubId === clubId && current.endsSeason === state.seasonNumber ? 'renewal' : 'free-agent',
+    ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }),
   };
   let next = { ...state, employment: { ...state.employment, contracts: [...state.employment.contracts, contract] } };
   if (scheduled?.transfer) {
@@ -71,16 +73,17 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
       fromClubId: sellerId, toClubId: clubId, seasonNumber: state.seasonNumber, completedOn: state.date,
       startsSeason: quote.startsSeason, startsRound: 1, fee: scheduled.transfer.fee, releasedContractIds: [...released], contractId: contract.id,
       paymentPlan: scheduled.transfer.paymentPlan ?? 'upfront',
+      ...(scheduled.transfer.mode ? { mode: scheduled.transfer.mode } : {}),
       installments: getTransferPaymentSchedule(scheduled.transfer.fee, scheduled.transfer.paymentPlan ?? 'upfront', state.date, quote.startsSeason),
       payments: [],
     };
     next = recordTransferFee({ ...next, employment: { ...next.employment, transfers: [...(state.employment.transfers ?? []), transfer] } }, transfer);
   }
-  return decision ? appendNegotiationResponse(next, clubId, playerId, seasonWage, seasons, decision, contract.id, contractCountBefore) : next;
+  return decision ? appendNegotiationResponse(next, clubId, playerId, seasonWage, seasons, decision, contract.id, contractCountBefore, quote.startsSeason, options.releaseFee) : next;
 }
 
-export function offerPlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number): SeasonState {
-  return state.market?.enabledSince && state.status === 'complete' ? submitMarketOffer(state, playerId, seasonWage, seasons) : commitPlayerOffer(state, state.managedClubId, playerId, seasonWage, seasons);
+export function offerPlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number, options: ContractOfferOptions = {}): SeasonState {
+  return state.market?.enabledSince && state.status === 'complete' ? submitMarketOffer(state, playerId, seasonWage, seasons, state.managedClubId, undefined, 'upfront', options) : commitPlayerOffer(state, state.managedClubId, playerId, seasonWage, seasons, undefined, options);
 }
 
 const rating = (player: Player): number => Object.values(player.attributes).reduce((sum, skill) => sum + skill, 0);

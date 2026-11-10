@@ -53,6 +53,30 @@ These can be resolved through implementation evidence without another general pe
 - One youth team coach slot is proposed; the role was explicitly requested but its maximum was not specified.
 - No deployment, remote repository operation, or new external account is needed for this design phase.
 
+## Development release-clause policy
+
+New player agreements may include an optional release amount from EUR 1,000 to EUR 500,000, in EUR 1,000 steps. No clause is added to existing agreements. Within the fictional development league, agreeing a clause caps the three-season salary premium at 5%, rather than 10%; the one- and two-season requirements remain unchanged. The contract review shows the actual salary requirement. This uniform game rule is provisional and is not a statement of any country's employment law or a claim about a player's personal preferences.
+
+A buyer explicitly chooses a clause approach and reserves its exact amount for full payment when the player accepts. A clause removes the selling club's fee decision; player choice, affordability, registration timing and squad protection still apply. Installments belong to negotiated transfers. A clause on one agreement cannot release a separate future agreement. Existing wages, earlier transfer debt and historical registrations retain their original treatment. Competition-specific clauses and the wider agent/bonus/loan model remain future work.
+
+## Development scout staffing policy
+
+Training coaches and scouts share the existing EUR 150,000 annual staff allocation. Scout contracts charge their full season fee immediately, retain the commitment after release and renew only when the new season's allocation and cash permit. The confirmed limit is three active scouts per club, equally applied to AI. Two baseline club observations remain available; each hired scout supplies one additional named observation per matchday. A person cannot observe two targets on the same matchday. Releasing a scout cancels their queued observation explicitly; completed club reports remain.
+
+Scouts have fictional judging and reporting skills on a 1-10 scale. The overall half-star display summarizes those skills and is not another bonus. A successful club observation supplies 100 evidence points; a scout supplies 100 plus five times the sum of their two skills. Report depth is the whole number of accumulated hundreds, capped at three. No minutes supplies no evidence. Existing uncertain ranges, systematic bias and aging still apply, so even the best report does not expose an outsider's exact ratings. This is a provisional development coefficient, not a calibrated scouting accuracy claim.
+
+Scout contracts and frozen observation attribution are retained for the career. New careers enable scout recruitment when finance and scouting are enabled. Older saves opt in prospectively; no report or pending baseline observation receives a retroactive benefit. AI aims for one affordable scout before hiring extra training coaches; existing coach renewals precede scout renewals at rollover. Regional travel, discovery coverage, potential and personality reports await their supporting world and player models.
+
+## Development fitness coaching policy
+
+Each club may appoint one fitness coach. The role shares the EUR 150,000 annual allocation with training coaches and scouts, charges the full season fee on appointment, and retains paid commitments after release. New hires require remaining cash after wages and transfer holds and settled arrears. Appointments are available on matchdays 1-9; matchday 10 has no remaining weekly training interval. The same rules apply to AI clubs.
+
+On medically available days within a normal training week, the recovery skill adds `skill / 10` condition points per day, capped at one. The workload skill reduces the chosen plan's practice condition cost by `skill * 2.5%`, capped at 25%. Daily condition remains within 35-100. Injured days retain their original recovery, with no fitness bonus, no practice, and unchanged injury return dates. There is no offseason bonus or direct skill-rating multiplier. Improved condition can affect the existing readiness threshold for useful practice. These are provisional development coefficients, not medical claims or calibrated real-world staff effects.
+
+The weekly report stores the applied appointment and compares the actual final condition with the same week, workload and availability without fitness coaching. It reports the actual capped difference, including zero for players who already finish fully rested. Hiring, release and renewal cannot rewrite a completed week. New careers opt in; older saves retain absent report fields and unchanged training until activation.
+
+Rival clubs seek one fitness coach after scout coverage and before extra training coaches. On opening day, existing training coaches renew first, then scouts, then fitness coaches if the shared budget and cash permit. This order is deterministic and gives no club an additional budget.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

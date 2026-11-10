@@ -2,6 +2,7 @@ import type { SeasonState } from '../../src/domain/season';
 
 /** Recreate the actual pre-roster schema, including the archive data those versions discarded. */
 export function stripRosterHistory(state: Record<string, unknown>): void {
+  stripScouts(state);
   delete state.recruitment;
   delete state.market;
   delete state.negotiations;
@@ -28,6 +29,7 @@ export function stripInSeasonRecruitment(value: object): void {
 
 /** Format18 retains free-agent recruitment but has no current-season club transfers. */
 export function stripInSeasonTransfers(value: object): void {
+  stripScouts(value);
   const state = value as Record<string, unknown>;
   const employment = state.employment as { transfers?: Array<Record<string, unknown>> } | undefined;
   for (const transfer of employment?.transfers ?? []) delete transfer.startsRound;
@@ -36,6 +38,18 @@ export function stripInSeasonTransfers(value: object): void {
     delete recruitment.transfersEnabledSince;
     for (const offer of recruitment.offers) { delete offer.seasons; delete offer.transfer; }
   }
+}
+
+/** Existing legacy fixtures have scout recruitment disabled and no scout payments. */
+export function stripScouts(value: object): void {
+  stripFitness(value);
+  const state = value as Record<string, unknown>;
+  delete state.scouts;
+}
+
+/** Format21 has no fitness staff; legacy fixtures create no fitness appointments. */
+export function stripFitness(value: object): void {
+  delete (value as Record<string, unknown>).fitness;
 }
 
 /** Past player statistics cannot be recovered from an old-format archive. */

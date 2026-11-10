@@ -71,13 +71,13 @@
 @media(min-width:1200px){
   .club-finances-active{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
   .club-finances-active>*{grid-column:1/-1;min-width:0}
-  .club-finances-active>.club-finance-overview{grid-column:1;grid-row:1}
-  .club-finances-active>.club-venue{grid-column:2;grid-row:1}
+  .club-finances-active>.club-finance-overview{grid-column:1/-1}
+  .club-finances-active>.club-venue{grid-column:1/-1}
   .club-finances-active>.club-ticket-plan{grid-column:1}
   .club-finances-active>.club-gate-forecast{grid-column:2}
-  .club-finances-active .club-venue>dl{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;padding:10px 14px}
-  .club-finances-active .club-venue>dl>div{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
-  .club-finances-active .club-venue dd{margin:0;text-align:right;white-space:nowrap}
+  .club-finances-active .club-venue>dl{grid-template-columns:repeat(5,minmax(0,1fr));gap:8px 18px;padding:12px 14px}
+  .club-finances-active .club-venue>dl>div{min-width:0}
+  .club-finances-active .club-venue dd{margin:6px 0 0;text-align:left}
   .club-finances-active .club-ticket-controls{gap:20px;padding:12px 14px}
 }
 @media(max-width:900px){.club-venue>dl{grid-template-columns:repeat(2,minmax(0,1fr))}.club-ticket-controls{gap:22px}}

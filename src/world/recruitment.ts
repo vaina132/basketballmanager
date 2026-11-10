@@ -1,4 +1,4 @@
-import type { EmploymentContract, EmploymentTransfer } from '../domain/employment';
+import type { ContractOfferOptions, EmploymentContract, EmploymentTransfer } from '../domain/employment';
 import type { InSeasonEvent, InSeasonEventAnchor, InSeasonOffer, SeasonRecruitment } from '../domain/recruitment';
 import type { SeasonState } from '../domain/season';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
@@ -16,6 +16,7 @@ import { registerInSeasonArrivals } from './rosters';
 import { scoutingRecruitmentRating } from './scouting-policy';
 import { dateForRound, SEASON_ROUNDS } from './season';
 import { getTransferPaymentSchedule } from './transfer-payments';
+import { getApplicableReleaseClause, offerOptionsReason } from './release-clauses';
 
 export function createInSeasonRecruitment(): SeasonRecruitment { return { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] }; }
 
@@ -71,13 +72,15 @@ export function applyInSeasonEvent(state: SeasonState, event: InSeasonEvent): Se
     requirePreparedBoundary(state);
     if (event.id !== `inseason-offer-${state.recruitment.offers.length + 1}`) throw new Error('In-season offer identity is not sequential.');
     const seasons = event.seasons ?? 1, plan = event.transferPaymentPlan ?? 'upfront';
+    const options: ContractOfferOptions = { ...(event.releaseFee === undefined ? {} : { releaseFee: event.releaseFee }), ...(event.transferMode ? { transferMode: event.transferMode } : {}) };
     if (event.transferFee === undefined && (seasons !== 1 || event.transferPaymentPlan !== undefined)) throw new Error('Free-agent recruitment covers the rest of this season without a transfer payment plan.');
-    const quote = event.transferFee === undefined ? quoteInSeasonOffer(state, event.playerId, event.seasonWage, event.clubId) : quoteInSeasonTransferOffer(state, event.playerId, event.seasonWage, seasons, event.transferFee, event.clubId, plan);
+    const quote = event.transferFee === undefined ? quoteInSeasonOffer(state, event.playerId, event.seasonWage, event.clubId, undefined, options) : quoteInSeasonTransferOffer(state, event.playerId, event.seasonWage, seasons, event.transferFee, event.clubId, plan, undefined, options);
     if (!quote.canOffer) throw new Error(quote.reason!);
     const previous = getInSeasonOffers(state, event.clubId, true).find(offer => offer.playerId === event.playerId);
-    if (previous?.seasonWage === event.seasonWage && previous.seasons === seasons && (previous.transfer?.fee ?? undefined) === event.transferFee && (previous.transfer?.paymentPlan ?? 'upfront') === plan) throw new Error('The same in-season offer is already open.');
-    const paid = event.transferFee === undefined ? null : quoteInSeasonTransferOffer(state, event.playerId, event.seasonWage, seasons, event.transferFee, event.clubId, plan);
-    const offer: InSeasonOffer = { id: event.id, clubId: event.clubId, playerId: event.playerId, seasonNumber: state.seasonNumber, offeredRound: state.round, responseRound: quote.responseRound, offeredOn: state.date, responseOn: quote.responseOn, seasonWage: event.seasonWage, seasons, transfer: paid ? { sellerClubId: paid.sellerClubId!, contractId: paid.contractId!, fee: paid.fee, paymentPlan: plan, requiredFee: paid.requiredFee, clubStatus: 'review', clubResponseOn: state.date, clubRespondedOn: null, clubReason: null, counterFee: null } : null, remainingWages: quote.remainingWages, status: paid ? 'club-review' : 'pending', respondedOn: null, closedOn: null, negotiationId: null, chosenOfferId: null, reason: null };
+    if (previous?.seasonWage === event.seasonWage && previous.seasons === seasons && previous.releaseFee === event.releaseFee && (previous.transfer?.mode ?? undefined) === event.transferMode && (previous.transfer?.fee ?? undefined) === event.transferFee && (previous.transfer?.paymentPlan ?? 'upfront') === plan) throw new Error('The same in-season offer is already open.');
+    const paid = event.transferFee === undefined ? null : quoteInSeasonTransferOffer(state, event.playerId, event.seasonWage, seasons, event.transferFee, event.clubId, plan, undefined, options);
+    const clause = event.transferMode === 'release-clause';
+    const offer: InSeasonOffer = { id: event.id, clubId: event.clubId, playerId: event.playerId, seasonNumber: state.seasonNumber, offeredRound: state.round, responseRound: quote.responseRound, offeredOn: state.date, responseOn: quote.responseOn, seasonWage: event.seasonWage, seasons, ...(event.releaseFee === undefined ? {} : { releaseFee: event.releaseFee }), transfer: paid ? { sellerClubId: paid.sellerClubId!, contractId: paid.contractId!, fee: paid.fee, paymentPlan: plan, requiredFee: paid.requiredFee, clubStatus: clause ? 'accepted' : 'review', clubResponseOn: state.date, clubRespondedOn: clause ? state.date : null, clubReason: clause ? 'Release clause invoked. The player decides next; selling-club consent is not required.' : null, counterFee: null, ...(clause ? { mode: 'release-clause' as const } : {}) } : null, remainingWages: quote.remainingWages, status: paid && !clause ? 'club-review' : 'pending', respondedOn: null, closedOn: null, negotiationId: null, chosenOfferId: null, reason: null };
     return { ...state, recruitment: { ...state.recruitment, events: [...state.recruitment.events, { ...event }], offers: [...state.recruitment.offers.map(item => item.id === previous?.id ? { ...item, status: 'replaced' as const, closedOn: state.date } : item), offer] } };
   }
   if (event.type === 'withdraw') {
@@ -119,26 +122,27 @@ export function applyInSeasonEvent(state: SeasonState, event: InSeasonEvent): Se
     const proposals = due.filter(offer => offer.playerId === playerId);
     const valid: InSeasonOffer[] = [];
     for (const offer of proposals) {
-      const quote = offer.transfer ? quoteInSeasonTransferOffer(next, offer.playerId, offer.seasonWage, offer.seasons, offer.transfer.fee, offer.clubId, offer.transfer.paymentPlan, offer.id) : quoteInSeasonOffer(next, offer.playerId, offer.seasonWage, offer.clubId, offer.id);
+      const options: ContractOfferOptions = { ...(offer.releaseFee === undefined ? {} : { releaseFee: offer.releaseFee }), ...(offer.transfer?.mode ? { transferMode: offer.transfer.mode } : {}) };
+      const quote = offer.transfer ? quoteInSeasonTransferOffer(next, offer.playerId, offer.seasonWage, offer.seasons, offer.transfer.fee, offer.clubId, offer.transfer.paymentPlan, offer.id, options) : quoteInSeasonOffer(next, offer.playerId, offer.seasonWage, offer.clubId, offer.id, options);
       if (quote.canOffer) valid.push(offer);
       else next = replaceOffers(next, next.recruitment.offers.map(item => item.id === offer.id ? { ...item, status: 'cancelled', respondedOn: next.date, closedOn: next.date, reason: quote.reason } : item));
     }
-    const chosen = valid.filter(offer => evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons).outcome === 'accepted').sort(compareOffers)[0];
+    const chosen = valid.filter(offer => evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee).outcome === 'accepted').sort(compareOffers)[0];
     if (chosen) {
       const contractCountBefore = next.employment.contracts.length;
-      const contract: EmploymentContract = { id: `employment-contract-${contractCountBefore + 1}`, playerId, clubId: chosen.clubId, startsSeason: next.seasonNumber, startsRound: next.round, endsSeason: next.seasonNumber + chosen.seasons - 1, seasonWage: chosen.seasonWage, signedSeason: next.seasonNumber, signedRound: next.round, kind: chosen.transfer ? 'midseason-transfer' : 'midseason' };
-      const transfer: EmploymentTransfer | null = chosen.transfer ? { id: `employment-transfer-${next.employment.transfers.length + 1}`, offerId: chosen.id, playerId, fromClubId: chosen.transfer.sellerClubId, toClubId: chosen.clubId, seasonNumber: next.seasonNumber, completedOn: next.date, startsSeason: next.seasonNumber, startsRound: next.round, fee: chosen.transfer.fee, releasedContractIds: getInSeasonReleasedContractIds(next, playerId, chosen.transfer.sellerClubId), contractId: contract.id, paymentPlan: chosen.transfer.paymentPlan, installments: getTransferPaymentSchedule(chosen.transfer.fee, chosen.transfer.paymentPlan, next.date, next.seasonNumber, next.round), payments: [] } : null;
+      const contract: EmploymentContract = { id: `employment-contract-${contractCountBefore + 1}`, playerId, clubId: chosen.clubId, startsSeason: next.seasonNumber, startsRound: next.round, endsSeason: next.seasonNumber + chosen.seasons - 1, seasonWage: chosen.seasonWage, signedSeason: next.seasonNumber, signedRound: next.round, kind: chosen.transfer ? 'midseason-transfer' : 'midseason', ...(chosen.releaseFee === undefined ? {} : { releaseFee: chosen.releaseFee }) };
+      const transfer: EmploymentTransfer | null = chosen.transfer ? { id: `employment-transfer-${next.employment.transfers.length + 1}`, offerId: chosen.id, playerId, fromClubId: chosen.transfer.sellerClubId, toClubId: chosen.clubId, seasonNumber: next.seasonNumber, completedOn: next.date, startsSeason: next.seasonNumber, startsRound: next.round, fee: chosen.transfer.fee, releasedContractIds: getInSeasonReleasedContractIds(next, playerId, chosen.transfer.sellerClubId), contractId: contract.id, paymentPlan: chosen.transfer.paymentPlan, installments: getTransferPaymentSchedule(chosen.transfer.fee, chosen.transfer.paymentPlan, next.date, next.seasonNumber, next.round), payments: [], ...(chosen.transfer.mode ? { mode: chosen.transfer.mode } : {}) } : null;
       next = { ...next, employment: { ...next.employment, contracts: [...next.employment.contracts, contract] } };
       if (transfer) next = { ...next, employment: { ...next.employment, transfers: [...next.employment.transfers, transfer] } };
       next = addInSeasonWageAgreement(next, contract);
       if (transfer) next = recordTransferFee(next, transfer);
-      next = appendNegotiationResponse(next, chosen.clubId, playerId, chosen.seasonWage, chosen.seasons, evaluateNegotiation(playerId, chosen.seasonWage, chosen.seasons), contract.id, contractCountBefore, next.seasonNumber);
+      next = appendNegotiationResponse(next, chosen.clubId, playerId, chosen.seasonWage, chosen.seasons, evaluateNegotiation(playerId, chosen.seasonWage, chosen.seasons, chosen.releaseFee), contract.id, contractCountBefore, next.seasonNumber, chosen.releaseFee);
       const negotiationId = next.negotiations.records.at(-1)!.id;
       next = replaceOffers(next, next.recruitment.offers.map(offer => offer.id === chosen.id ? { ...offer, status: 'accepted', respondedOn: next.date, closedOn: next.date, negotiationId } : offer.playerId === playerId && offer.seasonNumber === next.seasonNumber && isLiveInSeasonOffer(offer) ? { ...offer, status: 'lost', respondedOn: next.date, closedOn: next.date, chosenOfferId: chosen.id, reason: 'The player accepted another club\'s offer.' } : offer));
       arrivals.push(contract);
     } else for (const offer of valid) {
-      const decision = evaluateNegotiation(playerId, offer.seasonWage, offer.seasons);
-      next = appendNegotiationResponse(next, offer.clubId, playerId, offer.seasonWage, offer.seasons, decision, null, next.employment.contracts.length, next.seasonNumber);
+      const decision = evaluateNegotiation(playerId, offer.seasonWage, offer.seasons, offer.releaseFee);
+      next = appendNegotiationResponse(next, offer.clubId, playerId, offer.seasonWage, offer.seasons, decision, null, next.employment.contracts.length, next.seasonNumber, offer.releaseFee);
       const negotiationId = next.negotiations.records.at(-1)!.id;
       next = replaceOffers(next, next.recruitment.offers.map(item => item.id === offer.id ? { ...item, status: decision.outcome === 'countered' ? 'countered' : 'rejected', respondedOn: next.date, closedOn: next.date, negotiationId, reason: negotiationReasonText(decision) } : item));
     }
@@ -146,11 +150,12 @@ export function applyInSeasonEvent(state: SeasonState, event: InSeasonEvent): Se
   return registerInSeasonArrivals(next, arrivals);
 }
 
-export function submitInSeasonOffer(state: SeasonState, playerId: string, seasonWage: number, clubId = state.managedClubId): SeasonState {
+export function submitInSeasonOffer(state: SeasonState, playerId: string, seasonWage: number, clubId = state.managedClubId, options: ContractOfferOptions = {}): SeasonState {
   requirePreparedBoundary(state);
+  const reason = offerOptionsReason(state, options, false); if (reason) throw new Error(reason);
   const previous = getInSeasonOffers(state, clubId, true).find(offer => offer.playerId === playerId);
-  if (previous?.seasonWage === seasonWage && !previous.transfer) return state;
-  return applyInSeasonEvent(state, { ...eventAnchor(state), type: 'offer', id: `inseason-offer-${state.recruitment.offers.length + 1}`, clubId, playerId, seasonWage });
+  if (previous?.seasonWage === seasonWage && previous.releaseFee === options.releaseFee && !previous.transfer) return state;
+  return applyInSeasonEvent(state, { ...eventAnchor(state), type: 'offer', id: `inseason-offer-${state.recruitment.offers.length + 1}`, clubId, playerId, seasonWage, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) });
 }
 
 export function enableInSeasonTransfers(state: SeasonState): SeasonState {
@@ -159,11 +164,12 @@ export function enableInSeasonTransfers(state: SeasonState): SeasonState {
   return scheduleInSeasonRecruitment(next);
 }
 
-export function submitInSeasonTransferOffer(state: SeasonState, playerId: string, seasonWage: number, seasons: number, fee: number, clubId = state.managedClubId, paymentPlan: TransferPaymentPlan = 'upfront'): SeasonState {
+export function submitInSeasonTransferOffer(state: SeasonState, playerId: string, seasonWage: number, seasons: number, fee: number, clubId = state.managedClubId, paymentPlan: TransferPaymentPlan = 'upfront', options: ContractOfferOptions = {}): SeasonState {
   requirePreparedBoundary(state);
+  const reason = offerOptionsReason(state, options, true); if (reason) throw new Error(reason);
   const previous = getInSeasonOffers(state, clubId, true).find(offer => offer.playerId === playerId);
-  if (previous?.transfer && previous.seasonWage === seasonWage && previous.seasons === seasons && previous.transfer.fee === fee && previous.transfer.paymentPlan === paymentPlan) return state;
-  const next = applyInSeasonEvent(state, { ...eventAnchor(state), type: 'offer', id: `inseason-offer-${state.recruitment.offers.length + 1}`, clubId, playerId, seasonWage, seasons, transferFee: fee, transferPaymentPlan: paymentPlan });
+  if (previous?.transfer && previous.seasonWage === seasonWage && previous.seasons === seasons && previous.releaseFee === options.releaseFee && (previous.transfer.mode ?? 'negotiated') === (options.transferMode ?? 'negotiated') && previous.transfer.fee === fee && previous.transfer.paymentPlan === paymentPlan) return state;
+  const next = applyInSeasonEvent(state, { ...eventAnchor(state), type: 'offer', id: `inseason-offer-${state.recruitment.offers.length + 1}`, clubId, playerId, seasonWage, seasons, transferFee: fee, transferPaymentPlan: paymentPlan, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }), ...(options.transferMode === 'release-clause' ? { transferMode: 'release-clause' } : {}) });
   return reviewAutomaticTransfers(next);
 }
 
@@ -225,9 +231,14 @@ export function scheduleInSeasonRecruitment(state: SeasonState): SeasonState {
       const player = candidates.find(player => quoteInSeasonOffer(next, player.id, getSeasonWage(player.id), club.id).canOffer);
       if (player) { next = submitInSeasonOffer(next, player.id, getSeasonWage(player.id), club.id); continue; }
       if (!next.recruitment.transfersEnabledSince) break;
-      const paid = [...getInSeasonTransferCandidates(next, club.id)].filter(candidate => !pending.some(offer => offer.playerId === candidate.id) && !next.injuries.some(injury => injury.playerId === candidate.id && isRecovering(injury, responseOn))).sort((left, right) => (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || assessed(right.id) - assessed(left.id) || left.id.localeCompare(right.id, 'en')).find(candidate => quoteInSeasonTransferOffer(next, candidate.id, getSeasonWage(candidate.id), 1, requiredInSeasonTransferFee(next, candidate.id), club.id).canOffer);
+      const approach = (id: string): { fee: number; options: ContractOfferOptions } => {
+        const asking = requiredInSeasonTransferFee(next, id), clause = getApplicableReleaseClause(next, id);
+        return clause.canTrigger && clause.fee! <= asking && quoteInSeasonTransferOffer(next, id, getSeasonWage(id), 1, clause.fee!, club.id, 'upfront', undefined, { transferMode: 'release-clause' }).canOffer ? { fee: clause.fee!, options: { transferMode: 'release-clause' } } : { fee: asking, options: {} };
+      };
+      const paid = [...getInSeasonTransferCandidates(next, club.id)].filter(candidate => !pending.some(offer => offer.playerId === candidate.id) && !next.injuries.some(injury => injury.playerId === candidate.id && isRecovering(injury, responseOn))).sort((left, right) => (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || assessed(right.id) - assessed(left.id) || left.id.localeCompare(right.id, 'en')).find(candidate => { const terms = approach(candidate.id); return quoteInSeasonTransferOffer(next, candidate.id, getSeasonWage(candidate.id), 1, terms.fee, club.id, 'upfront', undefined, terms.options).canOffer; });
       if (!paid) break;
-      next = submitInSeasonTransferOffer(next, paid.id, getSeasonWage(paid.id), 1, requiredInSeasonTransferFee(next, paid.id), club.id);
+      const terms = approach(paid.id);
+      next = submitInSeasonTransferOffer(next, paid.id, getSeasonWage(paid.id), 1, terms.fee, club.id, 'upfront', terms.options);
     }
   }
   return next;

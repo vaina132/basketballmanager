@@ -15,7 +15,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'aegean-waves';
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
-const envelope = (state: unknown, formatVersion = 19) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 22) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const office = (state: SeasonState) => state.scouting.clubs[clubId]!;
 const firstPositive = (state: SeasonState): ScoutingReview => office(state).reviews.find(review => review.outcome === 'observed')!;
 
@@ -148,7 +148,7 @@ describe('scouting save validation', () => {
     const source = Object.values(state.scouting.clubs).flatMap(club => club.reviews).find(review => review.clubId !== clubId && !reports.some(existing => existing.playerId === review.playerId));
     expect(source).toBeDefined();
     reports.push(structuredClone(source!));
-    expect(() => validateSeasonState(state)).toThrow(/two-assignment/);
+    expect(() => validateSeasonState(state)).toThrow(/two baseline observations/);
   });
 
   it('rejects current rosters replacing the recorded origin of moved-player observations', () => {

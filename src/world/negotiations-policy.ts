@@ -1,30 +1,35 @@
 import type { NegotiationDecision, NegotiationTerms } from '../domain/negotiations';
 import { getSeasonWage } from '../data/development-wages';
+import { releaseFeeReason } from './release-clauses';
 
 const WAGE_STEP = 50_000;
 export const NEGOTIATION_TERM_PREMIUMS = [0, 5, 10] as const;
+export const RELEASE_CLAUSE_PREMIUM_CAP = 5;
 
 /** Uniform development contract rule, independent of hidden abilities or invented preferences. */
-export function requiredNegotiationWage(playerId: string, seasons: number): number {
+export function requiredNegotiationWage(playerId: string, seasons: number, releaseFee?: number): number {
   if (!Number.isInteger(seasons) || seasons < 1 || seasons > 3) throw new Error('Choose a contract lasting one to three seasons.');
   const base = getSeasonWage(playerId);
-  return Math.ceil(base * (100 + NEGOTIATION_TERM_PREMIUMS[seasons - 1]!) / (100 * WAGE_STEP)) * WAGE_STEP;
+  const clauseReason = releaseFeeReason(releaseFee);
+  if (clauseReason) throw new Error(clauseReason);
+  const premium = releaseFee === undefined ? NEGOTIATION_TERM_PREMIUMS[seasons - 1]! : Math.min(RELEASE_CLAUSE_PREMIUM_CAP, NEGOTIATION_TERM_PREMIUMS[seasons - 1]!);
+  return Math.ceil(base * (100 + premium) / (100 * WAGE_STEP)) * WAGE_STEP;
 }
 
-export function getNegotiationDemands(playerId: string): { baseWage: number; terms: NegotiationTerms[] } {
-  return { baseWage: getSeasonWage(playerId), terms: [1, 2, 3].map(seasons => ({ seasons, seasonWage: requiredNegotiationWage(playerId, seasons) })) };
+export function getNegotiationDemands(playerId: string, releaseFee?: number): { baseWage: number; terms: NegotiationTerms[] } {
+  return { baseWage: getSeasonWage(playerId), terms: [1, 2, 3].map(seasons => ({ seasons, seasonWage: requiredNegotiationWage(playerId, seasons, releaseFee), ...(releaseFee === undefined ? {} : { releaseFee }) })) };
 }
 
-export function evaluateNegotiation(playerId: string, seasonWage: number, seasons: number): NegotiationDecision {
-  const base = getSeasonWage(playerId), requiredWage = requiredNegotiationWage(playerId, seasons);
+export function evaluateNegotiation(playerId: string, seasonWage: number, seasons: number, releaseFee?: number): NegotiationDecision {
+  const base = getSeasonWage(playerId), requiredWage = requiredNegotiationWage(playerId, seasons, releaseFee);
   if (!Number.isInteger(seasonWage) || seasonWage < 500_000 || seasonWage > 5_000_000 || seasonWage % WAGE_STEP !== 0) throw new Error('Choose a valid annual wage in €500 steps.');
   if (seasonWage >= requiredWage) return { outcome: 'accepted', reason: 'terms-met', requiredWage, counterOffer: null, alternativeOffer: null };
   if (seasonWage * 4 < base * 3) return { outcome: 'rejected', reason: 'far-below-demand', requiredWage, counterOffer: null, alternativeOffer: null };
   let alternativeOffer: NegotiationTerms | null = null;
-  for (let shorter = seasons - 1; shorter >= 1; shorter -= 1) if (seasonWage >= requiredNegotiationWage(playerId, shorter)) {
-    alternativeOffer = { seasonWage, seasons: shorter }; break;
+  for (let shorter = seasons - 1; shorter >= 1; shorter -= 1) if (seasonWage >= requiredNegotiationWage(playerId, shorter, releaseFee)) {
+    alternativeOffer = { seasonWage, seasons: shorter, ...(releaseFee === undefined ? {} : { releaseFee }) }; break;
   }
-  return { outcome: 'countered', reason: seasonWage >= base ? 'term-premium' : 'below-demand', requiredWage, counterOffer: { seasonWage: requiredWage, seasons }, alternativeOffer };
+  return { outcome: 'countered', reason: seasonWage >= base ? 'term-premium' : 'below-demand', requiredWage, counterOffer: { seasonWage: requiredWage, seasons, ...(releaseFee === undefined ? {} : { releaseFee }) }, alternativeOffer };
 }
 
 export function negotiationReasonText(decision: NegotiationDecision): string {

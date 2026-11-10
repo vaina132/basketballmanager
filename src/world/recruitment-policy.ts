@@ -1,4 +1,5 @@
 import type { InSeasonBudget, InSeasonOffer, InSeasonOfferQuote } from '../domain/recruitment';
+import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import { DEVELOPMENT_PLAYERS } from '../data/development-players';
@@ -7,6 +8,7 @@ import { getFinanceBalance } from './finance';
 import { getSpendableCash, payrollInstallment } from './payroll-policy';
 import { dateForRound, SEASON_ROUNDS } from './season';
 import { getTransferPaymentSummary } from './transfer-payments';
+import { offerOptionsReason } from './release-clauses';
 
 export const IN_SEASON_EVENT_LIMIT = 20_000;
 
@@ -37,7 +39,7 @@ export function getInSeasonBudget(state: SeasonState, clubId = state.managedClub
 }
 
 /** One rest-of-season proposal; the current prepared match remains unchanged. */
-export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonWage: number, clubId = state.managedClubId, resolvingOfferId?: string): InSeasonOfferQuote {
+export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonWage: number, clubId = state.managedClubId, resolvingOfferId?: string, options: ContractOfferOptions = {}): InSeasonOfferQuote {
   const player = DEVELOPMENT_PLAYERS.find(candidate => candidate.id === playerId);
   const own = getInSeasonOffers(state, clubId, true).find(offer => offer.playerId === playerId);
   const resolving = !!resolvingOfferId && own?.id === resolvingOfferId && own.responseRound === state.round && own.responseOn === state.date;
@@ -50,6 +52,7 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   if (!state.recruitment?.enabledSince) reason = 'Enable in-season recruitment before approaching free agents.';
   else if (!state.employment.enabledSince || !state.finance.enabledSince || !state.payroll.enabledSince || !state.negotiations.enabledSince) reason = 'Enable player contracts, finances, payroll and negotiations before approaching free agents.';
   else if (!player || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a player and a club in this league.';
+  else if (offerOptionsReason(state, options, false)) reason = offerOptionsReason(state, options, false);
   else if (state.status !== 'active') reason = 'Use the offseason market after the final matchday.';
   else if (state.round >= SEASON_ROUNDS && !resolving) reason = 'There is no later matchday available to register a new player this season.';
   else if (!validWage) reason = 'Choose an annual salary from EUR 5,000 to EUR 50,000 in EUR 500 steps.';
@@ -59,7 +62,7 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   else if (budget.rosterSize + budget.reservedRosterSize + 1 > MAX_ROSTER_SIZE) reason = 'The squad already has twelve registered players or reserved places.';
   else if (budget.seasonWages + budget.reservedWages + seasonWage > EMPLOYMENT_BUDGET) reason = 'This offer exceeds the current season player salary budget.';
   else if (budget.spendableCash < remainingWages) reason = 'The remaining salary exceeds the available budget after existing commitments.';
-  return { playerId, clubId, seasonWage, remainingWages, responseRound, responseOn, remainingBudgetAfter: Math.max(0, budget.spendableCash - remainingWages), annualBudgetRemaining: Math.max(0, EMPLOYMENT_BUDGET - budget.seasonWages - budget.reservedWages - (validWage ? seasonWage : 0)), rosterSize: budget.rosterSize + budget.reservedRosterSize + 1, canOffer: reason === null, reason };
+  return { playerId, clubId, seasonWage, remainingWages, responseRound, responseOn, remainingBudgetAfter: Math.max(0, budget.spendableCash - remainingWages), annualBudgetRemaining: Math.max(0, EMPLOYMENT_BUDGET - budget.seasonWages - budget.reservedWages - (validWage ? seasonWage : 0)), rosterSize: budget.rosterSize + budget.reservedRosterSize + 1, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
 }
 
 export function getInSeasonCandidates(state: SeasonState): readonly Player[] {

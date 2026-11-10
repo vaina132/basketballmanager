@@ -4,8 +4,10 @@ import type { PlayerAttributes, Team } from '../domain/types';
 import { isRecovering } from './health';
 import type { SeasonCoaching } from '../domain/coaching';
 import type { RosterSnapshot } from '../domain/roster';
+import type { SeasonFitness } from '../domain/fitness';
 import { coachingAssignments, coachingRatingForAttribute } from './coaching';
 import { createRosterSnapshots, rosterForRound } from './rosters';
+import { fitnessAssignments } from './fitness-policy';
 
 export const TRAINING_ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 export const TRAINING_FOCUSES = ['balanced', ...TRAINING_ATTRIBUTES] as const;
@@ -97,6 +99,7 @@ export interface TrainingWeekInput {
   toDate: string;
   coaching?: SeasonCoaching;
   rosters?: readonly RosterSnapshot[];
+  fitness?: SeasonFitness;
 }
 
 /** One authoritative weekly pass updates every club; it consumes no match RNG. */
@@ -109,8 +112,9 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
   const dates = trainingDates(fromDate, toDate);
   const nextConditions = { ...conditions }, nextPoints = { ...training.points };
   const appliedCoaching = input.coaching ? coachingAssignments(input.coaching, clubs, seasonNumber, afterRound) : null;
+  const appliedFitness = input.fitness ? fitnessAssignments(input.fitness, clubs, seasonNumber, afterRound) : null;
   const rosters = input.rosters ?? createRosterSnapshots(clubs, seasonNumber);
-  const report: TrainingWeekReport = { seasonNumber, afterRound, fromDate, toDate, rosterIds: {}, plans: {}, players: {}, coaching: appliedCoaching };
+  const report: TrainingWeekReport = { seasonNumber, afterRound, fromDate, toDate, rosterIds: {}, plans: {}, players: {}, coaching: appliedCoaching, ...(appliedFitness ? { fitness: appliedFitness } : {}) };
   for (const club of clubs) {
     const registered = rosterForRound(rosters, club.id, afterRound);
     const registeredIds = new Set(registered.players.map(player => player.id));
@@ -123,14 +127,18 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       const focus = individual === 'team' ? plan.focus : individual;
       const workload = WORKLOAD[plan.intensity], conditionBefore = conditions[player.id]!;
       if (!Number.isFinite(conditionBefore) || conditionBefore < 35 || conditionBefore > 100) throw new Error('Training needs valid post-match condition for every player.');
-      let condition = conditionBefore, budget = 0, availableDays = 0;
+      const fitness = appliedFitness?.[club.id];
+      let condition = conditionBefore, conditionWithoutCoach = conditionBefore, budget = 0, availableDays = 0;
       for (const date of dates) {
         const available = !injuries.some(injury => injury.playerId === player.id && isRecovering(injury, date));
         if (available) {
           availableDays += 1;
           budget += condition < 70 ? Math.floor(workload.points / 2) : workload.points;
         }
-        condition = Math.max(35, Math.min(100, Math.round((condition + workload.recovery - (available ? workload.cost : 0)) * 1000) / 1000));
+        const recoveryBonus = available ? fitness?.recoveryPerDay ?? 0 : 0;
+        const practiceCost = available ? workload.cost * (1 - (fitness?.practiceCostReductionPercent ?? 0) / 100) : 0;
+        condition = Math.max(35, Math.min(100, Math.round((condition + workload.recovery + recoveryBonus - practiceCost) * 1000) / 1000));
+        conditionWithoutCoach = Math.max(35, Math.min(100, Math.round((conditionWithoutCoach + workload.recovery - (available ? workload.cost : 0)) * 1000) / 1000));
       }
       const desired = emptyPoints(), gains = emptyPoints(), coachingGains = emptyPoints(), previous = training.points[player.id];
       if (focus === 'balanced') {
@@ -157,7 +165,7 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       }
       nextConditions[player.id] = condition;
       nextPoints[player.id] = progress;
-      report.players[player.id] = { focus, intensity: plan.intensity, availableDays, conditionBefore, conditionAfter: condition, gains, coachingGains };
+      report.players[player.id] = { focus, intensity: plan.intensity, availableDays, conditionBefore, conditionAfter: condition, gains, coachingGains, ...(appliedFitness ? { fitness: { conditionWithoutCoach, conditionBenefit: Math.round((condition - conditionWithoutCoach) * 1000) / 1000 } } : {}) };
     }
   }
   return { training: { ...training, points: nextPoints, lastWeek: report }, conditions: nextConditions };

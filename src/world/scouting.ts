@@ -3,7 +3,7 @@ import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
 import { getDevelopmentPlayer } from '../data/development-players';
 import { rosterForRound } from './rosters';
-import { getPlayerKnowledge, quoteScoutingAssignment, SCOUTING_CAPACITY, scoutingActualAttributes } from './scouting-policy';
+import { getPlayerKnowledge, getScoutingCapacity, quoteScoutingAssignment, scoutingActualAttributes } from './scouting-policy';
 
 export function createScouting(clubs: readonly Team[], managedClubId: string): SeasonScouting {
   return { model: 'scouting-1', enabledSince: null, clubs: Object.fromEntries(clubs.map(club => [club.id, { delegated: club.id !== managedClubId, shortlist: [], assignments: [], reviews: [], squadKnowledge: {} }])) };
@@ -40,15 +40,15 @@ export function enableScouting(state: SeasonState): SeasonState {
   return prepareScoutingAssignments(refreshSquadKnowledge(enabled));
 }
 
-function assignForClub(state: SeasonState, clubId: string, playerId: string): SeasonState {
-  const quote = quoteScoutingAssignment(state, playerId, clubId);
+function assignForClub(state: SeasonState, clubId: string, playerId: string, scoutContractId?: string | null): SeasonState {
+  const quote = quoteScoutingAssignment(state, playerId, clubId, scoutContractId);
   if (!quote.canAssign) throw new Error(quote.reason!);
   const club = state.scouting.clubs[clubId]!;
-  return updateClub(state, clubId, { ...club, assignments: [...club.assignments, { playerId, seasonNumber: state.seasonNumber, round: state.round }] });
+  return updateClub(state, clubId, { ...club, assignments: [...club.assignments, { playerId, seasonNumber: state.seasonNumber, round: state.round, ...(quote.observer ? { observer: { ...quote.observer } } : {}) }] });
 }
 
-export function assignScouting(state: SeasonState, playerId: string): SeasonState {
-  return assignForClub(state, state.managedClubId, playerId);
+export function assignScouting(state: SeasonState, playerId: string, scoutContractId?: string | null): SeasonState {
+  return assignForClub(state, state.managedClubId, playerId, scoutContractId);
 }
 
 export function cancelScoutingAssignment(state: SeasonState, playerId: string): SeasonState {
@@ -96,7 +96,7 @@ export function prepareScoutingAssignments(state: SeasonState): SeasonState {
   for (const team of state.clubs) {
     const club = next.scouting.clubs[team.id]!;
     if (!club.delegated) continue;
-    while (next.scouting.clubs[team.id]!.assignments.length < SCOUTING_CAPACITY) {
+    while (next.scouting.clubs[team.id]!.assignments.length < getScoutingCapacity(next, team.id)) {
       const player = candidates(next, team.id)[0];
       if (!player) break;
       next = assignForClub(next, team.id, player.id);
@@ -131,7 +131,7 @@ export function processScoutingRound(state: SeasonState): SeasonState {
       const stats = fixture.result!.stats[assignment.playerId];
       if (!stats) throw new Error('The observed player must belong to the committed fixture roster.');
       const observed = stats.secondsPlayed > 0;
-      reviews.push({ playerId: assignment.playerId, seasonNumber: state.seasonNumber, round: state.round, date: state.date, clubId: target.id, rosterId: roster.id, outcome: observed ? 'observed' : 'no-minutes', attributes: observed ? scoutingActualAttributes(state, assignment.playerId) : null });
+      reviews.push({ playerId: assignment.playerId, seasonNumber: state.seasonNumber, round: state.round, date: state.date, clubId: target.id, rosterId: roster.id, outcome: observed ? 'observed' : 'no-minutes', attributes: observed ? scoutingActualAttributes(state, assignment.playerId) : null, ...(assignment.observer ? { observer: { ...assignment.observer } } : {}) });
     }
     if (reviews.length) next = updateClub(next, observer.id, { ...club, assignments: [], reviews: [...club.reviews, ...reviews] });
   }

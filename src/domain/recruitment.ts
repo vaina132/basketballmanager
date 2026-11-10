@@ -8,6 +8,7 @@ export interface InSeasonOffer {
   offeredOn: string;
   responseOn: string;
   seasonWage: number;
+  releaseFee?: number;
   seasons: number;
   transfer: TransferProposal | null;
   remainingWages: number;
@@ -29,7 +30,7 @@ export interface InSeasonEventAnchor {
 }
 
 export type InSeasonEvent = InSeasonEventAnchor & (
-  | { type: 'offer'; id: string; clubId: string; playerId: string; seasonWage: number; seasons?: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan }
+  | { type: 'offer'; id: string; clubId: string; playerId: string; seasonWage: number; seasons?: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan; releaseFee?: number; transferMode?: 'release-clause' }
   | { type: 'enable-transfers' }
   | { type: 'club-decision'; offerId: string; response: 'accept' | 'reject' | 'counter' }
   | { type: 'withdraw'; offerId: string }
@@ -48,6 +49,7 @@ export interface InSeasonOfferQuote {
   playerId: string;
   clubId: string;
   seasonWage: number;
+  releaseFee?: number;
   remainingWages: number;
   responseRound: number;
   responseOn: string;
@@ -73,6 +75,7 @@ import type { TransferInstallment, TransferPaymentPlan } from './transfer-paymen
 
 
 export interface InSeasonTransferQuote extends InSeasonOfferQuote {
+  transferMode?: 'release-clause';
   seasons: number;
   endsSeason: number;
   sellerClubId: string | null;

@@ -1,6 +1,7 @@
 import type { SeasonState } from '../domain/season'
 import { getPlayerHealth } from '../world/health'
 import { getFinanceBalance } from '../world/finance'
+import { getClubCashOutlook } from '../world/finance-outlook'
 import { getPayrollReserve } from '../world/payroll'
 import { getTransferPaymentSummary } from '../world/transfer-payments'
 import { getInSeasonOffers } from '../world/recruitment-policy'
@@ -92,11 +93,15 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
   }
 
   if (needsReplacement) notices.push({ key: 'replacement', title: 'Replace an unavailable player', detail: match.requiredSubstitutions.map(item => `${playerName(item.playerId, item.side)}: ${item.reason === 'injured' ? 'injured' : 'five fouls'}`).join('; '), urgent: true, action: 'Choose replacement', open: onOpenCoaching })
-  if (finances?.unpaid) notices.push({ key: 'unpaid', title: 'Outstanding club costs', detail: `${money(finances.unpaid)} unpaid. New coaching appointments are blocked until these costs are covered.`, urgent: true, action: 'Review finances', open: onOpenClub })
+  if (finances?.unpaid) notices.push({ key: 'unpaid', title: 'Outstanding club costs', detail: `${money(finances.unpaid)} unpaid. New staff appointments are blocked until these costs are covered.`, urgent: true, action: 'Review finances', open: onOpenClub })
   if (season) {
     const payments = getTransferPaymentSummary(season, season.managedClubId)
     if (payments.overdue > 0) notices.push({ key: 'transfer-arrears', title: 'Transfer payment overdue', detail: `${money(payments.overdue)} remains due. Payments are collected automatically when funds are available after protecting player salaries. Staff hires, new player offers and contract buyouts are blocked.`, urgent: true, action: 'Review payments', open: onOpenClub })
     if (payments.incomingOverdue > 0) notices.push({ key: 'transfer-receipts', title: 'Transfer income overdue', detail: `${money(payments.incomingOverdue)} is still owed by other clubs. It becomes available only when received.`, action: 'Review payments', open: onOpenClub })
+    if (finances && !finances.unpaid && !payments.overdue && finances.cash >= (wageReserve ?? 0)) {
+      const outlook = getClubCashOutlook(season)
+      if (outlook.baseline.fundingGap > 0) notices.push({ key: 'cash-outlook', title: 'Cash shortfall forecast', detail: `An estimated ${money(outlook.baseline.fundingGap)} gap on ${medicalDate(outlook.baseline.lowOn)} after scheduled costs. Review upcoming payments and ticket income.`, urgent: true, action: 'Review cash outlook', open: onOpenClub })
+    }
   }
   if (finances && wageReserve !== null && wageReserve > finances.cash) notices.push({ key: 'wage-commitments', title: 'Wage commitments exceed cash', detail: `${money(wageReserve - finances.cash)} more is needed to cover remaining scheduled wages. Future income may reduce this shortfall.`, urgent: true, action: 'Review wages', open: onOpenPayroll })
   if (injured.length) notices.push({ key: 'injuries', title: `${injured.length} injured ${injured.length === 1 ? 'player' : 'players'}`, detail: injured.map(player => { const health = season ? getPlayerHealth(season, player.id) : null; return health ? `${player.name}: expected ${medicalDate(health.returnOn)}` : player.name }).join('; '), action: 'Review squad', open: onOpenSquad })

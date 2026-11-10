@@ -1,11 +1,32 @@
-import type { PlayerKnowledge, ScoutingAssignmentQuote, ScoutingRanges } from '../domain/scouting';
+import type { PlayerKnowledge, ScoutingAssignmentQuote, ScoutingRanges, ScoutingReview } from '../domain/scouting';
 import type { SeasonState } from '../domain/season';
 import type { PlayerAttributes } from '../domain/types';
 import { DEVELOPMENT_PLAYERS, getDevelopmentPlayer } from '../data/development-players';
+import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
+import { getClubScouts, scoutEvidence } from './scout-policy';
 
 export const SCOUTING_CAPACITY = 2;
 export const MAX_KNOWLEDGE_LEVEL = 3;
 export const SCOUTING_ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
+
+export function getScoutingEvidence(review: ScoutingReview): number { return review.outcome === 'observed' ? review.observer?.evidence ?? 100 : 0; }
+
+export function getScoutingCapacity(state: SeasonState, clubId = state.managedClubId): number {
+  return SCOUTING_CAPACITY + (state.scouts.enabledSince ? getClubScouts(state, clubId).length : 0);
+}
+
+export interface ScoutingObserverOption { contractId: string | null; scoutId: string | null; name: string; evidence: number; available: boolean; reason: string | null }
+export function getScoutingObservers(state: SeasonState, clubId = state.managedClubId): ScoutingObserverOption[] {
+  const club = state.scouting.clubs[clubId];
+  const baselineUsed = (club?.assignments ?? []).filter(assignment => !assignment.observer?.contractId).length + (club?.reviews ?? []).filter(review => review.seasonNumber === state.seasonNumber && review.round === state.round && !review.observer?.contractId).length;
+  const baseline: ScoutingObserverOption = { contractId: null, scoutId: null, name: 'Club observation', evidence: 100, available: baselineUsed < SCOUTING_CAPACITY, reason: baselineUsed < SCOUTING_CAPACITY ? null : 'Both club observation slots are occupied for this matchday.' };
+  if (!state.scouts.enabledSince) return [baseline];
+  return [baseline, ...getClubScouts(state, clubId).map(contract => {
+    const scout = DEVELOPMENT_SCOUTS.find(scout => scout.id === contract.scoutId)!;
+    const busy = club?.assignments.some(assignment => assignment.observer?.scoutId === scout.id) || club?.reviews.some(review => review.seasonNumber === state.seasonNumber && review.round === state.round && review.observer?.scoutId === scout.id);
+    return { contractId: contract.id, scoutId: scout.id, name: scout.name, evidence: scoutEvidence(scout), available: !busy, reason: busy ? 'This scout already has an observation for this matchday.' : null };
+  })];
+}
 
 /** The same rating projection as training, without importing world orchestration. */
 export function scoutingActualAttributes(state: Pick<SeasonState, 'training'>, playerId: string): PlayerAttributes {
@@ -41,14 +62,16 @@ export function getPlayerKnowledge(state: SeasonState, playerId: string, clubId 
   const useOwn = own && (!review || own.date >= review.date);
   const source = useOwn ? own : review;
   if (!source?.attributes) return empty;
-  const level = (useOwn || own ? 3 : Math.min(3, reviews.length)) as 1 | 2 | 3;
+  const level = (useOwn || own ? 3 : Math.min(3, Math.floor(reviews.reduce((sum, review) => sum + getScoutingEvidence(review), 0) / 100))) as 1 | 2 | 3;
   const ageDays = Math.max(0, Math.round((Date.parse(`${state.date}T00:00:00Z`) - Date.parse(`${source.date}T00:00:00Z`)) / 86_400_000));
   return { playerId, kind: 'report', level, attributes: null, ranges: scoutingRanges(state.seed, clubId, playerId, source.attributes, level, ageDays), observedOn: source.date, observedClubId: source.clubId, ageDays, freshness: ageDays <= 28 ? 'recent' : ageDays <= 84 ? 'aging' : 'stale', source: useOwn ? 'squad' : 'observation', observations: reviews.length };
 }
 
-export function quoteScoutingAssignment(state: SeasonState, playerId: string, clubId = state.managedClubId): ScoutingAssignmentQuote {
+export function quoteScoutingAssignment(state: SeasonState, playerId: string, clubId = state.managedClubId, scoutContractId?: string | null): ScoutingAssignmentQuote {
   const club = state.scouting.clubs[clubId];
   const owner = state.clubs.find(club => club.players.some(player => player.id === playerId));
+  const observers = getScoutingObservers(state, clubId);
+  const selected = scoutContractId === undefined ? observers.filter(observer => observer.available).sort((left, right) => right.evidence - left.evidence || (left.contractId ?? '').localeCompare(right.contractId ?? '', 'en'))[0] : observers.find(observer => observer.contractId === scoutContractId);
   let reason: string | null = null;
   if (!state.scouting.enabledSince) reason = 'Enable scouting before assigning observations.';
   else if (!club || !DEVELOPMENT_PLAYERS.some(player => player.id === playerId)) reason = 'Choose a club and player in this league.';
@@ -56,9 +79,10 @@ export function quoteScoutingAssignment(state: SeasonState, playerId: string, cl
   else if (!owner) reason = 'This player needs a registered club and a scheduled match before he can be observed.';
   else if (owner.id === clubId) reason = 'Your own squad already has exact skill assessments.';
   else if (club.assignments.some(assignment => assignment.playerId === playerId)) reason = 'This player already has a pending assignment.';
-  else if (club.assignments.length >= SCOUTING_CAPACITY) reason = 'Both scouting assignments are occupied for this matchday.';
+  else if (!selected) reason = scoutContractId !== undefined && scoutContractId !== null ? 'Choose an active scout at this club.' : state.scouts.enabledSince ? 'All observation slots are occupied for this matchday.' : 'Both scouting assignments are occupied for this matchday.';
+  else if (!selected.available) reason = selected.reason;
   else if (club.reviews.some(review => review.playerId === playerId && review.seasonNumber === state.seasonNumber && review.round === state.round)) reason = 'This player has already been reviewed on this matchday.';
-  return { playerId, clubId, canAssign: reason === null, reason };
+  return { playerId, clubId, canAssign: reason === null, reason, ...(state.scouts.enabledSince && selected ? { observer: { contractId: selected.contractId, scoutId: selected.scoutId, evidence: selected.evidence, assignedLedgerIndex: state.finance.ledger.length } } : {}) };
 }
 
 /** Unknown outsiders receive a neutral prior, never a peek at catalog skill ratings. */

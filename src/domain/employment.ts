@@ -6,12 +6,14 @@ export interface EmploymentContract {
   playerId: string;
   clubId: string;
   startsSeason: number;
+  /** First registered matchday in startsSeason; later covered seasons begin at round one. */
+  startsRound: number;
   endsSeason: number;
   /** Gross annual wage in euro cents. */
   seasonWage: number;
   signedSeason: number;
   signedRound: number;
-  kind: 'initial' | 'renewal' | 'free-agent' | 'transfer';
+  kind: 'initial' | 'renewal' | 'free-agent' | 'transfer' | 'midseason' | 'midseason-transfer';
 }
 
 /** Completed club sale; old agreements remain intact for historical registration and payroll. */
@@ -24,6 +26,7 @@ export interface EmploymentTransfer {
   seasonNumber: number;
   completedOn: string;
   startsSeason: number;
+  startsRound: number;
   fee: number;
   releasedContractIds: string[];
   contractId: string;

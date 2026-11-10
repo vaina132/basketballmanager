@@ -1,3 +1,4 @@
+import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import type { NegotiationRecord } from '../src/domain/negotiations';
@@ -13,7 +14,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'rhine-falcons';
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
-const envelope = (state: unknown, formatVersion = 17) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 19) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const accepted = (state: SeasonState): NegotiationRecord => state.negotiations.records.find(record => record.outcome === 'accepted')!;
 const countered = (state: SeasonState): NegotiationRecord => state.negotiations.records.find(record => record.outcome === 'countered')!;
 
@@ -41,7 +42,7 @@ describe('negotiation journal persistence', () => {
   it('round-trips rejections, counteroffers, alternative acceptance, AI offers and offseason signings', () => {
     for (const state of [initial, rejected, counter, signed, completed, recruited, second, secondWeek]) {
       const text = serializeSeason(state), restored = parseSeason(text);
-      expect(JSON.parse(text).formatVersion).toBe(17);
+      expect(JSON.parse(text).formatVersion).toBe(19);
       expect(restored).toEqual(state);
       expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
     }
@@ -88,7 +89,7 @@ describe('negotiation journal persistence', () => {
 
   it('migrates actual format 11 with transferred squads and scouting history intact, leaving negotiations disabled', () => {
     const previous = structuredClone(secondWeek) as unknown as Record<string, unknown>;
-    delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts; delete previous.market; delete previous.negotiations; previous.schemaVersion = 11;
+    stripInSeasonRecruitment(previous); delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts; delete previous.market; delete previous.negotiations; previous.schemaVersion = 11;
     const restored = parseSeason(envelope(previous, 11));
     expect(restored.negotiations).toEqual({ model: 'negotiations-1', enabledSince: null, records: [] });
     expect(restored.scouting).toEqual(secondWeek.scouting);
@@ -162,7 +163,7 @@ describe('negotiation save validation', () => {
     const state = structuredClone(second);
     const original = state.negotiations.records.find(record => record.playerId === incomingId && record.outcome === 'countered')!;
     state.negotiations.records.push({ ...structuredClone(original), id: `negotiation-${state.negotiations.records.length + 1}`, clubId: state.clubs.find(club => club.id !== clubId)!.id, contractCountBefore: state.employment.contracts.length });
-    expect(() => validateSeasonState(state)).toThrow(/ownership|overlap/);
+    expect(() => validateSeasonState(state)).toThrow(/ownership|overlap|response prefix/);
   });
 
   it('rejects a canonical counteroffer that could not legally be submitted within the club budget', () => {

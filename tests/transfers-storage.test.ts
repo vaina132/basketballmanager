@@ -1,3 +1,4 @@
+import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { getSeasonWage } from '../src/data/development-wages';
@@ -11,7 +12,7 @@ import { requiredTransferFee } from '../src/world/transfers-policy';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 const managed = 'rhine-falcons', seller = 'aegean-waves', rival = 'alpine-stags';
-const envelope = (state: unknown, formatVersion = 17) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 19) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const window = (state: SeasonState) => getMarketWindow(state)!;
 const ownOffer = (state: SeasonState) => getMarketOffers(state).find(offer => offer.transfer)!;
 const complete = (initial: SeasonState): SeasonState => {
@@ -21,7 +22,7 @@ const complete = (initial: SeasonState): SeasonState => {
 };
 function legacy14(state: SeasonState): string {
   const old = structuredClone(state) as unknown as Record<string, unknown>;
-  old.schemaVersion = 14;
+  stripInSeasonRecruitment(old); old.schemaVersion = 14;
   delete (old.employment as Record<string, unknown>).transfers; delete (old.employment as Record<string, unknown>).buyouts;
   for (const item of (old.market as { windows: Array<{ offers: Array<Record<string, unknown>> }> }).windows) for (const offer of item.offers) delete offer.transfer;
   return envelope(old, 14);
@@ -63,7 +64,7 @@ describe('paid transfer persistence and accounting', () => {
   it('round-trips club review, approval, fee counters, player selection and completed transfers', () => {
     for (const state of [opened, pending, approved, accepted, competing, decided, incoming, reviewed, rejected, countered, ready, nextYear]) {
       const text = serializeSeason(state);
-      expect(JSON.parse(text).formatVersion).toBe(17);
+      expect(JSON.parse(text).formatVersion).toBe(19);
       const restored = parseSeason(text);
       expect(restored).toEqual(state);
       expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
@@ -112,8 +113,8 @@ describe('paid transfer persistence and accounting', () => {
 
   it('preserves format14 state and decisions before allowing new paid proposals', () => {
     const restored = parseSeason(legacy14(opened));
-    expect(restored).toEqual(opened);
-    expect(submitTransferOffer(restored, target, getSeasonWage(target) + 200_000, 3, fee)).toEqual(pending);
+    expect(restored).toEqual({ ...opened, recruitment: { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] } });
+    expect(submitTransferOffer(restored, target, getSeasonWage(target) + 200_000, 3, fee)).toEqual({ ...pending, recruitment: restored.recruitment });
     expect(parseSeason(serializeSeason(restored))).toEqual(restored);
   });
 });

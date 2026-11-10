@@ -26,7 +26,7 @@ export function getTransferCandidates(state: SeasonState, clubId = state.managed
   if (!isMarketActive(state) || !isCompetitiveMarket(state)) return [];
   return DEVELOPMENT_PLAYERS.filter(player => {
     const contract = contractForSeason(state.employment, player.id, state.seasonNumber + 1);
-    return contract && contract.clubId !== clubId && !(state.employment.transfers ?? []).some(transfer => transfer.playerId === player.id && transfer.seasonNumber === state.seasonNumber);
+    return contract && contract.clubId !== clubId && !(state.employment.transfers ?? []).some(transfer => transfer.playerId === player.id && transfer.startsSeason === state.seasonNumber + 1);
   });
 }
 
@@ -37,7 +37,7 @@ export function transferOfferReason(state: SeasonState, playerId: string, fee: n
   const resolving = !!resolvingOfferId && own?.id === resolvingOfferId && own.status === 'pending' && own.responseOn === state.date;
   if (!isMarketActive(state) || !isCompetitiveMarket(state) || !window) return 'Club transfers are available during the competitive offseason.';
   if (!contract || contract.clubId === buyerId) return 'Choose a player under contract at another club for next season.';
-  if ((state.employment.transfers ?? []).some(transfer => transfer.playerId === playerId && transfer.seasonNumber === state.seasonNumber)) return 'This player has already changed clubs this offseason.';
+  if ((state.employment.transfers ?? []).some(transfer => transfer.playerId === playerId && transfer.startsSeason === state.seasonNumber + 1)) return 'This player has already changed clubs this offseason.';
   if (!TRANSFER_PAYMENT_PLANS.includes(paymentPlan)) return 'Choose a supported transfer payment plan.';
   if (!Number.isSafeInteger(fee) || fee < MIN_TRANSFER_FEE || fee > MAX_TRANSFER_FEE || fee % TRANSFER_FEE_STEP !== 0) return 'Choose a transfer fee from €1,000 to €500,000 in €1,000 steps.';
   if (resolving) {

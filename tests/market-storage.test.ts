@@ -1,3 +1,4 @@
+import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { getSeasonWage } from '../src/data/development-wages';
@@ -12,7 +13,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'rhine-falcons', playerId = 'rhf-1';
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
-const envelope = (state: unknown, formatVersion = 17) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 19) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const window = (state: SeasonState) => getMarketWindow(state)!;
 const firstOffer = (state: SeasonState) => window(state).offers.find(offer => offer.playerId === playerId)!;
 let legacy: SeasonState, opened: SeasonState, pending: SeasonState, countered: SeasonState, expired: SeasonState, withdrawn: SeasonState, replaced: SeasonState, accepted: SeasonState, ready: SeasonState, second: SeasonState, secondComplete: SeasonState;
@@ -37,7 +38,7 @@ describe('dated recruitment persistence', () => {
   it('round-trips each offer state, partial calendar, accepted wages and closed historic windows', () => {
     for (const state of [opened, pending, countered, expired, withdrawn, replaced, accepted, ready, second, secondComplete]) {
       const text = serializeSeason(state), restored = parseSeason(text);
-      expect(JSON.parse(text).formatVersion).toBe(17);
+      expect(JSON.parse(text).formatVersion).toBe(19);
       expect(restored).toEqual(state);
       expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
     }
@@ -62,9 +63,9 @@ describe('dated recruitment persistence', () => {
 
   it('migrates a real format-12 career without changing its prior immediate negotiation behavior', () => {
     const previous = structuredClone(legacy) as unknown as Record<string, unknown>;
-    delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts; delete previous.market; previous.schemaVersion = 12;
+    stripInSeasonRecruitment(previous); delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts; delete previous.market; previous.schemaVersion = 12;
     const restored = parseSeason(envelope(previous, 12));
-    expect(restored).toEqual(legacy);
+    expect(restored).toEqual({ ...legacy, recruitment: { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] } });
     expect(restored.market).toEqual({ model: 'market-1', enabledSince: null, windows: [] });
     const signed = offerPlayerContract(restored, playerId, getSeasonWage(playerId), 1);
     expect(signed.employment.contracts.length).toBe(restored.employment.contracts.length + 1);

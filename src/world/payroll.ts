@@ -1,10 +1,11 @@
 import type { ClubPayrollSummary, PlayerPayroll, PlayerWageAgreement, SeasonPayroll, WagePrepaymentQuote } from '../domain/payroll';
 import type { SeasonState } from '../domain/season';
+import type { EmploymentContract } from '../domain/employment';
 import type { Team } from '../domain/types';
 import { getSeasonWage } from '../data/development-wages';
 import { contractForSeason } from './employment-policy';
 import { getFinanceBalance, recordPayrollCharge } from './finance';
-import { agreementCommitted, getPayrollReserve, getSpendableCash, isAgreementPrepaid, PAYROLL_AUTOMATION_CUSHION, PAYROLL_INSTALLMENTS, payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from './payroll-policy';
+import { agreementCommitted, agreementThroughRound, getPayrollReserve, getSpendableCash, isAgreementPrepaid, PAYROLL_AUTOMATION_CUSHION, PAYROLL_INSTALLMENTS, payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from './payroll-policy';
 
 export { getSeasonWage } from '../data/development-wages';
 export { agreementCommitted, getPayrollReserve, getSpendableCash, isAgreementPrepaid, PAYROLL_AUTOMATION_CUSHION, PAYROLL_INSTALLMENTS, payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from './payroll-policy';
@@ -12,6 +13,15 @@ export type { ClubPayrollSummary, PlayerPayroll, WagePrepaymentQuote } from '../
 
 export function createPayroll(clubs: readonly Team[], managedClubId: string): SeasonPayroll {
   return { model: 'payroll-1', enabledSince: null, delegated: Object.fromEntries(clubs.map(club => [club.id, club.id !== managedClubId])), agreements: [] };
+}
+
+/** No opening payment: wages begin with the player's first registered matchday. */
+export function addInSeasonWageAgreement(state: SeasonState, contract: EmploymentContract): SeasonState {
+  const paid = contract.kind === 'midseason-transfer';
+  if (!state.payroll.enabledSince || !paid && contract.kind !== 'midseason' || contract.startsSeason !== state.seasonNumber || contract.startsRound !== state.round || contract.endsSeason < state.seasonNumber) throw new Error('Use the effective current-season arrival contract to start payroll.');
+  if (state.payroll.agreements.some(agreement => agreement.playerId === contract.playerId && agreement.seasonNumber === state.seasonNumber && agreementThroughRound(state, agreement) >= state.round)) throw new Error('This player already has an active wage agreement for the season.');
+  const agreement: PlayerWageAgreement = { id: `wage-s${state.seasonNumber}-${contract.playerId}${paid ? `-r${state.round}` : ''}`, playerId: contract.playerId, clubId: contract.clubId, seasonNumber: state.seasonNumber, startsRound: state.round, seasonWage: contract.seasonWage };
+  return { ...state, payroll: { ...state.payroll, agreements: [...state.payroll.agreements, agreement] } };
 }
 
 function seasonAgreements(state: SeasonState, startsRound: number): PlayerWageAgreement[] {
@@ -28,24 +38,29 @@ function installmentRecorded(state: SeasonState, clubId: string): boolean {
 
 export function getPlayerPayroll(state: SeasonState, playerId: string): PlayerPayroll | null {
   if (!state.payroll.enabledSince) return null;
-  const agreement = state.payroll.agreements.find(agreement => agreement.playerId === playerId && agreement.seasonNumber === state.seasonNumber);
-  if (!agreement) return null;
+  const agreement = state.payroll.agreements.find(agreement => agreement.playerId === playerId && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= state.round && agreementThroughRound(state, agreement) >= state.round);
+  return agreement ? agreementPayroll(state, agreement) : null;
+}
+
+function agreementPayroll(state: SeasonState, agreement: PlayerWageAgreement): PlayerPayroll {
   const items = state.finance.ledger.flatMap(entry => entry.payroll?.items.filter(item => item.agreementId === agreement.id) ?? []);
   const prepaid = isAgreementPrepaid(agreement.id, state.finance.ledger);
+  const active = agreement.startsRound <= state.round && agreementThroughRound(state, agreement) >= state.round;
   return {
     agreement, prepaid, seasonWages: agreement.seasonWage,
     charged: items.reduce((sum, item) => sum + item.amount, 0), savings: items.reduce((sum, item) => sum + item.discount, 0),
-    futureCommitted: agreementCommitted(agreement, state.finance.ledger),
-    nextInstallment: state.status === 'complete' || prepaid || installmentRecorded(state, agreement.clubId) ? 0 : payrollInstallment(agreement.seasonWage, state.round),
+    futureCommitted: agreementCommitted(agreement, state.finance.ledger, agreementThroughRound(state, agreement)),
+    nextInstallment: !active || state.status === 'complete' || prepaid || installmentRecorded(state, agreement.clubId) ? 0 : payrollInstallment(agreement.seasonWage, state.round),
   };
 }
 
 export function getClubPayrollSummary(state: SeasonState, clubId: string): ClubPayrollSummary {
   const summary: ClubPayrollSummary = { seasonWages: 0, charged: 0, futureCommitted: 0, nextInstallment: 0, savings: 0, spendableCash: getSpendableCash(state, clubId) };
   if (!state.payroll.enabledSince) return summary;
-  for (const agreement of state.payroll.agreements.filter(agreement => agreement.clubId === clubId && agreement.seasonNumber === state.seasonNumber)) {
-    const row = getPlayerPayroll(state, agreement.playerId)!;
-    summary.seasonWages += row.seasonWages; summary.charged += row.charged; summary.futureCommitted += row.futureCommitted; summary.nextInstallment += row.nextInstallment; summary.savings += row.savings;
+  for (const agreement of state.payroll.agreements.filter(agreement => agreement.clubId === clubId && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= state.round)) {
+    const row = agreementPayroll(state, agreement);
+    if (agreementThroughRound(state, agreement) >= state.round) summary.seasonWages += row.seasonWages;
+    summary.charged += row.charged; summary.futureCommitted += row.futureCommitted; summary.nextInstallment += row.nextInstallment; summary.savings += row.savings;
   }
   return summary;
 }
@@ -86,7 +101,7 @@ export function prepayWages(state: SeasonState, playerId: string): SeasonState {
 function prepareClubPayroll(state: SeasonState, clubId: string): SeasonState {
   if (!state.payroll.enabledSince || !state.payroll.delegated[clubId] || state.status === 'complete') return state;
   let next = state;
-  const agreements = state.payroll.agreements.filter(agreement => agreement.clubId === clubId && agreement.seasonNumber === state.seasonNumber).sort((a, b) => a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0);
+  const agreements = state.payroll.agreements.filter(agreement => agreement.clubId === clubId && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= state.round && agreementThroughRound(state, agreement) >= state.round).sort((a, b) => a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0);
   for (const agreement of agreements) {
     const quote = prepaymentQuote(next, agreement.playerId, clubId);
     if (quote.canPrepay && getFinanceBalance(next.finance, clubId).cash >= quote.requiredCash + PAYROLL_AUTOMATION_CUSHION) next = prepayForClub(next, agreement.playerId, clubId);
@@ -125,7 +140,7 @@ export function processPayrollRound(state: SeasonState): SeasonState {
   let next = state;
   for (const club of state.clubs) {
     const items = club.players.flatMap(player => {
-      const agreement = state.payroll.agreements.find(agreement => agreement.playerId === player.id && agreement.clubId === club.id && agreement.seasonNumber === state.seasonNumber);
+      const agreement = state.payroll.agreements.find(agreement => agreement.playerId === player.id && agreement.clubId === club.id && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= state.round && agreementThroughRound(state, agreement) >= state.round);
       if (!agreement || agreement.startsRound > state.round) throw new Error('Every player needs a current wage agreement before payroll.');
       if (isAgreementPrepaid(agreement.id, state.finance.ledger)) return [];
       const gross = payrollInstallment(agreement.seasonWage, state.round);
@@ -141,6 +156,6 @@ export function startPayrollSeason(state: SeasonState): SeasonState {
   if (!state.payroll.enabledSince) return state;
   if (state.status !== 'active' || state.round !== 1) throw new Error('Start the annual wage schedule on opening day.');
   if (state.payroll.agreements.some(agreement => agreement.seasonNumber === state.seasonNumber)) throw new Error('This season’s wage agreements already exist.');
-  if (state.payroll.agreements.some(agreement => agreement.seasonNumber < state.seasonNumber && agreementCommitted(agreement, state.finance.ledger) !== 0)) throw new Error('Record every previous season wage installment before opening the new schedule.');
+  if (state.payroll.agreements.some(agreement => agreement.seasonNumber < state.seasonNumber && agreementCommitted(agreement, state.finance.ledger, agreementThroughRound(state, agreement)) !== 0)) throw new Error('Record every previous season wage installment before opening the new schedule.');
   return { ...state, payroll: { ...state.payroll, agreements: [...state.payroll.agreements, ...seasonAgreements(state, 1)] } };
 }

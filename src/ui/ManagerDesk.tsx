@@ -3,6 +3,7 @@ import { getPlayerHealth } from '../world/health'
 import { getFinanceBalance } from '../world/finance'
 import { getPayrollReserve } from '../world/payroll'
 import { getTransferPaymentSummary } from '../world/transfer-payments'
+import { getInSeasonOffers } from '../world/recruitment-policy'
 import { getLiveMarketOffers, getMarketOffers, getMarketWindow, getNextMarketDate, isMarketActive } from '../world/market-policy'
 import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE } from '../world/employment-policy'
 import { medicalDate } from './SeasonMedicalReport'
@@ -67,6 +68,17 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
     const reports = season.scouting.clubs[season.managedClubId]!.reviews.filter(report => report.seasonNumber === season.seasonNumber && report.round === latestRound)
     if (reports.length) notices.push({ key: 'scouting', title: 'Scouting reviews available', detail: `${reports.filter(report => report.outcome === 'observed').length} skill reports from matchday ${latestRound}.${reports.some(report => report.outcome === 'no-minutes') ? ' Some targets did not play.' : ''}`, action: 'Review scouting', open: onOpenScouting })
   }
+  if (season?.recruitment.enabledSince && season.status === 'active') {
+    const latestOffers = [...new Map(getInSeasonOffers(season, season.managedClubId).map(offer => [offer.playerId, offer])).values()]
+    const arrivals = latestOffers.filter(offer => offer.status === 'accepted' && offer.respondedOn === season.date)
+    const replies = latestOffers.filter(offer => ['countered', 'rejected', 'cancelled', 'lost', 'expired'].includes(offer.status) && (offer.respondedOn ?? offer.closedOn) === season.date)
+    const incoming = getInSeasonOffers(season).filter(offer => offer.status === 'club-review' && offer.transfer?.sellerClubId === season.managedClubId)
+    if (incoming.length) notices.push({ key: 'inseason-incoming', title: `${incoming.length} incoming transfer ${incoming.length === 1 ? 'offer' : 'offers'}`, detail: 'Approve the fee, ask for your price or reject before advancing to the next matchday.', urgent: true, action: 'Review incoming offers', open: onOpenTransfers })
+    const departures = season.employment.transfers.filter(transfer => transfer.fromClubId === season.managedClubId && transfer.startsSeason === season.seasonNumber && transfer.completedOn === season.date)
+    if (departures.length) notices.push({ key: 'inseason-departures', title: `${departures.length} player ${departures.length === 1 ? 'has' : 'have'} left the squad`, detail: 'Transfers are complete. Review your lineup and available replacements.', action: 'Review squad', open: onOpenSquad })
+    if (arrivals.length) notices.push({ key: 'new-registrations', title: `${arrivals.length} ${arrivals.length === 1 ? 'player has' : 'players have'} joined the squad`, detail: arrivals.map(offer => team.players.find(player => player.id === offer.playerId)?.name ?? offer.playerId).join(', '), action: 'Review squad', open: onOpenSquad })
+    if (replies.length) notices.push({ key: 'inseason-replies', title: `${replies.length} recruitment ${replies.length === 1 ? 'reply' : 'replies'}`, detail: 'Review the latest decisions and any revised salary requests.', action: 'Review offers', open: onOpenTransfers })
+  }
   if (season?.negotiations.enabledSince) {
     const latest = new Map(season.negotiations.records.filter(record => record.clubId === season.managedClubId && record.startsSeason === season.seasonNumber + 1).map(record => [record.playerId, record]))
     const counters = market ? marketOffers.filter(offer => offer.status === 'countered' && (!offer.transfer || offer.transfer.clubStatus === 'accepted')).length : [...latest.values()].filter(record => record.outcome === 'countered' && !contractForSeason(season.employment, record.playerId, season.seasonNumber + 1)).length
@@ -83,7 +95,7 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
   if (finances?.unpaid) notices.push({ key: 'unpaid', title: 'Outstanding club costs', detail: `${money(finances.unpaid)} unpaid. New coaching appointments are blocked until these costs are covered.`, urgent: true, action: 'Review finances', open: onOpenClub })
   if (season) {
     const payments = getTransferPaymentSummary(season, season.managedClubId)
-    if (payments.overdue > 0) notices.push({ key: 'transfer-arrears', title: 'Transfer payment overdue', detail: `${money(payments.overdue)} remains due. Payments are collected automatically when funds are available after protecting player salaries. Staff hires, paid transfers and contract buyouts are blocked.`, urgent: true, action: 'Review payments', open: onOpenClub })
+    if (payments.overdue > 0) notices.push({ key: 'transfer-arrears', title: 'Transfer payment overdue', detail: `${money(payments.overdue)} remains due. Payments are collected automatically when funds are available after protecting player salaries. Staff hires, new player offers and contract buyouts are blocked.`, urgent: true, action: 'Review payments', open: onOpenClub })
     if (payments.incomingOverdue > 0) notices.push({ key: 'transfer-receipts', title: 'Transfer income overdue', detail: `${money(payments.incomingOverdue)} is still owed by other clubs. It becomes available only when received.`, action: 'Review payments', open: onOpenClub })
   }
   if (finances && wageReserve !== null && wageReserve > finances.cash) notices.push({ key: 'wage-commitments', title: 'Wage commitments exceed cash', detail: `${money(wageReserve - finances.cash)} more is needed to cover remaining scheduled wages. Future income may reduce this shortfall.`, urgent: true, action: 'Review wages', open: onOpenPayroll })
@@ -99,7 +111,7 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
   return <div className="manager-desk">
     {market && <section className="desk-market panel" aria-label="Offseason recruitment"><Icon name="calendar" size={25} /><div><h2>Build next season's squad</h2><p>{marketOffers.length} outstanding {marketOffers.length === 1 ? 'offer' : 'offers'}{nextDecision ? ` ? Next decision ${medicalDate(nextDecision)}` : ' ? Recruitment closed'}</p></div><button className="button primary" onClick={onOpenTransfers}>Review recruitment<Icon name="chevron" size={15} /></button></section>}
     <section className="desk-fixture panel" aria-label="Current fixture">
-      <div className="desk-fixture-label"><span>{complete ? 'Last match ? ' : ''}{fixtureLabel}</span><strong className={needsReplacement ? 'desk-status-urgent' : ''}>{status}</strong></div>
+      <div className="desk-fixture-label"><span>{complete ? 'Last match \u00b7 ' : ''}{fixtureLabel}</span><strong className={needsReplacement ? 'desk-status-urgent' : ''}>{status}</strong></div>
       <div className="desk-fixture-content">
         <div className="desk-fixture-team"><span className="desk-club-code" style={{ color: match.home.color }}>{match.home.shortName}</span><div><strong>{match.home.name}</strong><span>{managedSide === 'home' ? 'Home · Your team' : 'Home'}</span></div></div>
         <div className="desk-fixture-score"><strong aria-label={`Score: ${score.home} to ${score.away}`}>{score.home}<span>:</span>{score.away}</strong><span>{ready ? 'Awaiting tipoff' : complete ? match.result?.kind === 'default' ? 'Awarded by default' : `${period(match.period)} · Final` : `${period(match.period)} · ${clock(match.clockSeconds)}`}</span></div>

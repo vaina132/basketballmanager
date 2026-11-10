@@ -56,3 +56,5 @@
 .payroll-settlement>footer{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;border-top:1px solid var(--border)}
 @media(min-width:1200px){.payroll-enabled{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.payroll-enabled>*{grid-column:1/-1;min-width:0}.payroll-enabled>.payroll-overview{grid-column:1}.payroll-enabled>.payroll-policy{grid-column:2}}
 @media(max-width:650px){.payroll-heading{flex-wrap:wrap;padding:10px;gap:8px}.payroll-summary{padding:12px 10px;gap:12px}.payroll-summary dd{font-size:14px}.payroll-policy-control{padding:12px 10px}.payroll-note,.payroll-totals,.payroll-model-note{padding-inline:10px}.payroll-search{width:100%;justify-content:space-between}.payroll-search input{width:65%}.payroll-settlement-body{padding:12px 10px}.payroll-settlement>footer{padding:10px}.payroll-settlement>footer .button{flex:1;font-size:12px;padding-inline:8px}}
+
+.payroll-salary-start{display:block;margin-top:4px;color:var(--muted);font-size:12px;line-height:1.5}

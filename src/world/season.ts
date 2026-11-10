@@ -8,6 +8,7 @@ import { createTraining, developClub, processTrainingWeek } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
 import { createFinance, enableFinance, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
+import { createInSeasonRecruitment, enableInSeasonRecruitment, enableInSeasonTransfers, resolveInSeasonRecruitment, scheduleInSeasonRecruitment } from './recruitment';
 import { createPayroll, enablePayroll, preparePayrollRound, processPayrollRound, startPayrollSeason } from './payroll';
 import { validateManagerProfile } from './manager';
 import { createRosterSnapshots, getFixtureTeams, rosterForRound } from './rosters';
@@ -133,7 +134,7 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: 17, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), scouting: createScouting(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
+    schemaVersion: 19, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
     ...preparation, date: first.date, status: 'active', round: 1, fixtures,
     activeFixtureId: first.id, activeMatch: prepareMatch(preparation, first),
   };
@@ -142,7 +143,8 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
   const contracted = employmentEnabled ? enableEmployment(paid) : paid;
   const observed = scoutingEnabled ? enableScouting(contracted) : contracted;
   const negotiated = negotiationsEnabled ? enableNegotiations(observed) : observed;
-  return marketEnabled ? enableMarket(negotiated) : negotiated;
+  const marketReady = marketEnabled ? enableMarket(negotiated) : negotiated;
+  return employmentEnabled && negotiationsEnabled ? enableInSeasonTransfers(enableInSeasonRecruitment(marketReady)) : marketReady;
 }
 
 function compactResult(match: MatchState, rosterIds: FixtureResult['rosterIds']): FixtureResult {
@@ -218,10 +220,14 @@ export function advanceSeason(state: SeasonState): SeasonState {
   } else {
     for (const id of Object.keys(next.conditions)) next.conditions[id] = Math.min(100, Math.round((next.conditions[id]! + DAILY_RECOVERY * ROUND_INTERVAL_DAYS) * 1000) / 1000);
   }
+  const registeredBefore = next.rosters.length;
+  next = resolveInSeasonRecruitment(next);
   next = prepareFinanceRound(next);
   next = preparePayrollRound(next);
   next = processTransferPayments(next);
+  if (next.rosters.length !== registeredBefore) next = refreshSquadKnowledge(next);
   next = prepareScoutingAssignments(next);
+  next = scheduleInSeasonRecruitment(next);
   const fixture = next.fixtures.find(fixture => fixture.round === next.round && [fixture.homeClubId, fixture.awayClubId].includes(next.managedClubId))!;
   next.activeFixtureId = fixture.id;
   next.activeMatch = prepareMatch(next, fixture);
@@ -286,12 +292,14 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   };
   next = startFinanceSeason(next);
   next = startPayrollSeason(next);
+  next = resolveInSeasonRecruitment(next);
   next = processTransferPayments(next);
   next = renewSeasonCoaching(next, state.coaching);
   next = recruitAiCoaches(next);
   next = preparePayrollRound(next);
   next = processTransferPayments(next);
   next = prepareScoutingAssignments(refreshSquadKnowledge(next));
+  next = scheduleInSeasonRecruitment(next);
   next.activeMatch = prepareMatch(next, first);
   return next;
 }

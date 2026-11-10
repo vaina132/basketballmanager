@@ -115,7 +115,7 @@ describe('prospective negotiation activation and immutable history', () => {
     expect(() => offerPlayerContract(state, playerId, 1_800_000, 3)).toThrow(/wage budget/);
     expect(state.negotiations.records).toHaveLength(counted);
     const foreign = offerPlayerContract(create(), playerId, 1_800_000, 3);
-    const blocked: SeasonState = { ...foreign, employment: { ...foreign.employment, contracts: [...foreign.employment.contracts, { id: 'employment-contract-61', playerId, clubId: otherClubId, startsSeason: 2, endsSeason: 2, seasonWage: 1_800_000, signedSeason: 1, signedRound: 10, kind: 'free-agent' }] } };
+    const blocked: SeasonState = { ...foreign, employment: { ...foreign.employment, contracts: [...foreign.employment.contracts, { id: 'employment-contract-61', playerId, clubId: otherClubId, startsSeason: 2, startsRound: 1, endsSeason: 2, seasonWage: 1_800_000, signedSeason: 1, signedRound: 10, kind: 'free-agent' }] } };
     expect(() => offerPlayerContract(blocked, playerId, 1_800_000, 3)).toThrow(/already has a contract/);
   });
 

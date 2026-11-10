@@ -2,6 +2,7 @@ import type { SeasonState } from '../../src/domain/season';
 
 /** Recreate the actual pre-roster schema, including the archive data those versions discarded. */
 export function stripRosterHistory(state: Record<string, unknown>): void {
+  delete state.recruitment;
   delete state.market;
   delete state.negotiations;
   delete state.scouting;
@@ -14,6 +15,27 @@ export function stripRosterHistory(state: Record<string, unknown>): void {
   }
   const training = state.training as { lastWeek: Record<string, unknown> | null } | undefined;
   if (training?.lastWeek) delete training.lastWeek.rosterIds;
+}
+
+/** Pre-18 files cannot retain commands or registration fields introduced by this release. */
+export function stripInSeasonRecruitment(value: object): void {
+  const state = value as Record<string, unknown>;
+  stripInSeasonTransfers(value);
+  delete state.recruitment;
+  const employment = state.employment as { contracts?: Array<Record<string, unknown>> } | undefined;
+  for (const contract of employment?.contracts ?? []) delete contract.startsRound;
+}
+
+/** Format18 retains free-agent recruitment but has no current-season club transfers. */
+export function stripInSeasonTransfers(value: object): void {
+  const state = value as Record<string, unknown>;
+  const employment = state.employment as { transfers?: Array<Record<string, unknown>> } | undefined;
+  for (const transfer of employment?.transfers ?? []) delete transfer.startsRound;
+  const recruitment = state.recruitment as { transfersEnabledSince?: unknown; offers: Array<Record<string, unknown>> } | undefined;
+  if (recruitment) {
+    delete recruitment.transfersEnabledSince;
+    for (const offer of recruitment.offers) { delete offer.seasons; delete offer.transfer; }
+  }
 }
 
 /** Past player statistics cannot be recovered from an old-format archive. */

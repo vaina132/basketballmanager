@@ -1,3 +1,4 @@
+import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { getSeasonWage } from '../src/data/development-wages';
@@ -10,14 +11,14 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 
 const clubId = 'rhine-falcons', playerId = 'rhf-1';
 const window = (state: SeasonState) => getMarketWindow(state)!;
-const envelope = (state: unknown, formatVersion = 17) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 19) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 
 /** Reconstruct the format13 shape from a window explicitly replayed under its original rules. */
 function format13(state: SeasonState): string {
   const previous = structuredClone(state) as unknown as Record<string, unknown>;
-  previous.schemaVersion = 13;
+  stripInSeasonRecruitment(previous); previous.schemaVersion = 13;
   delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts;
   const market = previous.market as { windows: Array<Record<string, unknown>> };
   for (const oldWindow of market.windows) {
@@ -57,7 +58,7 @@ describe('competing recruitment persistence', () => {
   it('round-trips simultaneous reservations, selected offers and lost bids without changing match RNG', () => {
     for (const state of [opened, pending, resolved, counterLost, ready, second]) {
       const text = serializeSeason(state), restored = parseSeason(text);
-      expect(JSON.parse(text).formatVersion).toBe(17);
+      expect(JSON.parse(text).formatVersion).toBe(19);
       expect(restored).toEqual(state);
       expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
     }
@@ -95,7 +96,7 @@ describe('competing recruitment persistence', () => {
 
   it('preserves format13 pending offer rules until every old proposal has resolved', () => {
     const restored = parseSeason(format13(legacyPending));
-    expect(restored.schemaVersion).toBe(17);
+    expect(restored.schemaVersion).toBe(19);
     expect(window(restored).competitionFromEvent).toBeNull();
     expect(window(restored).offers).toEqual(window(legacyPending).offers);
     expect(restored.negotiations).toEqual(legacyPending.negotiations);

@@ -39,7 +39,7 @@ beforeAll(() => {
 describe('training-aware season saves', () => {
   it.each([true, false])('round-trips format 8 with training enabled=%s', enabled => {
     const season = createSeason(7, clubId, 'off', enabled, false, false), text = serializeSeason(season);
-    expect(JSON.parse(text).formatVersion).toBe(17);
+    expect(JSON.parse(text).formatVersion).toBe(19);
     expect(restore(season)).toEqual(season);
     expect(season.training.enabledSince !== null).toBe(enabled);
   });

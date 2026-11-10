@@ -9,6 +9,7 @@ import type { SeasonEmployment } from './employment';
 import type { SeasonScouting } from './scouting';
 import type { SeasonNegotiations } from './negotiations';
 import type { SeasonMarket } from './market';
+import type { SeasonRecruitment } from './recruitment';
 
 export interface ClubPlan {
   tactics: Tactics;
@@ -62,7 +63,7 @@ export interface SeasonArchive {
 }
 
 export interface SeasonState {
-  schemaVersion: 17;
+  schemaVersion: 19;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;
@@ -87,6 +88,7 @@ export interface SeasonState {
   scouting: SeasonScouting;
   negotiations: SeasonNegotiations;
   market: SeasonMarket;
+  recruitment: SeasonRecruitment;
   fixtures: SeasonFixture[];
   activeFixtureId: string;
   activeMatch: MatchState;

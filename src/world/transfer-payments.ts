@@ -12,13 +12,14 @@ export function paymentPlanLabel(plan: TransferPaymentPlan): string {
 }
 
 /** Frozen dates use the real development calendar; the final portion owns rounding cents. */
-export function getTransferPaymentSchedule(fee: number, plan: TransferPaymentPlan, completedOn: string, startsSeason: number): TransferInstallment[] {
+export function getTransferPaymentSchedule(fee: number, plan: TransferPaymentPlan, completedOn: string, startsSeason: number, startsRound = 1): TransferInstallment[] {
   if (!Number.isSafeInteger(fee) || fee < 4 || !TRANSFER_PAYMENT_PLANS.includes(plan)) throw new Error('Choose a valid transfer fee and payment plan.');
   if (plan === 'upfront') return [{ dueOn: completedOn, amount: fee }];
+  const paymentSeason = startsSeason + (startsRound > 1 ? 1 : 0);
   const first = Math.floor(fee / 2);
-  if (plan === 'two-payments') return [{ dueOn: completedOn, amount: first }, { dueOn: dateForRound(1, startsSeason), amount: fee - first }];
+  if (plan === 'two-payments') return [{ dueOn: completedOn, amount: first }, { dueOn: dateForRound(1, paymentSeason), amount: fee - first }];
   const second = Math.floor(fee / 4);
-  return [{ dueOn: completedOn, amount: first }, { dueOn: dateForRound(1, startsSeason), amount: second }, { dueOn: dateForRound(6, startsSeason), amount: fee - first - second }];
+  return [{ dueOn: completedOn, amount: first }, { dueOn: dateForRound(1, paymentSeason), amount: second }, { dueOn: dateForRound(6, paymentSeason), amount: fee - first - second }];
 }
 
 /** Pre-format-16 records were paid fully on completion. */

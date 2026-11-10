@@ -1,3 +1,4 @@
+import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { getSeasonWage } from '../src/data/development-wages';
@@ -12,7 +13,7 @@ import { requiredTransferFee } from '../src/world/transfers-policy';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 const managed = 'rhine-falcons', rival = 'aegean-waves';
-const encode = (state: unknown, formatVersion = 17) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const encode = (state: unknown, formatVersion = 19) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 const finish = (initial: SeasonState) => { let state = initial; while (state.status === 'active') state = play(state); return state; };
 function settle(initial: SeasonState): SeasonState {
@@ -83,9 +84,9 @@ describe('contract buyout persistence', () => {
 
   it('migrates a genuine format16-shaped career without changing payments or funds', () => {
     const legacy = structuredClone(ready) as unknown as { schemaVersion: number; employment: Record<string, unknown> };
-    legacy.schemaVersion = 16; delete legacy.employment.buyouts;
+    stripInSeasonRecruitment(legacy); legacy.schemaVersion = 16; delete legacy.employment.buyouts;
     const restored = parseSeason(encode(legacy, 16));
-    expect(restored).toEqual(ready);
+    expect(restored).toEqual({ ...ready, recruitment: { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] } });
     expect(restored.employment.buyouts).toEqual([]);
     expect(getFinanceBalance(restored.finance, managed)).toEqual(getFinanceBalance(ready.finance, managed));
     const forged = structuredClone(legacy);

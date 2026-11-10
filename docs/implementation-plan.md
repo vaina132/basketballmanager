@@ -2,6 +2,21 @@
 
 Baseline: 5 November 2026. This is the build sequence for the confirmed design, not a promise that the entire game is implemented in one pass. All twelve domestic divisions and three European competitions remain first-release requirements.
 
+Current milestone status, 10 November 2026:
+
+| Milestone | Status | Working now / principal remaining work |
+| --- | --- | --- |
+| 1. Foundation | Complete | Deterministic domain/engine foundation, development data, tests and initial application. |
+| 2. Rules and match engine | Partial | Playable possession engine and tested rules subset; complete competition rules and statistical calibration remain. |
+| 3. Match viewer and coaching | Partial | Large court, animated actions, stamina, substitutions and tactical controls; richer movement and final presentation remain. |
+| 4. World and saves | Partial | Fictional six-club careers, rollover, history and local checkpoints; twelve real domestic divisions, three European competitions and their transitions remain. |
+| 5. Squad, training, health and staff | Partial | Squad information, training, injuries and training coaches; academy, youth coaches, wider staff roles, aging and retirement remain. |
+| 6. Scouting, recruitment and finances | Partial | Scouting, budgets, negotiations, competing bids, installments, buyouts and paid/free in-season registration; broader contract mechanics, regional scouting and the complete economy remain. |
+| 7. Facilities, business, board and career | Mostly pending | Ticket pricing and fixed sponsorship exist; facilities, academy infrastructure, commercial negotiations, board/press, dismissal and job changes remain. |
+| 8. Integrated first release | Pending | Verified opening-day player/club data, all agreed competitions, complete management modules, calibration and release acceptance remain. |
+
+The latest increment completes paid in-season transfers within the development league: selling-club decisions, next-matchday player replies, contracts covering this season plus up to two more, all three payment plans, dated roster changes and preserved wage history. This advances milestone 6 and its milestone 4 registration dependency; it does not complete either milestone. Detailed implementation and verification history follows below and in [current status](implementation-status.md).
+
 ## 1. Dependency order
 
 ```text
@@ -20,7 +35,7 @@ Design and decision record
 
 Data research and engine work can run in parallel. A small fictional dataset is a development fixture, not a replacement for the requested real-world database. Stop and expose missing coverage rather than silently relabeling fabricated players as real.
 
-### Progress on 9 November 2026
+### Progress on 10 November 2026
 
 Milestone 1 is implemented. Milestone 2 now has the `possession-3` action engine and a tested FIBA 2024 subset. Separate advances, passes, drives and shots use saved court positions and defensive matchups; earlier `rules-2` saves continue with their original engine. Milestone 3 now has animated engine-authored court scenes, pause/resume, playback speeds, reduced-motion and text-only views. Both milestones remain partial: the action model, competition overrides and statistical calibration are still being developed. The [rules matrix](design/rules-coverage.md) and [implementation status](implementation-status.md) record the exact coverage. Downloaded EuroLeague/EuroCup reference records remain separate from the exhibition.
 
@@ -58,7 +73,7 @@ Continue the visual workspace pattern in later modules: show actual identities, 
 
 The dated-offseason increment now implements a 28-day development window, next-day player replies, seven-day proposal holds, withdrawal/replacement/expiry and wage/roster reservations. The calendar advances to actual decision dates, with recoverable guards before closure and early rollover once every club has eight signed players and no open offers remain. AI and assistant recruitment submit the same pending commands; accepted replies create ordinary binding contracts. Conditions recover with elapsed days while completed match snapshots stay fixed. Format 13 replays the event journal and preserves formats 1–12 with the calendar disabled until activation. This first version reserves each player for one live proposal globally; it supplies the scheduling and reservation foundation without simulating competing bids. Final validation is tracked in [implementation status](implementation-status.md#verification-completed).
 
-The competing-offer increment adds simultaneous club bids, deterministic player choice and release of unsuccessful salary/roster holds. Acceptable due bids are compared by annual salary, contract length, current employer and a stable tie-break. AI and assistant bids use the same guards. Format 14 retains exact event replay; format-13 live offers keep their old rules until settled, then competing bids activate prospectively. The current market still lacks midseason moves, negotiated release clauses, loans and agents; age-dependent development, youth intake and retirement are also open. Real competition/data integration and match calibration continue as parallel tracks. The agreed twelve domestic divisions and three European competitions remain the first-release scope.
+The competing-offer increment adds simultaneous club bids, deterministic player choice and release of unsuccessful salary/roster holds. Acceptable due bids are compared by annual salary, contract length, current employer and a stable tie-break. AI and assistant bids use the same guards. Format 14 retains exact event replay; format-13 live offers keep their old rules until settled, then competing bids activate prospectively. Paid and free in-season moves now extend this market; negotiated release clauses, loans and agents remain unfinished; age-dependent development, youth intake and retirement are also open. Real competition/data integration and match calibration continue as parallel tracks. The agreed twelve domestic divisions and three European competitions remain the first-release scope.
 
 The paid-transfer increment adds contracted targets, seller review/approval/counters, separately reserved cash fees and a dated player decision. Acceptance atomically records both payment entries for both clubs and immutable releases of old future terms, with new employment effective on opening day. Format 15 replays transfers against historical financial/contract prefixes and migrates formats 1-14 without inventing moves. Remaining recruitment work includes loans, midseason transfers and richer clauses; broader staffing, facilities, youth and real competition/data integration remain unfinished.
 
@@ -127,7 +142,7 @@ Acceptance: each state has a named cause; workload is charged once; promises acc
 
 ## 8. Milestone 6: scouting, recruitment and finances
 
-Current foundation: ticketing and cash accounting, annual payroll, salary/term offers, expiry, offseason free-agent recruitment, delegation, atomic next-year registrations, persisted scouting observations, uncertain skill ranges, report freshness and shortlists are implemented for the fictional league. AI recruitment uses the acting club's knowledge when scouting is enabled. Salary/term negotiations now produce explainable acceptance, counteroffers or rejection. The dated offseason calendar, offer deadlines, wage/roster reservations, competing club bids, club consent, transfer installment schedules, automatic partial payments and offseason contract buyouts are now implemented. Next extend the remaining transfer systems below. These foundations do not complete this milestone's full economy, regional scouting or AI-strategy requirements.
+Current foundation: ticketing and cash accounting, annual payroll, salary/term offers, expiry, offseason free-agent recruitment, delegation, atomic next-year registrations, persisted scouting observations, uncertain skill ranges, report freshness and shortlists are implemented for the fictional league. AI recruitment uses the acting club's knowledge when scouting is enabled. Salary/term negotiations now produce explainable acceptance, counteroffers or rejection. The dated offseason calendar, offer deadlines, wage/roster reservations, competing club bids, club consent, transfer installment schedules, automatic partial payments and offseason contract buyouts are implemented. In-season free agents can now sign for the remaining season, with next-matchday replies, cash/salary/roster reservations, immutable registration history and prorated payroll. Paid in-season transfers now add club consent, up to three covered seasons, installment fees and prospective payroll stops with immutable prepaid history. Next extend the remaining contract and management systems below. These foundations do not complete this milestone's full economy, regional scouting or AI-strategy requirements.
 
 Implement knowledge maps, regional assignments, discovery, report uncertainty and freshness. Add shortlists, offers, negotiations, competing bids, contracts, loans where permitted, medicals, registration and contract expiry.
 

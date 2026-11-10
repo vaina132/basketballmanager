@@ -1,3 +1,4 @@
+import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import type { ScoutingReview } from '../src/domain/scouting';
@@ -14,7 +15,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'aegean-waves';
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
-const envelope = (state: unknown, formatVersion = 17) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 19) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const office = (state: SeasonState) => state.scouting.clubs[clubId]!;
 const firstPositive = (state: SeasonState): ScoutingReview => office(state).reviews.find(review => review.outcome === 'observed')!;
 
@@ -82,7 +83,7 @@ describe('scouting report persistence', () => {
 
   it('migrates an actual format 10 career with transfers and retains all prior state while scouting remains disabled', () => {
     const previous = structuredClone(nextYear) as unknown as Record<string, unknown>;
-    delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts; delete previous.market; delete previous.scouting; delete previous.negotiations; previous.schemaVersion = 10;
+    stripInSeasonRecruitment(previous); delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts; delete previous.market; delete previous.scouting; delete previous.negotiations; previous.schemaVersion = 10;
     const restored = parseSeason(envelope(previous, 10));
     expect(restored.scouting.enabledSince).toBeNull();
     expect(restored.employment).toEqual(nextYear.employment);

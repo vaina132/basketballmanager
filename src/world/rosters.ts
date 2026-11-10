@@ -1,6 +1,8 @@
 import type { RosterSnapshot } from '../domain/roster';
 import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
+import type { EmploymentContract } from '../domain/employment';
+import { getContractedClubsForRound } from './employment-policy';
 
 /** Capture identities once at registration; match development never rewrites them. */
 export function createRosterSnapshots(clubs: readonly Team[], seasonNumber: number): RosterSnapshot[] {
@@ -12,6 +14,37 @@ export function createRosterSnapshots(clubs: readonly Team[], seasonNumber: numb
     id: `roster-s${seasonNumber}-${club.id}-r1`, clubId: club.id, fromRound: 1,
     players: club.players.map(player => ({ ...player, attributes: { ...player.attributes } })),
   }));
+}
+
+/** Registration is one boundary operation after old-squad training and match commitment. */
+export function registerInSeasonArrivals(state: SeasonState, contracts: readonly EmploymentContract[]): SeasonState {
+  if (!contracts.length) return state;
+  if (state.status !== 'active' || contracts.some(contract => !['midseason', 'midseason-transfer'].includes(contract.kind) || contract.startsSeason !== state.seasonNumber || contract.startsRound !== state.round)) throw new Error('Register new players on their agreed matchday.');
+  const moved = state.employment.transfers.filter(transfer => contracts.some(contract => contract.id === transfer.contractId));
+  const affected = new Set([...contracts.map(contract => contract.clubId), ...moved.map(transfer => transfer.fromClubId)]);
+  const canonical = getContractedClubsForRound(state, state.seasonNumber, state.round);
+  const clubs = state.clubs.map(club => {
+    if (!affected.has(club.id)) return club;
+    const rebuilt = canonical.find(item => item.id === club.id)!;
+    const previous = new Map(club.players.map(player => [player.id, player]));
+    for (const player of club.players) {
+      const remains = rebuilt.players.find(item => item.id === player.id);
+      if (remains ? remains.number !== player.number : !moved.some(transfer => transfer.playerId === player.id && transfer.fromClubId === club.id)) throw new Error('Registration must preserve every remaining teammate and jersey number.');
+    }
+    return { ...club, players: rebuilt.players.map(player => previous.get(player.id) ?? player) };
+  });
+  const added = clubs.filter(club => affected.has(club.id)).map(club => ({ id: `roster-s${state.seasonNumber}-${club.id}-r${state.round}`, clubId: club.id, fromRound: state.round, players: club.players.map(player => ({ ...player, attributes: { ...player.attributes } })) }));
+  if (added.some(roster => state.rosters.some(existing => existing.id === roster.id))) throw new Error('This registration boundary has already been recorded.');
+  return { ...state, clubs, rosters: [...state.rosters, ...added], plans: Object.fromEntries(clubs.map(club => {
+    const plan = state.plans[club.id]!;
+    if (!affected.has(club.id)) return [club.id, plan];
+    const registered = new Set(club.players.map(player => player.id));
+    const lineup = [...new Set([...plan.lineup.filter(id => registered.has(id)), ...club.players.map(player => player.id)])].slice(0, 5);
+    return [club.id, { ...plan, lineup }];
+  })), training: { ...state.training, plans: Object.fromEntries(clubs.map(club => {
+    const plan = state.training.plans[club.id]!;
+    return [club.id, affected.has(club.id) ? { ...plan, individual: Object.fromEntries(club.players.map(player => [player.id, plan.individual[player.id] ?? 'team'])) } : plan];
+  })) } };
 }
 
 /** Resolve the registration effective at this boundary, irrespective of array order. */

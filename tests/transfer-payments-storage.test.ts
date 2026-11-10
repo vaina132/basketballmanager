@@ -1,3 +1,4 @@
+import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { getSeasonWage } from '../src/data/development-wages';
@@ -15,7 +16,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const managed = 'rhine-falcons', seller = 'aegean-waves';
 const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 const complete = (initial: SeasonState): SeasonState => { let state = initial; while (state.status === 'active') state = play(state); return state; };
-const encode = (state: unknown, formatVersion = 17) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const encode = (state: unknown, formatVersion = 19) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const settleWindow = (initial: SeasonState): SeasonState => {
   let state = initial;
   for (let attempts = 0; getMarketStartReason(state) && attempts < 35; attempts += 1) {
@@ -54,12 +55,12 @@ describe('installment transfer saves', () => {
 
   it('validates schema15 first, preserves cash history, then gives old transfers an upfront receipt', () => {
     const legacy = structuredClone(upfront) as unknown as { schemaVersion: number; employment: { transfers: Array<Record<string, unknown>> }; market: { windows: Array<{ offers: Array<{ transfer: Record<string, unknown> | null }> }> } };
-    legacy.schemaVersion = 15;
+    stripInSeasonRecruitment(legacy); legacy.schemaVersion = 15;
     delete (legacy.employment as unknown as Record<string, unknown>).buyouts;
     for (const transfer of legacy.employment.transfers) { delete transfer.paymentPlan; delete transfer.installments; delete transfer.payments; }
     for (const window of legacy.market.windows) for (const offer of window.offers) if (offer.transfer) delete offer.transfer.paymentPlan;
     const restored = parseSeason(encode(legacy, 15));
-    expect(restored).toEqual(upfront);
+    expect(restored).toEqual({ ...upfront, recruitment: { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] } });
     expect(restored.finance.ledger).toEqual(upfront.finance.ledger);
     const damaged = structuredClone(legacy);
     damaged.employment.transfers[0]!.fee = Number(damaged.employment.transfers[0]!.fee) + 100_000;

@@ -1,6 +1,7 @@
 import type { ClubContractSummary, EmploymentContract, PlayerContractQuote, SeasonEmployment } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
+import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import { DEVELOPMENT_CLUBS } from '../data/development-league';
 import { DEVELOPMENT_PLAYERS } from '../data/development-players';
 import { getSeasonWage } from '../data/development-wages';
@@ -46,7 +47,7 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
 }
 
 /** Public offers and automation share ownership, term, roster and annual-budget guards. */
-export function quotePlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number, clubId = state.managedClubId, resolvingOfferId?: string, transferFee?: number): PlayerContractQuote {
+export function quotePlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number, clubId = state.managedClubId, resolvingOfferId?: string, transferFee?: number, transferPaymentPlan: TransferPaymentPlan = 'upfront'): PlayerContractQuote {
   const player = DEVELOPMENT_PLAYERS.find(candidate => candidate.id === playerId);
   const startsSeason = state.seasonNumber + 1, endsSeason = startsSeason + seasons - 1;
   const askingWage = player ? getSeasonWage(playerId) : 0;
@@ -65,7 +66,7 @@ export function quotePlayerContract(state: SeasonState, playerId: string, season
   else if (!Number.isInteger(seasons) || seasons < 1 || seasons > MAX_CONTRACT_SEASONS || endsSeason > 7974) reason = 'Choose a contract lasting one to three supported seasons.';
   else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > MAX_CONTRACT_WAGE || seasonWage % WAGE_STEP !== 0) reason = 'Choose an annual wage from €5,000 to €50,000 in €500 steps.';
   else if (seasonWage < askingWage && !state.negotiations.enabledSince) reason = 'The player will not accept less than his asking wage.';
-  else if (paidTransfer) reason = transferOfferReason(state, playerId, transferFee, clubId, resolvingOfferId);
+  else if (paidTransfer) reason = transferOfferReason(state, playerId, transferFee, clubId, resolvingOfferId, transferPaymentPlan);
   else if (overlaps) reason = 'This player already has a contract covering the proposed seasons.';
   else if (state.status === 'active' && (current?.clubId !== clubId || current.endsSeason !== state.seasonNumber)) reason = 'During the season, renew only your own players whose contracts expire this year.';
   else if (state.status === 'complete' && state.employment.market?.seasonNumber !== startsSeason) reason = 'Open the offseason recruitment window before offering contracts.';

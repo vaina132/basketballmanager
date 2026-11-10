@@ -6,6 +6,7 @@ import { COACHES } from '../data/development-coaches'
 import { availableCoaches, coachRating, coachingCommitted, COACHING_BUDGET, getClubCoaching, MAX_COACHES } from '../world/coaching'
 import { getFinanceBalance } from '../world/finance'
 import { getPayrollReserve, getSpendableCash } from '../world/payroll'
+import { getTransferPaymentSummary } from '../world/transfer-payments'
 import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES, TRAINING_FOCUS_LABELS } from '../world/training'
 import { CoachPortrait } from './CoachPortrait'
 import { Icon } from './Icon'
@@ -70,7 +71,8 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
   const payrollEnabled = season.payroll.enabledSince !== null
   const wageReserve = getPayrollReserve(season, club.id)
   const spendable = getSpendableCash(season, club.id)
-  const staffBudget = finances ? finances.unpaid > 0 ? 0 : Math.min(allocation, spendable) : allocation
+  const overdueTransfers = getTransferPaymentSummary(season, club.id).overdue
+  const staffBudget = finances ? finances.unpaid > 0 || overdueTransfers > 0 ? 0 : Math.min(allocation, spendable) : allocation
   const available = availableCoaches(season.coaching)
   const candidates = available.filter(coach => coach.name.toLowerCase().includes(query.trim().toLowerCase())).sort((left, right) => {
     const value = sort.startsWith('rating') ? coachRating(left) - coachRating(right) : left.fee - right.fee
@@ -102,6 +104,7 @@ export function StaffWorkspace({ season, onEnable, onHire, onRelease, onAssignme
     if (contracts.length >= MAX_COACHES) return 'Release a coach to open a position.'
     if (coach.fee > allocation) return `${money(coach.fee - allocation)} above the staff hiring limit.`
     if (finances && finances.unpaid > 0) return `Settle ${money(finances.unpaid)} of unpaid costs before recruiting.`
+    if (overdueTransfers > 0) return `${money(overdueTransfers)} in transfer payments is overdue. Payments are collected automatically as funds become available.`
     if (finances && coach.fee > spendable) return `${money(coach.fee - spendable)} more available cash is needed.`
     return null
   }

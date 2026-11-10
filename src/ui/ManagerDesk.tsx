@@ -2,6 +2,7 @@ import type { SeasonState } from '../domain/season'
 import { getPlayerHealth } from '../world/health'
 import { getFinanceBalance } from '../world/finance'
 import { getPayrollReserve } from '../world/payroll'
+import { getTransferPaymentSummary } from '../world/transfer-payments'
 import { getLiveMarketOffers, getMarketOffers, getMarketWindow, getNextMarketDate, isMarketActive } from '../world/market-policy'
 import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE } from '../world/employment-policy'
 import { medicalDate } from './SeasonMedicalReport'
@@ -80,6 +81,11 @@ export function ManagerDesk({ match, season, managedSide = 'home', fixtureLabel 
 
   if (needsReplacement) notices.push({ key: 'replacement', title: 'Replace an unavailable player', detail: match.requiredSubstitutions.map(item => `${playerName(item.playerId, item.side)}: ${item.reason === 'injured' ? 'injured' : 'five fouls'}`).join('; '), urgent: true, action: 'Choose replacement', open: onOpenCoaching })
   if (finances?.unpaid) notices.push({ key: 'unpaid', title: 'Outstanding club costs', detail: `${money(finances.unpaid)} unpaid. New coaching appointments are blocked until these costs are covered.`, urgent: true, action: 'Review finances', open: onOpenClub })
+  if (season) {
+    const payments = getTransferPaymentSummary(season, season.managedClubId)
+    if (payments.overdue > 0) notices.push({ key: 'transfer-arrears', title: 'Transfer payment overdue', detail: `${money(payments.overdue)} remains due. Payments are collected automatically when funds are available after protecting player salaries. New staff hires and paid transfers are blocked.`, urgent: true, action: 'Review payments', open: onOpenClub })
+    if (payments.incomingOverdue > 0) notices.push({ key: 'transfer-receipts', title: 'Transfer income overdue', detail: `${money(payments.incomingOverdue)} is still owed by other clubs. It becomes available only when received.`, action: 'Review payments', open: onOpenClub })
+  }
   if (finances && wageReserve !== null && wageReserve > finances.cash) notices.push({ key: 'wage-commitments', title: 'Wage commitments exceed cash', detail: `${money(wageReserve - finances.cash)} more is needed to cover remaining scheduled wages. Future income may reduce this shortfall.`, urgent: true, action: 'Review wages', open: onOpenPayroll })
   if (injured.length) notices.push({ key: 'injuries', title: `${injured.length} injured ${injured.length === 1 ? 'player' : 'players'}`, detail: injured.map(player => { const health = season ? getPlayerHealth(season, player.id) : null; return health ? `${player.name}: expected ${medicalDate(health.returnOn)}` : player.name }).join('; '), action: 'Review squad', open: onOpenSquad })
   if (!complete && foulTrouble.length) notices.push({ key: 'fouls', title: 'Foul trouble', detail: foulTrouble.map(player => `${player.name} · 4 fouls`).join('; '), action: 'Manage rotation', open: onOpenCoaching })

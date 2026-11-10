@@ -1,7 +1,10 @@
+import type { TransferPaymentPlan } from './transfer-payments';
+
 export interface TransferProposal {
   sellerClubId: string;
   contractId: string;
   fee: number;
+  paymentPlan: TransferPaymentPlan;
   requiredFee: number;
   clubStatus: 'pending' | 'review' | 'accepted' | 'countered' | 'rejected';
   clubResponseOn: string;
@@ -32,7 +35,7 @@ export interface MarketOffer {
 }
 
 export type MarketEvent =
-  | { type: 'offer'; id: string; date: string; clubId: string; playerId: string; seasonWage: number; seasons: number; transferFee?: number }
+  | { type: 'offer'; id: string; date: string; clubId: string; playerId: string; seasonWage: number; seasons: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan }
   | { type: 'withdraw'; date: string; offerId: string }
   | { type: 'club-decision'; date: string; offerId: string; response: 'accept' | 'reject' | 'counter' }
   | { type: 'advance'; date: string };

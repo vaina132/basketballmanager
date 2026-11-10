@@ -8,6 +8,8 @@ import { ANNUAL_SPONSORSHIP, financeLedgerRows, forecastGate, getClubFinanceDefi
 import { dateForRound, seasonLabel } from '../world/season'
 import { getPayrollReserve, getSpendableCash } from '../world/payroll'
 import { getReservedTransferFees } from '../world/market-policy'
+import { getTransferPayments, getTransferPaymentSummary } from '../world/transfer-payments'
+import { TransferPaymentsPanel } from './TransferPaymentsPanel'
 import { Icon } from './Icon'
 import './club-workspace.css'
 
@@ -40,6 +42,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onO
   const wageReserve = getPayrollReserve(season, club.id)
   const spendable = getSpendableCash(season, club.id)
   const transferReserve = getReservedTransferFees(season, club.id)
+  const transferPayments = getTransferPaymentSummary(season, club.id)
   const plan = season.finance.plans[club.id]!
   const home = season.status === 'active' ? season.fixtures.find(fixture => fixture.homeClubId === club.id && fixture.round >= season.round && !fixture.result) : undefined
   const laterHome = season.fixtures.find(fixture => fixture.homeClubId === club.id && fixture.round > season.round && !fixture.result)
@@ -54,7 +57,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onO
 
   function entryDetail(entry: FinanceEntry): string {
     if (entry.kind === 'transfer') {
-      const transfer = season.employment.transfers.find(item => item.id === entry.sourceId)
+      const transfer = season.employment.transfers.find(item => getTransferPayments(item).some(payment => payment.id === entry.sourceId))
       if (!transfer) return 'Transfer fee'
       const buying = transfer.toClubId === club.id
       const counterpart = season.clubs.find(team => team.id === (buying ? transfer.fromClubId : transfer.toClubId))
@@ -81,7 +84,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onO
   return <div className={`club-workspace${enabled ? ' club-finances-active' : ''}`}>
     <section className="club-finance-overview panel" aria-label="Club finances">
       <header className="club-heading"><div><h2>{club.name}</h2><span>{seasonLabel(season.seasonNumber)} · <time dateTime={season.date}>{formatDate(season.date)}</time></span></div><div className="club-heading-actions"><button className="button small" onClick={onOpenPayroll} disabled={busy}>Player wages<Icon name="chevron" size={14} /></button><button className="button small" onClick={onOpenStaff} disabled={busy}>Open staff<Icon name="chevron" size={14} /></button></div></header>
-      {enabled && <details className="game-disclosure club-account-details"><summary><Icon name="wallet" size={16} />Accounts & commitments</summary><dl className="club-finance-summary"><div><dt>Bank balance</dt><dd data-finance-cash={balance.cash}>{money(balance.cash)}</dd></div><div><dt>Unpaid costs</dt><dd className={balance.unpaid > 0 ? 'club-finance-cost' : ''} data-finance-unpaid={balance.unpaid}>{money(balance.unpaid)}</dd></div><div><dt>Coaching committed</dt><dd>{money(committed)}</dd></div></dl>{payrollEnabled && <p className="club-payroll-summary"><span>Wages reserved <strong data-finance-wage-reserve={wageReserve}>{money(wageReserve)}</strong></span>{transferReserve > 0 && <span>Transfer fees reserved <strong data-finance-transfer-reserve={transferReserve}>{money(transferReserve)}</strong></span>}<span>Remaining budget <strong data-finance-spendable={spendable}>{money(spendable)}</strong></span></p>}</details>}
+      {enabled && <details className="game-disclosure club-account-details"><summary><Icon name="wallet" size={16} />Accounts & commitments</summary><dl className="club-finance-summary"><div><dt>Bank balance</dt><dd data-finance-cash={balance.cash}>{money(balance.cash)}</dd></div><div><dt>Unpaid costs</dt><dd className={balance.unpaid > 0 ? 'club-finance-cost' : ''} data-finance-unpaid={balance.unpaid}>{money(balance.unpaid)}</dd></div><div><dt>Coaching committed</dt><dd>{money(committed)}</dd></div></dl>{payrollEnabled && <p className="club-payroll-summary"><span>Wages reserved <strong data-finance-wage-reserve={wageReserve}>{money(wageReserve)}</strong></span>{transferReserve > 0 && <span>Pending transfer offers <strong data-finance-transfer-reserve={transferReserve}>{money(transferReserve)}</strong></span>}{transferPayments.outgoingRemaining > 0 && <span>Agreed fees remaining <strong data-finance-transfer-outstanding={transferPayments.outgoingRemaining}>{money(transferPayments.outgoingRemaining)}</strong></span>}<span>Remaining budget <strong data-finance-spendable={spendable}>{money(spendable)}</strong></span></p>}</details>}
     </section>
 
     {!enabled ? <section className="club-finance-enable panel" aria-labelledby="club-finance-enable-title">
@@ -109,15 +112,18 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onOpenStaff, onO
         {home && forecast && opponent ? <><div className="club-gate-fixture"><strong>{club.name} vs {opponent.name}</strong><span><time dateTime={home.date}>{formatDate(home.date)}</time> · Matchday {home.round}</span></div><progress className="club-crowd-meter" value={forecast.attendance} max={forecast.capacity} aria-label={`${forecast.attendance} of ${forecast.capacity} seats forecast to be filled`} /><dl className="club-gate-values"><div><dt>{locked ? 'Locked ticket price' : 'Planned ticket price'}</dt><dd data-gate-price={forecast.price}>{money(forecast.price)}</dd></div><div><dt>Forecast attendance</dt><dd data-gate-attendance={forecast.attendance}>{count(forecast.attendance)} <small>/ {count(forecast.capacity)}</small></dd></div><div><dt>Forecast ticket income</dt><dd data-gate-revenue={forecast.revenue}>{money(forecast.revenue)}</dd></div></dl><p className="club-note">This is a forecast. {locked ? 'Income is recorded when the matchday is completed.' : 'Future demand and automatic pricing may change before this matchday is prepared.'}</p></> : <p className="club-empty">No further home fixtures are scheduled this season. Your ticket plan carries into the next season.</p>}
       </section>
 
+      <TransferPaymentsPanel season={season} />
+
       <details className="club-ledger panel game-disclosure">
         <summary><Icon name="wallet" size={17} />Financial activity · {ledger.length} entries</summary>
         <header className="club-heading"><h2 id="club-ledger-title">Financial activity</h2><span>{ledger.length} entries · newest first</span></header>
         <div className="club-ledger-filters"><label htmlFor="finance-kind">Activity<select id="finance-kind" value={kind} onChange={event => setKind(event.target.value as FinanceEntry['kind'] | 'all')} disabled={busy}><option value="all">All activity</option>{Object.entries(kinds).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label htmlFor="finance-season">Period<select id="finance-season" value={period} onChange={event => setPeriod(event.target.value as 'current' | 'all')} disabled={busy}><option value="current">Current season · {seasonLabel(season.seasonNumber)}</option><option value="all">All seasons</option></select></label></div>
         <div className="club-ledger-scroll" tabIndex={0} role="region" aria-label="Club financial activity"><table className="club-finance-ledger"><thead><tr><th scope="col">Date</th><th scope="col">Activity</th><th scope="col">Income / cost</th><th scope="col">Cash change</th><th scope="col">Unpaid change</th></tr></thead><tbody>{ledger.map(entry => {
-          const transfer = entry.kind === 'transfer' ? season.employment.transfers.find(item => item.id === entry.sourceId) : null
-          const date = transfer?.completedOn ?? dateForRound(entry.round, entry.seasonNumber)
+          const transfer = entry.kind === 'transfer' ? season.employment.transfers.find(item => getTransferPayments(item).some(payment => payment.id === entry.sourceId)) : null
+          const payment = transfer ? getTransferPayments(transfer).find(item => item.id === entry.sourceId) : null
+          const date = payment?.paidOn ?? dateForRound(entry.round, entry.seasonNumber)
           return <tr key={entry.id} data-finance-entry={entry.id} data-finance-kind={entry.kind}>
-            <td><time dateTime={date}>{formatDate(date)}</time><small>{transfer ? 'Offseason transfer' : `Matchday ${entry.round}`}</small></td><th scope="row">{kinds[entry.kind]}<small>{entryDetail(entry)}</small>{entry.payroll && <details className="club-payroll-breakdown" data-payroll-ledger={entry.id}><summary>Player charges</summary><ul>{entry.payroll.items.map(item => <li key={item.agreementId}><span>{getDevelopmentPlayer(item.playerId).name}</span><strong>{money(item.amount)}</strong>{item.discount > 0 && <small>Gross {money(item.gross)} · discount {money(item.discount)}</small>}</li>)}</ul></details>}</th>
+            <td><time dateTime={date}>{formatDate(date)}</time><small>{transfer && payment ? `Transfer payment ${payment.installmentIndex + 1}/${transfer.installments.length}` : `Matchday ${entry.round}`}</small></td><th scope="row">{kinds[entry.kind]}<small>{entryDetail(entry)}</small>{entry.payroll && <details className="club-payroll-breakdown" data-payroll-ledger={entry.id}><summary>Player charges</summary><ul>{entry.payroll.items.map(item => <li key={item.agreementId}><span>{getDevelopmentPlayer(item.playerId).name}</span><strong>{money(item.amount)}</strong>{item.discount > 0 && <small>Gross {money(item.gross)} · discount {money(item.discount)}</small>}</li>)}</ul></details>}</th>
             <td className={entry.amount < 0 ? 'club-finance-cost' : entry.amount > 0 ? 'club-finance-income' : ''}>{movement(entry.amount)}</td>
             <td><span className={entry.cashDelta < 0 ? 'club-finance-cost' : entry.cashDelta > 0 ? 'club-finance-income' : ''}>{movement(entry.cashDelta)}</span><small>Balance {money(entry.cashAfter)}</small></td>
             <td><span className={entry.unpaidDelta > 0 ? 'club-finance-cost' : entry.unpaidDelta < 0 ? 'club-finance-income' : ''}>{movement(entry.unpaidDelta)}</span><small>Balance {money(entry.unpaidAfter)}</small></td>

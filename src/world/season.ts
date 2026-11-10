@@ -7,6 +7,7 @@ import { injuriesFromMatch, isRecovering } from './health';
 import { createTraining, developClub, processTrainingWeek } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
 import { createFinance, enableFinance, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
+import { processTransferPayments } from './transfer-payments';
 import { createPayroll, enablePayroll, preparePayrollRound, processPayrollRound, startPayrollSeason } from './payroll';
 import { validateManagerProfile } from './manager';
 import { createRosterSnapshots, getFixtureTeams, rosterForRound } from './rosters';
@@ -132,7 +133,7 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: 15, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), scouting: createScouting(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
+    schemaVersion: 16, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), scouting: createScouting(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
     ...preparation, date: first.date, status: 'active', round: 1, fixtures,
     activeFixtureId: first.id, activeMatch: prepareMatch(preparation, first),
   };
@@ -202,6 +203,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
   }
   next = processFinanceRound(next);
   next = processPayrollRound(next);
+  next = processTransferPayments(next);
   next = processScoutingRound(next);
   if (next.round === SEASON_ROUNDS) {
     next.status = 'complete';
@@ -218,6 +220,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
   }
   next = prepareFinanceRound(next);
   next = preparePayrollRound(next);
+  next = processTransferPayments(next);
   next = prepareScoutingAssignments(next);
   const fixture = next.fixtures.find(fixture => fixture.round === next.round && [fixture.homeClubId, fixture.awayClubId].includes(next.managedClubId))!;
   next.activeFixtureId = fixture.id;
@@ -283,9 +286,11 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   };
   next = startFinanceSeason(next);
   next = startPayrollSeason(next);
+  next = processTransferPayments(next);
   next = renewSeasonCoaching(next, state.coaching);
   next = recruitAiCoaches(next);
   next = preparePayrollRound(next);
+  next = processTransferPayments(next);
   next = prepareScoutingAssignments(refreshSquadKnowledge(next));
   next.activeMatch = prepareMatch(next, first);
   return next;

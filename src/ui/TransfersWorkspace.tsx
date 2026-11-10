@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SeasonState } from '../domain/season'
+import type { TransferPaymentPlan } from '../domain/transfer-payments'
 import type { Position } from '../domain/types'
 import { getDevelopmentPlayer } from '../data/development-players'
 import { getSeasonWage } from '../data/development-wages'
@@ -25,7 +26,7 @@ interface TransfersWorkspaceProps {
   onAdvanceMarket: () => void
   onWithdrawOffer: (offerId: string) => void
   onDelegation: (delegated: boolean) => void
-  onOffer: (playerId: string, seasonWage: number, seasons: number, transferFee?: number) => void
+  onOffer: (playerId: string, seasonWage: number, seasons: number, transferFee?: number, paymentPlan?: TransferPaymentPlan) => void
   onClubDecision: (offerId: string, response: 'accept' | 'reject' | 'counter') => void
   onStartSeason: () => void
   focusedPlayerId: string | null

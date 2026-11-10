@@ -62,7 +62,7 @@ export interface SeasonArchive {
 }
 
 export interface SeasonState {
-  schemaVersion: 15;
+  schemaVersion: 16;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;

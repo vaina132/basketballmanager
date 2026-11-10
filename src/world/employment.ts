@@ -11,6 +11,7 @@ import { finishMarketWindow, prepareMarketWindow, scheduleMarketRecruitment, sub
 import { getLiveMarketOffers } from './market-policy';
 import { recordTransferFee } from './finance';
 import { sellerReplacementReason } from './transfers-policy';
+import { getTransferPaymentSchedule } from './transfer-payments';
 
 export function createEmployment(): SeasonEmployment {
   return { model: 'employment-1', enabledSince: null, delegated: false, contracts: [], transfers: [], market: null };
@@ -40,7 +41,7 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
     const signed = state.employment.contracts.find(contract => contract.id === latest.contractId);
     if (signed && signed.playerId === playerId && signed.clubId === clubId && signed.startsSeason === state.seasonNumber + 1 && signed.endsSeason === state.seasonNumber + seasons && signed.seasonWage === seasonWage) return state;
   }
-  const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId, resolvingOfferId, scheduled?.transfer?.fee);
+  const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId, resolvingOfferId, scheduled?.transfer?.fee, scheduled?.transfer?.paymentPlan ?? 'upfront');
   if (!quote.canOffer) throw new Error(quote.reason!);
   if (duplicate) return state;
   const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons) : null;
@@ -68,6 +69,9 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
       id: `employment-transfer-${(state.employment.transfers ?? []).length + 1}`, offerId: scheduled.id, playerId,
       fromClubId: sellerId, toClubId: clubId, seasonNumber: state.seasonNumber, completedOn: state.date,
       startsSeason: quote.startsSeason, fee: scheduled.transfer.fee, releasedContractIds: [...released], contractId: contract.id,
+      paymentPlan: scheduled.transfer.paymentPlan ?? 'upfront',
+      installments: getTransferPaymentSchedule(scheduled.transfer.fee, scheduled.transfer.paymentPlan ?? 'upfront', state.date, quote.startsSeason),
+      payments: [],
     };
     next = recordTransferFee({ ...next, employment: { ...next.employment, transfers: [...(state.employment.transfers ?? []), transfer] } }, transfer);
   }

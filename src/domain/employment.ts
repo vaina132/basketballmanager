@@ -1,3 +1,5 @@
+import type { TransferInstallment, TransferPayment, TransferPaymentPlan } from './transfer-payments';
+
 /** Immutable employment terms. Seasonal payroll remains a separate payment schedule. */
 export interface EmploymentContract {
   id: string;
@@ -25,6 +27,9 @@ export interface EmploymentTransfer {
   fee: number;
   releasedContractIds: string[];
   contractId: string;
+  paymentPlan: TransferPaymentPlan;
+  installments: TransferInstallment[];
+  payments: TransferPayment[];
 }
 
 export interface SeasonEmployment {

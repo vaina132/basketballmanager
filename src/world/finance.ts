@@ -1,12 +1,14 @@
 import type { CoachingContract } from '../domain/coaching';
 import type { EmploymentTransfer } from '../domain/employment';
 import type { PayrollCharge } from '../domain/payroll';
+import type { TransferPayment } from '../domain/transfer-payments';
 import type { FinanceBalance, FinanceEntry, FinanceLedgerRow, FinancePlan, GateForecast, SeasonFinance } from '../domain/finance';
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { getClubFinanceDefinition } from '../data/development-finances';
-import { getSpendableCash } from './payroll-policy';
+import { getPayrollReserve, getSpendableCash } from './payroll-policy';
+import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransferPaymentSummary, payTransferInstallment } from './transfer-payments';
 
 export { getClubFinanceDefinition } from '../data/development-finances';
 export type { FinanceBalance, FinanceLedgerRow, GateForecast } from '../domain/finance';
@@ -76,14 +78,31 @@ export function recordPayrollCharge(state: SeasonState, clubId: string, payroll:
   return book(state, clubId, 'payroll', amount === 0 ? 0 : -amount, sourceId, null, null, payroll);
 }
 
-/** Debit and credit the agreed fee once, after club and player consent have completed. */
+/** Completion pays only the first installment; the entire fee must already be affordable. */
 export function recordTransferFee(state: SeasonState, transfer: EmploymentTransfer): SeasonState {
   const completed = state.employment.transfers.find(item => item.id === transfer.id);
   if (!state.finance.enabledSince || !completed || completed.offerId !== transfer.offerId || completed.contractId !== transfer.contractId || completed.fromClubId !== transfer.fromClubId || completed.toClubId !== transfer.toClubId || completed.fee !== transfer.fee || completed.seasonNumber !== transfer.seasonNumber || completed.completedOn !== transfer.completedOn) throw new Error('A transfer payment requires the exact completed employment transfer.');
   if (state.status !== 'complete' || transfer.seasonNumber !== state.seasonNumber || transfer.completedOn !== state.date || transfer.fromClubId === transfer.toClubId || !Number.isSafeInteger(transfer.fee) || transfer.fee <= 0) throw new Error('Choose a completed transfer in the current offseason.');
-  if (getFinanceBalance(state.finance, transfer.toClubId).unpaid > 0 || getSpendableCash(state, transfer.toClubId, transfer.offerId) < transfer.fee) throw new Error('The transfer fee exceeds the remaining budget after other commitments.');
-  const charged = book(state, transfer.toClubId, 'transfer', -transfer.fee, transfer.id);
-  return book(charged, transfer.fromClubId, 'transfer', transfer.fee, transfer.id);
+  if (transfer.payments.length || state.finance.ledger.some(entry => entry.kind === 'transfer' && entry.sourceId === transfer.id)) throw new Error('This transfer payment has already been recorded.');
+  if (completed.paymentPlan !== transfer.paymentPlan || JSON.stringify(completed.installments) !== JSON.stringify(transfer.installments) || JSON.stringify(transfer.installments) !== JSON.stringify(getTransferPaymentSchedule(transfer.fee, transfer.paymentPlan, transfer.completedOn, transfer.startsSeason))) throw new Error('Use the agreed transfer payment schedule.');
+  if (getFinanceBalance(state.finance, transfer.toClubId).unpaid > 0 || getSpendableCash(state, transfer.toClubId, transfer.offerId, transfer.id) < transfer.fee) throw new Error('The transfer fee exceeds the remaining budget after other commitments.');
+  return payTransferInstallment(state, transfer.id, 0, transfer.installments[0]!.amount);
+}
+
+/** Record only money actually paid. Outstanding fees remain in the installment schedule. */
+export function recordTransferPayment(state: SeasonState, transfer: EmploymentTransfer, payment: TransferPayment): SeasonState {
+  const completed = state.employment.transfers.find(item => item.id === transfer.id);
+  const stored = completed?.payments.at(-1);
+  if (!state.finance.enabledSince || !completed || !stored || JSON.stringify(stored) !== JSON.stringify(payment) || JSON.stringify(completed) !== JSON.stringify(transfer)) throw new Error('A transfer payment requires its exact recorded receipt.');
+  const installment = completed.installments[payment.installmentIndex];
+  const expectedId = completed.payments.length === 1 ? completed.id : `${completed.id}-payment-${completed.payments.length}`;
+  const previousPaid = completed.payments.slice(0, -1).filter(item => item.installmentIndex === payment.installmentIndex).reduce((sum, item) => sum + item.amount, 0);
+  if (!installment || installment.dueOn > state.date || payment.id !== expectedId || payment.paidOn !== state.date || payment.seasonNumber !== state.seasonNumber || payment.round !== state.round || !Number.isSafeInteger(payment.amount) || payment.amount <= 0 || previousPaid + payment.amount > installment.amount) throw new Error('Pay only an amount due on the recorded transfer schedule.');
+  if (completed.installments.some((_item, index) => index < payment.installmentIndex && getTransferInstallmentRemaining(completed, index) > 0)) throw new Error('Pay earlier installments of this transfer first.');
+  const balance = getFinanceBalance(state.finance, transfer.toClubId);
+  if (balance.unpaid > 0 || balance.cash - getPayrollReserve(state, transfer.toClubId) < payment.amount) throw new Error('Protect player wages before paying a transfer installment.');
+  const charged = book(state, transfer.toClubId, 'transfer', -payment.amount, payment.id);
+  return book(charged, transfer.fromClubId, 'transfer', payment.amount, payment.id);
 }
 
 function coachFee(contract: CoachingContract): number {
@@ -97,6 +116,7 @@ export function recordCoachFee(state: SeasonState, contract: CoachingContract): 
   if (!state.finance.enabledSince) return state;
   if (contract.seasonNumber !== state.seasonNumber || !state.coaching.contracts.some(current => current.id === contract.id && current.clubId === contract.clubId && current.coachId === contract.coachId)) throw new Error('The coaching payment must belong to a current club contract.');
   const fee = coachFee(contract), balance = getFinanceBalance(state.finance, contract.clubId);
+  if (getTransferPaymentSummary(state, contract.clubId).overdue > 0) throw new Error('Settle overdue transfer payments before hiring a coach.');
   if (balance.unpaid > 0 || balance.cash < fee) throw new Error('This club must settle unpaid costs and have enough cash before hiring a coach.');
   if (getSpendableCash(state, contract.clubId) < fee) throw new Error('This club must protect remaining player wage commitments before hiring a coach.');
   return book(state, contract.clubId, 'coaching', -fee, `coaching-${contract.id}`, null, { contractId: contract.id, coachId: contract.coachId });

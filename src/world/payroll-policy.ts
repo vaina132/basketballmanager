@@ -2,6 +2,7 @@ import type { FinanceEntry } from '../domain/finance';
 import type { PlayerWageAgreement } from '../domain/payroll';
 import type { SeasonState } from '../domain/season';
 import { getReservedTransferFees } from './market-policy';
+import { getTransferObligationReserve } from './transfer-payments';
 
 export const PAYROLL_INSTALLMENTS = 10;
 export const PREPAYMENT_DISCOUNT_PERCENT = 5;
@@ -31,7 +32,7 @@ export function getPayrollReserve(state: Pick<SeasonState, 'payroll' | 'finance'
 }
 
 /** Reconciled net wealth yields cash when positive and unpaid obligations when negative. */
-export function getSpendableCash(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market'>>, clubId: string, excludeOfferId?: string): number {
+export function getSpendableCash(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'employment'>>, clubId: string, excludeOfferId?: string, excludeTransferId?: string): number {
   const net = state.finance.ledger.filter(entry => entry.clubId === clubId).reduce((sum, entry) => sum + entry.amount, 0);
-  return Math.max(0, net - getPayrollReserve(state, clubId) - getReservedTransferFees(state, clubId, excludeOfferId));
+  return Math.max(0, net - getPayrollReserve(state, clubId) - getReservedTransferFees(state, clubId, excludeOfferId) - getTransferObligationReserve(state, clubId, excludeTransferId));
 }

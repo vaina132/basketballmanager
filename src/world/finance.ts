@@ -1,6 +1,7 @@
 import type { CoachingContract } from '../domain/coaching';
 import type { ScoutContract } from '../domain/scouts';
 import type { FitnessContract } from '../domain/fitness';
+import type { PhysioContract } from '../domain/physio';
 import type { EmploymentBuyout, EmploymentTransfer } from '../domain/employment';
 import type { PayrollCharge } from '../domain/payroll';
 import type { TransferPayment } from '../domain/transfer-payments';
@@ -10,6 +11,7 @@ import type { Team } from '../domain/types';
 import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
+import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { getClubFinanceDefinition } from '../data/development-finances';
 import { getPayrollReserve, getSpendableCash } from './payroll-policy';
 import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransferPaymentSummary, payTransferInstallment } from './transfer-payments';
@@ -162,6 +164,16 @@ export function recordFitnessFee(state: SeasonState, contract: FitnessContract):
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a fitness coach.');
   if (getSpendableCash(state, contract.clubId) < coach.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a fitness coach.');
   return append(state, { clubId: contract.clubId, kind: 'fitness', amount: -coach.fee, sourceId: `fitness-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, fitness: { contractId: contract.id, coachId: contract.coachId } });
+}
+
+export function recordPhysioFee(state: SeasonState, contract: PhysioContract): SeasonState {
+  const staff = DEVELOPMENT_PHYSIOS.find(staff => staff.id === contract.physioId);
+  const stored = state.physio.contracts.at(-1);
+  if (!state.finance.enabledSince || !state.physio.enabledSince || state.status !== 'active' || state.round === 10 || !staff || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== state.finance.ledger.length || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `physio-contract-${state.physio.contracts.length}`) throw new Error('Pay only the exact newly appointed physio contract.');
+  if (staffCommitted(state, contract.clubId) > STAFF_BUDGET) throw new Error('This appointment exceeds the shared staff allocation.');
+  if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a physio.');
+  if (getSpendableCash(state, contract.clubId) < staff.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a physio.');
+  return append(state, { clubId: contract.clubId, kind: 'physio', amount: -staff.fee, sourceId: `physio-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, physio: { contractId: contract.id, physioId: contract.physioId } });
 }
 
 function winShare(state: FinanceContext, clubId: string, beforeRound: number): number | null {

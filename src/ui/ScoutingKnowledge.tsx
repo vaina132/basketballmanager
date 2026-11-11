@@ -1,5 +1,6 @@
 import type { PlayerKnowledge } from '../domain/scouting'
 import { SCOUTING_ATTRIBUTES } from '../world/scouting-policy'
+import { PlayerRating } from './PlayerRating'
 import './scouting-knowledge.css'
 
 const labels = { twoPoint: 'Two-point shot', threePoint: 'Three-point shot', freeThrow: 'Free throws', passing: 'Passing', defense: 'Defense', rebounding: 'Rebounding', stamina: 'Stamina' }
@@ -15,6 +16,7 @@ export function knowledgeLabel(knowledge: PlayerKnowledge): string {
 /** Only safe knowledge projections enter this component; outsider base attributes are never accepted. */
 export function ScoutingKnowledge({ knowledge, compact = false }: { knowledge: PlayerKnowledge; compact?: boolean }) {
   return <div className={`scouting-knowledge${compact ? ' scouting-knowledge-compact' : ''}`} data-knowledge-kind={knowledge.kind}>
+    <div className="scouting-knowledge-overall"><span>Overall ability</span><PlayerRating knowledge={knowledge} label="Overall ability" /></div>
     <div className="scouting-knowledge-status"><strong>{knowledgeLabel(knowledge)}</strong><span>{knowledge.kind === 'own' ? 'Current squad assessment' : knowledge.kind === 'unknown' ? 'No skill assessment available' : `${knowledge.freshness === 'recent' ? 'Recent' : knowledge.freshness === 'aging' ? 'Aging' : 'Stale'} · ${knowledge.ageDays} ${knowledge.ageDays === 1 ? 'day' : 'days'} old`}</span></div>
     {knowledge.kind !== 'unknown' && <dl className="scouting-knowledge-ratings">{SCOUTING_ATTRIBUTES.map(attribute => {
       const exact = knowledge.kind === 'own' ? knowledge.attributes?.[attribute] : undefined

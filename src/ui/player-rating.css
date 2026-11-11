@@ -1,0 +1,14 @@
+.player-rating { display: inline-flex; align-items: center; gap: .35rem; max-width: 100%; vertical-align: middle; white-space: nowrap; }
+.player-rating-stars { display: inline-flex; color: #7e8ba0; font-size: 1rem; line-height: 1.2; }
+.player-rating-star { position: relative; display: inline-block; }
+.player-rating-star-fill, .player-rating-star-range { position: absolute; inset: 0 auto 0 0; overflow: hidden; color: #fbbf24; }
+.player-rating-star-range { opacity: .35; }
+.player-rating-value { color: #dbe3ef; font-size: .85rem; font-variant-numeric: tabular-nums; }
+.player-rating--compact { gap: .25rem; }
+.player-rating--compact .player-rating-stars { font-size: .875rem; }
+.player-rating--unknown .player-rating-stars { color: #657187; }
+.match-rating { display: inline-flex; min-width: 2.75rem; min-height: 1.65rem; align-items: center; justify-content: center; padding: .1rem .35rem; border: 1px solid #526079; border-radius: 3px; background: #273347; color: #f3f6fb; font-size: .9rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; vertical-align: middle; }
+.match-rating--compact { min-width: 2.15rem; min-height: 1.4rem; padding: .1rem .25rem; font-size: .85rem; }
+.match-rating--good { border-color: #4b8070; background: #203d35; color: #c8f4dd; }
+.match-rating--poor { border-color: #97665b; background: #49302c; color: #ffd4c9; }
+.match-rating--unrated { background: transparent; color: #aab6c8; border-color: #465266; }

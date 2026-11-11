@@ -72,6 +72,19 @@
 .scouting-player-button>svg{margin-left:auto;flex:none;color:var(--muted)}
 .scouting-player-button:hover:not(:disabled){color:var(--accent)}
 .scouting-age-cell{font-size:15px!important;font-weight:500!important}
+.scouting-ability-cell{min-width:125px}
+.scouting-column-sort{display:flex;align-items:center;gap:5px;padding:0;background:none;color:inherit;font:inherit;cursor:pointer}
+.scouting-column-sort>span{color:var(--accent)}
+.scouting-discovery-range{display:flex;align-items:center;flex-wrap:wrap;gap:9px 12px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px}
+.scouting-discovery-range>svg{flex:none;color:var(--accent)}
+.scouting-discovery-range strong{display:block;font-weight:500}
+.scouting-discovery-range small{display:block;margin-top:3px;font-size:12px;color:var(--muted)}
+.scouting-discovery-range progress{width:100px;max-width:100%;height:7px;accent-color:var(--accent)}
+.scouting-discovery-range>.button{margin-left:auto}
+.scouting-discovery-range details{font-size:12px;color:var(--muted)}
+.scouting-discovery-range details[open]{flex-basis:100%}
+.scouting-discovery-range summary{cursor:pointer}
+.scouting-discovery-range p{margin-top:7px;line-height:1.5;max-width:680px}
 .scouting-report-status{display:inline-flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap}
 .scouting-report-status.pending{color:var(--accent)}
 .scouting-depth{display:flex;align-items:center;gap:3px;margin-top:7px;min-width:130px}

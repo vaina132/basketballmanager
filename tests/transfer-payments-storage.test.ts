@@ -16,7 +16,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const managed = 'rhine-falcons', seller = 'aegean-waves';
 const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 const complete = (initial: SeasonState): SeasonState => { let state = initial; while (state.status === 'active') state = play(state); return state; };
-const encode = (state: unknown, formatVersion = 22) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const encode = (state: unknown, formatVersion = 23) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const settleWindow = (initial: SeasonState): SeasonState => {
   let state = initial;
   for (let attempts = 0; getMarketStartReason(state) && attempts < 35; attempts += 1) {

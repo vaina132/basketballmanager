@@ -32,11 +32,11 @@ describe('fitness save history and prospective migration', () => {
     expect(original.state.training.lastWeek).not.toBeNull();
     expect(original.state.scouting.clubs[club].reviews.some(review => review.observer?.scoutId)).toBe(true);
     expect(original.state.injuries.length).toBeGreaterThan(0);
-    expect(restored).toEqual({ ...original.state, schemaVersion: 22, fitness: createFitness() });
+    expect(restored).toEqual({ ...original.state, schemaVersion: 23, physio: { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }, fitness: createFitness() });
     expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(original.state.activeMatch));
     const expected = JSON.parse(fixture('season21-training-scouts-next'));
     const next = play(restored);
-    expect(next).toEqual({ ...expected.state, schemaVersion: 22, fitness: createFitness() });
+    expect(next).toEqual({ ...expected.state, schemaVersion: 23, physio: { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }, fitness: createFitness() });
     expect(restore(next)).toEqual(next);
   });
 

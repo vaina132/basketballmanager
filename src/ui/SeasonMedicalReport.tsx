@@ -1,7 +1,6 @@
-import { useState } from 'react'
 import type { SeasonState } from '../domain/season'
-import { getDevelopmentPlayer } from '../data/development-players'
-import { daysUntilReturn, getPlayerHealth, getSeasonInjuries, isRecovering } from '../world/health'
+import { getClubMedicalCases, getPlayerMedicalSummary } from '../world/health'
+import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import './season-medical.css'
 
@@ -9,43 +8,23 @@ const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 
 export const medicalDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const injuryName = (kind: 'ankle' | 'muscle') => kind === 'ankle' ? 'Ankle injury' : 'Muscle injury'
 
-export function PlayerHealthSummary({ season, playerId }: { season: SeasonState; playerId: string }) {
-  const injury = getPlayerHealth(season, playerId)
-  if (!injury) return null
-  const days = daysUntilReturn(season.date, injury.returnOn)
+export function PlayerHealthSummary({ season, playerId, onOpenMedical }: { season: SeasonState; playerId: string; onOpenMedical?: () => void }) {
+  const summary = getPlayerMedicalSummary(season, playerId)
+  if (!summary || summary.daysRemaining === 0) return null
   return <section className="profile-health" aria-label="Player recovery">
-    <strong>{injuryName(injury.kind)}</strong>
-    <span>Unavailable / {days} {days === 1 ? 'day' : 'days'} remaining</span>
-    <dl><div><dt>Injured</dt><dd>{medicalDate(injury.occurredOn)}</dd></div><div><dt>Expected return</dt><dd>{medicalDate(injury.returnOn)}</dd></div></dl>
+    <strong>{injuryName(summary.injury.kind)}</strong>
+    <span>Unavailable / {summary.daysRemaining} {summary.daysRemaining === 1 ? 'day' : 'days'} remaining</span>
+    <dl><div><dt>Expected return</dt><dd data-profile-medical-return={summary.effectiveReturnOn}>{medicalDate(summary.effectiveReturnOn)}</dd></div>{summary.daysSaved > 0 && <div><dt>Recovery shortened</dt><dd>{summary.daysSaved} {summary.daysSaved === 1 ? 'day' : 'days'}</dd></div>}</dl>
+    <details><summary>Injury record</summary><dl><div><dt>Injured</dt><dd>{medicalDate(summary.injury.occurredOn)}</dd></div><div><dt>Original expected return</dt><dd>{medicalDate(summary.originalReturnOn)}</dd></div></dl></details>
+    {onOpenMedical && <button className="text-button" onClick={onOpenMedical}>Open medical<Icon name="medical" size={14} /></button>}
   </section>
 }
 
-export function SeasonMedicalReport({ season, onSelectPlayer }: { season: SeasonState; onSelectPlayer: (id: string) => void }) {
-  const [history, setHistory] = useState(false)
+export function SeasonMedicalReport({ season, onSelectPlayer, onOpenMedical }: { season: SeasonState; onSelectPlayer: (id: string) => void; onOpenMedical: () => void }) {
   const club = season.clubs.find(team => team.id === season.managedClubId)!
-  const rosterIds = new Set(club.players.map(player => player.id))
-  const episodes = getSeasonInjuries(season).filter(injury => injury.clubId === club.id || rosterIds.has(injury.playerId))
-  const recovering = episodes.filter(injury => rosterIds.has(injury.playerId) && isRecovering(injury, season.date))
-  const rows = (history ? episodes : recovering).slice().sort((a, b) => b.occurredOn.localeCompare(a.occurredOn) || a.playerId.localeCompare(b.playerId))
-  const mode = { standard: 'Standard injuries', reduced: 'Reduced injuries', off: 'Injuries off' }[season.injuryMode]
-  return <section className="medical-report panel" aria-labelledby="medical-heading">
-    <header className="medical-heading"><div><h2 id="medical-heading">Medical report</h2><span>{recovering.length} recovering / {club.players.length - recovering.length} medically available</span></div>
-      <div className="segmented" aria-label="Medical report filter"><button aria-pressed={!history} className={!history ? 'selected' : ''} onClick={() => setHistory(false)}>Recovering</button><button aria-pressed={history} className={history ? 'selected' : ''} onClick={() => setHistory(true)}>History</button></div>
-    </header>
-    {rows.length ? <div className="table-scroll"><table className="medical-table"><thead><tr><th scope="col">Player</th><th scope="col">Injury</th><th scope="col">Injured</th><th scope="col">Availability</th><th scope="col">Expected return</th></tr></thead><tbody>{rows.map(injury => {
-      const player = getDevelopmentPlayer(injury.playerId)
-      const currentClub = season.clubs.find(team => team.players.some(member => member.id === player.id))
-      const inSquad = rosterIds.has(player.id)
-      const originClub = season.clubs.find(team => team.id === injury.clubId)!
-      const active = isRecovering(injury, season.date)
-      const days = daysUntilReturn(season.date, injury.returnOn)
-      return <tr key={injury.id} data-injury-id={injury.id} data-player-id={player.id}>
-        <td>{inSquad ? <button className="text-button medical-player" onClick={() => onSelectPlayer(player.id)} aria-label={`View ${player.name} recovery`}><strong>{player.name}</strong><Icon name="chevron" size={13} /></button> : <strong>{player.name}</strong>}{!inSquad && <small>Now: {currentClub?.name ?? 'Free agent'}</small>}{injury.clubId !== club.id && <small>Injured at {originClub.name}</small>}</td>
-        <td>{injuryName(injury.kind)}</td><td><time dateTime={injury.occurredOn}>{medicalDate(injury.occurredOn)}</time></td>
-        <td><span className={active ? 'medical-unavailable' : 'medical-cleared'}>{active ? `Unavailable / ${days}d` : 'Cleared'}</span></td>
-        <td><time dateTime={injury.returnOn}>{medicalDate(injury.returnOn)}</time></td>
-      </tr>
-    })}</tbody></table></div> : <p className="medical-empty">{history ? 'No injuries recorded for this squad.' : 'No players are currently recovering from injury.'}</p>}
-    <footer className="medical-note"><span>{mode} / all clubs</span><p>Recovery follows the season calendar. Players are unavailable until their return date; foul exclusions apply only to the current match.</p></footer>
-  </section>
+  const cases = getClubMedicalCases(season)
+  return <section className="medical-report panel" aria-labelledby="medical-heading"><header className="medical-heading"><div><h2 id="medical-heading">Medical report</h2><span>{cases.length} recovering / {club.players.length - cases.length} medically available</span></div><button className="button small" onClick={onOpenMedical}>Open medical<Icon name="medical" size={14} /></button></header>{cases.length ? <div className="squad-medical-summary">{cases.slice(0, 3).map(summary => {
+    const player = club.players.find(item => item.id === summary.injury.playerId)!
+    return <button key={summary.injury.id} className="squad-medical-player" onClick={() => onSelectPlayer(player.id)}><Avatar player={player} color={club.color} size={32} /><span><strong>{player.name}</strong><small>Expected {medicalDate(summary.effectiveReturnOn)}</small></span><Icon name="chevron" size={13} /></button>
+  })}{cases.length > 3 && <button className="text-button" onClick={onOpenMedical}>View all {cases.length} recovering players<Icon name="chevron" size={13} /></button>}</div> : <p className="medical-empty">No players are currently recovering from injury.</p>}</section>
 }

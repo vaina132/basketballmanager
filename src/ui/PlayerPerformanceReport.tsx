@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react'
 import type { SeasonState } from '../domain/season'
 import type { SeasonPlayerPerformance } from '../world/performance'
 import { performanceValue } from '../world/performance'
+import { playerPIR } from '../world/performance-rating'
+import { MatchRating } from './PlayerRating'
+import { PIR_HELP } from './MatchBoxScore'
 import { seasonLabel } from '../world/season'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
@@ -37,7 +40,7 @@ export function PlayerPerformanceReport({ season, record, onClose, onReviewFixtu
     </div>
     <div className="player-performance-log-heading"><h3>Match history</h3><span>Latest first · committed results</span></div>
     {record.log.length ? <div className="player-performance-scroll" role="region" aria-label={`${player.name} match history`} tabIndex={0}>
-      <table className="player-performance-log"><thead><tr><th scope="col">Date</th><th scope="col">Opponent</th><th scope="col">Result</th><th scope="col">Participation</th><th scope="col" title="Minutes and seconds played">Min</th><th scope="col" title="Points">Pts</th><th scope="col" title="Rebounds">Reb</th><th scope="col" title="Assists">Ast</th><th scope="col" title="Steals">Stl</th><th scope="col" title="Blocks">Blk</th><th scope="col" title="Turnovers">TO</th><th scope="col" title="Field goals made / attempted">FG</th><th scope="col" title="Three-pointers made / attempted">3PT</th><th scope="col" title="Free throws made / attempted">FT</th><th scope="col" title="Personal fouls">PF</th></tr></thead><tbody>{record.log.map(game => {
+      <table className="player-performance-log"><thead><tr><th scope="col">Date</th><th scope="col">Opponent</th><th scope="col">Result</th><th scope="col">Participation</th><th scope="col">Rating</th><th scope="col" title={PIR_HELP}>PIR</th><th scope="col" title="Minutes and seconds played">Min</th><th scope="col" title="Points">Pts</th><th scope="col" title="Rebounds">Reb</th><th scope="col" title="Assists">Ast</th><th scope="col" title="Steals">Stl</th><th scope="col" title="Blocks">Blk</th><th scope="col" title="Turnovers">TO</th><th scope="col" title="Field goals made / attempted">FG</th><th scope="col" title="Three-pointers made / attempted">3PT</th><th scope="col" title="Free throws made / attempted">FT</th><th scope="col" title="Personal fouls">PF</th></tr></thead><tbody>{record.log.map(game => {
         const opponent = season.clubs.find(team => team.id === game.opponentClubId)!
         const played = game.participation === 'played'
         const stat = game.stats
@@ -46,7 +49,7 @@ export function PlayerPerformanceReport({ season, record, onClose, onReviewFixtu
           <th scope="row"><span title={opponent.name}>{opponent.shortName}</span><small>{game.home ? 'Home' : 'Away'}</small></th>
           <td><span className={`performance-result ${game.result === 'W' ? 'performance-win' : ''}`}><b>{game.result}</b> {game.teamScore}–{game.opponentScore}</span>{game.kind === 'default' ? <small>Awarded by default</small> : game.periods > 4 ? <small>{game.periods - 4} OT</small> : null}</td>
           <td>{played ? 'Played' : game.participation === 'injured' ? 'Injured · did not play' : 'Did not play'}</td>
-          <td>{played ? minutes(stat.secondsPlayed) : '—'}</td><td>{played ? stat.points : '—'}</td><td>{played ? stat.rebounds : '—'}</td><td>{played ? stat.assists : '—'}</td><td>{played ? stat.steals : '—'}</td><td>{played ? stat.blocks : '—'}</td><td>{played ? stat.turnovers : '—'}</td><td>{played ? `${stat.fieldGoalsMade}/${stat.fieldGoalsAttempted}` : '—'}</td><td>{played ? `${stat.threePointersMade}/${stat.threePointersAttempted}` : '—'}</td><td>{played ? `${stat.freeThrowsMade}/${stat.freeThrowsAttempted}` : '—'}</td><td>{played ? stat.fouls : '—'}</td>
+          <td><MatchRating stats={stat} compact /></td><td>{played ? playerPIR(stat) : '—'}</td><td>{played ? minutes(stat.secondsPlayed) : '—'}</td><td>{played ? stat.points : '—'}</td><td>{played ? stat.rebounds : '—'}</td><td>{played ? stat.assists : '—'}</td><td>{played ? stat.steals : '—'}</td><td>{played ? stat.blocks : '—'}</td><td>{played ? stat.turnovers : '—'}</td><td>{played ? `${stat.fieldGoalsMade}/${stat.fieldGoalsAttempted}` : '—'}</td><td>{played ? `${stat.threePointersMade}/${stat.threePointersAttempted}` : '—'}</td><td>{played ? `${stat.freeThrowsMade}/${stat.freeThrowsAttempted}` : '—'}</td><td>{played ? stat.fouls : '—'}</td>
         </tr>
       })}</tbody></table>
     </div> : <p className="player-performance-empty">No committed games this season. Finish a matchday and Continue to record its results.</p>}

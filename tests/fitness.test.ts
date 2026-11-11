@@ -74,7 +74,7 @@ describe('fitness appointments and shared staff spending', () => {
 
   it('shares the same allocation across coaches, scouts and fitness in every hiring direction', () => {
     const first = hireFitnessCoach(hireScout(initial, 'scout-06'), 'fitness-12');
-    expect(staffCommitmentsByRole(first, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 5_000_000, total: 11_000_000 });
+    expect(staffCommitmentsByRole(first, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 5_000_000, physio: 0, total: 11_000_000 });
     expect(() => hireCoach(first, 'coach-07')).toThrow(/shared staff/i);
     expect(() => hireScout(first, 'scout-19')).toThrow(/shared staff/i);
     const coachesFirst = hireScout(hireCoach(initial, 'coach-07'), 'scout-06');

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-export type IconName = 'home' | 'court' | 'people' | 'training' | 'staff' | 'search' | 'mail' | 'building' | 'settings' | 'play' | 'pause' | 'next' | 'skip' | 'restart' | 'save' | 'download' | 'upload' | 'arrow' | 'chevron' | 'check' | 'close' | 'ball' | 'clock' | 'swap' | 'wallet' | 'calendar' | 'target' | 'star' | 'filter' | 'shield'
+export type IconName = 'home' | 'court' | 'people' | 'training' | 'staff' | 'search' | 'mail' | 'building' | 'settings' | 'play' | 'pause' | 'next' | 'skip' | 'restart' | 'save' | 'download' | 'upload' | 'arrow' | 'chevron' | 'check' | 'close' | 'ball' | 'clock' | 'swap' | 'wallet' | 'calendar' | 'target' | 'star' | 'filter' | 'shield' | 'medical'
 
 const paths: Record<IconName, string> = {
   home: 'M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z',
@@ -28,6 +28,7 @@ const paths: Record<IconName, string> = {
   target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 4a5 5 0 1 0 0 10 5 5 0 0 0 0-10m0 4v2m-1-1h2',
   star: 'm12 3 2.8 5.7 6.3.9-4.5 4.4 1 6.2-5.6-3-5.6 3 1-6.2L3 9.6l6.2-.9Z',
   filter: 'M3 5h18l-7 8v7l-4-2v-5ZM7 2v3m10-3v3',
+  medical: 'M8 3h8v5h5v8h-5v5H8v-5H3V8h5Z',
   shield: 'm12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6Zm-4 10 3 3 5-6',
 }
 

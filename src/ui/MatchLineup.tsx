@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { DragEvent, RefObject } from 'react'
 import type { MatchState, Player, Side } from '../domain/types'
+import type { PlayerKnowledge } from '../domain/scouting'
 import { cancelSubstitution, isPlayerEligible, substitutePlayer } from '../engine/match'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { StaminaMeter } from './StaminaMeter'
+import { PlayerRating, MatchRating } from './PlayerRating'
 import './match-lineup.css'
 
 type Apply = (action: (state: MatchState) => MatchState) => void
@@ -17,6 +19,7 @@ interface MatchLineupProps {
   disabled?: boolean
   apply: Apply
   onInteractionStart: () => void
+  knowledgeForPlayer?: (id: string) => PlayerKnowledge
 }
 
 interface LineupPlayerProps {
@@ -36,15 +39,17 @@ interface LineupPlayerProps {
   onDragLeave?: (event: DragEvent<HTMLElement>) => void
   onDrop?: (event: DragEvent<HTMLElement>) => void
   incomingName?: string
+  knowledge?: PlayerKnowledge
 }
 
-function LineupPlayer({ player, match, side, active, selectable, selected, target, dragOver, pending, onSelect, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, incomingName }: LineupPlayerProps) {
+function LineupPlayer({ player, match, side, active, selectable, selected, target, dragOver, pending, onSelect, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, incomingName, knowledge }: LineupPlayerProps) {
   const stats = match.stats[player.id]
   const unavailable = match.injuries[player.id] ? 'Injured' : stats.fouls >= 5 ? 'Fouled out' : null
   const identity = <><span aria-hidden="true"><Avatar player={player} color={match[side].color} size={34} /></span><span className="lineup-player-identity"><strong>{player.name}</strong><span>#{player.number} <i /> {player.position}<span className={stats.fouls >= 4 ? 'lineup-foul-trouble' : ''}> {stats.fouls} {stats.fouls === 1 ? 'foul' : 'fouls'}</span></span></span></>
 
   return <article className={`lineup-player${unavailable ? ' lineup-player-unavailable' : ''}${selected ? ' lineup-player-selected' : ''}${target ? ' lineup-player-target' : ''}${dragOver ? ' lineup-player-drop' : ''}`} data-player-id={player.id} data-roster-status={unavailable ?? (active ? 'active' : 'bench')} tabIndex={-1} aria-label={`${player.name}, ${unavailable ?? (active ? 'on court' : 'bench')}`} draggable={!active && selectable} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
     {selectable || target ? <button className="lineup-player-heading lineup-player-pick" type="button" data-sub-in={!active ? player.id : undefined} data-sub-out={active ? player.id : undefined} aria-pressed={!active ? selected : undefined} aria-label={active ? `Replace ${player.name} with ${incomingName}` : `${selected ? 'Deselect' : 'Select'} ${player.name} for substitution, ${Math.round(stats.condition)}% stamina`} onClick={event => onSelect(event.detail === 0)}>{identity}</button> : <div className="lineup-player-heading">{identity}</div>}
+    <div className="lineup-player-ratings"><div><span>Ability</span><PlayerRating attributes={player.attributes} knowledge={knowledge} compact label={`${player.name} ability`} /></div><div className="lineup-match-rating"><span>Match</span><MatchRating stats={stats} compact /></div></div>
     <StaminaMeter value={stats.condition} label={`${player.name} stamina`} />
     {unavailable && <span className="lineup-unavailable-label">{unavailable}</span>}
     {pending && <span className="lineup-pending-label">{pending}</span>}
@@ -54,7 +59,7 @@ function LineupPlayer({ player, match, side, active, selectable, selected, targe
 }
 
 /** Selection is presentation state; the shared engine owns every queued or legal substitution. */
-export function MatchLineup({ match, displayMatch = match, managedSide = 'home', disabled = false, apply, onInteractionStart }: MatchLineupProps) {
+export function MatchLineup({ match, displayMatch = match, managedSide = 'home', disabled = false, apply, onInteractionStart, knowledgeForPlayer }: MatchLineupProps) {
   const [showOpponent, setShowOpponent] = useState(false)
   const [benchOpen, setBenchOpen] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -160,9 +165,9 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
     requestAnimationFrame(() => status.current?.focus({ preventScroll: true }))
   }
 
-  return <section ref={container} id="match-rotation" className="match-lineup" tabIndex={-1} aria-label="Player stamina and substitutions" onKeyDown={event => { if (event.key === 'Escape' && selectedId) { event.preventDefault(); clearSelection() } }}>
+  return <section ref={container} id="match-rotation" className="match-lineup" tabIndex={-1} aria-label="Players, ratings and substitutions" onKeyDown={event => { if (event.key === 'Escape' && selectedId) { event.preventDefault(); clearSelection() } }}>
     <div className="lineup-toolbar">
-      <div className="lineup-title"><span className="lineup-live-dot" /><h3>On the floor</h3><span>Stamina</span></div>
+      <div className="lineup-title"><span className="lineup-live-dot" /><h3>On the floor</h3><span>Ratings &amp; stamina</span></div>
       <div className="lineup-team-switch" role="group" aria-label="Lineup team">{(['home', 'away'] as const).map(value => <button key={value} type="button" onClick={() => { setShowOpponent(value !== managedSide); setSelectedId(null); setDraggedId(null); setDropId(null) }} aria-pressed={side === value} className={side === value ? 'selected' : ''}><span style={{ backgroundColor: match[value].color }} />{match[value].shortName}<small>{value === managedSide ? 'Your team' : 'Opponent'}</small></button>)}</div>
       <button className="lineup-bench-toggle" type="button" aria-expanded={benchOpen} aria-controls={benchId} onClick={() => setBenchOpen(value => !value)}>{benchOpen ? 'Hide bench' : 'Show bench'} <span>{bench.length}</span><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
     </div>
@@ -170,7 +175,7 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
     <div className="lineup-grid" aria-label={`${team.name} on court`} aria-describedby={own ? helpId : undefined}>{active.map(player => {
       const pending = match.pendingSubstitutions[side].find(request => request.outId === player.id)
       const target = !!selected && match.lineups[managedSide].includes(player.id)
-      return <LineupPlayer key={player.id} player={player} match={shownMatch} side={side} active selectable={false} selected={false} target={target} dragOver={dropId === player.id} pending={pending ? `Queued off · ${match[side].players.find(member => member.id === pending.inId)!.name} coming on` : null} incomingName={selected?.name} onSelect={() => { if (selected) makeChange(player.id, selected.id) }} onDragOver={event => { if (own && !disabled && !complete && draggedId && match.lineups[managedSide].includes(player.id)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropId(player.id) } }} onDragLeave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropId(null) }} onDrop={event => dropPlayer(event, player.id)} />
+      return <LineupPlayer key={player.id} player={player} knowledge={knowledgeForPlayer?.(player.id)} match={shownMatch} side={side} active selectable={false} selected={false} target={target} dragOver={dropId === player.id} pending={pending ? `Queued off · ${match[side].players.find(member => member.id === pending.inId)!.name} coming on` : null} incomingName={selected?.name} onSelect={() => { if (selected) makeChange(player.id, selected.id) }} onDragOver={event => { if (own && !disabled && !complete && draggedId && match.lineups[managedSide].includes(player.id)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropId(player.id) } }} onDragLeave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropId(null) }} onDrop={event => dropPlayer(event, player.id)} />
     })}</div>
     {active.length === 0 && <p className="lineup-empty">No players on court.</p>}
     <div id={benchId} className="lineup-bench" hidden={!benchOpen}>
@@ -178,7 +183,7 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
       {bench.length ? <div className="lineup-grid" aria-label={`${team.name} bench`}>{bench.map(player => {
         const pending = match.pendingSubstitutions[side].find(request => request.inId === player.id)
         const selectable = own && !disabled && !complete && usableBench.some(member => member.id === player.id)
-        return <LineupPlayer key={player.id} player={player} match={shownMatch} side={side} active={false} selectable={selectable} selected={selected?.id === player.id} target={false} dragOver={false} pending={pending ? `Queued on · replacing ${match[side].players.find(member => member.id === pending.outId)!.name}` : null} onSelect={keyboard => chooseIncoming(player.id, keyboard)} onDragStart={event => beginDrag(event, player.id)} onDragEnd={() => { setDraggedId(null); setDropId(null) }} />
+        return <LineupPlayer key={player.id} player={player} knowledge={knowledgeForPlayer?.(player.id)} match={shownMatch} side={side} active={false} selectable={selectable} selected={selected?.id === player.id} target={false} dragOver={false} pending={pending ? `Queued on · replacing ${match[side].players.find(member => member.id === pending.outId)!.name}` : null} onSelect={keyboard => chooseIncoming(player.id, keyboard)} onDragStart={event => beginDrag(event, player.id)} onDragEnd={() => { setDraggedId(null); setDropId(null) }} />
       })}</div> : <p className="lineup-empty">No reserves available.</p>}
     </div>
   </section>

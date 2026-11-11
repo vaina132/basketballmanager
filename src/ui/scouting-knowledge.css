@@ -1,4 +1,6 @@
 .scouting-knowledge{min-width:0}
+.scouting-knowledge-overall{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.scouting-knowledge-overall>span:first-child{font-size:13px;color:var(--muted)}
 .scouting-knowledge-status{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px 14px;font-size:13px;line-height:1.5}
 .scouting-knowledge-status strong{font-weight:500}
 .scouting-knowledge-status>span{font-size:12px;color:var(--muted)}

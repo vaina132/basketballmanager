@@ -65,7 +65,7 @@ Training coaches and scouts share the existing EUR 150,000 annual staff allocati
 
 Scouts have fictional judging and reporting skills on a 1-10 scale. The overall half-star display summarizes those skills and is not another bonus. A successful club observation supplies 100 evidence points; a scout supplies 100 plus five times the sum of their two skills. Report depth is the whole number of accumulated hundreds, capped at three. No minutes supplies no evidence. Existing uncertain ranges, systematic bias and aging still apply, so even the best report does not expose an outsider's exact ratings. This is a provisional development coefficient, not a calibrated scouting accuracy claim.
 
-Scout contracts and frozen observation attribution are retained for the career. New careers enable scout recruitment when finance and scouting are enabled. Older saves opt in prospectively; no report or pending baseline observation receives a retroactive benefit. AI aims for one affordable scout before hiring extra training coaches; existing coach renewals precede scout renewals at rollover. Regional travel, discovery coverage, potential and personality reports await their supporting world and player models.
+Scout contracts and frozen observation attribution are retained for the career. New careers enable scout recruitment when finance and scouting are enabled. Older saves opt in prospectively; no report or pending baseline observation receives a retroactive benefit. AI aims for one affordable scout before hiring extra training coaches; existing coach renewals precede scout renewals at rollover. Regional travel, potential and personality reports await their supporting world and player models. The later discovery policy below adds a provisional visible player pool.
 
 ## Development fitness coaching policy
 
@@ -76,6 +76,32 @@ On medically available days within a normal training week, the recovery skill ad
 The weekly report stores the applied appointment and compares the actual final condition with the same week, workload and availability without fitness coaching. It reports the actual capped difference, including zero for players who already finish fully rested. Hiring, release and renewal cannot rewrite a completed week. New careers opt in; older saves retain absent report fields and unchanged training until activation.
 
 Rival clubs seek one fitness coach after scout coverage and before extra training coaches. On opening day, existing training coaches renew first, then scouts, then fitness coaches if the shared budget and cash permit. This order is deterministic and gives no club an additional budget.
+
+## Development physiotherapy and rehabilitation policy
+
+Each club may appoint one physio under the same EUR 150,000 annual staff allocation, protected cash and arrears rules as every other staff role. The full season fee is paid on appointment and remains committed after release. Recruitment requires enabled finances and an active matchday from 1 to 9; training may remain disabled. The physio automatically treats medically unavailable players registered to that club during the completed interval. Current registration, rather than the club where the injury originated, determines the treating club.
+
+Original injury identity, diagnosis and return date remain immutable. A separate dated rehabilitation history records the actual appointment, registered squad, eligible treatment days, accumulated credit and effective return dates. Each day strictly between matchdays earns `10 + 2 * rehabilitation rating` integer credits, with 100 credits representing one potential day of earlier recovery. The total credit for an episode is capped at `floor(original duration / 5) * 100`, so no injury can improve by more than 20% of its original duration in whole days. Only unavailable days count. All patients receive the same rule; no medical randomness is added.
+
+Credits settle at the next matchday, before training and new registrations. A revised return can never precede that settlement date or delay a previously earned return. Historical availability always uses the records already effective on the date being evaluated. This can make a player eligible on the final day of a training interval, but never rewrites earlier training, fixtures or the already prepared match. Earned improvements and their staff attribution remain after release, replacement or a transfer; replacement cannot reset the episode cap. No treatment is invented during the offseason.
+
+The Medical workspace distinguishes the original diagnosis, current expected return, actual days saved and calendar recovery progress. Credit that has not produced an earlier return is not advertised as a realized benefit. These are explicit provisional game coefficients and fictional staff identities, not a clinically calibrated rehabilitation model. More detailed diagnosis, return-to-play risk, treatment choices and facilities remain later work.
+
+## Player ability, match ratings and MVP
+
+Overall ability is the arithmetic mean of the seven 1-20 skills divided by four, rounded to half-star steps and bounded to 1-5 stars. It summarizes current ability, not position fit or potential. Own-player knowledge supplies exact stars; outsider reports supply lower/upper star estimates. Rounded bounds are widened by a half-star when they would otherwise collapse into an apparently exact value. Unknown ability remains unknown, even when raw catalog attributes are available to the caller.
+
+The current game PIR is `PTS + REB + AST + STL + BLK - (FGA - FGM) - (FTA - FTM) - TO - PF`. Three-point misses already belong to field-goal misses. The [official EuroLeague statistics criteria manual](https://ftpserver.euroleague.net/general/EB_Statistics_Criteria_Manual.pdf) distinguishes fouls drawn and shots rejected; the current engine retains neither category, so this explicitly labeled game variant omits them. It must not be presented as full official EuroLeague PIR.
+
+Match rating is `clamp(1, 10, 6 + PIR / 10)`, rounded to one decimal. It measures accumulated box-score contribution without extrapolating a short appearance to a full game; it does not grade every off-ball or tactical action. Live ratings are provisional. A player with no recorded exposure has no rating. The highest-PIR participant receives MVP even if every candidate has a negative PIR. Ties resolve by winning club, points, assists, rebounds, fewer turnovers and stable player ID. Unplayed defaults and historical results without player statistics cannot have an invented award.
+
+Ratings and MVPs are derived from existing statistics and historical roster snapshots. They do not alter simulation, save format or random state. The displayed live snapshot controls ratings during animation; the final award waits until playback has completed. Calibration against richer performance evidence remains future work.
+
+## Development scouting discovery policy
+
+A club discovers its own squad plus 20 outside identities, ordered by a fixed club/player identity hash. Each active scout adds `2 + floor((judging + reporting) / 2)` outside identities: 3-12 for current 1-10 staff skills. Additions use a stable prefix and cap at the actual outside population. This means higher-quality or additional scouts widen reach without hiding existing prefix members. Current reports, former-squad memories, shortlist entries and pending observations are always included, even after staff release.
+
+Coverage reveals identity only. The existing observation process still supplies uncertain ability evidence. Discovery filters the browsing pool without adding geography, travel expenses or permission barriers to direct known-player links. Existing AI/delegation policies and command guards stay unchanged; this is a player-facing discovery foundation, not completed regional AI scouting. Age sorting uses current calendar ages; ability sorting uses only known star bounds, with unknown values last in either direction. The interface previews each scout's reach and offers a direct hiring route.
 
 ## Evidence still required
 

@@ -49,7 +49,13 @@ export function stripScouts(value: object): void {
 
 /** Format21 has no fitness staff; legacy fixtures create no fitness appointments. */
 export function stripFitness(value: object): void {
+  stripPhysio(value);
   delete (value as Record<string, unknown>).fitness;
+}
+
+/** Format22 predates physio appointments and rehabilitation. */
+export function stripPhysio(value: object): void {
+  delete (value as Record<string, unknown>).physio;
 }
 
 /** Past player statistics cannot be recovered from an old-format archive. */

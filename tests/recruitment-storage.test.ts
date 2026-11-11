@@ -13,7 +13,7 @@ import { stripInSeasonRecruitment, stripInSeasonTransfers } from './helpers/lega
 
 const clubId = 'rhine-falcons';
 const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
-const encode = (state: unknown, formatVersion = 22) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const encode = (state: unknown, formatVersion = 23) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 let opening: SeasonState, pending: SeasonState, accepted: SeasonState, paid: SeasonState, competition: SeasonState, withdrawn: SeasonState;
 let playerId: string;
 

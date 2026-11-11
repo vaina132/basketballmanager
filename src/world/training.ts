@@ -5,6 +5,7 @@ import { isRecovering } from './health';
 import type { SeasonCoaching } from '../domain/coaching';
 import type { RosterSnapshot } from '../domain/roster';
 import type { SeasonFitness } from '../domain/fitness';
+import type { SeasonPhysio } from '../domain/physio';
 import { coachingAssignments, coachingRatingForAttribute } from './coaching';
 import { createRosterSnapshots, rosterForRound } from './rosters';
 import { fitnessAssignments } from './fitness-policy';
@@ -84,8 +85,8 @@ function trainingDates(fromDate: string, toDate: string): string[] {
   return Array.from({ length: 7 }, (_, index) => new Date(start + (index + 1) * DAY_MS).toISOString().slice(0, 10));
 }
 
-export function trainingAvailableDays(injuries: readonly SeasonInjury[], playerId: string, fromDate: string, toDate: string): number {
-  return trainingDates(fromDate, toDate).filter(date => !injuries.some(injury => injury.playerId === playerId && isRecovering(injury, date))).length;
+export function trainingAvailableDays(injuries: readonly SeasonInjury[], playerId: string, fromDate: string, toDate: string, physio?: SeasonPhysio): number {
+  return trainingDates(fromDate, toDate).filter(date => !injuries.some(injury => injury.playerId === playerId && isRecovering(injury, date, physio))).length;
 }
 
 export interface TrainingWeekInput {
@@ -100,6 +101,7 @@ export interface TrainingWeekInput {
   coaching?: SeasonCoaching;
   rosters?: readonly RosterSnapshot[];
   fitness?: SeasonFitness;
+  physio?: SeasonPhysio;
 }
 
 /** One authoritative weekly pass updates every club; it consumes no match RNG. */
@@ -130,7 +132,7 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       const fitness = appliedFitness?.[club.id];
       let condition = conditionBefore, conditionWithoutCoach = conditionBefore, budget = 0, availableDays = 0;
       for (const date of dates) {
-        const available = !injuries.some(injury => injury.playerId === player.id && isRecovering(injury, date));
+        const available = !injuries.some(injury => injury.playerId === player.id && isRecovering(injury, date, input.physio));
         if (available) {
           availableDays += 1;
           budget += condition < 70 ? Math.floor(workload.points / 2) : workload.points;

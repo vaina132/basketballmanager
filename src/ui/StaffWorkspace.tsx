@@ -10,6 +10,8 @@ import { getTransferPaymentSummary } from '../world/transfer-payments'
 import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES, TRAINING_FOCUS_LABELS } from '../world/training'
 import { ScoutStaff, type ScoutStaffProps } from './ScoutStaff'
 import { FitnessStaff, type FitnessStaffProps } from './FitnessStaff'
+import { PhysioStaff, type PhysioStaffProps } from './PhysioStaff'
+import { getClubPhysio } from '../world/physio-policy'
 import { getClubFitnessCoach } from '../world/fitness-policy'
 import { getClubScouts } from '../world/scout-policy'
 import { STAFF_BUDGET, staffCommitted, remainingStaffBudget } from '../world/staff-policy'
@@ -18,9 +20,9 @@ import { CoachPortrait } from './CoachPortrait'
 import { Icon } from './Icon'
 import './staff-workspace.css'
 
-interface StaffWorkspaceProps extends ScoutStaffProps, FitnessStaffProps {
-  role: 'coaches' | 'scouts' | 'fitness'
-  onRoleChange: (role: 'coaches' | 'scouts' | 'fitness') => void
+interface StaffWorkspaceProps extends ScoutStaffProps, FitnessStaffProps, PhysioStaffProps {
+  role: 'coaches' | 'scouts' | 'fitness' | 'physio'
+  onRoleChange: (role: 'coaches' | 'scouts' | 'fitness' | 'physio') => void
   season: SeasonState
   onEnable: () => void
   onHire: (coachId: string, focus: TrainingFocus) => void
@@ -52,7 +54,7 @@ function FocusOptions() {
 }
 
 export function StaffWorkspace(props: StaffWorkspaceProps) {
-  return <div className="staff-workspace"><section className="staff-role-selector panel" aria-label="Staff roles"><div className="segmented" role="group" aria-label="Choose staff role"><button id="staff-role-coaches" aria-pressed={props.role === 'coaches'} className={props.role === 'coaches' ? 'selected' : ''} onClick={() => props.onRoleChange('coaches')} disabled={props.busy}><Icon name="training" size={15} />Training coaches <span>{getClubCoaching(props.season.coaching, props.season.managedClubId).length}/3</span></button><button id="staff-role-scouts" aria-pressed={props.role === 'scouts'} className={props.role === 'scouts' ? 'selected' : ''} onClick={() => props.onRoleChange('scouts')} disabled={props.busy}><Icon name="search" size={15} />Scouts <span>{getClubScouts(props.season).length}/3</span></button><button id="staff-role-fitness" aria-pressed={props.role === 'fitness'} className={props.role === 'fitness' ? 'selected' : ''} onClick={() => props.onRoleChange('fitness')} disabled={props.busy}><Icon name="shield" size={15} />Fitness coach <span>{getClubFitnessCoach(props.season) ? 1 : 0}/1</span></button></div><span>Remaining staff budget <strong data-staff-role-budget={remainingStaffBudget(props.season, props.season.managedClubId)}>{money(remainingStaffBudget(props.season, props.season.managedClubId))}</strong></span></section>{props.role === 'scouts' ? <ScoutStaff {...props} /> : props.role === 'fitness' ? <FitnessStaff {...props} /> : <TrainingStaff {...props} />}</div>
+  return <div className="staff-workspace"><section className="staff-role-selector panel" aria-label="Staff roles"><div className="segmented" role="group" aria-label="Choose staff role"><button id="staff-role-coaches" aria-pressed={props.role === 'coaches'} className={props.role === 'coaches' ? 'selected' : ''} onClick={() => props.onRoleChange('coaches')} disabled={props.busy}><Icon name="training" size={15} />Training coaches <span>{getClubCoaching(props.season.coaching, props.season.managedClubId).length}/3</span></button><button id="staff-role-scouts" aria-pressed={props.role === 'scouts'} className={props.role === 'scouts' ? 'selected' : ''} onClick={() => props.onRoleChange('scouts')} disabled={props.busy}><Icon name="search" size={15} />Scouts <span>{getClubScouts(props.season).length}/3</span></button><button id="staff-role-fitness" aria-pressed={props.role === 'fitness'} className={props.role === 'fitness' ? 'selected' : ''} onClick={() => props.onRoleChange('fitness')} disabled={props.busy}><Icon name="shield" size={15} />Fitness coach <span>{getClubFitnessCoach(props.season) ? 1 : 0}/1</span></button><button id="staff-role-physio" aria-pressed={props.role === 'physio'} className={props.role === 'physio' ? 'selected' : ''} onClick={() => props.onRoleChange('physio')} disabled={props.busy}><Icon name="medical" size={15} />Physio <span>{getClubPhysio(props.season) ? 1 : 0}/1</span></button></div><span>Remaining staff budget <strong data-staff-role-budget={remainingStaffBudget(props.season, props.season.managedClubId)}>{money(remainingStaffBudget(props.season, props.season.managedClubId))}</strong></span></section>{props.role === 'scouts' ? <ScoutStaff {...props} /> : props.role === 'fitness' ? <FitnessStaff {...props} /> : props.role === 'physio' ? <PhysioStaff {...props} /> : <TrainingStaff {...props} />}</div>
 }
 
 function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRenewal, onOpenTraining, busy = false }: StaffWorkspaceProps) {

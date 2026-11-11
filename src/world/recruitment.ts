@@ -212,13 +212,15 @@ export function scheduleInSeasonRecruitment(state: SeasonState): SeasonState {
   requirePreparedBoundary(state);
   let next = reviewAutomaticTransfers(state);
   const responseOn = dateForRound(state.round + 1, state.seasonNumber);
+  // Future availability uses only care already known when the offer is considered.
+  const knownMedical = state.physio ? { ...state.physio, rehabilitation: state.physio.rehabilitation.filter(record => record.toDate <= state.date) } : undefined;
   for (const club of state.clubs) {
     if (club.id === state.managedClubId && !state.employment.delegated) continue;
     for (let count = 0; count < MAX_ROSTER_SIZE; count += 1) {
       const registered = effectiveContractsForRound(next.employment, next.seasonNumber, next.round).filter(contract => contract.clubId === club.id);
       const pending = getInSeasonOffers(next, club.id, true);
       const departing = new Set(getInSeasonOffers(next, undefined, true).filter(offer => offer.transfer?.sellerClubId === club.id && offer.transfer.clubStatus === 'accepted').map(offer => offer.playerId));
-      const healthy = registered.filter(contract => !departing.has(contract.playerId) && !next.injuries.some(injury => injury.playerId === contract.playerId && isRecovering(injury, responseOn))).length;
+      const healthy = registered.filter(contract => !departing.has(contract.playerId) && !next.injuries.some(injury => injury.playerId === contract.playerId && isRecovering(injury, responseOn, knownMedical))).length;
       const needed = club.id === state.managedClubId ? 10 - registered.length + departing.size - pending.length : 8 - healthy - pending.length;
       if (needed <= 0 || registered.length + pending.length >= MAX_ROSTER_SIZE) break;
       const positions = new Map<string, number>();
@@ -227,7 +229,7 @@ export function scheduleInSeasonRecruitment(state: SeasonState): SeasonState {
         positions.set(position, (positions.get(position) ?? 0) + 1);
       }
       const assessed = (playerId: string): number => next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, playerId) : Object.values(DEVELOPMENT_PLAYERS.find(player => player.id === playerId)!.attributes).reduce((sum, value) => sum + value, 0);
-      const candidates = getInSeasonCandidates(next).filter(player => !pending.some(offer => offer.playerId === player.id) && !next.injuries.some(injury => injury.playerId === player.id && isRecovering(injury, responseOn))).sort((left, right) => (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || assessed(right.id) - assessed(left.id) || left.id.localeCompare(right.id, 'en'));
+      const candidates = getInSeasonCandidates(next).filter(player => !pending.some(offer => offer.playerId === player.id) && !next.injuries.some(injury => injury.playerId === player.id && isRecovering(injury, responseOn, knownMedical))).sort((left, right) => (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || assessed(right.id) - assessed(left.id) || left.id.localeCompare(right.id, 'en'));
       const player = candidates.find(player => quoteInSeasonOffer(next, player.id, getSeasonWage(player.id), club.id).canOffer);
       if (player) { next = submitInSeasonOffer(next, player.id, getSeasonWage(player.id), club.id); continue; }
       if (!next.recruitment.transfersEnabledSince) break;
@@ -235,7 +237,7 @@ export function scheduleInSeasonRecruitment(state: SeasonState): SeasonState {
         const asking = requiredInSeasonTransferFee(next, id), clause = getApplicableReleaseClause(next, id);
         return clause.canTrigger && clause.fee! <= asking && quoteInSeasonTransferOffer(next, id, getSeasonWage(id), 1, clause.fee!, club.id, 'upfront', undefined, { transferMode: 'release-clause' }).canOffer ? { fee: clause.fee!, options: { transferMode: 'release-clause' } } : { fee: asking, options: {} };
       };
-      const paid = [...getInSeasonTransferCandidates(next, club.id)].filter(candidate => !pending.some(offer => offer.playerId === candidate.id) && !next.injuries.some(injury => injury.playerId === candidate.id && isRecovering(injury, responseOn))).sort((left, right) => (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || assessed(right.id) - assessed(left.id) || left.id.localeCompare(right.id, 'en')).find(candidate => { const terms = approach(candidate.id); return quoteInSeasonTransferOffer(next, candidate.id, getSeasonWage(candidate.id), 1, terms.fee, club.id, 'upfront', undefined, terms.options).canOffer; });
+      const paid = [...getInSeasonTransferCandidates(next, club.id)].filter(candidate => !pending.some(offer => offer.playerId === candidate.id) && !next.injuries.some(injury => injury.playerId === candidate.id && isRecovering(injury, responseOn, knownMedical))).sort((left, right) => (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || assessed(right.id) - assessed(left.id) || left.id.localeCompare(right.id, 'en')).find(candidate => { const terms = approach(candidate.id); return quoteInSeasonTransferOffer(next, candidate.id, getSeasonWage(candidate.id), 1, terms.fee, club.id, 'upfront', undefined, terms.options).canOffer; });
       if (!paid) break;
       const terms = approach(paid.id);
       next = submitInSeasonTransferOffer(next, paid.id, getSeasonWage(paid.id), 1, terms.fee, club.id, 'upfront', terms.options);

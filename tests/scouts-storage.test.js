@@ -27,7 +27,7 @@ describe('scout save provenance and migration', () => {
     const text = fixture('season20-scouting-pending'), original = JSON.parse(text);
     const restored = parseSeason(text), expected = JSON.parse(fixture('season20-scouting-reply'));
     expect(original.formatVersion).toBe(20);
-    expect(restored).toEqual({ ...original.state, schemaVersion: 23, physio: { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }, fitness: { model: 'fitness-1', enabledSince: null, contracts: [] }, scouts: createScouts() });
+    expect(restored).toEqual({ ...original.state, schemaVersion: 24, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, physio: { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }, fitness: { model: 'fitness-1', enabledSince: null, contracts: [] }, scouts: createScouts() });
     expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(original.state.activeMatch));
     expect(Object.fromEntries(Object.keys(expected.beforeKnowledge).map(id => [id, getPlayerKnowledge(restored, id)]))).toEqual(expected.beforeKnowledge);
     const next = play(restored);

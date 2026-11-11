@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { MatchState, Side } from '../domain/types'
 import { cancelTimeoutRequest, remainingTimeouts, requestTimeout, setAutoSubstitutions } from '../engine/match'
 import { Icon } from './Icon'
@@ -22,7 +23,7 @@ export function RequiredDecision({ match, managedSide = 'home', apply }: { match
   </section>
 }
 
-export function MatchCoaching({ match, managedSide = 'home', apply }: { match: MatchState; managedSide?: Side; apply: Apply }) {
+export function MatchCoaching({ match, managedSide = 'home', apply, advice }: { match: MatchState; managedSide?: Side; apply: Apply; advice?: ReactNode }) {
   const complete = match.status === 'finished'
   const timeouts = remainingTimeouts(match, managedSide)
   return <section className="coaching-panel coaching-workbench panel" aria-labelledby="coaching-title" tabIndex={-1}>
@@ -35,5 +36,6 @@ export function MatchCoaching({ match, managedSide = 'home', apply }: { match: M
         <p className="coach-help" aria-live="polite">{complete ? 'Match finished.' : match.timeoutRequested[managedSide] ? 'Queued for the next opportunity.' : match.status === 'ready' ? 'Available after tipoff.' : 'Next legal stoppage.'}</p>
       </div>
     </div>
+    {advice}
   </section>
 }

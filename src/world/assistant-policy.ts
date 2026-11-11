@@ -1,0 +1,37 @@
+import type { AssistantCoach, AssistantContract, AssistantHireQuote } from '../domain/assistant';
+import type { SeasonState } from '../domain/season';
+import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
+import { getFinanceBalance } from './finance';
+import { remainingStaffBudget, STAFF_BUDGET, staffCommitted } from './staff-policy';
+import { getTransferPaymentSummary } from './transfer-payments';
+
+export const MAX_ASSISTANTS = 1;
+export function assistantRating(coach: AssistantCoach): number { return coach.assessment; }
+/** Advice resolution only. Current condition, injuries and match eligibility stay exact. */
+export function assistantEffects(coach: AssistantCoach): { skillStep: number } {
+  return { skillStep: 1 + Math.floor((10 - coach.assessment) / 3) };
+}
+export function getClubAssistant(state: Pick<SeasonState, 'assistant' | 'seasonNumber' | 'managedClubId'>, clubId = state.managedClubId): AssistantContract | null {
+  return state.assistant.contracts.find(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null) ?? null;
+}
+export function availableAssistants(state: Pick<SeasonState, 'assistant' | 'seasonNumber'>): AssistantCoach[] {
+  const employed = new Set(state.assistant.contracts.filter(contract => contract.seasonNumber === state.seasonNumber && contract.releasedRound === null).map(contract => contract.assistantId));
+  return DEVELOPMENT_ASSISTANTS.filter(coach => !employed.has(coach.id));
+}
+export function quoteAssistantHire(state: SeasonState, assistantId: string, clubId = state.managedClubId): AssistantHireQuote {
+  const coach = DEVELOPMENT_ASSISTANTS.find(coach => coach.id === assistantId);
+  const remainingAllocation = Math.max(0, STAFF_BUDGET - staffCommitted(state, clubId));
+  const remainingBudget = remainingStaffBudget(state, clubId);
+  let reason: string | null = null;
+  if (!state.assistant.enabledSince) reason = 'Enable assistant-coach recruitment before hiring.';
+  else if (!state.finance.enabledSince) reason = 'Assistant-coach recruitment requires club finances.';
+  else if (state.status !== 'active' || state.round === 10 && state.activeMatch.status === 'finished') reason = 'No match advice remains this season. Recruit an assistant when the next season starts.';
+  else if (!state.clubs.some(club => club.id === clubId) || !coach) reason = 'Choose an assistant coach and club from this career.';
+  else if (getClubAssistant(state, clubId)) reason = 'The assistant-coach position is already occupied.';
+  else if (!availableAssistants(state).some(available => available.id === assistantId)) reason = 'This assistant coach already has an active club contract.';
+  else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring an assistant coach.';
+  else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring an assistant coach.';
+  else if (coach.fee > remainingAllocation) reason = 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
+  else if (coach.fee > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
+  return { assistantId, clubId, fee: coach?.fee ?? 0, remainingAllocation, remainingBudget, canHire: reason === null, reason };
+}

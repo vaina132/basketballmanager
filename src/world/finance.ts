@@ -2,6 +2,7 @@ import type { CoachingContract } from '../domain/coaching';
 import type { ScoutContract } from '../domain/scouts';
 import type { FitnessContract } from '../domain/fitness';
 import type { PhysioContract } from '../domain/physio';
+import type { AssistantContract } from '../domain/assistant';
 import type { EmploymentBuyout, EmploymentTransfer } from '../domain/employment';
 import type { PayrollCharge } from '../domain/payroll';
 import type { TransferPayment } from '../domain/transfer-payments';
@@ -12,6 +13,7 @@ import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
+import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { getClubFinanceDefinition } from '../data/development-finances';
 import { getPayrollReserve, getSpendableCash } from './payroll-policy';
 import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransferPaymentSummary, payTransferInstallment } from './transfer-payments';
@@ -174,6 +176,19 @@ export function recordPhysioFee(state: SeasonState, contract: PhysioContract): S
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a physio.');
   if (getSpendableCash(state, contract.clubId) < staff.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a physio.');
   return append(state, { clubId: contract.clubId, kind: 'physio', amount: -staff.fee, sourceId: `physio-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, physio: { contractId: contract.id, physioId: contract.physioId } });
+}
+
+/** A full-season assistant appointment is charged once and never refunded on release. */
+export function recordAssistantFee(state: SeasonState, contract: AssistantContract): SeasonState {
+  const coach = DEVELOPMENT_ASSISTANTS.find(coach => coach.id === contract.assistantId);
+  const stored = state.assistant.contracts.at(-1);
+  if (!state.finance.enabledSince || !state.assistant.enabledSince || state.status !== 'active' || state.round === 10 && state.activeMatch.status === 'finished' || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== state.finance.ledger.length || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `assistant-contract-${state.assistant.contracts.length}`) throw new Error('Pay only the exact newly appointed assistant-coach contract.');
+  const active = state.assistant.contracts.filter(item => item.seasonNumber === state.seasonNumber && item.releasedRound === null);
+  if (!state.clubs.some(club => club.id === contract.clubId) || active.filter(item => item.clubId === contract.clubId).length !== 1 || active.filter(item => item.assistantId === contract.assistantId).length !== 1) throw new Error('Only one active assistant coach is allowed per club and per person.');
+  if (staffCommitted(state, contract.clubId) > STAFF_BUDGET) throw new Error('This appointment exceeds the shared staff allocation.');
+  if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring an assistant coach.');
+  if (getSpendableCash(state, contract.clubId) < coach.fee) throw new Error('Protect remaining wages and transfer commitments before hiring an assistant coach.');
+  return append(state, { clubId: contract.clubId, kind: 'assistant', amount: -coach.fee, sourceId: `assistant-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, assistant: { contractId: contract.id, assistantId: contract.assistantId } });
 }
 
 function winShare(state: FinanceContext, clubId: string, beforeRound: number): number | null {

@@ -133,4 +133,5 @@
 @media(max-width:650px){.staff-role-selector{padding:10px}.staff-role-selector .segmented button{font-size:12px;padding-inline:7px;gap:5px}.scout-vacancy{min-height:100px}.scout-header-actions{width:100%;justify-content:space-between}.scout-enable{padding:10px}.scout-staff-workspace .staff-candidate-profile{align-items:flex-start}}
 
 .staff-role-selector>.segmented{flex-wrap:wrap}.staff-role-selector>.segmented button{min-height:38px}.staff-role-selector>.segmented button span{white-space:nowrap}
+.staff-role-selector{flex-wrap:wrap}.staff-role-selector>span{white-space:nowrap}
 @media(max-width:650px){.staff-role-selector>.segmented{width:100%}.staff-role-selector>.segmented button{flex:1 0 auto;justify-content:center}.staff-role-selector{align-items:stretch}}

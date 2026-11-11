@@ -14,7 +14,7 @@ describe('release-clause save migration', () => {
     const original = JSON.parse(text);
     expect(original.formatVersion).toBe(19);
     const restored = parseSeason(text);
-    expect(restored).toEqual({ ...original.state, schemaVersion: 23, physio: { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }, fitness: { model: 'fitness-1', enabledSince: null, contracts: [] }, scouts: { model: 'scouts-1', enabledSince: null, contracts: [] } });
+    expect(restored).toEqual({ ...original.state, schemaVersion: 24, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, physio: { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }, fitness: { model: 'fitness-1', enabledSince: null, contracts: [] }, scouts: { model: 'scouts-1', enabledSince: null, contracts: [] } });
     expect(restored.employment.contracts.every(contract => !Object.hasOwn(contract, 'releaseFee'))).toBe(true);
     expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(original.state.activeMatch));
     const next = play(restored);

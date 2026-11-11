@@ -29,7 +29,7 @@ function firstEntry(state: SeasonState, kind: FinanceEntry['kind']): FinanceEntr
 function reject(state: SeasonState, change: (state: SeasonState) => void): void {
   const damaged = structuredClone(state); change(damaged);
   expect(() => validateSeasonState(damaged)).toThrow();
-  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 23, engineVersion: 'possession-3', state: damaged }))).toThrow();
+  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 24, engineVersion: 'possession-3', state: damaged }))).toThrow();
 }
 
 beforeAll(() => {
@@ -44,7 +44,7 @@ beforeAll(() => {
 describe('finance ledger persistence', () => {
   it('writes format 9 with funding and full coaching commitments for every club', () => {
     const text = serializeSeason(initial), before = structuredClone(initial);
-    expect(JSON.parse(text).formatVersion).toBe(23);
+    expect(JSON.parse(text).formatVersion).toBe(24);
     expect(restore(initial)).toEqual(initial);
     expect(initial.finance.ledger).toHaveLength(18);
     for (const club of initial.clubs) {

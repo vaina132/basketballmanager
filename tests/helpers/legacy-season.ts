@@ -55,7 +55,13 @@ export function stripFitness(value: object): void {
 
 /** Format22 predates physio appointments and rehabilitation. */
 export function stripPhysio(value: object): void {
+  stripAssistant(value);
   delete (value as Record<string, unknown>).physio;
+}
+
+/** Format23 predates paid assistant appointments. */
+export function stripAssistant(value: object): void {
+  delete (value as Record<string, unknown>).assistant;
 }
 
 /** Past player statistics cannot be recovered from an old-format archive. */

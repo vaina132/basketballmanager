@@ -1,0 +1,24 @@
+.assistant-roster{padding:14px}
+.staff-owned-card.assistant-owned-card{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(250px,1.2fr);gap:20px;padding:16px}
+.assistant-owned-profile,.assistant-owned-terms{display:grid;gap:16px;align-content:start;min-width:0}
+.assistant-owned-card .staff-owned-identity{flex-direction:row}
+.assistant-owned-card .staff-contract-controls{flex-direction:row;align-items:center}
+.assistant-owned-profile>.staff-skill-list{max-width:340px}
+.assistant-owned-terms{border-left:1px solid var(--border);padding-left:20px}
+.assistant-role-benefits{display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--surface-2);border:1px solid var(--border)}
+.assistant-role-benefits>svg{color:var(--accent);flex:none}
+.assistant-role-benefits>div{display:grid;gap:6px}
+.assistant-role-benefits strong{font-size:14px;font-weight:500}
+.assistant-role-benefits span{color:var(--muted);font-size:13px;line-height:1.5}
+.staff-vacancy.assistant-vacancy{max-width:430px;min-height:110px;width:100%;flex-direction:row;justify-content:flex-start;text-align:left;gap:18px}
+.assistant-vacancy .staff-vacancy-image{width:56px;height:64px}
+.assistant-vacancy .staff-vacancy-action{justify-content:flex-start}
+.assistant-assessment-details{font-size:13px;color:var(--muted);line-height:1.5}
+.assistant-assessment-details summary{cursor:pointer}
+.assistant-assessment-details summary:hover{color:var(--accent)}
+.assistant-assessment-details p{margin:8px 0 0}
+.assistant-candidate-profile{display:grid;gap:16px;min-width:0}
+.assistant-staff-workspace .staff-candidate-profile{align-items:center}
+#assistant-current-title:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:800px){.staff-owned-card.assistant-owned-card{grid-template-columns:1fr;gap:14px}.assistant-owned-terms{padding:14px 0 0;border-left:0;border-top:1px solid var(--border)}}
+@media(max-width:650px){.assistant-roster{padding:10px}.staff-owned-card.assistant-owned-card{padding:12px}.staff-vacancy.assistant-vacancy{max-width:none;min-height:100px}.assistant-staff-workspace .staff-candidate-profile{align-items:flex-start}}

@@ -14,7 +14,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'rhine-falcons';
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
-const envelope = (state: unknown, formatVersion = 23) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 24) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const accepted = (state: SeasonState): NegotiationRecord => state.negotiations.records.find(record => record.outcome === 'accepted')!;
 const countered = (state: SeasonState): NegotiationRecord => state.negotiations.records.find(record => record.outcome === 'countered')!;
 
@@ -42,7 +42,7 @@ describe('negotiation journal persistence', () => {
   it('round-trips rejections, counteroffers, alternative acceptance, AI offers and offseason signings', () => {
     for (const state of [initial, rejected, counter, signed, completed, recruited, second, secondWeek]) {
       const text = serializeSeason(state), restored = parseSeason(text);
-      expect(JSON.parse(text).formatVersion).toBe(23);
+      expect(JSON.parse(text).formatVersion).toBe(24);
       expect(restored).toEqual(state);
       expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
     }

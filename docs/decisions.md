@@ -103,6 +103,18 @@ A club discovers its own squad plus 20 outside identities, ordered by a fixed cl
 
 Coverage reveals identity only. The existing observation process still supplies uncertain ability evidence. Discovery filters the browsing pool without adding geography, travel expenses or permission barriers to direct known-player links. Existing AI/delegation policies and command guards stay unchanged; this is a player-facing discovery foundation, not completed regional AI scouting. Age sorting uses current calendar ages; ability sorting uses only known star bounds, with unknown values last in either direction. The interface previews each scout's reach and offers a direct hiring route.
 
+## Development assistant coaching policy
+
+One assistant per club shares the EUR 150,000 annual staff allocation and actual cash with training coaches, scouts, fitness coaches and physios. Appointments pay the entire catalog season fee; releases do not refund cash or restore that season's allocation. Hiring requires settled arrears, protected wage/transfer reserves and remaining match advice this season. Matchday ten is eligible before the final whistle. Staff negotiations, prorated fees and monthly staff payroll remain future work.
+
+An assistant's single Assessment skill is 1-10. Advice reads owned squad skills rounded in steps of `1 + floor((10 - assessment) / 3)`, bounded back to 1-20. Assessment 8-10 uses full integer skill detail; equal precision bands have equal fees. Current condition, fouls, participation and eligibility are never estimated. This is a transparent provisional model of recommendation precision, not additional scouting knowledge or a passive player-stat bonus.
+
+For eligible players in the current five, tactical advice targets `tempo = .5 + (passing - 10) * .02 + (condition - 85) * .008`, `outsideShare = .45 + (threePoint - twoPoint) * .04`, and `pressure = .5 + (defense - 10) * .025 + (staminaSkill - 10) * .01 - (100 - condition) * .006 - averageFouls * .05`. Inputs are lineup means; outputs are bounded to .20-.75 and rounded to the existing five-point slider increments. These are own-squad recommendations, not opponent-specific predictions or guaranteed optimal tactics.
+
+Rotation first addresses injury/exclusion, then condition below 75 with an eligible reserve at least eight points fresher, then four fouls (or three before the fourth quarter) with a reserve on fewer fouls. Candidate comparison then uses assessed position-weighted skills, position distance, condition and foul risk. After five minutes of actual exposure, recorded PIR contributes at most plus/minus two fit points. Optional fit changes require an improvement above 1.5 pre-match or 3 during play. Only one change is suggested at a time; an existing pending substitution stays authoritative. Eligibility and ordinary engine rules determine when a requested change can actually occur.
+
+Managers review and apply recommendations explicitly. Existing generic delegation controls remain usable without an appointment. Advice does not itself advance the match, consume randomness or read hidden opponents' skills. Commands recompute recommendations from current state and annotate the ordinary event with the assistant's name. AI uses the same tactical calculation when preparing future fixtures; human instructions and already prepared matches remain unchanged by hiring. First-time new-career preparation includes initial AI staffing. AI budget/renewal rules are identical, with current staff renewals preceding assistant renewals.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

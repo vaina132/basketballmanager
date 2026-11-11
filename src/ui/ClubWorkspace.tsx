@@ -6,6 +6,7 @@ import { getDevelopmentPlayer } from '../data/development-players'
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts'
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness'
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios'
+import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants'
 import { ANNUAL_SPONSORSHIP, financeLedgerRows, forecastGate, getClubFinanceDefinition, getFinanceBalance, MAX_TICKET_PRICE, OPENING_CASH, recommendTicketPrice, ROUND_OPERATING_COST, TICKET_PRICE_STEP } from '../world/finance'
 import { dateForRound, seasonLabel } from '../world/season'
 import { getTransferPayments } from '../world/transfer-payments'
@@ -26,7 +27,7 @@ const money = (cents: number) => moneyFormatter.format(cents / 100)
 const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${money(Math.abs(cents))}`
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
-const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout' }
+const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout' }
 
 export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
@@ -72,6 +73,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: 
       const visitor = fixture ? season.clubs.find(team => team.id === fixture.awayClubId) : null
       return `${visitor ? `Home vs ${visitor.name} · ` : ''}${count(entry.ticket.attendance)} / ${count(definition.capacity)} attendance · ${money(entry.ticket.price)} per ticket`
     }
+    if (entry.assistant) return DEVELOPMENT_ASSISTANTS.find(coach => coach.id === entry.assistant!.assistantId)?.name ?? 'Assistant coach fee'
     if (entry.physio) return DEVELOPMENT_PHYSIOS.find(physio => physio.id === entry.physio!.physioId)?.name ?? 'Physio fee'
     if (entry.fitness) return DEVELOPMENT_FITNESS_COACHES.find(coach => coach.id === entry.fitness!.coachId)?.name ?? 'Fitness coach fee'
     if (entry.scout) return DEVELOPMENT_SCOUTS.find(scout => scout.id === entry.scout!.scoutId)?.name ?? 'Scout fee'

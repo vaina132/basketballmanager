@@ -15,20 +15,28 @@ import { answerPress, getSquadRelationships, quoteRelationshipTalk, talkToPlayer
 import { TRAINING_FOCUSES } from '../src/world/training';
 import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
-import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
+import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, previewSeasonEnd, rolloverSeason } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
 
-const FROM = 'rhine-falcons', TO = 'aegean-waves';
+const FROM = 'rhine-falcons';
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
-const career = (careerMoves = true) => createSeason({ seed: 227, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves });
-let finalDay: SeasonState, moved: SeasonState, opened: SeasonState, playing: SeasonState;
+// Seed 10: Rhine Falcons finish third and Adriatic Comets' season ends Under pressure, so Adriatic offers its job.
+const career = (careerMoves = true, seed = 10) => createSeason({ seed, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves });
+/** Take the best job offered at the end of the season being finished; the test fails if nobody offers one. */
+function takeBestOffer(finished: SeasonState): SeasonState {
+  const offer = previewSeasonEnd(finished)?.offers[0];
+  if (!offer) throw new Error(`No club offered a job at the end of season ${finished.seasonNumber}.`);
+  return advanceSeason(finished, { moveTo: offer.clubId });
+}
+let finalDay: SeasonState, moved: SeasonState, opened: SeasonState, playing: SeasonState, TO: string;
 
 beforeAll(() => {
   let state = career();
   while (state.round < 10) state = advanceMatchday(state);
   finalDay = finish(state);
-  moved = advanceSeason(finalDay, { moveTo: TO });
+  moved = takeBestOffer(finalDay);
+  TO = moved.managedClubId;
   // The new club's recruitment is delegated so the offseason can finish without manual signings.
   let offseason = setEmploymentDelegation(moved, true);
   for (let step = 0; step < 80 && getMarketStartReason(offseason); step += 1) offseason = advanceMarket(offseason);
@@ -39,8 +47,11 @@ beforeAll(() => {
 
 describe('season-end club changes', () => {
   it('hands the offseason and later seasons to the new club while the final match stays with the former club', () => {
-    expect(moved.managedClubId).toBe(TO);
+    expect(previewSeasonEnd(finalDay)).toMatchObject({ dismissed: false, offers: [{ clubId: 'adriatic-comets', reason: 'pressure' }] });
+    expect(TO).toBe('adriatic-comets');
     expect(moved.career.moves).toEqual([{ seasonNumber: 1, date: finalDay.date, fromClubId: FROM, toClubId: TO, reason: 'moved', ledgerCount: expect.any(Number) }]);
+    // Without a decision the manager stays.
+    expect(advanceSeason(finalDay).managedClubId).toBe(FROM);
     expect([managedClubFor(moved, 1, false), managedClubFor(moved, 1, true), managedClubFor(moved, 2, false)]).toEqual([FROM, TO, TO]);
     expect(matchClubFor(moved)).toBe(FROM);
     expect(managedSide(moved)).toBe(managedSide(finalDay));
@@ -70,13 +81,15 @@ describe('season-end club changes', () => {
     expect(careerMoveRefusal(moved, 'danube-lynx')).toMatch(/already changed clubs/);
     let plain = career(false);
     while (plain.round < 10) plain = advanceMatchday(plain);
-    expect(() => advanceSeason(finish(plain), { moveTo: TO })).toThrow(/not active/);
+    expect(previewSeasonEnd(finish(plain))).toBeNull();
+    expect(() => advanceSeason(finish(plain), { moveTo: TO })).toThrow(/no job offers/);
+    expect(() => advanceSeason(finalDay, { moveTo: 'danube-lynx' })).toThrow(/offered you its job/);
     expect(careerMoveRefusal({ ...finalDay, status: 'complete' }, FROM)).toMatch(/already manage/);
     expect(enableCareerMoves(moved)).toBe(moved);
   }, 120_000);
 
   it.each([
-    ['a move to another club', (copy: SeasonState) => { copy.career.moves[0]!.toClubId = 'danube-lynx'; }],
+    ['a move to a club that made no offer', (copy: SeasonState) => { copy.career.moves[0]!.toClubId = 'danube-lynx'; copy.managedClubId = 'danube-lynx'; }],
     ['a removed move', (copy: SeasonState) => { copy.career.moves = []; }],
     ['a move before the final matchday ledger', (copy: SeasonState) => { copy.career.moves[0]!.ledgerCount -= 40; }],
     ['a move without the career switch', (copy: SeasonState) => { copy.career.enabledSince = null; }],
@@ -86,10 +99,10 @@ describe('season-end club changes', () => {
     expect(() => parseSeason(currentSeasonFile(copy))).toThrow(/Invalid season save/);
   });
 
-  it('rejects a move recorded as a dismissal before dismissal exists', () => {
+  it('rejects a voluntary move recorded as a dismissal', () => {
     const copy = structuredClone(moved);
-    (copy.career.moves[0] as { reason: string }).reason = 'dismissed';
-    expect(() => parseSeason(currentSeasonFile(copy))).toThrow(/supported reason/);
+    copy.career.moves[0]!.reason = 'dismissed';
+    expect(() => parseSeason(currentSeasonFile(copy))).toThrow(/season verdict/);
   });
 
   it('rejects the career record in a format-36 file', () => {
@@ -125,12 +138,13 @@ describe('club changes after manual decisions at both clubs', () => {
   beforeAll(() => {
     let state = setTicketPlan(career(), { delegated: false, price: 2200 });
     while (state.round < 10) state = advanceMatchday(manage(state, FROM, log));
-    state = advanceSeason(finish(manage(state, FROM, log)), { moveTo: TO });
-    state = setEmploymentDelegation(manage(state, TO, log), true);
+    state = takeBestOffer(finish(manage(state, FROM, log)));
+    const firstClub = state.managedClubId;
+    state = setEmploymentDelegation(manage(state, firstClub, log), true);
     for (let step = 0; step < 80 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
     state = rolloverSeason(state);
-    while (state.round < 10) state = advanceMatchday(manage(state, TO, log));
-    secondMove = advanceSeason(finish(manage(state, TO, log)), { moveTo: 'danube-lynx' });
+    while (state.round < 10) state = advanceMatchday(manage(state, firstClub, log));
+    secondMove = takeBestOffer(finish(manage(state, firstClub, log)));
     state = setEmploymentDelegation(secondMove, true);
     for (let step = 0; step < 80 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
     thirdSeason = advanceMatchday(rolloverSeason(state));
@@ -138,9 +152,10 @@ describe('club changes after manual decisions at both clubs', () => {
 
   it('records manual decisions at both clubs and two chained moves', () => {
     for (const kind of ['academy', 'sponsor', 'facility', 'press', 'talk', 'market']) expect(log.some(entry => entry.startsWith(`${kind}:`)), kind).toBe(true);
-    expect(log.some(entry => entry.endsWith(`:${FROM}`)) && log.some(entry => entry.endsWith(`:${TO}`))).toBe(true);
-    expect(secondMove.career.moves.map(move => [move.seasonNumber, move.fromClubId, move.toClubId])).toEqual([[1, FROM, TO], [2, TO, 'danube-lynx']]);
-    expect([1, 2, 3].map(season => managedClubFor(thirdSeason, season, false))).toEqual([FROM, TO, 'danube-lynx']);
+    const [first, second] = secondMove.career.moves;
+    expect(log.some(entry => entry.endsWith(`:${FROM}`)) && log.some(entry => entry.endsWith(`:${first!.toClubId}`))).toBe(true);
+    expect([first!.fromClubId, first!.toClubId === second!.fromClubId, second!.seasonNumber]).toEqual([FROM, true, 2]);
+    expect([1, 2, 3].map(season => managedClubFor(thirdSeason, season, false))).toEqual([FROM, first!.toClubId, second!.toClubId]);
   });
 
   it('validates the whole history with every decision credited to the club managed then', () => {

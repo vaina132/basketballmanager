@@ -7,8 +7,8 @@ import { STAFF_BUDGET } from './staff-constants';
 export type BoardVerdict = 'confident' | 'steady' | 'concerned' | 'pressure';
 
 /**
- * While dismissal is off, the final confidence of a season sets the next season's shared staff budget and the
- * owner's capital for facility projects. Contracts already signed are never cut; the budgets limit new commitments.
+ * The final confidence of a season sets the next season's shared staff budget and the owner's capital for facility
+ * projects; with dismissal on, Under pressure also ends the manager's job. Signed contracts are never cut.
  */
 export const BOARD_VERDICT_EFFECTS: Readonly<Record<BoardVerdict, { label: string; staffPercent: number; capitalPercent: number }>> = Object.freeze({
   confident: { label: 'Confident', staffPercent: 110, capitalPercent: 150 },

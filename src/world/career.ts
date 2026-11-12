@@ -39,6 +39,16 @@ export function careerEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'rou
   return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed), effectiveFrom: mode === 'career' ? 1 : state.seasonNumber + 1 };
 }
 
+/**
+ * Format 37 recorded the switch before dismissal and offers existed. On migration, decisions start with the first
+ * season end still to come, so a season that already ended is never judged afterwards.
+ */
+export function deferCareerDecisions(career: SeasonCareer, state: Pick<SeasonState, 'seasonNumber' | 'status'>): SeasonCareer {
+  if (!career.enabledSince) return career;
+  const next = (state.status === 'complete' ? state.seasonNumber : state.seasonNumber - 1) + 1;
+  return career.enabledSince.effectiveFrom >= next ? career : { ...career, enabledSince: { ...career.enabledSince, effectiveFrom: next } };
+}
+
 /** New careers can change clubs from the end of their first season; older careers from the end of the next one. */
 export function enableCareerMoves(state: SeasonState, mode: 'career' | 'prospective' = 'prospective'): SeasonState {
   if (state.career?.enabledSince) return state;

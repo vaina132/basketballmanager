@@ -1,6 +1,7 @@
 import { createBoard, enableBoard, enableBoardConsequences, prepareBoardSeason, processBoardRound } from './board';
 import { createRivalries, enableRivalries } from './rivalries';
 import { appointManager, createCareer, enableCareerMoves, matchClubFor } from './career';
+import { jobOfferRefusal, seasonEndOutlook, type SeasonEndOutlook } from './career-policy';
 import type { SeasonEndDecision } from '../domain/career';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
 import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
@@ -291,11 +292,37 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
 /** Commits a complete round atomically; a failed transition leaves its input untouched. */
 /**
  * Commit the current matchday. On the final matchday the manager's season-end decision applies after the final board
- * review and before the offseason opens, so the new club runs that offseason. No decision keeps the current club.
+ * review and before the offseason opens, so the new club runs that offseason. Without a decision the manager stays,
+ * unless the board dismissed them: they then join the best club that offered its job.
  */
 export function advanceSeason(state: SeasonState, decision?: SeasonEndDecision): SeasonState {
-  if (state.status === 'complete') throw new Error('This season is complete.');
   if (decision !== undefined && (state.round !== SEASON_ROUNDS || !decision || typeof decision !== 'object' || typeof decision.moveTo !== 'string' || Object.keys(decision).length !== 1)) throw new Error('A club change can only be decided when the final matchday is committed.');
+  let next = commitMatchday(state);
+  if (next.round === SEASON_ROUNDS) {
+    next.status = 'complete';
+    const outlook = seasonEndOutlook(next);
+    if (decision) { const refusal = jobOfferRefusal(outlook, decision.moveTo); if (refusal) throw new Error(refusal); }
+    const moveTo = decision?.moveTo ?? (outlook?.dismissed ? outlook.offers[0]?.clubId : undefined);
+    if (moveTo) next = appointManager(next, moveTo, outlook!.dismissed ? 'dismissed' : 'moved');
+    // Earned sponsor bonuses follow the final review; clubs still without a sponsor receive a second round of offers.
+    next = completeCommercialSeason(next);
+    return automateFacilities(prepareEmploymentMarket(next));
+  }
+  return prepareNextMatchday(state, next);
+}
+
+/**
+ * The board's verdict and the job offers that committing the final matchday would bring, without committing it; the
+ * manager decides from this before the offseason opens. Null before the final matchday or while job changes are off.
+ */
+export function previewSeasonEnd(state: SeasonState): SeasonEndOutlook | null {
+  if (state.status !== 'active' || state.round !== SEASON_ROUNDS) return null;
+  return seasonEndOutlook(commitMatchday(state));
+}
+
+/** Play the round's other fixtures and commit its results, accounts and board review. */
+function commitMatchday(state: SeasonState): SeasonState {
+  if (state.status === 'complete') throw new Error('This season is complete.');
   if (state.engineVersion !== 'possession-3' || state.activeMatch.engineVersion !== state.engineVersion) throw new Error('The season and its match must use the supported possession engine.');
   if (state.activeMatch.status !== 'finished' || state.activeMatch.requiredSubstitutions.length) throw new Error('Finish the current match and resolve required decisions before continuing.');
   if (state.activeMatch.injuryMode !== state.injuryMode || state.injuryMode === 'off' && (state.injuries.length || Object.keys(state.activeMatch.injuries).length)) throw new Error('Every club must use the same season injury setting.');
@@ -318,15 +345,12 @@ export function advanceSeason(state: SeasonState, decision?: SeasonEndDecision):
   next = processPayrollRound(next);
   next = processTransferPayments(next);
   next = processScoutingRound(next);
-  next = processBoardRound(next);
-  if (next.round === SEASON_ROUNDS) {
-    next.status = 'complete';
-    if (decision) next = appointManager(next, decision.moveTo, 'moved');
-    // Earned sponsor bonuses follow the final review; clubs still without a sponsor receive a second round of offers.
-    next = completeCommercialSeason(next);
-    return automateFacilities(prepareEmploymentMarket(next));
-  }
-  next = recruitAiScouts(next);
+  return processBoardRound(next);
+}
+
+/** After an ordinary matchday: staff hiring, the calendar step and the next prepared match. */
+function prepareNextMatchday(state: SeasonState, committed: SeasonState): SeasonState {
+  let next = recruitAiScouts(committed);
   next = recruitAiFitnessCoaches(next);
   next = recruitAiPhysios(next);
   next = recruitAiAssistants(next);

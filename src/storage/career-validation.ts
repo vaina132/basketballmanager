@@ -1,6 +1,8 @@
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_CLUBS } from '../data/development-league';
 import { dateForRound } from '../world/season';
+import { seasonEndOutlook } from '../world/career-policy';
+import type { SeasonCareer } from '../domain/career';
 
 const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
@@ -20,7 +22,7 @@ function integer(value: unknown, path: string, min: number, max: number): number
  * season, from the club managed then to the club managed now. Every other system reads the same moves through
  * `managedClubFor`, so their replays attribute each decision to the club the manager ran at that time.
  */
-export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonNumber' | 'round' | 'status' | 'date' | 'market' | 'managedClubId' | 'board' | 'finance'>): void {
+export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonNumber' | 'round' | 'status' | 'date' | 'market' | 'managedClubId' | 'board' | 'finance'>, version: number): void {
   const fields = record(value, 'career', ['model', 'enabledSince', 'moves']);
   if (fields.model !== 'career-1') fail('career.model', 'is unsupported');
   if (!Array.isArray(fields.moves) || fields.moves.length > state.seasonNumber) fail('career.moves', 'must be a bounded list of club changes');
@@ -41,7 +43,9 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
   if (typeof anchor.date !== 'string' || !dates.has(anchor.date) || anchor.date > state.date) fail(`${path}.date`, 'must identify a calendar date actually visited');
   const career = year === 1 && round === 1 && completed === 0;
   const effectiveFrom = integer(anchor.effectiveFrom, `${path}.effectiveFrom`, 1, state.seasonNumber + 1);
-  if (effectiveFrom !== (career ? 1 : year + 1)) fail(`${path}.effectiveFrom`, 'must start with a new career or the season after activation');
+  // Format 38 also accepts a later start: careers migrated from format 37 are judged only from their next season end.
+  const expected = career ? 1 : year + 1;
+  if (version >= 38 ? effectiveFrom < expected : effectiveFrom !== expected) fail(`${path}.effectiveFrom`, 'must start with a new career or the season after activation');
   const clubIds = DEVELOPMENT_CLUBS.map(club => club.id);
   const ledger = state.finance.ledger;
   let previous: { seasonNumber: number; toClubId: string; ledgerCount: number } | null = null;
@@ -54,7 +58,7 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
     if (move.date !== dateForRound(10, season)) fail(`${location}.date`, 'must be the final matchday of that season');
     if (typeof move.fromClubId !== 'string' || !clubIds.includes(move.fromClubId) || typeof move.toClubId !== 'string' || !clubIds.includes(move.toClubId) || move.fromClubId === move.toClubId) fail(location, 'must move between two different clubs in this league');
     if (previous && move.fromClubId !== previous.toClubId) fail(`${location}.fromClubId`, 'must be the club managed after the previous move');
-    if (move.reason !== 'moved') fail(`${location}.reason`, 'must record a supported reason');
+    if (move.reason !== 'moved' && (move.reason !== 'dismissed' || version < 38)) fail(`${location}.reason`, 'must record a supported reason');
     // The move follows the committed final matchday (its tickets and operating costs) and precedes later seasons.
     const ledgerCount = integer(move.ledgerCount, `${location}.ledgerCount`, previous?.ledgerCount ?? 0, ledger.length);
     const matchdayEnd = ledger.reduce((end, entry, position) => entry.seasonNumber === season && entry.round === 10 && (entry.kind === 'tickets' || entry.kind === 'operations') ? position + 1 : end, 0);
@@ -62,4 +66,23 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
     previous = { seasonNumber: season, toClubId: move.toClubId, ledgerCount };
   }
   if (previous && previous.toClubId !== state.managedClubId) fail('career.moves', 'must end at the club managed now');
+}
+
+/**
+ * After the board history is validated: every governed season end is rebuilt from its final reviews and table. A
+ * dismissed manager must have moved to a club that offered its job; otherwise a move must accept an offer.
+ */
+export function validateCareerDecisions(state: SeasonState): void {
+  const career = state.career as SeasonCareer | undefined;
+  if (!career?.enabledSince) return;
+  const lastEnded = state.status === 'complete' ? state.seasonNumber : state.seasonNumber - 1;
+  for (let season = career.enabledSince.effectiveFrom; season <= lastEnded; season += 1) {
+    const move = career.moves.find(item => item.seasonNumber === season), index = career.moves.indexOf(move!);
+    const outlook = seasonEndOutlook(state, season), path = move ? `career.moves[${index}]` : 'career.moves';
+    if (!outlook) { if (move) fail(path, 'must follow a season end with a final board review'); continue; }
+    if (outlook.dismissed && !move) fail(path, `must record the club joined after the dismissal at the end of season ${season}`);
+    if (!move) continue;
+    if (move.reason !== (outlook.dismissed ? 'dismissed' : 'moved')) fail(`${path}.reason`, 'must match the board\'s season verdict');
+    if (!outlook.offers.some(offer => offer.clubId === move.toClubId)) fail(`${path}.toClubId`, 'must accept a job offered at that season end');
+  }
 }

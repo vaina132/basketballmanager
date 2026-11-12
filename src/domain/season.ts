@@ -77,7 +77,7 @@ export interface SeasonArchive {
 }
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
-export const SEASON_SCHEMA_VERSION = 37;
+export const SEASON_SCHEMA_VERSION = 38;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -117,7 +117,7 @@ export interface SeasonState {
   commercial: SeasonCommercial;
   /** Format 35: derby effects from the rivalry anchor. */
   rivalries: SeasonRivalries;
-  /** Format 37: dismissal and job changes, with the clubs the manager moved between. */
+  /** Format 37: club changes at season ends; format 38: the board's dismissal and job offers decide them. */
   career: SeasonCareer;
   negotiations: SeasonNegotiations;
   market: SeasonMarket;

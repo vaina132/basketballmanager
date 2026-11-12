@@ -9,7 +9,7 @@ The product discovery has eighteen answers. Core design, world/match specificati
 ## In progress: dismissal and job changes
 
 - Groundwork (format 37): a career can record a change of club at the end of a season, after the final board review; the new club runs that offseason and later seasons, and the former club continues under automatic control. The save checker credits every earlier decision (sponsorship, facilities, academy, press, squad conversations, recruitment) to the club managed at that time.
-- No screen offers a move yet. Dismissal, reputation, job offers and the screens follow in the next parts of step 7.5.
+- Dismissal and offers (format 38): with the setting on (new careers), a season that ends Under pressure dismisses the manager. Clubs whose season also went badly replace their coach and offer the job according to the manager's reputation (the last three final board ratings); a dismissed manager always receives an offer. For now a dismissed manager joins the best offer automatically, and the manager's desk and the Inbox report the change; offers to a manager who kept the job are not yet shown. The choice screen, the Board page section and the switch for older careers follow in the next part.
 
 ## Implemented: facility condition and upkeep plans
 

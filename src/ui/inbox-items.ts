@@ -11,6 +11,7 @@ import { seasonLabel } from '../world/season'
 import { governingDerby } from '../world/rivalries'
 import { FACILITY_TYPES, getFacilityCondition, getFacilityLevel, maintenancePlanOn } from '../world/facilities-policy'
 import { clubRetirementsThisSeason } from './PlayerLifecycle'
+import { careerMoveText } from './career-text'
 import { medicalDate } from './SeasonMedicalReport'
 
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
@@ -80,6 +81,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     const condition = getFacilityCondition(season, type, clubId)
     if (condition < 60) items.push({ id: `worn-${type}`, date: season.date, category: 'club', title: `${FACILITIES[type]} wearing`, detail: `Condition ${condition}/100 under ${maintenancePlanOn(season.facilities, clubId, season.date)} upkeep; its benefit shrinks until full upkeep restores it.`, needsAction: maintenancePlanOn(season.facilities, clubId) === 'reduced', target: 'club' })
   }
+  for (const move of season.career?.moves ?? []) { const text = careerMoveText(season, move); items.push({ id: `career-move-${move.seasonNumber}`, date: move.date, category: 'board', title: text.title, detail: text.detail, needsAction: false, target: 'board' }) }
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })
 
   return items.sort((a, b) => Number(b.needsAction) - Number(a.needsAction) || compare(b.date, a.date) || compare(a.id, b.id))

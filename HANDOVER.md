@@ -1,6 +1,6 @@
 # Project handover
 
-Prepared 12 November 2026 and updated at every Level 7 step. Repository: `basketballmanager`; active branch: `level-7`, created from `main` at `acc5c27`. [CLAUDE.md](CLAUDE.md) records the owner's working agreement.
+Prepared 12 November 2026 and updated at every Level 7 step. Repository: `basketballmanager`; work happens directly on `main` (the owner asked for no branches on 12 November 2026). Level 7 commits follow `acc5c27`; they were made on a local `level-7` branch that was fast-forwarded into `main` and deleted. [CLAUDE.md](CLAUDE.md) records the owner's working agreement.
 
 ## Active work: Level 7 (facilities, business, board and career)
 

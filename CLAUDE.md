@@ -15,6 +15,8 @@ The project owner set these instructions for any agent continuing this project:
 
 "Levels" are the milestones in [docs/implementation-plan.md](docs/implementation-plan.md). Interface rules live in [AGENTS.md](AGENTS.md); the current state, active level and next step live in [HANDOVER.md](HANDOVER.md).
 
+Work directly on `main`; do not create branches (owner's instruction, 12 November 2026).
+
 Communicate progress and any request for help in plain, non-technical language with step-by-step guidance. Keep real-data costs low: prefer free sources and ask before any paid option.
 
 ## Running checks on Windows

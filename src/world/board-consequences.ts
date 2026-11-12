@@ -52,6 +52,12 @@ export function governingVerdict(state: Partial<Pick<SeasonState, 'board'>>, clu
 
 const scaled = (amount: number, percent: number) => Math.round(amount * percent / 100);
 
+/** The budgets a verdict gives a club; standard budgets without one. Also used to preview an unfinished season. */
+export function verdictBudgets(clubId: string, verdict: BoardVerdict | null): { staff: number; capital: number } {
+  const effect = BOARD_VERDICT_EFFECTS[verdict ?? 'steady'];
+  return { staff: scaled(STAFF_BUDGET, effect.staffPercent), capital: scaled(getDevelopmentPresident(clubId).seasonCapital, effect.capitalPercent) };
+}
+
 /** The shared annual staff allocation for a club and season, in euro cents. */
 export function staffAllocation(state: Partial<Pick<SeasonState, 'board'>> & Pick<SeasonState, 'seasonNumber'>, clubId: string, seasonNumber = state.seasonNumber): number {
   const verdict = governingVerdict(state, clubId, seasonNumber);
@@ -60,6 +66,5 @@ export function staffAllocation(state: Partial<Pick<SeasonState, 'board'>> & Pic
 
 /** The owner's capital for facility projects in a season, in euro cents. */
 export function ownerCapital(state: Partial<Pick<SeasonState, 'board'>> & Pick<SeasonState, 'seasonNumber'>, clubId: string, seasonNumber = state.seasonNumber): number {
-  const base = getDevelopmentPresident(clubId).seasonCapital, verdict = governingVerdict(state, clubId, seasonNumber);
-  return verdict ? scaled(base, BOARD_VERDICT_EFFECTS[verdict.verdict].capitalPercent) : base;
+  return verdictBudgets(clubId, governingVerdict(state, clubId, seasonNumber)?.verdict ?? null).capital;
 }

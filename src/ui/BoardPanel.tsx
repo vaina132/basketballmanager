@@ -5,8 +5,8 @@ import type { SeasonState } from '../domain/season'
 import { getDevelopmentPresident, type DevelopmentPresident } from '../data/development-presidents'
 import { getBoardSummary } from '../world/board'
 import { BOARD_FUNDING_REFUSAL_COOLDOWN, boardCapitalGranted, boardConfidenceNow, boardFundingRefusal, requiredBoardConfidence } from '../world/board-funding-policy'
-import { ownerCapital } from '../world/board-consequences'
-import { seasonLabel } from '../world/season'
+import { BOARD_VERDICT_EFFECTS, governingVerdict, ownerCapital, seasonVerdict, staffAllocation, verdictBudgets, verdictForConfidence, type BoardVerdict } from '../world/board-consequences'
+import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { FACILITY_LABELS } from './FacilitiesPanel'
 import { Icon, type IconName } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
@@ -17,6 +17,7 @@ interface BoardPanelProps {
   busy?: boolean
   onEnable: () => void
   onEnableFunding: () => void
+  onEnableConsequences: () => void
 }
 
 const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(cents / 100)
@@ -65,7 +66,34 @@ function PresidentSection({ season, busy, onEnableFunding }: { season: SeasonSta
   </>
 }
 
-export function BoardPanel({ season, busy = false, onEnable, onEnableFunding }: BoardPanelProps) {
+const verdictState = (verdict: BoardVerdict): 'good' | 'concern' | 'waiting' => verdict === 'confident' ? 'good' : verdict === 'steady' ? 'waiting' : 'concern'
+const effectText = (verdict: BoardVerdict) => {
+  const effect = BOARD_VERDICT_EFFECTS[verdict]
+  return effect.staffPercent === 100 ? 'Standard budgets' : `Staff budget ${effect.staffPercent > 100 ? '+' : '−'}${Math.abs(effect.staffPercent - 100)}% · owner capital ${effect.capitalPercent === 0 ? 'withheld' : effect.capitalPercent < 100 ? 'halved' : `+${effect.capitalPercent - 100}%`}`
+}
+
+function VerdictSection({ season, busy, onEnableConsequences }: { season: SeasonState; busy: boolean; onEnableConsequences: () => void }) {
+  const clubId = season.managedClubId, next = season.seasonNumber + 1
+  const current = governingVerdict(season, clubId, season.seasonNumber)
+  const final = seasonVerdict(season.board, clubId, season.seasonNumber)
+  const confidence = final?.confidence ?? boardConfidenceNow(season, clubId)
+  const outlook = final?.verdict ?? verdictForConfidence(confidence)
+  const budgets = verdictBudgets(clubId, outlook)
+  if (!season.board.consequencesSince) return <>
+    <h3 className="board-section-heading"><Icon name="target" size={16} />Season verdict &amp; budgets</h3>
+    <div className="board-enable board-verdict-enable"><Icon name="target" size={24} /><div><strong>Let the season verdict set budgets</strong><p>At the end of each season, the board's final confidence sets next season's staff budget and the owner's capital for facility upgrades: Confident adds 10% to staff and 50% to capital, Steady changes nothing, Concerned cuts staff 10% and halves capital, Under pressure cuts staff 20% and withholds capital. Signed staff contracts are never cut. This starts with {seasonLabel(next)}.</p></div><button id="enable-board-consequences" className="button" onClick={onEnableConsequences} disabled={busy}>Enable season verdicts</button></div>
+  </>
+  return <>
+    <h3 className="board-section-heading"><Icon name="target" size={16} />Season verdict &amp; budgets</h3>
+    <div className="board-verdict" data-board-verdict={final?.verdict ?? 'pending'}>
+      <div className="board-verdict-season" data-board-verdict-current={current?.verdict ?? 'standard'}><span>This season · {seasonLabel(season.seasonNumber)}</span><strong>{money(staffAllocation(season, clubId))} staff budget</strong><small>{money(ownerCapital(season, clubId))} owner capital</small><small>{current ? `Set by the ${seasonLabel(current.seasonNumber)} verdict: ${BOARD_VERDICT_EFFECTS[current.verdict].label} (confidence ${current.confidence})` : 'Standard budgets'}</small></div>
+      {next <= MAX_SEASON_NUMBER && <div className="board-verdict-season" data-board-next-staff={budgets.staff} data-board-next-capital={budgets.capital}><span>{final ? `Verdict for ${seasonLabel(next)}` : `If the season ended today · ${seasonLabel(next)}`}</span><strong>{money(budgets.staff)} staff budget</strong><small>{money(budgets.capital)} owner capital</small><span className="board-verdict-outcome"><ObjectiveStatus label={`${BOARD_VERDICT_EFFECTS[outlook].label} · confidence ${confidence}`} state={final ? verdictState(outlook) : 'waiting'} /><small>{effectText(outlook)}</small></span></div>}
+    </div>
+    <p className="board-empty board-verdict-note">{final ? 'The verdict is final. ' : 'The verdict is given by the final review after matchday 10. '}Signed staff contracts are never cut; renewals on the opening day of the next season must fit its staff budget.</p>
+  </>
+}
+
+export function BoardPanel({ season, busy = false, onEnable, onEnableFunding, onEnableConsequences }: BoardPanelProps) {
   const summary = getBoardSummary(season)
   const { mandate, objective, latest } = summary
   const review = latest?.club
@@ -92,9 +120,10 @@ export function BoardPanel({ season, busy = false, onEnable, onEnableFunding }: 
           <p>The review assessment starts at 50, then adds the results, injury and financial contributions above. Confidence moves towards it by no more than 8 points per review. {season.facilities.fundingSince ? 'It records the board\'s view and decides capital requests; it does not change match performance, budget limits or your job.' : 'It records the board\'s view; it does not change match performance, budget limits or your job.'}</p>
         </details>
       </> : <p className="board-empty">Objectives start next season. The completed season will not be reviewed retroactively.</p>}
+      <VerdictSection season={season} busy={busy} onEnableConsequences={onEnableConsequences} />
       <PresidentSection season={season} busy={busy} onEnableFunding={onEnableFunding} />
       <ReviewHistory summary={summary} season={season} />
-      <details className="board-rules"><summary><Icon name="settings" size={15} />Review rules</summary><p>Reviews use recorded results and registered squads. A half-win tolerance applies to the expected pace. Beyond that tolerance, each win above or below pace contributes 10 assessment points, capped at 30 points in either direction. Fewer than three counted games produce no results contribution. Pre-existing injury absences can soften a negative contribution by up to 6 points. A result still on the match screen is included only after you continue the matchday.</p><p>Unpaid club costs and overdue transfer payments are compared with the balance when objectives were set. Only an increase above that starting balance lowers the financial assessment. Each €2,000 change contributes one assessment point, rounded to a whole point, with a maximum penalty of 25 or improvement of 10. If finances were disabled when objectives were set, this objective stays unassessed for the season.</p><p>Capital requests: the board funds only the part of a facility upgrade the club cannot pay, from the owner's capital for the season. It approves when the latest reviewed confidence reaches 65 minus 5 for each point of the president's generosity (60 to 40) and the owner's capital covers the amount. It never funds construction while committed wages and fees exceed cash or costs are unpaid. After a refusal, the club waits {BOARD_FUNDING_REFUSAL_COOLDOWN} matchdays before asking again. Automatic facilities control and rival clubs ask only when these rules approve.</p></details>
+      <details className="board-rules"><summary><Icon name="settings" size={15} />Review rules</summary><p>Reviews use recorded results and registered squads. A half-win tolerance applies to the expected pace. Beyond that tolerance, each win above or below pace contributes 10 assessment points, capped at 30 points in either direction. Fewer than three counted games produce no results contribution. Pre-existing injury absences can soften a negative contribution by up to 6 points. A result still on the match screen is included only after you continue the matchday.</p><p>Unpaid club costs and overdue transfer payments are compared with the balance when objectives were set. Only an increase above that starting balance lowers the financial assessment. Each €2,000 change contributes one assessment point, rounded to a whole point, with a maximum penalty of 25 or improvement of 10. If finances were disabled when objectives were set, this objective stays unassessed for the season.</p><p>Capital requests: the board funds only the part of a facility upgrade the club cannot pay, from the owner's capital for the season. It approves when the latest reviewed confidence reaches 65 minus 5 for each point of the president's generosity (60 to 40) and the owner's capital covers the amount. It never funds construction while committed wages and fees exceed cash or costs are unpaid. After a refusal, the club waits {BOARD_FUNDING_REFUSAL_COOLDOWN} matchdays before asking again. Automatic facilities control and rival clubs ask only when these rules approve.</p><p>Season verdicts: when switched on, the final review of each season gives a verdict from the board's confidence (Confident 65 and above, Steady 45-64, Concerned 30-44, Under pressure below 30). It sets the next season's shared staff budget (110%, 100%, 90% or 80% of the standard budget) and the owner's capital (150%, 100%, 50% or none). Rival clubs follow the same rules.</p></details>
     </>}
   </section>
 }

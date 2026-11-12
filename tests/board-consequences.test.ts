@@ -6,31 +6,18 @@ import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { boardEventAnchor, createBoard, enableBoardConsequences } from '../src/world/board';
 import { BOARD_VERDICT_EFFECTS, boardConsequencesGovern, governingVerdict, ownerCapital, seasonVerdict, staffAllocation, verdictForConfidence } from '../src/world/board-consequences';
 import { quoteBoardFunding } from '../src/world/board-funding-policy';
-import { setEmploymentDelegation } from '../src/world/employment';
-import { setFacilityDelegation } from '../src/world/facilities';
-import { advanceMarket } from '../src/world/market';
-import { getMarketStartReason } from '../src/world/market-policy';
 import { createSeason, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
 import { remainingStaffBudget, STAFF_BUDGET, staffCommitted } from '../src/world/staff-policy';
-import { advanceMatchday } from './helpers/board-funding';
+import { playFirstSeason } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
 
-const manager = { name: 'Verdict Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-/** Plays the first season with automatic contracts and facilities and stops after the offseason market. */
-function completeFirstSeason(boardConsequences: boolean): SeasonState {
-  let state = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, boardConsequences });
-  state = setEmploymentDelegation(setFacilityDelegation(state, true), true);
-  while (state.status === 'active') state = advanceMatchday(state);
-  for (let step = 0; step < 80 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
-  return state;
-}
 const verdictOf = (state: SeasonState, clubId: string) => seasonVerdict(state.board, clubId, 1)!.verdict;
 let complete: SeasonState, opening: SeasonState, legacyComplete: SeasonState, legacyOpening: SeasonState;
 
 beforeAll(() => {
-  complete = completeFirstSeason(true);
+  complete = playFirstSeason(true);
   opening = rolloverSeason(complete);
-  legacyComplete = completeFirstSeason(false);
+  legacyComplete = playFirstSeason(false);
   legacyOpening = rolloverSeason(legacyComplete);
 }, 240_000);
 

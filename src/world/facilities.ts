@@ -1,13 +1,14 @@
-import type { FacilityAnchor, FacilityEvent, FacilityProject, FacilityType, SeasonFacilities } from '../domain/facilities';
+import type { FacilityAnchor, FacilityEvent, FacilityProject, FacilityType, MaintenancePlan, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { getClubFinanceDefinition } from '../data/development-finances';
-import { FACILITY_AUTOMATION_BUFFER, FACILITY_TYPES, getActiveFacilityProject, quoteFacilityUpgrade } from './facilities-policy';
-import { recordBoardCapital, recordFacilityInvestment } from './finance';
+import { FACILITY_AUTOMATION_BUFFER, FACILITY_TYPES, getActiveFacilityProject, getFacilityLevel, maintenancePlanOn, quoteFacilityUpgrade } from './facilities-policy';
+import { getSpendableCash, getSpendablePosition } from './payroll-policy';
+import { getFinanceBalance, recordBoardCapital, recordFacilityInvestment } from './finance';
 import { quoteBoardFunding, type BoardFundingQuote } from './board-funding-policy';
 
 export function createFacilities(clubs: readonly Pick<Team, 'id'>[] = [], managedClubId = ''): SeasonFacilities {
-  return { model: 'facilities-1', enabledSince: null, delegated: Object.fromEntries(clubs.map(club => [club.id, club.id !== managedClubId])), projects: [], events: [], fundingSince: null };
+  return { model: 'facilities-1', enabledSince: null, delegated: Object.fromEntries(clubs.map(club => [club.id, club.id !== managedClubId])), projects: [], events: [], fundingSince: null, maintenanceSince: null };
 }
 
 export function facilityEventAnchor(state: SeasonState): FacilityAnchor {
@@ -72,6 +73,12 @@ export function applyFacilityEvent(state: SeasonState, event: FacilityEvent): Se
     const decided = { ...state, facilities: { ...state.facilities, events } };
     return event.approved ? recordBoardCapital(decided, `facility-project-${state.facilities.projects.length + 1}`) : decided;
   }
+  if (event.type === 'maintenance') {
+    if (!state.facilities.maintenanceSince) throw new Error('Enable facility maintenance choices first.');
+    if (!state.clubs.some(club => club.id === event.clubId) || !['full', 'reduced'].includes(event.plan)) throw new Error('Choose a club and a full or reduced upkeep plan.');
+    if (maintenancePlanOn(state.facilities, event.clubId) === event.plan) throw new Error('This upkeep plan is already selected.');
+    return { ...state, facilities: { ...state.facilities, events } };
+  }
   if (event.type !== 'process') throw new Error('Choose a supported facilities command.');
   const due = state.facilities.projects.filter(project => project.completedOn === null && project.cancelledOn === null && project.dueOn <= state.date);
   if (!due.length) throw new Error('There are no construction projects ready to complete at this calendar boundary.');
@@ -103,6 +110,18 @@ export function processFacilityProjects(state: SeasonState): SeasonState {
 
 const fundingDecision = (quote: BoardFundingQuote) => ({ type: 'funding' as const, clubId: quote.clubId, facilityType: quote.facilityType, amount: quote.amount, mode: quote.mode, approved: quote.approved, confidence: quote.confidence, requiredConfidence: quote.requiredConfidence, capitalRemaining: quote.capitalRemaining });
 
+/** Older careers opt in; condition only changes at matchdays after this point, and full upkeep stays the default. */
+export function enableFacilityMaintenance(state: SeasonState): SeasonState {
+  if (state.facilities.maintenanceSince) return state;
+  if (!state.facilities.enabledSince) throw new Error('Enable club facilities before choosing upkeep plans.');
+  return automateFacilities({ ...state, facilities: { ...state.facilities, maintenanceSince: facilityEventAnchor(state) } });
+}
+
+/** The manager's upkeep plan; it applies from the next matchday. */
+export function setMaintenancePlan(state: SeasonState, plan: MaintenancePlan): SeasonState {
+  return applyFacilityEvent(state, { ...facilityEventAnchor(state), type: 'maintenance', clubId: state.managedClubId, plan });
+}
+
 /** Older careers opt in; new careers enable funding with facilities and board reviews. */
 export function enableBoardFunding(state: SeasonState): SeasonState {
   if (state.facilities.fundingSince) return state;
@@ -127,7 +146,16 @@ export function automateFacilities(state: SeasonState): SeasonState {
   if (!state.facilities.enabledSince) return state;
   let next = state;
   for (const club of state.clubs) {
-    if (!next.facilities.delegated[club.id] || getActiveFacilityProject(next, club.id)) continue;
+    if (!next.facilities.delegated[club.id]) continue;
+    // Automatic upkeep, only with upgrades to maintain: reduce when commitments exceed cash or costs are unpaid,
+    // restore once half the automation cushion is spendable again.
+    if (next.facilities.maintenanceSince && FACILITY_TYPES.some(type => getFacilityLevel(next, type, club.id) > 1)) {
+      const current = maintenancePlanOn(next.facilities, club.id);
+      const tight = getSpendablePosition(next, club.id) < 0 || getFinanceBalance(next.finance, club.id).unpaid > 0;
+      const plan: MaintenancePlan = current === 'full' ? tight ? 'reduced' : 'full' : !tight && getSpendableCash(next, club.id) >= FACILITY_AUTOMATION_BUFFER / 2 ? 'full' : 'reduced';
+      if (plan !== current) next = applyFacilityEvent(next, { ...facilityEventAnchor(next), type: 'maintenance', clubId: club.id, plan });
+    }
+    if (getActiveFacilityProject(next, club.id)) continue;
     const quote = FACILITY_TYPES.map(type => quoteFacilityUpgrade(next, type, club.id)).filter(quote => quote.canStart && quote.remainingBudgetAfter >= FACILITY_AUTOMATION_BUFFER).sort((left, right) => left.cost - right.cost || FACILITY_TYPES.indexOf(left.type) - FACILITY_TYPES.indexOf(right.type))[0];
     if (quote) next = startFacilityUpgrade(next, quote.type, club.id);
     else if (next.facilities.fundingSince) {

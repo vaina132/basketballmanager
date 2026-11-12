@@ -1,9 +1,11 @@
-import type { ClubFacilities, FacilityProject, FacilityType, FacilityUpgradeQuote, SeasonFacilities } from '../domain/facilities';
+import type { ClubFacilities, FacilityProject, FacilityType, FacilityUpgradeQuote, MaintenancePlan, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
 import { getClubFinanceDefinition } from '../data/development-finances';
 import { getFinanceBalance } from './finance';
 import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
+import { dateForRound, MAX_SEASON_NUMBER } from './season';
+import { memoizePure } from './pure-cache';
 
 export const FACILITY_TYPES: readonly FacilityType[] = ['arena', 'training', 'youth'];
 export const FACILITY_MAX_LEVEL = 4;
@@ -17,6 +19,66 @@ const BUILD_DAYS = [0, 21, 28, 42] as const;
 const BONUS_PERCENT = [0, 5, 8, 10] as const;
 const ADDED_SEATS = [0, 500, 1400, 2600] as const;
 export type FacilitiesContext = { facilities?: SeasonFacilities; date?: string };
+
+/** Condition of an upgraded facility moves once per senior matchday under the plan in force before that matchday. */
+export const FACILITY_WEAR_PER_MATCHDAY = 5;
+export const FACILITY_RECOVERY_PER_MATCHDAY = 10;
+export const FACILITY_REDUCED_UPKEEP_PERCENT = 50;
+
+// Facility histories are immutable arrays, so derived values are remembered per events array.
+const plansByEvents = new WeakMap<SeasonFacilities['events'], Map<string, { date: string; plan: MaintenancePlan }[]>>();
+const conditionsByEvents = new WeakMap<SeasonFacilities['events'], Map<string, number>>();
+function clubPlans(facilities: SeasonFacilities, clubId: string): { date: string; plan: MaintenancePlan }[] {
+  let index = plansByEvents.get(facilities.events);
+  if (!index) {
+    index = new Map();
+    for (const event of facilities.events) if (event.type === 'maintenance') index.set(event.clubId, [...(index.get(event.clubId) ?? []), { date: event.date, plan: event.plan }]);
+    plansByEvents.set(facilities.events, index);
+  }
+  return index.get(clubId) ?? [];
+}
+
+/** The plan in force for a matchday: the club's latest choice made before that matchday's date. */
+export function maintenancePlanOn(facilities: SeasonFacilities | undefined, clubId: string, matchdayDate = '9999-12-31'): MaintenancePlan {
+  if (!facilities?.maintenanceSince) return 'full';
+  let plan: MaintenancePlan = 'full';
+  for (const choice of clubPlans(facilities, clubId)) if (choice.date < matchdayDate) plan = choice.plan;
+  return plan;
+}
+
+/** Senior matchday dates from a start date (inclusive) up to an end date (exclusive), keyed "from|before". */
+const matchdayDates = memoizePure((key: string): readonly string[] => {
+  const [from, before] = key.split('|') as [string, string];
+  const dates: string[] = [];
+  const first = Math.max(1, Number(from.slice(0, 4)) - 2027), last = Math.min(MAX_SEASON_NUMBER, Number(before.slice(0, 4)) - 2024);
+  for (let season = first; season <= last; season += 1) for (let round = 1; round <= 10; round += 1) {
+    const date = dateForRound(round, season);
+    if (date >= from && date < before) dates.push(date);
+  }
+  return Object.freeze(dates);
+});
+
+/**
+ * Condition 0-100 of an upgraded facility, rebuilt from its latest completion and every later matchday's plan.
+ * Standard (level-one) facilities and careers without maintenance choices always stay at 100.
+ */
+export function getFacilityCondition(state: FacilitiesContext, type: FacilityType, clubId: string, onDate = state.date ?? '9999-12-31'): number {
+  const facilities = state.facilities, since = facilities?.maintenanceSince;
+  if (!facilities || !since || getFacilityLevel(state, type, clubId, onDate) === 1) return 100;
+  const completed = facilities.projects.filter(project => project.clubId === clubId && project.type === type && project.completedOn !== null && project.completedOn <= onDate).map(project => project.completedOn!).sort().at(-1)!;
+  const key = `${clubId}|${completed}|${onDate}|${since.date}`;
+  let cache = conditionsByEvents.get(facilities.events);
+  if (!cache) { cache = new Map(); conditionsByEvents.set(facilities.events, cache); }
+  const known = cache.get(key);
+  if (known !== undefined) return known;
+  let condition = 100;
+  for (const date of matchdayDates(`${completed}|${onDate}`)) {
+    if (date <= since.date) continue;
+    condition = maintenancePlanOn(facilities, clubId, date) === 'reduced' ? Math.max(0, condition - FACILITY_WEAR_PER_MATCHDAY) : Math.min(100, condition + FACILITY_RECOVERY_PER_MATCHDAY);
+  }
+  cache.set(key, condition);
+  return condition;
+}
 
 export function facilityCompletionDate(date: string, days: number): string {
   const time = Date.parse(`${date}T00:00:00Z`);
@@ -36,20 +98,22 @@ export function getActiveFacilityProject(state: FacilitiesContext, clubId: strin
 }
 
 export function facilityPracticeBonusPercent(state: FacilitiesContext, type: 'training' | 'youth', clubId: string, onDate = state.date): number {
-  return BONUS_PERCENT[getFacilityLevel(state, type, clubId, onDate) - 1]!;
+  // A worn facility delivers only part of its practice benefit.
+  return Math.round(BONUS_PERCENT[getFacilityLevel(state, type, clubId, onDate) - 1]! * getFacilityCondition(state, type, clubId, onDate) / 100);
 }
 
 export function getFacilityUpkeepBreakdown(state: FacilitiesContext, clubId: string, onDate = state.date): { arena: number; training: number; youth: number; total: number } {
-  const arena = UPKEEP.arena[getFacilityLevel(state, 'arena', clubId, onDate) - 1]!;
-  const training = UPKEEP.training[getFacilityLevel(state, 'training', clubId, onDate) - 1]!;
-  const youth = UPKEEP.youth[getFacilityLevel(state, 'youth', clubId, onDate) - 1]!;
+  const percent = state.facilities?.maintenanceSince && state.facilities.maintenanceSince.date < (onDate ?? '9999-12-31') && maintenancePlanOn(state.facilities, clubId, onDate) === 'reduced' ? FACILITY_REDUCED_UPKEEP_PERCENT : 100;
+  const cost = (type: FacilityType) => Math.round(UPKEEP[type][getFacilityLevel(state, type, clubId, onDate) - 1]! * percent / 100);
+  const arena = cost('arena'), training = cost('training'), youth = cost('youth');
   return { arena, training, youth, total: arena + training + youth };
 }
 
 export function getFacilityUpkeep(state: FacilitiesContext, clubId: string, onDate = state.date): number { return getFacilityUpkeepBreakdown(state, clubId, onDate).total; }
 
 export function getArenaFullCapacity(state: FacilitiesContext, clubId: string, onDate = state.date): number {
-  return getClubFinanceDefinition(clubId).capacity + ADDED_SEATS[getFacilityLevel(state, 'arena', clubId, onDate) - 1]!;
+  // Sections of a worn arena expansion are closed for safety.
+  return getClubFinanceDefinition(clubId).capacity + Math.floor(ADDED_SEATS[getFacilityLevel(state, 'arena', clubId, onDate) - 1]! * getFacilityCondition(state, 'arena', clubId, onDate) / 100);
 }
 
 /** Starts and manual cancellations on matchday cannot change that day's already prepared gate. */
@@ -82,5 +146,6 @@ export function quoteFacilityUpgrade(state: SeasonState, type: FacilityType, clu
 export function getClubFacilities(state: SeasonState, clubId = state.managedClubId): ClubFacilities {
   if (!state.clubs.some(club => club.id === clubId)) throw new Error('Choose a club in this career.');
   const active = getActiveFacilityProject(state, clubId), upkeep = getFacilityUpkeepBreakdown(state, clubId);
-  return { enabled: state.facilities?.enabledSince !== null && state.facilities?.enabledSince !== undefined, clubId, delegated: state.facilities?.delegated[clubId] ?? false, remainingBudget: getSpendableCash(state, clubId), upkeepPerRound: upkeep.total, arenaCapacity: (state.status === 'active' ? state.finance.roundCapacities?.[clubId] : undefined) ?? getArenaCapacity(state, clubId), arenaFullCapacity: getArenaFullCapacity(state, clubId), rows: FACILITY_TYPES.map(type => ({ type, level: getFacilityLevel(state, type, clubId), maxLevel: 4, bonusPercent: type === 'arena' ? 0 : facilityPracticeBonusPercent(state, type, clubId), capacity: type === 'arena' ? getArenaFullCapacity(state, clubId) : 0, upkeepPerRound: upkeep[type], project: active?.type === type ? active : null, quote: quoteFacilityUpgrade(state, type, clubId) })) };
+  const maintenance = { enabled: !!state.facilities?.maintenanceSince, chosen: maintenancePlanOn(state.facilities, clubId), current: maintenancePlanOn(state.facilities, clubId, state.date) };
+  return { enabled: state.facilities?.enabledSince !== null && state.facilities?.enabledSince !== undefined, maintenance, clubId, delegated: state.facilities?.delegated[clubId] ?? false, remainingBudget: getSpendableCash(state, clubId), upkeepPerRound: upkeep.total, arenaCapacity: (state.status === 'active' ? state.finance.roundCapacities?.[clubId] : undefined) ?? getArenaCapacity(state, clubId), arenaFullCapacity: getArenaFullCapacity(state, clubId), rows: FACILITY_TYPES.map(type => ({ type, level: getFacilityLevel(state, type, clubId), maxLevel: 4, bonusPercent: type === 'arena' ? 0 : facilityPracticeBonusPercent(state, type, clubId), capacity: type === 'arena' ? getArenaFullCapacity(state, clubId) : 0, upkeepPerRound: upkeep[type], project: active?.type === type ? active : null, quote: quoteFacilityUpgrade(state, type, clubId), condition: getFacilityCondition(state, type, clubId) })) };
 }

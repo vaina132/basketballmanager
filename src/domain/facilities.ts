@@ -1,4 +1,6 @@
 export type FacilityType = 'arena' | 'training' | 'youth';
+/** Full upkeep keeps upgraded facilities in condition; reduced upkeep halves the cost while they wear. */
+export type MaintenancePlan = 'full' | 'reduced';
 
 /** Exact command ordering protects salary and transfer reservations at construction approval. */
 export interface FacilityAnchor {
@@ -48,6 +50,8 @@ export type FacilityEvent = FacilityAnchor & (
   | { type: 'delegate'; clubId: string; delegated: boolean }
   | { type: 'process' }
   | FacilityFundingDecision
+  /** Format 36: a club's upkeep plan, applied from the next matchday. */
+  | { type: 'maintenance'; clubId: string; plan: MaintenancePlan }
 );
 
 export interface SeasonFacilities {
@@ -58,6 +62,8 @@ export interface SeasonFacilities {
   events: FacilityEvent[];
   /** Board funding requests (format 32); absent in older formats, null until enabled. */
   fundingSince?: FacilityAnchor | null;
+  /** Upkeep plans and facility condition (format 36); absent in older formats, null until enabled. */
+  maintenanceSince?: FacilityAnchor | null;
 }
 
 export interface FacilityUpgradeQuote {
@@ -81,6 +87,8 @@ export interface FacilityUpgradeQuote {
 
 export interface ClubFacilities {
   enabled: boolean;
+  /** Upkeep choices (format 36): the plan chosen and the plan in force for the current matchday. */
+  maintenance: { enabled: boolean; chosen: MaintenancePlan; current: MaintenancePlan };
   clubId: string;
   delegated: boolean;
   remainingBudget: number;
@@ -97,5 +105,7 @@ export interface ClubFacilities {
     upkeepPerRound: number;
     project: FacilityProject | null;
     quote: FacilityUpgradeQuote;
+    /** 0-100; standard facilities stay at 100. */
+    condition: number;
   }[];
 }

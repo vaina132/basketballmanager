@@ -165,7 +165,7 @@ Board objectives are communicated before their evidence window: a frozen wins ta
 
 Each committed eligible matchday produces one dated review for all clubs. After three eligible games, wins above or below target pace beyond a half-win tolerance contribute ten points per win, capped at +/-30. Carried medical absences may offset up to six negative sporting points. Financial improvement or deterioration contributes five points per EUR 10,000, capped at +10/-25, relative to the mandate's inherited unpaid amount. Disabled finance is unassessed. Confidence moves at most eight points toward `50 + components` per review and retains its previous value across the season boundary. Short assessment windows still show objective outcomes but do not bypass the three-game sporting grace.
 
-These coefficients are provisional and visible in review evidence. This increment records board assessment without spending money, adding a match bonus, changing recruitment authority or dismissing the manager. Funding requests, president traits, development/culture objectives, employment consequences and press require subsequent work.
+These coefficients are provisional and visible in review evidence. This increment records board assessment without spending money, adding a match bonus, changing recruitment authority or dismissing the manager. Funding requests and president traits followed in Level 7 (see [Board funding policy](#board-funding-policy)); development/culture objectives, employment consequences and press require subsequent work.
 
 ## Sponsorship negotiation policy
 
@@ -176,6 +176,14 @@ On matchday six of a club's final contracted season, three fictional sponsors ma
 The manager may ask each sponsor once for 10% more. A deterministic, hidden flexibility of 0-12% decides at once: at least 10% accepts; otherwise the sponsor counters with its flexibility, or rarely withdraws (flexibility below 3% and appeal below 0.9). Accepting signs immediately for future seasons and closes the club's other offers; declining closes one offer. Clubs still without a next-season sponsor after the final matchday receive a second round. Open offers expire when the season they would start begins; an unsold slot earns nothing that season. Automatic control and every AI club sign the largest guaranteed total (annual fee x seasons), then the larger fee and bonus.
 
 Agreements pay half the annual fee on the opening matchday and the rest on matchday six, as dated ledger income booked only when due; bonuses follow the final matchday only after a top-half finish. There is no early termination in this foundation. Six-season diagnostics with every club automatic (seeds 227 and 71) kept the league's mean agreement fee at EUR 190,000-203,000, ranged EUR 154,000-277,000 per club-season, and left no unsold slots or unpaid costs. These coefficients are game rules, not claims about real sponsorship markets or companies.
+
+## Board funding policy
+
+Approved by the project owner on 12 November 2026 as provisional development rules. Each club has a fictional president with a generosity trait from 1 (reluctant) to 5 (generous) and owner capital for facility projects each season (EUR 120,000-250,000). Board capital pays only for facility upgrades; the staff and player salary allocations keep their existing rules.
+
+A club may ask when money is the only obstacle to an upgrade: facilities, finances and board reviews are enabled, no other project is running, no costs or transfer installments are overdue, and committed wages and fees do not already exceed cash. The manager asks for the upgrade cost minus the cash the club can spend; automatic control and rival clubs also ask for their EUR 150,000 cash cushion. The board approves when its latest reviewed confidence is at least `65 - 5 x generosity` (60 to 40) and the amount fits the owner's remaining capital for the season; otherwise it refuses and states which condition failed. After a refusal, the club waits two matchdays before asking again. An approval books the capital and starts the upgrade at once, paying its full cost, so board capital never becomes general spending money. Automatic control and every rival club ask only when the rules approve, choosing the cheapest such upgrade. The facility review shows the amount, the confidence needed and the expected answer before the manager asks.
+
+New careers enable requests; older saves opt in from Club > Board. A seed-227 exploration over about two seasons saw eight automatic approvals among rival clubs (EUR 132,000-337,000 per club in total), bounded by owner capital and the three available upgrades per facility. These coefficients are game rules, not claims about real club owners.
 
 ## Evidence still required
 

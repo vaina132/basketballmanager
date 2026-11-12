@@ -6,6 +6,12 @@ Updated: 12 November 2026.
 
 The product discovery has eighteen answers. Core design, world/match specifications, source strategy, architecture and milestone plan are recorded in this repository. Coefficients are proposals and require calibration. The historical database audit is incomplete.
 
+## Implemented: board season verdicts and budgets
+
+- Club > Board has a **Season verdict & budgets** section: this season's staff budget and owner capital with the verdict that set them, and next season's budgets, previewed from today's confidence until the final review and then fixed by the verdict. The manager's desk announces the verdict with next season's budgets (urgent when Concerned or Under pressure), and the budget details name the verdict behind the staff budget.
+- The final review of each season gives a verdict from board confidence (Confident 65+, Steady 45-64, Concerned 30-44, Under pressure below 30). It sets the next season's shared staff allocation (110/100/90/80% of EUR 150,000) and the owner's capital for facility upgrades (150/100/50/0%). Signed staff contracts are never cut; opening-day renewals must fit the new allocation. Rival clubs follow the same rules; every staff rule, AI hiring and renewal, funding quote and save check uses the per-season amounts.
+- Format 33 records when verdicts were switched on. New careers start with them; older saves migrate with them off and can switch them on, effective from the next season. Formats 1-32 continue unchanged. The player salary budget, dismissal, job changes and other objectives remain later work.
+
 ## Implemented: board funding requests and club presidents
 
 - Club > Board introduces the club's fictional president (name and investor label), the owner capital left this season, the confidence the board needs for capital and whether it is met, and a dated history of capital requests with the board's reason for each refusal. Older careers switch requests on there.
@@ -607,7 +613,7 @@ Watched and skipped managed matches still run on the main thread; matchday compl
 
 The user-directed usability work, dated offseason calendar, reservations and competing club offers are implemented. They do not complete the broader management milestones below.
 
-1. Sponsorship negotiations and board funding requests with president traits are implemented. Next: board consequences when dismissal is off, then press, optional dismissal and job changes, rivalries and facility maintenance (Level 7 in [HANDOVER.md](../HANDOVER.md)). Board objectives and dated confidence reviews provide the board foundation. Squad roles, playing-time promises and bounded morale now provide the first player-relationship foundation; deeper personalities, chemistry and conversation consequences remain. Broader commercial/board/career mechanics follow the [implementation plan](implementation-plan.md), alongside richer development and long-run calibration.
+1. Sponsorship negotiations, board funding requests with president traits and board season verdicts are implemented. Next: press and player events, then optional dismissal and job changes, rivalries and facility maintenance (Level 7 in [HANDOVER.md](../HANDOVER.md)). Board objectives and dated confidence reviews provide the board foundation. Squad roles, playing-time promises and bounded morale now provide the first player-relationship foundation; deeper personalities, chemistry and conversation consequences remain. Broader commercial/board/career mechanics follow the [implementation plan](implementation-plan.md), alongside richer development and long-run calibration.
 2. In parallel, extend the downloaded reference data to the missing competitions, reconstruct opening-day rosters, and resolve intended-use permissions before bundling a career database. The [data acquisition plan](data-acquisition.md) records immediate free and paid routes.
 3. Calibrate the possession model against verified team/game denominators, broaden off-ball creation and defensive decisions, and implement competition-specific rules. Repeatable diagnostics expose action counts, shot context and isolated tactical effects; they do not complete these acceptance gates.
 4. Extend the working career calendar and health foundation with validated real competition calendars, registration rules, promotion/qualification transitions and the remaining management layers.

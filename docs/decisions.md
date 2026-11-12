@@ -185,6 +185,14 @@ A club may ask when money is the only obstacle to an upgrade: facilities, financ
 
 New careers enable requests; older saves opt in from Club > Board. A seed-227 exploration over about two seasons saw eight automatic approvals among rival clubs (EUR 132,000-337,000 per club in total), bounded by owner capital and the three available upgrades per facility. These coefficients are game rules, not claims about real club owners.
 
+## Board verdict policy
+
+Provisional development rules for Level 7 step 7.3, chosen as the recommended default under the owner's delegation on 12 November 2026 ("board consequences when dismissal is off"); dismissal itself follows in step 7.5. The final review of each season (after matchday ten) gives every club a verdict from its board confidence, reusing the labels shown throughout the game: Confident (65 and above), Steady (45-64), Concerned (30-44) and Under pressure (below 30).
+
+While season verdicts are switched on, the previous season's verdict sets two budgets for the following season: the shared staff allocation for coaches, scouts, fitness coaches, physios, assistants and youth coaches (110%, 100%, 90% or 80% of EUR 150,000) and the president's owner capital for facility upgrades (150%, 100%, 50% or none). Rewards come mainly as investment and penalties as tighter budgets, so no club gains spending cash. Signed staff contracts are never cut; staff renewals on the new season's opening day must fit the new allocation, in the usual renewal order. The coaching-only limit stays EUR 150,000. A club without a final review that season keeps standard budgets. Rival clubs follow the same rules.
+
+New careers start with season verdicts on; older saves switch them on from Club > Board, and they then govern the following season. The player salary budget is deliberately unchanged: next season's contracts are signed during the current season, so changing that budget part-way would be confusing and hard to validate. A three-season automatic exploration (seed 227) produced all four verdicts and kept every club within its allocation. These coefficients are game rules to be calibrated, not claims about real club boards.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

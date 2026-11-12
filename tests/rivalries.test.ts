@@ -87,9 +87,10 @@ describe('rivalries in a career', () => {
   it('rejects rivalries in a format-34 file', () => {
     const file = JSON.parse(serializeSeason(legacy));
     file.formatVersion = 34; file.state.schemaVersion = 34;
-    // Format 34 also predates upkeep plans; this career has made no upkeep choice.
+    // Format 34 also predates upkeep plans and club changes; this career has made no upkeep choice and no move.
     expect(file.state.facilities.events.some((event: { type: string }) => event.type === 'maintenance')).toBe(false);
     delete file.state.facilities.maintenanceSince;
+    delete file.state.career;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/unsupported fields/);
     delete file.state.rivalries;
     expect(parseSeason(JSON.stringify(file)).rivalries).toEqual(createRivalries());

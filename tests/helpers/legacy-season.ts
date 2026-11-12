@@ -121,8 +121,14 @@ export function stripRivalries(value: object): void {
 
 /** Format35 predates upkeep plans and facility condition. */
 export function stripFacilityMaintenance(value: object): void {
+  stripCareer(value);
   const facilities = (value as { facilities?: Record<string, unknown> }).facilities;
   if (facilities) delete facilities.maintenanceSince;
+}
+
+/** Format36 predates dismissal and job changes. */
+export function stripCareer(value: object): void {
+  delete (value as Record<string, unknown>).career;
 }
 
 /** Format31 predates board funding requests. */

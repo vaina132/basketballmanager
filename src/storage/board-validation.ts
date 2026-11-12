@@ -3,6 +3,7 @@ import type { SeasonFixture, SeasonState } from '../domain/season';
 import { buildBoardMandate, buildBoardReview, createBoard } from '../world/board';
 import { dateForRound } from '../world/season';
 import { rosterForRound } from '../world/rosters';
+import { managedClubFor } from '../world/career';
 import { openingSponsorshipClubs } from '../world/commercial-policy';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'ledgerCount', 'rosterCount'] as const;
@@ -39,7 +40,7 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard):
   const committed = new Set([...history.flatMap(archive => archive.fixtures), ...fixtures].filter(fixture => fixture.result).map(fixture => fixture.id));
   const ledger = state.finance.ledger.slice(0, anchor.ledgerCount);
   return {
-    ...state, seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
+    ...state, managedClubId: managedClubFor(state, anchor.seasonNumber, false), seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
     status: completed === 10 ? 'complete' : 'active', rosters, fixtures, history, board,
     clubs: state.clubs.map(club => ({ ...club, players: rosterForRound(rosters, club.id, anchor.round).players })),
     injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),

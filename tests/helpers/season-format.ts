@@ -14,6 +14,7 @@ import { createRelationships } from '../../src/world/relationships';
 import { createBoard } from '../../src/world/board';
 import { createCommercial } from '../../src/world/commercial-policy';
 import { createRivalries } from '../../src/world/rivalries';
+import { createCareer } from '../../src/world/career';
 
 export { SEASON_SCHEMA_VERSION };
 
@@ -39,6 +40,7 @@ const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: Leg
   [33, state => ({ board: { ...state.board!, consequencesSince: null } })],
   [35, () => ({ rivalries: createRivalries() })],
   [36, state => ({ facilities: { ...state.facilities!, maintenanceSince: null } })],
+  [37, () => ({ career: createCareer() })],
 ];
 
 /**

@@ -1,0 +1,41 @@
+import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
+import { parseSeason, serializeSeason } from '../src/storage/season-storage';
+import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
+
+// Genuine format-36 saves from scripts/capture-season-fixtures.mjs; see tests/fixtures/README.md.
+const NAMES = ['career', 'career-next', 'complete', 'opening'];
+const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/season36-board-${name}.json.gz`, import.meta.url))).toString('utf8');
+const advance = state => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+let raw, career, careerNext, complete, opening;
+
+beforeAll(() => {
+  const texts = Object.fromEntries(NAMES.map(name => [name, fixture(name)]));
+  raw = Object.fromEntries(NAMES.map(name => [name, JSON.parse(texts[name])]));
+  [career, careerNext, complete, opening] = NAMES.map(name => parseSeason(texts[name]));
+}, 120_000);
+
+describe('genuine format-36 careers', () => {
+  it('were written by the format-36 runtime with upkeep choices, rivalries and derby reviews from the opening matchday', () => {
+    for (const file of Object.values(raw)) expect(file.formatVersion).toBe(36);
+    expect(raw.career.state.rivalries.enabledSince.effectiveFrom).toEqual({ seasonNumber: 1, round: 1 });
+    expect(raw.career.state.facilities.maintenanceSince.date).toBe('2026-09-05');
+    expect(raw.complete.state.board.reviews.some(review => review.clubs['rhine-falcons'].rivalryImpact === 3)).toBe(true);
+    expect(raw.complete.state.facilities.projects.filter(project => project.completedOn).length).toBeGreaterThan(0);
+    expect([career.round, careerNext.round, complete.status, opening.seasonNumber]).toEqual([5, 6, 'complete', 2]);
+  });
+
+  it('continues the mid-season career into the next matchday exactly as recorded', () => {
+    expect(advance(career)).toEqual(careerNext);
+  }, 120_000);
+
+  it('rolls the completed offseason into the recorded opening', () => {
+    expect(rolloverSeason(complete)).toEqual(opening);
+  }, 120_000);
+
+  it('round-trips every captured career through the current save format', () => {
+    for (const state of [career, careerNext, complete, opening]) expect(parseSeason(serializeSeason(state))).toEqual(state);
+  }, 120_000);
+});

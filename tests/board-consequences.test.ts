@@ -101,12 +101,13 @@ describe('board verdict validation', () => {
   });
 
   it('rejects the switch in a format-32 file', () => {
-    // A genuine format-32 career had neither season verdicts nor rivalries.
-    const file = JSON.parse(serializeSeason(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, boardConsequences: false, rivalries: false, facilityMaintenance: false })));
+    // A genuine format-32 career had neither season verdicts, rivalries, upkeep choices nor club changes.
+    const file = JSON.parse(serializeSeason(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false })));
     file.formatVersion = 32; file.state.schemaVersion = 32;
     delete file.state.board.consequencesSince;
     delete file.state.rivalries;
     delete file.state.facilities.maintenanceSince;
+    delete file.state.career;
     expect(() => parseSeason(JSON.stringify(file))).not.toThrow();
     file.state.board.consequencesSince = null;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/unsupported fields/);

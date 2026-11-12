@@ -3,6 +3,7 @@ import type { SeasonFixture, SeasonState } from '../domain/season';
 import { applyRelationshipEvent, createRelationships, enableRelationships, getPreparedRelationshipMorale } from '../world/relationships';
 import { dateForRound } from '../world/season';
 import { rosterForRound } from '../world/rosters';
+import { managedClubFor } from '../world/career';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'contractCount', 'rosterCount'] as const;
 const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
@@ -39,9 +40,10 @@ function contextAt(state: SeasonState, anchor: RelationshipAnchor, relationships
   const committed = new Set([...history.flatMap(archive => archive.fixtures), ...fixtures].filter(fixture => fixture.result).map(fixture => fixture.id));
   const clubs = state.clubs.map(club => ({ ...club, players: rosterForRound(rosters, club.id, anchor.round).players }));
   return {
-    ...state, seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
+    // A completed final matchday is that season's offseason, which a move at the season end hands to the new club.
+    ...state, managedClubId: managedClubFor(state, anchor.seasonNumber, localCompleted === 10), seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
     status: localCompleted === 10 ? 'complete' : 'active', clubs, rosters, history, fixtures, relationships,
-    activeFixtureId: fixtures.find(fixture => fixture.round === anchor.round && [fixture.homeClubId, fixture.awayClubId].includes(state.managedClubId))!.id,
+    activeFixtureId: fixtures.find(fixture => fixture.round === anchor.round && [fixture.homeClubId, fixture.awayClubId].includes(managedClubFor(state, anchor.seasonNumber, false)))!.id,
     injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
     employment: { ...state.employment, contracts: state.employment.contracts.slice(0, anchor.contractCount) },
   };
@@ -104,7 +106,7 @@ export function validateRelationships(state: SeasonState, version: number): void
     if (event.type === 'prepare') {
       if (prepared.has(boundary)) fail(path, 'cannot replace already frozen matchday morale');
       prepared.set(boundary, index);
-      if (source.events.slice(0, index).some(item => item.type !== 'prepare' && item.clubId === state.managedClubId && ordinal(item.seasonNumber, item.round) === boundary)) fail(path, 'must freeze the prepared match before subsequent manager conversations');
+      if (source.events.slice(0, index).some(item => item.type !== 'prepare' && item.clubId === managedClubFor(state, item.seasonNumber, false) && ordinal(item.seasonNumber, item.round) === boundary)) fail(path, 'must freeze the prepared match before subsequent manager conversations');
     }
     replay = contextAt(state, current, replay.relationships);
     try { replay = applyRelationshipEvent(replay, event); } catch (error) { fail(path, `does not follow the relationship rules: ${error instanceof Error ? error.message : 'invalid command'}`); }

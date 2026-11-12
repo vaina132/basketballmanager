@@ -15,7 +15,10 @@ export function facilityEventAnchor(state: SeasonState): FacilityAnchor {
   return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex: state.finance.ledger.length, contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length, recruitmentEventCount: state.recruitment.events.length, marketEventCount: state.market.windows.reduce((count, window) => count + window.events.length, 0) };
 }
 
-/** Historical command replay must not see later same-day cancellations, completions or delegation. */
+/**
+ * Historical command replay must not see later same-day cancellations, completions or delegation. `managedClubId` is
+ * the club managed at activation; control changes after a move are journaled as delegate events.
+ */
 export function facilitiesAtEventCount(facilities: SeasonFacilities, eventCount: number, managedClubId: string): SeasonFacilities {
   if (!Number.isInteger(eventCount) || eventCount < 0 || eventCount > facilities.events.length) throw new Error('Choose an existing facilities event prefix.');
   const events = facilities.events.slice(0, eventCount);

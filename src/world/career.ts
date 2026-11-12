@@ -1,0 +1,98 @@
+import type { CareerAnchor, CareerMove, CareerMoveReason, SeasonCareer } from '../domain/career';
+import type { SeasonState } from '../domain/season';
+import type { SeasonAcademy } from '../domain/academy';
+import { applyFacilityEvent, facilityEventAnchor } from './facilities';
+import { automateSponsorship } from './commercial';
+
+const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
+
+export function createCareer(): SeasonCareer { return { model: 'career-1', enabledSince: null, moves: [] }; }
+
+/**
+ * The club the manager ran in `seasonNumber`: during the season itself (`offseason` false, through its final board
+ * review) or during that season's offseason. A move at the end of a season hands its offseason to the new club.
+ * Careers without moves, and older formats, always manage the current club.
+ */
+export function managedClubFor(state: Pick<SeasonState, 'managedClubId'> & { career?: SeasonCareer }, seasonNumber: number, offseason: boolean): string {
+  const later = state.career?.moves.find(move => move.seasonNumber > seasonNumber || move.seasonNumber === seasonNumber && !offseason);
+  return later ? later.fromClubId : state.managedClubId;
+}
+
+/** The club managed when the finance ledger held `ledgerCount` entries; commands at a move's own position follow it. */
+export function managedClubAtLedger(state: Pick<SeasonState, 'managedClubId'> & { career?: SeasonCareer }, ledgerCount: number): string {
+  return state.career?.moves.find(move => ledgerCount < move.ledgerCount)?.fromClubId ?? state.managedClubId;
+}
+
+/** The club whose fixture the current season's prepared or final match belongs to. */
+export function matchClubFor(state: Pick<SeasonState, 'managedClubId' | 'seasonNumber'> & { career?: SeasonCareer }): string {
+  return managedClubFor(state, state.seasonNumber, false);
+}
+
+/** Season ends from `effectiveFrom` onwards can bring dismissal or a job change. */
+export function careerMovesGovern(career: SeasonCareer | undefined, seasonNumber: number): boolean {
+  const anchor = career?.enabledSince;
+  return !!anchor && seasonNumber >= anchor.effectiveFrom;
+}
+
+export function careerEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'date' | 'fixtures'>, mode: 'career' | 'prospective'): CareerAnchor {
+  const completed = state.fixtures.reduce((round, fixture) => fixture.result ? Math.max(round, fixture.round) : round, 0);
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed), effectiveFrom: mode === 'career' ? 1 : state.seasonNumber + 1 };
+}
+
+/** New careers can change clubs from the end of their first season; older careers from the end of the next one. */
+export function enableCareerMoves(state: SeasonState, mode: 'career' | 'prospective' = 'prospective'): SeasonState {
+  if (state.career?.enabledSince) return state;
+  if (!state.board?.enabledSince) throw new Error('Dismissal and job changes require board reviews.');
+  if (mode === 'career' && (state.seasonNumber !== 1 || state.round !== 1 || state.fixtures.some(fixture => fixture.result))) throw new Error('Dismissal and job changes can cover the first season only at the start of a new career.');
+  return { ...state, career: { ...createCareer(), enabledSince: careerEventAnchor(state, mode) } };
+}
+
+/** A departing manager's individual academy instructions end: the former club's current prospects return to balanced work. */
+export function releaseAcademyFocus(academy: SeasonAcademy, clubId: string): SeasonAcademy {
+  // Graduates keep the focus they last trained with.
+  const graduated = new Set(academy.graduates.map(graduate => graduate.prospectId));
+  const current = new Set(academy.prospects.filter(prospect => prospect.clubId === clubId && !graduated.has(prospect.player.id)).map(prospect => prospect.player.id));
+  return { ...academy, focus: Object.fromEntries(Object.entries(academy.focus).map(([id, focus]) => [id, current.has(id) ? 'balanced' : focus])) };
+}
+
+/** Why a move at the current season end is not possible, or null. Job offers and dismissal add their own rules. */
+export function careerMoveRefusal(state: SeasonState, toClubId: string): string | null {
+  if (!careerMovesGovern(state.career, state.seasonNumber)) return 'Job changes are not active in this season.';
+  if (state.status !== 'complete' || state.round !== 10) return 'Clubs change managers only when a season ends.';
+  if (state.career.moves.some(move => move.seasonNumber === state.seasonNumber)) return 'You have already changed clubs this season.';
+  if (toClubId === state.managedClubId) return 'You already manage this club.';
+  if (!state.clubs.some(club => club.id === toClubId)) return 'Choose a club in this league.';
+  return null;
+}
+
+/**
+ * Hand the manager to another club at the end of a season, before its offseason opens. The former club continues
+ * under automatic control in every area; the new club starts like a new career, with the manager in charge of the
+ * areas a new career controls manually. Contracts, staff, players, results and history are unchanged.
+ */
+export function appointManager(state: SeasonState, toClubId: string, reason: CareerMoveReason): SeasonState {
+  const refusal = careerMoveRefusal(state, toClubId);
+  if (refusal) throw new Error(refusal);
+  const from = state.managedClubId;
+  const move: CareerMove = { seasonNumber: state.seasonNumber, date: state.date, fromClubId: from, toClubId, reason, ledgerCount: state.finance.ledger.length };
+  let next: SeasonState = {
+    ...state,
+    managedClubId: toClubId,
+    career: { ...state.career, moves: [...state.career.moves, move] },
+    plans: { ...state.plans, [from]: { ...state.plans[from]!, autoSubstitutions: true }, [toClubId]: { ...state.plans[toClubId]!, autoSubstitutions: state.plans[from]!.autoSubstitutions } },
+    training: { ...state.training, plans: { ...state.training.plans, [from]: { ...state.training.plans[from]!, delegated: true } } },
+    finance: { ...state.finance, plans: { ...state.finance.plans, [from]: { ...state.finance.plans[from]!, delegated: true }, [toClubId]: { ...state.finance.plans[toClubId]!, delegated: false } } },
+    payroll: { ...state.payroll, delegated: { ...state.payroll.delegated, [from]: true, [toClubId]: false } },
+    scouting: { ...state.scouting, clubs: { ...state.scouting.clubs, [from]: { ...state.scouting.clubs[from]!, delegated: true }, [toClubId]: { ...state.scouting.clubs[toClubId]!, delegated: false } } },
+    commercial: { ...state.commercial, plans: { ...state.commercial.plans, [from]: { delegated: true }, [toClubId]: { delegated: false } } },
+    academy: releaseAcademyFocus(state.academy, from),
+  };
+  // Facility control changes are journaled like the manager's own switches, so every replay reproduces them.
+  if (!state.facilities.enabledSince) next = { ...next, facilities: { ...next.facilities, delegated: { ...next.facilities.delegated, [from]: true, [toClubId]: false } } };
+  else {
+    if (!next.facilities.delegated[from]) next = applyFacilityEvent(next, { ...facilityEventAnchor(next), type: 'delegate', clubId: from, delegated: true });
+    if (next.facilities.delegated[toClubId]) next = applyFacilityEvent(next, { ...facilityEventAnchor(next), type: 'delegate', clubId: toClubId, delegated: false });
+  }
+  // Automatic sponsorship never leaves an acceptable offer waiting, so the former club decides at once.
+  return automateSponsorship(next);
+}

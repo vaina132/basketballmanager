@@ -6,6 +6,11 @@ Updated: 12 November 2026.
 
 The product discovery has eighteen answers. Core design, world/match specifications, source strategy, architecture and milestone plan are recorded in this repository. Coefficients are proposals and require calibration. The historical database audit is incomplete.
 
+## In progress: dismissal and job changes
+
+- Groundwork (format 37): a career can record a change of club at the end of a season, after the final board review; the new club runs that offseason and later seasons, and the former club continues under automatic control. The save checker credits every earlier decision (sponsorship, facilities, academy, press, squad conversations, recruitment) to the club managed at that time.
+- No screen offers a move yet. Dismissal, reputation, job offers and the screens follow in the next parts of step 7.5.
+
 ## Implemented: facility condition and upkeep plans
 
 - Club > Operations > Facilities shows a condition bar for each upgraded facility and an **Upkeep** switch (Full or Reduced) with its effect and when it starts. The manager's desk and the Inbox flag facilities below 60 condition. Older careers use **Enable upkeep choices**.
@@ -631,7 +636,7 @@ Watched and skipped managed matches still run on the main thread; matchday compl
 
 The user-directed usability work, dated offseason calendar, reservations and competing club offers are implemented. They do not complete the broader management milestones below.
 
-1. Sponsorship negotiations, board funding requests with president traits, board season verdicts, press conferences with the Inbox, rivalries and facility upkeep are implemented. Next: optional dismissal and job changes, in several parts (Level 7 in [HANDOVER.md](../HANDOVER.md)). Board objectives and dated confidence reviews provide the board foundation. Squad roles, playing-time promises and bounded morale now provide the first player-relationship foundation; deeper personalities, chemistry and conversation consequences remain. Broader commercial/board/career mechanics follow the [implementation plan](implementation-plan.md), alongside richer development and long-run calibration.
+1. Sponsorship negotiations, board funding requests with president traits, board season verdicts, press conferences with the Inbox, rivalries and facility upkeep are implemented. Optional dismissal and job changes are in progress (groundwork done), in several parts (Level 7 in [HANDOVER.md](../HANDOVER.md)). Board objectives and dated confidence reviews provide the board foundation. Squad roles, playing-time promises and bounded morale now provide the first player-relationship foundation; deeper personalities, chemistry and conversation consequences remain. Broader commercial/board/career mechanics follow the [implementation plan](implementation-plan.md), alongside richer development and long-run calibration.
 2. In parallel, extend the downloaded reference data to the missing competitions, reconstruct opening-day rosters, and resolve intended-use permissions before bundling a career database. The [data acquisition plan](data-acquisition.md) records immediate free and paid routes.
 3. Calibrate the possession model against verified team/game denominators, broaden off-ball creation and defensive decisions, and implement competition-specific rules. Repeatable diagnostics expose action counts, shot context and isolated tactical effects; they do not complete these acceptance gates.
 4. Extend the working career calendar and health foundation with validated real competition calendars, registration rules, promotion/qualification transitions and the remaining management layers.

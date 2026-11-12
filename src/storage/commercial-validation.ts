@@ -1,5 +1,7 @@
 import type { CommercialAnchor, CommercialEvent, SeasonCommercial, SponsorshipAgreement, SponsorshipOffer, SponsorshipWindow } from '../domain/commercial';
 import type { SeasonState } from '../domain/season';
+import type { CareerMove } from '../domain/career';
+import { managedClubAtLedger } from '../world/career';
 import { incumbentSponsorId } from '../data/development-sponsors';
 import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, createCommercial, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_RENEWAL_ROUND } from '../world/commercial-policy';
 import { dateForRound, MAX_SEASON_NUMBER, seasonStartDate } from '../world/season';
@@ -28,7 +30,7 @@ function equal(left: unknown, right: unknown): boolean {
   return a.length === b.length && a.every(key => Object.hasOwn(right, key) && equal((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]));
 }
 
-type Boundary = { key: [number, number] } & ({ kind: 'window'; window: SponsorshipWindow; seasonNumber: number; round: number; date: string; completedRounds: number; activation: boolean } | { kind: 'expire'; seasonNumber: number; date: string });
+type Boundary = { key: [number, number] } & ({ kind: 'window'; window: SponsorshipWindow; seasonNumber: number; round: number; date: string; completedRounds: number; activation: boolean } | { kind: 'expire'; seasonNumber: number; date: string } | { kind: 'move'; move: CareerMove });
 const before = (left: [number, number], right: [number, number]) => left[0] < right[0] || left[0] === right[0] && left[1] < right[1];
 
 /**
@@ -40,6 +42,8 @@ export function validateCommercial(state: SeasonState, version: number): void {
   const fields = record(state.commercial, 'commercial', ['model', 'enabledSince', 'plans', 'agreements', 'offers', 'events']);
   if (fields.model !== 'commercial-1') fail('commercial.model', 'is unsupported');
   const defaults = createCommercial(state.clubs, state.managedClubId);
+  // Commands belong to the club managed at their ledger position; a move hands control over at its own position.
+  const managedAt = (event: CommercialEvent) => managedClubAtLedger(state, event.ledgerCount);
   const limit = 200 * state.clubs.length * state.seasonNumber;
   if (!Array.isArray(fields.agreements) || !Array.isArray(fields.offers) || !Array.isArray(fields.events) || fields.agreements.length > limit || fields.offers.length > limit || fields.events.length > limit) fail('commercial', 'must contain bounded agreements, offers and events');
   if (fields.enabledSince === null) {
@@ -73,7 +77,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
     id: `sponsorship-agreement-${index + 1}`, clubId: club.id, sponsorId: incumbentSponsorId(club.id), source: 'inherited', offerId: null,
     startsSeason: activation.seasonNumber, endsSeason: activation.seasonNumber, annualFee: SPONSORSHIP_REFERENCE_FEE, bonus: 0, signedOn: activation.date, automatic: false, prepaidSeasons: [activation.seasonNumber],
   }));
-  let replay: SeasonCommercial = { ...defaults, enabledSince: activation, agreements: inherited };
+  let replay: SeasonCommercial = { ...defaults, plans: createCommercial(state.clubs, managedClubAtLedger(state, activation.ledgerCount)).plans, enabledSince: activation, agreements: inherited };
   const events = fields.events as unknown[];
   let index = 0, previous: CommercialAnchor = activation;
 
@@ -137,6 +141,12 @@ export function validateCommercial(state: SeasonState, version: number): void {
     }
     if (at) consumeAutomation(at);
   };
+  /** A season-end move: the former club turns automatic and takes its best acceptable offer at once; the new club is manual. */
+  const consumeMove = (boundary: Extract<Boundary, { kind: 'move' }>) => {
+    const { move } = boundary;
+    replay = { ...replay, plans: { ...replay.plans, [move.fromClubId]: { delegated: true }, [move.toClubId]: { delegated: false } } };
+    consumeAutomation({ seasonNumber: move.seasonNumber, round: 10, date: move.date, ledgerCount: move.ledgerCount });
+  };
   const consumeExpiry = (boundary: Extract<Boundary, { kind: 'expire' }>) => {
     const expired = replay.offers.filter(offer => offer.status === 'open' && offer.forSeason <= boundary.seasonNumber).map(offer => offer.id);
     if (!expired.length) return;
@@ -154,13 +164,13 @@ export function validateCommercial(state: SeasonState, version: number): void {
     if (event.type === 'offers' || event.type === 'expire') fail(path, 'must occur at a sponsorship calendar boundary');
     previous = at; index += 1;
     if (event.type === 'policy') {
-      if (event.clubId !== state.managedClubId || typeof event.delegated !== 'boolean' || replay.plans[event.clubId]!.delegated === event.delegated) fail(path, 'must change the managed club between manual and automatic control');
+      if (event.clubId !== managedAt(event) || typeof event.delegated !== 'boolean' || replay.plans[event.clubId]!.delegated === event.delegated) fail(path, 'must change the managed club between manual and automatic control');
       replay = { ...replay, plans: { ...replay.plans, [event.clubId]: { delegated: event.delegated } } };
       consumeAutomation(at);
       return;
     }
     const offer = replay.offers.find(item => item.id === event.offerId);
-    if (!offer || offer.clubId !== state.managedClubId || offer.status !== 'open' || at.date > offer.expiresOn) fail(path, 'must act on an open offer made to the managed club');
+    if (!offer || offer.clubId !== managedAt(event) || offer.status !== 'open' || at.date > offer.expiresOn) fail(path, 'must act on an open offer made to the managed club');
     if (event.type === 'decline') { replay = { ...replay, offers: replay.offers.map(item => item.id === offer.id ? { ...item, status: 'declined', closedOn: at.date } : item) }; return; }
     if (event.type === 'request') {
       if (offer.request) fail(path, 'can ask each sponsor for better terms only once');
@@ -178,11 +188,12 @@ export function validateCommercial(state: SeasonState, version: number): void {
   for (let season = activation.seasonNumber; season <= state.seasonNumber; season += 1) {
     if (season > activation.seasonNumber) boundaries.push({ kind: 'expire', seasonNumber: season, date: dateForRound(1, season), key: [ordinal(season, 1), -1] });
     if ((season > activation.seasonNumber || activation.round < SPONSORSHIP_RENEWAL_ROUND) && (season < state.seasonNumber || state.round >= SPONSORSHIP_RENEWAL_ROUND)) boundaries.push({ kind: 'window', window: 'renewal', seasonNumber: season, round: SPONSORSHIP_RENEWAL_ROUND, date: dateForRound(SPONSORSHIP_RENEWAL_ROUND, season), completedRounds: SPONSORSHIP_RENEWAL_ROUND - 1, activation: false, key: [ordinal(season, SPONSORSHIP_RENEWAL_ROUND), -1] });
+    for (const move of state.career?.moves ?? []) if (move.seasonNumber === season && move.ledgerCount >= activation.ledgerCount) boundaries.push({ kind: 'move', move, key: [ordinal(season, 10), 0.5] });
     if (season < state.seasonNumber || state.status === 'complete') boundaries.push({ kind: 'window', window: 'second-round', seasonNumber: season, round: 10, date: dateForRound(10, season), completedRounds: 10, activation: false, key: [ordinal(season, 10), 1] });
   }
   for (const boundary of boundaries) {
     while (index < events.length && before(keyOf(eventAt(index)), boundary.key)) consumeManual();
-    if (boundary.kind === 'window') consumeWindow(boundary); else consumeExpiry(boundary);
+    if (boundary.kind === 'window') consumeWindow(boundary); else if (boundary.kind === 'move') consumeMove(boundary); else consumeExpiry(boundary);
   }
   while (index < events.length) consumeManual();
 

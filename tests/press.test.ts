@@ -81,6 +81,7 @@ describe('press questions in a career', () => {
     file.formatVersion = 33; file.state.schemaVersion = 33;
     delete file.state.rivalries;
     delete file.state.facilities.maintenanceSince;
+    delete file.state.career;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/supported player relationship command/);
   });
 });

@@ -1,0 +1,26 @@
+.youth-roster{padding:14px}
+.staff-owned-card.youth-owned-card{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(250px,1.2fr);gap:20px;padding:16px}
+.youth-owned-profile,.youth-owned-terms{display:grid;gap:16px;align-content:start;min-width:0}
+.youth-owned-card .staff-owned-identity{flex-direction:row}
+.youth-owned-card .staff-contract-controls{flex-direction:row;align-items:center}
+.youth-owned-profile>.staff-skill-list{max-width:340px}
+.youth-owned-terms{border-left:1px solid var(--border);padding-left:20px}
+.youth-role-benefits{display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--surface-2);border:1px solid var(--border)}
+.youth-role-benefits>svg{color:var(--accent);flex:none}
+.youth-role-benefits>div{display:grid;gap:6px}
+.youth-role-benefits strong{font-size:14px;font-weight:500}
+.youth-role-benefits span{color:var(--muted);font-size:13px;line-height:1.5}
+.staff-vacancy.youth-vacancy{max-width:430px;min-height:110px;width:100%;flex-direction:row;justify-content:flex-start;text-align:left;gap:18px}
+.youth-vacancy .staff-vacancy-image{width:56px;height:64px}
+.youth-vacancy .staff-vacancy-action{justify-content:flex-start}
+.youth-assessment-details{font-size:13px;color:var(--muted);line-height:1.5}
+.youth-assessment-details summary{cursor:pointer}
+.youth-assessment-details summary:hover{color:var(--accent)}
+.youth-assessment-details p{margin:8px 0 0}
+.youth-candidate-profile{display:grid;gap:16px;min-width:0}
+.youth-staff-workspace .staff-candidate-profile{align-items:center}
+#youth-current-title:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:800px){.staff-owned-card.youth-owned-card{grid-template-columns:1fr;gap:14px}.youth-owned-terms{padding:14px 0 0;border-left:0;border-top:1px solid var(--border)}}
+@media(max-width:650px){.youth-roster{padding:10px}.staff-owned-card.youth-owned-card{padding:12px}.staff-vacancy.youth-vacancy{max-width:none;min-height:100px}.youth-staff-workspace .staff-candidate-profile{align-items:flex-start}}
+
+.youth-development-benefits{display:grid;gap:8px}.youth-development-benefits>strong{color:var(--accent);font-size:15px}

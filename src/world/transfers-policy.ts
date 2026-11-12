@@ -3,7 +3,7 @@ import type { ContractOfferOptions, PlayerContractQuote } from '../domain/employ
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
-import { DEVELOPMENT_PLAYERS } from '../data/development-players';
+import { getActiveCareerPlayers } from './player-catalog';
 import { contractForSeason, effectiveContractsForSeason, getClubContractSummary, MIN_ROSTER_SIZE, MIN_ROSTER_WAGE_RESERVE, quotePlayerContract } from './employment-policy';
 import { getFinanceBalance } from './finance';
 import { addMarketDays, getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
@@ -25,7 +25,7 @@ export function requiredTransferFee(state: Pick<SeasonState, 'employment' | 'sea
 
 export function getTransferCandidates(state: SeasonState, clubId = state.managedClubId): readonly Player[] {
   if (!isMarketActive(state) || !isCompetitiveMarket(state)) return [];
-  return DEVELOPMENT_PLAYERS.filter(player => {
+  return getActiveCareerPlayers(state, state.seasonNumber + 1, 1).filter(player => {
     const contract = contractForSeason(state.employment, player.id, state.seasonNumber + 1);
     return contract && contract.clubId !== clubId && !(state.employment.transfers ?? []).some(transfer => transfer.playerId === player.id && transfer.startsSeason === state.seasonNumber + 1);
   });

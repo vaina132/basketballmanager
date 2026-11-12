@@ -1,6 +1,6 @@
+import { getCareerPlayer } from '../world/player-catalog'
 import { useState } from 'react'
 import type { SeasonState } from '../domain/season'
-import { getDevelopmentPlayer } from '../data/development-players'
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios'
 import { daysUntilReturn, getClubMedicalCases, getInjuryMedicalSummary, getPlayerMedicalSummary, getSeasonInjuries } from '../world/health'
 import { getClubPhysio } from '../world/physio-policy'
@@ -43,7 +43,7 @@ function MedicalCaseRow({ season, summary, busy, onSelectPlayer }: { season: Sea
   const { injury } = summary
   const currentClub = season.clubs.find(club => club.players.some(player => player.id === injury.playerId))
   const inSquad = currentClub?.id === season.managedClubId
-  const player = currentClub?.players.find(item => item.id === injury.playerId) ?? getDevelopmentPlayer(injury.playerId)
+  const player = currentClub?.players.find(item => item.id === injury.playerId) ?? getCareerPlayer(season, injury.playerId)
   const originalClub = season.clubs.find(club => club.id === injury.clubId)!
   const recovering = summary.daysRemaining > 0
   const condition = inSquad ? season.status === 'complete' ? season.conditions[player.id] : season.activeMatch.stats[player.id]?.condition ?? season.conditions[player.id] : null

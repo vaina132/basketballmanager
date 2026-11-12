@@ -9,6 +9,7 @@ import type { SeasonPhysio } from '../domain/physio';
 import { coachingAssignments, coachingRatingForAttribute } from './coaching';
 import { createRosterSnapshots, rosterForRound } from './rosters';
 import { fitnessAssignments } from './fitness-policy';
+import { ageTrainingRate, applyAgingAttributes, type LifecycleContext } from './lifecycle-policy';
 
 export const TRAINING_ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 export const TRAINING_FOCUSES = ['balanced', ...TRAINING_ATTRIBUTES] as const;
@@ -44,15 +45,15 @@ export function createTraining(clubs: readonly Team[], enabled = true): SeasonTr
 }
 
 /** Project training progress into a new match squad; authored identities stay immutable. */
-export function developClub(club: Team, training: SeasonTraining): Team {
+export function developClub(club: Team, training: SeasonTraining, context: LifecycleContext = {}): Team {
   return {
     ...club,
     players: club.players.map(player => ({
-      ...player, attributes: Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => {
+      ...player, attributes: applyAgingAttributes(context, player.id, Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => {
         const points = training.points[player.id]?.[attribute];
         if (!Number.isInteger(points) || points < 0 || points > trainingPointCap(player.attributes[attribute])) throw new Error('Training progress is outside its supported development limits.');
         return [attribute, Math.min(20, player.attributes[attribute] + Math.floor(points / 100))];
-      })) as unknown as PlayerAttributes,
+      })) as unknown as PlayerAttributes, context.date ?? ''),
     })),
   };
 }
@@ -102,6 +103,8 @@ export interface TrainingWeekInput {
   rosters?: readonly RosterSnapshot[];
   fitness?: SeasonFitness;
   physio?: SeasonPhysio;
+  lifecycle?: SeasonState['lifecycle'];
+  academy?: SeasonState['academy'];
 }
 
 /** One authoritative weekly pass updates every club; it consumes no match RNG. */
@@ -117,6 +120,7 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
   const appliedFitness = input.fitness ? fitnessAssignments(input.fitness, clubs, seasonNumber, afterRound) : null;
   const rosters = input.rosters ?? createRosterSnapshots(clubs, seasonNumber);
   const report: TrainingWeekReport = { seasonNumber, afterRound, fromDate, toDate, rosterIds: {}, plans: {}, players: {}, coaching: appliedCoaching, ...(appliedFitness ? { fitness: appliedFitness } : {}) };
+  const agingActive = !!input.lifecycle?.enabledSince && fromDate >= input.lifecycle.enabledSince.date;
   for (const club of clubs) {
     const registered = rosterForRound(rosters, club.id, afterRound);
     const registeredIds = new Set(registered.players.map(player => player.id));
@@ -130,18 +134,23 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       const workload = WORKLOAD[plan.intensity], conditionBefore = conditions[player.id]!;
       if (!Number.isFinite(conditionBefore) || conditionBefore < 35 || conditionBefore > 100) throw new Error('Training needs valid post-match condition for every player.');
       const fitness = appliedFitness?.[club.id];
-      let condition = conditionBefore, conditionWithoutCoach = conditionBefore, budget = 0, availableDays = 0;
+      let condition = conditionBefore, conditionWithoutCoach = conditionBefore, budget = 0, weightedBudget = 0, availableDays = 0;
       for (const date of dates) {
         const available = !injuries.some(injury => injury.playerId === player.id && isRecovering(injury, date, input.physio));
         if (available) {
           availableDays += 1;
-          budget += condition < 70 ? Math.floor(workload.points / 2) : workload.points;
+          const practice = condition < 70 ? Math.floor(workload.points / 2) : workload.points;
+          budget += practice;
+          weightedBudget += practice * (agingActive ? ageTrainingRate(input, player.id, date) : 10_000);
         }
         const recoveryBonus = available ? fitness?.recoveryPerDay ?? 0 : 0;
         const practiceCost = available ? workload.cost * (1 - (fitness?.practiceCostReductionPercent ?? 0) / 100) : 0;
         condition = Math.max(35, Math.min(100, Math.round((condition + workload.recovery + recoveryBonus - practiceCost) * 1000) / 1000));
         conditionWithoutCoach = Math.max(35, Math.min(100, Math.round((conditionWithoutCoach + workload.recovery - (available ? workload.cost : 0)) * 1000) / 1000));
       }
+      const ordinaryPracticePoints = budget;
+      if (agingActive) budget = Math.floor(weightedBudget / 10_000);
+      const aging = agingActive ? { ordinaryPracticePoints, adjustedPracticePoints: budget, rateBasisPoints: ordinaryPracticePoints > 0 ? Math.floor(weightedBudget / ordinaryPracticePoints) : ageTrainingRate(input, player.id, toDate) } : undefined;
       const desired = emptyPoints(), gains = emptyPoints(), coachingGains = emptyPoints(), previous = training.points[player.id];
       if (focus === 'balanced') {
         for (const key of TRAINING_ATTRIBUTES) desired[key] = Math.floor(budget / TRAINING_ATTRIBUTES.length);
@@ -167,7 +176,7 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       }
       nextConditions[player.id] = condition;
       nextPoints[player.id] = progress;
-      report.players[player.id] = { focus, intensity: plan.intensity, availableDays, conditionBefore, conditionAfter: condition, gains, coachingGains, ...(appliedFitness ? { fitness: { conditionWithoutCoach, conditionBenefit: Math.round((condition - conditionWithoutCoach) * 1000) / 1000 } } : {}) };
+      report.players[player.id] = { focus, intensity: plan.intensity, availableDays, conditionBefore, conditionAfter: condition, gains, coachingGains, ...(appliedFitness ? { fitness: { conditionWithoutCoach, conditionBenefit: Math.round((condition - conditionWithoutCoach) * 1000) / 1000 } } : {}), ...(aging ? { aging } : {}) };
     }
   }
   return { training: { ...training, points: nextPoints, lastWeek: report }, conditions: nextConditions };

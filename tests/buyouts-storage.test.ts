@@ -13,7 +13,7 @@ import { requiredTransferFee } from '../src/world/transfers-policy';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 const managed = 'rhine-falcons', rival = 'aegean-waves';
-const encode = (state: unknown, formatVersion = 24) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const encode = (state: unknown, formatVersion = 27) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 const finish = (initial: SeasonState) => { let state = initial; while (state.status === 'active') state = play(state); return state; };
 function settle(initial: SeasonState): SeasonState {

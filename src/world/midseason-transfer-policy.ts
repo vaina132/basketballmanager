@@ -3,7 +3,7 @@ import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import type { Player } from '../domain/types';
-import { DEVELOPMENT_PLAYERS } from '../data/development-players';
+import { getActiveCareerPlayers } from './player-catalog';
 import { contractForRound, effectiveContractsForRound, getClubContractSummary, MAX_CONTRACT_SEASONS, MAX_CONTRACT_WAGE, MAX_ROSTER_SIZE, MIN_CONTRACT_WAGE, MIN_ROSTER_SIZE, MIN_ROSTER_WAGE_RESERVE, outgoingReplacementReserve, WAGE_STEP } from './employment-policy';
 import { getFinanceBalance } from './finance';
 import { getPlayerPayroll } from './payroll';
@@ -11,6 +11,7 @@ import { getInSeasonBudget, getInSeasonOffers, remainingSeasonWages } from './re
 import { dateForRound, SEASON_ROUNDS } from './season';
 import { getTransferPaymentSchedule, getTransferPaymentSummary, TRANSFER_PAYMENT_PLANS } from './transfer-payments';
 import { MAX_TRANSFER_FEE, MIN_TRANSFER_FEE, TRANSFER_FEE_STEP } from './transfers-policy';
+import { retirementContractReason } from './lifecycle-policy';
 import { offerOptionsReason, releaseClauseTriggerReason } from './release-clauses';
 
 /** Every current and future seller agreement is released together; third-party promises never are. */
@@ -41,7 +42,7 @@ export function requiredInSeasonTransferFee(state: SeasonState, playerId: string
 
 export function getInSeasonTransferCandidates(state: SeasonState, clubId = state.managedClubId): readonly Player[] {
   if (!state.recruitment?.transfersEnabledSince || state.status !== 'active') return [];
-  return DEVELOPMENT_PLAYERS.filter(player => {
+  return getActiveCareerPlayers(state).filter(player => {
     const contract = contractForRound(state.employment, player.id, state.seasonNumber, state.round);
     return contract && contract.clubId !== clubId && !state.employment.transfers.some(transfer => transfer.playerId === player.id && transfer.startsSeason === state.seasonNumber && transfer.startsRound > 1);
   });
@@ -90,6 +91,7 @@ export function quoteInSeasonTransferOffer(state: SeasonState, playerId: string,
   else if (state.employment.transfers.some(transfer => transfer.playerId === playerId && transfer.startsSeason === state.seasonNumber && transfer.startsRound > 1)) reason = 'This player has already moved in a paid transfer during this season.';
   else if (!wageValid) reason = 'Choose an annual salary from EUR 5,000 to EUR 50,000 in EUR 500 steps.';
   else if (!termsValid) reason = 'Choose the rest of this season, optionally with one or two further seasons.';
+  else if (retirementContractReason(state, playerId, state.seasonNumber + seasons - 1)) reason = retirementContractReason(state, playerId, state.seasonNumber + seasons - 1);
   else if (!feeValid) reason = 'Choose a transfer fee from EUR 1,000 to EUR 500,000 in EUR 1,000 steps.';
   else if (!planValid || paymentPlan !== 'upfront' && state.seasonNumber >= 7974) reason = 'Choose a payment plan within the supported career calendar.';
   else if (options.transferMode === 'release-clause' && releaseClauseTriggerReason(state, playerId, fee, paymentPlan)) reason = releaseClauseTriggerReason(state, playerId, fee, paymentPlan);

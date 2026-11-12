@@ -2,7 +2,10 @@ import type { InSeasonBudget, InSeasonOffer, InSeasonOfferQuote } from '../domai
 import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
-import { DEVELOPMENT_PLAYERS } from '../data/development-players';
+import { getCareerPlayers, getActiveCareerPlayers } from './player-catalog';
+import { retirementContractReason } from './lifecycle-policy';
+import { getAcademyProspect } from './academy-policy';
+import { getYouthPlayerStatus } from './youth-competition';
 import { contractForSeason, effectiveContractsForRound, EMPLOYMENT_BUDGET, MAX_CONTRACT_WAGE, MAX_ROSTER_SIZE, MIN_CONTRACT_WAGE, WAGE_STEP } from './employment-policy';
 import { getFinanceBalance } from './finance';
 import { getSpendableCash, payrollInstallment } from './payroll-policy';
@@ -39,8 +42,9 @@ export function getInSeasonBudget(state: SeasonState, clubId = state.managedClub
 }
 
 /** One rest-of-season proposal; the current prepared match remains unchanged. */
-export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonWage: number, clubId = state.managedClubId, resolvingOfferId?: string, options: ContractOfferOptions = {}): InSeasonOfferQuote {
-  const player = DEVELOPMENT_PLAYERS.find(candidate => candidate.id === playerId);
+export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonWage: number, clubId = state.managedClubId, resolvingOfferId?: string, options: ContractOfferOptions = {}, academyProspectId?: string): InSeasonOfferQuote {
+  const prospect = academyProspectId ? getAcademyProspect(state, academyProspectId) : null;
+  const player = academyProspectId ? prospect?.player : getCareerPlayers(state).find(candidate => candidate.id === playerId);
   const own = getInSeasonOffers(state, clubId, true).find(offer => offer.playerId === playerId);
   const resolving = !!resolvingOfferId && own?.id === resolvingOfferId && own.responseRound === state.round && own.responseOn === state.date;
   const responseRound = resolving ? state.round : Math.min(SEASON_ROUNDS, state.round + 1);
@@ -52,10 +56,13 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   if (!state.recruitment?.enabledSince) reason = 'Enable in-season recruitment before approaching free agents.';
   else if (!state.employment.enabledSince || !state.finance.enabledSince || !state.payroll.enabledSince || !state.negotiations.enabledSince) reason = 'Enable player contracts, finances, payroll and negotiations before approaching free agents.';
   else if (!player || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a player and a club in this league.';
+  else if (academyProspectId !== undefined && (academyProspectId !== playerId || !prospect || prospect.clubId !== clubId || options.releaseFee !== undefined || options.transferMode !== undefined)) reason = 'Promote only a current prospect from your own academy with a standard rest-of-season contract.';
+  else if (prospect && getYouthPlayerStatus(state, playerId).injury) reason = `This prospect is recovering until ${getYouthPlayerStatus(state, playerId).returnOn}; review promotion after recovery.`;
   else if (offerOptionsReason(state, options, false)) reason = offerOptionsReason(state, options, false);
   else if (state.status !== 'active') reason = 'Use the offseason market after the final matchday.';
   else if (state.round >= SEASON_ROUNDS && !resolving) reason = 'There is no later matchday available to register a new player this season.';
   else if (!validWage) reason = 'Choose an annual salary from EUR 5,000 to EUR 50,000 in EUR 500 steps.';
+  else if (retirementContractReason(state, playerId, state.seasonNumber)) reason = retirementContractReason(state, playerId, state.seasonNumber);
   else if (contractForSeason(state.employment, playerId, state.seasonNumber)) reason = 'Choose a free agent without an employer for this season.';
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before offering another salary.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before offering another salary.';
@@ -67,7 +74,7 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
 
 export function getInSeasonCandidates(state: SeasonState): readonly Player[] {
   if (!state.employment.enabledSince || state.status !== 'active') return [];
-  return DEVELOPMENT_PLAYERS.filter(player => !contractForSeason(state.employment, player.id, state.seasonNumber));
+  return getActiveCareerPlayers(state).filter(player => !contractForSeason(state.employment, player.id, state.seasonNumber));
 }
 
 export { getInSeasonTransferCandidates, requiredInSeasonTransferFee, quoteInSeasonTransferOffer, quoteInSeasonSale } from './midseason-transfer-policy';

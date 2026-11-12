@@ -83,7 +83,7 @@ describe('scouting activation and assignment capacity', () => {
     state = setShortlisted(manual, target.id, false);
     expect(state.scouting.clubs[clubId]!.shortlist).toEqual([]);
     expect(() => setShortlisted(createSeason(71), target.id, true)).toThrow(/Enable scouting/);
-    expect(() => setShortlisted(state, 'missing', true)).toThrow(/catalog/);
+    expect(() => setShortlisted(state, 'missing', true)).toThrow(/senior player/);
   });
 });
 

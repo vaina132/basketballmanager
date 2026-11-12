@@ -1,8 +1,9 @@
+import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth'
+import { getCareerPlayer } from '../world/player-catalog'
 import { useState } from 'react'
 import type { FinanceEntry, FinancePlan } from '../domain/finance'
 import type { SeasonState } from '../domain/season'
 import { COACHES } from '../data/development-coaches'
-import { getDevelopmentPlayer } from '../data/development-players'
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts'
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness'
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios'
@@ -27,7 +28,7 @@ const money = (cents: number) => moneyFormatter.format(cents / 100)
 const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${money(Math.abs(cents))}`
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
-const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout' }
+const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout' }
 
 export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
@@ -52,20 +53,20 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: 
   function entryDetail(entry: FinanceEntry): string {
     if (entry.kind === 'buyout') {
       const buyout = season.employment.buyouts.find(item => item.id === entry.sourceId)
-      return buyout ? `${getDevelopmentPlayer(buyout.playerId).name} · Released from ${seasonLabel(buyout.startsSeason)}` : 'Player compensation'
+      return buyout ? `${getCareerPlayer(season, buyout.playerId).name} · Released from ${seasonLabel(buyout.startsSeason)}` : 'Player compensation'
     }
     if (entry.kind === 'transfer') {
       const transfer = season.employment.transfers.find(item => getTransferPayments(item).some(payment => payment.id === entry.sourceId))
       if (!transfer) return 'Transfer fee'
       const buying = transfer.toClubId === club.id
       const counterpart = season.clubs.find(team => team.id === (buying ? transfer.fromClubId : transfer.toClubId))
-      return `${getDevelopmentPlayer(transfer.playerId).name} · ${buying ? 'From' : 'To'} ${counterpart?.name ?? 'another club'}`
+      return `${getCareerPlayer(season, transfer.playerId).name} · ${buying ? 'From' : 'To'} ${counterpart?.name ?? 'another club'}`
     }
     if (entry.payroll) {
       const charge = entry.payroll
       const rounds = charge.fromRound === charge.throughRound ? `Matchday ${charge.fromRound}` : `Matchdays ${charge.fromRound}–${charge.throughRound}`
       const saving = charge.items.reduce((total, item) => total + item.discount, 0)
-      return charge.type === 'prepayment' ? `${getDevelopmentPlayer(charge.items[0]!.playerId).name} · ${rounds} · ${money(saving)} saved` : `${charge.items.length} players · ${rounds}`
+      return charge.type === 'prepayment' ? `${getCareerPlayer(season, charge.items[0]!.playerId).name} · ${rounds} · ${money(saving)} saved` : `${charge.items.length} players · ${rounds}`
     }
     if (entry.ticket) {
       const fixtures = entry.seasonNumber === season.seasonNumber ? season.fixtures : season.history.find(archive => archive.seasonNumber === entry.seasonNumber)?.fixtures
@@ -73,6 +74,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: 
       const visitor = fixture ? season.clubs.find(team => team.id === fixture.awayClubId) : null
       return `${visitor ? `Home vs ${visitor.name} · ` : ''}${count(entry.ticket.attendance)} / ${count(definition.capacity)} attendance · ${money(entry.ticket.price)} per ticket`
     }
+    if (entry.youth) return DEVELOPMENT_YOUTH_COACHES.find(coach => coach.id === entry.youth!.coachId)?.name ?? 'Youth coach fee'
     if (entry.assistant) return DEVELOPMENT_ASSISTANTS.find(coach => coach.id === entry.assistant!.assistantId)?.name ?? 'Assistant coach fee'
     if (entry.physio) return DEVELOPMENT_PHYSIOS.find(physio => physio.id === entry.physio!.physioId)?.name ?? 'Physio fee'
     if (entry.fitness) return DEVELOPMENT_FITNESS_COACHES.find(coach => coach.id === entry.fitness!.coachId)?.name ?? 'Fitness coach fee'
@@ -122,7 +124,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: 
           const buyout = entry.kind === 'buyout' ? season.employment.buyouts.find(item => item.id === entry.sourceId) : null
           const date = buyout?.completedOn ?? payment?.paidOn ?? dateForRound(entry.round, entry.seasonNumber)
           return <tr key={entry.id} data-finance-entry={entry.id} data-finance-kind={entry.kind}>
-            <td><time dateTime={date}>{formatDate(date)}</time><small>{buyout ? 'Player compensation' : transfer && payment ? `Transfer payment ${payment.installmentIndex + 1}/${transfer.installments.length}` : `Matchday ${entry.round}`}</small></td><th scope="row">{kinds[entry.kind]}<small>{entryDetail(entry)}</small>{entry.payroll && <details className="club-payroll-breakdown" data-payroll-ledger={entry.id}><summary>Player charges</summary><ul>{entry.payroll.items.map(item => <li key={item.agreementId}><span>{getDevelopmentPlayer(item.playerId).name}</span><strong>{money(item.amount)}</strong>{item.discount > 0 && <small>Gross {money(item.gross)} · discount {money(item.discount)}</small>}</li>)}</ul></details>}</th>
+            <td><time dateTime={date}>{formatDate(date)}</time><small>{buyout ? 'Player compensation' : transfer && payment ? `Transfer payment ${payment.installmentIndex + 1}/${transfer.installments.length}` : `Matchday ${entry.round}`}</small></td><th scope="row">{kinds[entry.kind]}<small>{entryDetail(entry)}</small>{entry.payroll && <details className="club-payroll-breakdown" data-payroll-ledger={entry.id}><summary>Player charges</summary><ul>{entry.payroll.items.map(item => <li key={item.agreementId}><span>{getCareerPlayer(season, item.playerId).name}</span><strong>{money(item.amount)}</strong>{item.discount > 0 && <small>Gross {money(item.gross)} · discount {money(item.discount)}</small>}</li>)}</ul></details>}</th>
             <td className={entry.amount < 0 ? 'club-finance-cost' : entry.amount > 0 ? 'club-finance-income' : ''}>{movement(entry.amount)}</td>
             <td><span className={entry.cashDelta < 0 ? 'club-finance-cost' : entry.cashDelta > 0 ? 'club-finance-income' : ''}>{movement(entry.cashDelta)}</span><small>Balance {money(entry.cashAfter)}</small></td>
             <td><span className={entry.unpaidDelta > 0 ? 'club-finance-cost' : entry.unpaidDelta < 0 ? 'club-finance-income' : ''}>{movement(entry.unpaidDelta)}</span><small>Balance {money(entry.unpaidAfter)}</small></td>

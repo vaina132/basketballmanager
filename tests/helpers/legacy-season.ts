@@ -61,10 +61,29 @@ export function stripPhysio(value: object): void {
 
 /** Format23 predates paid assistant appointments. */
 export function stripAssistant(value: object): void {
+  stripAcademy(value);
   delete (value as Record<string, unknown>).assistant;
+}
+
+/** Format24 predates academy prospects and paid youth coaches. */
+export function stripAcademy(value: object): void {
+  stripLifecycle(value);
+  delete (value as Record<string, unknown>).academy;
+  delete (value as Record<string, unknown>).youth;
 }
 
 /** Past player statistics cannot be recovered from an old-format archive. */
 export function withUnavailableArchivedStats(state: SeasonState): SeasonState {
   return { ...state, history: state.history.map(archive => ({ ...archive, fixtures: archive.fixtures.map(fixture => ({ ...fixture, result: { ...fixture.result, stats: null } })) })) };
+}
+
+/** Format25 predates dated senior aging and retirement reviews. */
+export function stripLifecycle(value: object): void {
+  stripYouthCompetition(value);
+  delete (value as Record<string, unknown>).lifecycle;
+}
+
+/** Format26 predates youth competition and its additional academy intake records. */
+export function stripYouthCompetition(value: object): void {
+  delete (value as Record<string, unknown>).youthCompetition;
 }

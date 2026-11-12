@@ -1,6 +1,6 @@
+import { getCareerPlayer } from '../world/player-catalog'
 import type { EmploymentTransfer } from '../domain/employment'
 import type { SeasonState } from '../domain/season'
-import { getDevelopmentPlayer } from '../data/development-players'
 import { getTransferInstallmentRemaining, getTransferInstallments, getTransferPayments, getTransferPaymentSummary, paymentPlanLabel } from '../world/transfer-payments'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
@@ -36,7 +36,7 @@ export function TransferPaymentsPanel({ season }: { season: SeasonState }) {
   function card(transfer: EmploymentTransfer) {
     const incoming = transfer.fromClubId === clubId
     const counterpart = season.clubs.find(club => club.id === (incoming ? transfer.toClubId : transfer.fromClubId))!
-    const player = getDevelopmentPlayer(transfer.playerId)
+    const player = getCareerPlayer(season, transfer.playerId)
     return <article className="club-transfer-payment" key={transfer.id} data-payment-direction={incoming ? 'incoming' : 'outgoing'}><header><span aria-hidden="true"><Avatar player={player} color={counterpart.color} size={36} /></span><div><strong>{player.name}</strong><small>{incoming ? 'From' : 'To'} {counterpart.name}</small></div><div><strong>{money(transfer.fee)}</strong><small>{incoming ? 'Sale income' : 'Transfer fee'}</small></div></header><TransferPaymentRecord transfer={transfer} date={season.date} incoming={incoming} /></article>
   }
   return <section className="club-transfer-payments panel" aria-labelledby="club-transfer-payments-title"><header className="club-heading"><h2 id="club-transfer-payments-title"><Icon name="swap" size={18} />Transfer payments</h2><span>{unsettled.length} open {unsettled.length === 1 ? 'agreement' : 'agreements'}</span></header>

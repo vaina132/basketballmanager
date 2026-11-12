@@ -85,7 +85,7 @@ describe('fitness coaching across actual career boundaries', () => {
 
   it('keeps all three staff roles within one allocation and closes hiring when no training week remains', () => {
     const { hired, replaced, allocationBlocked, roundTen } = careers;
-    expect(staffCommitmentsByRole(hired, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 5_000_000, physio: 0, assistant: 0, total: 11_000_000 });
+    expect(staffCommitmentsByRole(hired, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 5_000_000, physio: 0, assistant: 0, youth: 0, total: 11_000_000 });
     expect(staffCommitted(replaced, club)).toBe(13_000_000);
     expect(remainingStaffBudget(replaced)).toBe(2_000_000);
     expect(quoteScoutHire(replaced, 'scout-13').canHire).toBe(false);
@@ -101,7 +101,7 @@ describe('fitness coaching across actual career boundaries', () => {
     expect(nextYear.training.lastWeek).toBeNull();
     expect(Object.values(nextYear.conditions).every(value => value === 100)).toBe(true);
     expect(getClubFitnessCoach(nextYear)).toMatchObject({ seasonNumber: 2, startedRound: 1 });
-    expect(staffCommitmentsByRole(nextYear, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 2_000_000, physio: 0, assistant: 0, total: 8_000_000 });
+    expect(staffCommitmentsByRole(nextYear, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 2_000_000, physio: 0, assistant: 0, youth: 0, total: 8_000_000 });
     expect(nextYear.fitness.contracts.slice(0, completed.fitness.contracts.length)).toEqual(completed.fitness.contracts);
     expect(nextYear.finance.ledger.slice(0, completed.finance.ledger.length)).toEqual(completed.finance.ledger);
     const updated = setFitnessRenewal(nextYear, getClubFitnessCoach(nextYear).id, false);

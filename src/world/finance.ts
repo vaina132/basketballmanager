@@ -3,6 +3,7 @@ import type { ScoutContract } from '../domain/scouts';
 import type { FitnessContract } from '../domain/fitness';
 import type { PhysioContract } from '../domain/physio';
 import type { AssistantContract } from '../domain/assistant';
+import type { YouthCoachContract } from '../domain/youth';
 import type { EmploymentBuyout, EmploymentTransfer } from '../domain/employment';
 import type { PayrollCharge } from '../domain/payroll';
 import type { TransferPayment } from '../domain/transfer-payments';
@@ -14,6 +15,7 @@ import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
+import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
 import { getClubFinanceDefinition } from '../data/development-finances';
 import { getPayrollReserve, getSpendableCash } from './payroll-policy';
 import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransferPaymentSummary, payTransferInstallment } from './transfer-payments';
@@ -189,6 +191,17 @@ export function recordAssistantFee(state: SeasonState, contract: AssistantContra
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring an assistant coach.');
   if (getSpendableCash(state, contract.clubId) < coach.fee) throw new Error('Protect remaining wages and transfer commitments before hiring an assistant coach.');
   return append(state, { clubId: contract.clubId, kind: 'assistant', amount: -coach.fee, sourceId: `assistant-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, assistant: { contractId: contract.id, assistantId: contract.assistantId } });
+}
+
+export function recordYouthFee(state: SeasonState, contract: YouthCoachContract): SeasonState {
+  const coach = DEVELOPMENT_YOUTH_COACHES.find(coach => coach.id === contract.coachId), stored = state.youth.contracts.at(-1);
+  if (!state.finance.enabledSince || !state.youth.enabledSince || !state.academy.enabledSince || state.status !== 'active' || state.round === 10 || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== state.finance.ledger.length || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `youth-contract-${state.youth.contracts.length}`) throw new Error('Pay only the exact newly appointed youth-coach contract.');
+  const active = state.youth.contracts.filter(item => item.seasonNumber === state.seasonNumber && item.releasedRound === null);
+  if (!state.clubs.some(club => club.id === contract.clubId) || active.filter(item => item.clubId === contract.clubId).length !== 1 || active.filter(item => item.coachId === contract.coachId).length !== 1) throw new Error('Only one active youth coach is allowed per club and person.');
+  if (staffCommitted(state, contract.clubId) > STAFF_BUDGET) throw new Error('This appointment exceeds the shared staff allocation.');
+  if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a youth coach.');
+  if (getSpendableCash(state, contract.clubId) < coach.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a youth coach.');
+  return append(state, { clubId: contract.clubId, kind: 'youth', amount: -coach.fee, sourceId: `youth-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, youth: { contractId: contract.id, coachId: contract.coachId } });
 }
 
 function winShare(state: FinanceContext, clubId: string, beforeRound: number): number | null {

@@ -15,7 +15,7 @@ const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json
 const restore = state => parseSeason(serializeSeason(state));
 const changed = (state, mutate) => { const envelope = JSON.parse(serializeSeason(state)); mutate(envelope.state); return JSON.stringify(envelope); };
 const managedContract = state => state.assistant.contracts.findLast(contract => contract.clubId === club);
-const upgrade = state => ({ ...state, schemaVersion: 24, assistant: createAssistant() });
+const upgrade = state => ({ ...state, schemaVersion: 27, youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: createAssistant(), academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] } });
 
 /** Forge a matching charge as well, so employment validation cannot rely on missing cash records. */
 function appendAppointment(state, assistantId, clubId = club) {
@@ -64,7 +64,7 @@ describe('assistant save migration, payment provenance and career history', () =
     expect(hired.activeMatch).toEqual(initial.activeMatch);
     expect(released.finance).toEqual(afterWeek.finance);
     expect(replaced.activeMatch).toEqual(afterWeek.activeMatch);
-    expect(staffCommitmentsByRole(replaced, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 2_000_000, physio: 2_000_000, assistant: 5_000_000, total: STAFF_BUDGET });
+    expect(staffCommitmentsByRole(replaced, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 2_000_000, physio: 2_000_000, assistant: 5_000_000, youth: 0, total: STAFF_BUDGET });
     expect(advanceAssistantCareer(restore(replaced))).toEqual(advanceAssistantCareer(replaced));
   });
 

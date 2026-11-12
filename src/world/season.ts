@@ -20,6 +20,10 @@ import { createPhysio, enablePhysio, recruitAiPhysios, renewSeasonPhysio } from 
 import { createAssistant, enableAssistant, recruitAiAssistants, renewSeasonAssistant } from './assistant';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { applyAssistantTactics } from './assistant-advice';
+import { createAcademy, enableAcademy, prepareAcademySeason, processAcademyWeek } from './academy';
+import { createYouth, enableYouth, recruitAiYouthCoaches, renewSeasonYouth } from './youth';
+import { createLifecycle, enableLifecycle, prepareLifecycleSeason } from './lifecycle';
+import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, processYouthRound } from './youth-competition';
 import { processRehabilitationWeek } from './rehabilitation';
 import { createNegotiations, enableNegotiations } from './negotiations';
 import { createMarket, enableMarket } from './market';
@@ -103,13 +107,13 @@ export function managedSide(season: SeasonState): Side {
   throw new Error('The active fixture must include the managed club.');
 }
 
-function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber'>>, fixture: SeasonFixture): MatchState {
+function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy'>>, fixture: SeasonFixture): MatchState {
   const home = season.clubs.find(club => club.id === fixture.homeClubId);
   const away = season.clubs.find(club => club.id === fixture.awayClubId);
   if (!home || !away) throw new Error('A fixture refers to a missing club.');
   const homePlan = season.plans[home.id]!, awayPlan = season.plans[away.id]!;
   const registeredPlayers = new Set([...home.players, ...away.players].map(player => player.id));
-  let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), developClub(home, season.training), developClub(away, season.training), {
+  let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), developClub(home, season.training, { ...season, date: fixture.date }), developClub(away, season.training, { ...season, date: fixture.date }), {
     lineups: { home: homePlan.lineup, away: awayPlan.lineup },
     tactics: { home: homePlan.tactics, away: awayPlan.tactics },
     autoSubstitutions: { home: home.id === season.managedClubId ? homePlan.autoSubstitutions : true, away: away.id === season.managedClubId ? awayPlan.autoSubstitutions : true },
@@ -126,7 +130,7 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   return match;
 }
 
-export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false): SeasonState {
+export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   if (!DEVELOPMENT_CLUBS.some(club => club.id === managedClubId)) throw new Error('Choose a club from the development league.');
   if (!['standard', 'reduced', 'off'].includes(injuryMode)) throw new Error('Choose a valid season injury setting.');
@@ -140,6 +144,10 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
   if (typeof fitnessEnabled !== 'boolean' || fitnessEnabled && (!trainingEnabled || !financeEnabled)) throw new Error('Fitness coaches require enabled training and club finances.');
   if (typeof physioEnabled !== 'boolean' || physioEnabled && !financeEnabled) throw new Error('Physios require enabled club finances.');
   if (typeof assistantEnabled !== 'boolean' || assistantEnabled && !financeEnabled) throw new Error('Assistant coaches require enabled club finances.');
+  if (typeof academyEnabled !== 'boolean' || academyEnabled && (!employmentEnabled || !negotiationsEnabled || !payrollEnabled || !financeEnabled)) throw new Error('The academy requires finances, payroll, employment and negotiations.');
+  if (typeof youthEnabled !== 'boolean' || youthEnabled && !academyEnabled) throw new Error('Youth coaches require an enabled academy.');
+  if (typeof lifecycleEnabled !== 'boolean' || lifecycleEnabled && !academyEnabled) throw new Error('Player aging and retirement require an enabled academy.');
+  if (typeof youthCompetitionEnabled !== 'boolean' || youthCompetitionEnabled && !academyEnabled) throw new Error('Youth matches require an enabled academy.');
   if (typeof negotiationsEnabled !== 'boolean' || negotiationsEnabled && !employmentEnabled) throw new Error('Contract negotiations require enabled player contracts and a valid negotiation setting.');
   if (typeof marketEnabled !== 'boolean' || marketEnabled && !negotiationsEnabled) throw new Error('The offseason calendar requires enabled negotiations and a valid setting.');
   const managerProfile = manager === null ? null : validateManagerProfile(manager, DEVELOPMENT_START_DATE);
@@ -152,7 +160,7 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: 24, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), negotiations: createNegotiations(), market: createMarket(),
+    schemaVersion: 27, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), negotiations: createNegotiations(), market: createMarket(),
     ...preparation, date: first.date, status: 'active', round: 1, fixtures,
     activeFixtureId: first.id, activeMatch: prepareMatch(preparation, first),
   };
@@ -167,8 +175,12 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
   const negotiated = negotiationsEnabled ? enableNegotiations(assisted) : assisted;
   const marketReady = marketEnabled ? enableMarket(negotiated) : negotiated;
   const ready = employmentEnabled && negotiationsEnabled ? enableInSeasonTransfers(enableInSeasonRecruitment(marketReady)) : marketReady;
+  const academyReady = academyEnabled ? enableAcademy(ready) : ready;
+  const academyStaffed = youthEnabled ? enableYouth(academyReady) : academyReady;
+  const developed = lifecycleEnabled ? enableLifecycle(academyStaffed) : academyStaffed;
+  const youthReady = youthCompetitionEnabled ? enableYouthCompetition(developed) : developed;
   // Only a genuinely new career is prepared after initial staffing. Legacy opt-in never rewrites its current match.
-  return assistantEnabled ? { ...ready, activeMatch: prepareMatch(ready, first) } : ready;
+  return assistantEnabled ? { ...youthReady, activeMatch: prepareMatch(youthReady, first) } : youthReady;
 }
 
 function compactResult(match: MatchState, rosterIds: FixtureResult['rosterIds']): FixtureResult {
@@ -227,6 +239,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
     const match = fixture.id === next.activeFixtureId ? next.activeMatch : simulateToEnd(prepareMatch(next, fixture));
     postMatch(next, fixture, match);
   }
+  next = processYouthRound(next);
   next = processFinanceRound(next);
   next = processPayrollRound(next);
   next = processTransferPayments(next);
@@ -239,16 +252,18 @@ export function advanceSeason(state: SeasonState): SeasonState {
   next = recruitAiFitnessCoaches(next);
   next = recruitAiPhysios(next);
   next = recruitAiAssistants(next);
+  next = recruitAiYouthCoaches(next);
   next = recruitAiCoaches(next);
   next.round += 1;
   next.date = dateForRound(next.round, next.seasonNumber);
   next.physio = processRehabilitationWeek({ physio: next.physio, clubs: next.clubs, rosters: next.rosters, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
   if (next.training.enabledSince) {
-    const trained = processTrainingWeek({ training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
+    const trained = processTrainingWeek({ training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, lifecycle: next.lifecycle, academy: next.academy, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
     next.training = trained.training; next.conditions = trained.conditions;
   } else {
     for (const id of Object.keys(next.conditions)) next.conditions[id] = Math.min(100, Math.round((next.conditions[id]! + DAILY_RECOVERY * ROUND_INTERVAL_DAYS) * 1000) / 1000);
   }
+  next.academy = processAcademyWeek({ academy: next.academy, youth: next.youth, youthCompetition: next.youthCompetition, clubs: next.clubs, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
   const registeredBefore = next.rosters.length;
   next = resolveInSeasonRecruitment(next);
   next = prepareFinanceRound(next);
@@ -319,6 +334,9 @@ export function rolloverSeason(state: SeasonState): SeasonState {
     })) },
     coaching: { ...state.coaching, contracts: [] },
   };
+  next = prepareAcademySeason(next);
+  next = prepareYouthSeason(next);
+  next = prepareLifecycleSeason(next);
   next = startFinanceSeason(next);
   next = startPayrollSeason(next);
   next = resolveInSeasonRecruitment(next);
@@ -328,10 +346,12 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = renewSeasonFitness(next);
   next = renewSeasonPhysio(next);
   next = renewSeasonAssistant(next);
+  next = renewSeasonYouth(next);
   next = recruitAiScouts(next);
   next = recruitAiFitnessCoaches(next);
   next = recruitAiPhysios(next);
   next = recruitAiAssistants(next);
+  next = recruitAiYouthCoaches(next);
   next = recruitAiCoaches(next);
   next = preparePayrollRound(next);
   next = processTransferPayments(next);

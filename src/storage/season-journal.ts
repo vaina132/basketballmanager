@@ -1,5 +1,7 @@
+import { MAX_SEASON_SAVE_BYTES } from './season-limits';
+
 export const MAX_SEASON_CHECKPOINTS = 5;
-export const MAX_CHECKPOINT_BYTES = 8 * 1024 * 1024;
+export const MAX_CHECKPOINT_BYTES = MAX_SEASON_SAVE_BYTES;
 export const MAX_SEASON_REVISION = Number.MAX_SAFE_INTEGER;
 
 export type CheckpointReason = 'manual' | 'new-game' | 'matchday' | 'rollover' | 'recovery' | 'legacy';
@@ -43,7 +45,7 @@ function validSavedAt(value: unknown): value is string {
 
 function validateSerialized(value: unknown): asserts value is string {
   if (typeof value !== 'string') metadataError('a checkpoint must contain serialized text');
-  if (value.length > MAX_CHECKPOINT_BYTES || new TextEncoder().encode(value).byteLength > MAX_CHECKPOINT_BYTES) metadataError('a checkpoint exceeds the 8 MB save limit');
+  if (value.length > MAX_CHECKPOINT_BYTES || new TextEncoder().encode(value).byteLength > MAX_CHECKPOINT_BYTES) metadataError('a checkpoint exceeds the 32 MB save limit');
 }
 
 function decodeCheckpoint(value: unknown): SeasonCheckpoint {

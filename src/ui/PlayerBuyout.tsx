@@ -1,7 +1,7 @@
+import { getCareerPlayer } from '../world/player-catalog'
 import { useEffect, useRef } from 'react'
 import type { SeasonState } from '../domain/season'
 import type { Player } from '../domain/types'
-import { getDevelopmentPlayer } from '../data/development-players'
 import { quoteContractBuyout } from '../world/buyouts'
 import { MIN_ROSTER_SIZE } from '../world/employment-policy'
 import { getSpendableCash } from '../world/payroll'
@@ -73,5 +73,5 @@ export function PlayerBuyout({ season, player, disabled, onClose, onBuyout, onFi
 export function BuyoutHistory({ season }: { season: SeasonState }) {
   const records = season.employment.buyouts.filter(item => item.clubId === season.managedClubId)
   if (!records.length) return null
-  return <details className="game-disclosure panel buyout-history"><summary><Icon name="people" size={17} />Contract buyouts · {records.length}</summary><div className="transfers-table-scroll" role="region" aria-label="Contract buyout history" tabIndex={0}><table className="transfers-table"><thead><tr><th scope="col">Player</th><th scope="col">Compensation paid</th><th scope="col">Paid on</th><th scope="col">Released from</th></tr></thead><tbody>{[...records].reverse().map(record => <tr key={record.id} data-buyout-history={record.id}><th scope="row">{getDevelopmentPlayer(record.playerId).name}</th><td>{money(record.amount)}</td><td><time dateTime={record.completedOn}>{scoutingDate(record.completedOn)}</time></td><td>{seasonLabel(record.startsSeason)}</td></tr>)}</tbody></table></div></details>
+  return <details className="game-disclosure panel buyout-history"><summary><Icon name="people" size={17} />Contract buyouts · {records.length}</summary><div className="transfers-table-scroll" role="region" aria-label="Contract buyout history" tabIndex={0}><table className="transfers-table"><thead><tr><th scope="col">Player</th><th scope="col">Compensation paid</th><th scope="col">Paid on</th><th scope="col">Released from</th></tr></thead><tbody>{[...records].reverse().map(record => <tr key={record.id} data-buyout-history={record.id}><th scope="row">{getCareerPlayer(season, record.playerId).name}</th><td>{money(record.amount)}</td><td><time dateTime={record.completedOn}>{scoutingDate(record.completedOn)}</time></td><td>{seasonLabel(record.startsSeason)}</td></tr>)}</tbody></table></div></details>
 }

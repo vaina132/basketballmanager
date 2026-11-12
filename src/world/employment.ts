@@ -1,10 +1,9 @@
 import type { ContractOfferOptions, EmploymentContract, EmploymentTransfer, SeasonEmployment } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
-import { getDevelopmentPlayer } from '../data/development-players';
-import { getSeasonWage } from '../data/development-wages';
+import { getCareerPlayer, getCareerWage } from './player-catalog';
 import { contractForSeason, effectiveContractsForSeason, getAvailablePlayers, getClubContractSummary, getContractedClubs, MAX_ROSTER_SIZE, MIN_ROSTER_SIZE, quotePlayerContract } from './employment-policy';
-import { scoutingRecruitmentRating } from './scouting-policy';
+import { scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
 import { evaluateNegotiation } from './negotiations-policy';
 import { appendNegotiationResponse, getLatestNegotiation } from './negotiations';
 import { finishMarketWindow, prepareMarketWindow, scheduleMarketRecruitment, submitMarketOffer } from './market';
@@ -46,7 +45,7 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
   const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId, resolvingOfferId, scheduled?.transfer?.fee, scheduled?.transfer?.paymentPlan ?? 'upfront', options);
   if (!quote.canOffer) throw new Error(quote.reason!);
   if (duplicate) return state;
-  const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons, options.releaseFee) : null;
+  const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons, options.releaseFee, state) : null;
   const contractCountBefore = state.employment.contracts.length;
   if (decision && decision.outcome !== 'accepted') return appendNegotiationResponse(state, clubId, playerId, seasonWage, seasons, decision, null, contractCountBefore, quote.startsSeason, options.releaseFee);
   if (scheduled?.transfer) {
@@ -86,14 +85,13 @@ export function offerPlayerContract(state: SeasonState, playerId: string, season
   return state.market?.enabledSince && state.status === 'complete' ? submitMarketOffer(state, playerId, seasonWage, seasons, state.managedClubId, undefined, 'upfront', options) : commitPlayerOffer(state, state.managedClubId, playerId, seasonWage, seasons, undefined, options);
 }
 
-const rating = (player: Player): number => Object.values(player.attributes).reduce((sum, skill) => sum + skill, 0);
 function rankCandidates(state: SeasonState, clubId: string, players: readonly Player[]): Player[] {
   const positions = new Map<string, number>();
   for (const contract of getClubContractSummary(state, clubId).contracts) {
-    const position = getDevelopmentPlayer(contract.playerId).position;
+    const position = getCareerPlayer(state, contract.playerId).position;
     positions.set(position, (positions.get(position) ?? 0) + 1);
   }
-  const assessed = (player: Player): number => state.scouting.enabledSince ? scoutingRecruitmentRating(state, clubId, player.id) : rating(player);
+  const assessed = (player: Player): number => state.scouting.enabledSince ? scoutingRecruitmentRating(state, clubId, player.id) : Object.values(state.lifecycle?.enabledSince ? scoutingActualAttributes(state, player.id) : player.attributes).reduce((sum, skill) => sum + skill, 0);
   return [...players].sort((left, right) => (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || assessed(right) - assessed(left) || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
 }
 
@@ -102,9 +100,9 @@ function retainPlayers(state: SeasonState, clubId: string, target: number): Seas
   const club = state.clubs.find(club => club.id === clubId)!;
   while (getClubContractSummary(next, clubId).rosterSize < target) {
     const candidates = rankCandidates(next, clubId, club.players.filter(player => !contractForSeason(next.employment, player.id, next.seasonNumber + 1)));
-    const player = candidates.find(player => quotePlayerContract(next, player.id, getSeasonWage(player.id), 1, clubId).canOffer);
+    const player = candidates.find(player => quotePlayerContract(next, player.id, getCareerWage(state, player.id), 1, clubId).canOffer);
     if (!player) break;
-    next = commitPlayerOffer(next, clubId, player.id, getSeasonWage(player.id), 1);
+    next = commitPlayerOffer(next, clubId, player.id, getCareerWage(state, player.id), 1);
   }
   return next;
 }
@@ -112,9 +110,9 @@ function retainPlayers(state: SeasonState, clubId: string, target: number): Seas
 function recruitPlayers(state: SeasonState, clubId: string, target: number): SeasonState {
   let next = state;
   while (getClubContractSummary(next, clubId).rosterSize < target) {
-    const player = rankCandidates(next, clubId, getAvailablePlayers(next)).find(player => quotePlayerContract(next, player.id, getSeasonWage(player.id), 1, clubId).canOffer);
+    const player = rankCandidates(next, clubId, getAvailablePlayers(next)).find(player => quotePlayerContract(next, player.id, getCareerWage(state, player.id), 1, clubId).canOffer);
     if (!player) break;
-    next = commitPlayerOffer(next, clubId, player.id, getSeasonWage(player.id), 1);
+    next = commitPlayerOffer(next, clubId, player.id, getCareerWage(state, player.id), 1);
   }
   return next;
 }

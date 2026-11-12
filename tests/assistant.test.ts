@@ -90,7 +90,7 @@ describe('assistant appointments and shared five-role staff allocation', () => {
 
   it('shares staff allocation with coaches, scouts, fitness and physios, including released fees', () => {
     let staffed = hireAssistant(hirePhysio(hireFitnessCoach(hireScout(initial, 'scout-06'), 'fitness-06'), 'physio-06'), 'assistant-06');
-    expect(staffCommitmentsByRole(staffed, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 2_000_000, physio: 2_000_000, assistant: 2_000_000, total: 12_000_000 });
+    expect(staffCommitmentsByRole(staffed, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 2_000_000, physio: 2_000_000, assistant: 2_000_000, youth: 0, total: 12_000_000 });
     expect(remainingStaffBudget(staffed)).toBe(3_000_000);
     expect(() => hireCoach(staffed, 'coach-25')).toThrow(/shared staff/i);
     staffed = hireAssistant(releaseAssistant(staffed, getClubAssistant(staffed)!.id), 'assistant-06');

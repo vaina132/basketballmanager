@@ -12,11 +12,14 @@ import { developClub, resolveTrainingPlan, trainingAvailableDays, trainingPointC
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { StaminaMeter } from './StaminaMeter'
+import { LifecycleTrainingControl, PlayerCareerStatus, practiceAgeLabel } from './PlayerLifecycle'
+import { getPlayerAging } from '../world/lifecycle-policy'
 import './training-workspace.css'
 
 interface TrainingWorkspaceProps {
   season: SeasonState
   onEnable: () => void
+  onEnableLifecycle: () => void
   onOpenFitness: () => void
   onOpenMedical: () => void
   onPlanChange: (plan: TrainingPlan) => void
@@ -37,9 +40,9 @@ function FocusOptions({ individual = false }: { individual?: boolean }) {
   return <>{individual && <option value="team">Team focus</option>}{TRAINING_FOCUSES.map(focus => <option key={focus} value={focus}>{TRAINING_FOCUS_LABELS[focus]}</option>)}</>
 }
 
-export function TrainingWorkspace({ season, onEnable, onOpenFitness, onOpenMedical, onPlanChange, onSelectPlayer, busy = false }: TrainingWorkspaceProps) {
+export function TrainingWorkspace({ season, onEnable, onEnableLifecycle, onOpenFitness, onOpenMedical, onPlanChange, onSelectPlayer, busy = false }: TrainingWorkspaceProps) {
   const baseClub = season.clubs.find(club => club.id === season.managedClubId)!
-  const club = developClub(baseClub, season.training)
+  const club = developClub(baseClub, season.training, season)
   const enabled = season.training.enabledSince !== null
   const plan = season.training.plans[club.id]!
   const conditions = Object.fromEntries(club.players.map(player => [player.id, season.activeMatch.stats[player.id]?.condition ?? season.conditions[player.id]!]))
@@ -57,6 +60,7 @@ export function TrainingWorkspace({ season, onEnable, onOpenFitness, onOpenMedic
       <time dateTime={season.date}>{formatDate(season.date)}</time>
     </section>
 
+    <LifecycleTrainingControl season={season} busy={busy} onEnable={onEnableLifecycle} />
     {!enabled ? <section className="training-enable panel" aria-labelledby="training-enable-title">
       <header className="training-heading"><h2 id="training-enable-title">Weekly training</h2><span>Not enabled</span></header>
       <div><p>Enable workload and focus planning for recovery and skill development. Starts with the next training week and applies to every club.</p><button id="enable-training" className="button primary" onClick={onEnable} disabled={busy}>Enable training<Icon name="training" size={16} /></button></div>
@@ -103,11 +107,12 @@ export function TrainingWorkspace({ season, onEnable, onOpenFitness, onOpenMedic
             const points = focus === 'balanced' ? null : season.training.points[player.id]![focus]
             const cap = focus === 'balanced' ? null : trainingPointCap(basePlayer.attributes[focus])
             const capped = points !== null && cap !== null && points >= cap
+            const aging = getPlayerAging(season, player.id)
             return <tr key={player.id} data-player-id={player.id}>
-              <th scope="row"><button className="training-player" onClick={() => onSelectPlayer(player.id)} disabled={busy} aria-label={`View ${player.name}`}><Avatar player={player} color={club.color} size={28} /><span><strong>{player.name}</strong><small>{player.position} · #{player.number}</small></span><Icon name="chevron" size={13} /></button></th>
+              <th scope="row"><button className="training-player" onClick={() => onSelectPlayer(player.id)} disabled={busy} aria-label={`View ${player.name}`}><Avatar player={player} color={club.color} size={28} /><span><strong>{player.name}</strong><small>{player.position} · #{player.number}{aging.age !== null && <> · {aging.age} years</>}</small></span><Icon name="chevron" size={13} /></button><PlayerCareerStatus season={season} playerId={player.id} compact /></th>
               <td><StaminaMeter value={conditions[player.id]!} label={`${player.name} current condition`} compact /></td>
               <td><select data-player-focus={player.id} value={individual} aria-label={`${player.name} training focus`} onChange={event => onPlanChange({ ...plan, individual: { ...plan.individual, [player.id]: event.target.value as TrainingFocus | 'team' } })} disabled={busy}><FocusOptions individual /></select></td>
-              <td>{focus === 'balanced' ? <div className="training-skill"><span>Balanced practice</span><small>Shared across all skills</small></div> : <div className="training-skill"><div><span>{TRAINING_FOCUS_LABELS[focus]}</span><strong>{player.attributes[focus]} / 20</strong></div>{capped ? <small>{player.attributes[focus] === 20 ? 'Maximum rating reached' : 'Training cap reached'}</small> : <><progress value={points! % 100} max={100} aria-label={`${player.name} ${TRAINING_FOCUS_LABELS[focus]} progress to next rating`} /><small>{points! % 100} / 100 practice points</small></>}</div>}</td>
+              <td>{focus === 'balanced' ? <div className="training-skill"><span>Balanced practice</span><small>Shared across all skills</small></div> : <div className="training-skill"><div><span>{TRAINING_FOCUS_LABELS[focus]}</span><strong>{player.attributes[focus]} / 20</strong></div>{capped ? <small>{player.attributes[focus] === 20 ? 'Maximum rating reached' : 'Training cap reached'}</small> : <><progress value={points! % 100} max={100} aria-label={`${player.name} ${TRAINING_FOCUS_LABELS[focus]} progress to next rating`} /><small>{points! % 100} / 100 practice points</small></>}</div>}{aging.active && <span className="training-age-line" data-training-age-rate={player.id}>{practiceAgeLabel(aging.trainingPercent)}</span>}</td>
               <td><span className={injury ? 'training-injured' : ''}>{availableDays === null ? 'Next season' : `${availableDays} / 7 days`}</span><small>{injury ? `Injured · return ${formatDate(injury.effectiveReturnOn)}` : 'Available now'}</small></td>
             </tr>
           })}</tbody></table>
@@ -128,9 +133,9 @@ function TrainingReport({ season, club, week, onSelectPlayer, busy }: { season: 
   const roster = season.rosters.find(snapshot => snapshot.id === week.rosterIds[club.id] && snapshot.clubId === club.id)
   if (!roster) return <p className="training-empty">The recorded squad for this training week is unavailable.</p>
   const recordedBase = { ...club, players: roster.players }
-  const recordedClub = developClub(recordedBase, season.training)
+  const recordedClub = developClub(recordedBase, season.training, { ...season, date: week.toDate })
   const previousPoints = Object.fromEntries(Object.entries(season.training.points).map(([id, points]) => [id, Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => [attribute, points[attribute] - (week.players[id]?.gains[attribute] ?? 0)]))])) as typeof season.training.points
-  const previousClub = developClub(recordedBase, { ...season.training, points: previousPoints })
+  const previousClub = developClub(recordedBase, { ...season.training, points: previousPoints }, { ...season, date: week.fromDate })
   const appliedCoaches = week.coaching?.[club.id] ?? null
   const appliedFitness = week.fitness?.[club.id] ?? null
   const reportCoach = appliedFitness ? DEVELOPMENT_FITNESS_COACHES.find(coach => coach.id === appliedFitness.coachId)! : null
@@ -145,14 +150,14 @@ function TrainingReport({ season, club, week, onSelectPlayer, busy }: { season: 
       const gains = TRAINING_ATTRIBUTES.filter(attribute => report.gains[attribute] > 0)
       const totalGains = gains.reduce((total, attribute) => total + report.gains[attribute], 0)
       const coachingGains = TRAINING_ATTRIBUTES.reduce((total, attribute) => total + report.coachingGains[attribute], 0)
-      const ratingGains = gains.filter(attribute => player.attributes[attribute] > before.attributes[attribute])
+      const ratingChanges = TRAINING_ATTRIBUTES.filter(attribute => player.attributes[attribute] !== before.attributes[attribute])
       const breakdown = <ul className="training-gains">{gains.map(attribute => <li key={attribute}><span>{TRAINING_FOCUS_LABELS[attribute]}</span><strong>+{report.gains[attribute]} practice</strong>{report.coachingGains[attribute] > 0 && <small className="training-coaching-skill">({report.coachingGains[attribute]} from coaching)</small>}</li>)}</ul>
       return <tr key={player.id} data-player-id={player.id}>
         <th scope="row">{club.players.some(current => current.id === player.id) ? <button className="text-button" onClick={() => onSelectPlayer(player.id)} disabled={busy}>{player.name}<Icon name="chevron" size={13} /></button> : <span>{player.name}</span>}</th>
         <td>{TRAINING_FOCUS_LABELS[report.focus]}<small>{TRAINING_INTENSITY_LABELS[report.intensity]}</small></td>
         <td>{report.availableDays} days</td>
         <td><span aria-label={`${player.name} condition before ${Math.round(report.conditionBefore)} percent, after ${Math.round(report.conditionAfter)} percent`}>{Math.round(report.conditionBefore)}% → {Math.round(report.conditionAfter)}%</span>{appliedFitness && report.fitness && <small className="training-fitness-gain" data-fitness-benefit={report.fitness.conditionBenefit} title={`Condition without fitness support: ${fitnessNumber(report.fitness.conditionWithoutCoach)}%`}>Fitness +{fitnessNumber(report.fitness.conditionBenefit)} condition</small>}</td>
-        <td>{gains.length > 1 ? <details className="training-gain-details"><summary aria-label={`${player.name}: ${totalGains} practice points across ${gains.length} skills. Skill breakdown.`}>+{totalGains} practice across {gains.length} skills</summary>{breakdown}</details> : gains.length === 1 ? breakdown : <span className="training-no-gain">No practice gained</span>}{coachingGains > 0 && <p className="training-coaching-gain">Includes +{coachingGains} from coaching</p>}{ratingGains.map(attribute => <p className="training-rating-gain" key={attribute}>{TRAINING_FOCUS_LABELS[attribute]} {before.attributes[attribute]} → {player.attributes[attribute]} rating</p>)}</td>
+        <td>{gains.length > 1 ? <details className="training-gain-details"><summary aria-label={`${player.name}: ${totalGains} practice points across ${gains.length} skills. Skill breakdown.`}>+{totalGains} practice across {gains.length} skills</summary>{breakdown}</details> : gains.length === 1 ? breakdown : <span className="training-no-gain">No practice gained</span>}{coachingGains > 0 && <p className="training-coaching-gain">Includes +{coachingGains} from coaching</p>}{report.aging && <details className="training-aging-details" data-weekly-aging={player.id}><summary>Practice allowance: {report.aging.adjustedPracticePoints} points</summary><dl><div><dt>Ordinary practice allowance</dt><dd>{report.aging.ordinaryPracticePoints} points</dd></div><div><dt>Age practice rate</dt><dd>{Math.round(report.aging.rateBasisPoints / 100)}%</dd></div><div><dt>Age-adjusted allowance</dt><dd>{report.aging.adjustedPracticePoints} points</dd></div></dl><p>100% is standard practice. This is the practice allowance for eligible days. Coaching is added separately, then training limits determine the skill progress retained above.</p></details>}{ratingChanges.map(attribute => <p className={player.attributes[attribute] > before.attributes[attribute] ? 'training-rating-gain' : 'training-rating-decline'} key={attribute}>{TRAINING_FOCUS_LABELS[attribute]} {before.attributes[attribute]} → {player.attributes[attribute]} rating</p>)}</td>
       </tr>
     })}</tbody></table>
     </div>

@@ -72,7 +72,7 @@ describe('physio recruitment and four-role staff allocation', () => {
 
   it('shares exact cash/allocation guards with the other three roles and retains release costs', () => {
     const staffed = hirePhysio(hireFitnessCoach(hireScout(initial, 'scout-06'), 'fitness-06'), 'physio-12');
-    expect(staffCommitmentsByRole(staffed, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 2_000_000, physio: 5_000_000, assistant: 0, total: 13_000_000 });
+    expect(staffCommitmentsByRole(staffed, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 2_000_000, physio: 5_000_000, assistant: 0, youth: 0, total: 13_000_000 });
     expect(() => hireCoach(staffed, 'coach-25')).toThrow(/shared staff/i);
     expect(() => hireScout(staffed, 'scout-07')).toThrow(/shared staff/i);
     const full = hireFitnessCoach(hireCoach(initial, 'coach-07'), 'fitness-07');

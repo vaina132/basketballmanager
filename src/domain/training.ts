@@ -22,6 +22,8 @@ export interface TrainingPlayerReport {
   gains: TrainingPoints;
   coachingGains: TrainingPoints;
   fitness?: { conditionWithoutCoach: number; conditionBenefit: number };
+  /** Actual eligible practice before coaching and skill caps; absent in the legacy model. */
+  aging?: { ordinaryPracticePoints: number; adjustedPracticePoints: number; rateBasisPoints: number };
 }
 
 export interface TrainingWeekReport {

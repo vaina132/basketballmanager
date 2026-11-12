@@ -1,3 +1,7 @@
+import { getPlayerRetirement } from '../world/lifecycle-policy'
+import { seasonLabel } from '../world/season'
+import { getCareerPlayer } from '../world/player-catalog'
+import { recentClubRetirements } from './PlayerLifecycle'
 import type { AssistantCoach } from '../domain/assistant'
 import { AssistantPortrait } from './AssistantPortrait'
 import type { SeasonState } from '../domain/season'
@@ -64,9 +68,15 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
 
   if (season?.employment.enabledSince) {
     const nextSquad = getClubContractSummary(season, season.managedClubId)
-    const expiring = team.players.filter(player => !contractForSeason(season.employment, player.id, season.seasonNumber + 1)).length
+    const expiring = team.players.filter(player => (getPlayerRetirement(season, player.id).notice?.lastSeason ?? Infinity) > season.seasonNumber && !contractForSeason(season.employment, player.id, season.seasonNumber + 1)).length
     if (season.status === 'complete') notices.push({ key: 'offseason', title: 'Prepare next season’s squad', detail: `${nextSquad.rosterSize} players signed for next season. ${Math.max(0, MIN_ROSTER_SIZE - nextSquad.rosterSize)} more needed to reach the minimum squad.`, urgent: nextSquad.rosterSize < MIN_ROSTER_SIZE, action: 'Review offseason', open: onOpenTransfers })
     else if (expiring) notices.push({ key: 'contracts', title: `${expiring} contracts awaiting renewal`, detail: 'Unrenewed players leave at the end of this season. Renewals take effect next season.', action: 'Review contracts', open: onOpenTransfers })
+  }
+  if (season?.lifecycle.enabledSince) {
+    const retirements = team.players.flatMap(player => { const retirement = getPlayerRetirement(season, player.id); return retirement.status === 'announced' && retirement.notice ? [{ player, notice: retirement.notice }] : [] })
+    if (retirements.length) notices.push({ key: 'retirements', title: retirements.length === 1 ? 'Retirement announced' : retirements.length + ' retirements announced', detail: retirements.map(({ player, notice }) => player.name + ': final season ' + seasonLabel(notice.lastSeason) + ', retiring ' + medicalDate(notice.retiredOn)).join('; '), urgent: retirements.some(({ notice }) => notice.lastSeason === season.seasonNumber), action: 'Plan replacements', open: onOpenTransfers })
+    const retired = recentClubRetirements(season)
+    if (retired.length) notices.push({ key: 'retired', title: retired.length === 1 ? 'A player has retired' : `${retired.length} players have retired`, detail: retired.map(notice => getCareerPlayer(season, notice.playerId).name).join(', ') + '. Their playing records remain in Season statistics.', action: 'Review squad', open: onOpenSquad })
   }
   if (season?.scouting.enabledSince) {
     const latestRound = season.status === 'complete' ? season.round : season.round - 1

@@ -1,7 +1,8 @@
 import type { ClubScouting, ScoutingReview, SeasonScouting, SquadObservation } from '../domain/scouting';
 import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
-import { getDevelopmentPlayer } from '../data/development-players';
+import { isPlayerRetired } from './lifecycle-policy';
+import { getCareerPlayers } from './player-catalog';
 import { rosterForRound } from './rosters';
 import { getPlayerKnowledge, getScoutingCapacity, quoteScoutingAssignment, scoutingActualAttributes } from './scouting-policy';
 
@@ -59,8 +60,10 @@ export function cancelScoutingAssignment(state: SeasonState, playerId: string): 
 }
 
 export function setShortlisted(state: SeasonState, playerId: string, shortlisted: boolean): SeasonState {
-  requireEnabled(state); getDevelopmentPlayer(playerId);
+  requireEnabled(state);
+  if (!getCareerPlayers(state).some(player => player.id === playerId)) throw new Error('Choose a known senior player in this career.');
   if (typeof shortlisted !== 'boolean') throw new Error('Choose whether this player belongs on the shortlist.');
+  if (shortlisted && isPlayerRetired(state, playerId)) throw new Error('This player has retired from playing.');
   const club = state.scouting.clubs[state.managedClubId]!;
   const shortlist = club.shortlist.filter(id => id !== playerId);
   if (shortlisted) shortlist.push(playerId);

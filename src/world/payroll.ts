@@ -2,7 +2,7 @@ import type { ClubPayrollSummary, PlayerPayroll, PlayerWageAgreement, SeasonPayr
 import type { SeasonState } from '../domain/season';
 import type { EmploymentContract } from '../domain/employment';
 import type { Team } from '../domain/types';
-import { getSeasonWage } from '../data/development-wages';
+import { getCareerWage } from './player-catalog';
 import { contractForSeason } from './employment-policy';
 import { getFinanceBalance, recordPayrollCharge } from './finance';
 import { agreementCommitted, agreementThroughRound, getPayrollReserve, getSpendableCash, isAgreementPrepaid, PAYROLL_AUTOMATION_CUSHION, PAYROLL_INSTALLMENTS, payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from './payroll-policy';
@@ -28,7 +28,7 @@ function seasonAgreements(state: SeasonState, startsRound: number): PlayerWageAg
   return state.clubs.flatMap(club => club.players.map(player => {
     const contract = state.employment.enabledSince ? contractForSeason(state.employment, player.id, state.seasonNumber) : null;
     if (state.employment.enabledSince && (!contract || contract.clubId !== club.id)) throw new Error('Every registered player needs an effective employment contract before payroll.');
-    return { id: `wage-s${state.seasonNumber}-${player.id}`, playerId: player.id, clubId: club.id, seasonNumber: state.seasonNumber, startsRound, seasonWage: contract?.seasonWage ?? getSeasonWage(player.id) };
+    return { id: `wage-s${state.seasonNumber}-${player.id}`, playerId: player.id, clubId: club.id, seasonNumber: state.seasonNumber, startsRound, seasonWage: contract?.seasonWage ?? getCareerWage(state, player.id) };
   }));
 }
 

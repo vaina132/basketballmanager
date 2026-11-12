@@ -1,10 +1,12 @@
+import { getPlayerRetirement } from '../world/lifecycle-policy'
+import { PlayerCareerStatus } from './PlayerLifecycle'
+import { getCareerWage } from '../world/player-catalog'
 import { useEffect, useRef, useState } from 'react'
 import type { ContractOfferOptions, EmploymentBuyout } from '../domain/employment'
 import type { NegotiationRecord, NegotiationTerms } from '../domain/negotiations'
 import type { SeasonState } from '../domain/season'
 import type { Player } from '../domain/types'
 import type { TransferPaymentPlan } from '../domain/transfer-payments'
-import { getSeasonWage } from '../data/development-wages'
 import { contractForSeason, MAX_CONTRACT_SEASONS, MAX_CONTRACT_WAGE, MIN_CONTRACT_WAGE, MIN_ROSTER_SIZE, quotePlayerContract, WAGE_STEP } from '../world/employment-policy'
 import { getLatestNegotiation } from '../world/negotiations'
 import { MAX_TRANSFER_FEE, MIN_TRANSFER_FEE, TRANSFER_FEE_STEP, quoteTransferOffer, requiredTransferFee } from '../world/transfers-policy'
@@ -85,7 +87,7 @@ export function PlayerContractOffer({ season, player, disabled, historyOnly, onC
   const lastSeenResponse = useRef(latest?.id ?? null)
   const lastSeenMarket = useRef(marketOffer ? `${marketOffer.id}:${marketOffer.status}:${marketOffer.transfer?.clubStatus ?? ""}` : null)
   const wasHistoryOnly = useRef(historyOnly)
-  const [wage, setWage] = useState(String((marketOffer?.seasonWage ?? latest?.offeredWage ?? getSeasonWage(player.id)) / 100))
+  const [wage, setWage] = useState(String((marketOffer?.seasonWage ?? latest?.offeredWage ?? getCareerWage(season, player.id)) / 100))
   const [years, setYears] = useState(marketOffer?.seasons ?? latest?.offeredSeasons ?? 1)
   const [fee, setFee] = useState(String((currentTransfer?.fee ?? askingFee) / 100))
   const [paymentPlan, setPaymentPlan] = useState<TransferPaymentPlan>(currentTransfer?.paymentPlan ?? 'upfront')
@@ -103,7 +105,7 @@ export function PlayerContractOffer({ season, player, disabled, historyOnly, onC
   const records = season.negotiations.records.filter(record => record.playerId === player.id && record.clubId === season.managedClubId)
   const seasonWage = wage.trim() ? Math.round(Number(wage) * 100) : 0
   const quote = transferTarget ? quoteTransferOffer(season, player.id, seasonWage, years, transferFee, season.managedClubId, effectivePlan, options) : quotePlayerContract(season, player.id, seasonWage, years, season.managedClubId, undefined, undefined, 'upfront', options)
-  const entryQuote = transferTarget ? transferEntryQuote(season, player.id, MIN_CONTRACT_WAGE) : quotePlayerContract(season, player.id, negotiations ? MIN_CONTRACT_WAGE : getSeasonWage(player.id), 1)
+  const entryQuote = transferTarget ? transferEntryQuote(season, player.id, MIN_CONTRACT_WAGE) : quotePlayerContract(season, player.id, negotiations ? MIN_CONTRACT_WAGE : getCareerWage(season, player.id), 1)
   const current = contractForSeason(season.employment, player.id, season.seasonNumber)
   const renewal = current?.clubId === season.managedClubId
   const owner = season.clubs.find(team => team.players.some(member => member.id === player.id))
@@ -111,9 +113,9 @@ export function PlayerContractOffer({ season, player, disabled, historyOnly, onC
   const unchangedOffer = timedMarket ? !!liveOffer && liveOffer.seasonWage === seasonWage && liveOffer.seasons === years && liveOffer.releaseFee === releaseFee && (!transferTarget || liveOffer.transfer?.fee === transferFee && (liveOffer.transfer.paymentPlan ?? 'upfront') === effectivePlan && (liveOffer.transfer.mode ?? 'negotiated') === transferMode) : !!latest && latest.seasonNumber === season.seasonNumber && latest.round === season.round && latest.status === season.status && latest.offeredWage === seasonWage && latest.offeredSeasons === years && latest.releaseFee === releaseFee
   const submitReason = quote.reason ?? (unchangedOffer ? timedMarket ? liveOffer?.status === 'pending' || liveOffer?.status === 'club-review' ? transferTarget ? 'Waiting for a reply. Change the fee, payment plan or contract terms to replace this offer.' : 'Waiting for the player reply. Change the terms to replace this offer.' : 'Change the terms or use the counteroffer before submitting again.' : 'This offer already received a response. Change the wage or contract length before submitting again.' : null)
   const showLatestResponse = !!latest && (!timedMarket || marketOffer?.negotiationId === latest.id && ['countered', 'rejected'].includes(marketOffer.status))
-  const openingDemand = negotiations ? requiredNegotiationWage(player.id, years, demandReleaseFee) : quote.askingWage
+  const openingDemand = negotiations ? requiredNegotiationWage(player.id, years, demandReleaseFee, season) : quote.askingWage
   const knowledge = getPlayerKnowledge(season, player.id)
-  const assessment = <div className="contract-offer-knowledge"><ScoutingKnowledge knowledge={knowledge} compact /><div><button type="button" className="text-button" onClick={() => { onClose(); onOpenScouting(player.id) }} disabled={disabled}>Scouting report<Icon name="chevron" size={13} /></button><button type="button" className="text-button" aria-pressed={shortlisted} onClick={() => onShortlist(player.id, !shortlisted)} disabled={disabled || !season.scouting.enabledSince}>{shortlisted ? 'Remove from shortlist' : 'Add to shortlist'}</button></div></div>
+  const assessment = <div className="contract-offer-knowledge"><ScoutingKnowledge knowledge={knowledge} compact /><div><button type="button" className="text-button" onClick={() => { onClose(); onOpenScouting(player.id) }} disabled={disabled}>Scouting report<Icon name="chevron" size={13} /></button><button type="button" className="text-button" aria-pressed={shortlisted} onClick={() => onShortlist(player.id, !shortlisted)} disabled={disabled || !season.scouting.enabledSince || getPlayerRetirement(season, player.id).status === 'retired' && !shortlisted}>{shortlisted ? 'Remove from shortlist' : 'Add to shortlist'}</button></div></div>
 
   useEffect(() => {
     const element = dialog.current!
@@ -152,7 +154,8 @@ export function PlayerContractOffer({ season, player, disabled, historyOnly, onC
   }
 
   return <dialog ref={dialog} id="player-contract-offer" className={`contract-offer${negotiations ? ' contract-offer-negotiations' : ''}`} aria-labelledby="contract-offer-title" onCancel={event => { event.preventDefault(); if (!disabled) onClose() }}>
-    <header className="transfers-heading"><div><h2 id="contract-offer-title">{historyOnly ? 'Contract conversations' : boughtOut ? 'Contract bought out' : accepted ? 'Contract agreed' : lost ? 'Chose another club' : transferTarget ? 'Offer transfer' : renewal ? 'Offer renewal' : 'Offer contract'} · {player.name}</h2><span>{player.position} · {player.heightCm} cm · {owner?.name ?? 'Free agent'}</span></div></header>
+    <header className="transfers-heading"><div><h2 id="contract-offer-title">{historyOnly ? 'Contract conversations' : boughtOut ? 'Contract bought out' : accepted ? 'Contract agreed' : lost ? 'Chose another club' : transferTarget ? 'Offer transfer' : renewal ? 'Offer renewal' : 'Offer contract'} · {player.name}</h2><span>{player.position} · {player.heightCm} cm · {getPlayerRetirement(season, player.id).status === 'retired' ? 'Retired player' : owner?.name ?? 'Free agent'}</span></div></header>
+    <PlayerCareerStatus season={season} playerId={player.id} />
     {historyOnly ? <>
       <div className="contract-offer-body">{lost && <p className="contract-offer-reason">Talks closed: {player.name} chose {chosenClub?.name ?? 'another club'}. Your salary budget and squad place have been released.</p>}<NegotiationHistory records={records} buyouts={season.employment.buyouts} expanded />{entryQuote.reason && <p id="contract-history-availability" className="contract-offer-reason">Current availability: {entryQuote.reason}</p>}<p>{timedMarket ? 'Offseason reservations and deadlines are shown in the offer queue.' : 'Recorded replies are kept across seasons. Counteroffers reserve neither a squad place nor the player.'}</p></div>
       <footer><button ref={close} className="button" id="close-player-contract" onClick={onClose} disabled={disabled}>Close</button>{entryQuote.canOffer && <button id="continue-contract-talks" className="button primary" onClick={onContinue} disabled={disabled}>Open current contract talks<Icon name="chevron" size={14} /></button>}</footer>
@@ -190,7 +193,7 @@ export function PlayerContractOffer({ season, player, disabled, historyOnly, onC
         {negotiations ? <details className="contract-offer-assessment"><summary>Player assessment · {knowledgeLabel(knowledge)}</summary>{assessment}</details> : assessment}
         <dl className="contract-offer-facts"><div><dt>{negotiations ? `Opening demand · ${years} ${years === 1 ? 'season' : 'seasons'}` : 'Requested annual wage'}</dt><dd data-contract-demand={openingDemand}>{money(openingDemand)} / season</dd></div><div><dt>Contract begins</dt><dd>{seasonLabel(quote.startsSeason)}</dd></div></dl>
         {proposalDates && <div className="contract-offer-dates"><span>{liveOffer ? 'New terms' : 'This offer'}</span><Icon name="calendar" size={16} /><span>{transferTarget ? 'Earliest player reply' : 'Reply'} <strong><time dateTime={proposalDates.responseOn}>{scoutingDate(proposalDates.responseOn)}</time></strong></span><span>Expires <strong><time dateTime={proposalDates.expiresOn}>{scoutingDate(proposalDates.expiresOn)}</time></strong></span></div>}
-        {negotiations && <div className="contract-demand-options" aria-label="Opening wage demands by contract length">{getNegotiationDemands(player.id, demandReleaseFee).terms.map(terms => <div key={terms.seasons}><span>{terms.seasons} {terms.seasons === 1 ? 'season' : 'seasons'}</span><strong>{money(terms.seasonWage)} / year</strong></div>)}</div>}
+        {negotiations && <div className="contract-demand-options" aria-label="Opening wage demands by contract length">{getNegotiationDemands(player.id, demandReleaseFee, season).terms.map(terms => <div key={terms.seasons}><span>{terms.seasons} {terms.seasons === 1 ? 'season' : 'seasons'}</span><strong>{money(terms.seasonWage)} / year</strong></div>)}</div>}
         <div className="contract-offer-field"><label htmlFor="contract-offer-wage">Your annual wage offer · EUR</label><input ref={wageInput} id="contract-offer-wage" type="number" min={MIN_CONTRACT_WAGE / 100} max={MAX_CONTRACT_WAGE / 100} step={WAGE_STEP / 100} value={wage} onChange={event => setWage(event.target.value)} disabled={disabled} required aria-describedby="contract-wage-help" /><input type="range" aria-label="Adjust annual wage" min={MIN_CONTRACT_WAGE / 100} max={MAX_CONTRACT_WAGE / 100} step={WAGE_STEP / 100} value={Math.max(MIN_CONTRACT_WAGE / 100, Math.min(MAX_CONTRACT_WAGE / 100, Number(wage) || MIN_CONTRACT_WAGE / 100))} aria-valuetext={`${money(seasonWage)} per season`} onChange={event => setWage(event.target.value)} disabled={disabled} /><small id="contract-wage-help">{negotiations ? 'You can offer below the opening demand. The player may accept, counter or reject.' : 'Offers must meet the requested wage.'} Leave enough allocation for a squad of {MIN_ROSTER_SIZE}.</small></div>
         <div className="contract-offer-field"><label htmlFor="contract-offer-years">Contract length</label><select id="contract-offer-years" value={years} onChange={event => setYears(Number(event.target.value))} disabled={disabled}>{Array.from({ length: MAX_CONTRACT_SEASONS }, (_, index) => index + 1).map(length => <option key={length} value={length}>{length} {length === 1 ? 'season' : 'seasons'}</option>)}</select><input type="range" aria-label="Adjust contract length" min={1} max={MAX_CONTRACT_SEASONS} step={1} value={years} aria-valuetext={`${years} ${years === 1 ? 'season' : 'seasons'}`} onChange={event => setYears(Number(event.target.value))} disabled={disabled} /></div>
         {negotiations && <ReleaseClauseFields id="contract-release" value={releaseFee} onChange={setReleaseFee} disabled={disabled} years={years} />}

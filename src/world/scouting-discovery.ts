@@ -1,7 +1,7 @@
 import type { PlayerKnowledge } from '../domain/scouting';
 import type { Scout } from '../domain/scouts';
 import type { SeasonState } from '../domain/season';
-import { DEVELOPMENT_PLAYERS } from '../data/development-players';
+import { getActiveCareerPlayers } from './player-catalog';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { getClubScouts } from './scout-policy';
 import { abilityRating } from './performance-rating';
@@ -21,7 +21,7 @@ function identityOrder(clubId: string, playerId: string): number {
 
 function outsiderIds(state: SeasonState, clubId: string): string[] {
   const own = new Set(state.clubs.find(club => club.id === clubId)?.players.map(player => player.id) ?? []);
-  return DEVELOPMENT_PLAYERS.filter(player => !own.has(player.id)).map(player => player.id)
+  return getActiveCareerPlayers(state).filter(player => !own.has(player.id)).map(player => player.id)
     .sort((left, right) => identityOrder(clubId, left) - identityOrder(clubId, right) || left.localeCompare(right, 'en'));
 }
 
@@ -50,7 +50,7 @@ export function getScoutingDiscovery(state: SeasonState, clubId = state.managedC
   for (const playerId of Object.keys(office?.squadKnowledge ?? {})) visible.add(playerId);
   const network = new Set(networkPlayerIds);
   return {
-    playerIds: DEVELOPMENT_PLAYERS.filter(player => visible.has(player.id)).map(player => player.id), networkPlayerIds,
+    playerIds: getActiveCareerPlayers(state).filter(player => visible.has(player.id)).map(player => player.id), networkPlayerIds,
     baselineOutsideCount: Math.min(BASE_SCOUTING_DISCOVERY, outsiders.length), networkOutsideCount: networkPlayerIds.length,
     totalOutsideCount: outsiders.length, retainedOutsideCount: outsiders.filter(id => visible.has(id) && !network.has(id)).length,
     scoutCount: scouts.length,

@@ -115,6 +115,32 @@ Rotation first addresses injury/exclusion, then condition below 75 with an eligi
 
 Managers review and apply recommendations explicitly. Existing generic delegation controls remain usable without an appointment. Advice does not itself advance the match, consume randomness or read hidden opponents' skills. Commands recompute recommendations from current state and annotate the ordinary event with the assistant's name. AI uses the same tactical calculation when preparing future fixtures; human instructions and already prepared matches remain unchanged by hiring. First-time new-career preparation includes initial AI staffing. AI budget/renewal rules are identical, with current staff renewals preceding assistant renewals.
 
+## Academy foundation and population boundary
+
+The fictional academy starts with three prospects per club aged 16-18. Each real seven-day playing-season interval awards 28 practice points across the existing seven skills; a youth coach adds up to 50%. A skill gains one point per 100 practice points, with three academy improvements per skill and a ceiling of 20. Development focus is a direct manager decision, and reports freeze actual contributions rather than projecting unseen potential.
+
+Promotion uses the remaining-season offer and registration pipeline: next-matchday reply, salary and cash reservations, the same twelve-player roster ceiling and a normal senior contract on acceptance. The current prepared match remains unchanged. Graduates retain their academy skill baseline but start ordinary senior practice at zero. Annual intake adds up to two within six academy places, after players aged 21 or older become free agents. These are explicit provisional game rules, not claims about real competition registration regulations.
+
+A separate career-local catalog replaces fixed-population assumptions without mutating the original development pack. Earlier saves opt in prospectively. Subsequent increments add senior aging, retirement and youth fixtures. Hidden potential, facility effects and sustainable long-run population calibration remain separate work.
+
+## Senior aging and retirement foundation
+
+Senior learning scales actual practice rather than granting an annual birthday bonus: 125% at 16 to 100% at 23, flat through 29, then down to 50% at 39. Calendar decline uses separate skill-family rates, internally retaining fractional loss and applying whole-point changes within 1-20. Medical availability, workload, coaching and the original training cap still determine the earned gains. No extra match randomness or hidden condition penalty is added.
+
+Retirement target ages 37-40 use a separate deterministic identity stream. Public notices preserve signed contracts and live proposals and provide at least the current and following season before retirement. New terms must respect the announced final season. A reserve of sixty seniors without notices and a limit of two outstanding future departures per current club protect replacement capacity. Testing rejected an earlier remaining-current-squad rule because it could indefinitely prevent eight-player AI clubs from retiring veterans. The corrected policy permits recruitment to supply replacements while retaining immutable notices. These are provisional game rules, not calibrated predictions of real athletes' careers.
+
+Retired identity remains available for financial and sporting history. Normal recruitment, new observations and discovery exclude retired players, while old reports retain their original evidence. Earlier saves opt in prospectively; the player catalog and already prepared match remain unchanged by activation. The subsequent youth competition increment adds fixtures and records minutes. Match-exposure skill gains, hidden potential, facilities and broader career dynamics remain separate work.
+
+## Youth competition foundation
+
+Youth matches use a separate fictional six-club competition on the actual development-season calendar. Each round settles with Continue, before that interval's practice and next-matchday senior registrations. Enabling it partway through a career schedules only remaining fixtures. The existing possession engine and career injury setting apply equally to all youth clubs, with separate fixture random streams and retained lineups, statistics and diagnoses. Managers continue to control training and promotions; automatic selection and rotation handle the youth matches in this foundation.
+
+Participating academies have eight places. Existing intake identities and rules stay intact; explicit supplemental intake records fill remaining places at activation and each subsequent opening day. Supplemental prospects use a separate deterministic identity namespace and a spread of ages from 16 to 20. There are no automatic arrivals after midseason promotions. Fewer than five available players produces an unplayed default; if neither side can field five, the fixture is a no-contest. No minutes or MVP are invented for unplayed decisions.
+
+Youth condition follows actual playing workload and calendar recovery, with a modest daily practice cost on medically available training days. Injury reduces eligible academy practice rather than awarding missing sessions. Match minutes are development exposure information; this increment adds no extra fixture experience bonus. A currently injured prospect cannot be promoted, and a pending offer is rechecked on the reply date. Successful promotion carries actual recovered condition into the senior registration. Historical youth results retain the original players and skills after subsequent practice, promotion and aging.
+
+The roster size, supplementary population, workload and result policies are provisional development rules. This foundation does not claim real-world youth league eligibility, full youth match coaching, hidden potential, facility effects or calibrated population balance.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

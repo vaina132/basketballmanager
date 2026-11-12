@@ -92,10 +92,19 @@ describe('career checkpoint journal metadata', () => {
 
   it('bounds both character count and UTF-8 bytes before writing a new snapshot', () => {
     const journal = decodeSeasonJournal('legacy', 0, []), original = structuredClone(journal);
-    expect(() => prepareSeasonCheckpoint(journal, 'a'.repeat(MAX_CHECKPOINT_BYTES + 1), 0, 'manual', savedAt)).toThrow(/8 MB/);
-    expect(() => prepareSeasonCheckpoint(journal, '€'.repeat(Math.floor(MAX_CHECKPOINT_BYTES / 3) + 1), 0, 'manual', savedAt)).toThrow(/8 MB/);
+    expect(() => prepareSeasonCheckpoint(journal, 'a'.repeat(MAX_CHECKPOINT_BYTES + 1), 0, 'manual', savedAt)).toThrow(/32 MB/);
+    expect(() => prepareSeasonCheckpoint(journal, '€'.repeat(Math.floor(MAX_CHECKPOINT_BYTES / 3) + 1), 0, 'manual', savedAt)).toThrow(/32 MB/);
     expect(() => prepareSeasonCheckpoint(journal, {} as string, 0, 'manual', savedAt)).toThrow(/serialized text/);
     expect(journal).toEqual(original);
+  });
+
+  it('accepts a long-career checkpoint above the former eight-megabyte limit', () => {
+    expect(MAX_CHECKPOINT_BYTES).toBe(32 * 1024 * 1024);
+    const payload = 'long career'.repeat(800_000);
+    expect(new TextEncoder().encode(payload).byteLength).toBeGreaterThan(8 * 1024 * 1024);
+    const prepared = prepareSeasonCheckpoint(decodeSeasonJournal(undefined, undefined, []), payload, 0, 'matchday', savedAt);
+    expect(prepared.checkpoint.serialized).toBe(payload);
+    expect(decodeSeasonJournal(payload, 1, prepared.checkpoints).current).toBe(payload);
   });
 });
 

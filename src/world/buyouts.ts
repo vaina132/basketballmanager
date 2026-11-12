@@ -1,6 +1,6 @@
 import type { EmploymentBuyout } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
-import { DEVELOPMENT_PLAYERS } from '../data/development-players';
+import { getCareerPlayers } from './player-catalog';
 import { contractForSeason, effectiveContractsForSeason, getClubContractSummary, MIN_ROSTER_SIZE } from './employment-policy';
 import { getFinanceBalance, recordContractBuyout } from './finance';
 import { addMarketDays, getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
@@ -49,7 +49,7 @@ export function quoteContractBuyout(state: SeasonState, playerId: string, clubId
   const cash = getSpendableCash(state, clubId), window = getMarketWindow(state);
   let reason: string | null = null;
   if (!state.employment.enabledSince || !state.finance.enabledSince || !state.payroll.enabledSince) reason = 'Enable player contracts, finances and payroll before buying out a contract.';
-  else if (!DEVELOPMENT_PLAYERS.some(player => player.id === playerId) || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a player and a club in this league.';
+  else if (!getCareerPlayers(state).some(player => player.id === playerId) || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a player and a club in this league.';
   else if (!isMarketActive(state) || !isCompetitiveMarket(state) || !window || startsSeason > 7974) reason = 'Contract buyouts are available during the competitive offseason.';
   else if (state.date >= window.closesOn) reason = 'The recruitment period has closed.';
   else if (!own || own.clubId !== clubId || !releasedContractIds.length || amount <= 0) reason = 'Choose one of your players under contract for next season.';

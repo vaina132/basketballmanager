@@ -1,6 +1,6 @@
+import { getCareerPlayer } from '../world/player-catalog'
 import { useEffect, useRef } from 'react'
 import type { SeasonState } from '../domain/season'
-import { getDevelopmentPlayer } from '../data/development-players'
 import { isLiveInSeasonOffer, quoteInSeasonSale } from '../world/recruitment-policy'
 import { seasonLabel } from '../world/season'
 import { Avatar } from './Avatar'
@@ -27,7 +27,7 @@ export function InSeasonIncomingTransfers({ season, disabled, onDecision }: { se
     <header className="in-season-section-heading"><h3 id="in-season-incoming-title" tabIndex={-1}><Icon name="mail" size={17} />Offers for your players <span>{live.length}</span></h3><small>{season.employment.delegated ? 'Assistant handles club replies' : 'Club offers and release-clause notices'}</small></header>
     {live.map(offer => {
       const transfer = offer.transfer!
-      const player = club.players.find(item => item.id === offer.playerId) ?? getDevelopmentPlayer(offer.playerId)
+      const player = club.players.find(item => item.id === offer.playerId) ?? getCareerPlayer(season, offer.playerId)
       const buyer = season.clubs.find(item => item.id === offer.clubId)!
       const quote = quoteInSeasonSale(season, offer.id)
       const clauseTriggered = transfer.mode === 'release-clause'
@@ -40,6 +40,6 @@ export function InSeasonIncomingTransfers({ season, disabled, onDecision }: { se
         <details className="game-disclosure in-season-sale-details"><summary><Icon name="wallet" size={14} />Payments &amp; squad impact</summary><div><TransferPaymentTerms fee={transfer.fee} plan={transfer.paymentPlan} startsSeason={offer.seasonNumber} startsRound={offer.responseRound} earliestSigning={offer.responseOn} incoming /><dl className="contract-offer-facts"><div><dt>Annual salary budget freed on sale</dt><dd data-sale-annual-freed={quote.annualSalaryFreed}>{money(quote.annualSalaryFreed)}</dd></div><div><dt>Remaining salary saved</dt><dd data-sale-wages-freed={quote.remainingWagesFreed}>{money(quote.remainingWagesFreed)}</dd></div><div><dt>Salary cost to date</dt><dd>{money(quote.salaryAlreadyCharged)}</dd></div>{quote.nonRefundablePrepayment > 0 && <div><dt>Salary prepaid - no refund</dt><dd data-sale-prepaid={quote.nonRefundablePrepayment}>{money(quote.nonRefundablePrepayment)}</dd></div>}<div><dt>Contract ends</dt><dd>{seasonLabel(quote.releasedThroughSeason)}</dd></div>{!clauseTriggered && <div><dt>Club decision deadline</dt><dd><time dateTime={quote.decisionDeadline}>{scoutingDate(quote.decisionDeadline)}</time> &middot; before Continue</dd></div>}</dl><p>{clauseTriggered ? 'The agreed release clause lets the player decide without club approval. The full fee arrives only if he signs next matchday. The current match stays unchanged.' : 'Approval lets the player decide on the offered contract. The current match stays unchanged. Money arrives only after signing; unanswered offers expire when you Continue.'}</p></div></details>
       </article>
     })}
-    {history.length > 0 && <details className="game-disclosure in-season-sale-history"><summary>Recent offers for your players</summary><ul>{history.map(offer => <li key={offer.id} data-in-season-sale-history={offer.id}><strong>{getDevelopmentPlayer(offer.playerId).name}</strong><span>{season.clubs.find(item => item.id === offer.clubId)?.name}</span><span>{offer.status === 'accepted' ? 'Transferred' : offer.status === 'countered' ? 'Counteroffer sent' : offer.status === 'rejected' ? 'Declined' : offer.status === 'expired' ? 'Expired' : offer.status === 'lost' ? 'Another offer chosen' : offer.status === 'replaced' ? 'Replaced' : offer.status === 'withdrawn' ? 'Withdrawn' : 'Cancelled'} &middot; {money(offer.transfer!.fee)}</span><time dateTime={offer.closedOn ?? offer.responseOn}>{scoutingDate(offer.closedOn ?? offer.responseOn)}</time></li>)}</ul></details>}
+    {history.length > 0 && <details className="game-disclosure in-season-sale-history"><summary>Recent offers for your players</summary><ul>{history.map(offer => <li key={offer.id} data-in-season-sale-history={offer.id}><strong>{getCareerPlayer(season, offer.playerId).name}</strong><span>{season.clubs.find(item => item.id === offer.clubId)?.name}</span><span>{offer.status === 'accepted' ? 'Transferred' : offer.status === 'countered' ? 'Counteroffer sent' : offer.status === 'rejected' ? 'Declined' : offer.status === 'expired' ? 'Expired' : offer.status === 'lost' ? 'Another offer chosen' : offer.status === 'replaced' ? 'Replaced' : offer.status === 'withdrawn' ? 'Withdrawn' : 'Cancelled'} &middot; {money(offer.transfer!.fee)}</span><time dateTime={offer.closedOn ?? offer.responseOn}>{scoutingDate(offer.closedOn ?? offer.responseOn)}</time></li>)}</ul></details>}
   </section>
 }

@@ -39,12 +39,12 @@ describe('physio save provenance and historical recovery', () => {
     expect(original.formatVersion).toBe(22);
     expect(original.state.fitness.enabledSince).not.toBeNull();
     expect(original.state.scouts.enabledSince).not.toBeNull();
-    expect(migrated).toEqual({ ...original.state, schemaVersion: 24, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, physio: createPhysio() });
+    expect(migrated).toEqual({ ...original.state, schemaVersion: 27, youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] }, physio: createPhysio() });
     expect(stepMatch(migrated.activeMatch)).toEqual(stepMatch(original.state.activeMatch));
     const unavailable = play(migrated);
     const partial = play(unavailable);
-    expect(unavailable).toEqual({ ...JSON.parse(fixture('season22-injury-fitness-scouts-next')).state, schemaVersion: 24, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, physio: createPhysio() });
-    expect(partial).toEqual({ ...JSON.parse(fixture('season22-injury-fitness-scouts-partial')).state, schemaVersion: 24, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, physio: createPhysio() });
+    expect(unavailable).toEqual({ ...JSON.parse(fixture('season22-injury-fitness-scouts-next')).state, schemaVersion: 27, youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] }, physio: createPhysio() });
+    expect(partial).toEqual({ ...JSON.parse(fixture('season22-injury-fitness-scouts-partial')).state, schemaVersion: 27, youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] }, physio: createPhysio() });
     expect(unavailable.training.lastWeek.players['rhf-9'].availableDays).toBe(0);
     expect(partial.training.lastWeek.players['rhf-9'].availableDays).toBe(2);
     expect(restore(partial)).toEqual(partial);

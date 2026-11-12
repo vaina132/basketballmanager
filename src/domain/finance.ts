@@ -11,7 +11,7 @@ export interface FinanceEntry {
   clubId: string;
   seasonNumber: number;
   round: number;
-  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'payroll' | 'transfer' | 'buyout';
+  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout';
   /** Income or cost in signed euro cents; cash effects also depend on unpaid obligations. */
   amount: number;
   sourceId: string;
@@ -22,6 +22,7 @@ export interface FinanceEntry {
   fitness?: { contractId: string; coachId: string };
   physio?: { contractId: string; physioId: string };
   assistant?: { contractId: string; assistantId: string };
+  youth?: { contractId: string; coachId: string };
 }
 
 export interface SeasonFinance {

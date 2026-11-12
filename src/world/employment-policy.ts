@@ -3,12 +3,12 @@ import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import { DEVELOPMENT_CLUBS } from '../data/development-league';
-import { DEVELOPMENT_PLAYERS } from '../data/development-players';
-import { getSeasonWage } from '../data/development-wages';
+import { getCareerPlayers, getActiveCareerPlayers, getCareerWage, type CareerPlayerContext } from './player-catalog';
 import { getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { transferOfferReason } from './transfers-policy';
 import { getInSeasonOffers } from './recruitment-policy';
 import { offerOptionsReason } from './release-clauses';
+import { retirementContractReason } from './lifecycle-policy';
 
 export const EMPLOYMENT_BUDGET = 24_000_000;
 export const MIN_ROSTER_SIZE = 8;
@@ -60,9 +60,9 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
 
 /** Public offers and automation share ownership, term, roster and annual-budget guards. */
 export function quotePlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number, clubId = state.managedClubId, resolvingOfferId?: string, transferFee?: number, transferPaymentPlan: TransferPaymentPlan = 'upfront', options: ContractOfferOptions = {}): PlayerContractQuote {
-  const player = DEVELOPMENT_PLAYERS.find(candidate => candidate.id === playerId);
+  const player = getCareerPlayers(state).find(candidate => candidate.id === playerId);
   const startsSeason = state.seasonNumber + 1, endsSeason = startsSeason + seasons - 1;
-  const askingWage = player ? getSeasonWage(playerId) : 0;
+  const askingWage = player ? getCareerWage(state, playerId) : 0;
   const current = contractForSeason(state.employment, playerId, state.seasonNumber);
   const liveOffers = getLiveMarketOffers(state);
   const openOffer = liveOffers.find(offer => offer.playerId === playerId && offer.clubId === clubId);
@@ -77,6 +77,7 @@ export function quotePlayerContract(state: SeasonState, playerId: string, season
   else if (!player || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a development player and a club in this league.';
   else if (offerOptionsReason(state, options, paidTransfer)) reason = offerOptionsReason(state, options, paidTransfer);
   else if (!Number.isInteger(seasons) || seasons < 1 || seasons > MAX_CONTRACT_SEASONS || endsSeason > 7974) reason = 'Choose a contract lasting one to three supported seasons.';
+  else if (retirementContractReason(state, playerId, endsSeason)) reason = retirementContractReason(state, playerId, endsSeason);
   else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > MAX_CONTRACT_WAGE || seasonWage % WAGE_STEP !== 0) reason = 'Choose an annual wage from €5,000 to €50,000 in €500 steps.';
   else if (seasonWage < askingWage && !state.negotiations.enabledSince) reason = 'The player will not accept less than his asking wage.';
   else if ((state.employment.buyouts ?? []).some(buyout => buyout.playerId === playerId && buyout.clubId === clubId && buyout.seasonNumber === state.seasonNumber)) reason = 'A player you buy out cannot rejoin your club during the same offseason.';
@@ -100,19 +101,19 @@ export function quotePlayerContract(state: SeasonState, playerId: string, season
 }
 
 /** Players without an opening-day employer; current-season ownership is preserved. */
-export function getAvailablePlayers(state: Pick<SeasonState, 'employment' | 'seasonNumber' | 'status'> & Partial<Pick<SeasonState, 'market' | 'managedClubId'>>): readonly Player[] {
+export function getAvailablePlayers(state: Pick<SeasonState, 'employment' | 'seasonNumber' | 'status'> & Partial<Pick<SeasonState, 'market' | 'managedClubId'>> & CareerPlayerContext): readonly Player[] {
   if (!state.employment.enabledSince || state.status !== 'complete' || state.employment.market?.seasonNumber !== state.seasonNumber + 1) return [];
   const held = new Set(getLiveMarketOffers(state).filter(offer => !isCompetitiveMarket(state) || offer.clubId === state.managedClubId).map(offer => offer.playerId));
-  return DEVELOPMENT_PLAYERS.filter(player => !held.has(player.id) && !contractForSeason(state.employment, player.id, state.seasonNumber + 1));
+  return getActiveCareerPlayers(state, state.seasonNumber + 1, 1).filter(player => !held.has(player.id) && !contractForSeason(state.employment, player.id, state.seasonNumber + 1));
 }
 
 /** Stable catalog order and collision-free jerseys make registrations reproducible on import. */
-export function getContractedClubs(state: { employment: SeasonEmployment; clubs: readonly Team[] }, seasonNumber: number): readonly Team[] {
+export function getContractedClubs(state: { employment: SeasonEmployment; clubs: readonly Team[] } & CareerPlayerContext, seasonNumber: number): readonly Team[] {
   if (!state.employment.enabledSince || seasonNumber < state.employment.enabledSince.seasonNumber) return DEVELOPMENT_CLUBS;
   return DEVELOPMENT_CLUBS.map(definition => {
     const club = state.clubs.find(club => club.id === definition.id) ?? definition;
     const numbers = new Set<number>();
-    const players = DEVELOPMENT_PLAYERS.filter(player => contractForSeason(state.employment, player.id, seasonNumber)?.clubId === club.id).map(player => {
+    const players = getCareerPlayers(state, seasonNumber, 10).filter(player => contractForSeason(state.employment, player.id, seasonNumber)?.clubId === club.id).map(player => {
       let number = player.number;
       if (numbers.has(number)) { number = 1; while (numbers.has(number)) number += 1; }
       numbers.add(number);
@@ -123,14 +124,14 @@ export function getContractedClubs(state: { employment: SeasonEmployment; clubs:
 }
 
 /** Canonical opening jerseys plus chronological arrivals; incumbents keep their numbers. */
-export function getContractedClubsForRound(state: { employment: SeasonEmployment; clubs: readonly Team[] }, seasonNumber: number, round: number): readonly Team[] {
+export function getContractedClubsForRound(state: { employment: SeasonEmployment; clubs: readonly Team[] } & CareerPlayerContext, seasonNumber: number, round: number): readonly Team[] {
   if (!state.employment.enabledSince || seasonNumber < state.employment.enabledSince.seasonNumber) return DEVELOPMENT_CLUBS;
   const changeRounds = [...new Set([
     ...state.employment.contracts.filter(contract => contract.startsSeason === seasonNumber).map(contract => contract.startsRound ?? 1),
     ...state.employment.transfers.filter(transfer => transfer.startsSeason === seasonNumber).map(transfer => transfer.startsRound ?? 1),
   ].filter(at => at > 1 && at <= round))].sort((left, right) => left - right);
   const openingTerms = effectiveContractsForRound(state.employment, seasonNumber, 1);
-  const changes = changeRounds.map(at => effectiveContractsForRound(state.employment, seasonNumber, at));
+  const changes = changeRounds.map(at => ({ at, terms: effectiveContractsForRound(state.employment, seasonNumber, at) }));
   return DEVELOPMENT_CLUBS.map(definition => {
     let numbers = new Set<number>();
     const append = (player: Player): Player => {
@@ -140,13 +141,13 @@ export function getContractedClubsForRound(state: { employment: SeasonEmployment
       return { ...player, number, attributes: { ...player.attributes } };
     };
     const opening = new Set(openingTerms.filter(contract => contract.clubId === definition.id).map(contract => contract.playerId));
-    let players = DEVELOPMENT_PLAYERS.filter(player => opening.has(player.id)).map(append);
+    let players = getCareerPlayers(state, seasonNumber, 1).filter(player => opening.has(player.id)).map(append);
     for (const changed of changes) {
-      const terms = changed.filter(contract => contract.clubId === definition.id);
+      const terms = changed.terms.filter(contract => contract.clubId === definition.id);
       const registered = new Set(terms.map(contract => contract.playerId));
       players = players.filter(player => registered.has(player.id));
       numbers = new Set(players.map(player => player.number));
-      for (const contract of terms) if (!players.some(player => player.id === contract.playerId)) players.push(append(DEVELOPMENT_PLAYERS.find(player => player.id === contract.playerId)!));
+      for (const contract of terms) if (!players.some(player => player.id === contract.playerId)) players.push(append(getCareerPlayers(state, seasonNumber, changed.at).find(player => player.id === contract.playerId)!));
     }
     return { ...definition, players };
   });

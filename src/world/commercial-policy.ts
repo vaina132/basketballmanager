@@ -18,6 +18,8 @@ export const SPONSORSHIP_REQUEST_PERCENT = 10;
 export const SPONSORSHIP_BONUS_PERCENT = 10;
 /** Each extra contracted season lowers the annual fee by this share in exchange for security. */
 export const SPONSORSHIP_TERM_DISCOUNT = 0.03;
+/** Home attendance treated as typical when valuing a club; also used before any home game is played. */
+export const SPONSORSHIP_NEUTRAL_FILL = 0.8;
 const FEE_STEP = 100_000;
 
 function hash(seed: number, key: string): number {
@@ -99,8 +101,9 @@ export function sponsorAppeal(context: { clubs: readonly Pick<Team, 'id'>[]; fix
   const played = context.fixtures.filter(fixture => fixture.round <= context.completedRounds && fixture.result && (fixture.homeClubId === clubId || fixture.awayClubId === clubId));
   const winShare = played.length ? played.filter(fixture => fixture.result!.winnerClubId === clubId).length / played.length : 0.5;
   const gates = context.ledger.filter(entry => entry.kind === 'tickets' && entry.clubId === clubId && entry.seasonNumber === context.seasonNumber && entry.round <= context.completedRounds && entry.ticket);
-  const fill = gates.length ? gates.reduce((sum, entry) => sum + entry.ticket!.attendance / (entry.ticket!.capacity ?? definition(clubId).capacity), 0) / gates.length : 0.8;
-  const appeal = clamp(Math.round(reach * (0.8 + 0.4 * winShare) * (0.9 + 0.2 * fill) * 1000) / 1000, SPONSORSHIP_MIN_APPEAL, SPONSORSHIP_MAX_APPEAL);
+  const fill = gates.length ? gates.reduce((sum, entry) => sum + entry.ticket!.attendance / (entry.ticket!.capacity ?? definition(clubId).capacity), 0) / gates.length : SPONSORSHIP_NEUTRAL_FILL;
+  // Each factor is neutral for an average club: league-average demand, half the games won, a typical 80% full arena.
+  const appeal = clamp(Math.round(reach * (0.8 + 0.4 * winShare) * (1 + 0.2 * (fill - SPONSORSHIP_NEUTRAL_FILL)) * 1000) / 1000, SPONSORSHIP_MIN_APPEAL, SPONSORSHIP_MAX_APPEAL);
   return { reach, winShare, fill, appeal };
 }
 

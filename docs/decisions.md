@@ -167,6 +167,16 @@ Each committed eligible matchday produces one dated review for all clubs. After 
 
 These coefficients are provisional and visible in review evidence. This increment records board assessment without spending money, adding a match bonus, changing recruitment authority or dismissing the manager. Funding requests, president traits, development/culture objectives, employment consequences and press require subsequent work.
 
+## Sponsorship negotiation policy
+
+Approved by the project owner on 12 November 2026 as provisional development rules. Each club has one exclusive main-sponsor slot. On activation (new careers, or **Enable negotiations** in Club for older saves during an active season), each club's existing sponsor becomes an inherited agreement for the current season, already funded by the fixed EUR 200,000 payment; nothing changes for that season.
+
+On matchday six of a club's final contracted season, three fictional sponsors make offers for the following one to three seasons: the incumbent's two-season renewal first, then available sponsors in a seeded order. A club's current sponsor negotiates only with that club until its agreement ends, and a sponsor makes offers to one club at a time, so club processing order grants no advantage. Offer value is the former EUR 200,000 multiplied by a club appeal bounded to 75%-125%: venue demand relative to the league average, `0.8 + 0.4 x win share` this season and `1 + 0.2 x (home fill - 0.8)`; each factor is neutral for an average club. Sponsors then vary by +/-5%, each extra season lowers the annual fee by 3% in exchange for security, and about half add a top-half bonus of 10%. Fees round to EUR 1,000.
+
+The manager may ask each sponsor once for 10% more. A deterministic, hidden flexibility of 0-12% decides at once: at least 10% accepts; otherwise the sponsor counters with its flexibility, or rarely withdraws (flexibility below 3% and appeal below 0.9). Accepting signs immediately for future seasons and closes the club's other offers; declining closes one offer. Clubs still without a next-season sponsor after the final matchday receive a second round. Open offers expire when the season they would start begins; an unsold slot earns nothing that season. Automatic control and every AI club sign the largest guaranteed total (annual fee x seasons), then the larger fee and bonus.
+
+Agreements pay half the annual fee on the opening matchday and the rest on matchday six, as dated ledger income booked only when due; bonuses follow the final matchday only after a top-half finish. There is no early termination in this foundation. Six-season diagnostics with every club automatic (seeds 227 and 71) kept the league's mean agreement fee at EUR 190,000-203,000, ranged EUR 154,000-277,000 per club-season, and left no unsold slots or unpaid costs. These coefficients are game rules, not claims about real sponsorship markets or companies.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

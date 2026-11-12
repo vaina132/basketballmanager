@@ -113,6 +113,18 @@ export function stripCommercial(value: object): void {
   delete (value as Record<string, unknown>).commercial;
 }
 
+/** Format34 predates rivalries. */
+export function stripRivalries(value: object): void {
+  stripFacilityMaintenance(value);
+  delete (value as Record<string, unknown>).rivalries;
+}
+
+/** Format35 predates upkeep plans and facility condition. */
+export function stripFacilityMaintenance(value: object): void {
+  const facilities = (value as { facilities?: Record<string, unknown> }).facilities;
+  if (facilities) delete facilities.maintenanceSince;
+}
+
 /** Format31 predates board funding requests. */
 export function stripBoardFunding(value: object): void {
   stripBoardConsequences(value);
@@ -122,6 +134,7 @@ export function stripBoardFunding(value: object): void {
 
 /** Format32 predates board verdicts that set later budgets. */
 export function stripBoardConsequences(value: object): void {
+  stripRivalries(value);
   const board = (value as { board?: Record<string, unknown> }).board;
   if (board) delete board.consequencesSince;
 }

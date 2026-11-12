@@ -74,8 +74,13 @@ describe('press questions in a career', () => {
   });
 
   it('rejects press answers in a format-33 file', () => {
-    const file = JSON.parse(serializeSeason(answerPress(open, 'routine')));
+    // A genuine format-33 career had no rivalries, so its derby crowds were never enlarged.
+    let plain = createSeason({ seed: 9, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, rivalries: false, facilityMaintenance: false });
+    for (let step = 0; step < 10 && !getPressQuestion(plain); step += 1) plain = advanceMatchday(plain);
+    const file = JSON.parse(serializeSeason(answerPress(plain, 'routine')));
     file.formatVersion = 33; file.state.schemaVersion = 33;
+    delete file.state.rivalries;
+    delete file.state.facilities.maintenanceSince;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/supported player relationship command/);
   });
 });

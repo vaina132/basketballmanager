@@ -1,5 +1,6 @@
 import type { SeasonBoard } from './board';
 import type { SeasonCommercial } from './commercial';
+import type { SeasonRivalries } from './rivalries';
 import type { SeasonRelationships } from './relationships';
 import type { InjuryMode, MatchResult, MatchState, PlayerStats, Side, Tactics, Team } from './types';
 import type { SeasonTraining } from './training';
@@ -75,7 +76,7 @@ export interface SeasonArchive {
 }
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
-export const SEASON_SCHEMA_VERSION = 34;
+export const SEASON_SCHEMA_VERSION = 36;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -113,6 +114,8 @@ export interface SeasonState {
   relationships: SeasonRelationships;
   board: SeasonBoard;
   commercial: SeasonCommercial;
+  /** Format 35: derby effects from the rivalry anchor. */
+  rivalries: SeasonRivalries;
   negotiations: SeasonNegotiations;
   market: SeasonMarket;
   recruitment: SeasonRecruitment;

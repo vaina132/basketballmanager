@@ -23,9 +23,10 @@ const server = await createServer({
 
 try {
   const load = path => server.ssrLoadModule(path);
-  const [world, engine, storage, finance, facilities, employment, market, marketPolicy] = await Promise.all([
+  const [world, engine, storage, finance, facilities, employment, market, marketPolicy, relationships, press] = await Promise.all([
     '/src/world/season.ts', '/src/engine/match.ts', '/src/storage/season-storage.ts', '/src/world/finance.ts',
     '/src/world/facilities.ts', '/src/world/employment.ts', '/src/world/market.ts', '/src/world/market-policy.ts',
+    '/src/world/relationships.ts', '/src/world/press-policy.ts',
   ].map(load));
   const version = storage.SEASON_SCHEMA_VERSION;
   const prefix = `season${version}-board`;
@@ -43,6 +44,9 @@ try {
   state = advance(state);
   state = facilities.startFacilityUpgrade(state, 'training');
   while (state.round < 5) state = advance(state);
+  // Answer an open press question (format 34 and later) so the fixtures carry a recorded press decision.
+  const question = press.getPressQuestion?.(state);
+  if (question && !question.answered) state = relationships.answerPress(state, question.answers[0]);
   const career = state;
   const careerNext = advance(career);
 

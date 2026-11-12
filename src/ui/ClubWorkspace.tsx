@@ -17,6 +17,7 @@ import { FACILITY_LABELS, FacilitiesPanel, type FacilitiesActions } from './Faci
 import { SponsorshipPanel, type SponsorshipActions } from './SponsorshipPanel'
 import { getClubFacilities } from '../world/facilities-policy'
 import { getDevelopmentSponsor } from '../data/development-sponsors'
+import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
 import './club-workspace.css'
 
 interface ClubWorkspaceProps extends FacilitiesActions, SponsorshipActions {
@@ -34,7 +35,7 @@ const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:0
 const count = (value: number) => value.toLocaleString('en-GB')
 const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital' }
 
-export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, onRequestBoardFunding, onEnableSponsorship, onAcceptSponsorship, onDeclineSponsorship, onRequestSponsorship, onSponsorshipDelegation, busy = false }: ClubWorkspaceProps) {
+export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, onRequestBoardFunding, onEnableMaintenance, onMaintenancePlan, onEnableSponsorship, onAcceptSponsorship, onDeclineSponsorship, onRequestSponsorship, onSponsorshipDelegation, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
   const [period, setPeriod] = useState<'current' | 'all'>('current')
   const club = season.clubs.find(team => team.id === season.managedClubId)!
@@ -53,6 +54,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
   const forecastPrice = home ? locked ? season.finance.roundPrices[club.id]! : plan.delegated ? recommendTicketPrice(season, home) : plan.price : null
   const forecast = home && forecastPrice !== null ? forecastGate(season, home, forecastPrice) : null
   const opponent = home ? season.clubs.find(team => team.id === home.awayClubId)! : null
+  const derby = home ? governingDerby(season.rivalries, home.homeClubId, home.awayClubId, season.seasonNumber, home.round) : null
   const ledger = financeLedgerRows(season.finance, club.id).filter(entry => (kind === 'all' || entry.kind === kind) && (period === 'all' || entry.seasonNumber === season.seasonNumber))
 
   function entryDetail(entry: FinanceEntry): string {
@@ -105,7 +107,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
     </section> : <>
       {balance.unpaid > 0 && <p className="club-unpaid-note panel">{money(balance.unpaid)} of costs remain unpaid. New income clears unpaid costs first; staff recruitment requires these costs to be settled.</p>}
 
-      <FacilitiesPanel season={season} busy={busy} onEnableFacilities={onEnableFacilities} onFacilityUpgrade={onFacilityUpgrade} onCancelFacilityUpgrade={onCancelFacilityUpgrade} onFacilityDelegation={onFacilityDelegation} onRequestBoardFunding={onRequestBoardFunding} />
+      <FacilitiesPanel season={season} busy={busy} onEnableFacilities={onEnableFacilities} onFacilityUpgrade={onFacilityUpgrade} onCancelFacilityUpgrade={onCancelFacilityUpgrade} onFacilityDelegation={onFacilityDelegation} onRequestBoardFunding={onRequestBoardFunding} onEnableMaintenance={onEnableMaintenance} onMaintenancePlan={onMaintenancePlan} />
 
       <section className="club-venue panel" aria-labelledby="club-venue-title">
         <header className="club-heading"><h2 id="club-venue-title">Venue</h2></header>
@@ -125,7 +127,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
 
       <section className="club-gate-forecast panel" aria-labelledby="club-gate-forecast-title" data-finance-gate-fixture={home?.id}>
         <header className="club-heading"><h2 id="club-gate-forecast-title"><Icon name="people" size={18} />Next home crowd</h2><span>{home ? locked ? 'Current matchday · price locked' : 'Future fixture · price not locked' : 'No remaining home fixtures'}</span></header>
-        {home && forecast && opponent ? <><div className="club-gate-fixture"><strong>{club.name} vs {opponent.name}</strong><span><time dateTime={home.date}>{formatDate(home.date)}</time> · Matchday {home.round}</span></div><progress className="club-crowd-meter" value={forecast.attendance} max={forecast.capacity} aria-label={`${forecast.attendance} of ${forecast.capacity} seats forecast to be filled`} /><dl className="club-gate-values"><div><dt>{locked ? 'Locked ticket price' : 'Planned ticket price'}</dt><dd data-gate-price={forecast.price}>{money(forecast.price)}</dd></div><div><dt>Forecast attendance</dt><dd data-gate-attendance={forecast.attendance}>{count(forecast.attendance)} <small>/ {count(forecast.capacity)}</small></dd></div><div><dt>Forecast ticket income</dt><dd data-gate-revenue={forecast.revenue}>{money(forecast.revenue)}</dd></div></dl><p className="club-note">This is a forecast. {locked ? 'Income is recorded when the matchday is completed.' : 'Future demand, pricing and facility work may change before this matchday is prepared.'}</p></> : <p className="club-empty">No further home fixtures are scheduled this season. Your ticket plan carries into the next season.</p>}
+        {home && forecast && opponent ? <><div className="club-gate-fixture"><strong>{club.name} vs {opponent.name}{derby && <span className="club-derby" data-derby={derby.id}> · {derby.name}, crowd demand +{RIVALRY_CROWD_PERCENT * derby.intensity}%</span>}</strong><span><time dateTime={home.date}>{formatDate(home.date)}</time> · Matchday {home.round}</span></div><progress className="club-crowd-meter" value={forecast.attendance} max={forecast.capacity} aria-label={`${forecast.attendance} of ${forecast.capacity} seats forecast to be filled`} /><dl className="club-gate-values"><div><dt>{locked ? 'Locked ticket price' : 'Planned ticket price'}</dt><dd data-gate-price={forecast.price}>{money(forecast.price)}</dd></div><div><dt>Forecast attendance</dt><dd data-gate-attendance={forecast.attendance}>{count(forecast.attendance)} <small>/ {count(forecast.capacity)}</small></dd></div><div><dt>Forecast ticket income</dt><dd data-gate-revenue={forecast.revenue}>{money(forecast.revenue)}</dd></div></dl><p className="club-note">This is a forecast. {locked ? 'Income is recorded when the matchday is completed.' : 'Future demand, pricing and facility work may change before this matchday is prepared.'}</p></> : <p className="club-empty">No further home fixtures are scheduled this season. Your ticket plan carries into the next season.</p>}
       </section>
 
       <TransferPaymentsPanel season={season} />

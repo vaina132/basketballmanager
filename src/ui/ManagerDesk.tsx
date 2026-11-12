@@ -2,6 +2,8 @@ import { getPlayerRetirement } from '../world/lifecycle-policy'
 import { getSquadRelationships } from '../world/relationships'
 import { getBoardSummary } from '../world/board'
 import { getPressQuestion } from '../world/press-policy'
+import { FACILITY_TYPES, getFacilityCondition, getFacilityLevel } from '../world/facilities-policy'
+import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
 import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/board-consequences'
 import { getClubSponsorship } from '../world/commercial'
 import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
@@ -74,6 +76,14 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   const finances = season?.finance.enabledSince ? getFinanceBalance(season.finance, season.managedClubId) : null
   const wageReserve = season?.payroll.enabledSince ? getPayrollReserve(season, season.managedClubId) : null
 
+  const derbyFixture = season?.status === 'active' ? season.fixtures.find(fixture => fixture.id === season.activeFixtureId && !fixture.result) : undefined
+  const derby = season && derbyFixture ? governingDerby(season.rivalries, derbyFixture.homeClubId, derbyFixture.awayClubId, season.seasonNumber, derbyFixture.round) : null
+  if (season && derbyFixture && derby && onOpenBoard) {
+    const home = derbyFixture.homeClubId === season.managedClubId, rival = season.clubs.find(club => club.id === (home ? derbyFixture.awayClubId : derbyFixture.homeClubId))!
+    notices.push({ key: 'derby', title: `Derby next · ${derby.name}`, detail: `${home ? 'Home' : 'Away'} against ${rival.name}. ${home ? `Crowd demand +${RIVALRY_CROWD_PERCENT * derby.intensity}%. ` : ''}The board and the squad weigh this result more than usual.`, action: 'View rivalry', open: onOpenBoard })
+  }
+  const worn = season?.facilities.maintenanceSince ? FACILITY_TYPES.filter(type => getFacilityLevel(season, type, season.managedClubId) > 1).map(type => ({ type, condition: getFacilityCondition(season, type, season.managedClubId) })).filter(item => item.condition < 60) : []
+  if (season && worn.length) notices.push({ key: 'facilities-worn', title: 'Facilities wearing', detail: `${worn.map(item => `${({ arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure' })[item.type]} ${item.condition}/100`).join(', ')}. Their benefit shrinks while condition is low; full upkeep restores it.`, action: 'Review facilities', open: onOpenClub })
   const press = season && onOpenInbox ? getPressQuestion(season) : null
   if (press && !press.answered && onOpenInbox) notices.push({ key: 'press', title: 'Press conference', detail: `${press.question} Answer in the Inbox before the next match, or your assistant keeps it routine.`, action: 'Open inbox', open: onOpenInbox })
 
@@ -202,7 +212,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
       <div className="desk-side-column">
         <section className="desk-attention panel" aria-labelledby="desk-attention-heading">
           <div className="desk-panel-heading"><h2 id="desk-attention-heading">{complete ? 'Match review' : 'Attention'}</h2><span className="desk-count">{notices.length}</span></div>
-          {notices.length ? <ul className="desk-notices">{notices.map(notice => <li key={notice.key} className={notice.urgent ? 'desk-notice-urgent' : ''}><div><strong className="desk-notice-title"><Icon name={notice.key === 'press' ? 'mail' : notice.key === 'board' ? 'shield' : notice.key === 'scouting' ? 'search' : ['contracts', 'offseason', 'negotiations', 'unpaid', 'wage-commitments'].includes(notice.key) ? 'wallet' : notice.key === 'timeout' ? 'clock' : 'people'} size={15} />{notice.title}</strong>{notice.urgent || ['injuries', 'fatigue', 'fouls', 'queued'].includes(notice.key) ? <p>{notice.detail}</p> : <details className="desk-notice-detail"><summary>Details</summary><p>{notice.detail}</p></details>}</div><button className="text-button" onClick={notice.open}>{notice.action}<Icon name="chevron" size={14} /></button></li>)}</ul> : <div className="desk-clear"><Icon name="check" size={18} /><div><strong>{complete ? 'Match complete' : 'No urgent decisions'}</strong><p>{complete ? 'The result and player statistics are ready to review.' : `${eligible.length} eligible players. Your current lineup is available.`}</p></div></div>}
+          {notices.length ? <ul className="desk-notices">{notices.map(notice => <li key={notice.key} className={notice.urgent ? 'desk-notice-urgent' : ''}><div><strong className="desk-notice-title"><Icon name={notice.key === 'facilities-worn' ? 'building' : notice.key === 'derby' ? 'target' : notice.key === 'press' ? 'mail' : notice.key === 'board' ? 'shield' : notice.key === 'scouting' ? 'search' : ['contracts', 'offseason', 'negotiations', 'unpaid', 'wage-commitments'].includes(notice.key) ? 'wallet' : notice.key === 'timeout' ? 'clock' : 'people'} size={15} />{notice.title}</strong>{notice.urgent || ['injuries', 'fatigue', 'fouls', 'queued'].includes(notice.key) ? <p>{notice.detail}</p> : <details className="desk-notice-detail"><summary>Details</summary><p>{notice.detail}</p></details>}</div><button className="text-button" onClick={notice.open}>{notice.action}<Icon name="chevron" size={14} /></button></li>)}</ul> : <div className="desk-clear"><Icon name="check" size={18} /><div><strong>{complete ? 'Match complete' : 'No urgent decisions'}</strong><p>{complete ? 'The result and player statistics are ready to review.' : `${eligible.length} eligible players. Your current lineup is available.`}</p></div></div>}
         </section>
 
         {assistant && !complete && <section className="assistant-desk panel" aria-label="Assistant coach"><AssistantPortrait coach={assistant} size={36} /><div><strong>{assistant.name}</strong><span>Assistant coach</span></div><button className="text-button" onClick={onOpenAssistantAdvice}>Match advice<Icon name="chevron" size={14} /></button></section>}

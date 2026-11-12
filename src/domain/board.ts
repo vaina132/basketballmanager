@@ -35,6 +35,8 @@ export interface BoardClubReview {
   resultsImpact: number;
   injuryRelief: number;
   financeImpact: number;
+  /** Format 35, once rivalries govern the review: derby wins and losses in the counted games. */
+  rivalryImpact?: number;
   assessment: number;
   previousConfidence: number;
   confidence: number;

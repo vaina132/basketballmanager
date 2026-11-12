@@ -15,7 +15,7 @@ The project owner set these instructions for any agent continuing this project:
 
 "Levels" are the milestones in [docs/implementation-plan.md](docs/implementation-plan.md). Interface rules live in [AGENTS.md](AGENTS.md); the current state, active level and next step live in [HANDOVER.md](HANDOVER.md).
 
-Work directly on `main`; do not create branches (owner's instruction, 12 November 2026).
+Work directly on `main`; do not create branches. Do not commit or push: leave each finished step as uncommitted changes on `main`, tell the owner it is ready and suggest a commit message; the owner commits and pushes (owner's instructions, 12 November 2026).
 
 Communicate progress and any request for help in plain, non-technical language with step-by-step guidance. Keep real-data costs low: prefer free sources and ask before any paid option.
 

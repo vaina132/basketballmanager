@@ -6,6 +6,7 @@ import { rosterForRound } from './rosters';
 import { dateForRound } from './season';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { BOARD_VERDICT_EFFECTS, verdictForConfidence } from './board-consequences';
+import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS } from './rivalries';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
@@ -76,6 +77,9 @@ export function buildBoardReview(state: SeasonState, mandate: BoardMandate): Boa
   const fixtures = state.fixtures.filter(fixture => fixture.round >= mandate.startsRound && fixture.round <= state.round);
   if (!fixtures.length || fixtures.some(fixture => !fixture.result)) throw new Error('Commit every fixture in the board review window first.');
   const clubs: Record<string, BoardClubReview> = {};
+  // Derbies count only once rivalries govern this review's matchday, so earlier reviews rebuild unchanged.
+  const from = state.rivalries?.enabledSince?.effectiveFrom;
+  const rivalriesCount = !!from && (state.seasonNumber - 1) * 10 + state.round >= (from.seasonNumber - 1) * 10 + from.round;
   for (const club of state.clubs) {
     const objective = mandate.clubs[club.id];
     if (!objective || !objective.games) throw new Error('Review a club with a communicated sporting objective.');
@@ -94,10 +98,13 @@ export function buildBoardReview(state: SeasonState, mandate: BoardMandate): Boa
     const injuryRelief = Math.max(0, Math.min(-Math.min(0, resultsImpact), Math.round(Math.min(6, rosterPlaces ? carriedAbsences / rosterPlaces * 30 : 0))));
     const unpaid = objective.startingUnpaid === null ? null : boardUnpaidCosts(state, club.id);
     const financeImpact = unpaid === null || objective.startingUnpaid === null ? 0 : Math.round(clamp((objective.startingUnpaid - unpaid) / 200_000, -25, 10)) || 0;
-    const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact, 0, 100);
+    const derbies = rivalriesCount ? games.filter(fixture => governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round)) : [];
+    const derbyBalance = derbies.reduce((sum, fixture) => sum + (fixture.result!.winnerClubId === club.id ? 1 : -1), 0);
+    const rivalryImpact = clamp(derbyBalance * RIVALRY_BOARD_POINTS, -RIVALRY_BOARD_CAP, RIVALRY_BOARD_CAP) || 0;
+    const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact + rivalryImpact, 0, 100);
     const previousConfidence = state.board.reviews.at(-1)?.clubs[club.id]?.confidence ?? 50;
     const confidence = previousConfidence + clamp(assessment - previousConfidence, -BOARD_REVIEW_STEP, BOARD_REVIEW_STEP);
-    clubs[club.id] = { fixtureIds: games.map(fixture => fixture.id), played, wins, targetPace: rounded(targetPace), carriedAbsences, rosterPlaces, unpaid, resultsImpact, injuryRelief, financeImpact, assessment, previousConfidence, confidence };
+    clubs[club.id] = { fixtureIds: games.map(fixture => fixture.id), played, wins, targetPace: rounded(targetPace), carriedAbsences, rosterPlaces, unpaid, resultsImpact, injuryRelief, financeImpact, ...(rivalriesCount ? { rivalryImpact } : {}), assessment, previousConfidence, confidence };
   }
   return { ...boardEventAnchor(state), id: `board-review-${state.board.reviews.length + 1}`, mandateId: mandate.id, clubs };
 }

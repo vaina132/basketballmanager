@@ -5,6 +5,7 @@ import { dateForRound } from './season';
 import { rosterForRound } from './rosters';
 import { getPlayerRetirement } from './lifecycle-policy';
 import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, pressImpact } from './press-policy';
+import { governingDerby, RIVALRY_MORALE_WEIGHT } from './rivalries';
 
 export const SQUAD_ROLES: readonly SquadRole[] = ['development', 'rotation', 'starter'];
 export const SQUAD_ROLE_DEFINITIONS: Record<SquadRole, { label: string; minMinutes: number; maxMinutes: number }> = {
@@ -67,7 +68,7 @@ function roleAt(state: SeasonState, clubId: string, playerId: string, events: re
   const event = events.filter((event): event is Extract<RelationshipEvent, { type: 'role' }> => event.type === 'role' && event.clubId === clubId && event.playerId === playerId && ordinal(event.seasonNumber, event.round) >= start).at(-1);
   return { role: event?.role ?? 'rotation', after: Math.max(state.relationships.enabledSince?.completedRounds ?? 0, start - 1, event ? ordinal(event.seasonNumber, event.round) : 0) };
 }
-interface EvidenceGame { at: number; id: string; date: string; eligible: boolean; minutes: number; won: boolean }
+interface EvidenceGame { at: number; id: string; date: string; eligible: boolean; minutes: number; won: boolean; derby: boolean }
 function gamesFor(state: SeasonState, clubId: string, playerId: string): EvidenceGame[] {
   const games: EvidenceGame[] = [];
   for (const season of seasons(state)) for (const fixture of season.fixtures) {
@@ -76,7 +77,7 @@ function gamesFor(state: SeasonState, clubId: string, playerId: string): Evidenc
     if (!roster.players.some(player => player.id === playerId)) continue;
     const stats = fixture.result.stats?.[playerId];
     const eligible = !!stats && fixture.result.kind === 'normal' && !fixture.result.injuries[playerId] && stats.fouls < 5;
-    games.push({ at: ordinal(season.seasonNumber, fixture.round), id: fixture.id, date: fixture.date, eligible, minutes: stats ? stats.secondsPlayed / 60 : 0, won: fixture.result.winnerClubId === clubId });
+    games.push({ at: ordinal(season.seasonNumber, fixture.round), id: fixture.id, date: fixture.date, eligible, minutes: stats ? stats.secondsPlayed / 60 : 0, won: fixture.result.winnerClubId === clubId, derby: !!governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round) });
   }
   return games.sort((a, b) => a.at - b.at || compareText(a.id, b.id));
 }
@@ -135,7 +136,7 @@ export function getPlayerRelationship(state: SeasonState, playerId: string, club
   const trust = Math.round(clamp(50 + conversationImpact + promiseImpact, 0, 100));
   const roleImpact = evidence.length < 3 ? 0 : concern ? -Math.min(15, Math.max(3, (definition.minMinutes - average!) * 1.5)) : definition.minMinutes > 0 ? 6 : 0;
   const recent = games.filter(game => game.at > (state.relationships.enabledSince?.completedRounds ?? Infinity) && game.at >= stintStart(state, clubId, playerId)).slice(-4);
-  const resultImpact = recent.length >= 3 ? clamp(recent.reduce((sum, game) => sum + decayed(game.won ? 2 : -2, game.date, state.date, 21), 0), -6, 6) : 0;
+  const resultImpact = recent.length >= 3 ? clamp(recent.reduce((sum, game) => sum + decayed((game.won ? 2 : -2) * (game.derby ? RIVALRY_MORALE_WEIGHT : 1), game.date, state.date, 21), 0), -6, 6) : 0;
   const reasons = [
     { label: concern ?? (evidence.length < 3 ? 'Building playing-time evidence' : definition.minMinutes > 0 ? 'Agreed playing time met' : 'Reserve role accepted'), impact: Math.round(roleImpact) },
     { label: 'Recent team results', impact: Math.round(resultImpact) },

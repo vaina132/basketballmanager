@@ -6,6 +6,24 @@ Updated: 12 November 2026.
 
 The product discovery has eighteen answers. Core design, world/match specifications, source strategy, architecture and milestone plan are recorded in this repository. Coefficients are proposals and require calibration. The historical database audit is incomplete.
 
+## Implemented: facility condition and upkeep plans
+
+- Club > Operations > Facilities shows a condition bar for each upgraded facility and an **Upkeep** switch (Full or Reduced) with its effect and when it starts. The manager's desk and the Inbox flag facilities below 60 condition. Older careers use **Enable upkeep choices**.
+- Reduced upkeep halves the cost while upgraded facilities lose 5 condition per matchday; full upkeep recovers 10 per matchday; a completed upgrade restores 100. Condition scales the practice bonus and the extra arena seats. Automatic control and rival clubs reduce upkeep only when committed wages and fees exceed cash or costs are unpaid.
+- Format 36 records the opt-in anchor and each club's dated upkeep choices; gates, training reports and upkeep payments are rebuilt from them. Financing, leases, medical/scouting facilities and repair projects remain future work.
+
+## Implemented: rivalries
+
+- Each club has one fictional rival (River derby, Sea derby, Summit rivalry). Club > Board shows the rivalry with this season's derbies, their results and whether they counted; the manager's desk announces the next derby, the ticket forecast marks a derby crowd, the Inbox records derby results, and board reviews show the derby contribution.
+- Derby crowd demand rises 5-15% by intensity; each derby win or loss moves the board's assessment by 3 (capped at +/-6); a derby result counts double in the recent-results part of player morale. Effects apply from the matchday rivalries take effect, so earlier records never change.
+- Format 35 records the rivalry anchor; ticket, board-review and morale replays read it. New careers start with rivalries; older saves migrate with them off and can switch them on from the Board page. Evolving rivalries and rivalry press questions remain future work.
+
+## Implemented: press conferences and the Inbox
+
+- A new **Inbox** page lists dated messages built only from recorded events: press conferences, board objectives, reviews and season verdicts, board capital decisions, sponsor offers and signings, players' playing-time concerns and promise outcomes, and retirements, each linking to the screen where you can act, with filters. The manager's desk raises an open press conference.
+- After a run of exactly three wins or three defeats, the press asks one question with three answers: back or credit the whole squad, single out the five most-used players (a trade-off with the rest of the squad), or keep it routine. Effects are small morale contributions that fade by half every three weeks, are capped at +/-6, and apply from the next prepared match. Ignoring the question counts as the routine answer.
+- Format 34 records press answers in the squad-dynamics journal; validation recomputes each question and the morale frozen for later matches. Formats 1-33 continue unchanged. Contract-future requests, richer press topics (rivalries, transfers, verdicts) and media reputation remain future work.
+
 ## Implemented: board season verdicts and budgets
 
 - Club > Board has a **Season verdict & budgets** section: this season's staff budget and owner capital with the verdict that set them, and next season's budgets, previewed from today's confidence until the final review and then fixed by the verdict. The manager's desk announces the verdict with next season's budgets (urgent when Concerned or Under pressure), and the budget details name the verdict behind the staff budget.
@@ -613,7 +631,7 @@ Watched and skipped managed matches still run on the main thread; matchday compl
 
 The user-directed usability work, dated offseason calendar, reservations and competing club offers are implemented. They do not complete the broader management milestones below.
 
-1. Sponsorship negotiations, board funding requests with president traits and board season verdicts are implemented. Next: press and player events, then optional dismissal and job changes, rivalries and facility maintenance (Level 7 in [HANDOVER.md](../HANDOVER.md)). Board objectives and dated confidence reviews provide the board foundation. Squad roles, playing-time promises and bounded morale now provide the first player-relationship foundation; deeper personalities, chemistry and conversation consequences remain. Broader commercial/board/career mechanics follow the [implementation plan](implementation-plan.md), alongside richer development and long-run calibration.
+1. Sponsorship negotiations, board funding requests with president traits, board season verdicts, press conferences with the Inbox, rivalries and facility upkeep are implemented. Next: optional dismissal and job changes, in several parts (Level 7 in [HANDOVER.md](../HANDOVER.md)). Board objectives and dated confidence reviews provide the board foundation. Squad roles, playing-time promises and bounded morale now provide the first player-relationship foundation; deeper personalities, chemistry and conversation consequences remain. Broader commercial/board/career mechanics follow the [implementation plan](implementation-plan.md), alongside richer development and long-run calibration.
 2. In parallel, extend the downloaded reference data to the missing competitions, reconstruct opening-day rosters, and resolve intended-use permissions before bundling a career database. The [data acquisition plan](data-acquisition.md) records immediate free and paid routes.
 3. Calibrate the possession model against verified team/game denominators, broaden off-ball creation and defensive decisions, and implement competition-specific rules. Repeatable diagnostics expose action counts, shot context and isolated tactical effects; they do not complete these acceptance gates.
 4. Extend the working career calendar and health foundation with validated real competition calendars, registration rules, promotion/qualification transitions and the remaining management layers.

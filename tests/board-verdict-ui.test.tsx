@@ -8,7 +8,7 @@ import { ClubBudgetBar } from '../src/ui/ClubBudgetBar';
 import { playFirstSeason } from './helpers/board-funding';
 
 const noop = () => {};
-const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={season} onEnable={noop} onEnableFunding={noop} onEnableConsequences={noop} />);
+const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={season} onEnable={noop} onEnableFunding={noop} onEnableConsequences={noop} onEnableRivalries={noop} />);
 const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(cents / 100);
 const club = 'rhine-falcons';
 let complete: SeasonState, opening: SeasonState;

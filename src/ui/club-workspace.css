@@ -82,3 +82,4 @@
 }
 @media(max-width:900px){.club-venue>dl{grid-template-columns:repeat(2,minmax(0,1fr))}.club-ticket-controls{gap:22px}}
 @media(max-width:650px){.club-heading{align-items:flex-start;flex-wrap:wrap;padding:10px;gap:8px}.club-finance-summary{padding:12px 10px;gap:12px}.club-finance-summary dd{font-size:14px}.club-venue>dl{padding:12px 10px;gap:12px}.club-ticket-controls{grid-template-columns:1fr;gap:20px;padding:12px 10px}.club-gate-fixture{padding:10px 10px 0}.club-gate-values{padding:12px 10px;gap:12px}.club-gate-values dd{font-size:13px}.club-ledger-filters{padding:10px;gap:10px}.club-ledger-filters label{width:100%;justify-content:space-between}.club-ledger-filters select{width:72%}.club-note,.club-model-note{padding-inline:10px}.club-finance-enable>div{padding:12px 10px}.club-unpaid-note{padding:10px}}
+.club-derby{color:var(--accent);font-weight:500}

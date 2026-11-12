@@ -8,6 +8,8 @@ import { getCareerPlayer } from '../world/player-catalog'
 import { getPressQuestion, PRESS_ANSWER_TEXT } from '../world/press-policy'
 import { getSquadRelationships } from '../world/relationships'
 import { seasonLabel } from '../world/season'
+import { governingDerby } from '../world/rivalries'
+import { FACILITY_TYPES, getFacilityCondition, getFacilityLevel, maintenancePlanOn } from '../world/facilities-policy'
 import { clubRetirementsThisSeason } from './PlayerLifecycle'
 import { medicalDate } from './SeasonMedicalReport'
 
@@ -66,6 +68,17 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   if (season.relationships.enabledSince) for (const row of getSquadRelationships(season)) {
     if (row.concern) items.push({ id: `concern-${row.player.id}`, date: season.date, category: 'players', title: `${row.player.name}: playing-time concern`, detail: `${row.concern}. Averaging ${row.averageMinutes} minutes against an agreed minimum of ${row.minMinutes}.`, needsAction: row.canTalk, target: 'dynamics', playerId: row.player.id })
     for (const promise of row.promises) if (promise.outcomeDate && (promise.status === 'kept' || promise.status === 'broken')) items.push({ id: `${promise.id}-outcome`, date: promise.outcomeDate, category: 'players', title: `Promise ${promise.status} · ${row.player.name}`, detail: `${promise.averageMinutes} minutes per eligible game against ${promise.targetMinutes} promised.`, needsAction: false, target: 'dynamics', playerId: row.player.id })
+  }
+  for (const fixture of season.fixtures) {
+    const derby = fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(clubId) ? governingDerby(season.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round) : null
+    if (!derby || !fixture.result) continue
+    const home = fixture.homeClubId === clubId, won = fixture.result.winnerClubId === clubId
+    items.push({ id: `derby-${fixture.id}`, date: fixture.date, category: 'board', title: `${derby.name} ${won ? 'won' : 'lost'}`, detail: `${fixture.result.score[home ? 'home' : 'away']}–${fixture.result.score[home ? 'away' : 'home']} ${home ? 'at home' : 'away'}. The board and the squad weigh this result more than usual.`, needsAction: false, target: 'board' })
+  }
+  if (season.facilities.maintenanceSince) for (const type of FACILITY_TYPES) {
+    if (getFacilityLevel(season, type, clubId) === 1) continue
+    const condition = getFacilityCondition(season, type, clubId)
+    if (condition < 60) items.push({ id: `worn-${type}`, date: season.date, category: 'club', title: `${FACILITIES[type]} wearing`, detail: `Condition ${condition}/100 under ${maintenancePlanOn(season.facilities, clubId, season.date)} upkeep; its benefit shrinks until full upkeep restores it.`, needsAction: maintenancePlanOn(season.facilities, clubId) === 'reduced', target: 'club' })
   }
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })
 

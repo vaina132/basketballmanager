@@ -5,7 +5,7 @@ const manager = { name: 'Options Manager', dateOfBirth: '1984-03-17', nationalit
 
 describe('named career options', () => {
   it('lists every optional system once and cannot be changed at runtime', () => {
-    expect(Object.keys(NEW_CAREER_SYSTEMS)).toHaveLength(22);
+    expect(Object.keys(NEW_CAREER_SYSTEMS)).toHaveLength(24);
     expect(Object.values(NEW_CAREER_SYSTEMS).every(Boolean)).toBe(true);
     expect(Object.isFrozen(NEW_CAREER_SYSTEMS)).toBe(true);
   });
@@ -15,7 +15,7 @@ describe('named career options', () => {
     // The New career screen's former positional call: every flag after the manager enabled.
     const fullPositional = createSeason(227, 'rhine-falcons', 'standard', true, true, true, true, manager, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true);
     // Sponsorship negotiations, board funding and board verdicts postdate the positional form, so they are reachable only by name.
-    expect(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, commercial: false, boardFunding: false, boardConsequences: false })).toEqual(fullPositional);
+    expect(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, commercial: false, boardFunding: false, boardConsequences: false, rivalries: false, facilityMaintenance: false })).toEqual(fullPositional);
     const named = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS });
     expect([named.commercial.enabledSince, named.facilities.fundingSince, named.board.consequencesSince].every(anchor => anchor !== null)).toBe(true);
     expect(createSeason({ seed: 9, managedClubId: 'aegean-waves', injuryMode: 'off', training: false, coaching: false, employment: true, negotiations: true, board: true }))

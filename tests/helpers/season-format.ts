@@ -13,6 +13,7 @@ import { createFacilities } from '../../src/world/facilities';
 import { createRelationships } from '../../src/world/relationships';
 import { createBoard } from '../../src/world/board';
 import { createCommercial } from '../../src/world/commercial-policy';
+import { createRivalries } from '../../src/world/rivalries';
 
 export { SEASON_SCHEMA_VERSION };
 
@@ -36,6 +37,8 @@ const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: Leg
   [31, state => ({ commercial: createCommercial(state.clubs, state.managedClubId) })],
   [32, state => ({ facilities: { ...state.facilities!, fundingSince: null } })],
   [33, state => ({ board: { ...state.board!, consequencesSince: null } })],
+  [35, () => ({ rivalries: createRivalries() })],
+  [36, state => ({ facilities: { ...state.facilities!, maintenanceSince: null } })],
 ];
 
 /**

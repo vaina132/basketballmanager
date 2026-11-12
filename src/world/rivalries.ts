@@ -1,0 +1,45 @@
+import type { Rivalry, RivalryAnchor, SeasonRivalries } from '../domain/rivalries';
+import type { SeasonState } from '../domain/season';
+import { DEVELOPMENT_RIVALRIES } from '../data/development-rivalries';
+
+/** Derby crowds grow by this percentage per point of rivalry intensity (5% to 15%). */
+export const RIVALRY_CROWD_PERCENT = 5;
+/** Board assessment points per derby win or loss in the counted games, capped in either direction. */
+export const RIVALRY_BOARD_POINTS = 3;
+export const RIVALRY_BOARD_CAP = 6;
+/** A derby result counts this many times in the recent-results part of player morale (still capped there). */
+export const RIVALRY_MORALE_WEIGHT = 2;
+
+const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
+
+export function createRivalries(): SeasonRivalries { return { model: 'rivalries-1', enabledSince: null }; }
+
+export function rivalryBetween(firstClubId: string, secondClubId: string): Rivalry | null {
+  return DEVELOPMENT_RIVALRIES.find(rivalry => rivalry.clubIds.includes(firstClubId) && rivalry.clubIds.includes(secondClubId) && firstClubId !== secondClubId) ?? null;
+}
+
+export function rivalryFor(clubId: string): { rivalry: Rivalry; rivalId: string } | null {
+  const rivalry = DEVELOPMENT_RIVALRIES.find(item => item.clubIds.includes(clubId));
+  return rivalry ? { rivalry, rivalId: rivalry.clubIds[0] === clubId ? rivalry.clubIds[1] : rivalry.clubIds[0] } : null;
+}
+
+/** The rivalry a fixture belongs to when rivalries govern that matchday; earlier matchdays never become derbies. */
+export function governingDerby(rivalries: SeasonRivalries | undefined, homeClubId: string, awayClubId: string, seasonNumber: number, round: number): Rivalry | null {
+  const from = rivalries?.enabledSince?.effectiveFrom;
+  if (!from || ordinal(seasonNumber, round) < ordinal(from.seasonNumber, from.round)) return null;
+  return rivalryBetween(homeClubId, awayClubId);
+}
+
+export function rivalryEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'date' | 'fixtures'>, mode: 'career' | 'prospective'): RivalryAnchor {
+  const completed = state.fixtures.reduce((round, fixture) => fixture.result ? Math.max(round, fixture.round) : round, 0);
+  const next = ordinal(state.seasonNumber, state.round) + 1;
+  const effectiveFrom = mode === 'career' ? { seasonNumber: 1, round: 1 } : { seasonNumber: Math.floor((next - 1) / 10) + 1, round: (next - 1) % 10 + 1 };
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed), effectiveFrom };
+}
+
+/** New careers count derbies from the opening matchday; older careers from the next uncommitted matchday. */
+export function enableRivalries(state: SeasonState, mode: 'career' | 'prospective' = 'prospective'): SeasonState {
+  if (state.rivalries?.enabledSince) return state;
+  if (mode === 'career' && (state.seasonNumber !== 1 || state.round !== 1 || state.fixtures.some(fixture => fixture.result))) throw new Error('Rivalries can include the opening matchday only at the start of a new career.');
+  return { ...state, rivalries: { ...createRivalries(), enabledSince: rivalryEventAnchor(state, mode) } };
+}

@@ -193,6 +193,26 @@ While season verdicts are switched on, the previous season's verdict sets two bu
 
 New careers start with season verdicts on; older saves switch them on from Club > Board, and they then govern the following season. The player salary budget is deliberately unchanged: next season's contracts are signed during the current season, so changing that budget part-way would be confusing and hard to validate. A three-season automatic exploration (seed 227) produced all four verdicts and kept every club within its allocation. These coefficients are game rules to be calibrated, not claims about real club boards.
 
+## Press and Inbox policy
+
+Provisional development rules for Level 7 step 7.4, chosen as the recommended default under the owner's delegation on 12 November 2026, following the design rules that press interrupts only for material events, uses short authored choices whose effects depend on the people addressed, never hides a right answer and can be left to the assistant. A press question appears when the managed club's latest matchday completes a run of exactly three wins or three defeats. It names the five players with the most minutes in those games ("regulars") and stays open until the next result or the end of the season.
+
+After defeats the manager can back the squad (+3 morale for everyone), demand more from the regulars (-3 for them, +2 for the rest) or keep it routine (no change); after wins, credit the whole squad (+2), praise the regulars (+3 for them, -1 for the rest) or keep it routine. Effects are morale contributions that halve every 21 days and are capped at +/-6 per player; they apply from the next prepared match and never change the current one. An unanswered question is treated as the assistant's routine answer. Rival clubs have no press. Two-season explorations produced one or two questions per club-season.
+
+The Inbox lists dated messages built only from recorded events and links each to the screen where the manager can act. Contract-future requests from players with expiring deals were deferred: judging whether a renewal offer was made in time needs offer records that the relationship replay does not yet reconstruct at past boundaries.
+
+## Rivalry policy
+
+Provisional development rules for Level 7 step 7.6, chosen as the recommended default under the owner's delegation on 12 November 2026, following the design rule that rivalries amplify fan, board and player reactions within capped, decaying limits and that fictional rivalries are clearly distinguished from historical facts. Every development-league club has one fictional rival: the River derby (Rhine Falcons and Danube Lynx, intensity 3), the Sea derby (Aegean Waves and Adriatic Comets, 2) and the Summit rivalry (Alpine Stags and Atlantic Pilots, 1).
+
+Derby crowd demand rises by 5% per point of intensity, still limited by capacity and price. Each derby win in the board's counted games adds 3 assessment points and each loss removes 3, capped at +/-6. A derby result counts double in the recent-results part of player morale, which keeps its existing cap and decay. Effects apply only from the matchday rivalries take effect: a new career's opening matchday, otherwise the matchday after activation, so earlier gates, reviews and morale never change. Intensity does not yet evolve with results; that remains a later refinement.
+
+## Facility upkeep policy
+
+Provisional development rules for Level 7 step 7.7, chosen as the recommended default under the owner's delegation on 12 November 2026, following the design rule that deterioration creates an upkeep decision rather than weekly maintenance clicks. Each upgraded facility has a condition from 0 to 100, set to 100 when an upgrade completes. A club chooses one upkeep plan: full upkeep costs the existing upkeep and recovers 10 condition per senior matchday (to at most 100); reduced upkeep costs 50% and loses 5 per matchday. A change applies from the next matchday.
+
+Condition scales the facility's benefit: the training and youth practice bonus and the extra arena seats are multiplied by condition / 100 (rounded to whole percent and whole seats). Standard (level-one) facilities have no condition. Automatic facilities control and rival clubs reduce upkeep only while committed wages and fees exceed cash or costs are unpaid, and restore it once EUR 75,000 is spendable; an earlier rule tied to the EUR 150,000 automation cushion cut upkeep at every season opening, when a full season of wages is reserved, and was rejected.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

@@ -10,7 +10,7 @@ import { FacilityBoardFunding } from '../src/ui/FacilitiesPanel';
 import { driveToFundingRequest } from './helpers/board-funding';
 
 const noop = () => {};
-const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={season} onEnable={noop} onEnableFunding={noop} onEnableConsequences={noop} />);
+const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={season} onEnable={noop} onEnableFunding={noop} onEnableConsequences={noop} onEnableRivalries={noop} />);
 const ask = (quote: BoardFundingQuote, enabled = true) => renderToStaticMarkup(<FacilityBoardFunding quote={quote} enabled={enabled} busy={false} onRequest={noop} />);
 const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100);
 let generous: { state: SeasonState; quote: BoardFundingQuote }, cautious: { state: SeasonState; quote: BoardFundingQuote };

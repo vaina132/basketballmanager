@@ -5,6 +5,7 @@ import type { PhysioContract } from '../domain/physio';
 import type { AssistantContract } from '../domain/assistant';
 import type { YouthCoachContract } from '../domain/youth';
 import type { FacilityProject, SeasonFacilities } from '../domain/facilities';
+import type { SeasonRivalries } from '../domain/rivalries';
 import type { EmploymentBuyout, EmploymentTransfer } from '../domain/employment';
 import type { PayrollCharge } from '../domain/payroll';
 import type { TransferPayment } from '../domain/transfer-payments';
@@ -23,6 +24,7 @@ import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransfe
 import { quoteContractBuyout } from './buyouts';
 import { staffAllocation, staffCommitted } from './staff-policy';
 import { getArenaCapacity, getFacilityUpkeepBreakdown, quoteFacilityUpgrade } from './facilities-policy';
+import { governingDerby, RIVALRY_CROWD_PERCENT } from './rivalries';
 import { agreementFor, commercialGovernsSeason, openingSponsorshipClubs, sponsorshipInstallment, sponsorshipSourceId, type DueSponsorshipPayment } from './commercial-policy';
 
 export { getClubFinanceDefinition } from '../data/development-finances';
@@ -41,7 +43,7 @@ export interface FinanceFixture {
   awayClubId: string;
   result: { winnerClubId: string } | null;
 }
-export interface FinanceContext { fixtures: readonly FinanceFixture[]; facilities?: SeasonFacilities; finance?: SeasonFinance; date?: string; round?: number }
+export interface FinanceContext { fixtures: readonly FinanceFixture[]; facilities?: SeasonFacilities; finance?: SeasonFinance; date?: string; round?: number; seasonNumber?: number; rivalries?: SeasonRivalries }
 
 function validatePrice(price: number): void {
   if (!Number.isInteger(price) || price < 0 || price > MAX_TICKET_PRICE || price % TICKET_PRICE_STEP !== 0) throw new Error('Choose a ticket price from zero to sixty euros in one-euro steps.');
@@ -236,7 +238,8 @@ export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture
   const recorded = state.finance?.ledger.find(entry => entry.ticket?.fixtureId === fixture.id)?.ticket?.capacity;
   const capacity = recorded ?? (fixture.round === state.round ? state.finance?.roundCapacities?.[fixture.homeClubId] : undefined) ?? getArenaCapacity(state, fixture.homeClubId, fixture.date ?? state.date);
   const own = winShare(state, fixture.homeClubId, fixture.round), opponent = winShare(state, fixture.awayClubId, fixture.round);
-  const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent);
+  const derby = state.seasonNumber === undefined ? null : governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round);
+  const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent) * (derby ? 1 + RIVALRY_CROWD_PERCENT * derby.intensity / 100 : 1);
   const attendance = price === 0 ? capacity : Math.min(capacity, Math.floor(demand * (DEFAULT_TICKET_PRICE / price) ** 1.4));
   return { fixtureId: fixture.id, clubId: fixture.homeClubId, opponentClubId: fixture.awayClubId, price, attendance, capacity, revenue: attendance * price };
 }

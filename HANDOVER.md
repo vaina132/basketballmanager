@@ -1,6 +1,35 @@
 # Project handover
 
-Prepared 12 November 2026. Repository: `basketballmanager`; branch: `main`.
+Prepared 12 November 2026 and updated at every Level 7 step. Repository: `basketballmanager`; active branch: `level-7`, created from `main` at `acc5c27`. [CLAUDE.md](CLAUDE.md) records the owner's working agreement.
+
+## Active work: Level 7 (facilities, business, board and career)
+
+The owner approved the review's plan on 12 November 2026 and delegated the open choices to the recommended defaults below. Each step is implemented, tested, committed and recorded here. Work stops for a summary at the end of the level.
+
+| Step | Status |
+| --- | --- |
+| 0. Working agreement in CLAUDE.md | Done |
+| P1. Shared current-schema test helper | Next |
+| P2. Genuine format-30 fixtures and a committed capture script | Planned |
+| P3. Save and load responsiveness | Planned |
+| P4. Named `createSeason` options | Planned |
+| P5. Documentation corrections | Planned |
+| 7.1 Sponsorship negotiations and commercial management | Planned |
+| 7.2 Board funding requests and president traits | Planned |
+| 7.3 Board consequences when dismissal is off | Planned |
+| 7.4 Press and player events | Planned |
+| 7.5 Optional dismissal and job changes | Planned |
+| 7.6 Rivalries | Planned |
+| 7.7 Facility maintenance and deterioration | Planned |
+| 7.8 Level 7 acceptance and summary | Planned |
+
+Approved choices:
+
+- **Sponsorship (7.1):** one exclusive main-sponsor slot per club; the current fixed EUR 200,000 deal becomes an explicit inherited agreement. Fictional sponsors make dated offers for one to three seasons, valued at roughly 75-125% of EUR 200,000 from venue demand, last season's results and actual attendance. One request for improved terms per offer, answered deterministically. Two dated installments (opening matchday and matchday six) are booked only when due; an optional top-half bonus is booked only if earned. No early termination in this foundation. Manual/Automatic control; AI clubs follow the same rules; an unsold slot earns nothing. Older saves keep fixed sponsorship until explicitly enabled, without changing the current season's payment.
+- **Funding requests (7.2):** one-off board capital for facility projects only. The staff and player salary allocations keep their existing rules.
+- **Dismissal (7.5):** enabled for new careers; existing saves opt in.
+- **Press (7.4):** add an Inbox destination once real press events exist; urgent items also appear on the manager's desk.
+- "Richer player relationships", listed with this work in the plan, remains Level 5 work.
 
 ## Current state and stopping point
 
@@ -102,7 +131,7 @@ Follow [AGENTS.md](AGENTS.md) and [game design section 11](docs/game-design.md#1
 
 ## Run and test
 
-Requires **Node.js 24.14 or newer**. Use the committed lockfile. In PowerShell, `npm.cmd` avoids execution-policy errors from `npm.ps1`.
+Requires **Node.js 24.14 or newer**. Use the committed lockfile. In PowerShell, `npm.cmd` avoids execution-policy errors from `npm.ps1`. Run tests from PowerShell: invoking vitest from Git Bash fails every file at load because vitest is loaded twice through `/c/...` and `C:/...` path spellings.
 
 ```powershell
 npm.cmd ci
@@ -130,6 +159,8 @@ The earlier full four-worker run passed 1,910 cases across 98 files; serial exec
 For reference data, use **Open real data.cmd** or `npm.cmd run data:fetch`. Generated data lives under `.local-data/europe-2025-26/`, separate from the game build.
 
 ## Verification at handover
+
+Re-verified before Level 7 began, on unchanged source `acc5c27`: typecheck and build passed (known chunk advisory) and the serial suite passed 1,910 tests across 98 files in 895.6 seconds.
 
 Fresh verification on 12 November 2026, using unchanged application source from `2b3fad5`:
 

@@ -1,5 +1,6 @@
 import { stripRosterHistory } from './helpers/legacy-season';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToQuarterEnd, stepMatch } from '../src/engine/match';
 import { loadCareerCheckpoint, readCareerSaves, saveCareerCheckpoint } from '../src/storage/career-saves';
@@ -165,7 +166,7 @@ describe('checkpoint restore and append', () => {
     expect(await saveCareerCheckpoint(state, 1, 'manual')).toEqual(saved);
     const serialized = storage.writeSeasonCheckpoint.mock.calls[0]![0] as string;
     expect(Object.keys(JSON.parse(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'state']);
-    expect(JSON.parse(serialized).formatVersion).toBe(30);
+    expect(JSON.parse(serialized).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(parseSeason(serialized)).toEqual(state);
     expect(state).toEqual(before);
     expect(stepMatch(parseSeason(serialized).activeMatch)).toEqual(stepMatch(before.activeMatch));

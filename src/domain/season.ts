@@ -73,8 +73,11 @@ export interface SeasonArchive {
   fixtures: ArchivedFixture[];
 }
 
+/** Current season save format. Bumping it also requires a migration in season-storage.ts. */
+export const SEASON_SCHEMA_VERSION = 30;
+
 export interface SeasonState {
-  schemaVersion: 30;
+  schemaVersion: typeof SEASON_SCHEMA_VERSION;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;

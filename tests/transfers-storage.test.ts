@@ -1,5 +1,6 @@
 import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import { getSeasonWage } from '../src/data/development-wages';
 import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match';
@@ -64,7 +65,7 @@ describe('paid transfer persistence and accounting', () => {
   it('round-trips club review, approval, fee counters, player selection and completed transfers', () => {
     for (const state of [opened, pending, approved, accepted, competing, decided, incoming, reviewed, rejected, countered, ready, nextYear]) {
       const text = serializeSeason(state);
-      expect(JSON.parse(text).formatVersion).toBe(30);
+      expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
       const restored = parseSeason(text);
       expect(restored).toEqual(state);
       expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));

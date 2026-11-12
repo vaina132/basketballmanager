@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { RosterSnapshot } from '../src/domain/roster';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_CLUBS } from '../src/data/development-league';
@@ -57,7 +58,7 @@ describe('fixture, training and archive ownership', () => {
   }, 30_000);
 
   it('records the squads used by every committed game and the completed training week', () => {
-    expect(initial.schemaVersion).toBe(30);
+    expect(initial.schemaVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(initial.rosters).toEqual(createRosterSnapshots(initial.clubs, 1));
     for (const fixture of secondRound.fixtures.filter(fixture => fixture.result)) {
       const teams = getFixtureTeams(secondRound, fixture);

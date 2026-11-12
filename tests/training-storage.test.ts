@@ -1,5 +1,6 @@
 import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd, simulateToQuarterEnd, stepMatch } from '../src/engine/match';
 import { parseSeason, serializeSeason, validateSeasonState } from '../src/storage/season-storage';
@@ -39,7 +40,7 @@ beforeAll(() => {
 describe('training-aware season saves', () => {
   it.each([true, false])('round-trips format 8 with training enabled=%s', enabled => {
     const season = createSeason(7, clubId, 'off', enabled, false, false), text = serializeSeason(season);
-    expect(JSON.parse(text).formatVersion).toBe(30);
+    expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restore(season)).toEqual(season);
     expect(season.training.enabledSince !== null).toBe(enabled);
   });

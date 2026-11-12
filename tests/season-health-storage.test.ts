@@ -1,5 +1,6 @@
 import { stripRosterHistory } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match';
 import { parseSeason, serializeSeason, validateSeasonState } from '../src/storage/season-storage';
@@ -33,7 +34,7 @@ beforeAll(() => {
 describe('health-aware season persistence', () => {
   it.each(['standard', 'reduced', 'off'] as const)('writes format 9 with a uniform %s injury mode', mode => {
     const season = createSeason(17, clubId, mode, false, false, false), text = serializeSeason(season);
-    expect(JSON.parse(text).formatVersion).toBe(30);
+    expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restore(season)).toEqual(season);
     expect(restore(season).activeMatch.injuryMode).toBe(mode);
   });
@@ -147,7 +148,7 @@ describe('explicit injury-free legacy migration', () => {
     const previous = advanceSeason(finish(createSeason(37, clubId, 'off', false, false, false)));
     const text = legacyText(previous), snapshot = JSON.parse(text).state;
     const restored = parseSeason(text);
-    expect(restored.schemaVersion).toBe(30);
+    expect(restored.schemaVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restored.injuryMode).toBe('off');
     expect(restored.injuries).toEqual([]);
     expect(restored.activeMatch).toEqual(snapshot.activeMatch);
@@ -156,7 +157,7 @@ describe('explicit injury-free legacy migration', () => {
     expect(restored.fixtures.filter(fixture => fixture.result).every(fixture => Object.keys(fixture.result!.injuries).length === 0)).toBe(true);
     expect(JSON.parse(text).state).toEqual(snapshot);
     expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(previous)));
-    expect(JSON.parse(serializeSeason(restored)).formatVersion).toBe(30);
+    expect(JSON.parse(serializeSeason(restored)).formatVersion).toBe(SEASON_SCHEMA_VERSION);
   });
 
   it('migrates completed seasons without changing the retained final replay', () => {

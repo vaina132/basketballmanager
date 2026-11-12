@@ -1,6 +1,7 @@
 import { createRosterSnapshots, rosterForRound } from '../src/world/rosters';
 import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonArchive, SeasonState } from '../src/domain/season';
 import { createFixtureMatch, setAutoSubstitutions, simulateToEnd, simulateToQuarterEnd, stepMatch } from '../src/engine/match';
 import { MAX_SEASON_SAVE_BYTES, parseSeason, serializeSeason, validateSeasonState } from '../src/storage/season-storage';
@@ -48,7 +49,7 @@ beforeAll(() => {
 describe('career save boundaries', () => {
   it('writes format 9 with the original season table preserved after rollover', () => {
     const text = serializeSeason(secondStart), restored = parseSeason(text);
-    expect(JSON.parse(text).formatVersion).toBe(30);
+    expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restored).toEqual(secondStart);
     expect(restored.history).toHaveLength(1);
     expect(getStandings({ clubs: restored.clubs, fixtures: restored.history[0]!.fixtures })).toEqual(getStandings(firstComplete));
@@ -116,7 +117,7 @@ describe('explicit career migrations', () => {
     const text = previousFormat(original, 2), snapshot = JSON.parse(text).state;
     const restored = parseSeason(text);
     expect(restored).toEqual(withUnavailableArchivedStats(original));
-    expect(restored.schemaVersion).toBe(30);
+    expect(restored.schemaVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restored.seasonNumber).toBe(1);
     expect(restored.history).toEqual([]);
     expect(restored.activeMatch).toEqual(snapshot.activeMatch);

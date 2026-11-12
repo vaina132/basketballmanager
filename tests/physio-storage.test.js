@@ -1,6 +1,3 @@
-import { createBoard } from '../src/world/board';
-import { createRelationships } from '../src/world/relationships';
-import { createFacilities } from '../src/world/facilities';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -16,6 +13,7 @@ import { quoteInSeasonTransferOffer, requiredInSeasonTransferFee } from '../src/
 import { decideInSeasonTransfer, submitInSeasonTransferOffer } from '../src/world/recruitment';
 import { hireScout } from '../src/world/scouts';
 import { advanceSeason, createSeason, managedSide } from '../src/world/season';
+import { expectedMigration } from './helpers/season-format';
 
 const club = 'rhine-falcons';
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
@@ -42,12 +40,12 @@ describe('physio save provenance and historical recovery', () => {
     expect(original.formatVersion).toBe(22);
     expect(original.state.fitness.enabledSince).not.toBeNull();
     expect(original.state.scouts.enabledSince).not.toBeNull();
-    expect(migrated).toEqual({ ...original.state, schemaVersion: 30, board: createBoard(), relationships: createRelationships(), facilities: createFacilities((original.state).clubs, (original.state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] }, physio: createPhysio() });
+    expect(migrated).toEqual(expectedMigration(original.state, 22));
     expect(stepMatch(migrated.activeMatch)).toEqual(stepMatch(original.state.activeMatch));
     const unavailable = play(migrated);
     const partial = play(unavailable);
-    expect(unavailable).toEqual({ ...JSON.parse(fixture('season22-injury-fitness-scouts-next')).state, schemaVersion: 30, board: createBoard(), relationships: createRelationships(), facilities: createFacilities((JSON.parse(fixture('season22-injury-fitness-scouts-next')).state).clubs, (JSON.parse(fixture('season22-injury-fitness-scouts-next')).state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] }, physio: createPhysio() });
-    expect(partial).toEqual({ ...JSON.parse(fixture('season22-injury-fitness-scouts-partial')).state, schemaVersion: 30, board: createBoard(), relationships: createRelationships(), facilities: createFacilities((JSON.parse(fixture('season22-injury-fitness-scouts-partial')).state).clubs, (JSON.parse(fixture('season22-injury-fitness-scouts-partial')).state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] }, physio: createPhysio() });
+    expect(unavailable).toEqual(expectedMigration(JSON.parse(fixture('season22-injury-fitness-scouts-next')).state, 22));
+    expect(partial).toEqual(expectedMigration(JSON.parse(fixture('season22-injury-fitness-scouts-partial')).state, 22));
     expect(unavailable.training.lastWeek.players['rhf-9'].availableDays).toBe(0);
     expect(partial.training.lastWeek.players['rhf-9'].availableDays).toBe(2);
     expect(restore(partial)).toEqual(partial);

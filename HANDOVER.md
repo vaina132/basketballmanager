@@ -9,8 +9,8 @@ The owner approved the review's plan on 12 November 2026 and delegated the open 
 | Step | Status |
 | --- | --- |
 | 0. Working agreement in CLAUDE.md | Done |
-| P1. Shared current-schema test helper | Next |
-| P2. Genuine format-30 fixtures and a committed capture script | Planned |
+| P1. Shared current-schema test helper | Done |
+| P2. Genuine format-30 fixtures and a committed capture script | Next |
 | P3. Save and load responsiveness | Planned |
 | P4. Named `createSeason` options | Planned |
 | P5. Documentation corrections | Planned |
@@ -30,6 +30,10 @@ Approved choices:
 - **Dismissal (7.5):** enabled for new careers; existing saves opt in.
 - **Press (7.4):** add an Inbox destination once real press events exist; urgent items also appear on the manager's desk.
 - "Richer player relationships", listed with this work in the plan, remains Level 5 work.
+
+Step notes:
+
+- **P1:** `SEASON_SCHEMA_VERSION` in `src/domain/season.ts` is the single current season format number; `season-storage.ts` derives its accepted formats from it. `tests/helpers/season-format.ts` provides `expectedMigration(rawState, fromFormat)` and `currentSeasonFile(state)`. When a format adds a top-level system, add one row to its `ADDED_BY_FORMAT` table instead of editing each storage test. Verified: typecheck; 1,909 of 1,910 tests in the full serial run, the remaining format-13 compatibility test exceeding its own 30-second limit while a CPU profiler ran alongside; that file then passed alone (24/24). Avoid running heavy jobs during the suite.
 
 ## Current state and stopping point
 

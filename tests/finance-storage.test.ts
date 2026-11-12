@@ -1,5 +1,6 @@
 import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION, currentSeasonFile } from './helpers/season-format';
 import type { FinanceEntry } from '../src/domain/finance';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_CLUBS } from '../src/data/development-league';
@@ -29,7 +30,7 @@ function firstEntry(state: SeasonState, kind: FinanceEntry['kind']): FinanceEntr
 function reject(state: SeasonState, change: (state: SeasonState) => void): void {
   const damaged = structuredClone(state); change(damaged);
   expect(() => validateSeasonState(damaged)).toThrow();
-  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 30, engineVersion: 'possession-3', state: damaged }))).toThrow();
+  expect(() => parseSeason(currentSeasonFile(damaged))).toThrow();
 }
 
 beforeAll(() => {
@@ -44,7 +45,7 @@ beforeAll(() => {
 describe('finance ledger persistence', () => {
   it('writes format 9 with funding and full coaching commitments for every club', () => {
     const text = serializeSeason(initial), before = structuredClone(initial);
-    expect(JSON.parse(text).formatVersion).toBe(30);
+    expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restore(initial)).toEqual(initial);
     expect(initial.finance.ledger).toHaveLength(18);
     for (const club of initial.clubs) {

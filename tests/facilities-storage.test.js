@@ -1,12 +1,10 @@
-import { createBoard } from '../src/world/board';
-import { createRelationships } from '../src/world/relationships';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { simulateToEnd, setAutoSubstitutions, stepMatch } from '../src/engine/match';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
-import { createFacilities, enableFacilities, startFacilityUpgrade, cancelFacilityUpgrade, setFacilityDelegation } from '../src/world/facilities';
+import { enableFacilities, startFacilityUpgrade, cancelFacilityUpgrade, setFacilityDelegation } from '../src/world/facilities';
 import { getArenaCapacity, getFacilityLevel, quoteFacilityUpgrade } from '../src/world/facilities-policy';
 import { getFinanceBalance } from '../src/world/finance';
 import { setEmploymentDelegation } from '../src/world/employment';
@@ -17,11 +15,12 @@ import { withdrawInSeasonOffer } from '../src/world/recruitment';
 import { getClubAcademy } from '../src/world/academy-policy';
 import { enableTraining } from '../src/world/training';
 import { createYouthCareer, advanceYouthCareer as advance } from './helpers/youth-competition-careers';
+import { currentSeasonFile, expectedMigration } from './helpers/season-format';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
-const upgrade = state => ({ ...state, schemaVersion: 30, board: createBoard(), relationships: createRelationships(), facilities: createFacilities(state.clubs, state.managedClubId) });
+const upgrade = state => expectedMigration(state, 27);
 const restore = state => parseSeason(serializeSeason(state));
-const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 30, engineVersion: 'possession-3', state: copy }); };
+const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return currentSeasonFile(copy); };
 const own = state => state.facilities.projects.find(project => project.clubId === state.managedClubId);
 let original, legacy, enabled, started, cancelled, second, fourth, fifth, trained, youth, completed, marketStarted, marketFinished, opening, automatic, lateTraining, lateArena, heldProject;
 

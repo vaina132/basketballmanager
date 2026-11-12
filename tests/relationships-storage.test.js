@@ -1,20 +1,20 @@
-import { createBoard } from '../src/world/board';
 ﻿import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
-import { agreeSquadRole, createRelationships, enableRelationships, getPlayerRelationship, talkToPlayer } from '../src/world/relationships';
+import { agreeSquadRole, enableRelationships, getPlayerRelationship, talkToPlayer } from '../src/world/relationships';
 import { setEmploymentDelegation } from '../src/world/employment';
 import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
+import { currentSeasonFile, expectedMigration } from './helpers/season-format';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
-const upgrade = state => ({ ...state, schemaVersion: 30, board: createBoard(), relationships: createRelationships() });
+const upgrade = state => expectedMigration(state, 28);
 const restore = state => parseSeason(serializeSeason(state));
 const advance = state => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
-const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 30, engineVersion: 'possession-3', state: copy }); };
+const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return currentSeasonFile(copy); };
 const playerId = 'rhf-10';
 let legacy, enabled, promoted, initial, role, concern, promised, answered, complete, opening;
 beforeAll(() => {

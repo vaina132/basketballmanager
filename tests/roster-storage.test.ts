@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION, currentSeasonFile } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd, simulateToQuarterEnd, stepMatch } from '../src/engine/match';
 import { parseSeason, serializeSeason, validateSeasonState } from '../src/storage/season-storage';
@@ -25,7 +26,7 @@ beforeAll(() => {
 describe('historical roster persistence', () => {
   it('round-trips full archived box scores, roster identities and current training references', () => {
     const text = serializeSeason(secondLive), restored = parseSeason(text);
-    expect(JSON.parse(text).formatVersion).toBe(30);
+    expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restored).toEqual(secondLive);
     expect(restored.manager).toEqual(manager);
     expect(restored.history[0]!.rosters).toEqual(firstComplete.rosters);
@@ -98,6 +99,6 @@ describe('roster and historical accounting validation', () => {
   it.each(mutations)('rejects %s before replacing an open career', (_name, mutate) => {
     const damaged = structuredClone(secondLive); mutate(damaged);
     expect(() => validateSeasonState(damaged)).toThrow();
-    expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 30, engineVersion: 'possession-3', state: damaged }))).toThrow();
+    expect(() => parseSeason(currentSeasonFile(damaged))).toThrow();
   });
 });

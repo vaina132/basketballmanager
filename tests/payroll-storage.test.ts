@@ -1,5 +1,6 @@
 import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION, currentSeasonFile } from './helpers/season-format';
 import type { FinanceEntry } from '../src/domain/finance';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd, simulateToQuarterEnd, stepMatch } from '../src/engine/match';
@@ -27,7 +28,7 @@ function prepayment(state: SeasonState, id = clubId): FinanceEntry { return stat
 function reject(state: SeasonState, change: (state: SeasonState) => void): void {
   const damaged = structuredClone(state); change(damaged);
   expect(() => validateSeasonState(damaged)).toThrow();
-  expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 30, engineVersion: 'possession-3', state: damaged }))).toThrow();
+  expect(() => parseSeason(currentSeasonFile(damaged))).toThrow();
 }
 
 beforeAll(() => {
@@ -49,7 +50,7 @@ beforeAll(() => {
 
 describe('payroll-aware career persistence', () => {
   it('writes format 9 with canonical terms and delegated prepayments without changing the roster', () => {
-    expect(JSON.parse(serializeSeason(initial)).formatVersion).toBe(30);
+    expect(JSON.parse(serializeSeason(initial)).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(initial.payroll.agreements).toHaveLength(60);
     expect(initial.payroll.enabledSince).toEqual({ seasonNumber: 1, round: 1, ledgerIndex: 18 });
     expect(restore(initial)).toEqual(initial);

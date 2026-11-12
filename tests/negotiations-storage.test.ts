@@ -1,5 +1,6 @@
 import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import type { NegotiationRecord } from '../src/domain/negotiations';
 import { getSeasonWage } from '../src/data/development-wages';
@@ -42,7 +43,7 @@ describe('negotiation journal persistence', () => {
   it('round-trips rejections, counteroffers, alternative acceptance, AI offers and offseason signings', () => {
     for (const state of [initial, rejected, counter, signed, completed, recruited, second, secondWeek]) {
       const text = serializeSeason(state), restored = parseSeason(text);
-      expect(JSON.parse(text).formatVersion).toBe(30);
+      expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
       expect(restored).toEqual(state);
       expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
     }

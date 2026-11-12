@@ -1,5 +1,6 @@
 import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { CoachingContract } from '../src/domain/coaching';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_COACHES } from '../src/data/development-coaches';
@@ -56,7 +57,7 @@ beforeAll(() => {
 describe('coaching-aware season persistence', () => {
   it('writes format 9 with exact appointments, commitments and future instructions', () => {
     const text = serializeSeason(initial);
-    expect(JSON.parse(text).formatVersion).toBe(30);
+    expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restore(initial)).toEqual(initial);
     expect(coachingCommitted(restore(initial).coaching, clubId)).toBe(10_500_000);
     expect(restore(initial).activeMatch).toEqual(initial.activeMatch);

@@ -32,6 +32,7 @@ import { processRehabilitationWeek } from './rehabilitation';
 import { createNegotiations, enableNegotiations } from './negotiations';
 import { createMarket, enableMarket } from './market';
 import { getMarketStartReason, getMarketWindow } from './market-policy';
+import { memoizePure } from './pure-cache';
 
 export const SEASON_ROUNDS = 10;
 export const ROUND_INTERVAL_DAYS = 7;
@@ -56,18 +57,27 @@ export function seasonLabel(seasonNumber = 1): string {
   return `${year}/${String((year + 1) % 100).padStart(2, '0')}`;
 }
 
-/** Development seasons begin on the first Saturday in September, in UTC. */
-export function seasonStartDate(seasonNumber = 1): string {
-  const september = new Date(Date.UTC(seasonYear(seasonNumber), 8, 1));
+// Calendar lookups run constantly during simulation and save validation; inputs are validated before the caches.
+const seasonStarts = memoizePure((year: number): string => {
+  const september = new Date(Date.UTC(year, 8, 1));
   september.setUTCDate(1 + (6 - september.getUTCDay() + 7) % 7);
   return september.toISOString().slice(0, 10);
+});
+const roundDates = memoizePure((key: string): string => {
+  const separator = key.indexOf('|');
+  const start = Date.parse(`${key.slice(0, separator)}T00:00:00.000Z`);
+  return new Date(start + (Number(key.slice(separator + 1)) - 1) * ROUND_INTERVAL_DAYS * DAY_MS).toISOString().slice(0, 10);
+});
+
+/** Development seasons begin on the first Saturday in September, in UTC. */
+export function seasonStartDate(seasonNumber = 1): string {
+  return seasonStarts(seasonYear(seasonNumber));
 }
 
 /** Date arithmetic is UTC-only and does not depend on locale or the wall clock. */
 export function dateForRound(round: number, seasonNumber = 1): string {
   if (!Number.isInteger(round) || round < 1 || round > SEASON_ROUNDS) throw new Error('Choose a round between one and ten.');
-  const start = Date.parse(`${seasonStartDate(seasonNumber)}T00:00:00.000Z`);
-  return new Date(start + (round - 1) * ROUND_INTERVAL_DAYS * DAY_MS).toISOString().slice(0, 10);
+  return roundDates(`${seasonStartDate(seasonNumber)}|${round}`);
 }
 
 /** Circle scheduling: each club plays once per round and visits every opponent. */

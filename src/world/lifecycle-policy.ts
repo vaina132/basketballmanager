@@ -3,6 +3,7 @@ import type { SeasonState } from '../domain/season';
 import type { PlayerAttributes } from '../domain/types';
 import type { TrainingPoints } from '../domain/training';
 import { DEVELOPMENT_PLAYER_PROFILES, playerAgeOnDate } from '../data/development-player-profiles';
+import { memoizePure } from './pure-cache';
 
 export type LifecycleContext = Partial<Pick<SeasonState, 'lifecycle' | 'academy' | 'seasonNumber' | 'round' | 'date'>>;
 const ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
@@ -16,25 +17,28 @@ export const AGING_RATES: Readonly<Record<keyof PlayerAttributes, { fromAge: num
   stamina: { fromAge: 30, annualPoints: 40 },
 };
 const zeroPoints = (): TrainingPoints => Object.fromEntries(ATTRIBUTES.map(key => [key, 0])) as TrainingPoints;
-const dateNumber = (date: string): number => {
+// Pure calendar conversions are replayed for every player-week during save validation, so they are cached.
+const dateNumber = memoizePure((date: string): number => {
   const value = Date.parse(`${date}T00:00:00.000Z`);
   if (!Number.isFinite(value) || new Date(value).toISOString().slice(0, 10) !== date) throw new Error('Choose a valid player-development date.');
   return value;
-};
+});
 
 export function lifecycleDateOfBirth(context: LifecycleContext, playerId: string): string | null {
   return DEVELOPMENT_PLAYER_PROFILES[playerId]?.dateOfBirth ?? context.academy?.prospects.find(prospect => prospect.player.id === playerId)?.dateOfBirth ?? null;
 }
 
 /** Match the public calendar-age convention: leap-day birthdays fall on March 1 otherwise. */
-function birthday(dateOfBirth: string, age: number): string {
+const birthdays = memoizePure((key: string): string => {
+  const separator = key.indexOf('|'), dateOfBirth = key.slice(0, separator), age = Number(key.slice(separator + 1));
   const year = Number(dateOfBirth.slice(0, 4)) + age;
   if (year > 9999) return '9999-12-31';
   const month = Number(dateOfBirth.slice(5, 7)), day = Number(dateOfBirth.slice(8, 10));
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
   if (day > lastDay) return `${String(year).padStart(4, '0')}-03-01`;
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
+});
+function birthday(dateOfBirth: string, age: number): string { return birthdays(`${dateOfBirth}|${age}`); }
 
 function agingStart(context: LifecycleContext, playerId: string, onDate: string): string | null {
   const anchor = context.lifecycle?.enabledSince;

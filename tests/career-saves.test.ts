@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToQuarterEnd, stepMatch } from '../src/engine/match';
-import { loadCareerCheckpoint, readCareerSaves, saveCareerCheckpoint } from '../src/storage/career-saves';
+import { loadCareerCheckpoint, readCareerSaves, readCurrentCareer, saveCareerCheckpoint } from '../src/storage/career-saves';
+import { directSeasonCodec, type SeasonCodec } from '../src/storage/season-codec';
 import type { SeasonCheckpoint, SeasonJournal } from '../src/storage/season-indexed-db';
 import { loadLocalSeason, MAX_SEASON_SAVE_BYTES, parseSeason, saveLocalSeason, serializeSeason } from '../src/storage/season-storage';
 import { createSeason, managedSide } from '../src/world/season';
@@ -181,5 +182,71 @@ describe('checkpoint restore and append', () => {
     expect(storage.writeLocalSeason).toHaveBeenCalledExactlyOnceWith(text, 11);
     storage.readLocalSeason.mockResolvedValue(null);
     expect(await loadLocalSeason()).toBeNull();
+  });
+});
+
+describe('save history work and the background codec', () => {
+  const countingCodec = () => {
+    const parsed: string[] = [], serialized: SeasonState[] = [];
+    const codec: SeasonCodec = {
+      parse: text => { parsed.push(text); return directSeasonCodec.parse(text); },
+      serialize: state => { serialized.push(state); return directSeasonCodec.serialize(state); },
+    };
+    return { codec, parsed, serialized };
+  };
+  const twoSaves = () => {
+    const latest = createSeason(71, 'aegean-waves'), older = createSeason(12, 'atlantic-pilots');
+    const newest = checkpoint(2, latest), earlier = checkpoint(1, older);
+    storage.readSeasonJournal.mockResolvedValue({ revision: 2, current: newest.serialized, checkpoints: [newest, earlier] });
+    return { latest, newest, earlier };
+  };
+
+  it('validates identical current and checkpoint text once while still listing every checkpoint', async () => {
+    const { latest, newest, earlier } = twoSaves(), { codec, parsed } = countingCodec();
+    const list = await readCareerSaves(codec);
+    expect(list.current).toEqual(latest);
+    expect(list.entries.map(entry => [entry.revision, entry.valid])).toEqual([[2, true], [1, true]]);
+    expect(parsed).toEqual([newest.serialized, earlier.serialized]);
+  });
+
+  it('reads only the current career for the main menu', async () => {
+    const { latest, newest } = twoSaves(), { codec, parsed } = countingCodec();
+    expect(await readCurrentCareer(codec)).toEqual({ revision: 2, current: latest, currentError: null });
+    expect(parsed).toEqual([newest.serialized]);
+  });
+
+  it('reuses a career already validated at the same saved revision and re-checks after any new save', async () => {
+    const { latest, newest } = twoSaves(), { codec, parsed } = countingCodec();
+    const known = { revision: 2, state: latest };
+    expect(await readCurrentCareer(codec, known)).toEqual({ revision: 2, current: latest, currentError: null });
+    expect(parsed).toEqual([]);
+    expect((await readCurrentCareer(codec, { ...known, revision: 1 })).current).toEqual(latest);
+    expect(parsed).toEqual([newest.serialized]);
+    storage.readSeasonJournal.mockResolvedValue({ revision: 0, current: newest.serialized, checkpoints: [] });
+    await readCurrentCareer(codec, { ...known, revision: 0 });
+    expect(parsed).toHaveLength(2);
+  });
+
+  it('reports a damaged current save from the main-menu read without validating history', async () => {
+    storage.readSeasonJournal.mockResolvedValue({ revision: 1, current: '{damaged', checkpoints: [checkpoint(1, createSeason(4))] });
+    const { codec, parsed } = countingCodec();
+    const current = await readCurrentCareer(codec);
+    expect(current.current).toBeNull();
+    expect(current.currentError).toMatch(/Choose a valid checkpoint/);
+    expect(parsed).toEqual(['{damaged']);
+    storage.readSeasonJournal.mockResolvedValue({ revision: 0, current: null, checkpoints: [] });
+    expect(await readCurrentCareer(codec)).toEqual({ revision: 0, current: null, currentError: null });
+  });
+
+  it('saves and restores checkpoints through the supplied codec', async () => {
+    const state = createSeason(9), saved = checkpoint(1, state);
+    storage.readSeasonJournal.mockResolvedValue({ revision: 1, current: saved.serialized, checkpoints: [saved] });
+    storage.writeSeasonCheckpoint.mockResolvedValue({ ...saved, revision: 2 });
+    const { codec, parsed, serialized } = countingCodec();
+    expect(await loadCareerCheckpoint(1, codec)).toEqual({ state, revision: 1 });
+    await saveCareerCheckpoint(state, 1, 'manual', codec);
+    expect(parsed).toEqual([saved.serialized]);
+    expect(serialized).toEqual([state]);
+    expect(storage.writeSeasonCheckpoint).toHaveBeenCalledExactlyOnceWith(saved.serialized, 1, 'manual');
   });
 });

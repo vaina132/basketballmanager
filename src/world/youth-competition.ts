@@ -7,15 +7,18 @@ import { createSchedule } from './season';
 import { developAcademyPlayer, emptyAcademyPoints, getAcademyProspect } from './academy-policy';
 import { generateYouthSquadProspects } from './academy-generation';
 import { injuriesFromMatch, isRecovering } from './health';
+import { memoizePure } from './pure-cache';
 
 export const YOUTH_SQUAD_SIZE = 8;
 const DAY_MS = 86_400_000;
 type YouthContext = { academy: SeasonAcademy; youthCompetition?: SeasonYouthCompetition; date?: string };
-const calendarNumber = (date: string): number => {
+// Save validation replays these conversions many times per career; both are pure.
+const calendarNumber = memoizePure((date: string): number => {
   const value = Date.parse(`${date}T00:00:00Z`);
   if (!Number.isFinite(value) || new Date(value).toISOString().slice(0, 10) !== date) throw new Error('Choose a valid youth calendar date.');
   return value;
-};
+});
+const isoDay = memoizePure((time: number): string => new Date(time).toISOString().slice(0, 10));
 
 export function createYouthCompetition(): SeasonYouthCompetition { return { model: 'youth-competition-1', enabledSince: null, seasons: [] }; }
 
@@ -41,7 +44,7 @@ export function getYouthPlayerStatus(context: YouthContext, playerId: string, on
   const last = [...fixtures].reverse().find(fixture => fixture.result!.played && Object.hasOwn(fixture.result!.stats, playerId));
   let condition = last?.result!.stats[playerId]?.condition ?? 100;
   if (last) for (let date = calendarNumber(last.date) + DAY_MS; date <= until && condition < 100; date += DAY_MS) {
-    const day = new Date(date).toISOString().slice(0, 10);
+    const day = isoDay(date);
     const available = !injuries.some(episode => isRecovering(episode, day));
     // The fixed academy practice plan applies only between this season's fixtures.
     const practice = context.youthCompetition.seasons.some(season => season.fixtures.length > 1 && day > season.fixtures[0]!.date && day <= season.fixtures.at(-1)!.date);

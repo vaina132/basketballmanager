@@ -37,9 +37,10 @@ import { StaminaMeter } from './ui/StaminaMeter'
 import { ManagerDesk } from './ui/ManagerDesk'
 import type { SeasonState } from './domain/season'
 import { createSeason, getActiveFixture, getStandings, managedSide as seasonManagedSide } from './world/season'
-import { MAX_SEASON_SAVE_BYTES, parseSeason, serializeSeason } from './storage/season-storage'
-import { readCareerSaves, loadCareerCheckpoint, saveCareerCheckpoint } from './storage/career-saves'
+import { MAX_SEASON_SAVE_BYTES } from './storage/season-storage'
+import { readCareerSaves, readCurrentCareer, loadCareerCheckpoint, saveCareerCheckpoint } from './storage/career-saves'
 import type { CareerSaveList } from './storage/career-saves'
+import { createWorkerSeasonCodec } from './storage/season-codec'
 import { readSeasonJournal, SeasonSaveConflictError } from './storage/season-indexed-db'
 import type { CheckpointReason } from './storage/season-indexed-db'
 import { CareerSaveHistory } from './ui/CareerSaveHistory'
@@ -82,6 +83,8 @@ const pageNames: Record<Page, string> = { home: "Manager's desk", squad: 'Squad'
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const periodLabel = (period: number) => period <= 4 ? `Q${period}` : `OT${period - 4}`
 const messageOf = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.'
+/** Save validation and conversion run in a background worker (started on first use) so saving never freezes play. */
+const saveCodec = createWorkerSeasonCodec()
 
 function ClubMark({ name, color, large = false }: { name: string; color: string; large?: boolean }) {
   return <div className={`club-mark ${large ? 'club-mark-large' : ''}`} style={{ color }} aria-hidden="true"><Icon name="ball" size={large ? 30 : 21} /><span>{name.slice(0, 3).toUpperCase()}</span></div>
@@ -281,7 +284,7 @@ export default function App() {
     persistenceBusy.current = true; setSaving(true); setPlaying(false); settlePlayback()
     try {
       const revision = await ensureSaveRevision()
-      const checkpoint = await saveCareerCheckpoint(state, revision, reason)
+      const checkpoint = await saveCareerCheckpoint(state, revision, reason, saveCodec)
       savedRevision.current = checkpoint.revision
       setCheckpointIssue(null)
       return true
@@ -296,13 +299,24 @@ export default function App() {
     const request = ++historyRequest.current
     setHistoryLoading(true); setHistoryError(null)
     try {
-      const history = await readCareerSaves()
+      const history = await readCareerSaves(saveCodec)
       if (request !== historyRequest.current) return
       setSaveHistory(history); setHistoryError(history.currentError)
     } catch (error) { if (request === historyRequest.current) setHistoryError(messageOf(error)) }
     finally { if (request === historyRequest.current) setHistoryLoading(false) }
   }
-  useEffect(() => { if (entryView === 'menu') void refreshSaveHistory() }, [entryView])
+  // The menu shows only the current career; checkpoints are read when Save history opens.
+  async function refreshSavedCareer() {
+    const request = ++historyRequest.current
+    setHistoryLoading(true); setHistoryError(null)
+    try {
+      const saved = await readCurrentCareer(saveCodec)
+      if (request !== historyRequest.current) return
+      setSaveHistory({ ...saved, entries: [] }); setHistoryError(saved.currentError)
+    } catch (error) { if (request === historyRequest.current) setHistoryError(messageOf(error)) }
+    finally { if (request === historyRequest.current) setHistoryLoading(false) }
+  }
+  useEffect(() => { if (entryView === 'menu') void refreshSavedCareer() }, [entryView])
   function openSaveHistory() {
     if (seasonWorker.current || persistenceBusy.current) return
     replacementRequest.current += 1
@@ -318,7 +332,7 @@ export default function App() {
     const request = ++replacementRequest.current
     persistenceBusy.current = true; setSaving(true); setPlaying(false); settlePlayback()
     try {
-      const restored = await loadCareerCheckpoint(revision)
+      const restored = await loadCareerCheckpoint(revision, saveCodec)
       if (request !== replacementRequest.current) return
       savedRevision.current = restored.revision
       install({ kind: 'season', season: restored.state })
@@ -378,10 +392,11 @@ export default function App() {
     const request = ++replacementRequest.current
     persistenceBusy.current = true; setSaving(true); setPlaying(false); settlePlayback()
     try {
-      const saved = await readCareerSaves()
+      const saved = await readCurrentCareer(saveCodec, saveHistory?.current ? { revision: saveHistory.revision, state: saveHistory.current } : undefined)
       if (request !== replacementRequest.current) return
       if (saved.currentError) {
-        setSaveHistory(saved); setHistoryError(saved.currentError); setSaveHistoryOpen(true)
+        // A damaged current save opens recovery history, which then lists the checkpoints.
+        setSaveHistoryOpen(true); void refreshSaveHistory()
         return
       }
       if (!saved.current) { setNotice({ message: 'No saved season yet. Start a season to create one.' }); return }
@@ -399,17 +414,19 @@ export default function App() {
     try { const saved = await loadLocalMatch(); if (request !== replacementRequest.current) return; if (!saved) { setNotice({ message: 'No saved match yet. Save this match to create one.' }); return }; install({ kind: 'exhibition', match: saved }); setNotice({ message: saved.engineVersion === 'rules-2' ? 'Saved match restored with its original simulation.' : 'Saved match restored.' }) }
     catch (error) { if (request !== replacementRequest.current) return; setNotice({ message: messageOf(error), error: true }) }
   }
-  function exportSave() {
+  async function exportSave() {
     if (seasonWorker.current || persistenceBusy.current) return
+    const current = sessionRef.current
+    if (current.kind === 'season') { persistenceBusy.current = true; setSaving(true) }
     try {
-      const current = sessionRef.current
-      const text = current.kind === 'season' ? serializeSeason(current.season) : serializeMatch(current.match)
+      const text = current.kind === 'season' ? await saveCodec.serialize(current.season) : serializeMatch(current.match)
       const blob = new Blob([text], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a'); link.href = url; link.download = current.kind === 'season' ? `courtside-season-${current.season.seed}-year-${current.season.seasonNumber}.json` : `courtside-match-${current.match.seed}.json`; link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setNotice({ message: current.kind === 'season' ? 'Season exported. Keep the file to resume on another device.' : 'Match exported. Keep the file to resume on another device.' })
     } catch (error) { setNotice({ message: messageOf(error), error: true }) }
+    finally { if (current.kind === 'season') { persistenceBusy.current = false; setSaving(false) } }
   }
   async function importSave(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -422,7 +439,9 @@ export default function App() {
       const text = await file.text()
       if (request !== replacementRequest.current) return
       if (JSON.parse(text)?.format === 'basketball-manager-season') {
-        install({ kind: 'season', season: parseSeason(text) }); navigate('home'); setNotice({ message: 'Season imported successfully. Save season to keep it on this device.' })
+        const season = await saveCodec.parse(text)
+        if (request !== replacementRequest.current) return
+        install({ kind: 'season', season }); navigate('home'); setNotice({ message: 'Season imported successfully. Save season to keep it on this device.' })
       } else {
         if (file.size > MAX_SAVE_BYTES) throw new Error(`Choose a match save under ${MAX_SAVE_BYTES / 1024 / 1024} MB.`)
         const imported = parseMatch(text); install({ kind: 'exhibition', match: imported })

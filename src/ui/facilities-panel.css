@@ -7,3 +7,5 @@
 .facility-practice-contribution{display:block;font-size:12px;color:var(--muted);margin-top:5px;line-height:1.4}
 
 .facility-project:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.facility-board{border-top:1px solid var(--border)}.facility-board h4{display:flex;align-items:center;gap:8px;margin:0;padding:13px 16px 0;font-size:14px;font-weight:600}.facility-board h4>svg{flex:none;color:var(--accent)}.facility-board>p{margin:0;padding:10px 16px 14px;font-size:13px;color:var(--muted);line-height:1.5}.facility-board>footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 16px 14px}.facility-board>footer>span{font-size:13px;color:var(--muted);line-height:1.5}.facility-board[data-board-funding=refuse]>footer>span{color:var(--accent)}.facility-board>footer>.button{flex:none}
+@media(max-width:600px){.facility-board h4{padding:12px 12px 0}.facility-board>p{padding:10px 12px 12px}.facility-board>footer{flex-direction:column;align-items:stretch;gap:12px;padding:0 12px 12px}}

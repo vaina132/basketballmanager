@@ -5,6 +5,7 @@ import { getDevelopmentSponsor } from '../data/development-sponsors'
 import { getClubSponsorship, quoteSponsorshipOffer, type SponsorshipPaymentRow } from '../world/commercial'
 import { SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_REQUEST_PERCENT } from '../world/commercial-policy'
 import { dateForRound, seasonLabel } from '../world/season'
+import { focusWhenReady } from './focus-when-ready'
 import { Icon } from './Icon'
 import { scoutingDate } from './ScoutingKnowledge'
 import './facilities-panel.css'
@@ -77,7 +78,7 @@ export function SponsorshipPanel({ season, busy = false, onEnableSponsorship, on
           <div className="sponsor-actions"><button className="button small primary" data-sponsor-review={offer.id} onClick={() => setReviewId(offer.id)} disabled={busy || !quote.canAccept} aria-expanded={reviewId === offer.id} aria-controls="sponsor-offer-review">Review<Icon name="chevron" size={13} /></button>{quote.canRequest && <button className="button small" data-sponsor-request={offer.id} onClick={() => { setReviewId(null); onRequestSponsorship(offer.id) }} disabled={busy}>Ask for {SPONSORSHIP_REQUEST_PERCENT}% more</button>}<button className="text-button" data-sponsor-decline={offer.id} onClick={() => { setReviewId(null); onDeclineSponsorship(offer.id) }} disabled={busy}>Decline</button></div>
         </article>
       })}</div>}
-      {review && <OfferReview key={review.id} season={season} offer={review} busy={busy} onClose={closeReview} onConfirm={() => { onAcceptSponsorship(review.id); setReviewId(null); requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-sponsor-current]')?.focus({ preventScroll: true })) }} />}
+      {review && <OfferReview key={review.id} season={season} offer={review} busy={busy} onClose={closeReview} onConfirm={() => { onAcceptSponsorship(review.id); setReviewId(null); focusWhenReady('[data-sponsor-current]') }} />}
       <details className="facility-rules"><summary><Icon name="settings" size={14} />How sponsorship works{sponsorship.closed.length > 0 ? ' · Offer history' : ''}</summary><p>Offers for next season arrive on matchday 6 of your sponsor's final season. Their value reflects your arena's demand compared with the league, this season's results and actual home attendance. Each offer can be improved once: the sponsor may agree, counter or occasionally withdraw.</p><p>Each season is paid in two installments, on the opening matchday and on matchday 6. A bonus is paid only after a top-half finish. Without an agreement the next season starts without sponsorship income; clubs still without a sponsor receive a second round of offers after the final matchday. Open offers expire when the season they would start begins.</p>{sponsorship.closed.length > 0 && <ul className="facility-history">{sponsorship.closed.map(offer => <li key={offer.id} data-sponsor-history={offer.id}><span><strong>{sponsorName(offer.sponsorId)}</strong><small>{closedStatus[offer.status as Exclude<SponsorshipOffer['status'], 'open'>]}{offer.closedOn ? ` · ${scoutingDate(offer.closedOn)}` : ''}{requestOutcome(offer) ? ` · ${requestOutcome(offer)}` : ''}</small></span><span>{money(offer.annualFee)} / season</span></li>)}</ul>}</details>
     </>}
   </section>

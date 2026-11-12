@@ -1,38 +1,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_PRESIDENTS } from '../src/data/development-presidents';
-import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
-import { boardCapitalGranted, quoteBoardFunding, requiredBoardConfidence, type BoardFundingQuote } from '../src/world/board-funding-policy';
-import { enableBoardFunding, requestBoardFunding, startFacilityUpgrade } from '../src/world/facilities';
-import { FACILITY_TYPES, getActiveFacilityProject, quoteFacilityUpgrade } from '../src/world/facilities-policy';
+import { boardCapitalGranted, boardFundingRefusal, quoteBoardFunding, requiredBoardConfidence, type BoardFundingQuote } from '../src/world/board-funding-policy';
+import { enableBoardFunding, facilityEventAnchor, requestBoardFunding } from '../src/world/facilities';
+import { getActiveFacilityProject } from '../src/world/facilities-policy';
 import { getFinanceBalance } from '../src/world/finance';
-import { setEmploymentDelegation } from '../src/world/employment';
-import { advanceMarket } from '../src/world/market';
-import { getMarketStartReason } from '../src/world/market-policy';
-import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
+import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
+import { advanceMatchday, driveToFundingRequest } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
-
-const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
-/** The manager upgrades the most expensive affordable facility whenever idle, until an upgrade needs board capital. */
-function driveToFundingRequest(clubId: string, seed: number): { state: SeasonState; quote: BoardFundingQuote } {
-  let state = createSeason({ seed, managedClubId: clubId, injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
-  for (let step = 0; step < 40; step += 1) {
-    if (!getActiveFacilityProject(state, clubId)) {
-      const affordable = FACILITY_TYPES.map(type => quoteFacilityUpgrade(state, type, clubId)).filter(quote => quote.canStart).sort((a, b) => b.cost - a.cost)[0];
-      if (affordable) state = startFacilityUpgrade(state, affordable.type);
-      const quote = FACILITY_TYPES.map(type => quoteBoardFunding(state, type, clubId)).find(item => item.eligible);
-      if (quote) return { state, quote };
-    }
-    if (state.status === 'active') state = advance(state);
-    else {
-      state = setEmploymentDelegation(state, true);
-      for (let i = 0; i < 80 && getMarketStartReason(state); i += 1) state = advanceMarket(state);
-      state = rolloverSeason(state);
-    }
-  }
-  throw new Error('No funding request became possible.');
-}
 const changed = (state: SeasonState, mutate: (copy: SeasonState) => void) => { const copy = structuredClone(state); mutate(copy); return currentSeasonFile(copy); };
 let generous: { state: SeasonState; quote: BoardFundingQuote }, cautious: { state: SeasonState; quote: BoardFundingQuote };
 
@@ -58,6 +34,26 @@ describe('board funding rules', () => {
     expect(() => enableBoardFunding(createSeason({ seed: 3, finance: true, facilities: true }))).toThrow(/board reviews/);
     expect(quote.capitalRemaining).toBe(DEVELOPMENT_PRESIDENTS.find(item => item.clubId === 'aegean-waves')!.seasonCapital - boardCapitalGranted(state.facilities, 'aegean-waves', state.seasonNumber));
   });
+
+  it('explains a refusal from the recorded evidence in the same words as the live quote', () => {
+    expect(boardFundingRefusal({ approved: true, confidence: 40, requiredConfidence: 50, capitalRemaining: 0 })).toBeNull();
+    expect(boardFundingRefusal({ approved: false, confidence: 48, requiredConfidence: 50, capitalRemaining: 10_000_000 })).toBe('The board needs confidence of at least 50; it is 48.');
+    expect(boardFundingRefusal({ approved: false, confidence: 60, requiredConfidence: 50, capitalRemaining: 4_250_000 })).toBe('The owner has €42,500 of capital left this season.');
+    expect(cautious.quote.refusal).toBe(boardFundingRefusal(cautious.quote));
+  });
+
+  it('lets older careers opt in during a season or after its final matchday, and the save still validates', () => {
+    let legacy = createSeason({ seed: 3, managedClubId: 'adriatic-comets', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, boardFunding: false });
+    legacy = advanceMatchday(advanceMatchday(legacy));
+    const midSeason = enableBoardFunding(legacy);
+    expect(midSeason.facilities.fundingSince).toEqual(facilityEventAnchor(legacy));
+    expect(parseSeason(serializeSeason(midSeason))).toEqual(midSeason);
+    while (legacy.status === 'active') legacy = advanceMatchday(legacy);
+    const offseason = enableBoardFunding(legacy);
+    expect(offseason.facilities.fundingSince?.round).toBe(10);
+    expect(parseSeason(serializeSeason(offseason))).toEqual(offseason);
+    expect(enableBoardFunding(offseason)).toBe(offseason);
+  }, 120_000);
 });
 
 describe('board funding in a career', () => {

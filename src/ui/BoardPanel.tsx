@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import type { BoardSummary } from '../domain/board'
+import type { FacilityEvent } from '../domain/facilities'
 import type { SeasonState } from '../domain/season'
+import { getDevelopmentPresident, type DevelopmentPresident } from '../data/development-presidents'
 import { getBoardSummary } from '../world/board'
+import { BOARD_FUNDING_REFUSAL_COOLDOWN, boardCapitalGranted, boardConfidenceNow, boardFundingRefusal, requiredBoardConfidence } from '../world/board-funding-policy'
 import { seasonLabel } from '../world/season'
+import { FACILITY_LABELS } from './FacilitiesPanel'
 import { Icon, type IconName } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
 import './board-panel.css'
@@ -11,12 +15,15 @@ interface BoardPanelProps {
   season: SeasonState
   busy?: boolean
   onEnable: () => void
+  onEnableFunding: () => void
 }
 
 const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(cents / 100)
 const signed = (value: number) => `${value > 0 ? '+' : ''}${value}`
 const sportingLabels: Record<BoardSummary['sportingStatus'], string> = { waiting: 'Awaiting review', building: 'Early games', 'on-track': 'On track', behind: 'Behind target', met: 'Target met', missed: 'Target missed' }
 const financeLabels: Record<BoardSummary['financeStatus'], string> = { unassessed: 'Not assessed', waiting: 'Awaiting review', 'on-track': 'Within target', behind: 'Above target' }
+const generosityLabels: Record<DevelopmentPresident['generosity'], string> = { 1: 'Reluctant investor', 2: 'Cautious investor', 3: 'Measured investor', 4: 'Supportive investor', 5: 'Generous investor' }
+type FundingRequest = Extract<FacilityEvent, { type: 'funding' }>
 
 function ObjectiveStatus({ label, state }: { label: string; state: 'waiting' | 'concern' | 'good' }) {
   const icon: IconName = state === 'good' ? 'check' : state === 'concern' ? 'target' : 'clock'
@@ -37,7 +44,26 @@ function ReviewHistory({ summary, season }: { summary: BoardSummary; season: Sea
   </details>
 }
 
-export function BoardPanel({ season, busy = false, onEnable }: BoardPanelProps) {
+function PresidentSection({ season, busy, onEnableFunding }: { season: SeasonState; busy: boolean; onEnableFunding: () => void }) {
+  const clubId = season.managedClubId
+  const president = getDevelopmentPresident(clubId)
+  const required = requiredBoardConfidence(president), confidence = boardConfidenceNow(season, clubId)
+  const left = Math.max(0, president.seasonCapital - boardCapitalGranted(season.facilities, clubId, season.seasonNumber))
+  const requests = season.facilities.events.flatMap((event, index) => event.type === 'funding' && event.clubId === clubId ? [{ event: event as FundingRequest, index }] : []).reverse()
+  const enableReason = !season.facilities.enabledSince ? 'Enable club facilities first, under Club › Operations.' : null
+  return <>
+    <h3 className="board-section-heading"><Icon name="people" size={16} />President &amp; owner capital</h3>
+    <div className="board-president" data-board-president={president.clubId}>
+      <div className="board-president-identity"><strong>{president.name}</strong><span>Club president · {generosityLabels[president.generosity]}</span></div>
+      <dl className="board-president-facts"><div><dt>Owner capital left · {seasonLabel(season.seasonNumber)}</dt><dd data-board-capital-left={left}>{money(left)}<small>of {money(president.seasonCapital)} for facility upgrades</small></dd></div><div><dt>Confidence needed for capital</dt><dd data-board-required={required}>{required} / 100<small>{confidence >= required ? 'Met' : 'Not met'} · current confidence {confidence}</small></dd></div></dl>
+    </div>
+    {!season.facilities.fundingSince ? <div className="board-enable board-funding-enable"><Icon name="wallet" size={24} /><div><strong>Ask the board for capital</strong><p>When a facility upgrade costs more than the club can spend, ask {president.name} to fund the difference. Rival clubs can ask their boards under the same rules once this is on.</p>{enableReason && <p id="board-funding-enable-reason">{enableReason}</p>}</div><button id="enable-board-funding" className="button" onClick={onEnableFunding} disabled={busy || !!enableReason} aria-describedby={enableReason ? 'board-funding-enable-reason' : undefined}>Enable funding requests</button></div>
+      : !requests.length ? <p className="board-empty board-funding-empty">No capital requests yet. When an upgrade costs more than the club can spend, its review under Club › Facilities lets you ask the board.</p>
+      : <ul className="board-funding-history" aria-label="Board capital requests">{requests.map(({ event, index }) => <li key={index} data-board-funding-request={event.approved ? 'approved' : 'refused'}><span><strong>{FACILITY_LABELS[event.facilityType]} · {money(event.amount)}</strong><small><time dateTime={event.date}>{medicalDate(event.date)}</time> · Matchday {event.round}, {seasonLabel(event.seasonNumber)}{event.mode === 'automatic' ? ' · Automatic control' : ''}</small></span><span className="board-funding-outcome"><ObjectiveStatus label={event.approved ? 'Approved' : 'Refused'} state={event.approved ? 'good' : 'concern'} />{!event.approved && <small>{boardFundingRefusal(event)}</small>}</span></li>)}</ul>}
+  </>
+}
+
+export function BoardPanel({ season, busy = false, onEnable, onEnableFunding }: BoardPanelProps) {
   const summary = getBoardSummary(season)
   const { mandate, objective, latest } = summary
   const review = latest?.club
@@ -61,11 +87,12 @@ export function BoardPanel({ season, busy = false, onEnable }: BoardPanelProps) 
         <details className="board-evidence" id="board-evidence"><summary><Icon name="search" size={15} />Why these targets &amp; this assessment</summary>
           <p>The squad was assessed {objective.resourceRank} of {season.clubs.length} when these objectives were set on {medicalDate(mandate.date)}. The eight strongest registered players determine that assessment. The upper, middle and lower thirds target 60%, 50% and 40% of counted games respectively, rounded up to whole wins. This starting assessment and the wins target stay fixed for the season.</p>
           <dl className="board-evidence-facts"><div><dt>Unpaid costs at the start</dt><dd>{financeAssessed ? money(objective.startingUnpaid!) : 'Not assessed'}<small>Starting unpaid costs are the baseline</small></dd></div><div><dt>Results assessment</dt><dd>{review ? signed(review.resultsImpact) : 'Awaiting review'}<small>{objective.games < 3 ? 'Too few counted games for a results assessment' : 'Results assessed from the third counted game'}</small></dd></div>{review && <><div><dt>Expected wins by this review</dt><dd>{review.targetPace}<small>{review.wins} actual {review.wins === 1 ? 'win' : 'wins'} in {review.played} counted games</small></dd></div><div><dt>Recorded injury absences</dt><dd>{review.carriedAbsences} / {review.rosterPlaces}<small>Registered player places across counted games</small></dd></div><div><dt>Injury allowance</dt><dd>{signed(review.injuryRelief)}<small>Can soften a negative results assessment</small></dd></div><div><dt>Financial assessment</dt><dd>{review.unpaid === null ? 'Not assessed' : signed(review.financeImpact)}</dd></div><div><dt>Review assessment</dt><dd>{review.assessment} / 100</dd></div><div><dt>Confidence change</dt><dd>{signed(review.confidence - review.previousConfidence)}<small>{review.previousConfidence} → {review.confidence}</small></dd></div></>}</dl>
-          <p>The review assessment starts at 50, then adds the results, injury and financial contributions above. Confidence moves towards it by no more than 8 points per review. It records the board's view; it does not change match performance, budget limits or your job.</p>
+          <p>The review assessment starts at 50, then adds the results, injury and financial contributions above. Confidence moves towards it by no more than 8 points per review. {season.facilities.fundingSince ? 'It records the board\'s view and decides capital requests; it does not change match performance, budget limits or your job.' : 'It records the board\'s view; it does not change match performance, budget limits or your job.'}</p>
         </details>
       </> : <p className="board-empty">Objectives start next season. The completed season will not be reviewed retroactively.</p>}
+      <PresidentSection season={season} busy={busy} onEnableFunding={onEnableFunding} />
       <ReviewHistory summary={summary} season={season} />
-      <details className="board-rules"><summary><Icon name="settings" size={15} />Review rules</summary><p>Reviews use recorded results and registered squads. A half-win tolerance applies to the expected pace. Beyond that tolerance, each win above or below pace contributes 10 assessment points, capped at 30 points in either direction. Fewer than three counted games produce no results contribution. Pre-existing injury absences can soften a negative contribution by up to 6 points. A result still on the match screen is included only after you continue the matchday.</p><p>Unpaid club costs and overdue transfer payments are compared with the balance when objectives were set. Only an increase above that starting balance lowers the financial assessment. Each €2,000 change contributes one assessment point, rounded to a whole point, with a maximum penalty of 25 or improvement of 10. If finances were disabled when objectives were set, this objective stays unassessed for the season.</p></details>
+      <details className="board-rules"><summary><Icon name="settings" size={15} />Review rules</summary><p>Reviews use recorded results and registered squads. A half-win tolerance applies to the expected pace. Beyond that tolerance, each win above or below pace contributes 10 assessment points, capped at 30 points in either direction. Fewer than three counted games produce no results contribution. Pre-existing injury absences can soften a negative contribution by up to 6 points. A result still on the match screen is included only after you continue the matchday.</p><p>Unpaid club costs and overdue transfer payments are compared with the balance when objectives were set. Only an increase above that starting balance lowers the financial assessment. Each €2,000 change contributes one assessment point, rounded to a whole point, with a maximum penalty of 25 or improvement of 10. If finances were disabled when objectives were set, this objective stays unassessed for the season.</p><p>Capital requests: the board funds only the part of a facility upgrade the club cannot pay, from the owner's capital for the season. It approves when the latest reviewed confidence reaches 65 minus 5 for each point of the president's generosity (60 to 40) and the owner's capital covers the amount. It never funds construction while committed wages and fees exceed cash or costs are unpaid. After a refusal, the club waits {BOARD_FUNDING_REFUSAL_COOLDOWN} matchdays before asking again. Automatic facilities control and rival clubs ask only when these rules approve.</p></details>
     </>}
   </section>
 }

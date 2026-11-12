@@ -1,4 +1,4 @@
-import type { FacilityType, SeasonFacilities } from '../domain/facilities';
+import type { FacilityFundingDecision, FacilityType, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
 import { getDevelopmentPresident, type DevelopmentPresident } from '../data/development-presidents';
 import { FACILITY_AUTOMATION_BUFFER, FACILITY_FUNDS_REASON, quoteFacilityUpgrade } from './facilities-policy';
@@ -10,7 +10,8 @@ export const BOARD_FUNDING_GENEROSITY_STEP = 5;
 /** After a refusal, the board reconsiders once this many further matchdays have been reached. */
 export const BOARD_FUNDING_REFUSAL_COOLDOWN = 2;
 const ordinal = (seasonNumber: number, round: number) => (seasonNumber - 1) * 10 + round;
-const euros = (cents: number) => `EUR ${(cents / 100).toLocaleString('en-GB', { maximumFractionDigits: 0 })}`;
+const eurosFormat = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+const euros = (cents: number) => eurosFormat.format(cents / 100);
 
 export function requiredBoardConfidence(president: Pick<DevelopmentPresident, 'generosity'>): number {
   return BOARD_FUNDING_BASE_CONFIDENCE - BOARD_FUNDING_GENEROSITY_STEP * president.generosity;
@@ -23,6 +24,12 @@ export function boardConfidenceNow(state: Pick<SeasonState, 'board' | 'finance' 
 
 export function boardCapitalGranted(facilities: Pick<SeasonFacilities, 'events'>, clubId: string, seasonNumber: number): number {
   return facilities.events.reduce((sum, event) => sum + (event.type === 'funding' && event.approved && event.clubId === clubId && event.seasonNumber === seasonNumber ? event.amount : 0), 0);
+}
+
+/** The board's stated reason for a refusal, rebuilt from the recorded decision evidence; null for an approval. */
+export function boardFundingRefusal(decision: Pick<FacilityFundingDecision, 'approved' | 'confidence' | 'requiredConfidence' | 'capitalRemaining'>): string | null {
+  if (decision.approved) return null;
+  return decision.confidence < decision.requiredConfidence ? `The board needs confidence of at least ${decision.requiredConfidence}; it is ${decision.confidence}.` : `The owner has ${euros(decision.capitalRemaining)} of capital left this season.`;
 }
 
 export interface BoardFundingQuote {
@@ -68,10 +75,7 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   else if (amount === 0) reason = 'The club can fund this upgrade without board capital.';
   else if (position < 0) reason = 'Committed wages and fees already exceed the club\'s cash; the board will not fund new construction.';
   else if (wait > 0) reason = `The board will reconsider after ${wait} more ${wait === 1 ? 'matchday' : 'matchdays'}.`;
-  let refusal: string | null = null;
-  if (reason === null) {
-    if (confidence < requiredConfidence) refusal = `The board needs confidence of at least ${requiredConfidence}; it is ${confidence}.`;
-    else if (amount > capitalRemaining) refusal = `The owner has ${euros(capitalRemaining)} of capital left this season.`;
-  }
-  return { clubId, facilityType: type, mode, president, cost: upgrade.cost, available, amount, confidence, requiredConfidence, seasonCapital: president.seasonCapital, capitalRemaining, eligible: reason === null, reason, approved: reason === null && refusal === null, refusal };
+  const approved = reason === null && confidence >= requiredConfidence && amount <= capitalRemaining;
+  const refusal = reason === null ? boardFundingRefusal({ approved, confidence, requiredConfidence, capitalRemaining }) : null;
+  return { clubId, facilityType: type, mode, president, cost: upgrade.cost, available, amount, confidence, requiredConfidence, seasonCapital: president.seasonCapital, capitalRemaining, eligible: reason === null, reason, approved, refusal };
 }

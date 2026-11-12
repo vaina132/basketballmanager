@@ -34,7 +34,7 @@ const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:0
 const count = (value: number) => value.toLocaleString('en-GB')
 const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital' }
 
-export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, onEnableSponsorship, onAcceptSponsorship, onDeclineSponsorship, onRequestSponsorship, onSponsorshipDelegation, busy = false }: ClubWorkspaceProps) {
+export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, onRequestBoardFunding, onEnableSponsorship, onAcceptSponsorship, onDeclineSponsorship, onRequestSponsorship, onSponsorshipDelegation, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
   const [period, setPeriod] = useState<'current' | 'all'>('current')
   const club = season.clubs.find(team => team.id === season.managedClubId)!
@@ -105,7 +105,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
     </section> : <>
       {balance.unpaid > 0 && <p className="club-unpaid-note panel">{money(balance.unpaid)} of costs remain unpaid. New income clears unpaid costs first; staff recruitment requires these costs to be settled.</p>}
 
-      <FacilitiesPanel season={season} busy={busy} onEnableFacilities={onEnableFacilities} onFacilityUpgrade={onFacilityUpgrade} onCancelFacilityUpgrade={onCancelFacilityUpgrade} onFacilityDelegation={onFacilityDelegation} />
+      <FacilitiesPanel season={season} busy={busy} onEnableFacilities={onEnableFacilities} onFacilityUpgrade={onFacilityUpgrade} onCancelFacilityUpgrade={onCancelFacilityUpgrade} onFacilityDelegation={onFacilityDelegation} onRequestBoardFunding={onRequestBoardFunding} />
 
       <section className="club-venue panel" aria-labelledby="club-venue-title">
         <header className="club-heading"><h2 id="club-venue-title">Venue</h2></header>

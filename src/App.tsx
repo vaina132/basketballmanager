@@ -36,7 +36,7 @@ import { enableYouth, hireYouthCoach, releaseYouthCoach, setYouthCoachRenewal } 
 import { StaminaMeter } from './ui/StaminaMeter'
 import { ManagerDesk } from './ui/ManagerDesk'
 import type { SeasonState } from './domain/season'
-import { createSeason, getActiveFixture, getStandings, managedSide as seasonManagedSide } from './world/season'
+import { createSeason, getActiveFixture, getStandings, managedSide as seasonManagedSide, NEW_CAREER_SYSTEMS } from './world/season'
 import { MAX_SEASON_SAVE_BYTES } from './storage/season-storage'
 import { readCareerSaves, readCurrentCareer, loadCareerCheckpoint, saveCareerCheckpoint } from './storage/career-saves'
 import type { CareerSaveList } from './storage/career-saves'
@@ -469,7 +469,7 @@ export default function App() {
   function startSeason({ seed, clubId, injuryMode, manager }: CareerSetup) {
     if (seasonWorker.current || persistenceBusy.current) return
     try {
-      const created = createSeason(seed, clubId, injuryMode, true, true, true, true, manager, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true)
+      const created = createSeason({ seed, managedClubId: clubId, injuryMode, manager, ...NEW_CAREER_SYSTEMS })
       install({ kind: 'season', season: created }); navigate('home')
       setNotice({ message: 'Season ready. Review your lineup before the opening match.' })
       void persistSeason(created, 'new-game')

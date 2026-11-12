@@ -147,7 +147,35 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   return match;
 }
 
-export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false): SeasonState {
+/** Optional career systems, named. Omitted systems keep the positional defaults (training, coaching, finance and payroll on). */
+export interface SeasonSystems {
+  training?: boolean; coaching?: boolean; finance?: boolean; payroll?: boolean; employment?: boolean; scouting?: boolean;
+  negotiations?: boolean; market?: boolean; scouts?: boolean; fitness?: boolean; physio?: boolean; assistant?: boolean;
+  academy?: boolean; youth?: boolean; lifecycle?: boolean; youthCompetition?: boolean; facilities?: boolean;
+  relationships?: boolean; board?: boolean;
+}
+export interface SeasonOptions extends SeasonSystems { seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null }
+
+/** Every system a brand-new career starts with, as chosen by the New career screen. */
+export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.freeze({
+  training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
+  scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
+  facilities: true, relationships: true, board: true,
+});
+const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', ...Object.keys(NEW_CAREER_SYSTEMS)]);
+
+/** Create a career from named options (preferred) or the original positional arguments, which stay supported. */
+export function createSeason(options: SeasonOptions): SeasonState;
+export function createSeason(seed?: number, managedClubId?: string, injuryMode?: InjuryMode, trainingEnabled?: boolean, coachingEnabled?: boolean, financeEnabled?: boolean, payrollEnabled?: boolean, manager?: ManagerProfile | null, employmentEnabled?: boolean, scoutingEnabled?: boolean, negotiationsEnabled?: boolean, marketEnabled?: boolean, scoutsEnabled?: boolean, fitnessEnabled?: boolean, physioEnabled?: boolean, assistantEnabled?: boolean, academyEnabled?: boolean, youthEnabled?: boolean, lifecycleEnabled?: boolean, youthCompetitionEnabled?: boolean, facilitiesEnabled?: boolean, relationshipsEnabled?: boolean, boardEnabled?: boolean): SeasonState;
+export function createSeason(first?: number | SeasonOptions, ...positional: unknown[]): SeasonState {
+  if (typeof first !== 'object' || first === null) return (createSeasonFromFlags as (...args: unknown[]) => SeasonState)(first, ...positional);
+  const unknown = Object.keys(first).filter(key => !SEASON_OPTION_KEYS.has(key));
+  if (unknown.length || positional.length) throw new Error(`Unsupported career options: ${unknown.join(', ') || 'extra positional arguments'}.`);
+  const options = first, finance = options.finance ?? true;
+  return createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false);
+}
+
+function createSeasonFromFlags(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   if (!DEVELOPMENT_CLUBS.some(club => club.id === managedClubId)) throw new Error('Choose a club from the development league.');
   if (!['standard', 'reduced', 'off'].includes(injuryMode)) throw new Error('Choose a valid season injury setting.');

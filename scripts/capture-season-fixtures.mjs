@@ -33,10 +33,9 @@ try {
   const existing = names.filter(name => existsSync(`tests/fixtures/${name}.json.gz`));
   if (existing.length && !force) throw new Error(`Refusing to overwrite ${existing.join(', ')}. Fixtures must come from their own format's runtime; pass --force only to regenerate them on unchanged code.`);
 
-  // The same flags as App.startSeason: every system enabled for a new career.
+  // The same options as App.startSeason: every system enabled for a new career.
   const manager = { name: 'Fixture Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-  const enabled = Array.from({ length: 16 }, () => true);
-  let state = world.createSeason(227, 'rhine-falcons', 'standard', true, true, true, true, manager, ...enabled);
+  let state = world.createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...world.NEW_CAREER_SYSTEMS });
   const advance = value => world.advanceSeason({ ...value, activeMatch: engine.simulateToEnd(engine.setAutoSubstitutions(value.activeMatch, world.managedSide(value), true)) });
 
   // A few ordinary manager decisions so the fixtures exercise more than defaults.

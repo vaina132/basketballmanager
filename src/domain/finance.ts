@@ -1,4 +1,5 @@
 import type { PayrollCharge } from './payroll';
+import type { FacilityType } from './facilities';
 
 export interface FinancePlan {
   delegated: boolean;
@@ -11,11 +12,11 @@ export interface FinanceEntry {
   clubId: string;
   seasonNumber: number;
   round: number;
-  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout';
+  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout' | 'facility' | 'facility-upkeep';
   /** Income or cost in signed euro cents; cash effects also depend on unpaid obligations. */
   amount: number;
   sourceId: string;
-  ticket: { fixtureId: string; price: number; attendance: number } | null;
+  ticket: { fixtureId: string; price: number; attendance: number; capacity?: number } | null;
   coach: { contractId: string; coachId: string } | null;
   payroll: PayrollCharge | null;
   scout?: { contractId: string; scoutId: string };
@@ -23,6 +24,8 @@ export interface FinanceEntry {
   physio?: { contractId: string; physioId: string };
   assistant?: { contractId: string; assistantId: string };
   youth?: { contractId: string; coachId: string };
+  facility?: { projectId: string; type: FacilityType };
+  facilityUpkeep?: { arena: number; training: number; youth: number };
 }
 
 export interface SeasonFinance {
@@ -31,6 +34,8 @@ export interface SeasonFinance {
   plans: Record<string, FinancePlan>;
   /** Prices already chosen for the prepared matchday; future plan edits leave these intact. */
   roundPrices: Record<string, number>;
+  /** Present after facilities activation; prepared seats stay fixed through that matchday. */
+  roundCapacities?: Record<string, number>;
   ledger: FinanceEntry[];
 }
 

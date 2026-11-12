@@ -85,5 +85,11 @@ export function stripLifecycle(value: object): void {
 
 /** Format26 predates youth competition and its additional academy intake records. */
 export function stripYouthCompetition(value: object): void {
+  stripFacilities(value);
   delete (value as Record<string, unknown>).youthCompetition;
+}
+
+/** Format27 predates club facility approvals, construction and upkeep. */
+export function stripFacilities(value: object): void {
+  delete (value as Record<string, unknown>).facilities;
 }

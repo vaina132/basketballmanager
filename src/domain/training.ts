@@ -24,6 +24,8 @@ export interface TrainingPlayerReport {
   fitness?: { conditionWithoutCoach: number; conditionBenefit: number };
   /** Actual eligible practice before coaching and skill caps; absent in the legacy model. */
   aging?: { ordinaryPracticePoints: number; adjustedPracticePoints: number; rateBasisPoints: number };
+  /** Additive facility practice, with actual gains recorded after skill caps. */
+  facility?: { earnedPoints: number; gains: TrainingPoints };
 }
 
 export interface TrainingWeekReport {

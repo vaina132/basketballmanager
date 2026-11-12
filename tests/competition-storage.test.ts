@@ -11,7 +11,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 
 const clubId = 'rhine-falcons', playerId = 'rhf-1';
 const window = (state: SeasonState) => getMarketWindow(state)!;
-const envelope = (state: unknown, formatVersion = 27) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 28) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 
@@ -58,7 +58,7 @@ describe('competing recruitment persistence', () => {
   it('round-trips simultaneous reservations, selected offers and lost bids without changing match RNG', () => {
     for (const state of [opened, pending, resolved, counterLost, ready, second]) {
       const text = serializeSeason(state), restored = parseSeason(text);
-      expect(JSON.parse(text).formatVersion).toBe(27);
+      expect(JSON.parse(text).formatVersion).toBe(28);
       expect(restored).toEqual(state);
       expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
     }
@@ -96,7 +96,7 @@ describe('competing recruitment persistence', () => {
 
   it('preserves format13 pending offer rules until every old proposal has resolved', () => {
     const restored = parseSeason(format13(legacyPending));
-    expect(restored.schemaVersion).toBe(27);
+    expect(restored.schemaVersion).toBe(28);
     expect(window(restored).competitionFromEvent).toBeNull();
     expect(window(restored).offers).toEqual(window(legacyPending).offers);
     expect(restored.negotiations).toEqual(legacyPending.negotiations);

@@ -1,3 +1,4 @@
+import { facilityPracticeBonusPercent } from './facilities-policy';
 import type { AcademyGraduate, AcademyWeek, SeasonAcademy } from '../domain/academy';
 import type { SeasonState } from '../domain/season';
 import type { SeasonYouth } from '../domain/youth';
@@ -77,7 +78,7 @@ export function prepareAcademySeason(state: SeasonState): SeasonState {
   return intake(next, false);
 }
 
-export interface AcademyWeekInput { academy: SeasonAcademy; youth: SeasonYouth; youthCompetition?: SeasonYouthCompetition; clubs: readonly Pick<Team, 'id'>[]; seasonNumber: number; afterRound: number; fromDate: string; toDate: string }
+export interface AcademyWeekInput { facilities?: SeasonState['facilities']; academy: SeasonAcademy; youth: SeasonYouth; youthCompetition?: SeasonYouthCompetition; clubs: readonly Pick<Team, 'id'>[]; seasonNumber: number; afterRound: number; fromDate: string; toDate: string }
 /** One real calendar interval; youth sessions do not borrow senior fixtures or match RNG. */
 export function processAcademyWeek(input: AcademyWeekInput): SeasonAcademy {
   const { academy, youth, clubs, seasonNumber, afterRound, fromDate, toDate } = input;
@@ -101,7 +102,8 @@ export function processAcademyWeek(input: AcademyWeekInput): SeasonAcademy {
     const before = academy.points[id]!, gains = emptyAcademyPoints(), coachingGains = emptyAcademyPoints(), after = emptyAcademyPoints();
     const base = emptyAcademyPoints(), bonus = emptyAcademyPoints();
     const competition = input.youthCompetition?.enabledSince && input.youthCompetition.enabledSince.date <= fromDate;
-    const availableDays = competition ? Array.from({ length: 7 }, (_, index) => new Date(Date.parse(`${fromDate}T00:00:00Z`) + (index + 1) * 86_400_000).toISOString().slice(0, 10)).filter(date => getYouthPlayerStatus(input, id, date).available).length : 7;
+    const eligibleDates = Array.from({ length: 7 }, (_, index) => new Date(Date.parse(`${fromDate}T00:00:00Z`) + (index + 1) * 86_400_000).toISOString().slice(0, 10)).filter(date => !competition || getYouthPlayerStatus(input, id, date).available);
+    const availableDays = eligibleDates.length;
     const ordinaryPoints = competition ? 4 * availableDays : ACADEMY_WEEKLY_POINTS;
     const availability = competition ? { availableDays, conditionBefore: getYouthPlayerStatus(input, id, fromDate).condition, conditionAfter: getYouthPlayerStatus(input, id, toDate).condition } : undefined;
     const bonusTotal = Math.floor(ordinaryPoints * (coaches[prospect.clubId]?.bonusPercent ?? 0) / 100);
@@ -110,15 +112,21 @@ export function processAcademyWeek(input: AcademyWeekInput): SeasonAcademy {
       else { for (const key of TRAINING_ATTRIBUTES) target[key] = Math.floor(amount / TRAINING_ATTRIBUTES.length); for (let n = 0; n < amount % TRAINING_ATTRIBUTES.length; n += 1) target[TRAINING_ATTRIBUTES[(afterRound - 1 + offset + n) % TRAINING_ATTRIBUTES.length]!] += 1; }
     };
     allocate(ordinaryPoints, base, 0); allocate(bonusTotal, bonus, ordinaryPoints % TRAINING_ATTRIBUTES.length);
+    const facilitiesActive = !!input.facilities?.enabledSince && input.facilities.enabledSince.date <= fromDate;
+    const facilityPoints = facilitiesActive ? Math.floor(eligibleDates.reduce((sum, date) => sum + 4 * facilityPracticeBonusPercent(input, 'youth', prospect.clubId, date), 0) / 100) : 0;
+    const facilityDesired = emptyAcademyPoints(), facilityGains = emptyAcademyPoints();
+    allocate(facilityPoints, facilityDesired, ordinaryPoints % TRAINING_ATTRIBUTES.length);
     for (const key of TRAINING_ATTRIBUTES) {
       const cap = academyPointCap(prospect.player.attributes[key]);
       if (!Number.isInteger(before[key]) || before[key] < 0 || before[key] > cap) throw new Error('Academy development exceeds its supported limits.');
       const withoutCoach = Math.min(cap, before[key] + base[key]);
-      after[key] = Math.min(cap, withoutCoach + bonus[key]);
-      gains[key] = after[key] - before[key]; coachingGains[key] = after[key] - withoutCoach;
+      const coached = Math.min(cap, withoutCoach + bonus[key]);
+      after[key] = Math.min(cap, coached + facilityDesired[key]);
+      gains[key] = after[key] - before[key]; coachingGains[key] = coached - withoutCoach;
+      facilityGains[key] = after[key] - coached;
     }
     points[id] = after;
-    week.players[id] = { clubId: prospect.clubId, focus, pointsBefore: { ...before }, gains, coachingGains, pointsAfter: { ...after }, ...(availability ? { availability } : {}) };
+    week.players[id] = { clubId: prospect.clubId, focus, pointsBefore: { ...before }, gains, coachingGains, pointsAfter: { ...after }, ...(availability ? { availability } : {}), ...(facilitiesActive ? { facility: { earnedPoints: facilityPoints, gains: facilityGains } } : {}) };
   }
   return { ...academy, points, weeks: [...academy.weeks, week] };
 }

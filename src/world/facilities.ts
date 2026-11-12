@@ -1,0 +1,105 @@
+import type { FacilityAnchor, FacilityEvent, FacilityProject, FacilityType, SeasonFacilities } from '../domain/facilities';
+import type { SeasonState } from '../domain/season';
+import type { Team } from '../domain/types';
+import { getClubFinanceDefinition } from '../data/development-finances';
+import { FACILITY_AUTOMATION_BUFFER, FACILITY_TYPES, getActiveFacilityProject, quoteFacilityUpgrade } from './facilities-policy';
+import { recordFacilityInvestment } from './finance';
+
+export function createFacilities(clubs: readonly Pick<Team, 'id'>[] = [], managedClubId = ''): SeasonFacilities {
+  return { model: 'facilities-1', enabledSince: null, delegated: Object.fromEntries(clubs.map(club => [club.id, club.id !== managedClubId])), projects: [], events: [] };
+}
+
+export function facilityEventAnchor(state: SeasonState): FacilityAnchor {
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex: state.finance.ledger.length, contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length, recruitmentEventCount: state.recruitment.events.length, marketEventCount: state.market.windows.reduce((count, window) => count + window.events.length, 0) };
+}
+
+/** Historical command replay must not see later same-day cancellations, completions or delegation. */
+export function facilitiesAtEventCount(facilities: SeasonFacilities, eventCount: number, managedClubId: string): SeasonFacilities {
+  if (!Number.isInteger(eventCount) || eventCount < 0 || eventCount > facilities.events.length) throw new Error('Choose an existing facilities event prefix.');
+  const events = facilities.events.slice(0, eventCount);
+  let projects: FacilityProject[] = [];
+  const delegated = Object.fromEntries(Object.keys(facilities.delegated).map(clubId => [clubId, clubId !== managedClubId]));
+  for (const event of events) {
+    if (event.type === 'start') {
+      const stored = facilities.projects.find(project => project.id === event.projectId);
+      if (!stored) throw new Error('A construction approval must retain its project terms.');
+      projects.push({ ...stored, completedOn: null, cancelledOn: null });
+    } else if (event.type === 'cancel') projects = projects.map(project => project.id === event.projectId ? { ...project, cancelledOn: event.date } : project);
+    else if (event.type === 'delegate') delegated[event.clubId] = event.delegated;
+    else if (event.type === 'process') projects = projects.map(project => project.completedOn === null && project.cancelledOn === null && project.dueOn <= event.date ? { ...project, completedOn: event.date } : project);
+  }
+  return { ...facilities, delegated, projects, events };
+}
+
+export function enableFacilities(state: SeasonState): SeasonState {
+  if (state.facilities.enabledSince) return state;
+  if (!state.finance.enabledSince) throw new Error('Enable club finances before managing facilities.');
+  // Activation preserves the price and capacity of the already prepared matchday.
+  const facilities: SeasonFacilities = { ...createFacilities(state.clubs, state.managedClubId), enabledSince: facilityEventAnchor(state) };
+  const next = { ...state, facilities, finance: { ...state.finance, roundCapacities: Object.fromEntries(state.clubs.map(club => [club.id, getClubFinanceDefinition(club.id).capacity])) } };
+  return automateFacilities(next);
+}
+
+/** Replayable approvals; starting construction pays once and never changes sporting state. */
+export function applyFacilityEvent(state: SeasonState, event: FacilityEvent): SeasonState {
+  if (!state.facilities.enabledSince || !state.finance.enabledSince) throw new Error('Enable club facilities and finances before making a facilities decision.');
+  const anchor = facilityEventAnchor(state);
+  for (const key of Object.keys(anchor) as (keyof FacilityAnchor)[]) if (event[key] !== anchor[key]) throw new Error('Retain the exact calendar and commitment history for each facilities decision.');
+  const events = [...state.facilities.events, { ...event }];
+  if (event.type === 'start') {
+    const quote = quoteFacilityUpgrade(state, event.facilityType, event.clubId);
+    if (!quote.canStart) throw new Error(quote.reason!);
+    if (event.projectId !== `facility-project-${state.facilities.projects.length + 1}`) throw new Error('Facility project identity must be sequential.');
+    const project: FacilityProject = { id: event.projectId, clubId: event.clubId, type: event.facilityType, fromLevel: quote.fromLevel, toLevel: quote.toLevel, cost: quote.cost, startedOn: state.date, dueOn: quote.dueOn, completedOn: null, cancelledOn: null, startEventIndex: state.facilities.events.length };
+    return recordFacilityInvestment({ ...state, facilities: { ...state.facilities, projects: [...state.facilities.projects, project], events } }, project);
+  }
+  if (event.type === 'cancel') {
+    const project = state.facilities.projects.find(project => project.id === event.projectId);
+    if (!project || project.completedOn !== null || project.cancelledOn !== null) throw new Error('Choose a project still under construction.');
+    return { ...state, facilities: { ...state.facilities, events, projects: state.facilities.projects.map(item => item.id === project.id ? { ...item, cancelledOn: state.date } : item) } };
+  }
+  if (event.type === 'delegate') {
+    if (!state.clubs.some(club => club.id === event.clubId) || typeof event.delegated !== 'boolean') throw new Error('Choose a club and a manual or automatic facilities policy.');
+    if (state.facilities.delegated[event.clubId] === event.delegated) throw new Error('This facilities policy is already selected.');
+    return { ...state, facilities: { ...state.facilities, events, delegated: { ...state.facilities.delegated, [event.clubId]: event.delegated } } };
+  }
+  if (event.type !== 'process') throw new Error('Choose a supported facilities command.');
+  const due = state.facilities.projects.filter(project => project.completedOn === null && project.cancelledOn === null && project.dueOn <= state.date);
+  if (!due.length) throw new Error('There are no construction projects ready to complete at this calendar boundary.');
+  return { ...state, facilities: { ...state.facilities, events, projects: state.facilities.projects.map(project => due.some(item => item.id === project.id) ? { ...project, completedOn: state.date } : project) } };
+}
+
+export function startFacilityUpgrade(state: SeasonState, type: FacilityType, clubId = state.managedClubId): SeasonState {
+  return applyFacilityEvent(state, { ...facilityEventAnchor(state), type: 'start', projectId: `facility-project-${state.facilities.projects.length + 1}`, clubId, facilityType: type });
+}
+
+export function cancelFacilityUpgrade(state: SeasonState, projectId: string): SeasonState {
+  if (!state.facilities.projects.some(project => project.id === projectId && project.clubId === state.managedClubId)) throw new Error('Choose a construction project at your club.');
+  return applyFacilityEvent(state, { ...facilityEventAnchor(state), type: 'cancel', projectId });
+}
+
+export function setFacilityDelegation(state: SeasonState, delegated: boolean): SeasonState {
+  if (typeof delegated !== 'boolean') throw new Error('Choose manual or automatic facilities management.');
+  if (!state.facilities.enabledSince) throw new Error('Enable club facilities before delegating construction.');
+  if (state.facilities.delegated[state.managedClubId] === delegated) return state;
+  const next = applyFacilityEvent(state, { ...facilityEventAnchor(state), type: 'delegate', clubId: state.managedClubId, delegated });
+  return delegated ? automateFacilities(next) : next;
+}
+
+/** Real calendar advancement owns completion; due dates alone never award a building. */
+export function processFacilityProjects(state: SeasonState): SeasonState {
+  if (!state.facilities.enabledSince || !state.facilities.projects.some(project => project.completedOn === null && project.cancelledOn === null && project.dueOn <= state.date)) return state;
+  return applyFacilityEvent(state, { ...facilityEventAnchor(state), type: 'process' });
+}
+
+/** The same funded quote applies to all clubs; automation preserves a conservative extra cash cushion. */
+export function automateFacilities(state: SeasonState): SeasonState {
+  if (!state.facilities.enabledSince) return state;
+  let next = state;
+  for (const club of state.clubs) {
+    if (!next.facilities.delegated[club.id] || getActiveFacilityProject(next, club.id)) continue;
+    const quote = FACILITY_TYPES.map(type => quoteFacilityUpgrade(next, type, club.id)).filter(quote => quote.canStart && quote.remainingBudgetAfter >= FACILITY_AUTOMATION_BUFFER).sort((left, right) => left.cost - right.cost || FACILITY_TYPES.indexOf(left.type) - FACILITY_TYPES.indexOf(right.type))[0];
+    if (quote) next = startFacilityUpgrade(next, quote.type, club.id);
+  }
+  return next;
+}

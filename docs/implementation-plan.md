@@ -12,12 +12,12 @@ Current milestone status, 12 November 2026:
 | 4. World and saves | Partial | Fictional six-club careers, rollover, history and local checkpoints; twelve real domestic divisions, three European competitions and their transitions remain. |
 | 5. Squad, training, health and staff | Partial | Squad information, training, injuries, training coaches, scouts, fitness coaches, physios, assistants and youth coaches; academy intake/promotion, youth fixtures/results and medical availability, age-adjusted senior practice, gradual decline and retirement; richer development, youth match coaching and population calibration remain. |
 | 6. Scouting, recruitment and finances | Partial | Scouting, budgets, negotiations, competing bids, installments, buyouts, paid/free in-season registration, optional release clauses, recruitable scouts, quality-dependent discovery and simpler Club management; broader contract mechanics, regional scouting and the complete economy remain. |
-| 7. Facilities, business, board and career | Mostly pending | Ticket pricing and fixed sponsorship exist; facilities, academy infrastructure, commercial negotiations, board/press, dismissal and job changes remain. |
+| 7. Facilities, business, board and career | Partial | Ticket pricing, fixed sponsorship and funded arena/training/youth upgrades with construction, upkeep and optional delegation; wider facility finance/maintenance, commercial negotiations, board/press, dismissal and job changes remain. |
 | 8. Integrated first release | Pending | Verified opening-day player/club data, all agreed competitions, complete management modules, calibration and release acceptance remain. |
 
-The latest increment adds the youth competition foundation: eight-player academy squads with explicit supplemental intake, scheduled matches settled by Continue, retained lineups/box scores and a youth table. Workload, injuries and eligible practice affect prospect availability; promotions respect recovery and carry actual condition into senior registration. Format 27 preserves the youth competition and imports older careers with it disabled. Detailed behavior and verification are recorded in [current status](implementation-status.md).
+The latest increment adds the club facilities foundation: funded arena, training and youth infrastructure upgrades, calendar construction, temporary seat closures, completed-level upkeep and manual/automatic control. Eligible practice reports retain actual facility contributions; the current prepared gate and historical results stay fixed. Format 28 imports earlier careers with facilities disabled. Detailed behavior and verification are recorded in [current status](implementation-status.md).
 
-Next management increment: club facilities, beginning with the arena, training facilities and youth infrastructure, funded upgrade decisions and optional delegation. Player relationships and broader career systems remain subsequent management work. Real competition/data integration and match calibration remain parallel requirements.
+Next management increment: player relationships and squad morale, beginning with meaningful roles, expectations and conversations backed by game state. Broader commercial, board and career systems follow. Real competition/data integration and match calibration remain parallel requirements.
 
 ## 1. Dependency order
 
@@ -153,6 +153,8 @@ Implement a reconciled ledger, payroll, commitments, installments, cash-flow for
 Acceptance: simultaneous offers cannot overspend reservations; failed negotiations are explainable; ownership, registration and wages update atomically; hidden potential is not exposed in the normal interface; bankrupt or roster-empty clubs trigger defined recovery/failure behavior.
 
 ## 9. Milestone 7: facilities, business, board and career
+
+Current foundation: all three facility types have funded upgrades, calendar durations, completed-level upkeep, temporary arena disruption and optional delegation under existing cash/commitment guards. Project financing, maintenance choices/deterioration and broader board decisions remain.
 
 Facilities include arena/stadium, training facilities and youth infrastructure. Add project cost/duration, maintenance, funding, temporary disruption and board constraints. Let the manager set ticket policies, negotiate sponsorship and manage upgrades or delegate each responsibility.
 

@@ -31,6 +31,7 @@ export interface AcademyWeekPlayer {
   coachingGains: TrainingPoints;
   pointsAfter: TrainingPoints;
   availability?: { availableDays: number; conditionBefore: number; conditionAfter: number };
+  facility?: { earnedPoints: number; gains: TrainingPoints };
 }
 
 export interface AcademyWeek {

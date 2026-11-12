@@ -1,3 +1,4 @@
+import { createFacilities } from '../src/world/facilities';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -10,9 +11,9 @@ import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season'
 import { advanceYouthCareer as advance, createYouthCompetitionCareers, createYouthInjuryCareers, createYouthShortageCareers, createManagedYouthShortageCareers } from './helpers/youth-competition-careers';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
-const upgrade = state => ({ ...state, schemaVersion: 27, youthCompetition: createYouthCompetition() });
+const upgrade = state => ({ ...state, schemaVersion: 28, facilities: createFacilities((state).clubs, (state).managedClubId), youthCompetition: createYouthCompetition() });
 const restore = state => parseSeason(serializeSeason(state));
-const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 27, engineVersion: 'possession-3', state: copy }); };
+const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 28, engineVersion: 'possession-3', state: copy }); };
 const first = state => state.youthCompetition.seasons[0].fixtures[0];
 let careers, medical, shortage, managedShortage, original, legacy, activated, activatedNext, finalReady, finalEnabled, finalComplete;
 

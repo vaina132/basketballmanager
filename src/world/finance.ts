@@ -4,6 +4,7 @@ import type { FitnessContract } from '../domain/fitness';
 import type { PhysioContract } from '../domain/physio';
 import type { AssistantContract } from '../domain/assistant';
 import type { YouthCoachContract } from '../domain/youth';
+import type { FacilityProject, SeasonFacilities } from '../domain/facilities';
 import type { EmploymentBuyout, EmploymentTransfer } from '../domain/employment';
 import type { PayrollCharge } from '../domain/payroll';
 import type { TransferPayment } from '../domain/transfer-payments';
@@ -21,6 +22,7 @@ import { getPayrollReserve, getSpendableCash } from './payroll-policy';
 import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransferPaymentSummary, payTransferInstallment } from './transfer-payments';
 import { quoteContractBuyout } from './buyouts';
 import { STAFF_BUDGET, staffCommitted } from './staff-policy';
+import { getArenaCapacity, getFacilityUpkeepBreakdown, quoteFacilityUpgrade } from './facilities-policy';
 
 export { getClubFinanceDefinition } from '../data/development-finances';
 export type { FinanceBalance, FinanceLedgerRow, GateForecast } from '../domain/finance';
@@ -38,7 +40,7 @@ export interface FinanceFixture {
   awayClubId: string;
   result: { winnerClubId: string } | null;
 }
-export interface FinanceContext { fixtures: readonly FinanceFixture[] }
+export interface FinanceContext { fixtures: readonly FinanceFixture[]; facilities?: SeasonFacilities; finance?: SeasonFinance; date?: string; round?: number }
 
 function validatePrice(price: number): void {
   if (!Number.isInteger(price) || price < 0 || price > MAX_TICKET_PRICE || price % TICKET_PRICE_STEP !== 0) throw new Error('Choose a ticket price from zero to sixty euros in one-euro steps.');
@@ -88,6 +90,16 @@ export function recordPayrollCharge(state: SeasonState, clubId: string, payroll:
   if (!state.finance.enabledSince) throw new Error('Enable club finances before recording wages.');
   const amount = payroll.items.reduce((sum, item) => sum + item.amount, 0);
   return book(state, clubId, 'payroll', amount === 0 ? 0 : -amount, sourceId, null, null, payroll);
+}
+
+/** Construction is paid in full on approval; cancellation does not refund this retained investment. */
+export function recordFacilityInvestment(state: SeasonState, project: FacilityProject): SeasonState {
+  const stored = state.facilities.projects.at(-1), event = state.facilities.events.at(-1);
+  if (!state.facilities.enabledSince || !state.finance.enabledSince || !stored || JSON.stringify(stored) !== JSON.stringify(project) || project.id !== `facility-project-${state.facilities.projects.length}` || event?.type !== 'start' || event.projectId !== project.id || event.ledgerIndex !== state.finance.ledger.length || project.startEventIndex !== state.facilities.events.length - 1 || project.startedOn !== state.date || project.completedOn !== null || project.cancelledOn !== null) throw new Error('Pay only the exact newly approved facility project.');
+  const before = { ...state, facilities: { ...state.facilities, projects: state.facilities.projects.slice(0, -1), events: state.facilities.events.slice(0, -1) } };
+  const quote = quoteFacilityUpgrade(before, project.type, project.clubId);
+  if (!quote.canStart || quote.cost !== project.cost || quote.fromLevel !== project.fromLevel || quote.toLevel !== project.toLevel || quote.dueOn !== project.dueOn) throw new Error(quote.reason ?? 'Fund exactly the approved construction terms.');
+  return append(state, { clubId: project.clubId, kind: 'facility', amount: -project.cost, sourceId: project.id, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, facility: { projectId: project.id, type: project.type } });
 }
 
 /** Compensation leaves the club once; no other club receives the player's settlement. */
@@ -210,13 +222,15 @@ function winShare(state: FinanceContext, clubId: string, beforeRound: number): n
 }
 
 /** Attendance is a deterministic development estimate from prior results and the chosen price. */
-export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'>, price: number): GateForecast {
+export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'> & { date?: string }, price: number): GateForecast {
   validatePrice(price);
   const venue = getClubFinanceDefinition(fixture.homeClubId);
+  const recorded = state.finance?.ledger.find(entry => entry.ticket?.fixtureId === fixture.id)?.ticket?.capacity;
+  const capacity = recorded ?? (fixture.round === state.round ? state.finance?.roundCapacities?.[fixture.homeClubId] : undefined) ?? getArenaCapacity(state, fixture.homeClubId, fixture.date ?? state.date);
   const own = winShare(state, fixture.homeClubId, fixture.round), opponent = winShare(state, fixture.awayClubId, fixture.round);
   const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent);
-  const attendance = price === 0 ? venue.capacity : Math.min(venue.capacity, Math.floor(demand * (DEFAULT_TICKET_PRICE / price) ** 1.4));
-  return { fixtureId: fixture.id, clubId: fixture.homeClubId, opponentClubId: fixture.awayClubId, price, attendance, capacity: venue.capacity, revenue: attendance * price };
+  const attendance = price === 0 ? capacity : Math.min(capacity, Math.floor(demand * (DEFAULT_TICKET_PRICE / price) ** 1.4));
+  return { fixtureId: fixture.id, clubId: fixture.homeClubId, opponentClubId: fixture.awayClubId, price, attendance, capacity, revenue: attendance * price };
 }
 
 export function recommendTicketPrice(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'>): number {
@@ -238,13 +252,15 @@ export function setTicketPlan(state: SeasonState, plan: FinancePlan): SeasonStat
 /** Calendar preparation only: UI edits update plans and cannot rewrite these locked prices. */
 export function prepareFinanceRound(state: SeasonState): SeasonState {
   if (!state.finance.enabledSince) return state;
+  const roundCapacities = state.facilities?.enabledSince ? Object.fromEntries(state.clubs.map(club => [club.id, getArenaCapacity(state, club.id)])) : undefined;
+  const prepared = roundCapacities ? { ...state, finance: { ...state.finance, roundCapacities } } : state;
   const roundPrices = Object.fromEntries(state.clubs.map(club => {
     const plan = state.finance.plans[club.id]!;
     validatePrice(plan.price);
     const fixture = state.fixtures.find(fixture => fixture.round === state.round && fixture.homeClubId === club.id);
-    return [club.id, plan.delegated && fixture ? recommendTicketPrice(state, fixture) : plan.price];
+    return [club.id, plan.delegated && fixture ? recommendTicketPrice(prepared, fixture) : plan.price];
   }));
-  return { ...state, finance: { ...state.finance, roundPrices } };
+  return { ...prepared, finance: { ...prepared.finance, roundPrices } };
 }
 
 export function enableFinance(state: SeasonState): SeasonState {
@@ -265,9 +281,13 @@ export function processFinanceRound(state: SeasonState): SeasonState {
   let next = state;
   for (const fixture of fixtures) {
     const gate = forecastGate(state, fixture, state.finance.roundPrices[fixture.homeClubId]!);
-    next = book(next, fixture.homeClubId, 'tickets', gate.revenue, `tickets-${fixture.id}`, { fixtureId: fixture.id, price: gate.price, attendance: gate.attendance });
+    next = book(next, fixture.homeClubId, 'tickets', gate.revenue, `tickets-${fixture.id}`, { fixtureId: fixture.id, price: gate.price, attendance: gate.attendance, ...(state.facilities?.enabledSince ? { capacity: gate.capacity } : {}) });
   }
   for (const club of state.clubs) next = book(next, club.id, 'operations', -ROUND_OPERATING_COST, `operations-s${state.seasonNumber}-r${state.round}`);
+  if (state.facilities?.enabledSince) for (const club of state.clubs) {
+    const { total, ...facilityUpkeep } = getFacilityUpkeepBreakdown(state, club.id);
+    if (total) next = append(next, { clubId: club.id, kind: 'facility-upkeep', amount: -total, sourceId: `facility-upkeep-s${state.seasonNumber}-r${state.round}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, facilityUpkeep });
+  }
   return next;
 }
 

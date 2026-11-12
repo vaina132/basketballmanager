@@ -18,6 +18,7 @@ import type { SeasonAcademy } from './academy';
 import type { SeasonYouth } from './youth';
 import type { SeasonLifecycle } from './lifecycle';
 import type { SeasonYouthCompetition } from './youth-competition';
+import type { SeasonFacilities } from './facilities';
 
 export interface ClubPlan {
   tactics: Tactics;
@@ -71,7 +72,7 @@ export interface SeasonArchive {
 }
 
 export interface SeasonState {
-  schemaVersion: 27;
+  schemaVersion: 28;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;
@@ -102,6 +103,7 @@ export interface SeasonState {
   youth: SeasonYouth;
   lifecycle: SeasonLifecycle;
   youthCompetition: SeasonYouthCompetition;
+  facilities: SeasonFacilities;
   negotiations: SeasonNegotiations;
   market: SeasonMarket;
   recruitment: SeasonRecruitment;

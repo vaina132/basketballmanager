@@ -141,6 +141,14 @@ Youth condition follows actual playing workload and calendar recovery, with a mo
 
 The roster size, supplementary population, workload and result policies are provisional development rules. This foundation does not claim real-world youth league eligibility, full youth match coaching, hidden potential, facility effects or calibrated population balance.
 
+## Funded club facilities foundation
+
+Arena, senior training and youth infrastructure use four levels with diminishing practice benefits and one concurrent project per club. The provisional cost schedule is EUR 100k/160k/240k for arena upgrades, 75k/120k/180k for training and 60k/100k/150k for youth. Durations are 21/28/42 calendar days. Payment is upfront from protected available cash; cancellation has no refund. Borrowing, leases and board financing are separate future systems. Base-level upkeep stays within existing operations; completed upgrades add explicit matchday expenses.
+
+Completion is an actual calendar command, dated at the first processed boundary on or after the due date. Merely viewing a future date or reading a quote cannot grant a building. Training effects are 5/8/10% of medically eligible ordinary practice, with senior age/workload/condition applied first; coaches and facilities contribute separately under the same caps. Arena expansion adds a cumulative 500/1,400/2,600 seats. Construction temporarily closes 10% of seats only for future prepared matchdays, preserving current prices, capacity and historical receipts.
+
+Automatic management is optional for the manager, enabled for AI clubs, and may immediately approve the cheapest eligible upgrade while retaining EUR 150,000 beyond existing cash reservations. It shares manual funding/arrears guards and records the same project terms and expenses. One conservative policy is a foundation, not a claim of complete board strategy or a calibrated club economy. Earlier saves opt in prospectively.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

@@ -1,3 +1,4 @@
+import { getFacilityUpkeep } from './facilities-policy';
 import type { CashOutlookInstallment, CashOutlookRow, CashOutlookScenario, ClubCashOutlook } from '../domain/finance-outlook';
 import type { SeasonState } from '../domain/season';
 import { forecastGate, getFinanceBalance, recommendTicketPrice, ROUND_OPERATING_COST } from './finance';
@@ -48,6 +49,7 @@ export function getClubCashOutlook(state: SeasonState, clubId = state.managedClu
       'Expected income assumes future transfer installments arrive on their agreed dates. Already-due unpaid receipts have no assumed payment date.',
       'The cautious scenario uses 25% less ticket income and no unreceived transfer income. It is a stress scenario, not a probability or a worst-case guarantee.',
       'Wages follow existing agreements and installments, excluding charges already posted or prepaid and wages ended by a completed transfer. Optional future prepayments and other automatic or discretionary decisions are not predicted.',
+      ...(state.facilities?.enabledSince ? ['Facility investment already paid is not counted again. Upkeep and venue capacity use completed facilities and current construction restrictions; future project completions and new upgrades are not predicted.'] : []),
       ...(!state.payroll.enabledSince ? ['Player payroll is disabled in this career, so player wages are not included.'] : []),
       'Pending offers retain their existing cash reservations but do not become forecast expenses until agreed. Next-season salary allocations are separate from cash reservations.',
       'Scheduled transfer costs are shown in full when due, even if actual payment must wait for enough cash after protected wages. Staff fees and sponsorship already recorded in cash are not counted again.',
@@ -68,17 +70,20 @@ export function getClubCashOutlook(state: SeasonState, clubId = state.managedClu
   };
 
   // Only already-published results inform every future gate; no future match is played.
-  const form = { fixtures: state.fixtures.filter(fixture => fixture.round < state.round && fixture.result !== null) };
+  const form = { ...state, fixtures: state.fixtures.filter(fixture => fixture.round < state.round && fixture.result !== null) };
   const fixtures = state.fixtures.filter(fixture => fixture.date >= state.date && (fixture.homeClubId === clubId || fixture.awayClubId === clubId)).sort((left, right) => left.date.localeCompare(right.date, 'en') || left.id.localeCompare(right.id, 'en'));
   for (const fixture of fixtures) {
     const operationPosted = ledger.some(entry => entry.kind === 'operations' && entry.sourceId === `operations-s${state.seasonNumber}-r${fixture.round}`);
+    const upkeep = getFacilityUpkeep(state, clubId, fixture.date);
+    const upkeepPosted = upkeep === 0 || ledger.some(entry => entry.kind === 'facility-upkeep' && entry.round === fixture.round && entry.seasonNumber === state.seasonNumber);
     const gatePosted = ledger.some(entry => entry.kind === 'tickets' && (entry.ticket?.fixtureId === fixture.id || entry.sourceId === `tickets-${fixture.id}`));
     const gatePending = fixture.homeClubId === clubId && !gatePosted;
-    if (operationPosted && !gatePending) continue;
+    if (operationPosted && upkeepPosted && !gatePending) continue;
     const row = rowOn(fixture.date);
     row.round = fixture.round;
     row.fixtureIds.push(fixture.id);
     if (!operationPosted) row.operations += ROUND_OPERATING_COST;
+    if (!upkeepPosted) row.operations += upkeep;
     if (gatePending) {
       const plan = state.finance.plans[clubId]!;
       const price = fixture.round === state.round ? state.finance.roundPrices[clubId]! : plan.delegated ? recommendTicketPrice(form, fixture) : plan.price;

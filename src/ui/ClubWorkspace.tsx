@@ -13,9 +13,11 @@ import { dateForRound, seasonLabel } from '../world/season'
 import { getTransferPayments } from '../world/transfer-payments'
 import { TransferPaymentsPanel } from './TransferPaymentsPanel'
 import { Icon } from './Icon'
+import { FACILITY_LABELS, FacilitiesPanel, type FacilitiesActions } from './FacilitiesPanel'
+import { getClubFacilities } from '../world/facilities-policy'
 import './club-workspace.css'
 
-interface ClubWorkspaceProps {
+interface ClubWorkspaceProps extends FacilitiesActions {
   season: SeasonState
   onEnable: () => void
   onPlanChange: (plan: FinancePlan) => void
@@ -28,13 +30,14 @@ const money = (cents: number) => moneyFormatter.format(cents / 100)
 const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${money(Math.abs(cents))}`
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
-const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout' }
+const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep' }
 
-export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: ClubWorkspaceProps) {
+export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
   const [period, setPeriod] = useState<'current' | 'all'>('current')
   const club = season.clubs.find(team => team.id === season.managedClubId)!
   const definition = getClubFinanceDefinition(club.id)
+  const facilities = getClubFacilities(season)
   const enabled = season.finance.enabledSince !== null
   const balance = getFinanceBalance(season.finance, club.id)
   const payrollEnabled = season.payroll.enabledSince !== null
@@ -51,6 +54,11 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: 
   const ledger = financeLedgerRows(season.finance, club.id).filter(entry => (kind === 'all' || entry.kind === kind) && (period === 'all' || entry.seasonNumber === season.seasonNumber))
 
   function entryDetail(entry: FinanceEntry): string {
+    if (entry.facility) {
+      const project = season.facilities.projects.find(item => item.id === entry.facility!.projectId)
+      return `${FACILITY_LABELS[entry.facility.type]}${project ? ` · Level ${project.fromLevel} → ${project.toLevel}` : ''} · Construction paid upfront`
+    }
+    if (entry.facilityUpkeep) return (Object.entries(entry.facilityUpkeep) as [keyof typeof FACILITY_LABELS, number][]).filter(([, cost]) => cost > 0).map(([type, cost]) => `${FACILITY_LABELS[type]} ${money(cost)}`).join(' · ')
     if (entry.kind === 'buyout') {
       const buyout = season.employment.buyouts.find(item => item.id === entry.sourceId)
       return buyout ? `${getCareerPlayer(season, buyout.playerId).name} · Released from ${seasonLabel(buyout.startsSeason)}` : 'Player compensation'
@@ -72,7 +80,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: 
       const fixtures = entry.seasonNumber === season.seasonNumber ? season.fixtures : season.history.find(archive => archive.seasonNumber === entry.seasonNumber)?.fixtures
       const fixture = fixtures?.find(fixture => fixture.id === entry.ticket!.fixtureId)
       const visitor = fixture ? season.clubs.find(team => team.id === fixture.awayClubId) : null
-      return `${visitor ? `Home vs ${visitor.name} · ` : ''}${count(entry.ticket.attendance)} / ${count(definition.capacity)} attendance · ${money(entry.ticket.price)} per ticket`
+      return `${visitor ? `Home vs ${visitor.name} · ` : ''}${count(entry.ticket.attendance)} / ${count(entry.ticket.capacity ?? definition.capacity)} attendance · ${money(entry.ticket.price)} per ticket`
     }
     if (entry.youth) return DEVELOPMENT_YOUTH_COACHES.find(coach => coach.id === entry.youth!.coachId)?.name ?? 'Youth coach fee'
     if (entry.assistant) return DEVELOPMENT_ASSISTANTS.find(coach => coach.id === entry.assistant!.assistantId)?.name ?? 'Assistant coach fee'
@@ -93,9 +101,11 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: 
     </section> : <>
       {balance.unpaid > 0 && <p className="club-unpaid-note panel">{money(balance.unpaid)} of costs remain unpaid. New income clears unpaid costs first; staff recruitment requires these costs to be settled.</p>}
 
+      <FacilitiesPanel season={season} busy={busy} onEnableFacilities={onEnableFacilities} onFacilityUpgrade={onFacilityUpgrade} onCancelFacilityUpgrade={onCancelFacilityUpgrade} onFacilityDelegation={onFacilityDelegation} />
+
       <section className="club-venue panel" aria-labelledby="club-venue-title">
         <header className="club-heading"><h2 id="club-venue-title">Venue &amp; sponsorship</h2></header>
-        <dl><div><dt>Venue</dt><dd>{definition.venue}</dd></div><div><dt>Capacity</dt><dd>{count(definition.capacity)}</dd></div><div><dt>Sponsor</dt><dd>{definition.sponsor}</dd></div><div><dt>Full-season sponsorship</dt><dd>{money(ANNUAL_SPONSORSHIP)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{money(ROUND_OPERATING_COST)}</dd></div></dl>
+        <dl><div><dt>Venue</dt><dd>{definition.venue}</dd></div><div><dt>{facilities.arenaCapacity === facilities.arenaFullCapacity ? 'Capacity' : 'Capacity this matchday'}</dt><dd>{count(facilities.arenaCapacity)}</dd></div><div><dt>Sponsor</dt><dd>{definition.sponsor}</dd></div><div><dt>Full-season sponsorship</dt><dd>{money(ANNUAL_SPONSORSHIP)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{money(ROUND_OPERATING_COST + facilities.upkeepPerRound)}</dd></div></dl>
       </section>
 
       <section className="club-ticket-plan panel" aria-labelledby="club-ticket-plan-title" data-finance-locked-price={season.finance.roundPrices[club.id]}>
@@ -109,7 +119,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: 
 
       <section className="club-gate-forecast panel" aria-labelledby="club-gate-forecast-title" data-finance-gate-fixture={home?.id}>
         <header className="club-heading"><h2 id="club-gate-forecast-title"><Icon name="people" size={18} />Next home crowd</h2><span>{home ? locked ? 'Current matchday · price locked' : 'Future fixture · price not locked' : 'No remaining home fixtures'}</span></header>
-        {home && forecast && opponent ? <><div className="club-gate-fixture"><strong>{club.name} vs {opponent.name}</strong><span><time dateTime={home.date}>{formatDate(home.date)}</time> · Matchday {home.round}</span></div><progress className="club-crowd-meter" value={forecast.attendance} max={forecast.capacity} aria-label={`${forecast.attendance} of ${forecast.capacity} seats forecast to be filled`} /><dl className="club-gate-values"><div><dt>{locked ? 'Locked ticket price' : 'Planned ticket price'}</dt><dd data-gate-price={forecast.price}>{money(forecast.price)}</dd></div><div><dt>Forecast attendance</dt><dd data-gate-attendance={forecast.attendance}>{count(forecast.attendance)} <small>/ {count(forecast.capacity)}</small></dd></div><div><dt>Forecast ticket income</dt><dd data-gate-revenue={forecast.revenue}>{money(forecast.revenue)}</dd></div></dl><p className="club-note">This is a forecast. {locked ? 'Income is recorded when the matchday is completed.' : 'Future demand and automatic pricing may change before this matchday is prepared.'}</p></> : <p className="club-empty">No further home fixtures are scheduled this season. Your ticket plan carries into the next season.</p>}
+        {home && forecast && opponent ? <><div className="club-gate-fixture"><strong>{club.name} vs {opponent.name}</strong><span><time dateTime={home.date}>{formatDate(home.date)}</time> · Matchday {home.round}</span></div><progress className="club-crowd-meter" value={forecast.attendance} max={forecast.capacity} aria-label={`${forecast.attendance} of ${forecast.capacity} seats forecast to be filled`} /><dl className="club-gate-values"><div><dt>{locked ? 'Locked ticket price' : 'Planned ticket price'}</dt><dd data-gate-price={forecast.price}>{money(forecast.price)}</dd></div><div><dt>Forecast attendance</dt><dd data-gate-attendance={forecast.attendance}>{count(forecast.attendance)} <small>/ {count(forecast.capacity)}</small></dd></div><div><dt>Forecast ticket income</dt><dd data-gate-revenue={forecast.revenue}>{money(forecast.revenue)}</dd></div></dl><p className="club-note">This is a forecast. {locked ? 'Income is recorded when the matchday is completed.' : 'Future demand, pricing and facility work may change before this matchday is prepared.'}</p></> : <p className="club-empty">No further home fixtures are scheduled this season. Your ticket plan carries into the next season.</p>}
       </section>
 
       <TransferPaymentsPanel season={season} />
@@ -122,7 +132,8 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, busy = false }: 
           const transfer = entry.kind === 'transfer' ? season.employment.transfers.find(item => getTransferPayments(item).some(payment => payment.id === entry.sourceId)) : null
           const payment = transfer ? getTransferPayments(transfer).find(item => item.id === entry.sourceId) : null
           const buyout = entry.kind === 'buyout' ? season.employment.buyouts.find(item => item.id === entry.sourceId) : null
-          const date = buyout?.completedOn ?? payment?.paidOn ?? dateForRound(entry.round, entry.seasonNumber)
+          const facilityProject = entry.facility ? season.facilities.projects.find(item => item.id === entry.facility!.projectId) : null
+          const date = facilityProject?.startedOn ?? buyout?.completedOn ?? payment?.paidOn ?? dateForRound(entry.round, entry.seasonNumber)
           return <tr key={entry.id} data-finance-entry={entry.id} data-finance-kind={entry.kind}>
             <td><time dateTime={date}>{formatDate(date)}</time><small>{buyout ? 'Player compensation' : transfer && payment ? `Transfer payment ${payment.installmentIndex + 1}/${transfer.installments.length}` : `Matchday ${entry.round}`}</small></td><th scope="row">{kinds[entry.kind]}<small>{entryDetail(entry)}</small>{entry.payroll && <details className="club-payroll-breakdown" data-payroll-ledger={entry.id}><summary>Player charges</summary><ul>{entry.payroll.items.map(item => <li key={item.agreementId}><span>{getCareerPlayer(season, item.playerId).name}</span><strong>{money(item.amount)}</strong>{item.discount > 0 && <small>Gross {money(item.gross)} · discount {money(item.discount)}</small>}</li>)}</ul></details>}</th>
             <td className={entry.amount < 0 ? 'club-finance-cost' : entry.amount > 0 ? 'club-finance-income' : ''}>{movement(entry.amount)}</td>

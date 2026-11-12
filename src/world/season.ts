@@ -1,3 +1,4 @@
+import { createFacilities, enableFacilities, processFacilityProjects, automateFacilities } from './facilities';
 import type { ArchivedFixture, ClubPlan, FixtureResult, SeasonFixture, SeasonState, Standing } from '../domain/season';
 import type { InjuryMode, MatchState, Side, Team } from '../domain/types';
 import type { ManagerProfile } from '../domain/manager';
@@ -130,7 +131,7 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   return match;
 }
 
-export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false): SeasonState {
+export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   if (!DEVELOPMENT_CLUBS.some(club => club.id === managedClubId)) throw new Error('Choose a club from the development league.');
   if (!['standard', 'reduced', 'off'].includes(injuryMode)) throw new Error('Choose a valid season injury setting.');
@@ -148,6 +149,7 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
   if (typeof youthEnabled !== 'boolean' || youthEnabled && !academyEnabled) throw new Error('Youth coaches require an enabled academy.');
   if (typeof lifecycleEnabled !== 'boolean' || lifecycleEnabled && !academyEnabled) throw new Error('Player aging and retirement require an enabled academy.');
   if (typeof youthCompetitionEnabled !== 'boolean' || youthCompetitionEnabled && !academyEnabled) throw new Error('Youth matches require an enabled academy.');
+  if (typeof facilitiesEnabled !== 'boolean' || facilitiesEnabled && !financeEnabled) throw new Error('Club facilities require enabled finances.');
   if (typeof negotiationsEnabled !== 'boolean' || negotiationsEnabled && !employmentEnabled) throw new Error('Contract negotiations require enabled player contracts and a valid negotiation setting.');
   if (typeof marketEnabled !== 'boolean' || marketEnabled && !negotiationsEnabled) throw new Error('The offseason calendar requires enabled negotiations and a valid setting.');
   const managerProfile = manager === null ? null : validateManagerProfile(manager, DEVELOPMENT_START_DATE);
@@ -160,7 +162,7 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: 27, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), negotiations: createNegotiations(), market: createMarket(),
+    schemaVersion: 28, engineVersion: 'possession-3', dataPackId: DEVELOPMENT_DATA_PACK_ID, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), facilities: createFacilities(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
     ...preparation, date: first.date, status: 'active', round: 1, fixtures,
     activeFixtureId: first.id, activeMatch: prepareMatch(preparation, first),
   };
@@ -179,8 +181,9 @@ export function createSeason(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id
   const academyStaffed = youthEnabled ? enableYouth(academyReady) : academyReady;
   const developed = lifecycleEnabled ? enableLifecycle(academyStaffed) : academyStaffed;
   const youthReady = youthCompetitionEnabled ? enableYouthCompetition(developed) : developed;
+  const built = facilitiesEnabled ? enableFacilities(youthReady) : youthReady;
   // Only a genuinely new career is prepared after initial staffing. Legacy opt-in never rewrites its current match.
-  return assistantEnabled ? { ...youthReady, activeMatch: prepareMatch(youthReady, first) } : youthReady;
+  return assistantEnabled ? { ...built, activeMatch: prepareMatch(built, first) } : built;
 }
 
 function compactResult(match: MatchState, rosterIds: FixtureResult['rosterIds']): FixtureResult {
@@ -246,7 +249,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
   next = processScoutingRound(next);
   if (next.round === SEASON_ROUNDS) {
     next.status = 'complete';
-    return prepareEmploymentMarket(next);
+    return automateFacilities(prepareEmploymentMarket(next));
   }
   next = recruitAiScouts(next);
   next = recruitAiFitnessCoaches(next);
@@ -256,14 +259,15 @@ export function advanceSeason(state: SeasonState): SeasonState {
   next = recruitAiCoaches(next);
   next.round += 1;
   next.date = dateForRound(next.round, next.seasonNumber);
+  next = processFacilityProjects(next);
   next.physio = processRehabilitationWeek({ physio: next.physio, clubs: next.clubs, rosters: next.rosters, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
   if (next.training.enabledSince) {
-    const trained = processTrainingWeek({ training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, lifecycle: next.lifecycle, academy: next.academy, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
+    const trained = processTrainingWeek({ facilities: next.facilities, training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, lifecycle: next.lifecycle, academy: next.academy, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
     next.training = trained.training; next.conditions = trained.conditions;
   } else {
     for (const id of Object.keys(next.conditions)) next.conditions[id] = Math.min(100, Math.round((next.conditions[id]! + DAILY_RECOVERY * ROUND_INTERVAL_DAYS) * 1000) / 1000);
   }
-  next.academy = processAcademyWeek({ academy: next.academy, youth: next.youth, youthCompetition: next.youthCompetition, clubs: next.clubs, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
+  next.academy = processAcademyWeek({ facilities: next.facilities, academy: next.academy, youth: next.youth, youthCompetition: next.youthCompetition, clubs: next.clubs, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
   const registeredBefore = next.rosters.length;
   next = resolveInSeasonRecruitment(next);
   next = prepareFinanceRound(next);
@@ -272,6 +276,7 @@ export function advanceSeason(state: SeasonState): SeasonState {
   if (next.rosters.length !== registeredBefore) next = refreshSquadKnowledge(next);
   next = prepareScoutingAssignments(next);
   next = scheduleInSeasonRecruitment(next);
+  next = automateFacilities(next);
   const fixture = next.fixtures.find(fixture => fixture.round === next.round && [fixture.homeClubId, fixture.awayClubId].includes(next.managedClubId))!;
   next.activeFixtureId = fixture.id;
   next.activeMatch = prepareMatch(next, fixture);
@@ -334,6 +339,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
     })) },
     coaching: { ...state.coaching, contracts: [] },
   };
+  next = processFacilityProjects(next);
   next = prepareAcademySeason(next);
   next = prepareYouthSeason(next);
   next = prepareLifecycleSeason(next);
@@ -357,6 +363,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = processTransferPayments(next);
   next = prepareScoutingAssignments(refreshSquadKnowledge(next));
   next = scheduleInSeasonRecruitment(next);
+  next = automateFacilities(next);
   next.activeMatch = prepareMatch(next, first);
   return next;
 }

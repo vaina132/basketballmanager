@@ -1,3 +1,4 @@
+import { processFacilityProjects, automateFacilities } from './facilities';
 import type { MarketEvent, MarketOffer, MarketWindow, SeasonMarket } from '../domain/market';
 import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
@@ -263,7 +264,8 @@ export function advanceMarket(state: SeasonState): SeasonState {
   const prepared = scheduleMarketRecruitment(state);
   const date = getNextMarketDate(prepared);
   if (!date) throw new Error('Recruitment has closed. Review the squad and start next season.');
-  return scheduleMarketRecruitment(activateCompetition(applyMarketEvent(prepared, { type: 'advance', date })));
+  const advanced = scheduleMarketRecruitment(activateCompetition(applyMarketEvent(prepared, { type: 'advance', date })));
+  return automateFacilities(processFacilityProjects(advanced));
 }
 
 export function finishMarketWindow(state: SeasonState): SeasonState {

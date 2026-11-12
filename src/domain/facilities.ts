@@ -27,11 +27,27 @@ export interface FacilityProject {
   startEventIndex: number;
 }
 
+/** A board capital decision for one facility upgrade; an approval is immediately followed by that upgrade's start. */
+export interface FacilityFundingDecision {
+  type: 'funding';
+  clubId: string;
+  facilityType: FacilityType;
+  /** Requested capital in euro cents: the shortfall for the manager, or the shortfall to the cash cushion for automatic control. */
+  amount: number;
+  mode: 'manager' | 'automatic';
+  approved: boolean;
+  /** Decision evidence, recomputed during validation. */
+  confidence: number;
+  requiredConfidence: number;
+  capitalRemaining: number;
+}
+
 export type FacilityEvent = FacilityAnchor & (
   | { type: 'start'; projectId: string; clubId: string; facilityType: FacilityType }
   | { type: 'cancel'; projectId: string }
   | { type: 'delegate'; clubId: string; delegated: boolean }
   | { type: 'process' }
+  | FacilityFundingDecision
 );
 
 export interface SeasonFacilities {
@@ -40,6 +56,8 @@ export interface SeasonFacilities {
   delegated: Record<string, boolean>;
   projects: FacilityProject[];
   events: FacilityEvent[];
+  /** Board funding requests (format 32); absent in older formats, null until enabled. */
+  fundingSince?: FacilityAnchor | null;
 }
 
 export interface FacilityUpgradeQuote {

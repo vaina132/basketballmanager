@@ -9,6 +9,8 @@ export const FACILITY_TYPES: readonly FacilityType[] = ['arena', 'training', 'yo
 export const FACILITY_MAX_LEVEL = 4;
 export const FACILITY_AUTOMATION_BUFFER = 15_000_000;
 export const FACILITY_CONSTRUCTION_CAPACITY_PERCENT = 90;
+/** The only upgrade blocker that board capital can resolve. */
+export const FACILITY_FUNDS_REASON = 'The upgrade exceeds the remaining budget after salary and transfer commitments.';
 const COSTS: Record<FacilityType, readonly number[]> = { arena: [0, 10_000_000, 16_000_000, 24_000_000], training: [0, 7_500_000, 12_000_000, 18_000_000], youth: [0, 6_000_000, 10_000_000, 15_000_000] };
 const UPKEEP: Record<FacilityType, readonly number[]> = { arena: [0, 50_000, 90_000, 120_000], training: [0, 40_000, 70_000, 100_000], youth: [0, 30_000, 50_000, 70_000] };
 const BUILD_DAYS = [0, 21, 28, 42] as const;
@@ -73,7 +75,7 @@ export function quoteFacilityUpgrade(state: SeasonState, type: FacilityType, clu
   else if (getActiveFacilityProject(state, clubId)) reason = 'Finish or cancel the current club project before starting another.';
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before funding construction.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before funding construction.';
-  else if (available < cost) reason = 'The upgrade exceeds the remaining budget after salary and transfer commitments.';
+  else if (available < cost) reason = FACILITY_FUNDS_REASON;
   return { clubId, type, fromLevel, toLevel, cost, durationDays, dueOn: facilityCompletionDate(state.date, durationDays), remainingBudgetAfter: Math.max(0, available - cost), upkeepAfter, totalUpkeepAfter: currentUpkeep - UPKEEP[type][fromLevel - 1]! + upkeepAfter, bonusAfter: type === 'arena' ? 0 : BONUS_PERCENT[toLevel - 1]!, capacityAfter: type === 'arena' ? getClubFinanceDefinition(clubId).capacity + ADDED_SEATS[toLevel - 1]! : 0, canStart: reason === null, reason };
 }
 

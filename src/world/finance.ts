@@ -103,6 +103,13 @@ export function recordFacilityInvestment(state: SeasonState, project: FacilityPr
   return append(state, { clubId: project.clubId, kind: 'facility', amount: -project.cost, sourceId: project.id, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, facility: { projectId: project.id, type: project.type } });
 }
 
+/** Owner capital for exactly the approved board decision just recorded; the funded upgrade starts next. */
+export function recordBoardCapital(state: SeasonState, projectId: string): SeasonState {
+  const decision = state.facilities.events.at(-1);
+  if (!state.finance.enabledSince || decision?.type !== 'funding' || !decision.approved || decision.ledgerIndex !== state.finance.ledger.length || projectId !== `facility-project-${state.facilities.projects.length + 1}` || !Number.isSafeInteger(decision.amount) || decision.amount <= 0) throw new Error('Book owner capital only for the board decision just approved.');
+  return append(state, { clubId: decision.clubId, kind: 'board-capital', amount: decision.amount, sourceId: `board-capital-${projectId}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, boardCapital: { projectId, facilityType: decision.facilityType } });
+}
+
 /** Compensation leaves the club once; no other club receives the player's settlement. */
 export function recordContractBuyout(state: SeasonState, buyout: EmploymentBuyout): SeasonState {
   const records = state.employment.buyouts ?? [], recorded = records.at(-1);

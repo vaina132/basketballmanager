@@ -22,7 +22,7 @@ interface LegacyIdentity { clubs: readonly Team[]; managedClubId: string }
  * Top-level systems introduced by each season format, with the disabled defaults that parseSeason installs
  * for older saves. When a new format adds a system, add one row here instead of editing every storage test.
  */
-const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: LegacyIdentity) => Partial<SeasonState>])[] = [
+const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: LegacyIdentity & Partial<SeasonState>) => Partial<SeasonState>])[] = [
   [21, () => ({ scouts: createScouts() })],
   [22, () => ({ fitness: createFitness() })],
   [23, () => ({ physio: createPhysio() })],
@@ -34,6 +34,7 @@ const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: Leg
   [29, () => ({ relationships: createRelationships() })],
   [30, () => ({ board: createBoard() })],
   [31, state => ({ commercial: createCommercial(state.clubs, state.managedClubId) })],
+  [32, state => ({ facilities: { ...state.facilities!, fundingSince: null } })],
 ];
 
 /**
@@ -42,7 +43,8 @@ const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: Leg
  */
 export function expectedMigration<T extends LegacyIdentity>(raw: T, fromFormat: number) {
   if (!Number.isInteger(fromFormat) || fromFormat < 19 || fromFormat > SEASON_SCHEMA_VERSION) throw new Error('expectedMigration supports raw states from format 19 to the current format.');
-  const added = ADDED_BY_FORMAT.filter(([format]) => format > fromFormat).reduce<Partial<SeasonState>>((systems, [, defaults]) => ({ ...systems, ...defaults(raw) }), {});
+  // Each row sees the systems added before it, so later formats can extend an earlier system's defaults.
+  const added = ADDED_BY_FORMAT.filter(([format]) => format > fromFormat).reduce<Partial<SeasonState>>((systems, [, defaults]) => ({ ...systems, ...defaults({ ...raw, ...systems }) }), {});
   return { ...raw, ...added, schemaVersion: SEASON_SCHEMA_VERSION };
 }
 

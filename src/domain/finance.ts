@@ -13,7 +13,7 @@ export interface FinanceEntry {
   clubId: string;
   seasonNumber: number;
   round: number;
-  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout' | 'facility' | 'facility-upkeep';
+  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout' | 'facility' | 'facility-upkeep' | 'board-capital';
   /** Income or cost in signed euro cents; cash effects also depend on unpaid obligations. */
   amount: number;
   sourceId: string;
@@ -29,6 +29,8 @@ export interface FinanceEntry {
   facilityUpkeep?: { arena: number; training: number; youth: number };
   /** Present on sponsorship payments made under a negotiated agreement (format 31). */
   sponsorship?: SponsorshipPayment;
+  /** One-off owner capital for the facility upgrade that starts immediately afterwards (format 32). */
+  boardCapital?: { projectId: string; facilityType: FacilityType };
 }
 
 export interface SeasonFinance {

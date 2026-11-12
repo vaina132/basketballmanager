@@ -8,7 +8,7 @@ import { setEmploymentDelegation } from '../src/world/employment';
 import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
-import { currentSeasonFile, expectedMigration } from './helpers/season-format';
+import { currentSeasonFile, expectedMigration, SEASON_SCHEMA_VERSION } from './helpers/season-format';
 
 const club = 'rhine-falcons';
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
@@ -36,10 +36,10 @@ beforeAll(() => {
 }, 180_000);
 
 describe('sponsorship persistence and strict replay', () => {
-  it('round-trips every stage of negotiated sponsorship through format 31', () => {
+  it('round-trips every stage of negotiated sponsorship through the current format', () => {
     for (const state of [opening, renewal, negotiated, complete, nextOpening, nextRenewal]) {
       const text = serializeSeason(state);
-      expect(JSON.parse(text).formatVersion).toBe(31);
+      expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
       expect(parseSeason(text)).toEqual(state);
     }
     expect(nextRenewal.finance.ledger.some(entry => entry.sponsorship?.installment === 2)).toBe(true);

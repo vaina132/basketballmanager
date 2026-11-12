@@ -3,10 +3,11 @@ import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { getClubFinanceDefinition } from '../data/development-finances';
 import { FACILITY_AUTOMATION_BUFFER, FACILITY_TYPES, getActiveFacilityProject, quoteFacilityUpgrade } from './facilities-policy';
-import { recordFacilityInvestment } from './finance';
+import { recordBoardCapital, recordFacilityInvestment } from './finance';
+import { quoteBoardFunding, type BoardFundingQuote } from './board-funding-policy';
 
 export function createFacilities(clubs: readonly Pick<Team, 'id'>[] = [], managedClubId = ''): SeasonFacilities {
-  return { model: 'facilities-1', enabledSince: null, delegated: Object.fromEntries(clubs.map(club => [club.id, club.id !== managedClubId])), projects: [], events: [] };
+  return { model: 'facilities-1', enabledSince: null, delegated: Object.fromEntries(clubs.map(club => [club.id, club.id !== managedClubId])), projects: [], events: [], fundingSince: null };
 }
 
 export function facilityEventAnchor(state: SeasonState): FacilityAnchor {
@@ -63,6 +64,14 @@ export function applyFacilityEvent(state: SeasonState, event: FacilityEvent): Se
     if (state.facilities.delegated[event.clubId] === event.delegated) throw new Error('This facilities policy is already selected.');
     return { ...state, facilities: { ...state.facilities, events, delegated: { ...state.facilities.delegated, [event.clubId]: event.delegated } } };
   }
+  if (event.type === 'funding') {
+    const quote = quoteBoardFunding(state, event.facilityType, event.clubId, event.mode);
+    if (!quote.eligible) throw new Error(quote.reason!);
+    if (event.amount !== quote.amount || event.approved !== quote.approved || event.confidence !== quote.confidence || event.requiredConfidence !== quote.requiredConfidence || event.capitalRemaining !== quote.capitalRemaining) throw new Error('Record the board decision exactly as the board rules give it.');
+    if (event.mode === 'automatic' && !event.approved) throw new Error('Automatic control asks the board only when the rules allow the capital.');
+    const decided = { ...state, facilities: { ...state.facilities, events } };
+    return event.approved ? recordBoardCapital(decided, `facility-project-${state.facilities.projects.length + 1}`) : decided;
+  }
   if (event.type !== 'process') throw new Error('Choose a supported facilities command.');
   const due = state.facilities.projects.filter(project => project.completedOn === null && project.cancelledOn === null && project.dueOn <= state.date);
   if (!due.length) throw new Error('There are no construction projects ready to complete at this calendar boundary.');
@@ -92,7 +101,28 @@ export function processFacilityProjects(state: SeasonState): SeasonState {
   return applyFacilityEvent(state, { ...facilityEventAnchor(state), type: 'process' });
 }
 
-/** The same funded quote applies to all clubs; automation preserves a conservative extra cash cushion. */
+const fundingDecision = (quote: BoardFundingQuote) => ({ type: 'funding' as const, clubId: quote.clubId, facilityType: quote.facilityType, amount: quote.amount, mode: quote.mode, approved: quote.approved, confidence: quote.confidence, requiredConfidence: quote.requiredConfidence, capitalRemaining: quote.capitalRemaining });
+
+/** Older careers opt in; new careers enable funding with facilities and board reviews. */
+export function enableBoardFunding(state: SeasonState): SeasonState {
+  if (state.facilities.fundingSince) return state;
+  if (!state.facilities.enabledSince) throw new Error('Enable club facilities before asking the board for capital.');
+  if (!state.board.enabledSince) throw new Error('Enable board reviews before asking the board for capital.');
+  return automateFacilities({ ...state, facilities: { ...state.facilities, fundingSince: facilityEventAnchor(state) } });
+}
+
+/** The manager asks the board to fund what the club cannot; an approval starts the upgrade at once. */
+export function requestBoardFunding(state: SeasonState, type: FacilityType): SeasonState {
+  const quote = quoteBoardFunding(state, type, state.managedClubId, 'manager');
+  if (!quote.eligible) throw new Error(quote.reason!);
+  const decided = applyFacilityEvent(state, { ...facilityEventAnchor(state), ...fundingDecision(quote) });
+  return quote.approved ? startFacilityUpgrade(decided, type) : decided;
+}
+
+/**
+ * The same funded quote applies to all clubs; automation preserves a conservative extra cash cushion. When no
+ * upgrade is affordable with that cushion, automatic control asks the board only if its rules would approve.
+ */
 export function automateFacilities(state: SeasonState): SeasonState {
   if (!state.facilities.enabledSince) return state;
   let next = state;
@@ -100,6 +130,10 @@ export function automateFacilities(state: SeasonState): SeasonState {
     if (!next.facilities.delegated[club.id] || getActiveFacilityProject(next, club.id)) continue;
     const quote = FACILITY_TYPES.map(type => quoteFacilityUpgrade(next, type, club.id)).filter(quote => quote.canStart && quote.remainingBudgetAfter >= FACILITY_AUTOMATION_BUFFER).sort((left, right) => left.cost - right.cost || FACILITY_TYPES.indexOf(left.type) - FACILITY_TYPES.indexOf(right.type))[0];
     if (quote) next = startFacilityUpgrade(next, quote.type, club.id);
+    else if (next.facilities.fundingSince) {
+      const funded = FACILITY_TYPES.map(type => quoteBoardFunding(next, type, club.id, 'automatic')).filter(item => item.approved).sort((left, right) => left.cost - right.cost || FACILITY_TYPES.indexOf(left.facilityType) - FACILITY_TYPES.indexOf(right.facilityType))[0];
+      if (funded) next = startFacilityUpgrade(applyFacilityEvent(next, { ...facilityEventAnchor(next), ...fundingDecision(funded) }), funded.facilityType, club.id);
+    }
   }
   return next;
 }

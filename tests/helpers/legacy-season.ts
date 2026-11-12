@@ -109,5 +109,12 @@ export function stripBoard(value: object): void {
 
 /** Format30 predates negotiated sponsorship agreements. */
 export function stripCommercial(value: object): void {
+  stripBoardFunding(value);
   delete (value as Record<string, unknown>).commercial;
+}
+
+/** Format31 predates board funding requests. */
+export function stripBoardFunding(value: object): void {
+  const facilities = (value as { facilities?: Record<string, unknown> }).facilities;
+  if (facilities) delete facilities.fundingSince;
 }

@@ -32,7 +32,7 @@ const money = (cents: number) => moneyFormatter.format(cents / 100)
 const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${money(Math.abs(cents))}`
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
-const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep' }
+const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital' }
 
 export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, onEnableSponsorship, onAcceptSponsorship, onDeclineSponsorship, onRequestSponsorship, onSponsorshipDelegation, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
@@ -60,6 +60,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
       const project = season.facilities.projects.find(item => item.id === entry.facility!.projectId)
       return `${FACILITY_LABELS[entry.facility.type]}${project ? ` · Level ${project.fromLevel} → ${project.toLevel}` : ''} · Construction paid upfront`
     }
+    if (entry.boardCapital) return `${FACILITY_LABELS[entry.boardCapital.facilityType]} upgrade · Owner capital from the board`
     if (entry.facilityUpkeep) return (Object.entries(entry.facilityUpkeep) as [keyof typeof FACILITY_LABELS, number][]).filter(([, cost]) => cost > 0).map(([type, cost]) => `${FACILITY_LABELS[type]} ${money(cost)}`).join(' · ')
     if (entry.kind === 'buyout') {
       const buyout = season.employment.buyouts.find(item => item.id === entry.sourceId)

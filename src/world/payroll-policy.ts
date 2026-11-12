@@ -38,8 +38,13 @@ export function getPayrollReserve(state: Pick<SeasonState, 'payroll' | 'finance'
   return state.payroll.agreements.filter(agreement => agreement.clubId === clubId && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= (state.round ?? 10)).reduce((sum, agreement) => sum + agreementCommitted(agreement, state.finance.ledger, agreementThroughRound(state, agreement)), 0);
 }
 
+/** Reconciled net wealth after every reservation; negative when commitments already exceed cash. */
+export function getSpendablePosition(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'employment' | 'recruitment' | 'round'>>, clubId: string, excludeOfferId?: string, excludeTransferId?: string, excludeInSeasonOfferId?: string): number {
+  const net = state.finance.ledger.filter(entry => entry.clubId === clubId).reduce((sum, entry) => sum + entry.amount, 0);
+  return net - getPayrollReserve(state, clubId) - getReservedTransferFees(state, clubId, excludeOfferId) - getTransferObligationReserve(state, clubId, excludeTransferId) - getReservedInSeasonWages(state, clubId, excludeInSeasonOfferId) - getReservedInSeasonFees(state, clubId, excludeInSeasonOfferId);
+}
+
 /** Reconciled net wealth yields cash when positive and unpaid obligations when negative. */
 export function getSpendableCash(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'employment' | 'recruitment' | 'round'>>, clubId: string, excludeOfferId?: string, excludeTransferId?: string, excludeInSeasonOfferId?: string): number {
-  const net = state.finance.ledger.filter(entry => entry.clubId === clubId).reduce((sum, entry) => sum + entry.amount, 0);
-  return Math.max(0, net - getPayrollReserve(state, clubId) - getReservedTransferFees(state, clubId, excludeOfferId) - getTransferObligationReserve(state, clubId, excludeTransferId) - getReservedInSeasonWages(state, clubId, excludeInSeasonOfferId) - getReservedInSeasonFees(state, clubId, excludeInSeasonOfferId));
+  return Math.max(0, getSpendablePosition(state, clubId, excludeOfferId, excludeTransferId, excludeInSeasonOfferId));
 }

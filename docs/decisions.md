@@ -159,6 +159,14 @@ Promises commit to the current role minimum over three future eligible games wit
 
 Morale affects future decision consistency only: the existing possession error chance gains `(50 - morale) / 10000`, bounded to half a percentage point in either direction and the existing action range. It never multiplies every skill or draws extra randomness. A unique round preparation freezes all clubs before any matches, so a later conversation cannot benefit or penalize an already prepared fixture. Contract bargaining, teammate chemistry, personalities and broader relationship consequences remain separate future work.
 
+## Board expectations and confidence foundation
+
+Board objectives are communicated before their evidence window: a frozen wins target from the registered squad and no increase over starting unpaid costs, including overdue transfer fees. The upper, middle and lower thirds of squad assessment target 60%, 50% and 40% wins, rounded up over eligible fixtures. The strongest eight registered players determine the comparison; later arrivals and skill changes do not rewrite it. Exact squad-strength ties share the best rank and target; tied expectations may be collectively aspirational. The initial pack has distinct ranks and targets of 6/6/5/5/4/4 wins. Existing-career opt-in excludes today's match; no retrospective target is imposed.
+
+Each committed eligible matchday produces one dated review for all clubs. After three eligible games, wins above or below target pace beyond a half-win tolerance contribute ten points per win, capped at +/-30. Carried medical absences may offset up to six negative sporting points. Financial improvement or deterioration contributes five points per EUR 10,000, capped at +10/-25, relative to the mandate's inherited unpaid amount. Disabled finance is unassessed. Confidence moves at most eight points toward `50 + components` per review and retains its previous value across the season boundary. Short assessment windows still show objective outcomes but do not bypass the three-game sporting grace.
+
+These coefficients are provisional and visible in review evidence. This increment records board assessment without spending money, adding a match bonus, changing recruitment authority or dismissing the manager. Funding requests, president traits, development/culture objectives, employment consequences and press require subsequent work.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

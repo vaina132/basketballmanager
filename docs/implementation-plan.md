@@ -12,12 +12,12 @@ Current milestone status, 12 November 2026:
 | 4. World and saves | Partial | Fictional six-club careers, rollover, history and local checkpoints; twelve real domestic divisions, three European competitions and their transitions remain. |
 | 5. Squad, training, health and staff | Partial | Squad information, training, injuries, training coaches, scouts, fitness coaches, physios, assistants and youth coaches; academy intake/promotion, youth fixtures/results and medical availability, age-adjusted senior practice, gradual decline and retirement; agreed roles, playing-time promises, morale and bounded match focus; deeper relationships/chemistry, richer development, youth match coaching and population calibration remain. |
 | 6. Scouting, recruitment and finances | Partial | Scouting, budgets, negotiations, competing bids, installments, buyouts, paid/free in-season registration, optional release clauses, recruitable scouts, quality-dependent discovery and simpler Club management; broader contract mechanics, regional scouting and the complete economy remain. |
-| 7. Facilities, business, board and career | Partial | Ticket pricing, fixed sponsorship and funded arena/training/youth upgrades with construction, upkeep and optional delegation; wider facility finance/maintenance, commercial negotiations, board/press, dismissal and job changes remain. |
+| 7. Facilities, business, board and career | Partial | Ticket pricing, fixed sponsorship and funded arena/training/youth upgrades with construction, upkeep and optional delegation; fixed board objectives, dated reviews and confidence; wider facility finance/maintenance, commercial negotiations, board consequences/press, dismissal and job changes remain. |
 | 8. Integrated first release | Pending | Verified opening-day player/club data, all agreed competitions, complete management modules, calibration and release acceptance remain. |
 
-The latest increment adds squad dynamics: agreed playing-time roles, concerns from eligible recorded appearances, explicit conversations/promises, bounded morale/trust with visible causes, and a small focus effect frozen before future matches. Promises retain their history through transfers and seasons, while old careers opt in prospectively under format 29. Detailed behavior and verification are recorded in [current status](implementation-status.md).
+The latest increment adds board expectations and confidence in Club: fixed season wins objectives, financial discipline against inherited unpaid costs, dated reviews from committed results, bounded injury context and confidence that carries between seasons. Earlier careers opt in prospectively under format 30. Detailed behavior and verification are recorded in [current status](implementation-status.md).
 
-Next management increment: board expectations and confidence, beginning with transparent objectives and dated reviews based on actual club results and resources. Broader commercial negotiations, press, dismissal/job changes and richer player relationships remain subsequent work. Real competition/data integration and match calibration remain parallel requirements.
+Next management increment: sponsorship negotiations and commercial management, extending the current fixed sponsorship foundation with explicit terms and cash consequences. Board funding requests, employment consequences, press, dismissal/job changes and richer player relationships remain subsequent work. Real competition/data integration and match calibration remain parallel requirements.
 
 ## 1. Dependency order
 
@@ -154,7 +154,7 @@ Acceptance: simultaneous offers cannot overspend reservations; failed negotiatio
 
 ## 9. Milestone 7: facilities, business, board and career
 
-Current foundation: all three facility types have funded upgrades, calendar durations, completed-level upkeep, temporary arena disruption and optional delegation under existing cash/commitment guards. Project financing, maintenance choices/deterioration and broader board decisions remain.
+Current foundation: all three facility types have funded upgrades, calendar durations, completed-level upkeep, temporary arena disruption and optional delegation under existing cash/commitment guards. Board objectives and dated confidence reviews now use actual results and unpaid costs. Project financing, maintenance choices/deterioration, funding requests and employment consequences remain.
 
 Facilities include arena/stadium, training facilities and youth infrastructure. Add project cost/duration, maintenance, funding, temporary disruption and board constraints. Let the manager set ticket policies, negotiate sponsorship and manage upgrades or delegate each responsibility.
 

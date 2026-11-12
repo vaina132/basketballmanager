@@ -1,3 +1,4 @@
+import { createBoard } from '../src/world/board';
 import { createRelationships } from '../src/world/relationships';
 import { createFacilities } from '../src/world/facilities';
 import { readFileSync } from 'node:fs';
@@ -17,7 +18,7 @@ const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json
 const restore = state => parseSeason(serializeSeason(state));
 const changed = (state, mutate) => { const envelope = JSON.parse(serializeSeason(state)); mutate(envelope.state); return JSON.stringify(envelope); };
 const managedContract = state => state.assistant.contracts.findLast(contract => contract.clubId === club);
-const upgrade = state => ({ ...state, schemaVersion: 29, relationships: createRelationships(), facilities: createFacilities((state).clubs, (state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: createAssistant(), academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] } });
+const upgrade = state => ({ ...state, schemaVersion: 30, board: createBoard(), relationships: createRelationships(), facilities: createFacilities((state).clubs, (state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: createAssistant(), academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] } });
 
 /** Forge a matching charge as well, so employment validation cannot rely on missing cash records. */
 function appendAppointment(state, assistantId, clubId = club) {

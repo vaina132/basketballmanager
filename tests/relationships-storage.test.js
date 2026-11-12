@@ -1,3 +1,4 @@
+import { createBoard } from '../src/world/board';
 ﻿import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -10,10 +11,10 @@ import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
-const upgrade = state => ({ ...state, schemaVersion: 29, relationships: createRelationships() });
+const upgrade = state => ({ ...state, schemaVersion: 30, board: createBoard(), relationships: createRelationships() });
 const restore = state => parseSeason(serializeSeason(state));
 const advance = state => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
-const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 29, engineVersion: 'possession-3', state: copy }); };
+const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 30, engineVersion: 'possession-3', state: copy }); };
 const playerId = 'rhf-10';
 let legacy, enabled, promoted, initial, role, concern, promised, answered, complete, opening;
 beforeAll(() => {

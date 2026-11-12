@@ -1,3 +1,4 @@
+import { createBoard } from '../src/world/board';
 import { createRelationships } from '../src/world/relationships';
 import { createFacilities } from '../src/world/facilities';
 import { readFileSync } from 'node:fs';
@@ -29,7 +30,7 @@ describe('scout save provenance and migration', () => {
     const text = fixture('season20-scouting-pending'), original = JSON.parse(text);
     const restored = parseSeason(text), expected = JSON.parse(fixture('season20-scouting-reply'));
     expect(original.formatVersion).toBe(20);
-    expect(restored).toEqual({ ...original.state, schemaVersion: 29, relationships: createRelationships(), facilities: createFacilities((original.state).clubs, (original.state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] }, physio: { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }, fitness: { model: 'fitness-1', enabledSince: null, contracts: [] }, scouts: createScouts() });
+    expect(restored).toEqual({ ...original.state, schemaVersion: 30, board: createBoard(), relationships: createRelationships(), facilities: createFacilities((original.state).clubs, (original.state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, assistant: { model: 'assistant-1', enabledSince: null, contracts: [] }, academy: { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }, youth: { model: 'youth-1', enabledSince: null, contracts: [] }, physio: { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }, fitness: { model: 'fitness-1', enabledSince: null, contracts: [] }, scouts: createScouts() });
     expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(original.state.activeMatch));
     expect(Object.fromEntries(Object.keys(expected.beforeKnowledge).map(id => [id, getPlayerKnowledge(restored, id)]))).toEqual(expected.beforeKnowledge);
     const next = play(restored);

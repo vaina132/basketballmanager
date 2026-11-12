@@ -12,7 +12,7 @@ import { requiredTransferFee } from '../src/world/transfers-policy';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 const managed = 'rhine-falcons', seller = 'aegean-waves', rival = 'alpine-stags';
-const envelope = (state: unknown, formatVersion = 29) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 30) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const window = (state: SeasonState) => getMarketWindow(state)!;
 const ownOffer = (state: SeasonState) => getMarketOffers(state).find(offer => offer.transfer)!;
 const complete = (initial: SeasonState): SeasonState => {
@@ -64,7 +64,7 @@ describe('paid transfer persistence and accounting', () => {
   it('round-trips club review, approval, fee counters, player selection and completed transfers', () => {
     for (const state of [opened, pending, approved, accepted, competing, decided, incoming, reviewed, rejected, countered, ready, nextYear]) {
       const text = serializeSeason(state);
-      expect(JSON.parse(text).formatVersion).toBe(29);
+      expect(JSON.parse(text).formatVersion).toBe(30);
       const restored = parseSeason(text);
       expect(restored).toEqual(state);
       expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));

@@ -1,3 +1,4 @@
+import { createBoard } from '../src/world/board';
 import { createRelationships } from '../src/world/relationships';
 import { createFacilities } from '../src/world/facilities';
 import { readFileSync } from 'node:fs';
@@ -16,9 +17,9 @@ import { advanceAcademyCareer as advance } from './helpers/academy-careers';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
 const restore = state => parseSeason(serializeSeason(state));
-const upgrade = state => ({ ...state, schemaVersion: 29, relationships: createRelationships(), facilities: createFacilities((state).clubs, (state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: createLifecycle() });
+const upgrade = state => ({ ...state, schemaVersion: 30, board: createBoard(), relationships: createRelationships(), facilities: createFacilities((state).clubs, (state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: createLifecycle() });
 const notice = state => state.lifecycle.notices.find(item => item.playerId === 'adr-3');
-const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 29, engineVersion: 'possession-3', state: copy }); };
+const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 30, engineVersion: 'possession-3', state: copy }); };
 let original, migrated, enabled, next, yearFour, pending, protectedState, withdrawnBefore, accepted, retired, retiredNext;
 
 beforeAll(() => {

@@ -1,3 +1,4 @@
+import { createBoard } from '../src/world/board';
 import { createRelationships } from '../src/world/relationships';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
@@ -70,7 +71,7 @@ describe('same-club career rollover', () => {
     const before = structuredClone(completed);
     const next = rolloverSeason(completed), archive = next.history[0]!;
     expect(completed).toEqual(before);
-    expect(next).toMatchObject({ schemaVersion: 29, relationships: createRelationships(), seasonNumber: 2, round: 1, status: 'active', date: '2027-09-04', managedClubId: completed.managedClubId, seed: completed.seed });
+    expect(next).toMatchObject({ schemaVersion: 30, board: createBoard(), relationships: createRelationships(), seasonNumber: 2, round: 1, status: 'active', date: '2027-09-04', managedClubId: completed.managedClubId, seed: completed.seed });
     expect(next.clubs).toEqual(completed.clubs);
     expect(next.history).toHaveLength(1);
     expect(archive.seasonNumber).toBe(1);

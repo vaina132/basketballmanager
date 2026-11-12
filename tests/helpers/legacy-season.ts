@@ -97,5 +97,11 @@ export function stripFacilities(value: object): void {
 
 /** Format28 predates player relationships and frozen match morale. */
 export function stripRelationships(value: object): void {
+  stripBoard(value);
   delete (value as Record<string, unknown>).relationships;
+}
+
+/** Format29 predates board mandates and dated confidence reviews. */
+export function stripBoard(value: object): void {
+  delete (value as Record<string, unknown>).board;
 }

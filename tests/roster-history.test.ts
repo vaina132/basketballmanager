@@ -57,7 +57,7 @@ describe('fixture, training and archive ownership', () => {
   }, 30_000);
 
   it('records the squads used by every committed game and the completed training week', () => {
-    expect(initial.schemaVersion).toBe(29);
+    expect(initial.schemaVersion).toBe(30);
     expect(initial.rosters).toEqual(createRosterSnapshots(initial.clubs, 1));
     for (const fixture of secondRound.fixtures.filter(fixture => fixture.result)) {
       const teams = getFixtureTeams(secondRound, fixture);

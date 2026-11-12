@@ -1,3 +1,4 @@
+import type { SeasonBoard } from './board';
 import type { SeasonRelationships } from './relationships';
 import type { InjuryMode, MatchResult, MatchState, PlayerStats, Side, Tactics, Team } from './types';
 import type { SeasonTraining } from './training';
@@ -73,7 +74,7 @@ export interface SeasonArchive {
 }
 
 export interface SeasonState {
-  schemaVersion: 29;
+  schemaVersion: 30;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;
@@ -106,6 +107,7 @@ export interface SeasonState {
   youthCompetition: SeasonYouthCompetition;
   facilities: SeasonFacilities;
   relationships: SeasonRelationships;
+  board: SeasonBoard;
   negotiations: SeasonNegotiations;
   market: SeasonMarket;
   recruitment: SeasonRecruitment;

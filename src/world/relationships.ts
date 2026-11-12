@@ -1,9 +1,10 @@
-import type { PlayerRelationship, PlayingTimePromise, RelationshipAnchor, RelationshipEvent, RelationshipTalk, RelationshipTalkQuote, RoleAgreementQuote, SeasonRelationships, SquadRole } from '../domain/relationships';
+import type { PlayerRelationship, PlayingTimePromise, PressAnswer, RelationshipAnchor, RelationshipEvent, RelationshipTalk, RelationshipTalkQuote, RoleAgreementQuote, SeasonRelationships, SquadRole } from '../domain/relationships';
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import { dateForRound } from './season';
 import { rosterForRound } from './rosters';
 import { getPlayerRetirement } from './lifecycle-policy';
+import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, pressImpact } from './press-policy';
 
 export const SQUAD_ROLES: readonly SquadRole[] = ['development', 'rotation', 'starter'];
 export const SQUAD_ROLE_DEFINITIONS: Record<SquadRole, { label: string; minMinutes: number; maxMinutes: number }> = {
@@ -19,7 +20,7 @@ const dateAt = (at: number) => dateForRound((at - 1) % 10 + 1, Math.floor((at - 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 const rounded = (n: number) => Math.round(n * 10) / 10;
 const compareText = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
-const playerEvent = (event: RelationshipEvent): event is Extract<RelationshipEvent, { type: 'role' | 'talk' }> => event.type !== 'prepare';
+const playerEvent = (event: RelationshipEvent): event is Extract<RelationshipEvent, { type: 'role' | 'talk' }> => event.type === 'role' || event.type === 'talk';
 
 export function createRelationships(): SeasonRelationships { return { model: 'relationships-1', enabledSince: null, events: [] }; }
 export function relationshipEventAnchor(state: SeasonState): RelationshipAnchor {
@@ -141,7 +142,9 @@ export function getPlayerRelationship(state: SeasonState, playerId: string, club
     { label: 'Manager conversations', impact: Math.round(conversationImpact) },
     { label: 'Playing-time promises', impact: Math.round(promiseImpact) },
   ];
-  const morale = Math.round(clamp(50 + roleImpact + resultImpact + conversationImpact + promiseImpact, 0, 100));
+  const press = state.relationships.enabledSince ? pressImpact(state, clubId, playerId) : { impact: 0, mentioned: false };
+  if (press.mentioned) reasons.push({ label: 'Press comments', impact: Math.round(press.impact) });
+  const morale = Math.round(clamp(50 + roleImpact + resultImpact + conversationImpact + promiseImpact + press.impact, 0, 100));
   const promise = promises.find(promise => promise.status === 'active') ?? null;
   const latest = personal.at(-1), completedRounds = relationshipEventAnchor(state).completedRounds;
   let talkReason: string | null = null;
@@ -153,6 +156,10 @@ export function getPlayerRelationship(state: SeasonState, playerId: string, club
   else if (latest && completedRounds - latest.completedRounds < RELATIONSHIP_COOLDOWN_GAMES) talkReason = `Allow ${RELATIONSHIP_COOLDOWN_GAMES - (completedRounds - latest.completedRounds)} more completed club games before another role conversation.`;
   const history = personal.map(event => ({ id: event.id, date: event.date, label: event.type === 'role' ? `${SQUAD_ROLE_DEFINITIONS[event.role].label} role agreed` : event.choice === 'explain' ? 'Competition explained' : 'Playing time promised', detail: event.type === 'role' ? `Future expectation: ${SQUAD_ROLE_DEFINITIONS[event.role].minMinutes}–${SQUAD_ROLE_DEFINITIONS[event.role].maxMinutes} minutes per eligible game.` : event.choice === 'explain' ? 'The player was heard; the agreed playing-time role remains.' : 'Meet the agreed minimum across the next three eligible games after this matchday, within six club games.' }));
   for (const item of promises) if (item.outcomeDate) history.push({ id: `${item.id}-outcome`, date: item.outcomeDate, label: item.status === 'kept' ? 'Playing-time promise kept' : item.status === 'broken' ? 'Playing-time promise broken' : item.status === 'departed' ? 'Promise closed after departure' : 'Promise closed without enough eligible games', detail: item.status === 'kept' || item.status === 'broken' ? `${item.averageMinutes} minutes per eligible game; ${item.targetMinutes} promised.` : 'No promise penalty was applied.' });
+  for (const event of state.relationships.events) if (event.type === 'press' && event.clubId === clubId && event.playerIds.includes(playerId)) {
+    const effect = PRESS_EFFECTS[event.answer], value = event.coreIds.includes(playerId) ? effect.core : effect.others;
+    history.push({ id: event.id, date: event.date, label: `Press: ${PRESS_ANSWER_TEXT[event.answer].label.toLowerCase()}`, detail: value === 0 ? 'No morale change.' : `${value > 0 ? '+' : ''}${value} morale, fading over the following weeks.` });
+  }
   history.sort((a, b) => compareText(b.date, a.date) || compareText(b.id, a.id));
   return { player, clubId, role: role.role, roleLabel: definition.label, minMinutes: definition.minMinutes, maxMinutes: definition.maxMinutes, morale, trust, moraleLabel: morale >= 65 ? 'Positive' : morale >= 45 ? 'Settled' : morale >= 30 ? 'Concerned' : 'Unsettled', eligibleGames: evidence.length, averageMinutes: average === null ? null : rounded(average), evidenceFixtureIds: evidence.map(game => game.id), concern, reasons, promise, promises, history, canTalk: talkReason === null, talkReason };
 }
@@ -196,6 +203,13 @@ export function applyRelationshipEvent(state: SeasonState, event: RelationshipEv
   } else if (event.type === 'talk') {
     const quote = quoteRelationshipTalk(state, event.playerId, event.choice, event.clubId);
     if (!quote.canTalk) throw new Error(quote.reason!);
+  } else if (event.type === 'press') {
+    const question = getPressQuestion(state);
+    if (!question || question.clubId !== event.clubId) throw new Error('There is no open press question for this club.');
+    if (question.answered) throw new Error('This press question has already been answered.');
+    if (event.topic !== question.topic || event.triggerRound !== question.triggerRound || !question.answers.includes(event.answer)) throw new Error('Choose one of the answers offered for this press question.');
+    const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((value, index) => value === b[index]);
+    if (!same(event.playerIds, question.playerIds) || !same(event.coreIds, question.coreIds)) throw new Error('Record exactly the squad and regulars the press question addressed.');
   } else if (event.type === 'prepare') {
     if (state.status !== 'active' || anchor.completedRounds !== ordinal(state.seasonNumber, state.round) - 1) throw new Error('Freeze morale only before a new uncommitted matchday.');
     if (state.relationships.events.some(item => item.type === 'prepare' && item.seasonNumber === state.seasonNumber && item.round === state.round)) throw new Error('This matchday already has frozen morale.');
@@ -211,6 +225,12 @@ export function agreeSquadRole(state: SeasonState, playerId: string, role: Squad
 }
 export function talkToPlayer(state: SeasonState, playerId: string, choice: RelationshipTalk, clubId = state.managedClubId): SeasonState {
   return applyRelationshipEvent(state, { ...relationshipEventAnchor(state), id: eventId(state), type: 'talk', clubId, playerId, choice });
+}
+/** The manager answers the open press question; ignoring it leaves the routine answer with no effect. */
+export function answerPress(state: SeasonState, answer: PressAnswer): SeasonState {
+  const question = getPressQuestion(state);
+  if (!question) throw new Error('There is no open press question.');
+  return applyRelationshipEvent(state, { ...relationshipEventAnchor(state), id: eventId(state), type: 'press', clubId: question.clubId, topic: question.topic, triggerRound: question.triggerRound, answer, playerIds: question.playerIds, coreIds: question.coreIds });
 }
 function preparationValues(state: SeasonState): { rosterIds: Record<string, string>; values: Record<string, number> } {
   return { rosterIds: Object.fromEntries(state.clubs.map(club => [club.id, rosterForRound(state.rosters, club.id, state.round).id])), values: Object.fromEntries(state.clubs.flatMap(club => getSquadRelationships(state, club.id).map(row => [row.player.id, row.morale]))) };

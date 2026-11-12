@@ -94,7 +94,8 @@ export function validateRelationships(state: SeasonState, version: number): void
   const prepared = new Map<number, number>();
   for (const [index, raw] of fields.events.entries()) {
     const path = `relationships.events[${index}]`, type = raw && typeof raw === 'object' ? raw.type : undefined;
-    const extra = type === 'role' ? ['clubId', 'playerId', 'role'] : type === 'talk' ? ['clubId', 'playerId', 'choice'] : type === 'prepare' ? ['rosterIds', 'values'] : null;
+    // Format 34 adds press answers to the same chronological journal.
+    const extra = type === 'role' ? ['clubId', 'playerId', 'role'] : type === 'talk' ? ['clubId', 'playerId', 'choice'] : type === 'prepare' ? ['rosterIds', 'values'] : type === 'press' && version >= 34 ? ['clubId', 'topic', 'triggerRound', 'answer', 'playerIds', 'coreIds'] : null;
     if (!extra) fail(path, 'must identify a supported player relationship command');
     const event = record(raw, path, [...ANCHOR_KEYS, 'id', 'type', ...extra]) as unknown as RelationshipEvent;
     const current = checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, event[key]])), path);

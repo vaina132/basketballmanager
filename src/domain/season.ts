@@ -75,7 +75,7 @@ export interface SeasonArchive {
 }
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
-export const SEASON_SCHEMA_VERSION = 33;
+export const SEASON_SCHEMA_VERSION = 34;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

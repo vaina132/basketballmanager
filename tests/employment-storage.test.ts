@@ -1,5 +1,6 @@
 import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_PLAYERS } from '../src/data/development-players';
 import { getSeasonWage } from '../src/data/development-wages';
@@ -12,7 +13,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'atlantic-pilots';
 const finish = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status !== 'complete') state = advanceSeason(finish(state)); return state; }
-const envelope = (state: unknown, formatVersion = 30) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 
 let initial: SeasonState, offseason: SeasonState, recruited: SeasonState, second: SeasonState, secondWeek: SeasonState;
 let incomingId: string, renewedId: string;

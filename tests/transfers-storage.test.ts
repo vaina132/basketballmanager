@@ -13,7 +13,7 @@ import { requiredTransferFee } from '../src/world/transfers-policy';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 const managed = 'rhine-falcons', seller = 'aegean-waves', rival = 'alpine-stags';
-const envelope = (state: unknown, formatVersion = 30) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const window = (state: SeasonState) => getMarketWindow(state)!;
 const ownOffer = (state: SeasonState) => getMarketOffers(state).find(offer => offer.transfer)!;
 const complete = (initial: SeasonState): SeasonState => {

@@ -14,7 +14,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'rhine-falcons', playerId = 'rhf-1';
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
-const envelope = (state: unknown, formatVersion = 30) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const window = (state: SeasonState) => getMarketWindow(state)!;
 const firstOffer = (state: SeasonState) => window(state).offers.find(offer => offer.playerId === playerId)!;
 let legacy: SeasonState, opened: SeasonState, pending: SeasonState, countered: SeasonState, expired: SeasonState, withdrawn: SeasonState, replaced: SeasonState, accepted: SeasonState, ready: SeasonState, second: SeasonState, secondComplete: SeasonState;

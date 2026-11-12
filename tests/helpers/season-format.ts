@@ -12,6 +12,7 @@ import { createYouthCompetition } from '../../src/world/youth-competition';
 import { createFacilities } from '../../src/world/facilities';
 import { createRelationships } from '../../src/world/relationships';
 import { createBoard } from '../../src/world/board';
+import { createCommercial } from '../../src/world/commercial-policy';
 
 export { SEASON_SCHEMA_VERSION };
 
@@ -32,6 +33,7 @@ const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: Leg
   [28, state => ({ facilities: createFacilities(state.clubs, state.managedClubId) })],
   [29, () => ({ relationships: createRelationships() })],
   [30, () => ({ board: createBoard() })],
+  [31, state => ({ commercial: createCommercial(state.clubs, state.managedClubId) })],
 ];
 
 /**

@@ -1,5 +1,6 @@
 import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import type { ScoutingReview } from '../src/domain/scouting';
 import { DEVELOPMENT_PLAYERS } from '../src/data/development-players';
@@ -15,7 +16,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'aegean-waves';
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
-const envelope = (state: unknown, formatVersion = 30) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const office = (state: SeasonState) => state.scouting.clubs[clubId]!;
 const firstPositive = (state: SeasonState): ScoutingReview => office(state).reviews.find(review => review.outcome === 'observed')!;
 

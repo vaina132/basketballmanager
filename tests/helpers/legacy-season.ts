@@ -103,5 +103,11 @@ export function stripRelationships(value: object): void {
 
 /** Format29 predates board mandates and dated confidence reviews. */
 export function stripBoard(value: object): void {
+  stripCommercial(value);
   delete (value as Record<string, unknown>).board;
+}
+
+/** Format30 predates negotiated sponsorship agreements. */
+export function stripCommercial(value: object): void {
+  delete (value as Record<string, unknown>).commercial;
 }

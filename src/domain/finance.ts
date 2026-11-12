@@ -1,5 +1,6 @@
 import type { PayrollCharge } from './payroll';
 import type { FacilityType } from './facilities';
+import type { SponsorshipPayment } from './commercial';
 
 export interface FinancePlan {
   delegated: boolean;
@@ -26,6 +27,8 @@ export interface FinanceEntry {
   youth?: { contractId: string; coachId: string };
   facility?: { projectId: string; type: FacilityType };
   facilityUpkeep?: { arena: number; training: number; youth: number };
+  /** Present on sponsorship payments made under a negotiated agreement (format 31). */
+  sponsorship?: SponsorshipPayment;
 }
 
 export interface SeasonFinance {

@@ -3,6 +3,7 @@ import type { SeasonFixture, SeasonState } from '../domain/season';
 import { buildBoardMandate, buildBoardReview, createBoard } from '../world/board';
 import { dateForRound } from '../world/season';
 import { rosterForRound } from '../world/rosters';
+import { openingSponsorshipClubs } from '../world/commercial-policy';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'ledgerCount', 'rosterCount'] as const;
 const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
@@ -122,8 +123,9 @@ export function validateBoard(state: SeasonState, version: number): void {
     const anchor = checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, raw[key]])), path, 'mandate');
     if (first ? !equal(anchor, enabled) : anchor.seasonNumber !== year || anchor.round !== 1 || anchor.completedRounds !== ordinal(year, 0) || anchor.date !== dateForRound(1, year)) fail(path, 'must freeze the objective at activation or the next season opening');
     if (!first && state.finance.enabledSince && ordinal(state.finance.enabledSince.seasonNumber, state.finance.enabledSince.round) < ordinal(year, 1)) {
-      const sponsorship = state.finance.ledger.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.seasonNumber === year && entry.kind === 'sponsor');
-      if (sponsorship.length !== state.clubs.length || sponsorship.some(({ index }) => index >= anchor.ledgerCount)) fail(path, 'must include the new-season funding before setting expectations');
+      // Opening sponsorship: every club under the fixed model, only covered clubs under negotiated agreements.
+      const sponsorship = state.finance.ledger.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.seasonNumber === year && entry.kind === 'sponsor' && entry.round === 1);
+      if (sponsorship.length !== openingSponsorshipClubs(state.commercial, state.clubs, year).length || sponsorship.some(({ index }) => index >= anchor.ledgerCount)) fail(path, 'must include the new-season funding before setting expectations');
     }
     chronological(anchor, path);
     let expected: BoardMandate;

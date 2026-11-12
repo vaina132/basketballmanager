@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import { getSeasonWage } from '../src/data/development-wages';
 import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match';
@@ -13,7 +14,7 @@ import { stripInSeasonRecruitment, stripInSeasonTransfers } from './helpers/lega
 
 const clubId = 'rhine-falcons';
 const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
-const encode = (state: unknown, formatVersion = 30) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const encode = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 let opening: SeasonState, pending: SeasonState, accepted: SeasonState, paid: SeasonState, competition: SeasonState, withdrawn: SeasonState;
 let playerId: string;
 

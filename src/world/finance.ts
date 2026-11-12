@@ -23,6 +23,7 @@ import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransfe
 import { quoteContractBuyout } from './buyouts';
 import { STAFF_BUDGET, staffCommitted } from './staff-policy';
 import { getArenaCapacity, getFacilityUpkeepBreakdown, quoteFacilityUpgrade } from './facilities-policy';
+import { agreementFor, commercialGovernsSeason, openingSponsorshipClubs, sponsorshipInstallment, sponsorshipSourceId, type DueSponsorshipPayment } from './commercial-policy';
 
 export { getClubFinanceDefinition } from '../data/development-finances';
 export type { FinanceBalance, FinanceLedgerRow, GateForecast } from '../domain/finance';
@@ -291,11 +292,25 @@ export function processFinanceRound(state: SeasonState): SeasonState {
   return next;
 }
 
-/** New-year sponsorship is received before selected staff renewals are considered. */
+/**
+ * New-year sponsorship is received before selected staff renewals are considered. Under negotiated agreements
+ * only covered clubs receive their first installment; an unsold sponsorship slot earns nothing.
+ */
 export function startFinanceSeason(state: SeasonState): SeasonState {
   if (!state.finance.enabledSince) return state;
   if (state.status !== 'active' || state.round !== 1) throw new Error('New-season funding requires the opening matchday.');
   let next = state;
-  for (const club of state.clubs) next = book(next, club.id, 'sponsor', ANNUAL_SPONSORSHIP, `sponsor-s${state.seasonNumber}`);
+  if (commercialGovernsSeason(state.commercial, state.seasonNumber)) {
+    for (const clubId of openingSponsorshipClubs(state.commercial, state.clubs, state.seasonNumber)) {
+      const agreement = agreementFor(state.commercial, clubId, state.seasonNumber)!;
+      next = append(next, { clubId, kind: 'sponsor', amount: sponsorshipInstallment(agreement, 1), sourceId: sponsorshipSourceId(agreement, state.seasonNumber, 1), seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, sponsorship: { agreementId: agreement.id, sponsorId: agreement.sponsorId, installment: 1 } });
+    }
+  } else for (const club of state.clubs) next = book(next, club.id, 'sponsor', ANNUAL_SPONSORSHIP, `sponsor-s${state.seasonNumber}`);
   return prepareFinanceRound(next);
+}
+
+/** Books a later agreement payment (matchday-six installment or earned bonus) exactly once, on its due boundary. */
+export function recordSponsorshipPayment(state: SeasonState, payment: DueSponsorshipPayment): SeasonState {
+  if (!state.finance.enabledSince || !commercialGovernsSeason(state.commercial, payment.seasonNumber) || payment.seasonNumber !== state.seasonNumber || payment.round !== state.round || payment.sponsorship.installment === 1) throw new Error('Record only a sponsorship payment due on the current matchday.');
+  return append(state, { clubId: payment.clubId, kind: 'sponsor', amount: payment.amount, sourceId: payment.sourceId, seasonNumber: payment.seasonNumber, round: payment.round, ticket: null, coach: null, payroll: null, sponsorship: { ...payment.sponsorship } });
 }

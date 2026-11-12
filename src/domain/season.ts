@@ -1,4 +1,5 @@
 import type { SeasonBoard } from './board';
+import type { SeasonCommercial } from './commercial';
 import type { SeasonRelationships } from './relationships';
 import type { InjuryMode, MatchResult, MatchState, PlayerStats, Side, Tactics, Team } from './types';
 import type { SeasonTraining } from './training';
@@ -74,7 +75,7 @@ export interface SeasonArchive {
 }
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
-export const SEASON_SCHEMA_VERSION = 30;
+export const SEASON_SCHEMA_VERSION = 31;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -111,6 +112,7 @@ export interface SeasonState {
   facilities: SeasonFacilities;
   relationships: SeasonRelationships;
   board: SeasonBoard;
+  commercial: SeasonCommercial;
   negotiations: SeasonNegotiations;
   market: SeasonMarket;
   recruitment: SeasonRecruitment;

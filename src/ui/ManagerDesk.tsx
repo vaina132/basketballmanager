@@ -1,6 +1,7 @@
 import { getPlayerRetirement } from '../world/lifecycle-policy'
 import { getSquadRelationships } from '../world/relationships'
 import { getBoardSummary } from '../world/board'
+import { getPressQuestion } from '../world/press-policy'
 import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/board-consequences'
 import { getClubSponsorship } from '../world/commercial'
 import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
@@ -44,13 +45,14 @@ interface ManagerDeskProps {
   onOpenScouting: () => void
   onOpenRelationships?: (playerId?: string) => void
   onOpenBoard?: () => void
+  onOpenInbox?: () => void
 }
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
 const money = (cents: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100)
 
-export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenScouting, onOpenRelationships, onOpenBoard }: ManagerDeskProps) {
+export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenScouting, onOpenRelationships, onOpenBoard, onOpenInbox }: ManagerDeskProps) {
   const team = match[managedSide]
   const market = season && isMarketActive(season) ? getMarketWindow(season) : null
   const marketOffers = market && season ? getMarketOffers(season, season.managedClubId, true) : []
@@ -71,6 +73,9 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   const notices: { key: string; title: string; detail: string; urgent?: boolean; action: string; open: () => void }[] = []
   const finances = season?.finance.enabledSince ? getFinanceBalance(season.finance, season.managedClubId) : null
   const wageReserve = season?.payroll.enabledSince ? getPayrollReserve(season, season.managedClubId) : null
+
+  const press = season && onOpenInbox ? getPressQuestion(season) : null
+  if (press && !press.answered && onOpenInbox) notices.push({ key: 'press', title: 'Press conference', detail: `${press.question} Answer in the Inbox before the next match, or your assistant keeps it routine.`, action: 'Open inbox', open: onOpenInbox })
 
   if (season?.board.enabledSince && onOpenBoard) {
     const board = getBoardSummary(season)
@@ -197,7 +202,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
       <div className="desk-side-column">
         <section className="desk-attention panel" aria-labelledby="desk-attention-heading">
           <div className="desk-panel-heading"><h2 id="desk-attention-heading">{complete ? 'Match review' : 'Attention'}</h2><span className="desk-count">{notices.length}</span></div>
-          {notices.length ? <ul className="desk-notices">{notices.map(notice => <li key={notice.key} className={notice.urgent ? 'desk-notice-urgent' : ''}><div><strong className="desk-notice-title"><Icon name={notice.key === 'board' ? 'shield' : notice.key === 'scouting' ? 'search' : ['contracts', 'offseason', 'negotiations', 'unpaid', 'wage-commitments'].includes(notice.key) ? 'wallet' : notice.key === 'timeout' ? 'clock' : 'people'} size={15} />{notice.title}</strong>{notice.urgent || ['injuries', 'fatigue', 'fouls', 'queued'].includes(notice.key) ? <p>{notice.detail}</p> : <details className="desk-notice-detail"><summary>Details</summary><p>{notice.detail}</p></details>}</div><button className="text-button" onClick={notice.open}>{notice.action}<Icon name="chevron" size={14} /></button></li>)}</ul> : <div className="desk-clear"><Icon name="check" size={18} /><div><strong>{complete ? 'Match complete' : 'No urgent decisions'}</strong><p>{complete ? 'The result and player statistics are ready to review.' : `${eligible.length} eligible players. Your current lineup is available.`}</p></div></div>}
+          {notices.length ? <ul className="desk-notices">{notices.map(notice => <li key={notice.key} className={notice.urgent ? 'desk-notice-urgent' : ''}><div><strong className="desk-notice-title"><Icon name={notice.key === 'press' ? 'mail' : notice.key === 'board' ? 'shield' : notice.key === 'scouting' ? 'search' : ['contracts', 'offseason', 'negotiations', 'unpaid', 'wage-commitments'].includes(notice.key) ? 'wallet' : notice.key === 'timeout' ? 'clock' : 'people'} size={15} />{notice.title}</strong>{notice.urgent || ['injuries', 'fatigue', 'fouls', 'queued'].includes(notice.key) ? <p>{notice.detail}</p> : <details className="desk-notice-detail"><summary>Details</summary><p>{notice.detail}</p></details>}</div><button className="text-button" onClick={notice.open}>{notice.action}<Icon name="chevron" size={14} /></button></li>)}</ul> : <div className="desk-clear"><Icon name="check" size={18} /><div><strong>{complete ? 'Match complete' : 'No urgent decisions'}</strong><p>{complete ? 'The result and player statistics are ready to review.' : `${eligible.length} eligible players. Your current lineup is available.`}</p></div></div>}
         </section>
 
         {assistant && !complete && <section className="assistant-desk panel" aria-label="Assistant coach"><AssistantPortrait coach={assistant} size={36} /><div><strong>{assistant.name}</strong><span>Assistant coach</span></div><button className="text-button" onClick={onOpenAssistantAdvice}>Match advice<Icon name="chevron" size={14} /></button></section>}

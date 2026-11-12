@@ -230,9 +230,9 @@ Separate bank cash, board-authorized recruitment budget, wage commitments, forec
 Initial model: `cashNext = cashNow + collectedReceipts - actualPayments`; promises of future revenue are not current cash.
 Track remaining committed salary, staff costs, bonuses, installments, scouting costs, facility spending, and cancellation obligations.
 Revenue may include ticketing, sponsorship, competition distributions, player payments, and board capital; values require sources or labeled estimates.
-Show a cash forecast with an adverse scenario, not an implied guarantee that projected prize money will arrive.
+Show a cash forecast with an adverse scenario, not an implied guarantee that projected prize money will arrive. *Superseded by the user's later decision (see [AGENTS.md](../../AGENTS.md) and [game design §11](../game-design.md#11-interface-structure)): Club omits expected/cautious forecasts. Show actual cash, agreed terms, dated commitments and actual financial activity instead; the internal projection is not a gameplay screen.*
 Board injections are explicit funded transactions with a finite owner's capacity and decision logic; they are not automatic bankruptcy prevention.
-The default dashboard shows money available, committed wages, projected cash, and upcoming exceptional payments, including business and facilities commitments.
+The default dashboard shows money available, committed wages, projected cash, and upcoming exceptional payments, including business and facilities commitments. *Projected cash is superseded as noted above; the shared budget strip and actual dated commitments remain.*
 Financial failure rules—emergency cuts, administration, enforced sales, dismissal—need a deliberate design decision and applicable rule data.
 
 ## 11. Facilities, ticketing, sponsorship, and delegation
@@ -245,7 +245,7 @@ Represent each facility with capacity, quality, condition, ownership/lease const
 Benefits must map to named mechanisms: training quality, youth development, medical assessment, attendance capacity, or matchday spending; no universal facility bonus.
 Facility quality has diminishing returns, while deterioration creates an upkeep decision rather than requiring weekly maintenance clicks.
 An upgrade records scope, cost estimate, committed price, installment schedule, planned duration, construction state, and resulting capacity/quality.
-Before commitment, show forecast cash, ongoing upkeep, construction disruption, expected benefit, and uncertainty.
+Before commitment, show forecast cash, ongoing upkeep, construction disruption, expected benefit, and uncertainty. *Superseded for cash: per the user's later decision, reviews show the actual cost, payment dates, upkeep and the Remaining budget after payment, not cash forecasts.*
 Construction takes calendar time; postponement, cancellation, and scope changes preserve sunk costs and outstanding obligations.
 Arena projects may reduce usable capacity or require a temporary venue; the calendar service validates home fixtures and the ledger records the resulting costs.
 Do not permit a new stand, venue, or academy to complete instantly because the manager advances several days in one click.

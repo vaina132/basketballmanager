@@ -8,9 +8,10 @@ import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
 import { getFinanceBalance } from './finance';
 import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
-import { STAFF_BUDGET } from './staff-constants';
+import { staffAllocation } from './board-consequences';
 
 export { STAFF_BUDGET } from './staff-constants';
+export { staffAllocation } from './board-consequences';
 
 /** Released appointments keep their full fee in the same annual staff allocation. */
 export function staffCommitmentsByRole(state: Pick<SeasonState, 'coaching' | 'seasonNumber'> & Partial<Pick<SeasonState, 'scouts' | 'fitness' | 'physio' | 'assistant' | 'youth'>>, clubId: string): { coaches: number; scouts: number; fitness: number; physio: number; assistant: number; youth: number; total: number } {
@@ -27,7 +28,7 @@ export function staffCommitted(state: Pick<SeasonState, 'coaching' | 'seasonNumb
 
 /** Matches cash, salary/transfer reservations and arrears guards used by all staff roles. */
 export function remainingStaffBudget(state: SeasonState, clubId = state.managedClubId): number {
-  const allocation = Math.max(0, STAFF_BUDGET - staffCommitted(state, clubId));
+  const allocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
   if (!state.finance.enabledSince) return allocation;
   if (getFinanceBalance(state.finance, clubId).unpaid || getTransferPaymentSummary(state, clubId).overdue) return 0;
   return Math.min(allocation, getSpendableCash(state, clubId));

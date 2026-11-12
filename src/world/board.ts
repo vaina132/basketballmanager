@@ -5,6 +5,7 @@ import { isRecovering } from './health';
 import { rosterForRound } from './rosters';
 import { dateForRound } from './season';
 import { getTransferPaymentSummary } from './transfer-payments';
+import { BOARD_VERDICT_EFFECTS, verdictForConfidence } from './board-consequences';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
@@ -13,7 +14,7 @@ const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(ma
 const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
 const rounded = (n: number) => Math.round(n * 1000) / 1000;
 
-export function createBoard(): SeasonBoard { return { model: 'board-1', enabledSince: null, mandates: [], reviews: [] }; }
+export function createBoard(): SeasonBoard { return { model: 'board-1', enabledSince: null, mandates: [], reviews: [], consequencesSince: null }; }
 
 export function boardEventAnchor(state: SeasonState): BoardAnchor {
   const completed = state.fixtures.filter(fixture => fixture.result).reduce((round, fixture) => Math.max(round, fixture.round), 0);
@@ -53,6 +54,13 @@ export function enableBoard(state: SeasonState, mode: 'career' | 'prospective' =
   const enabled = { ...state, board };
   if (mode === 'prospective' && state.round === 10) return enabled;
   return { ...enabled, board: { ...board, mandates: [buildBoardMandate(enabled, mode === 'career' ? 1 : state.round + 1)] } };
+}
+
+/** Older careers opt in; the verdict at the end of the current season sets the following season's budgets. */
+export function enableBoardConsequences(state: SeasonState): SeasonState {
+  if (state.board.consequencesSince) return state;
+  if (!state.board.enabledSince) throw new Error('Enable board reviews before board verdicts can affect budgets.');
+  return { ...state, board: { ...state.board, consequencesSince: boardEventAnchor(state) } };
 }
 
 /** Called after new-year registrations and opening finances, before that year's first fixture. */
@@ -104,7 +112,7 @@ export function processBoardRound(state: SeasonState): SeasonState {
 }
 
 export function boardConfidenceLabel(confidence: number): string {
-  return confidence >= 65 ? 'Confident' : confidence >= 45 ? 'Steady' : confidence >= 30 ? 'Concerned' : 'Under pressure';
+  return BOARD_VERDICT_EFFECTS[verdictForConfidence(confidence)].label;
 }
 
 export function getBoardSummary(state: SeasonState, clubId = state.managedClubId): BoardSummary {

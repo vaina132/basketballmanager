@@ -3,7 +3,7 @@ import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { getFinanceBalance } from './finance';
-import { remainingStaffBudget, STAFF_BUDGET, staffCommitted } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCommitted } from './staff-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
 
 export const MAX_FITNESS_COACHES = 1;
@@ -28,7 +28,7 @@ export function getClubFitnessEffects(state: Pick<SeasonState, 'fitness' | 'trai
 
 export function quoteFitnessHire(state: SeasonState, coachId: string, clubId = state.managedClubId): FitnessHireQuote {
   const coach = DEVELOPMENT_FITNESS_COACHES.find(coach => coach.id === coachId);
-  const remainingAllocation = Math.max(0, STAFF_BUDGET - staffCommitted(state, clubId));
+  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.fitness.enabledSince) reason = 'Enable fitness coach recruitment before hiring.';

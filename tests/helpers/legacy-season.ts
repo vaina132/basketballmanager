@@ -115,6 +115,13 @@ export function stripCommercial(value: object): void {
 
 /** Format31 predates board funding requests. */
 export function stripBoardFunding(value: object): void {
+  stripBoardConsequences(value);
   const facilities = (value as { facilities?: Record<string, unknown> }).facilities;
   if (facilities) delete facilities.fundingSince;
+}
+
+/** Format32 predates board verdicts that set later budgets. */
+export function stripBoardConsequences(value: object): void {
+  const board = (value as { board?: Record<string, unknown> }).board;
+  if (board) delete board.consequencesSince;
 }

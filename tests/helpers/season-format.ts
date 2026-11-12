@@ -35,6 +35,7 @@ const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: Leg
   [30, () => ({ board: createBoard() })],
   [31, state => ({ commercial: createCommercial(state.clubs, state.managedClubId) })],
   [32, state => ({ facilities: { ...state.facilities!, fundingSince: null } })],
+  [33, state => ({ board: { ...state.board!, consequencesSince: null } })],
 ];
 
 /**

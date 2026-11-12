@@ -3,7 +3,7 @@ import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { getFinanceBalance } from './finance';
 import { MAX_REHABILITATION_REDUCTION_PERCENT } from './rehabilitation-policy';
-import { remainingStaffBudget, STAFF_BUDGET, staffCommitted } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCommitted } from './staff-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
 
 export const MAX_PHYSIOS = 1;
@@ -18,7 +18,7 @@ export function availablePhysios(state: Pick<SeasonState, 'physio' | 'seasonNumb
 }
 export function quotePhysioHire(state: SeasonState, physioId: string, clubId = state.managedClubId): PhysioHireQuote {
   const physio = DEVELOPMENT_PHYSIOS.find(physio => physio.id === physioId);
-  const remainingAllocation = Math.max(0, STAFF_BUDGET - staffCommitted(state, clubId));
+  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.physio.enabledSince) reason = 'Enable physio recruitment before hiring.';

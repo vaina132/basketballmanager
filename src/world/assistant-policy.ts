@@ -2,7 +2,7 @@ import type { AssistantCoach, AssistantContract, AssistantHireQuote } from '../d
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { getFinanceBalance } from './finance';
-import { remainingStaffBudget, STAFF_BUDGET, staffCommitted } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCommitted } from './staff-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
 
 export const MAX_ASSISTANTS = 1;
@@ -20,7 +20,7 @@ export function availableAssistants(state: Pick<SeasonState, 'assistant' | 'seas
 }
 export function quoteAssistantHire(state: SeasonState, assistantId: string, clubId = state.managedClubId): AssistantHireQuote {
   const coach = DEVELOPMENT_ASSISTANTS.find(coach => coach.id === assistantId);
-  const remainingAllocation = Math.max(0, STAFF_BUDGET - staffCommitted(state, clubId));
+  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.assistant.enabledSince) reason = 'Enable assistant-coach recruitment before hiring.';

@@ -51,6 +51,8 @@ export interface SeasonBoard {
   enabledSince: (BoardAnchor & { includeCurrentRound: boolean }) | null;
   mandates: BoardMandate[];
   reviews: BoardReview[];
+  /** Season verdicts set later budgets from this anchor (format 33); absent in older formats, null until enabled. */
+  consequencesSince?: BoardAnchor | null;
 }
 
 export interface BoardSummary {

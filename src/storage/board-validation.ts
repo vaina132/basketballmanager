@@ -67,11 +67,15 @@ function reviewLedgerCount(state: SeasonState, year: number, round: number): num
 /** Validate immutable objectives and every mandatory review by rebuilding them from retained evidence. */
 export function validateBoard(state: SeasonState, version: number): void {
   if (version < 30) return;
-  const fields = record(state.board, 'board', ['model', 'enabledSince', 'mandates', 'reviews']);
+  // Format 33 adds the anchor from which season verdicts set later budgets.
+  const consequences = version >= 33;
+  const { consequencesSince: _unused, ...legacyEmpty } = createBoard();
+  const empty: SeasonBoard = consequences ? createBoard() : legacyEmpty;
+  const fields = record(state.board, 'board', ['model', 'enabledSince', 'mandates', 'reviews', ...(consequences ? ['consequencesSince'] : [])]);
   if (fields.model !== 'board-1') fail('board.model', 'is unsupported');
   if (!Array.isArray(fields.mandates) || fields.mandates.length > state.seasonNumber || !Array.isArray(fields.reviews) || fields.reviews.length > 10 * state.seasonNumber) fail('board', 'must retain bounded chronological objectives and reviews');
   if (fields.enabledSince === null) {
-    if (!equal(fields, createBoard())) fail('board', 'must remain empty while disabled');
+    if (!equal(fields, empty)) fail('board', 'must remain empty while disabled');
     return;
   }
   const completedNow = ordinal(state.seasonNumber, state.status === 'complete' ? state.round : state.round - 1);
@@ -108,7 +112,7 @@ export function validateBoard(state: SeasonState, version: number): void {
   const enabled = checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, activation[key]])), 'board.enabledSince', 'activation');
   if (activation.includeCurrentRound && (enabled.seasonNumber !== 1 || enabled.round !== 1 || enabled.completedRounds !== 0 || enabled.date !== dateForRound(1, 1))) fail('board.enabledSince', 'can include the current matchday only at initial career creation');
   const source = fields as unknown as SeasonBoard;
-  let board: SeasonBoard = { ...createBoard(), enabledSince: source.enabledSince };
+  let board: SeasonBoard = { ...empty, enabledSince: source.enabledSince };
   let mandateIndex = 0, reviewIndex = 0, previous = enabled;
   const chronological = (anchor: BoardAnchor, path: string) => {
     if (anchor.date < previous.date || anchor.completedRounds < previous.completedRounds || anchor.ledgerCount < previous.ledgerCount || ordinal(anchor.seasonNumber, anchor.round) < ordinal(previous.seasonNumber, previous.round)) fail(path, 'must preserve chronological results and cash evidence');
@@ -144,6 +148,11 @@ export function validateBoard(state: SeasonState, version: number): void {
       if (!equal(reviewRaw, review)) fail(reviewPath, 'must exactly reproduce results, inherited costs, injury context and bounded confidence');
       board = { ...board, reviews: [...board.reviews, review] }; reviewIndex += 1;
     }
+  }
+  if (consequences && fields.consequencesSince !== null) {
+    const since = checkAnchor(fields.consequencesSince, 'board.consequencesSince', 'activation');
+    if (since.date < enabled.date || since.completedRounds < enabled.completedRounds || since.ledgerCount < enabled.ledgerCount || ordinal(since.seasonNumber, since.round) < ordinal(enabled.seasonNumber, enabled.round)) fail('board.consequencesSince', 'cannot precede board reviews');
+    board = { ...board, consequencesSince: since };
   }
   if (!equal(board, source)) fail('board', 'must retain exactly the complete objective and review history without added or missing records');
 }

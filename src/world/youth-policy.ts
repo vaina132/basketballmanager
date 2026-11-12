@@ -4,7 +4,7 @@ import type { Team } from '../domain/types';
 import type { AcademyWeek } from '../domain/academy';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
 import { getFinanceBalance } from './finance';
-import { remainingStaffBudget, STAFF_BUDGET, staffCommitted } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCommitted } from './staff-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
 
 export const MAX_YOUTH_COACHES = 1;
@@ -19,7 +19,7 @@ export function availableYouthCoaches(state: Pick<SeasonState, 'youth' | 'season
 }
 export function quoteYouthCoachHire(state: SeasonState, coachId: string, clubId = state.managedClubId): YouthCoachHireQuote {
   const coach = DEVELOPMENT_YOUTH_COACHES.find(coach => coach.id === coachId);
-  const remainingAllocation = Math.max(0, STAFF_BUDGET - staffCommitted(state, clubId)), remainingBudget = remainingStaffBudget(state, clubId);
+  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId)), remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.youth.enabledSince) reason = 'Enable youth-coach recruitment before hiring.';
   else if (!state.academy.enabledSince || !state.finance.enabledSince) reason = 'Youth coaches require an academy and club finances.';

@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
+import { STAFF_BUDGET, staffAllocation } from '../src/world/staff-policy';
 
 // Genuine format-32 saves from scripts/capture-season-fixtures.mjs; see tests/fixtures/README.md.
 const NAMES = ['career', 'career-next', 'complete', 'opening'];
@@ -34,6 +35,14 @@ describe('genuine format-32 careers', () => {
 
   it('rolls the completed offseason into the recorded opening', () => {
     expect(rolloverSeason(complete)).toEqual(opening);
+  }, 120_000);
+
+  it('migrates to the current format keeping board funding and with board verdicts switched off', () => {
+    expect(complete.board.consequencesSince).toBeNull();
+    expect(complete.facilities.fundingSince).toEqual(raw.complete.state.facilities.fundingSince);
+    expect(complete.facilities.events.some(event => event.type === 'funding')).toBe(true);
+    const next = rolloverSeason(complete);
+    for (const club of next.clubs) expect(staffAllocation(next, club.id)).toBe(STAFF_BUDGET);
   }, 120_000);
 
   it('round-trips every captured career through the current save format', () => {

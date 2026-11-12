@@ -18,7 +18,7 @@ import { getClubAssistant } from '../world/assistant-policy'
 import { getClubPhysio } from '../world/physio-policy'
 import { getClubFitnessCoach } from '../world/fitness-policy'
 import { getClubScouts } from '../world/scout-policy'
-import { STAFF_BUDGET, staffCommitted, remainingStaffBudget } from '../world/staff-policy'
+import { staffAllocation, staffCommitted, remainingStaffBudget } from '../world/staff-policy'
 import { StaffStars } from './StaffRating'
 import { CoachPortrait } from './CoachPortrait'
 import { Icon } from './Icon'
@@ -78,7 +78,7 @@ function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRe
   const contracts = getClubCoaching(season.coaching, club.id)
   const released = season.coaching.contracts.filter(contract => contract.clubId === club.id && contract.releasedRound !== null)
   const committed = staffCommitted(season, club.id)
-  const allocation = STAFF_BUDGET - committed
+  const allocation = staffAllocation(season, season.managedClubId) - committed
   const finances = season.finance.enabledSince === null ? null : getFinanceBalance(season.finance, club.id)
   const payrollEnabled = season.payroll.enabledSince !== null
   const wageReserve = getPayrollReserve(season, club.id)

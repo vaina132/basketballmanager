@@ -1,4 +1,4 @@
-import { createBoard, enableBoard, prepareBoardSeason, processBoardRound } from './board';
+import { createBoard, enableBoard, enableBoardConsequences, prepareBoardSeason, processBoardRound } from './board';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
 import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
 import { createFacilities, enableBoardFunding, enableFacilities, processFacilityProjects, automateFacilities } from './facilities';
@@ -153,7 +153,7 @@ export interface SeasonSystems {
   training?: boolean; coaching?: boolean; finance?: boolean; payroll?: boolean; employment?: boolean; scouting?: boolean;
   negotiations?: boolean; market?: boolean; scouts?: boolean; fitness?: boolean; physio?: boolean; assistant?: boolean;
   academy?: boolean; youth?: boolean; lifecycle?: boolean; youthCompetition?: boolean; facilities?: boolean;
-  relationships?: boolean; board?: boolean; commercial?: boolean; boardFunding?: boolean;
+  relationships?: boolean; board?: boolean; commercial?: boolean; boardFunding?: boolean; boardConsequences?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems { seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null }
 
@@ -161,7 +161,7 @@ export interface SeasonOptions extends SeasonSystems { seed?: number; managedClu
 export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.freeze({
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
-  facilities: true, relationships: true, board: true, commercial: true, boardFunding: true,
+  facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -173,11 +173,11 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   const unknown = Object.keys(first).filter(key => !SEASON_OPTION_KEYS.has(key));
   if (unknown.length || positional.length) throw new Error(`Unsupported career options: ${unknown.join(', ') || 'extra positional arguments'}.`);
   const options = first, finance = options.finance ?? true;
-  return createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false);
+  return createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false);
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.
-function createSeasonFromFlags(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false): SeasonState {
+function createSeasonFromFlags(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.id, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   if (!DEVELOPMENT_CLUBS.some(club => club.id === managedClubId)) throw new Error('Choose a club from the development league.');
   if (!['standard', 'reduced', 'off'].includes(injuryMode)) throw new Error('Choose a valid season injury setting.');
@@ -200,6 +200,7 @@ function createSeasonFromFlags(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.
   if (typeof facilitiesEnabled !== 'boolean' || facilitiesEnabled && !financeEnabled) throw new Error('Club facilities require enabled finances.');
   if (typeof commercialEnabled !== 'boolean' || commercialEnabled && !financeEnabled) throw new Error('Sponsorship negotiations require enabled club finances.');
   if (typeof boardFundingEnabled !== 'boolean' || boardFundingEnabled && (!facilitiesEnabled || !boardEnabled)) throw new Error('Board funding requests require club facilities and board reviews.');
+  if (typeof boardConsequencesEnabled !== 'boolean' || boardConsequencesEnabled && !boardEnabled) throw new Error('Board verdicts require board reviews.');
   if (typeof negotiationsEnabled !== 'boolean' || negotiationsEnabled && !employmentEnabled) throw new Error('Contract negotiations require enabled player contracts and a valid negotiation setting.');
   if (typeof marketEnabled !== 'boolean' || marketEnabled && !negotiationsEnabled) throw new Error('The offseason calendar requires enabled negotiations and a valid setting.');
   const managerProfile = manager === null ? null : validateManagerProfile(manager, DEVELOPMENT_START_DATE);
@@ -235,7 +236,8 @@ function createSeasonFromFlags(seed = 42, managedClubId = DEVELOPMENT_CLUBS[0]!.
   const sponsored = commercialEnabled ? enableCommercial(built) : built;
   const related = relationshipsEnabled ? prepareRelationshipsRound(enableRelationships(sponsored)) : sponsored;
   const boarded = boardEnabled ? enableBoard(related, 'career') : related;
-  const reviewed = boardFundingEnabled ? enableBoardFunding(boarded) : boarded;
+  const capitalised = boardFundingEnabled ? enableBoardFunding(boarded) : boarded;
+  const reviewed = boardConsequencesEnabled ? enableBoardConsequences(capitalised) : capitalised;
   // Only a genuinely new career is prepared after initial staffing. Legacy opt-in never rewrites its current match.
   return assistantEnabled || relationshipsEnabled ? { ...reviewed, activeMatch: prepareMatch(reviewed, first) } : reviewed;
 }

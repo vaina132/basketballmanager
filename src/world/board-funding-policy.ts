@@ -3,6 +3,7 @@ import type { SeasonState } from '../domain/season';
 import { getDevelopmentPresident, type DevelopmentPresident } from '../data/development-presidents';
 import { FACILITY_AUTOMATION_BUFFER, FACILITY_FUNDS_REASON, quoteFacilityUpgrade } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
+import { ownerCapital } from './board-consequences';
 
 /** Confidence the board requires is 65 minus five per point of presidential generosity (60 to 40). */
 export const BOARD_FUNDING_BASE_CONFIDENCE = 65;
@@ -64,7 +65,9 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   const position = getSpendablePosition(state, clubId), available = Math.max(0, position);
   const amount = Math.max(0, upgrade.cost + (mode === 'automatic' ? FACILITY_AUTOMATION_BUFFER : 0) - available);
   const confidence = boardConfidenceNow(state, clubId), requiredConfidence = requiredBoardConfidence(president);
-  const capitalRemaining = Math.max(0, president.seasonCapital - boardCapitalGranted(state.facilities, clubId, state.seasonNumber));
+  // The previous season's board verdict can raise, halve or withhold the owner's capital (see board-consequences).
+  const seasonCapital = ownerCapital(state, clubId);
+  const capitalRemaining = Math.max(0, seasonCapital - boardCapitalGranted(state.facilities, clubId, state.seasonNumber));
   const refused = [...state.facilities.events].reverse().find(event => event.type === 'funding' && !event.approved && event.clubId === clubId);
   const wait = refused ? ordinal(refused.seasonNumber, refused.round) + BOARD_FUNDING_REFUSAL_COOLDOWN - ordinal(state.seasonNumber, state.round) : 0;
   let reason: string | null = null;
@@ -77,5 +80,5 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   else if (wait > 0) reason = `The board will reconsider after ${wait} more ${wait === 1 ? 'matchday' : 'matchdays'}.`;
   const approved = reason === null && confidence >= requiredConfidence && amount <= capitalRemaining;
   const refusal = reason === null ? boardFundingRefusal({ approved, confidence, requiredConfidence, capitalRemaining }) : null;
-  return { clubId, facilityType: type, mode, president, cost: upgrade.cost, available, amount, confidence, requiredConfidence, seasonCapital: president.seasonCapital, capitalRemaining, eligible: reason === null, reason, approved, refusal };
+  return { clubId, facilityType: type, mode, president, cost: upgrade.cost, available, amount, confidence, requiredConfidence, seasonCapital, capitalRemaining, eligible: reason === null, reason, approved, refusal };
 }

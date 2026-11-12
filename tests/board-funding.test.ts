@@ -5,6 +5,7 @@ import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { boardCapitalGranted, boardFundingRefusal, quoteBoardFunding, requiredBoardConfidence, type BoardFundingQuote } from '../src/world/board-funding-policy';
 import { enableBoardFunding, facilityEventAnchor, requestBoardFunding } from '../src/world/facilities';
 import { getActiveFacilityProject } from '../src/world/facilities-policy';
+import { ownerCapital } from '../src/world/board-consequences';
 import { getFinanceBalance } from '../src/world/finance';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { advanceMatchday, driveToFundingRequest } from './helpers/board-funding';
@@ -87,7 +88,7 @@ describe('board funding in a career', () => {
     const automatic = generous.state.facilities.events.filter(event => event.type === 'funding' && event.mode === 'automatic');
     expect(automatic.length).toBeGreaterThan(0);
     expect(automatic.every(event => event.type === 'funding' && event.approved && event.confidence >= event.requiredConfidence)).toBe(true);
-    for (const president of DEVELOPMENT_PRESIDENTS) for (let season = 1; season <= generous.state.seasonNumber; season += 1) expect(boardCapitalGranted(generous.state.facilities, president.clubId, season)).toBeLessThanOrEqual(president.seasonCapital);
+    for (const president of DEVELOPMENT_PRESIDENTS) for (let season = 1; season <= generous.state.seasonNumber; season += 1) expect(boardCapitalGranted(generous.state.facilities, president.clubId, season)).toBeLessThanOrEqual(ownerCapital(generous.state, president.clubId, season));
   });
 
   it.each([
@@ -95,7 +96,7 @@ describe('board funding in a career', () => {
     ['an approval turned into a refusal', (copy: SeasonState) => { const event = copy.facilities.events.find(item => item.type === 'funding' && item.approved)!; (event as { approved: boolean }).approved = false; }],
     ['altered decision evidence', (copy: SeasonState) => { const event = copy.facilities.events.find(item => item.type === 'funding')!; (event as { confidence: number }).confidence += 1; }],
     ['capital without its detail', (copy: SeasonState) => { delete copy.finance.ledger.find(entry => entry.kind === 'board-capital')!.boardCapital; }],
-    ['funding enabled without board reviews', (copy: SeasonState) => { copy.board = { model: 'board-1', enabledSince: null, mandates: [], reviews: [] }; }],
+    ['funding enabled without board reviews', (copy: SeasonState) => { copy.board = { model: 'board-1', enabledSince: null, mandates: [], reviews: [], consequencesSince: null }; }],
   ])('rejects %s', (_label, mutate) => {
     expect(() => parseSeason(changed(generous.state, mutate))).toThrow(/Invalid season save/);
   });

@@ -5,6 +5,7 @@ import type { SeasonState } from '../domain/season'
 import { getDevelopmentPresident, type DevelopmentPresident } from '../data/development-presidents'
 import { getBoardSummary } from '../world/board'
 import { BOARD_FUNDING_REFUSAL_COOLDOWN, boardCapitalGranted, boardConfidenceNow, boardFundingRefusal, requiredBoardConfidence } from '../world/board-funding-policy'
+import { ownerCapital } from '../world/board-consequences'
 import { seasonLabel } from '../world/season'
 import { FACILITY_LABELS } from './FacilitiesPanel'
 import { Icon, type IconName } from './Icon'
@@ -48,14 +49,15 @@ function PresidentSection({ season, busy, onEnableFunding }: { season: SeasonSta
   const clubId = season.managedClubId
   const president = getDevelopmentPresident(clubId)
   const required = requiredBoardConfidence(president), confidence = boardConfidenceNow(season, clubId)
-  const left = Math.max(0, president.seasonCapital - boardCapitalGranted(season.facilities, clubId, season.seasonNumber))
+  const capital = ownerCapital(season, clubId)
+  const left = Math.max(0, capital - boardCapitalGranted(season.facilities, clubId, season.seasonNumber))
   const requests = season.facilities.events.flatMap((event, index) => event.type === 'funding' && event.clubId === clubId ? [{ event: event as FundingRequest, index }] : []).reverse()
   const enableReason = !season.facilities.enabledSince ? 'Enable club facilities first, under Club › Operations.' : null
   return <>
     <h3 className="board-section-heading"><Icon name="people" size={16} />President &amp; owner capital</h3>
     <div className="board-president" data-board-president={president.clubId}>
       <div className="board-president-identity"><strong>{president.name}</strong><span>Club president · {generosityLabels[president.generosity]}</span></div>
-      <dl className="board-president-facts"><div><dt>Owner capital left · {seasonLabel(season.seasonNumber)}</dt><dd data-board-capital-left={left}>{money(left)}<small>of {money(president.seasonCapital)} for facility upgrades</small></dd></div><div><dt>Confidence needed for capital</dt><dd data-board-required={required}>{required} / 100<small>{confidence >= required ? 'Met' : 'Not met'} · current confidence {confidence}</small></dd></div></dl>
+      <dl className="board-president-facts"><div><dt>Owner capital left · {seasonLabel(season.seasonNumber)}</dt><dd data-board-capital-left={left}>{money(left)}<small>of {money(capital)} for facility upgrades</small></dd></div><div><dt>Confidence needed for capital</dt><dd data-board-required={required}>{required} / 100<small>{confidence >= required ? 'Met' : 'Not met'} · current confidence {confidence}</small></dd></div></dl>
     </div>
     {!season.facilities.fundingSince ? <div className="board-enable board-funding-enable"><Icon name="wallet" size={24} /><div><strong>Ask the board for capital</strong><p>When a facility upgrade costs more than the club can spend, ask {president.name} to fund the difference. Rival clubs can ask their boards under the same rules once this is on.</p>{enableReason && <p id="board-funding-enable-reason">{enableReason}</p>}</div><button id="enable-board-funding" className="button" onClick={onEnableFunding} disabled={busy || !!enableReason} aria-describedby={enableReason ? 'board-funding-enable-reason' : undefined}>Enable funding requests</button></div>
       : !requests.length ? <p className="board-empty board-funding-empty">No capital requests yet. When an upgrade costs more than the club can spend, its review under Club › Facilities lets you ask the board.</p>

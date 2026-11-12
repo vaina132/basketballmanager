@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "data:fetch": "node scripts/euroleague-data.mjs",
-    "benchmark:match": "node scripts/benchmark-match.mjs"
+    "benchmark:match": "node scripts/benchmark-match.mjs",
+    "fixtures:capture": "node scripts/capture-season-fixtures.mjs"
   },
   "dependencies": {
     "react": "19.3.1",

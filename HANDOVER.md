@@ -10,8 +10,8 @@ The owner approved the review's plan on 12 November 2026 and delegated the open 
 | --- | --- |
 | 0. Working agreement in CLAUDE.md | Done |
 | P1. Shared current-schema test helper | Done |
-| P2. Genuine format-30 fixtures and a committed capture script | Next |
-| P3. Save and load responsiveness | Planned |
+| P2. Genuine format-30 fixtures and a committed capture script | Done |
+| P3. Save and load responsiveness | Next |
 | P4. Named `createSeason` options | Planned |
 | P5. Documentation corrections | Planned |
 | 7.1 Sponsorship negotiations and commercial management | Planned |
@@ -34,6 +34,7 @@ Approved choices:
 Step notes:
 
 - **P1:** `SEASON_SCHEMA_VERSION` in `src/domain/season.ts` is the single current season format number; `season-storage.ts` derives its accepted formats from it. `tests/helpers/season-format.ts` provides `expectedMigration(rawState, fromFormat)` and `currentSeasonFile(state)`. When a format adds a top-level system, add one row to its `ADDED_BY_FORMAT` table instead of editing each storage test. Verified: typecheck; 1,909 of 1,910 tests in the full serial run, the remaining format-13 compatibility test exceeding its own 30-second limit while a CPU profiler ran alongside; that file then passed alone (24/24). Avoid running heavy jobs during the suite.
+- **P2:** `npm.cmd run fixtures:capture` (`scripts/capture-season-fixtures.mjs`) records genuine current-format saves into `tests/fixtures/season<version>-board-*.json.gz` and refuses to overwrite them without `--force`. Run it before every save-format change, on unchanged code. The format-30 set (provenance in `tests/fixtures/README.md`) is guarded by `tests/season30-continuation.test.js` (4/4). Strict parse timings on an idle machine: 0.6 MB matchday-five save 65-75 ms, 1.96 MB completed season 150-160 ms, 1.23 MB season-two opening 130-195 ms, 2.68 MB six-season format-26 save 550-595 ms (older formats are validated twice: as written and after migration). Measurements taken while the test suite runs are roughly ten times slower and must not be compared.
 
 ## Current state and stopping point
 

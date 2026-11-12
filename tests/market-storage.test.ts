@@ -13,7 +13,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'rhine-falcons', playerId = 'rhf-1';
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
-const envelope = (state: unknown, formatVersion = 28) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
+const envelope = (state: unknown, formatVersion = 29) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const window = (state: SeasonState) => getMarketWindow(state)!;
 const firstOffer = (state: SeasonState) => window(state).offers.find(offer => offer.playerId === playerId)!;
 let legacy: SeasonState, opened: SeasonState, pending: SeasonState, countered: SeasonState, expired: SeasonState, withdrawn: SeasonState, replaced: SeasonState, accepted: SeasonState, ready: SeasonState, second: SeasonState, secondComplete: SeasonState;
@@ -38,7 +38,7 @@ describe('dated recruitment persistence', () => {
   it('round-trips each offer state, partial calendar, accepted wages and closed historic windows', () => {
     for (const state of [opened, pending, countered, expired, withdrawn, replaced, accepted, ready, second, secondComplete]) {
       const text = serializeSeason(state), restored = parseSeason(text);
-      expect(JSON.parse(text).formatVersion).toBe(28);
+      expect(JSON.parse(text).formatVersion).toBe(29);
       expect(restored).toEqual(state);
       expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
     }

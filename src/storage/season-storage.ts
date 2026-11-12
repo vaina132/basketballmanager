@@ -1,3 +1,6 @@
+import { createRelationships } from '../world/relationships';
+import type { SeasonRelationships } from '../domain/relationships';
+import { validateRelationships } from './relationships-validation';
 import type { ArchivedFixture, FixtureResult, SeasonArchive, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import type { FacilityAnchor, FacilityEvent, SeasonFacilities } from '../domain/facilities';
 import { createFacilities, applyFacilityEvent, facilitiesAtEventCount } from '../world/facilities';
@@ -1041,7 +1044,7 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
   }
 }
 
-function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 28, context: CareerPlayerContext = {}): SeasonEmployment {
+function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 29, context: CareerPlayerContext = {}): SeasonEmployment {
   const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market', ...(version >= 15 ? ['transfers'] : []), ...(version >= 17 ? ['buyouts'] : [])]);
   const rawTransfers = version >= 15 ? fields.transfers : [];
   if (!Array.isArray(rawTransfers) || rawTransfers.length > 20_000) fail('employment.transfers', 'must retain at most 20000 completed transfers');
@@ -1477,7 +1480,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
 }
 
 /** Replay accepted replies against the contract prefix independently of present-day reservations. */
-function validateNegotiations(value: unknown, state: SeasonState, recruitmentHolds: RecruitmentHolds[] = [], version = 28): SeasonNegotiations {
+function validateNegotiations(value: unknown, state: SeasonState, recruitmentHolds: RecruitmentHolds[] = [], version = 29): SeasonNegotiations {
   const fields = record(value, 'negotiations', ['model', 'enabledSince', 'records']);
   if (fields.model !== 'negotiations-1') fail('negotiations.model', 'is unsupported');
   if (!Array.isArray(fields.records) || fields.records.length > 20_000) fail('negotiations.records', 'must contain at most 20000 retained offers');
@@ -1751,7 +1754,7 @@ function validatePayroll(value: unknown, clubs: readonly Team[], seasonNumber: n
 }
 
 /** Reconcile required career cash events against the calendar; no balance is trusted from a save. */
-function validateFinance(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], archives: SeasonArchive[], coaching: SeasonCoaching, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, payroll?: SeasonPayroll, employment?: SeasonEmployment, recruitmentHolds: RecruitmentHolds[] = [], scouts: SeasonScouts = createScouts(), fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), assistant: SeasonAssistant = createAssistant(), youth: SeasonYouth = createYouth(), version = 28, facilities: SeasonFacilities = createFacilities(clubs, managedClubId)): void {
+function validateFinance(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], archives: SeasonArchive[], coaching: SeasonCoaching, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, payroll?: SeasonPayroll, employment?: SeasonEmployment, recruitmentHolds: RecruitmentHolds[] = [], scouts: SeasonScouts = createScouts(), fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), assistant: SeasonAssistant = createAssistant(), youth: SeasonYouth = createYouth(), version = 29, facilities: SeasonFacilities = createFacilities(clubs, managedClubId)): void {
   const fields = record(value, 'finance', ['model', 'enabledSince', 'plans', 'roundPrices', 'ledger', ...(version >= 28 && Object.hasOwn(value as object, 'roundCapacities') ? ['roundCapacities'] : [])]);
   if (fields.model !== 'finance-1') fail('finance.model', 'is unsupported');
   const clubIds = clubs.map(club => club.id);
@@ -2201,7 +2204,7 @@ function migrateTrainingCoaching(training: SeasonTraining): SeasonTraining {
 }
 
 /** Reconcile the retained week; older development remains bounded state, not invented history. */
-function validateTraining(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], injuries: SeasonInjury[], seasonNumber: number, round: number, coaching?: SeasonCoaching, rosters?: readonly RosterSnapshot[], fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), version = 28, context: CareerPlayerContext & LifecycleContext & { facilities?: SeasonFacilities } = {}): { training: SeasonTraining; conditionsAfter: Record<string, number> | null } {
+function validateTraining(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], injuries: SeasonInjury[], seasonNumber: number, round: number, coaching?: SeasonCoaching, rosters?: readonly RosterSnapshot[], fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), version = 29, context: CareerPlayerContext & LifecycleContext & { facilities?: SeasonFacilities } = {}): { training: SeasonTraining; conditionsAfter: Record<string, number> | null } {
   const fields = record(value, 'training', ['model', 'enabledSince', 'plans', 'points', 'lastWeek']);
   if (fields.model !== 'training-1') fail('training.model', 'is unsupported');
   validateTrainingPlans(fields.plans, 'training.plans', clubs);
@@ -2290,10 +2293,10 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
 }
 
 /** Older schemas keep their original constraints before migration adds career fields. */
-function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28): void {
+function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29): void {
   const legacy = version === 1, career = version >= 3;
   checkJsonTree(value);
-  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : [])]);
+  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : [])]);
   if (state.schemaVersion !== version || state.engineVersion !== 'possession-3' || state.dataPackId !== DEVELOPMENT_DATA_PACK_ID) fail('state', 'uses an unsupported schema, engine or data pack');
   if (version >= 8 && state.manager !== null && !sameData(state.manager, validateManagerProfile(state.manager, DEVELOPMENT_START_DATE))) fail('manager', 'must contain normalized profile details valid at the initial career date');
   const seed = number(state.seed, 'seed', 0, 0xffff_ffff), round = number(state.round, 'round', 1, 10);
@@ -2308,6 +2311,7 @@ function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 
   const lifecycle = version >= 26 ? validateLifecycleShape(state.lifecycle, state as unknown as SeasonState) : createLifecycle();
   const youthCompetition = version >= 27 ? validateYouthCompetitionShape(state.youthCompetition, state as unknown as SeasonState) : createYouthCompetition();
   const facilities = version >= 28 ? validateFacilitiesShape(state.facilities, state as unknown as SeasonState) : createFacilities(DEVELOPMENT_CLUBS, state.managedClubId);
+  const relationships = version >= 29 ? state.relationships as unknown as SeasonRelationships : createRelationships();
   const careerContext: CareerPlayerContext = { academy, lifecycle, seasonNumber, round, date: state.date as string };
   const marketEnabled = version >= 13 && record(state.market, 'market', ['model', 'enabledSince', 'windows']).enabledSince !== null;
   const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId, marketEnabled, version, careerContext) : undefined;
@@ -2413,7 +2417,7 @@ function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 
       if (!anchor || anchor.seasonNumber * 10 + anchor.round > employment.enabledSince.seasonNumber * 10 + employment.enabledSince.round) fail('employment.enabledSince', 'requires payroll active from the employment activation boundary');
     }
   }
-  const normalizedState = { ...state, scouts, fitness, physio, assistant, academy, youth, lifecycle, youthCompetition, facilities, ...(employment ? { employment } : {}), recruitment: version >= 19 ? state.recruitment : version === 18 ? migrateRecruitmentTransfers(state.recruitment as unknown as SeasonRecruitment) : createRecruitment() } as unknown as SeasonState;
+  const normalizedState = { ...state, scouts, fitness, physio, assistant, academy, youth, lifecycle, youthCompetition, facilities, relationships, ...(employment ? { employment } : {}), recruitment: version >= 19 ? state.recruitment : version === 18 ? migrateRecruitmentTransfers(state.recruitment as unknown as SeasonRecruitment) : createRecruitment() } as unknown as SeasonState;
   const recruitmentHolds = version >= 18 ? validateRecruitment(state.recruitment, normalizedState, version) : [];
   if (version >= 6) validateFinance(state.finance, clubs, fixtures as SeasonFixture[], state.history as SeasonArchive[], coaching!, seasonNumber, round, state.status, state.managedClubId, payroll, employment, recruitmentHolds, scouts, fitness, physio, assistant, youth, version, facilities);
   const development = version >= 4 ? validateTraining(state.training, clubs, fixtures as SeasonFixture[], history, seasonNumber, round, coaching, rosters, fitness, physio, version, { ...careerContext, facilities }) : null;
@@ -2431,6 +2435,7 @@ function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 
     validateTransferPaymentBoundaries(normalizedState);
   }
   validateMatchState(state.activeMatch);
+  validateRelationships(normalizedState, version);
   const match = state.activeMatch;
   if (match.engineVersion !== 'possession-3' || match.seed !== fixtureSeed(seed, active.id)) fail('activeMatch', 'has the wrong engine or fixture seed');
   const home = clubs.find(club => club.id === active.homeClubId)!, away = clubs.find(club => club.id === active.awayClubId)!;
@@ -2471,11 +2476,11 @@ function validateState(value: unknown, version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 
 }
 
 /** Validate every reference and committed round before replacing any live season. */
-export function validateSeasonState(value: unknown): asserts value is SeasonState { validateState(value, 28); }
+export function validateSeasonState(value: unknown): asserts value is SeasonState { validateState(value, 29); }
 
 export function serializeSeason(state: SeasonState): string {
   validateSeasonState(state);
-  const text = JSON.stringify({ format: FORMAT, formatVersion: 28, engineVersion: 'possession-3', state });
+  const text = JSON.stringify({ format: FORMAT, formatVersion: 29, engineVersion: 'possession-3', state });
   checkSize(text);
   return text;
 }
@@ -2490,7 +2495,7 @@ function migrateRosterHistory(previous: SeasonState, version: number): SeasonSta
   });
   const training = version >= 5 ? previous.training : version === 4 ? migrateTrainingCoaching(previous.training) : createTraining(clubs, false);
   return {
-    ...previous, schemaVersion: 28, facilities: createFacilities(clubs, previous.managedClubId), seasonNumber, rosters, scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), employment: createEmployment(), scouting: createScouting(clubs, previous.managedClubId), negotiations: createNegotiations(), market: createMarket(), recruitment: createRecruitment(),
+    ...previous, schemaVersion: 29, relationships: createRelationships(), facilities: createFacilities(clubs, previous.managedClubId), seasonNumber, rosters, scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), employment: createEmployment(), scouting: createScouting(clubs, previous.managedClubId), negotiations: createNegotiations(), market: createMarket(), recruitment: createRecruitment(),
     manager: version >= 8 ? previous.manager : null,
     injuryMode: version >= 2 ? previous.injuryMode : 'off',
     injuries: version >= 2 ? previous.injuries : [],
@@ -2530,15 +2535,15 @@ export function parseSeason(text: string): SeasonState {
   try { parsed = JSON.parse(text); } catch { throw new Error('This is not a valid JSON season file.'); }
   checkJsonTree(parsed);
   const envelope = record(parsed, 'envelope', ['format', 'formatVersion', 'engineVersion', 'state']);
-  if (envelope.format !== FORMAT || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28].includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
-  const version = envelope.formatVersion as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28;
+  if (envelope.format !== FORMAT || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29].includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
+  const version = envelope.formatVersion as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29;
   // Validate the original shape and accounting before adding any recoverable metadata.
   validateState(envelope.state, version);
-  if (version === 28) return envelope.state as SeasonState;
+  if (version === 29) return envelope.state as SeasonState;
   const previous = envelope.state as SeasonState;
   const previousMarket = version >= 13 ? version < 15 ? migrateMarketTransfers(version < 14 ? migrateMarketCompetition(previous.market) : previous.market) : previous.market : createMarket();
   const upgraded: SeasonState = version >= 9 ? {
-    ...previous, schemaVersion: 28, facilities: createFacilities(previous.clubs, previous.managedClubId), youthCompetition: version >= 27 ? previous.youthCompetition : createYouthCompetition(), lifecycle: version >= 26 ? previous.lifecycle : createLifecycle(), academy: version >= 25 ? previous.academy : createAcademy(), youth: version >= 25 ? previous.youth : createYouth(), assistant: version >= 24 ? previous.assistant : createAssistant(), physio: version >= 23 ? previous.physio : createPhysio(), fitness: version >= 22 ? previous.fitness : createFitness(), scouts: version >= 21 ? previous.scouts : createScouts(), recruitment: version >= 19 ? previous.recruitment : version === 18 ? migrateRecruitmentTransfers(previous.recruitment) : createRecruitment(),
+    ...previous, schemaVersion: 29, relationships: createRelationships(), facilities: version >= 28 ? previous.facilities : createFacilities(previous.clubs, previous.managedClubId), youthCompetition: version >= 27 ? previous.youthCompetition : createYouthCompetition(), lifecycle: version >= 26 ? previous.lifecycle : createLifecycle(), academy: version >= 25 ? previous.academy : createAcademy(), youth: version >= 25 ? previous.youth : createYouth(), assistant: version >= 24 ? previous.assistant : createAssistant(), physio: version >= 23 ? previous.physio : createPhysio(), fitness: version >= 22 ? previous.fitness : createFitness(), scouts: version >= 21 ? previous.scouts : createScouts(), recruitment: version >= 19 ? previous.recruitment : version === 18 ? migrateRecruitmentTransfers(previous.recruitment) : createRecruitment(),
     employment: version >= 10 ? { ...(version < 16 ? migrateTransferPayments({ ...previous.employment, transfers: version >= 15 ? previous.employment.transfers : [] }) : previous.employment), buyouts: version >= 17 ? previous.employment.buyouts : [], contracts: previous.employment.contracts.map(contract => ({ ...contract, startsRound: version >= 18 ? contract.startsRound : 1 })), transfers: (version < 16 ? migrateTransferPayments({ ...previous.employment, transfers: version >= 15 ? previous.employment.transfers : [] }).transfers : previous.employment.transfers).map(transfer => ({ ...transfer, startsRound: version >= 19 ? transfer.startsRound : 1 })) } : createEmployment(),
     scouting: version >= 11 ? previous.scouting : createScouting(previous.clubs, previous.managedClubId), negotiations: version >= 12 ? previous.negotiations : createNegotiations(),
     market: { ...previousMarket, windows: previousMarket.windows.map(window => ({ ...window, offers: window.offers.map(offer => ({ ...offer, transfer: offer.transfer ? { ...offer.transfer, paymentPlan: version < 16 ? 'upfront' as const : offer.transfer.paymentPlan } : null })) })) },

@@ -1,3 +1,4 @@
+import { createRelationships } from '../src/world/relationships';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -17,9 +18,9 @@ import { enableTraining } from '../src/world/training';
 import { createYouthCareer, advanceYouthCareer as advance } from './helpers/youth-competition-careers';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
-const upgrade = state => ({ ...state, schemaVersion: 28, facilities: createFacilities(state.clubs, state.managedClubId) });
+const upgrade = state => ({ ...state, schemaVersion: 29, relationships: createRelationships(), facilities: createFacilities(state.clubs, state.managedClubId) });
 const restore = state => parseSeason(serializeSeason(state));
-const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 28, engineVersion: 'possession-3', state: copy }); };
+const changed = (state, mutate) => { const copy = structuredClone(state); mutate(copy); return JSON.stringify({ format: 'basketball-manager-season', formatVersion: 29, engineVersion: 'possession-3', state: copy }); };
 const own = state => state.facilities.projects.find(project => project.clubId === state.managedClubId);
 let original, legacy, enabled, started, cancelled, second, fourth, fifth, trained, youth, completed, marketStarted, marketFinished, opening, automatic, lateTraining, lateArena, heldProject;
 

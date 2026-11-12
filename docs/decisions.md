@@ -149,6 +149,16 @@ Completion is an actual calendar command, dated at the first processed boundary 
 
 Automatic management is optional for the manager, enabled for AI clubs, and may immediately approve the cheapest eligible upgrade while retaining EUR 150,000 beyond existing cash reservations. It shares manual funding/arrears guards and records the same project terms and expenses. One conservative policy is a foundation, not a claim of complete board strategy or a calibrated club economy. Earlier saves opt in prospectively.
 
+## Playing-time relationships and bounded focus
+
+The first squad-dynamics model uses explicit senior roles rather than inventing undocumented personalities. Reserve (0-8), Rotation (12-20) and Starter (24-32) expectations are assessed over up to four eligible committed games, with three required for a concern. A healthy DNP counts zero; injury, disqualification and default results are exempt. All defaults are excluded in this foundation because even a played default may end before normal opportunities were available. Future competition-specific models can refine that policy.
+
+Agreements apply after the current matchday. Conversations and role changes share a four-completed-matchday cooldown, and an active promise cannot be erased by another role decision. New commitments cannot increase an overcommitted 200-minute plan. New signings may reveal an existing overcommitment, which is displayed honestly and resolved by an explicit reduction rather than a silent downgrade. Increasing the role of a dissatisfied player cannot erase their current concern.
+
+Promises commit to the current role minimum over three future eligible games within six club fixtures. Success adds a capped +10 contribution; failure -15; insufficient eligible games or a departure closes the promise without penalty. Explanations add +2 with a 21-day half-life, reduced-role agreements -4 with a 42-day half-life, and resolved promises use a 42-day half-life. Conversation effects cap at -8/+8 and promise effects at -20/+10. Trust is baseline 50 plus these contributions; morale also includes bounded actual role satisfaction and recent results. The last four team results contribute +/-2 each with a 21-day half-life and a combined cap of +/-6, after three recorded games. These are transparent provisional game rules, not calibrated psychological claims.
+
+Morale affects future decision consistency only: the existing possession error chance gains `(50 - morale) / 10000`, bounded to half a percentage point in either direction and the existing action range. It never multiplies every skill or draws extra randomness. A unique round preparation freezes all clubs before any matches, so a later conversation cannot benefit or penalize an already prepared fixture. Contract bargaining, teammate chemistry, personalities and broader relationship consequences remain separate future work.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

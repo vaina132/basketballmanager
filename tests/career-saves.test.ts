@@ -165,7 +165,7 @@ describe('checkpoint restore and append', () => {
     expect(await saveCareerCheckpoint(state, 1, 'manual')).toEqual(saved);
     const serialized = storage.writeSeasonCheckpoint.mock.calls[0]![0] as string;
     expect(Object.keys(JSON.parse(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'state']);
-    expect(JSON.parse(serialized).formatVersion).toBe(28);
+    expect(JSON.parse(serialized).formatVersion).toBe(29);
     expect(parseSeason(serialized)).toEqual(state);
     expect(state).toEqual(before);
     expect(stepMatch(parseSeason(serialized).activeMatch)).toEqual(stepMatch(before.activeMatch));

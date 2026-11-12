@@ -91,5 +91,11 @@ export function stripYouthCompetition(value: object): void {
 
 /** Format27 predates club facility approvals, construction and upkeep. */
 export function stripFacilities(value: object): void {
+  stripRelationships(value);
   delete (value as Record<string, unknown>).facilities;
+}
+
+/** Format28 predates player relationships and frozen match morale. */
+export function stripRelationships(value: object): void {
+  delete (value as Record<string, unknown>).relationships;
 }

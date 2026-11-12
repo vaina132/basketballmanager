@@ -1,4 +1,5 @@
 import { getPlayerRetirement } from '../world/lifecycle-policy'
+import { getSquadRelationships } from '../world/relationships'
 import { seasonLabel } from '../world/season'
 import { getCareerPlayer } from '../world/player-catalog'
 import { recentClubRetirements } from './PlayerLifecycle'
@@ -38,13 +39,14 @@ interface ManagerDeskProps {
   onOpenPayroll: () => void
   onOpenTransfers: () => void
   onOpenScouting: () => void
+  onOpenRelationships?: (playerId?: string) => void
 }
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
 const money = (cents: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100)
 
-export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenScouting }: ManagerDeskProps) {
+export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenScouting, onOpenRelationships }: ManagerDeskProps) {
   const team = match[managedSide]
   const market = season && isMarketActive(season) ? getMarketWindow(season) : null
   const marketOffers = market && season ? getMarketOffers(season, season.managedClubId, true) : []
@@ -65,6 +67,16 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   const notices: { key: string; title: string; detail: string; urgent?: boolean; action: string; open: () => void }[] = []
   const finances = season?.finance.enabledSince ? getFinanceBalance(season.finance, season.managedClubId) : null
   const wageReserve = season?.payroll.enabledSince ? getPayrollReserve(season, season.managedClubId) : null
+
+  if (season?.relationships.enabledSince && onOpenRelationships) {
+    const relationships = getSquadRelationships(season)
+    const concerns = relationships.filter(row => row.concern)
+    const promises = relationships.filter(row => row.promise?.status === 'active')
+    const roleMinutes = relationships.reduce((sum, row) => sum + row.minMinutes, 0)
+    const first = concerns[0] ?? promises[0]
+    if (first) notices.push({ key: 'relationships', title: concerns.length ? `${concerns.length} playing-time ${concerns.length === 1 ? 'concern' : 'concerns'}` : `${promises.length} playing-time ${promises.length === 1 ? 'promise' : 'promises'}`, detail: concerns.length ? concerns.map(row => `${row.player.name}: ${row.concern}`).join(' ') : promises.map(row => `${row.player.name}: ${row.promise!.eligibleGames} of 3 eligible games reviewed, ${row.promise!.remainingClubGames} club games remaining.`).join(' '), urgent: concerns.some(row => row.morale < 40) || promises.some(row => row.promise!.remainingClubGames <= 1), action: 'Review dynamics', open: () => onOpenRelationships(first.player.id) })
+    else if (roleMinutes > 200) notices.push({ key: 'relationship-roles', title: 'Playing-time commitments exceed available minutes', detail: `The squad's agreed roles require ${roleMinutes} minutes per game; a regulation game has 200. Discuss a lower role to bring the plan within available minutes.`, urgent: true, action: 'Review dynamics', open: () => onOpenRelationships() })
+  }
 
   if (season?.employment.enabledSince) {
     const nextSquad = getClubContractSummary(season, season.managedClubId)

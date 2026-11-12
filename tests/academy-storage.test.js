@@ -1,3 +1,4 @@
+import { createRelationships } from '../src/world/relationships';
 import { createFacilities } from '../src/world/facilities';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -15,7 +16,7 @@ import { advanceAcademyCareer, academyClub as club, createAcademyCareers, create
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
 const restore = state => parseSeason(serializeSeason(state));
 const changed = (state, mutate) => { const envelope = JSON.parse(serializeSeason(state)); mutate(envelope.state); return JSON.stringify(envelope); };
-const upgrade = state => ({ ...state, schemaVersion: 28, facilities: createFacilities((state).clubs, (state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, academy: createAcademy(), youth: createYouth() });
+const upgrade = state => ({ ...state, schemaVersion: 29, relationships: createRelationships(), facilities: createFacilities((state).clubs, (state).managedClubId), youthCompetition: { model: 'youth-competition-1', enabledSince: null, seasons: [] }, lifecycle: { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }, academy: createAcademy(), youth: createYouth() });
 const youthContract = state => state.youth.contracts.findLast(contract => contract.clubId === club);
 
 function appendYouthAppointment(state, coachId) {

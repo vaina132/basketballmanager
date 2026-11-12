@@ -13,6 +13,10 @@ const other = (side: Side): Side => side === 'home' ? 'away' : 'home';
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 const elapsed = (state: MatchState): number => state.period <= 4 ? state.period * 600 - state.clockSeconds : 2400 + (state.period - 4) * 300 - state.clockSeconds;
 const lateGame = (state: MatchState): boolean => state.period >= 4 && state.clockSeconds <= 120;
+/** Focus changes decision errors only, capped at half a percentage point; no extra random draw. */
+export function moraleTurnoverAdjustment(state: Pick<MatchState, 'morale'>, playerId: string): number {
+  return clamp((50 - (state.morale?.values[playerId] ?? 50)) / 10_000, -.005, .005);
+}
 function emptyStats(): PlayerStats {
   return { secondsPlayed: 0, points: 0, fieldGoalsMade: 0, fieldGoalsAttempted: 0, threePointersMade: 0, threePointersAttempted: 0, freeThrowsMade: 0, freeThrowsAttempted: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, turnovers: 0, fouls: 0, condition: 100 };
 }
@@ -32,6 +36,7 @@ function copy(state: MatchState): MatchState {
     substitutionLocks: [...state.substitutionLocks], autoSubstitutions: { ...state.autoSubstitutions },
     injuries: Object.fromEntries(Object.entries(state.injuries).map(([id, injury]) => [id, { ...injury }])),
     ...(state.preExistingInjuries ? { preExistingInjuries: [...state.preExistingInjuries] } : {}),
+    ...(state.morale ? { morale: { ...state.morale, values: { ...state.morale.values } } } : {}),
     courtSeconds: { ...state.courtSeconds }, result: state.result ? { ...state.result, officialScore: { ...state.result.officialScore } } : null,
   };
 }
@@ -455,7 +460,7 @@ function resolvePossessionAction(state: MatchState): void {
     emit(state, { type: 'command', side: offense, playerId: handler.id, text: `${handler.name} brings ${state[offense].name} into their half-court offense.`, scene: actionScene('setup', offense, start, positions, from, to) });
   } else {
     const fatigue = (100 - state.stats[handler.id]!.condition) / 100;
-    const turnoverChance = clamp((action === 'shot' ? .008 : .018) + pressure * .024 + (defender.attributes.defense - handler.attributes.passing) * .002 + fatigue * .014, .006, .095);
+    const turnoverChance = clamp((action === 'shot' ? .008 : .018) + pressure * .024 + (defender.attributes.defense - handler.attributes.passing) * .002 + fatigue * .014 + moraleTurnoverAdjustment(state, handler.id), .006, .095);
     const foulChance = (action === 'drive' ? .028 : .012) + pressure * .018;
     const roll = draw(state);
     if (roll < turnoverChance) possessionTurnover(state, play);
@@ -523,6 +528,7 @@ function beginPeriod(state: MatchState): void {
   emit(state, { type: 'period-start', text: state.period <= 4 ? `Quarter ${state.period} begins.` : `Overtime ${state.period - 4} begins.` });
 }
 export interface FixtureMatchOptions {
+  morale?: MatchState['morale'];
   lineups?: Partial<Record<Side, readonly string[]>>;
   tactics?: Partial<Record<Side, Tactics>>;
   conditions?: Readonly<Record<string, number>>;
@@ -534,6 +540,7 @@ export interface FixtureMatchOptions {
 function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team, away: Team, options: FixtureMatchOptions = {}): MatchState {
   if (engineVersion !== 'rules-2' && engineVersion !== 'possession-3') throw new Error('Choose a supported match engine.');
   const state: MatchState = {
+    ...(options.morale ? { morale: { ...options.morale, values: { ...options.morale.values } } } : {}),
     schemaVersion: 2, engineVersion, seed, rngState: normalizeSeed(seed), home, away, score: { home: 0, away: 0 },
     period: 1, clockSeconds: 600, status: 'ready', phase: 'dead-ball', possession: 'home', possessionArrow: 'away', shotClockSeconds: 24, frontcourt: false, teamFouls: { home: 0, away: 0 },
     timeoutUsage: { home: { firstHalf: 0, secondHalf: 0, overtime: 0, lateFourth: 0 }, away: { firstHalf: 0, secondHalf: 0, overtime: 0, lateFourth: 0 } },
@@ -585,6 +592,10 @@ export function createFixtureMatch(seed: number, home: Team, away: Team, options
   }
   for (const [id, condition] of Object.entries(options.conditions ?? {})) {
     if (!allIds.has(id) || !Number.isFinite(condition) || condition < 0 || condition > 100) throw new Error('Fixture condition must identify its players and stay between zero and one hundred.');
+  }
+  if (options.morale !== undefined) {
+    const morale = options.morale;
+    if (!morale || typeof morale !== 'object' || Array.isArray(morale) || Object.keys(morale).length !== 3 || morale.model !== 'morale-1' || !Number.isSafeInteger(morale.eventCount) || morale.eventCount < 1 || morale.eventCount > 1_000_000 || !morale.values || typeof morale.values !== 'object' || Array.isArray(morale.values) || Object.keys(morale.values).length !== allIds.size || [...allIds].some(id => !Object.hasOwn(morale.values, id)) || Object.entries(morale.values).some(([id, value]) => !allIds.has(id) || !Number.isInteger(value) || value < 0 || value > 100)) throw new Error('Fixture morale must retain its prepared relationship history and an assessment from zero to one hundred for every player.');
   }
   if (options.preExistingInjuries !== undefined) {
     if (options.preExistingInjuries === null || typeof options.preExistingInjuries !== 'object' || Array.isArray(options.preExistingInjuries)) throw new Error('Fixture injuries must identify unavailable players.');

@@ -1,3 +1,4 @@
+import type { SeasonRelationships } from './relationships';
 import type { InjuryMode, MatchResult, MatchState, PlayerStats, Side, Tactics, Team } from './types';
 import type { SeasonTraining } from './training';
 import type { SeasonCoaching } from './coaching';
@@ -72,7 +73,7 @@ export interface SeasonArchive {
 }
 
 export interface SeasonState {
-  schemaVersion: 28;
+  schemaVersion: 29;
   engineVersion: 'possession-3';
   dataPackId: 'development-league-1';
   seed: number;
@@ -104,6 +105,7 @@ export interface SeasonState {
   lifecycle: SeasonLifecycle;
   youthCompetition: SeasonYouthCompetition;
   facilities: SeasonFacilities;
+  relationships: SeasonRelationships;
   negotiations: SeasonNegotiations;
   market: SeasonMarket;
   recruitment: SeasonRecruitment;

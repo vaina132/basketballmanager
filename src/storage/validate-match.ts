@@ -243,7 +243,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     'pendingSubstitutions', 'requiredSubstitutions', 'freeThrows', 'stoppage', 'substitutionLocks',
     'autoSubstitutions', 'injuryMode', 'injuries', 'courtSeconds', 'result',
     ...(modern ? ['possessionPlay'] : []),
-  ], modern ? ['preExistingInjuries'] : []);
+  ], modern ? ['preExistingInjuries', 'morale'] : []);
   if (state.schemaVersion !== 2 || !['rules-2', 'possession-3'].includes(state.engineVersion as string)) fail('state', 'uses an unsupported schema or engine version');
   number(state.seed, 'seed', 0, 0xffff_ffff);
   number(state.rngState, 'rngState', 1, 0xffff_ffff);
@@ -321,6 +321,13 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     }
   }
 
+  if (Object.hasOwn(state, 'morale')) {
+    const morale = record(state.morale, 'morale', ['model', 'eventCount', 'values']);
+    choice(morale.model, ['morale-1'], 'morale.model');
+    number(morale.eventCount, 'morale.eventCount', 1, 1_000_000);
+    const values = record(morale.values, 'morale.values', [...allIds]);
+    for (const playerId of allIds) number(values[playerId], `morale.values.${playerId}`, 0, 100);
+  }
   const lineups = record(state.lineups, 'lineups', SIDES);
   const tactics = record(state.tactics, 'tactics', SIDES);
   const stats = record(state.stats, 'stats', [...allIds]);

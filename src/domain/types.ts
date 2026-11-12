@@ -119,6 +119,8 @@ export interface MatchState {
   schemaVersion: 2;
   engineVersion: EngineVersion;
   possessionPlay?: PossessionPlay | null;
+  /** Frozen when the career round is prepared; later conversations never rewrite a match. */
+  morale?: { model: 'morale-1'; eventCount: number; values: Record<string, number> };
   seed: number;
   rngState: number;
   home: Team;

@@ -1,7 +1,8 @@
 import { getPlayerRetirement } from '../world/lifecycle-policy'
 import { getSquadRelationships } from '../world/relationships'
 import { getBoardSummary } from '../world/board'
-import { seasonLabel } from '../world/season'
+import { getClubSponsorship } from '../world/commercial'
+import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { getCareerPlayer } from '../world/player-catalog'
 import { recentClubRetirements } from './PlayerLifecycle'
 import type { AssistantCoach } from '../domain/assistant'
@@ -74,6 +75,12 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     const board = getBoardSummary(season)
     if (board.latest) notices.push({ key: 'board', title: `Board review · ${board.confidenceLabel}`, detail: `${medicalDate(board.latest.date)}: confidence ${board.confidence}/100. ${board.latest.club.wins} ${board.latest.club.wins === 1 ? 'win' : 'wins'} in ${board.latest.club.played} counted games.${board.financeStatus === 'behind' ? ' Unpaid costs are above the agreed starting balance.' : ''}`, urgent: board.confidence < 40 || board.financeStatus === 'behind', action: 'Review board', open: onOpenBoard })
     else if (board.objective && board.objective.games > 0) notices.push({ key: 'board', title: 'Board objectives set', detail: `Win ${board.objective.targetWins} of ${board.objective.games} counted games.${board.objective.startingUnpaid !== null ? ` Keep unpaid costs at or below ${money(board.objective.startingUnpaid)}.` : ''}`, action: 'View objectives', open: onOpenBoard })
+  }
+
+  if (season?.commercial.enabledSince) {
+    const sponsorship = getClubSponsorship(season), next = seasonLabel(Math.min(season.seasonNumber + 1, MAX_SEASON_NUMBER))
+    if (sponsorship.open.length) notices.push({ key: 'sponsorship', title: 'Sponsor offers waiting', detail: `${sponsorship.open.length} ${sponsorship.open.length === 1 ? 'offer' : 'offers'} for ${next}. Unsigned offers expire on ${medicalDate(sponsorship.open[0]!.expiresOn)}.`, urgent: season.status === 'complete', action: 'Review offers', open: onOpenClub })
+    else if (season.status === 'complete' && !sponsorship.next && season.seasonNumber < MAX_SEASON_NUMBER) notices.push({ key: 'sponsorship', title: 'No sponsor for next season', detail: `${next} will start without main-sponsor income.`, urgent: true, action: 'Review sponsorship', open: onOpenClub })
   }
 
   if (season?.relationships.enabledSince && onOpenRelationships) {

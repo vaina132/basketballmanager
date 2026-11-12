@@ -89,6 +89,9 @@ describe('sponsorship negotiations in a career', () => {
     }
     const sponsors = renewal.commercial.offers.map(offer => offer.sponsorId);
     expect(new Set(sponsors).size).toBe(sponsors.length);
+    // A club's current sponsor negotiates only with that club, whatever the club processing order.
+    const incumbents = new Map(opening.commercial.agreements.map(agreement => [agreement.sponsorId, agreement.clubId]));
+    for (const offer of renewal.commercial.offers) expect([undefined, offer.clubId]).toContain(incumbents.get(offer.sponsorId));
     const rivals = renewal.clubs.filter(item => item.id !== club);
     for (const rival of rivals) expect(renewal.commercial.agreements.filter(agreement => agreement.clubId === rival.id && agreement.startsSeason === 2)).toHaveLength(1);
     expect(renewal.commercial.agreements.filter(agreement => agreement.startsSeason === 2).every(agreement => agreement.automatic)).toBe(true);

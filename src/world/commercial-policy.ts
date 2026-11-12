@@ -104,9 +104,12 @@ export function sponsorAppeal(context: { clubs: readonly Pick<Team, 'id'>[]; fix
   return { reach, winShare, fill, appeal };
 }
 
-/** A sponsor can hold one main-sponsor contract and make offers to one club at a time. */
+/**
+ * A sponsor holds one main-sponsor contract and makes offers to one club at a time. While still another club's
+ * current sponsor it negotiates only with that club, so club processing order gives no club a free advantage.
+ */
 export function sponsorAvailable(commercial: SeasonCommercial, sponsorId: string, clubId: string, forSeason: number): boolean {
-  if (commercial.agreements.some(agreement => agreement.sponsorId === sponsorId && agreement.clubId !== clubId && agreement.startsSeason <= forSeason && agreement.endsSeason >= forSeason)) return false;
+  if (commercial.agreements.some(agreement => agreement.sponsorId === sponsorId && agreement.clubId !== clubId && agreement.startsSeason <= forSeason && agreement.endsSeason >= forSeason - 1)) return false;
   return !commercial.offers.some(offer => offer.sponsorId === sponsorId && offer.clubId !== clubId && offer.status === 'open');
 }
 

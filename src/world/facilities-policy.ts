@@ -1,6 +1,7 @@
 import type { ClubFacilities, FacilityProject, FacilityType, FacilityUpgradeQuote, MaintenancePlan, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
-import { getClubFinanceDefinition } from '../data/development-finances';
+import type { WorldContext } from '../domain/world';
+import { clubFinanceDefinition, worldOf } from './career-world';
 import { getFinanceBalance } from './finance';
 import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
@@ -18,7 +19,7 @@ const UPKEEP: Record<FacilityType, readonly number[]> = { arena: [0, 50_000, 90_
 const BUILD_DAYS = [0, 21, 28, 42] as const;
 const BONUS_PERCENT = [0, 5, 8, 10] as const;
 const ADDED_SEATS = [0, 500, 1400, 2600] as const;
-export type FacilitiesContext = { facilities?: SeasonFacilities; date?: string };
+export type FacilitiesContext = { facilities?: SeasonFacilities; date?: string } & WorldContext;
 
 /** Condition of an upgraded facility moves once per senior matchday under the plan in force before that matchday. */
 export const FACILITY_WEAR_PER_MATCHDAY = 5;
@@ -113,7 +114,7 @@ export function getFacilityUpkeep(state: FacilitiesContext, clubId: string, onDa
 
 export function getArenaFullCapacity(state: FacilitiesContext, clubId: string, onDate = state.date): number {
   // Sections of a worn arena expansion are closed for safety.
-  return getClubFinanceDefinition(clubId).capacity + Math.floor(ADDED_SEATS[getFacilityLevel(state, 'arena', clubId, onDate) - 1]! * getFacilityCondition(state, 'arena', clubId, onDate) / 100);
+  return clubFinanceDefinition(worldOf(state), clubId).capacity + Math.floor(ADDED_SEATS[getFacilityLevel(state, 'arena', clubId, onDate) - 1]! * getFacilityCondition(state, 'arena', clubId, onDate) / 100);
 }
 
 /** Starts and manual cancellations on matchday cannot change that day's already prepared gate. */
@@ -140,7 +141,7 @@ export function quoteFacilityUpgrade(state: SeasonState, type: FacilityType, clu
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before funding construction.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before funding construction.';
   else if (available < cost) reason = FACILITY_FUNDS_REASON;
-  return { clubId, type, fromLevel, toLevel, cost, durationDays, dueOn: facilityCompletionDate(state.date, durationDays), remainingBudgetAfter: Math.max(0, available - cost), upkeepAfter, totalUpkeepAfter: currentUpkeep - UPKEEP[type][fromLevel - 1]! + upkeepAfter, bonusAfter: type === 'arena' ? 0 : BONUS_PERCENT[toLevel - 1]!, capacityAfter: type === 'arena' ? getClubFinanceDefinition(clubId).capacity + ADDED_SEATS[toLevel - 1]! : 0, canStart: reason === null, reason };
+  return { clubId, type, fromLevel, toLevel, cost, durationDays, dueOn: facilityCompletionDate(state.date, durationDays), remainingBudgetAfter: Math.max(0, available - cost), upkeepAfter, totalUpkeepAfter: currentUpkeep - UPKEEP[type][fromLevel - 1]! + upkeepAfter, bonusAfter: type === 'arena' ? 0 : BONUS_PERCENT[toLevel - 1]!, capacityAfter: type === 'arena' ? clubFinanceDefinition(worldOf(state), clubId).capacity + ADDED_SEATS[toLevel - 1]! : 0, canStart: reason === null, reason };
 }
 
 export function getClubFacilities(state: SeasonState, clubId = state.managedClubId): ClubFacilities {

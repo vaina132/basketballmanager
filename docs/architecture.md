@@ -104,6 +104,8 @@ Store portrait and court appearance references together. Load images lazily and 
 
 Third-party data and image permissions are independent of this repository's Apache software license. Maintain a separate data/asset manifest and distribution status.
 
+**Career worlds (format 39).** Game logic never reads the built-in league's data modules directly; it asks for the career's world with `worldOf(context)` (`src/world/career-world.ts`), which returns `SeasonState.world` or, for careers without one, `DEVELOPMENT_WORLD` (`src/data/development-world.ts`). Catalog, lifecycle, facilities and finance contexts include the optional `world`/`dataPackId` fields (`WorldContext`); contexts built by hand inside validators pass `world` explicitly. Rivalry, president and sponsor helpers take the world as an argument (`rivalryFor`, `governingDerby`, `verdictBudgets`, `sponsorAppeal`, `buildSponsorshipOffers`). `createSeason({ world })` starts a career in a world after `validateWorld`; only non-built-in worlds are stored (`storedWorld`). `tests/career-world.test.ts` plays a full career in a renamed copy of the built-in league, so any remaining direct read of built-in data fails.
+
 ## 9. Performance budgets and evidence
 
 Initial measurement goals, not current guarantees: responsive controls during a simulated day; a representative watched match near display refresh rate; no growing memory allocation per rendered frame; resumable season work with visible progress; bounded historical replay storage.

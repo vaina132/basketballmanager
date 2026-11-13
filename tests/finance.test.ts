@@ -5,9 +5,10 @@ import { DEVELOPMENT_CLUBS } from '../src/data/development-league';
 import { DEVELOPMENT_COACHES } from '../src/data/development-coaches';
 import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match';
 import { coachingCommitted, enableCoaching, getClubCoaching, hireCoach, recruitAiCoaches, releaseCoach, renewSeasonCoaching, setCoachRenewal } from '../src/world/coaching';
-import { ANNUAL_SPONSORSHIP, createFinance, DEFAULT_TICKET_PRICE, enableFinance, financeLedgerRows, forecastGate, getClubFinanceDefinition, getFinanceBalance, MAX_TICKET_PRICE, OPENING_CASH, prepareFinanceRound, processFinanceRound, recommendTicketPrice, recordCoachFee, ROUND_OPERATING_COST, setTicketPlan, startFinanceSeason } from '../src/world/finance';
+import { ANNUAL_SPONSORSHIP, createFinance, DEFAULT_TICKET_PRICE, enableFinance, financeLedgerRows, forecastGate, getFinanceBalance, MAX_TICKET_PRICE, OPENING_CASH, prepareFinanceRound, processFinanceRound, recommendTicketPrice, recordCoachFee, ROUND_OPERATING_COST, setTicketPlan, startFinanceSeason } from '../src/world/finance';
 import { advanceSeason, createSeason as createSeasonWithPayroll, getActiveFixture, managedSide, rolloverSeason } from '../src/world/season';
 import type { InjuryMode } from '../src/domain/types';
+import { getClubFinanceDefinition } from '../src/data/development-finances';
 
 // These cases isolate the pre-payroll financial model; payroll has its own integration suite.
 const createSeason = (seed?: number, club?: string, injury?: InjuryMode, training?: boolean, coaching?: boolean, finance?: boolean) => createSeasonWithPayroll(seed, club, injury, training, coaching, finance, false);

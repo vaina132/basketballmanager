@@ -1,12 +1,12 @@
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
-import { DEVELOPMENT_PLAYERS } from '../data/development-players';
-import { DEVELOPMENT_PLAYER_PROFILES, playerAgeOnDate } from '../data/development-player-profiles';
-import { DEVELOPMENT_WAGES } from '../data/development-wages';
+import type { WorldContext } from '../domain/world';
+import { playerAgeOnDate } from '../data/development-player-profiles';
+import { worldOf, worldPlayer, worldPlayers } from './career-world';
 import { isPlayerRetired } from './lifecycle-policy';
 
 /** A catalog is local to a career and a calendar boundary, never a global mutable registry. */
-export type CareerPlayerContext = Partial<Pick<SeasonState, 'academy' | 'lifecycle' | 'seasonNumber' | 'round' | 'date'>>;
+export type CareerPlayerContext = Partial<Pick<SeasonState, 'academy' | 'lifecycle' | 'seasonNumber' | 'round' | 'date'>> & WorldContext;
 
 function atBoundary(context: CareerPlayerContext, seasonNumber = context.seasonNumber ?? 7974, round = context.round ?? 10): number {
   if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || seasonNumber > 7974 || !Number.isInteger(round) || round < 1 || round > 10) throw new Error('Choose a supported player-catalog calendar boundary.');
@@ -17,7 +17,8 @@ function atBoundary(context: CareerPlayerContext, seasonNumber = context.seasonN
 export function getCareerPlayers(context: CareerPlayerContext, seasonNumber = context.seasonNumber ?? 7974, round = context.round ?? 10): readonly Player[] {
   const boundary = atBoundary(context, seasonNumber, round);
   const graduates = context.academy?.enabledSince ? context.academy.graduates.filter(entry => entry.availableSince.seasonNumber * 10 + entry.availableSince.round <= boundary) : [];
-  return graduates.length ? [...DEVELOPMENT_PLAYERS, ...graduates.map(entry => entry.player)] : DEVELOPMENT_PLAYERS;
+  const originals = worldPlayers(worldOf(context));
+  return graduates.length ? [...originals, ...graduates.map(entry => entry.player)] : originals;
 }
 
 /** Currently known seniors who can still play at the requested registration boundary.
@@ -33,7 +34,7 @@ export function getActiveCareerPlayers(context: CareerPlayerContext, seasonNumbe
 /** Scalar identity lookup also serves pending academy promotion offers, after actual intake only. */
 export function getCareerPlayer(context: CareerPlayerContext, playerId: string, seasonNumber = context.seasonNumber ?? 7974, round = context.round ?? 10): Player {
   const boundary = atBoundary(context, seasonNumber, round);
-  const original = DEVELOPMENT_PLAYERS.find(player => player.id === playerId);
+  const original = worldPlayer(worldOf(context), playerId);
   if (original) return original;
   if (context.academy?.enabledSince) {
     const graduate = context.academy.graduates.find(entry => entry.player.id === playerId && entry.availableSince.seasonNumber * 10 + entry.availableSince.round <= boundary);
@@ -46,14 +47,16 @@ export function getCareerPlayer(context: CareerPlayerContext, playerId: string, 
 
 export function getCareerWage(context: CareerPlayerContext, playerId: string): number {
   getCareerPlayer(context, playerId);
-  if (Object.hasOwn(DEVELOPMENT_WAGES, playerId)) return DEVELOPMENT_WAGES[playerId]!;
+  const wages = worldOf(context).wages;
+  if (Object.hasOwn(wages, playerId)) return wages[playerId]!;
   const prospect = context.academy?.prospects.find(entry => entry.player.id === playerId);
   if (prospect) return prospect.seasonWage;
   throw new Error('This career has no wage terms for the selected player.');
 }
 
 export function getCareerPlayerAge(context: CareerPlayerContext, playerId: string, onDate: string): number | null {
-  const original = DEVELOPMENT_PLAYER_PROFILES[playerId];
+  const profiles = worldOf(context).playerProfiles;
+  const original = Object.hasOwn(profiles, playerId) ? profiles[playerId] : undefined;
   if (original) return playerAgeOnDate(original.dateOfBirth, onDate);
   const boundary = atBoundary(context);
   const prospect = context.academy?.enabledSince ? context.academy.prospects.find(entry => entry.player.id === playerId && entry.intakeSeason * 10 + entry.intakeRound <= boundary) : undefined;

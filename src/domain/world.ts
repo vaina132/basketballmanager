@@ -1,0 +1,36 @@
+import type { ClubFinanceDefinition } from '../data/development-finances';
+import type { DevelopmentPresident } from '../data/development-presidents';
+import type { DevelopmentPlayerProfile } from '../data/development-player-profiles';
+import type { DevelopmentSponsor } from '../data/development-sponsors';
+import type { Rivalry } from './rivalries';
+import type { Team } from './types';
+
+/**
+ * Everything a career's league is made of at its start: clubs and squads, player birth dates and wages, venues,
+ * presidents, sponsors and rivalries. The built-in fictional league is one world (`DEVELOPMENT_WORLD`, never stored
+ * in saves); any other world travels inside its career's save, so a career never depends on files outside it.
+ */
+export interface CareerWorld {
+  /** Equals the career's `dataPackId`. */
+  id: string;
+  name: string;
+  source: 'fictional-development' | 'real-data-pack';
+  /** First matchday of season one (a Saturday). */
+  startDate: string;
+  clubs: readonly Team[];
+  /** Every original player's date of birth. */
+  playerProfiles: Readonly<Record<string, DevelopmentPlayerProfile>>;
+  /** Every original player's gross season wage in euro cents. */
+  wages: Readonly<Record<string, number>>;
+  finances: readonly ClubFinanceDefinition[];
+  presidents: readonly DevelopmentPresident[];
+  /** The sponsor market; each club's current sponsor is named in its finance definition. */
+  sponsors: readonly DevelopmentSponsor[];
+  rivalries: readonly Rivalry[];
+}
+
+/** The fields a context needs to find its world: careers outside the built-in league carry theirs. */
+export interface WorldContext {
+  dataPackId?: string;
+  world?: CareerWorld;
+}

@@ -1,7 +1,7 @@
 import type { FacilityAnchor, FacilityEvent, FacilityProject, FacilityType, MaintenancePlan, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
-import { getClubFinanceDefinition } from '../data/development-finances';
+import { clubFinanceDefinition, worldOf } from './career-world';
 import { FACILITY_AUTOMATION_BUFFER, FACILITY_TYPES, getActiveFacilityProject, getFacilityLevel, maintenancePlanOn, quoteFacilityUpgrade } from './facilities-policy';
 import { getSpendableCash, getSpendablePosition } from './payroll-policy';
 import { getFinanceBalance, recordBoardCapital, recordFacilityInvestment } from './finance';
@@ -41,7 +41,7 @@ export function enableFacilities(state: SeasonState): SeasonState {
   if (!state.finance.enabledSince) throw new Error('Enable club finances before managing facilities.');
   // Activation preserves the price and capacity of the already prepared matchday.
   const facilities: SeasonFacilities = { ...createFacilities(state.clubs, state.managedClubId), enabledSince: facilityEventAnchor(state) };
-  const next = { ...state, facilities, finance: { ...state.finance, roundCapacities: Object.fromEntries(state.clubs.map(club => [club.id, getClubFinanceDefinition(club.id).capacity])) } };
+  const next = { ...state, facilities, finance: { ...state.finance, roundCapacities: Object.fromEntries(state.clubs.map(club => [club.id, clubFinanceDefinition(worldOf(state), club.id).capacity])) } };
   return automateFacilities(next);
 }
 

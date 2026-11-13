@@ -6,6 +6,7 @@ import { rosterForRound } from './rosters';
 import { getPlayerRetirement } from './lifecycle-policy';
 import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, pressImpact } from './press-policy';
 import { governingDerby, RIVALRY_MORALE_WEIGHT } from './rivalries';
+import { worldOf } from './career-world';
 
 export const SQUAD_ROLES: readonly SquadRole[] = ['development', 'rotation', 'starter'];
 export const SQUAD_ROLE_DEFINITIONS: Record<SquadRole, { label: string; minMinutes: number; maxMinutes: number }> = {
@@ -77,7 +78,7 @@ function gamesFor(state: SeasonState, clubId: string, playerId: string): Evidenc
     if (!roster.players.some(player => player.id === playerId)) continue;
     const stats = fixture.result.stats?.[playerId];
     const eligible = !!stats && fixture.result.kind === 'normal' && !fixture.result.injuries[playerId] && stats.fouls < 5;
-    games.push({ at: ordinal(season.seasonNumber, fixture.round), id: fixture.id, date: fixture.date, eligible, minutes: stats ? stats.secondsPlayed / 60 : 0, won: fixture.result.winnerClubId === clubId, derby: !!governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round) });
+    games.push({ at: ordinal(season.seasonNumber, fixture.round), id: fixture.id, date: fixture.date, eligible, minutes: stats ? stats.secondsPlayed / 60 : 0, won: fixture.result.winnerClubId === clubId, derby: !!governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round, worldOf(state)) });
   }
   return games.sort((a, b) => a.at - b.at || compareText(a.id, b.id));
 }

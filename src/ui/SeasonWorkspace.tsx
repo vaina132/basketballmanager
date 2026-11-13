@@ -11,6 +11,7 @@ import { MatchMvpCard } from './MatchMvpCard'
 import { MatchRating } from './PlayerRating'
 import { PIR_HELP } from './MatchBoxScore'
 import './season-workspace.css'
+import { worldOf } from '../world/career-world'
 
 interface SeasonWorkspaceProps {
   season: SeasonState | null
@@ -42,6 +43,7 @@ export function SeasonWorkspace(props: SeasonWorkspaceProps) {
 
 function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, busy = false }: SeasonWorkspaceProps & { season: SeasonState; onNewGame: () => void }) {
   const [selectedSeason, setSelectedSeason] = useState(season.seasonNumber)
+  const leagueName = worldOf(season).source === 'fictional-development' ? 'the development league' : worldOf(season).name
   const [round, setRound] = useState(String(season.round))
   const [ownFixtures, setOwnFixtures] = useState(false)
   const [reviewId, setReviewId] = useState<string | null>(null)
@@ -94,7 +96,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
         <span>{archived ? 'Archived season' : complete ? 'Season complete' : `Matchday ${season.round} of ${totalRounds}`}<time dateTime={selectedDate}>{formatDate(selectedDate)}</time></span>
       </div>
       <div className="season-matchday-action">
-        <p>{complete ? <><strong>{champion!.name}</strong> win the development league.</> : matchFinished ? 'Match finished. Continue to complete this matchday and update the table.' : <>{club(active.homeClubId).name} <span>vs</span> {club(active.awayClubId).name}</>}</p>
+        <p>{complete ? <><strong>{champion!.name}</strong> win {leagueName}.</> : matchFinished ? 'Match finished. Continue to complete this matchday and update the table.' : <>{club(active.homeClubId).name} <span>vs</span> {club(active.awayClubId).name}</>}</p>
         <div className="season-result-actions">{archived ? <button className="button" onClick={() => { selectSeason(season.seasonNumber); seasonSelector.current?.focus() }} disabled={busy}>Current season<Icon name="chevron" size={16} /></button> : complete ? <>
           <button className="button primary" onClick={onRollover} disabled={busy}>{busy ? 'Preparing next season…' : season.employment.enabledSince ? 'Review offseason' : 'Next season'}<Icon name="next" size={16} /></button>
           <button className="button" onClick={onOpenMatch} disabled={busy}>View last match<Icon name="court" size={16} /></button>
@@ -104,7 +106,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
     </section>
 
     <section className="season-standings panel" aria-labelledby="season-table-title">
-      <header className="season-panel-heading"><div><h2 id="season-table-title">League table</h2><p>Fictional development league · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
+      <header className="season-panel-heading"><div><h2 id="season-table-title">League table</h2><p>{worldOf(season).source === 'fictional-development' ? 'Fictional development league' : worldOf(season).name} · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
       <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th><th scope="col" title="Points for">PF</th><th scope="col" title="Points against">PA</th><th scope="col" title="Point difference">Diff</th></tr></thead><tbody>{standings.map(row => <tr key={row.clubId} data-club-id={row.clubId} className={row.clubId === season.managedClubId ? 'season-managed-row' : ''}>
         <td>{row.position}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} /></th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td><td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
       </tr>)}</tbody></table></div>

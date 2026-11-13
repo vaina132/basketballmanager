@@ -8,7 +8,7 @@ import { DEVELOPMENT_SCOUTS } from '../data/development-scouts'
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness'
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios'
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants'
-import { financeLedgerRows, forecastGate, getClubFinanceDefinition, getFinanceBalance, MAX_TICKET_PRICE, OPENING_CASH, recommendTicketPrice, ROUND_OPERATING_COST, TICKET_PRICE_STEP } from '../world/finance'
+import { financeLedgerRows, forecastGate, getFinanceBalance, MAX_TICKET_PRICE, OPENING_CASH, recommendTicketPrice, ROUND_OPERATING_COST, TICKET_PRICE_STEP } from '../world/finance'
 import { dateForRound, seasonLabel } from '../world/season'
 import { getTransferPayments } from '../world/transfer-payments'
 import { TransferPaymentsPanel } from './TransferPaymentsPanel'
@@ -19,6 +19,7 @@ import { getClubFacilities } from '../world/facilities-policy'
 import { getDevelopmentSponsor } from '../data/development-sponsors'
 import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
 import './club-workspace.css'
+import { clubFinanceDefinition, worldOf } from '../world/career-world'
 
 interface ClubWorkspaceProps extends FacilitiesActions, SponsorshipActions {
   season: SeasonState
@@ -39,7 +40,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
   const [period, setPeriod] = useState<'current' | 'all'>('current')
   const club = season.clubs.find(team => team.id === season.managedClubId)!
-  const definition = getClubFinanceDefinition(club.id)
+  const definition = clubFinanceDefinition(worldOf(season), club.id)
   const facilities = getClubFacilities(season)
   const enabled = season.finance.enabledSince !== null
   const balance = getFinanceBalance(season.finance, club.id)
@@ -54,7 +55,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
   const forecastPrice = home ? locked ? season.finance.roundPrices[club.id]! : plan.delegated ? recommendTicketPrice(season, home) : plan.price : null
   const forecast = home && forecastPrice !== null ? forecastGate(season, home, forecastPrice) : null
   const opponent = home ? season.clubs.find(team => team.id === home.awayClubId)! : null
-  const derby = home ? governingDerby(season.rivalries, home.homeClubId, home.awayClubId, season.seasonNumber, home.round) : null
+  const derby = home ? governingDerby(season.rivalries, home.homeClubId, home.awayClubId, season.seasonNumber, home.round, worldOf(season)) : null
   const ledger = financeLedgerRows(season.finance, club.id).filter(entry => (kind === 'all' || entry.kind === kind) && (period === 'all' || entry.seasonNumber === season.seasonNumber))
 
   function entryDetail(entry: FinanceEntry): string {

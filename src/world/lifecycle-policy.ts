@@ -2,10 +2,14 @@ import type { PlayerAging, RetirementNotice } from '../domain/lifecycle';
 import type { SeasonState } from '../domain/season';
 import type { PlayerAttributes } from '../domain/types';
 import type { TrainingPoints } from '../domain/training';
-import { DEVELOPMENT_PLAYER_PROFILES, playerAgeOnDate } from '../data/development-player-profiles';
+import type { WorldContext } from '../domain/world';
+import { playerAgeOnDate } from '../data/development-player-profiles';
+import { worldOf } from './career-world';
 import { memoizePure } from './pure-cache';
 
-export type LifecycleContext = Partial<Pick<SeasonState, 'lifecycle' | 'academy' | 'seasonNumber' | 'round' | 'date'>>;
+export type LifecycleContext = Partial<Pick<SeasonState, 'lifecycle' | 'academy' | 'seasonNumber' | 'round' | 'date'>> & WorldContext;
+/** An original player's profile in the career's world, if the player is one. */
+const originalProfile = (context: LifecycleContext, playerId: string) => { const profiles = worldOf(context).playerProfiles; return Object.hasOwn(profiles, playerId) ? profiles[playerId] : undefined; };
 const ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 const DAY_MS = 86_400_000;
 export const MIN_LIFECYCLE_POPULATION = 60;
@@ -25,7 +29,7 @@ const dateNumber = memoizePure((date: string): number => {
 });
 
 export function lifecycleDateOfBirth(context: LifecycleContext, playerId: string): string | null {
-  return DEVELOPMENT_PLAYER_PROFILES[playerId]?.dateOfBirth ?? context.academy?.prospects.find(prospect => prospect.player.id === playerId)?.dateOfBirth ?? null;
+  return originalProfile(context, playerId)?.dateOfBirth ?? context.academy?.prospects.find(prospect => prospect.player.id === playerId)?.dateOfBirth ?? null;
 }
 
 /** Match the public calendar-age convention: leap-day birthdays fall on March 1 otherwise. */
@@ -43,7 +47,7 @@ function birthday(dateOfBirth: string, age: number): string { return birthdays(`
 function agingStart(context: LifecycleContext, playerId: string, onDate: string): string | null {
   const anchor = context.lifecycle?.enabledSince;
   if (!anchor || onDate < anchor.date) return null;
-  if (DEVELOPMENT_PLAYER_PROFILES[playerId]) return anchor.date;
+  if (originalProfile(context, playerId)) return anchor.date;
   const graduate = context.academy?.graduates.find(entry => entry.player.id === playerId && entry.graduatedOn <= onDate);
   return graduate ? (graduate.graduatedOn > anchor.date ? graduate.graduatedOn : anchor.date) : null;
 }

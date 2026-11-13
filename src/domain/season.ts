@@ -1,3 +1,4 @@
+import type { CareerWorld } from './world';
 import type { SeasonBoard } from './board';
 import type { SeasonCommercial } from './commercial';
 import type { SeasonRivalries } from './rivalries';
@@ -77,12 +78,16 @@ export interface SeasonArchive {
 }
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
-export const SEASON_SCHEMA_VERSION = 38;
+/** Format 39: careers outside the built-in fictional league carry their world (`SeasonState.world`). */
+export const SEASON_SCHEMA_VERSION = 39;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
   engineVersion: 'possession-3';
-  dataPackId: 'development-league-1';
+  /** The world this career plays in: the built-in league's id, or the id of the world it carries in `world`. */
+  dataPackId: string;
+  /** Format 39: careers outside the built-in fictional league carry their world (clubs, players and club data). */
+  world?: CareerWorld;
   seed: number;
   managedClubId: string;
   manager: ManagerProfile | null;

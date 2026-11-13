@@ -2,7 +2,8 @@ import { useState } from 'react'
 import type { BoardSummary } from '../domain/board'
 import type { FacilityEvent } from '../domain/facilities'
 import type { SeasonState } from '../domain/season'
-import { getDevelopmentPresident, type DevelopmentPresident } from '../data/development-presidents'
+import type { DevelopmentPresident } from '../data/development-presidents'
+import { clubPresident, worldOf } from '../world/career-world'
 import { getBoardSummary } from '../world/board'
 import { BOARD_FUNDING_REFUSAL_COOLDOWN, boardCapitalGranted, boardConfidenceNow, boardFundingRefusal, requiredBoardConfidence } from '../world/board-funding-policy'
 import { BOARD_VERDICT_EFFECTS, governingVerdict, ownerCapital, seasonVerdict, staffAllocation, verdictBudgets, verdictForConfidence, type BoardVerdict } from '../world/board-consequences'
@@ -53,7 +54,7 @@ function ReviewHistory({ summary, season }: { summary: BoardSummary; season: Sea
 
 function PresidentSection({ season, busy, onEnableFunding }: { season: SeasonState; busy: boolean; onEnableFunding: () => void }) {
   const clubId = season.managedClubId
-  const president = getDevelopmentPresident(clubId)
+  const president = clubPresident(worldOf(season), clubId)
   const required = requiredBoardConfidence(president), confidence = boardConfidenceNow(season, clubId)
   const capital = ownerCapital(season, clubId)
   const left = Math.max(0, capital - boardCapitalGranted(season.facilities, clubId, season.seasonNumber))
@@ -80,7 +81,7 @@ const effectText = (verdict: BoardVerdict) => {
 const INTENSITY_LABELS = { 1: 'Mild', 2: 'Strong', 3: 'Fierce' } as const
 
 function RivalrySection({ season, busy, onEnableRivalries }: { season: SeasonState; busy: boolean; onEnableRivalries: () => void }) {
-  const clubId = season.managedClubId, entry = rivalryFor(clubId)
+  const clubId = season.managedClubId, entry = rivalryFor(clubId, worldOf(season))
   if (!entry) return null
   const rival = season.clubs.find(club => club.id === entry.rivalId)!
   const crowd = RIVALRY_CROWD_PERCENT * entry.rivalry.intensity
@@ -92,7 +93,7 @@ function RivalrySection({ season, busy, onEnableRivalries }: { season: SeasonSta
       : <div className="board-rivalry" data-board-rival={rival.id}>
         <div className="board-president-identity"><strong>{rival.name}</strong><span>{INTENSITY_LABELS[entry.rivalry.intensity]} rivalry · fictional league rivals</span></div>
         <ul className="board-derbies" aria-label={`${entry.rivalry.name} fixtures ${seasonLabel(season.seasonNumber)}`}>{derbies.map(fixture => {
-          const home = fixture.homeClubId === clubId, counted = !!governingDerby(season.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round)
+          const home = fixture.homeClubId === clubId, counted = !!governingDerby(season.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round, worldOf(season))
           const result = fixture.result, won = result?.winnerClubId === clubId
           return <li key={fixture.id} data-derby-fixture={fixture.id} data-derby-result={result ? (won ? 'won' : 'lost') : 'upcoming'}><span><strong>Matchday {fixture.round} · {home ? 'Home' : 'Away'}</strong><small><time dateTime={fixture.date}>{medicalDate(fixture.date)}</time>{!counted ? ' · before rivalries began' : ''}</small></span>{result ? <ObjectiveStatus label={`${won ? 'Won' : 'Lost'} ${result.score[home ? 'home' : 'away']}–${result.score[home ? 'away' : 'home']}`} state={won ? 'good' : 'concern'} /> : <ObjectiveStatus label="Upcoming" state="waiting" />}</li>
         })}</ul>
@@ -146,7 +147,7 @@ function VerdictSection({ season, busy, onEnableConsequences }: { season: Season
   const final = seasonVerdict(season.board, clubId, season.seasonNumber)
   const confidence = final?.confidence ?? boardConfidenceNow(season, clubId)
   const outlook = final?.verdict ?? verdictForConfidence(confidence)
-  const budgets = verdictBudgets(clubId, outlook)
+  const budgets = verdictBudgets(clubId, outlook, worldOf(season))
   if (!season.board.consequencesSince) return <>
     <h3 className="board-section-heading"><Icon name="target" size={16} />Season verdict &amp; budgets</h3>
     <div className="board-enable board-verdict-enable"><Icon name="target" size={24} /><div><strong>Let the season verdict set budgets</strong><p>At the end of each season, the board's final confidence sets next season's staff budget and the owner's capital for facility upgrades: Confident adds 10% to staff and 50% to capital, Steady changes nothing, Concerned cuts staff 10% and halves capital, Under pressure cuts staff 20% and withholds capital. Signed staff contracts are never cut. This starts with {seasonLabel(next)}.</p></div><button id="enable-board-consequences" className="button" onClick={onEnableConsequences} disabled={busy}>Enable season verdicts</button></div>

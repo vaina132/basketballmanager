@@ -18,7 +18,8 @@ import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
-import { getClubFinanceDefinition } from '../data/development-finances';
+import type { WorldContext } from '../domain/world';
+import { clubFinanceDefinition, worldOf } from './career-world';
 import { getPayrollReserve, getSpendableCash } from './payroll-policy';
 import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransferPaymentSummary, payTransferInstallment } from './transfer-payments';
 import { quoteContractBuyout } from './buyouts';
@@ -27,7 +28,7 @@ import { getArenaCapacity, getFacilityUpkeepBreakdown, quoteFacilityUpgrade } fr
 import { governingDerby, RIVALRY_CROWD_PERCENT } from './rivalries';
 import { agreementFor, commercialGovernsSeason, openingSponsorshipClubs, sponsorshipInstallment, sponsorshipSourceId, type DueSponsorshipPayment } from './commercial-policy';
 
-export { getClubFinanceDefinition } from '../data/development-finances';
+export { clubFinanceDefinition } from './career-world';
 export type { FinanceBalance, FinanceLedgerRow, GateForecast } from '../domain/finance';
 export const OPENING_CASH = 50_000_000;
 export const ANNUAL_SPONSORSHIP = 20_000_000;
@@ -43,7 +44,7 @@ export interface FinanceFixture {
   awayClubId: string;
   result: { winnerClubId: string } | null;
 }
-export interface FinanceContext { fixtures: readonly FinanceFixture[]; facilities?: SeasonFacilities; finance?: SeasonFinance; date?: string; round?: number; seasonNumber?: number; rivalries?: SeasonRivalries }
+export interface FinanceContext extends WorldContext { fixtures: readonly FinanceFixture[]; facilities?: SeasonFacilities; finance?: SeasonFinance; date?: string; round?: number; seasonNumber?: number; rivalries?: SeasonRivalries }
 
 function validatePrice(price: number): void {
   if (!Number.isInteger(price) || price < 0 || price > MAX_TICKET_PRICE || price % TICKET_PRICE_STEP !== 0) throw new Error('Choose a ticket price from zero to sixty euros in one-euro steps.');
@@ -234,11 +235,11 @@ function winShare(state: FinanceContext, clubId: string, beforeRound: number): n
 /** Attendance is a deterministic development estimate from prior results and the chosen price. */
 export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'> & { date?: string }, price: number): GateForecast {
   validatePrice(price);
-  const venue = getClubFinanceDefinition(fixture.homeClubId);
+  const venue = clubFinanceDefinition(worldOf(state), fixture.homeClubId);
   const recorded = state.finance?.ledger.find(entry => entry.ticket?.fixtureId === fixture.id)?.ticket?.capacity;
   const capacity = recorded ?? (fixture.round === state.round ? state.finance?.roundCapacities?.[fixture.homeClubId] : undefined) ?? getArenaCapacity(state, fixture.homeClubId, fixture.date ?? state.date);
   const own = winShare(state, fixture.homeClubId, fixture.round), opponent = winShare(state, fixture.awayClubId, fixture.round);
-  const derby = state.seasonNumber === undefined ? null : governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round);
+  const derby = state.seasonNumber === undefined ? null : governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round, worldOf(state));
   const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent) * (derby ? 1 + RIVALRY_CROWD_PERCENT * derby.intensity / 100 : 1);
   const attendance = price === 0 ? capacity : Math.min(capacity, Math.floor(demand * (DEFAULT_TICKET_PRICE / price) ** 1.4));
   return { fixtureId: fixture.id, clubId: fixture.homeClubId, opponentClubId: fixture.awayClubId, price, attendance, capacity, revenue: attendance * price };

@@ -15,6 +15,7 @@ import { careerMoveText } from './career-text'
 import { careerMovesGovern, managedClubFor } from '../world/career'
 import { seasonEndOutlook } from '../world/career-policy'
 import { medicalDate } from './SeasonMedicalReport'
+import { worldOf } from '../world/career-world'
 
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
 export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad'
@@ -55,7 +56,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
       const judged = managedClubFor(season, year, false), verdict = seasonVerdict(season.board, judged, year)
       if (!verdict) continue
       if (judged !== clubId) { items.push({ id: `verdict-${year}`, date: verdict.date, category: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `${season.clubs.find(club => club.id === judged)!.name}'s board after ${seasonLabel(year)}.`, needsAction: false, target: 'board' }); continue }
-      const budgets = verdictBudgets(clubId, verdict.verdict)
+      const budgets = verdictBudgets(clubId, verdict.verdict, worldOf(season))
       items.push({ id: `verdict-${year}`, date: verdict.date, category: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `${seasonLabel(year + 1)}: ${money(budgets.staff)} staff budget and ${money(budgets.capital)} owner capital.`, needsAction: false, target: 'board' })
     }
   }
@@ -75,7 +76,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     for (const promise of row.promises) if (promise.outcomeDate && (promise.status === 'kept' || promise.status === 'broken')) items.push({ id: `${promise.id}-outcome`, date: promise.outcomeDate, category: 'players', title: `Promise ${promise.status} · ${row.player.name}`, detail: `${promise.averageMinutes} minutes per eligible game against ${promise.targetMinutes} promised.`, needsAction: false, target: 'dynamics', playerId: row.player.id })
   }
   for (const fixture of season.fixtures) {
-    const derby = fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(clubId) ? governingDerby(season.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round) : null
+    const derby = fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(clubId) ? governingDerby(season.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round, worldOf(season)) : null
     if (!derby || !fixture.result) continue
     const home = fixture.homeClubId === clubId, won = fixture.result.winnerClubId === clubId
     items.push({ id: `derby-${fixture.id}`, date: fixture.date, category: 'board', title: `${derby.name} ${won ? 'won' : 'lost'}`, detail: `${fixture.result.score[home ? 'home' : 'away']}–${fixture.result.score[home ? 'away' : 'home']} ${home ? 'at home' : 'away'}. The board and the squad weigh this result more than usual.`, needsAction: false, target: 'board' })

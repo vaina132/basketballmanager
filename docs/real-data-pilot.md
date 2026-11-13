@@ -14,7 +14,12 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 | 2.6a A versioned, private game pack | Done |
 | 2.6b Friendly matches between real clubs from a loaded pack (exhibition) | Done |
 | 2.7 A repeat import and a second version that leave earlier versions and saved games unchanged | Done (`2026.11-pilot-2`, rules rating-2) |
-| 2.8 A new career with the real clubs from a pack (owner's plan, phase 5 item 9; feasibility report point 5) | Planned: steps to be agreed with the owner. The step list above stopped at friendlies; the owner noticed (13 November 2026) that a new career still uses the fictional clubs. |
+| 2.8 A new career with the real clubs from a pack (owner's plan, phase 5 item 9; feasibility report point 5); real clubs only (owner, 13 November 2026) | In progress: 2.8a done; next 2.8b |
+| 2.8a Each career carries its own world (clubs, players, wages, venues, presidents, sponsors, rivals); save format 39 | Done |
+| 2.8b Leagues of any size: schedule, season length and timings follow the league; staff and sponsor markets grow with it | Next |
+| 2.8c A real world from a pack, and the New career screen offering real clubs only | Planned |
+| 2.8d Speed and save size with 18 clubs and 34 matchdays | Planned |
+| 2.8e A full real-club season: start, play, save and load | Planned |
 
 ## How it works
 
@@ -36,6 +41,14 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 | EuroLeague 2026-27 | 20 | 389 | 380 | 107 | 2,416 |
 
 902 players and 39 clubs (Bayern plays both competitions); about 160 API requests over two runs. The first run stopped on a box-score line naming a club the provider lists nowhere (ID 7886); the importer now places such a line by the player's squad when that squad played the game, otherwise skips it, and records either case. The rerun continued where the first stopped.
+
+## Careers carry their world (step 2.8a, 13 November 2026)
+
+The owner approved step 2.8 with one change: careers use **real clubs only** (no fictional-club choice; `docs/decisions.md#real-clubs-only-and-each-career-carries-its-world`). The parts were reordered so that the groundwork comes first: a real-club career needs the game to take its clubs and players from the career, not from the built-in league.
+
+What changed: a career's league is now a world (`CareerWorld`): clubs and squads, birth dates, wages, venues and crowd demand, presidents, the sponsor market and rivalries. Every part of the game that read the built-in league (about 60 places: player catalog, contracts, ages, sponsorship, board budgets and funding, arenas and ticket demand, derbies, academy intake, save checks and the Club, Board, Manager desk and Inbox screens) now reads the career's world. Careers in the built-in league are unchanged and store no world; others store it in the save (format 39). Before the format change, genuine format-38 saves were captured (`tests/fixtures/season38-board-*`); replaying that career with the new code gave identical contents, and `tests/season38-continuation.test.js` (4) checks they continue and roll over exactly. `tests/career-world.test.ts` (6) plays a full career with every system on, its offseason and the next opening in a renamed copy of the league (new identities for every club, player, venue and rivalry): the first run found two save checks still reading the built-in venues, now fixed. It also checks that incomplete or inconsistent worlds, saves without their world, with a renamed world or a damaged one, and older formats carrying a world are refused. The league label in page headings, the sidebar ("Real clubs" or "Fictional squads") and the league table caption now follow the world. Verified: typecheck, build, full serial suite 134 files / 2,122 tests; headless Edge loads a renamed-world save (sidebar, Overview, Club Operations and Board with the world's president and derby rival, Inbox, Squad; no overflow at 1440 and 390 px) and a format-38 save of the built-in league with its labels.
+
+Found for step 2.8b: about 80 checks assume 10 matchdays, 110 lines number dates as season x 10 + matchday (wrong beyond 10 matchdays), the schedule requires six clubs, and the staff and sponsor markets are sized for six clubs.
 
 ## Update test and second version (step 2.7, 13 November 2026)
 

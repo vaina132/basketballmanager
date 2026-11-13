@@ -2,8 +2,8 @@ import type { CommercialAnchor, SeasonCommercial, SponsorshipAgreement, Sponsors
 import type { FinanceEntry } from '../domain/finance';
 import type { ArchivedFixture, SeasonFixture } from '../domain/season';
 import type { Team } from '../domain/types';
-import { DEVELOPMENT_FINANCES } from '../data/development-finances';
-import { DEVELOPMENT_SPONSORS } from '../data/development-sponsors';
+import type { CareerWorld } from '../domain/world';
+import { clubFinanceDefinition } from './career-world';
 import { seasonStartDate } from './season';
 
 /** The fixed sponsorship that negotiations replace: EUR 200,000 a season, in euro cents. */
@@ -95,8 +95,8 @@ export interface SponsorAppeal { reach: number; winShare: number; fill: number; 
  * Commercial appeal from venue demand relative to the league, this season's results and actual home attendance.
  * Bounded to 75%-125% so negotiations redistribute rather than inflate the fixed EUR 200,000 benchmark.
  */
-export function sponsorAppeal(context: { clubs: readonly Pick<Team, 'id'>[]; fixtures: readonly (SeasonFixture | ArchivedFixture)[]; ledger: readonly FinanceEntry[]; seasonNumber: number; completedRounds: number }, clubId: string): SponsorAppeal {
-  const definition = (id: string) => DEVELOPMENT_FINANCES.find(item => item.clubId === id)!;
+export function sponsorAppeal(context: { clubs: readonly Pick<Team, 'id'>[]; fixtures: readonly (SeasonFixture | ArchivedFixture)[]; ledger: readonly FinanceEntry[]; seasonNumber: number; completedRounds: number; world: CareerWorld }, clubId: string): SponsorAppeal {
+  const definition = (id: string) => clubFinanceDefinition(context.world, id);
   const reach = definition(clubId).referenceDemand / (context.clubs.reduce((sum, club) => sum + definition(club.id).referenceDemand, 0) / context.clubs.length);
   const played = context.fixtures.filter(fixture => fixture.round <= context.completedRounds && fixture.result && (fixture.homeClubId === clubId || fixture.awayClubId === clubId));
   const winShare = played.length ? played.filter(fixture => fixture.result!.winnerClubId === clubId).length / played.length : 0.5;
@@ -122,12 +122,12 @@ export function needsSponsorshipOffers(commercial: SeasonCommercial, clubId: str
 }
 
 /** Deterministic offers for one club: the incumbent's renewal first, then other available sponsors in seeded order. */
-export function buildSponsorshipOffers(input: { seed: number; commercial: SeasonCommercial; clubId: string; window: SponsorshipWindow; anchor: CommercialAnchor; appeal: number }): SponsorshipOffer[] {
-  const { seed, commercial, clubId, window, anchor, appeal } = input;
+export function buildSponsorshipOffers(input: { seed: number; commercial: SeasonCommercial; clubId: string; window: SponsorshipWindow; anchor: CommercialAnchor; appeal: number; world: CareerWorld }): SponsorshipOffer[] {
+  const { seed, commercial, clubId, window, anchor, appeal, world } = input;
   const forSeason = anchor.seasonNumber + 1;
   const current = agreementFor(commercial, clubId, anchor.seasonNumber);
   const incumbent = window === 'renewal' && current && sponsorAvailable(commercial, current.sponsorId, clubId, forSeason) ? current.sponsorId : null;
-  const pool = DEVELOPMENT_SPONSORS.map(sponsor => sponsor.id).filter(id => id !== incumbent && sponsorAvailable(commercial, id, clubId, forSeason))
+  const pool = world.sponsors.map(sponsor => sponsor.id).filter(id => id !== incumbent && sponsorAvailable(commercial, id, clubId, forSeason))
     .sort((left, right) => hash(seed, `${clubId}|${forSeason}|${window}|${left}`) - hash(seed, `${clubId}|${forSeason}|${window}|${right}`) || (left < right ? -1 : left > right ? 1 : 0));
   const chosen = [...(incumbent ? [incumbent] : []), ...pool].slice(0, SPONSORSHIP_OFFERS_PER_WINDOW);
   const expiresOn = dayBefore(seasonStartDate(forSeason));

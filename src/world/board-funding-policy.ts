@@ -1,6 +1,7 @@
 import type { FacilityFundingDecision, FacilityType, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
-import { getDevelopmentPresident, type DevelopmentPresident } from '../data/development-presidents';
+import type { DevelopmentPresident } from '../data/development-presidents';
+import { clubPresident, worldOf } from './career-world';
 import { FACILITY_AUTOMATION_BUFFER, FACILITY_FUNDS_REASON, quoteFacilityUpgrade } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
 import { ownerCapital } from './board-consequences';
@@ -59,7 +60,7 @@ export interface BoardFundingQuote {
  * confidence meets the president's threshold. The rules are visible; the same answer applies to every club.
  */
 export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId = state.managedClubId, mode: 'manager' | 'automatic' = 'manager'): BoardFundingQuote {
-  const president = getDevelopmentPresident(clubId);
+  const president = clubPresident(worldOf(state), clubId);
   const upgrade = quoteFacilityUpgrade(state, type, clubId);
   // A negative position means wages and fees already exceed cash; capital is never a back door for those.
   const position = getSpendablePosition(state, clubId), available = Math.max(0, position);

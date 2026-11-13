@@ -1,6 +1,6 @@
 import type { CommercialAnchor, CommercialEvent, SeasonCommercial, SponsorshipAgreement, SponsorshipOffer, SponsorshipWindow } from '../domain/commercial';
 import type { SeasonState } from '../domain/season';
-import { incumbentSponsorId } from '../data/development-sponsors';
+import { incumbentSponsorId, worldOf } from './career-world';
 import { recordSponsorshipPayment } from './finance';
 import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, commercialGovernsSeason, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorshipPaymentsDue, sponsorshipSourceId, sponsorshipInstallment, SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_RENEWAL_ROUND, SPONSORSHIP_SECOND_INSTALLMENT_ROUND, type DueSponsorshipPayment } from './commercial-policy';
 import { dateForRound, getStandings, MAX_SEASON_NUMBER } from './season';
@@ -38,8 +38,9 @@ export function enableCommercial(state: SeasonState): SeasonState {
   if (state.commercial.enabledSince) return state;
   if (!state.finance.enabledSince) throw new Error('Enable club finances before negotiating sponsorship.');
   if (state.status !== 'active') throw new Error('Enable sponsorship negotiations during an active season.');
+  const world = worldOf(state);
   const agreements: SponsorshipAgreement[] = state.clubs.map((club, index) => ({
-    id: `sponsorship-agreement-${index + 1}`, clubId: club.id, sponsorId: incumbentSponsorId(club.id), source: 'inherited', offerId: null,
+    id: `sponsorship-agreement-${index + 1}`, clubId: club.id, sponsorId: incumbentSponsorId(world, club.id), source: 'inherited', offerId: null,
     startsSeason: state.seasonNumber, endsSeason: state.seasonNumber, annualFee: SPONSORSHIP_REFERENCE_FEE, bonus: 0, signedOn: state.date, automatic: false, prepaidSeasons: [state.seasonNumber],
   }));
   const enabled: SeasonState = { ...state, commercial: { ...state.commercial, enabledSince: commercialAnchor(state), agreements } };
@@ -53,8 +54,8 @@ export function openSponsorshipWindows(state: SeasonState, window: SponsorshipWi
   const anchor = commercialAnchor(state), completedRounds = completedSeasonRounds(state);
   for (const club of state.clubs) {
     if (!needsSponsorshipOffers(commercial, club.id, state.seasonNumber)) continue;
-    const appeal = sponsorAppeal({ clubs: state.clubs, fixtures: state.fixtures, ledger: state.finance.ledger, seasonNumber: state.seasonNumber, completedRounds }, club.id).appeal;
-    const offers = buildSponsorshipOffers({ seed: state.seed, commercial, clubId: club.id, window, anchor, appeal });
+    const appeal = sponsorAppeal({ clubs: state.clubs, fixtures: state.fixtures, ledger: state.finance.ledger, seasonNumber: state.seasonNumber, completedRounds, world: worldOf(state) }, club.id).appeal;
+    const offers = buildSponsorshipOffers({ seed: state.seed, commercial, clubId: club.id, window, anchor, appeal, world: worldOf(state) });
     if (!offers.length) continue;
     commercial = { ...commercial, offers: [...commercial.offers, ...offers], events: [...commercial.events, { ...anchor, type: 'offers', clubId: club.id, window, completedRounds, offerIds: offers.map(offer => offer.id) }] };
   }

@@ -1,6 +1,7 @@
 import type { Rivalry, RivalryAnchor, SeasonRivalries } from '../domain/rivalries';
 import type { SeasonState } from '../domain/season';
-import { DEVELOPMENT_RIVALRIES } from '../data/development-rivalries';
+import type { CareerWorld } from '../domain/world';
+import { worldRivalryBetween, worldRivalryFor } from './career-world';
 
 /** Derby crowds grow by this percentage per point of rivalry intensity (5% to 15%). */
 export const RIVALRY_CROWD_PERCENT = 5;
@@ -14,20 +15,19 @@ const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
 
 export function createRivalries(): SeasonRivalries { return { model: 'rivalries-1', enabledSince: null }; }
 
-export function rivalryBetween(firstClubId: string, secondClubId: string): Rivalry | null {
-  return DEVELOPMENT_RIVALRIES.find(rivalry => rivalry.clubIds.includes(firstClubId) && rivalry.clubIds.includes(secondClubId) && firstClubId !== secondClubId) ?? null;
+export function rivalryBetween(firstClubId: string, secondClubId: string, world: CareerWorld): Rivalry | null {
+  return worldRivalryBetween(world, firstClubId, secondClubId);
 }
 
-export function rivalryFor(clubId: string): { rivalry: Rivalry; rivalId: string } | null {
-  const rivalry = DEVELOPMENT_RIVALRIES.find(item => item.clubIds.includes(clubId));
-  return rivalry ? { rivalry, rivalId: rivalry.clubIds[0] === clubId ? rivalry.clubIds[1] : rivalry.clubIds[0] } : null;
+export function rivalryFor(clubId: string, world: CareerWorld): { rivalry: Rivalry; rivalId: string } | null {
+  return worldRivalryFor(world, clubId);
 }
 
 /** The rivalry a fixture belongs to when rivalries govern that matchday; earlier matchdays never become derbies. */
-export function governingDerby(rivalries: SeasonRivalries | undefined, homeClubId: string, awayClubId: string, seasonNumber: number, round: number): Rivalry | null {
+export function governingDerby(rivalries: SeasonRivalries | undefined, homeClubId: string, awayClubId: string, seasonNumber: number, round: number, world: CareerWorld): Rivalry | null {
   const from = rivalries?.enabledSince?.effectiveFrom;
   if (!from || ordinal(seasonNumber, round) < ordinal(from.seasonNumber, from.round)) return null;
-  return rivalryBetween(homeClubId, awayClubId);
+  return rivalryBetween(homeClubId, awayClubId, world);
 }
 
 export function rivalryEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'date' | 'fixtures'>, mode: 'career' | 'prospective'): RivalryAnchor {

@@ -231,6 +231,12 @@ When starting a new career, the player chooses which of these leagues are includ
 
 Order of the remaining work: real-data feasibility, a real-data pilot, the multi-league world with league selection, match realism, the saved ideas, release preparation, and interface simplification last, after the owner has played with real data. The game will be commercialized (the real-data plan describes a free first season in the browser, then a one-time EUR 15 unlock, and later Steam); this is planned for release preparation and is not built now, so local saves without an account (D05) stay until then.
 
+## Real clubs only, and each career carries its world
+
+Decided by the owner on 13 November 2026 when approving pilot step 2.8: "I want the real clubs to be the only option I dont want the generated clubs." New careers will offer only real clubs, loaded from the player's private data pack; the New career screen will not offer the fictional league (step 2.8c). The fictional league stays inside the game for loading older saves and as the automated tests' league. Club data the real-data source does not provide (wages, budgets and arena sizes, presidents, sponsors, staff, academy prospects) stays fictional, generated and labelled as such, until real data exists.
+
+To make this possible, a career's league is a **world** (`CareerWorld`, `src/domain/world.ts`): clubs and squads, player birth dates and wages, venues, presidents, the sponsor market and rivalries. The built-in league is `DEVELOPMENT_WORLD` and is never stored; every other career stores its world in its save (format 39, `SeasonState.world`, named by `dataPackId`), so a career never depends on a pack file after it starts and a newer data version never changes it. A world is checked completely (`validateWorld`) when a career starts and whenever its save loads. Staff candidates and the names of fictional sponsors stay shared lists for now; their sizes become world-dependent with larger leagues (step 2.8b). All worlds share the career calendar (season one starts on 5 September 2026); a later data season will need its own start year.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

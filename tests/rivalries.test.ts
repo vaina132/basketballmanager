@@ -8,6 +8,7 @@ import { createRivalries, enableRivalries, governingDerby, rivalryFor } from '..
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
+import { DEVELOPMENT_WORLD } from '../src/data/development-world';
 
 const manager = { name: 'Derby Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
 const career = (rivalries: boolean) => createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, rivalries });
@@ -28,18 +29,18 @@ describe('rivalry rules', () => {
   it('gives every club exactly one fictional rival', () => {
     const clubs = createSeason().clubs.map(club => club.id);
     for (const club of clubs) expect(DEVELOPMENT_RIVALRIES.filter(rivalry => rivalry.clubIds.includes(club))).toHaveLength(1);
-    expect(rivalryFor('rhine-falcons')).toMatchObject({ rivalId: 'danube-lynx', rivalry: { name: 'River derby', intensity: 3 } });
+    expect(rivalryFor('rhine-falcons', DEVELOPMENT_WORLD)).toMatchObject({ rivalId: 'danube-lynx', rivalry: { name: 'River derby', intensity: 3 } });
     expect(DEVELOPMENT_RIVALRIES.every(rivalry => rivalry.origin === 'fictional-development-league')).toBe(true);
   });
 
   it('counts derbies only from the matchday the rivalries govern', () => {
     const fresh = career(true).rivalries;
     expect(fresh.enabledSince?.effectiveFrom).toEqual({ seasonNumber: 1, round: 1 });
-    expect(governingDerby(fresh, 'danube-lynx', 'rhine-falcons', 1, 1)?.id).toBe('river-derby');
-    expect(governingDerby(fresh, 'danube-lynx', 'aegean-waves', 1, 1)).toBeNull();
+    expect(governingDerby(fresh, 'danube-lynx', 'rhine-falcons', 1, 1, DEVELOPMENT_WORLD)?.id).toBe('river-derby');
+    expect(governingDerby(fresh, 'danube-lynx', 'aegean-waves', 1, 1, DEVELOPMENT_WORLD)).toBeNull();
     expect(switched.rivalries.enabledSince?.effectiveFrom).toEqual({ seasonNumber: 1, round: 5 });
-    expect(governingDerby(switched.rivalries, 'danube-lynx', 'rhine-falcons', 1, 4)).toBeNull();
-    expect(governingDerby(createRivalries(), 'danube-lynx', 'rhine-falcons', 1, 5)).toBeNull();
+    expect(governingDerby(switched.rivalries, 'danube-lynx', 'rhine-falcons', 1, 4, DEVELOPMENT_WORLD)).toBeNull();
+    expect(governingDerby(createRivalries(), 'danube-lynx', 'rhine-falcons', 1, 5, DEVELOPMENT_WORLD)).toBeNull();
   });
 
   it('draws a bigger derby crowd by 5% per point of intensity', () => {

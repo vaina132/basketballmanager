@@ -17,6 +17,7 @@
     "data:identities": "node scripts/real-data-identities.mjs",
     "data:ratings": "node scripts/real-data-ratings.mjs",
     "data:pack": "node scripts/real-data-pack.mjs",
+    "data:verify": "node scripts/real-data-verify.mjs",
     "benchmark:match": "node scripts/benchmark-match.mjs",
     "fixtures:capture": "node scripts/capture-season-fixtures.mjs"
   },

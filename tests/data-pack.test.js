@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { matchdayTeam, NEUTRAL_APPEARANCE, NEUTRAL_CLUB_COLOR, parseDataPack } from '../src/world/data-pack.ts';
 import { createFixtureMatch } from '../src/engine/match.ts';
 import { validateMatchState } from '../src/storage/validate-match.ts';
+import { parseMatch, serializeMatch } from '../src/storage/match-storage.ts';
 
 const positions = ['PG', 'SG', 'SF', 'PF', 'C'];
 function player(club, index, overrides = {}) {
@@ -46,5 +47,21 @@ describe('real-data packs in the game', () => {
     expect(team.players.some(item => item.id === 'player-b-0')).toBe(false);
     const match = createFixtureMatch(42, matchdayTeam(pack, 'club-a'), team);
     expect(() => validateMatchState(match)).not.toThrow();
+  });
+
+  it('keeps a saved friendly exactly as it was when a newer pack changes the same players', async () => {
+    const saved = serializeMatch(createFixtureMatch(7, matchdayTeam(pack, 'club-a'), matchdayTeam(pack, 'club-b')));
+    const newer = structuredClone(pack);
+    newer.version = 'test-2';
+    for (const item of newer.players) item.attributes = { ...item.attributes, twoPoint: 20, rebounding: 1 };
+    const loaded = await parseDataPack(file(newer));
+    expect(loaded.version).toBe('test-2');
+    expect(matchdayTeam(loaded, 'club-a').players[0].attributes.twoPoint).toBe(20);
+    // The save holds its own copy of both squads; it never looks at a pack again.
+    const reopened = parseMatch(saved);
+    expect(reopened).toEqual(parseMatch(saved));
+    expect(reopened.home.players.map(item => item.attributes)).toEqual(matchdayTeam(pack, 'club-a').players.map(item => item.attributes));
+    expect(reopened.home.players.some(item => item.attributes.twoPoint === 20 && item.attributes.rebounding === 1)).toBe(false);
+    expect((await parseDataPack(file(pack))).version).toBe('test-1');
   });
 });

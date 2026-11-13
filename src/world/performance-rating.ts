@@ -2,6 +2,8 @@ import type { PlayerKnowledge } from '../domain/scouting';
 import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/season';
 import type { MatchState, Player, PlayerAttributes, PlayerStats, Position, Team } from '../domain/types';
 import { getFixtureTeams } from './rosters';
+import { overallRating, overallRatingStars } from './overall-rating';
+export { OVR_POSITION_WEIGHTS, OVR_SCALE, OVR_STAR_SCALE, overallRating, overallRatingStars } from './overall-rating';
 
 /** Box-score totals also work without the separate current-condition field. */
 export type PlayerBoxStats = Omit<PlayerStats, 'condition'>;
@@ -33,26 +35,10 @@ export const GAME_PIR_DESCRIPTION = 'Game PIR: points + rebounds + assists + ste
 export const MATCH_RATING_DESCRIPTION = 'Match rating: 6.0 + game PIR ÷ 10, limited to 1.0–10.0. Live ratings are provisional; players without an appearance are unrated.';
 export const ABILITY_RATING_DESCRIPTION = 'Overall rating (1-99): the seven skills weighted by what the player\'s position needs. Stars show it from 1 to 5 in half steps: 85 or more is 5 stars and every 6 points less is half a star less. Scouted ability remains an estimated range.';
 const ATTRIBUTE_KEYS: readonly (keyof PlayerAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
-type SkillWeights = Readonly<Record<keyof PlayerAttributes, number>>;
-/** What each position needs most; every row sums to 1. Guards lean on passing and shooting, bigs on inside scoring and rebounding. */
-export const OVR_POSITION_WEIGHTS: Readonly<Record<Position, SkillWeights>> = {
-  PG: { twoPoint: 0.15, threePoint: 0.20, freeThrow: 0.08, passing: 0.27, defense: 0.15, rebounding: 0.05, stamina: 0.10 },
-  SG: { twoPoint: 0.18, threePoint: 0.26, freeThrow: 0.10, passing: 0.14, defense: 0.17, rebounding: 0.06, stamina: 0.09 },
-  SF: { twoPoint: 0.20, threePoint: 0.20, freeThrow: 0.08, passing: 0.10, defense: 0.18, rebounding: 0.14, stamina: 0.10 },
-  PF: { twoPoint: 0.24, threePoint: 0.12, freeThrow: 0.06, passing: 0.08, defense: 0.20, rebounding: 0.22, stamina: 0.08 },
-  C: { twoPoint: 0.26, threePoint: 0.04, freeThrow: 0.06, passing: 0.07, defense: 0.22, rebounding: 0.28, stamina: 0.07 },
-};
-const POSITIONS = Object.keys(OVR_POSITION_WEIGHTS) as Position[];
-const BALANCED_WEIGHTS = Object.fromEntries(ATTRIBUTE_KEYS.map(key => [key, mean(POSITIONS.map(position => OVR_POSITION_WEIGHTS[position][key]))])) as SkillWeights;
-/** Each point of weighted skill (1-20) is worth 8 rating points: a weighted 12 is 60, a weighted 15 is 84. */
-export const OVR_SCALE = { perSkillPoint: 8, offset: -36, min: 1, max: 99 } as const;
-/** 85 or more is five stars; every 6 points less is half a star less, down to one star below 43. */
-export const OVR_STAR_SCALE = { fiveStars: 85, halfStarStep: 6 } as const;
 const COUNTING_KEYS: readonly (keyof PlayerBoxStats)[] = [
   'secondsPlayed', 'points', 'fieldGoalsMade', 'fieldGoalsAttempted', 'threePointersMade', 'threePointersAttempted',
   'freeThrowsMade', 'freeThrowsAttempted', 'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls',
 ];
-function mean(values: readonly number[]): number { return values.reduce((sum, value) => sum + value, 0) / values.length; }
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
 
 /** Three-point misses are already included in total field-goal misses. */
@@ -75,18 +61,6 @@ export function playerMatchRating(stats: PlayerBoxStats | null | undefined): num
 export function attributeAbilityStars(value: number): number {
   const stars = value / 4;
   return Math.max(1, Math.min(5, Math.round(stars * 2) / 2));
-}
-
-/** Position-weighted overall rating from 1 to 99. Not potential, and not a match prediction. */
-export function overallRating(attributes: PlayerAttributes, position?: Position | null): number {
-  const weights = position ? OVR_POSITION_WEIGHTS[position] : BALANCED_WEIGHTS;
-  const weighted = ATTRIBUTE_KEYS.reduce((sum, key) => sum + weights[key] * attributes[key], 0);
-  return Math.max(OVR_SCALE.min, Math.min(OVR_SCALE.max, Math.round(OVR_SCALE.perSkillPoint * weighted + OVR_SCALE.offset)));
-}
-
-export function overallRatingStars(ovr: number): number {
-  const halfSteps = Math.floor((ovr - OVR_STAR_SCALE.fiveStars) / OVR_STAR_SCALE.halfStarStep) + 8;
-  return Math.max(1, Math.min(5, 1 + halfSteps / 2));
 }
 
 export function overallAbilityStars(attributes: PlayerAttributes, position?: Position | null): number {

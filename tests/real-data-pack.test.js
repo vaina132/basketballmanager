@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPack, packChecksum, PACK_FORMAT } from '../scripts/real-data-pack.mjs';
+import { buildPack, packChecksum, packProblems, PACK_FORMAT } from '../scripts/real-data-pack.mjs';
 
 // Synthetic database rows: one competition with two clubs of ten players; one player moved during the season.
 const clubs = [
@@ -32,5 +32,14 @@ describe('real-data pack', () => {
     const first = buildPack(input).pack, again = buildPack(input).pack;
     expect(packChecksum(again)).toBe(packChecksum(first));
     expect(packChecksum({ ...first, version: 'test-2' })).not.toBe(packChecksum(first));
+  });
+
+  it('finds an earlier published pack that went missing or no longer matches its recorded checksum', () => {
+    const pack = buildPack(input).pack, checksum = packChecksum(pack);
+    const versions = [{ id: 'test-1', checksum, storage_path: 'local:packs/real-test-1.json' }];
+    expect(packProblems(versions, new Map([['test-1', { checksum, pack }]]))).toEqual([]);
+    const edited = structuredClone(pack); edited.players[0].attributes.twoPoint = 20;
+    expect(packProblems(versions, new Map([['test-1', { checksum, pack: edited }]]))).toEqual(['test-1: pack file no longer matches its recorded checksum']);
+    expect(packProblems(versions, new Map())).toEqual(['test-1: pack file local:packs/real-test-1.json is missing']);
   });
 });

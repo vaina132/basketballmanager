@@ -5,7 +5,9 @@
  * (.local-data/real-data/packs/, ignored by Git): real player data is not published until its rights are cleared.
  * A version is immutable: rebuilding it with different contents is refused, so newer data needs a new version.
  *
- *   node scripts/real-data-pack.mjs [--version 2026.11-pilot] [--season 2026-27]
+ * Before writing, every earlier published pack must still match its recorded checksum.
+ *
+ *   node scripts/real-data-pack.mjs --version 2026.11-pilot-2 [--season 2026-27]
  */
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -15,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argument = (name, fallback) => { const index = process.argv.indexOf(name); return index > 0 ? process.argv[index + 1] : fallback; };
-const VERSION = argument('--version', '2026.11-pilot');
+const VERSION = argument('--version', null);
 const SEASON = argument('--season', '2026-27');
 export const PACK_FORMAT = 'basketball-manager-data-pack';
 export const PACK_FORMAT_VERSION = 1;
@@ -84,7 +86,19 @@ export function packChecksum(pack) {
   return createHash('sha256').update(JSON.stringify(pack)).digest('hex');
 }
 
+/** Problems with published packs: a missing file, or contents that no longer match the recorded checksum. */
+export function packProblems(versions, files) {
+  const problems = [];
+  for (const version of versions) {
+    const file = files.get(version.id);
+    if (!file) problems.push(`${version.id}: pack file ${version.storage_path} is missing`);
+    else if (file.checksum !== version.checksum || packChecksum(file.pack) !== version.checksum) problems.push(`${version.id}: pack file no longer matches its recorded checksum`);
+  }
+  return problems;
+}
+
 async function main() {
+  if (!VERSION) throw new Error('Name the dataset version to pack, for example --version 2026.11-pilot-2 (its ratings come from npm.cmd run data:ratings).');
   const { db, selectAll, write } = await (await import('./real-data-import.mjs')).databaseHelpers();
   const [versionRow] = await db('GET', `dataset_versions?id=eq.${encodeURIComponent(VERSION)}&select=*`);
   if (!versionRow) throw new Error(`Dataset version ${VERSION} has no ratings yet; run npm.cmd run data:ratings first.`);
@@ -95,17 +109,24 @@ async function main() {
   const clubs = await selectAll('clubs?select=id,name,short_name,country,city,venue,color_primary,color_secondary,identity_source');
   const players = await selectAll('players?select=id,full_name,nationality,position,age_observed,merged_into');
   const ratings = await selectAll(`player_ratings?dataset_version_id=eq.${encodeURIComponent(VERSION)}&select=*`);
-  const source = { provider: 'API-SPORTS (API-BASKETBALL)', importRun: versionRow.source_run_id, ratings: 'rating-1', ratingsNote: versionRow.notes };
+  const rules = [...new Set(ratings.map(rating => rating.method?.rules).filter(Boolean))].sort().join(', ');
+  const source = { provider: 'API-SPORTS (API-BASKETBALL)', importRun: versionRow.source_run_id, ratings: rules || 'unknown', ratingsNote: versionRow.notes };
   const { pack, problems, warnings, summary } = buildPack({ version: VERSION, season: SEASON, competitions, clubs, memberships, players, ratings, source });
   if (problems.length) throw new Error(`Pack ${VERSION} failed its checks and was not written:\n- ${problems.join('\n- ')}`);
   const checksum = packChecksum(pack);
   const directory = path.join(ROOT, '.local-data', 'real-data', 'packs'), file = path.join(directory, `real-${VERSION}.json`);
   if (versionRow.checksum && versionRow.checksum !== checksum) throw new Error(`Version ${VERSION} was already built with different contents; versions never change. Build a new version, for example --version ${VERSION}b.`);
   if (existsSync(file) && packChecksum(JSON.parse(await readFile(file, 'utf8')).pack) !== checksum) throw new Error(`${path.relative(ROOT, file)} holds different contents for ${VERSION}; versions never change.`);
+  // Earlier packs must be exactly as published: a new version never touches them.
+  const earlier = (await db('GET', 'dataset_versions?status=eq.published&select=id,checksum,storage_path')).filter(row => row.id !== VERSION);
+  const earlierFiles = new Map();
+  for (const row of earlier) { const earlierFile = path.join(ROOT, (row.storage_path ?? '').replace(/^local:/, '')); if (row.storage_path && existsSync(earlierFile)) earlierFiles.set(row.id, JSON.parse(await readFile(earlierFile, 'utf8'))); }
+  const changed = packProblems(earlier, earlierFiles);
+  if (changed.length) throw new Error(`Earlier packs no longer match what was published; nothing was written:\n- ${changed.join('\n- ')}`);
   await mkdir(directory, { recursive: true });
   await writeFile(file, JSON.stringify({ checksum, writtenAt: new Date().toISOString(), pack }, null, 1));
   await write('dataset_versions', [{ id: VERSION, status: 'published', checksum, storage_path: `local:${path.relative(ROOT, file).replace(/\\/g, '/')}`, notes: versionRow.notes }], { onConflict: 'id' });
-  console.log(`Pack ${VERSION} written: ${summary.competitions} competitions, ${summary.clubs} clubs, ${summary.players} players. File: ${path.relative(ROOT, file)}`);
+  console.log(`Pack ${VERSION} written: ${summary.competitions} competitions, ${summary.clubs} clubs, ${summary.players} players. File: ${path.relative(ROOT, file)}. Earlier packs unchanged: ${earlier.map(row => row.id).join(', ') || 'none'}.`);
   for (const warning of warnings) console.log(`Note: ${warning}`);
 }
 

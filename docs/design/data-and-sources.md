@@ -10,7 +10,7 @@ This is a technical sourcing plan, not a determination of legal permission to re
 - Confirmed data policy: verified identities and rosters, explicitly labelled missing-value estimates, usable real photos with illustrated fallbacks.
 - The user is willing to pay for high-quality data when useful; free sources remain acceptable. No budget or purchase authorization has been given. See the [supplier shortlist, sample audit and ready-to-send enquiry](../data-acquisition.md).
 - Confirmed visibility: exact current skills for the manager's own squad; scouting ranges for outsiders; potential and personality expressed through reports rather than exact hidden values.
-- All twelve selected domestic divisions are fully playable. Only third tiers and below, and domestic leagues outside the six countries, may use background simulation.
+- The ten first-release domestic divisions are fully playable (owner's decision of 13 November 2026, see [decisions](../decisions.md#first-release-league-scope-and-league-selection); Greece's Elite League and Germany's ProA are no longer included). Only third tiers and below, and domestic leagues outside the six countries, may use background simulation.
 - Keep the game engine, factual reference data, estimated game ratings, and visual assets separate.
 - A player can have a verified identity and statistics while their simulated abilities remain estimates.
 - Preserve the source and effective date of every imported factual field.
@@ -185,7 +185,7 @@ The user has accepted real photos where usable and illustrated fallbacks otherwi
 
 ## 9. Dataset acceptance checks
 
-- All clubs in all twelve playable domestic divisions have valid competition entries and enough eligible players for the supported match rules; the three European competitions also contain every admitted entrant.
+- All clubs in the selected playable domestic divisions have valid competition entries and enough eligible players for the supported match rules; the three European competitions also contain every admitted entrant.
 - Every imported player has one internal identity; duplicates and conflicting memberships are resolved or reported.
 - Opening-day roster membership is reconciled separately from all-season player appearances.
 - Shooting makes do not exceed attempts; team totals reconcile with official records under the selected statistics convention.
@@ -200,7 +200,7 @@ The user has accepted real photos where usable and illustrated fallbacks otherwi
 
 ## 10. Decisions still needed
 
-1. Can the candidate 2025-26 opening-day dataset pass coverage checks for all twelve domestic divisions and three European competitions?
+1. Can the candidate 2025-26 opening-day dataset pass coverage checks for the ten domestic divisions and three European competitions?
 2. Historical opening-day knowledge or retrospective season-informed ratings?
 3. Freeze opening-day competition regulations or schedule verified later regulatory amendments?
 4. Which estimate methods and uncertainty labels best fit the accepted missing-contract/budget policy?

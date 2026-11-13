@@ -26,7 +26,8 @@ Core principles:
 | --- | --- |
 | Basketball | Men's club basketball |
 | Countries | Turkey, Spain, Greece, Germany, Italy, France |
-| Domestic scope | Top two divisions in each country, all fully playable: twelve domestic divisions |
+| Domestic scope | Top and second divisions in Turkey, Spain, Italy and France; top divisions in Greece and Germany: ten domestic divisions, all fully playable (owner's decision of 13 November 2026, see [decisions](decisions.md#first-release-league-scope-and-league-selection)) |
+| League selection | A new career chooses which of these leagues are included, as in Football Manager, to keep simulation fast |
 | European scope | EuroLeague, EuroCup, Basketball Champions League |
 | Starting data | Latest completed season for which an opening-day database can be verified; a new simulated timeline begins from that point |
 | Season candidate | 2025-26 is the candidate based on the current date, not yet a verified complete dataset |
@@ -150,11 +151,11 @@ Facilities include the arena/stadium, training facilities and youth infrastructu
 
 Each club has a roster plan, tactical preference, finances, scouting network, board objectives, and risk tolerance. AI recruitment weighs fit, price, availability, uncertainty, age, playing time, registration, and strategic needs. It can fail and change course without receiving hidden rescue money.
 
-Simulate all twelve playable divisions with their actual selected-season membership and format, subject to verified rules. The three European competitions use the same club/player identities and shared availability records as domestic competitions.
+Simulate all selected playable divisions (up to ten) with their actual selected-season membership and format, subject to verified rules. The three European competitions use the same club/player identities and shared availability records as domestic competitions.
 
 Every continental participant outside the six playable countries needs a coherent roster, contracts, budget, calendar load, and club policy. Its home competition can use background simulation. Specify that approximation visibly in database/world information; avoid presenting invented detailed tables as verified competitions.
 
-Promotion and relegation at the boundary below the twelve playable divisions need background clubs and rules. Playoff qualification, licensing, eligibility, reserved places, and continental participation must be configuration-driven; a simple universal league-position rule would be inaccurate.
+Promotion and relegation at the boundary below the playable divisions need background clubs and rules. Playoff qualification, licensing, eligibility, reserved places, and continental participation must be configuration-driven; a simple universal league-position rule would be inaccurate.
 
 Scheduling includes shared arenas, travel/rest assumptions, playoff uncertainty, season overlaps, and player availability. World time advances once; the same player cannot be independently healthy in a domestic match and injured in a European match on the same date.
 
@@ -216,7 +217,7 @@ Compare results by team strength, role, age, league, and season, not only global
 
 Required end-to-end release stories:
 
-1. Start a career at any eligible club in any of the twelve divisions and complete a season.
+1. Start a career at any eligible club in any of the selected playable divisions and complete a season.
 2. Coach the same seeded match in watched, skipped, and instant modes with identical commands and obtain identical sporting results.
 3. Sign, register, develop, injure, rehabilitate, loan or sell a player with coherent effects in all screens and competitions.
 4. Scout an initially obscure prospect, receive uncertain reports, and improve knowledge through observation.

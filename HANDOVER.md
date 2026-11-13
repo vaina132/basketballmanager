@@ -135,12 +135,24 @@ No unfinished code changes, active feature branch or pending implementation task
 
 ## Next steps according to the plan
 
-1. **Sponsorship negotiations and commercial management** is the next management increment. Extend the fixed sponsorship foundation with explicit terms, dated decisions, optional delegation and actual cash consequences. Start with `src/world/finance.ts` (`ANNUAL_SPONSORSHIP`, `enableFinance`, `startFinanceSeason`), `src/domain/finance.ts`, `src/ui/ClubWorkspace.tsx` and finance/storage tests. Define scope and migration behavior before changing state. Preserve existing commitments and board historical payment evidence; do not add fictional spending power.
+Owner's order after Level 7 (13 November 2026, see `docs/decisions.md#first-release-league-scope-and-league-selection`):
+
+1. **Real data, feasibility** (phases 1-4 of `docs/real-data-integration-plan.md`): **report complete** in `docs/real-data-feasibility.md` (13 November 2026), awaiting the owner's decision on the proposed pilot. The API test is `npm.cmd run data:api-sports-probe` (`scripts/api-sports-probe.mjs`); it reads the key from `api-sports-key.local` in the project folder (ignored by Git; never print, commit or bundle it), caches answers in `.local-data/api-sports/`, spaces requests 6.5 s apart (free plan: 10 a minute, 100 a day, seasons up to 2024-25, one game per box-score request). The owner's Supabase project is `BasketBallManager` (`kesxznybhotzduvcwiwm`, free plan, empty); create nothing there before the owner approves the pilot.
+2. **Real data, pilot:** BBL and EuroLeague clubs, players and ratings in a new career from a versioned dataset. **In progress** (approved 13 November 2026; the owner bought the API-Sports Pro plan): see `docs/real-data-pilot.md` for its steps, how to run the importer and the first import's results. Steps 2.1 (database) and 2.2 (importer) are done; 2.3 club identities is next.
+3. **Multi-league world:** the ten domestic divisions and three European competitions in one calendar, promotion/relegation, and choosing the leagues when starting a career.
+4. **Match realism:** engine calibration against real statistics.
+5. **Saved ideas** (section above), each placed in the sprint where it fits.
+6. **Release preparation:** commercialization is planned (free first season, then a EUR 15 unlock; later Steam) but not built yet; data-rights review.
+7. **Interface simplification, last:** after the owner has played with real data; the owner will send feedback.
+
+Earlier list, kept for reference:
+
+1. **Sponsorship negotiations and commercial management** was the next management increment (done in Level 7). Extend the fixed sponsorship foundation with explicit terms, dated decisions, optional delegation and actual cash consequences. Start with `src/world/finance.ts` (`ANNUAL_SPONSORSHIP`, `enableFinance`, `startFinanceSeason`), `src/domain/finance.ts`, `src/ui/ClubWorkspace.tsx` and finance/storage tests. Define scope and migration behavior before changing state. Preserve existing commitments and board historical payment evidence; do not add fictional spending power.
 2. Subsequent work includes board funding requests and employment consequences, press, optional dismissal/job changes, richer player relationships, and broader facility finance/maintenance. These are planned, not active implementations.
 3. In parallel, build validated opening-day data packs and actual competition configurations, calendars, registration, promotion/relegation and qualification transitions.
 4. Continue rules coverage, match/tactics calibration, economy/AI/population calibration, richer court movement and performance optimization before release acceptance.
 
-The confirmed first release still requires men's top **and second divisions** in Turkey, Spain, Greece, Germany, Italy and France, plus **EuroLeague, EuroCup and Basketball Champions League**: twelve domestic divisions and three European competitions. It targets English, desktop/laptop with tablet support, single-player local saves, a long-running club career and full manager control within real game budgets.
+The confirmed first release requires men's top **and second divisions** in Turkey, Spain, Italy and France, the **top divisions** in Greece and Germany, plus **EuroLeague, EuroCup and Basketball Champions League**: ten domestic divisions and three European competitions, with the leagues chosen when a career starts (owner's decision of 13 November 2026). It targets English, desktop/laptop with tablet support, single-player local saves, a long-running club career and full manager control within real game budgets.
 
 ### Real data status
 

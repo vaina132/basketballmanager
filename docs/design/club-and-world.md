@@ -3,8 +3,8 @@
 Status: target management mechanics, 5 November 2026. The current exhibition foundation does not implement these career systems; see [implementation status](../implementation-status.md).
 The user's requested features are requirements; formulas, weights, timing, and scope choices below are design proposals.
 Numerical coefficients are initial tuning hypotheses, not validated basketball, financial, or medical findings.
-Confirmed direction: men's basketball, with the top two domestic divisions in Turkey, Spain, Greece, Germany, Italy, and France fully playable in the first release, plus EuroLeague, EuroCup, and Basketball Champions League.
-These twelve domestic divisions are core playable scope, not deferred or background-only leagues. The starting database uses the latest completed verifiable season's opening-day roster snapshot.
+Confirmed direction (revised 13 November 2026, see [decisions](../decisions.md#first-release-league-scope-and-league-selection)): men's basketball, with the top and second divisions in Turkey, Spain, Italy and France and the top divisions in Greece and Germany fully playable in the first release, plus EuroLeague, EuroCup, and Basketball Champions League; a new career chooses which leagues are included.
+These ten domestic divisions are core playable scope, not deferred or background-only leagues. The starting database uses the latest completed verifiable season's opening-day roster snapshot.
 The player is a full manager over recruitment, contracts, staff, and tactics within board budgets, across unlimited seasons with optional dismissal and job changes.
 Presentation uses a diagonal 2.5D court; saves are local single-player with import/export. The interface is English and targets desktop and tablet.
 Known identities and rosters must be verified; unavailable salaries and traits may use clearly labeled estimates.
@@ -287,7 +287,7 @@ No oscillation between buying and immediately selling the same player without a 
 Tactics adapt to personnel and opponent information, with a cost for unfamiliar changes; AI cannot read the next simulated possession.
 Match coaches use the same legal substitution windows, instruction latency, timeout limits, and fatigue information as the human.
 Training, injuries, development, contract obligations, and youth generation apply to every fully simulated club.
-All twelve selected domestic divisions run full club and competition simulation, including the second tiers.
+All selected domestic divisions run full club and competition simulation, including the second tiers.
 Only leagues outside that confirmed scope may use a less-detailed background tier, with a consistent promotion-to-full-simulation process if they later become playable.
 Resolution of competing offers is deterministic and policy-based; processing order must not grant the first club free priority.
 All clubs use the same transaction validators and calendar services, rather than duplicated human and AI implementations.
@@ -335,7 +335,7 @@ If dismissal is disabled, the same poor performance can affect budgets and objec
 
 Use one world date, timezone-independent simulation dates, stable competition IDs, and season-specific rule versions.
 The scheduling service combines domestic and European fixtures, rest constraints, arena conflicts, international windows if modeled, and postponed games.
-Reconcile EuroLeague, EuroCup, and Basketball Champions League participation against all twelve active domestic divisions in the same calendar; the two schedules cannot independently allocate a club's availability.
+Reconcile EuroLeague, EuroCup, and Basketball Champions League participation against all active domestic divisions in the same calendar; the two schedules cannot independently allocate a club's availability.
 Define priority and rescheduling policies; an infeasible calendar must surface a validation error rather than silently overlap fixtures.
 Daily processing order is explicit: resolve dated obligations and eligibility, pre-session recovery, training/matches, results, reactions, knowledge/AI decisions, then notifications.
 Training exposure and match exposure on the same day must be coordinated; no default full training session immediately before every match.
@@ -364,7 +364,7 @@ All tests should verify observable invariants or statistical behavior, not merel
 
 ## 17. Remaining implementation assumptions
 
-- Verification of the selected completed season, authoritative sources for all twelve domestic divisions and three European competitions, and depth of additional background countries.
+- Verification of the selected completed season, authoritative sources for the ten domestic divisions and three European competitions, and depth of additional background countries.
 - Optional editor access and details of confidence display; own-roster exact skills, outsider ranges, and hidden potential/personality reports are confirmed.
 - Gross/net salary convention, base currency, contract detail, loans, and financial-failure consequences need documented implementation defaults and verified competition rules.
 - The youth coach cap defaults to one unless revised; the role, academy roster, simplified fixtures, youth infrastructure, and senior promotion are confirmed.

@@ -223,6 +223,14 @@ Dismissal and offers (part b): the final review's verdict for the club managed t
 
 Screens (part c): when the manager continues after the final match of a governed season, the board's verdict and any offers appear before the matchday is recorded. A dismissed manager chooses among the offers; a manager who kept the job may join an offering club or stay; Decide later records nothing, so the same choice reappears. Club > Board shows the manager's reputation, today's outlook (job safe or at risk) and the clubs managed so far; older careers switch the setting on there, effective from the end of the next season. The manager's desk warns once a reviewed confidence falls below 30 in a governed season, and the Inbox records club changes and declined offers. A new coach takes over the board's current confidence, which moves at most 8 points per review towards the assessment, so it recovers within a few matchdays of average results. Suggestions outside this step: careers that sit out unemployed seasons, a protected first season at a new club, a fresh confidence start for a new coach, and mid-season dismissals.
 
+## First-release league scope and league selection
+
+Decided by the owner on 13 November 2026, replacing the earlier twelve-division scope. The first release covers men's **top and second divisions in Turkey, Spain, Italy and France**, the **top divisions in Greece and Germany**, and **EuroLeague, EuroCup and Basketball Champions League**: ten domestic divisions and three European competitions. Greece's second division (Elite League) and Germany's ProA are no longer first-release divisions; they were also the second divisions with the weakest known player-statistics coverage. The NBA, listed in the owner's real-data plan, is not part of this scope.
+
+When starting a new career, the player chooses which of these leagues are included, as in Football Manager, because each league adds simulation time. The details (any minimum selection, and how European competitions treat clubs from leagues that were not selected) are decided in the multi-league sprint.
+
+Order of the remaining work: real-data feasibility, a real-data pilot, the multi-league world with league selection, match realism, the saved ideas, release preparation, and interface simplification last, after the owner has played with real data. The game will be commercialized (the real-data plan describes a free first season in the browser, then a one-time EUR 15 unlock, and later Steam); this is planned for release preparation and is not built now, so local saves without an account (D05) stay until then.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

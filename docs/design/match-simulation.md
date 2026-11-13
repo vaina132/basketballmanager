@@ -263,7 +263,7 @@ Publish a calibration report and known simplifications with each material engine
 
 ## 12. Open design decisions
 
-1. Can the 2025–26 opening-day snapshots, applicable rule editions, and calibration datasets be verified for all twelve domestic divisions and the three confirmed European competitions?
+1. Can the 2025–26 opening-day snapshots, applicable rule editions, and calibration datasets be verified for the ten domestic divisions and the three confirmed European competitions?
 2. Which appearance traits and asset sources provide sufficient player recognition in the confirmed stylized 2.5D viewer?
 3. Should the default tactics screen include only man-to-man coverage initially, or a validated zone option too?
 4. What match viewing duration and acceleration controls feel comfortable for an ordinary session?

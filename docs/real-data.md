@@ -58,7 +58,7 @@ Public access was tested successfully on the research date; an API without an au
 
 ## Remaining coverage and immediate self-service option
 
-These records cover the two European competitions only. They do not constitute complete domestic league rosters for the twelve selected divisions or Basketball Champions League. Participating clubs from those countries do not make their entire domestic competition covered.
+These records cover the two European competitions only. They do not constitute complete domestic league rosters for the ten first-release divisions or Basketball Champions League. Participating clubs from those countries do not make their entire domestic competition covered.
 
 For additional coverage, the immediately available account-based candidate is [API-BASKETBALL](https://api-sports.io/sports/basketball), accessed through its official [registration/dashboard link](https://dashboard.api-football.com/). The free plan is activated upon registration and advertises 100 requests/day. Available free data is restricted, so 2025-26 access must be tested on the actual account. The published PRO tier advertises 7,500 requests/day; check the currency and billing terms shown at checkout before purchasing.
 

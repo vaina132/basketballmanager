@@ -1,6 +1,6 @@
 # Implementation plan
 
-Baseline: 5 November 2026. This is the build sequence for the confirmed design, not a promise that the entire game is implemented in one pass. All twelve domestic divisions and three European competitions remain first-release requirements.
+Baseline: 5 November 2026. This is the build sequence for the confirmed design, not a promise that the entire game is implemented in one pass. Ten domestic divisions (top and second divisions in Turkey, Spain, Italy and France; top divisions in Greece and Germany) and three European competitions are the first-release scope, with league selection when a career starts (owner's decision of 13 November 2026, see [decisions](decisions.md#first-release-league-scope-and-league-selection)).
 
 Current milestone status, 12 November 2026:
 
@@ -9,7 +9,7 @@ Current milestone status, 12 November 2026:
 | 1. Foundation | Complete | Deterministic domain/engine foundation, development data, tests and initial application. |
 | 2. Rules and match engine | Partial | Playable possession engine and tested rules subset; complete competition rules and statistical calibration remain. |
 | 3. Match viewer and coaching | Partial | Large court, animated actions, stamina, ability/match ratings, PIR/MVP, substitutions and tactical controls; richer movement and final presentation remain. |
-| 4. World and saves | Partial | Fictional six-club careers, rollover, history and local checkpoints; twelve real domestic divisions, three European competitions and their transitions remain. |
+| 4. World and saves | Partial | Fictional six-club careers, rollover, history and local checkpoints; ten real domestic divisions, three European competitions, league selection at career start and their transitions remain. |
 | 5. Squad, training, health and staff | Partial | Squad information, training, injuries, training coaches, scouts, fitness coaches, physios, assistants and youth coaches; academy intake/promotion, youth fixtures/results and medical availability, age-adjusted senior practice, gradual decline and retirement; agreed roles, playing-time promises, morale and bounded match focus; deeper relationships/chemistry, richer development, youth match coaching and population calibration remain. |
 | 6. Scouting, recruitment and finances | Partial | Scouting, budgets, negotiations, competing bids, installments, buyouts, paid/free in-season registration, optional release clauses, recruitable scouts, quality-dependent discovery and simpler Club management; broader contract mechanics, regional scouting and the complete economy remain. |
 | 7. Facilities, business, board and career | Accepted (13 November 2026) | Ticket pricing, negotiated main-sponsor agreements with dated payments and optional delegation, and funded arena/training/youth upgrades with construction, upkeep and optional delegation; fixed board objectives, dated reviews and confidence; board capital requests for facility upgrades with fictional club presidents; season verdicts that set the next season's staff budget and owner capital; press conferences after result runs and an Inbox of recorded events; fictional rivalries with capped derby effects; facility condition with full or reduced upkeep; optional season-end dismissal and job offers with a choice before the offseason (format 38). Later additions: project financing and loans, further president traits, contract-future requests and unemployed seasons. |
@@ -128,7 +128,7 @@ Acceptance: player IDs and event geometry match rendering; pauses do not grant r
 
 ## 6. Milestone 4: world, competitions and saves
 
-Implement all twelve playable divisions and three European competitions using validated season configurations. Support club identity across competitions, draws, schedules, standings, tie-breakers, playoffs, cross-tier accession, registration, qualification and boundary promotion/relegation.
+Implement the ten playable divisions and three European competitions using validated season configurations, with the leagues included chosen when a career starts. Support club identity across competitions, draws, schedules, standings, tie-breakers, playoffs, cross-tier accession, registration, qualification and boundary promotion/relegation.
 
 Represent external continental participants and background third-tier clubs. Add deterministic date advancement, worker orchestration, resumable rollover, IndexedDB revisions, save migration, export/import and one-writer conflict protection.
 

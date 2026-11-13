@@ -8,7 +8,9 @@ Owner's notes when sharing it:
 - The owner has set up a **Supabase** account for the game. Tell the owner when the work reaches the point where Supabase is needed.
 - Keep the approach simple; do not overcomplicate it.
 
-When this work starts, reconcile it with the earlier first-release scope in [implementation-plan.md](implementation-plan.md) and [data-and-sources.md](design/data-and-sources.md) (twelve domestic divisions and three European competitions): this plan proposes a smaller launch set (NBA, EuroLeague, ACB, BBL, BSL, LBA) and a BBL + EuroLeague pilot. Confirm the scope with the owner before building. Never ask the owner to paste API keys into chat or commit them.
+**Scope decided on 13 November 2026** (see [decisions](decisions.md#first-release-league-scope-and-league-selection)): top and second divisions in Turkey, Spain, Italy and France, top divisions in Greece and Germany, plus EuroLeague, EuroCup and Basketball Champions League; the NBA is not included, and a new career chooses which leagues are included. This replaces the league list in section 5 below.
+
+Earlier note: when this work starts, reconcile it with the earlier first-release scope in [implementation-plan.md](implementation-plan.md) and [data-and-sources.md](design/data-and-sources.md) (twelve domestic divisions and three European competitions): this plan proposes a smaller launch set (NBA, EuroLeague, ACB, BBL, BSL, LBA) and a BBL + EuroLeague pilot. Confirm the scope with the owner before building. Never ask the owner to paste API keys into chat or commit them.
 
 The plan as shared:
 

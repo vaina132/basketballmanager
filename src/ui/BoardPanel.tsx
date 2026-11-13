@@ -8,6 +8,8 @@ import { BOARD_FUNDING_REFUSAL_COOLDOWN, boardCapitalGranted, boardConfidenceNow
 import { BOARD_VERDICT_EFFECTS, governingVerdict, ownerCapital, seasonVerdict, staffAllocation, verdictBudgets, verdictForConfidence, type BoardVerdict } from '../world/board-consequences'
 import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS, RIVALRY_CROWD_PERCENT, rivalryFor } from '../world/rivalries'
+import { careerMovesGovern, managedClubFor } from '../world/career'
+import { managerReputation, VACANCY_BASE_REQUIREMENT, VACANCY_STEP } from '../world/career-policy'
 import { FACILITY_LABELS } from './FacilitiesPanel'
 import { Icon, type IconName } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
@@ -20,6 +22,7 @@ interface BoardPanelProps {
   onEnableFunding: () => void
   onEnableConsequences: () => void
   onEnableRivalries: () => void
+  onEnableCareerMoves: () => void
 }
 
 const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(cents / 100)
@@ -98,6 +101,45 @@ function RivalrySection({ season, busy, onEnableRivalries }: { season: SeasonSta
   </>
 }
 
+export const CAREER_RULE = `A season that ends Under pressure (final board confidence below 30) ends your job. Clubs whose own season ends Under pressure offer you their job when your reputation reaches what they look for: ${VACANCY_BASE_REQUIREMENT} for last place and ${VACANCY_STEP} more for each place higher. Your reputation is your last three final board ratings, the most recent counting most. After a dismissal you always receive at least one offer.`
+
+/** The manager's employment: reputation, the season-end rule, today's outlook and the clubs managed so far. */
+function CareerSection({ season, busy, onEnableCareerMoves }: { season: SeasonState; busy: boolean; onEnableCareerMoves: () => void }) {
+  const career = season.career
+  const heading = <h3 className="board-section-heading"><Icon name="shield" size={16} />Your job</h3>
+  const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? id
+  if (!career?.enabledSince) return <>
+    {heading}
+    <div className="board-enable board-career-enable"><Icon name="shield" size={24} /><div><strong>Play with dismissal and job offers</strong><p>{CAREER_RULE} The current season is never judged: this applies from the end of {seasonLabel(season.seasonNumber + 1)}.</p></div><button id="enable-career-moves" className="button" onClick={onEnableCareerMoves} disabled={busy || !season.board.enabledSince}>Enable dismissal and job offers</button></div>
+  </>
+  const lastEnded = season.status === 'complete' ? season.seasonNumber : season.seasonNumber - 1
+  const reputation = managerReputation(season, Math.max(lastEnded, 0))
+  const governs = careerMovesGovern(career, season.seasonNumber)
+  const confidence = boardConfidenceNow(season, season.managedClubId), outlook = verdictForConfidence(confidence)
+  const move = career.moves.find(item => item.seasonNumber === season.seasonNumber)
+  const status = !governs ? 'not-yet' : season.status === 'complete' ? 'decided' : outlook === 'pressure' ? 'at-risk' : 'safe'
+  const statusText = status === 'not-yet' ? `Dismissal and job offers start at the end of ${seasonLabel(career.enabledSince.effectiveFrom)}.`
+    : status === 'decided' ? (move ? `You joined ${name(move.toClubId)} at the end of this season.` : 'The board has decided: you stay for next season.')
+    : `If the season ended today: ${BOARD_VERDICT_EFFECTS[outlook].label} (${confidence}/100) — ${status === 'at-risk' ? 'the board would dismiss you' : 'your job is safe'}.`
+  const seasons = Array.from({ length: season.seasonNumber }, (_, index) => index + 1).map(year => {
+    const clubId = managedClubFor(season, year, false), final = seasonVerdict(season.board, clubId, year)
+    const moved = career.moves.find(item => item.seasonNumber === year)
+    return { year, clubId, final, moved }
+  }).filter(row => row.final || row.year === season.seasonNumber).reverse()
+  return <>
+    {heading}
+    <div className="board-verdict board-career" data-career-status={status}>
+      <div className="board-verdict-season" data-career-reputation={reputation.value}><span>Reputation</span><strong>{reputation.value} / 100</strong><small>{reputation.seasons.length ? reputation.seasons.map(item => `${seasonLabel(item.seasonNumber)}: ${item.confidence}`).join(' · ') : 'No final board review yet'}</small></div>
+      <div className="board-verdict-season"><span>{seasonLabel(season.seasonNumber)} · {name(season.managedClubId)}</span><strong>{status === 'at-risk' ? 'Job at risk' : status === 'safe' ? 'Job safe' : status === 'decided' ? 'Season decided' : 'Not judged yet'}</strong><small>{statusText}</small></div>
+    </div>
+    <div className="board-history-scroll board-career-history" tabIndex={0} role="region" aria-label="Clubs managed"><table><thead><tr><th scope="col">Season</th><th scope="col">Club</th><th scope="col">Final confidence</th><th scope="col">Outcome</th></tr></thead><tbody>{seasons.map(row => <tr key={row.year} data-career-season={row.year}>
+      <td>{seasonLabel(row.year)}</td><td>{name(row.clubId)}</td><td>{row.final ? `${row.final.confidence} · ${BOARD_VERDICT_EFFECTS[row.final.verdict].label}` : 'In progress'}</td>
+      <td>{row.moved ? (row.moved.reason === 'dismissed' ? `Dismissed · joined ${name(row.moved.toClubId)}` : `Moved to ${name(row.moved.toClubId)}`) : row.final ? 'Stayed' : '—'}</td>
+    </tr>)}</tbody></table></div>
+    <p className="board-empty board-career-rule">{CAREER_RULE}</p>
+  </>
+}
+
 function VerdictSection({ season, busy, onEnableConsequences }: { season: SeasonState; busy: boolean; onEnableConsequences: () => void }) {
   const clubId = season.managedClubId, next = season.seasonNumber + 1
   const current = governingVerdict(season, clubId, season.seasonNumber)
@@ -119,7 +161,7 @@ function VerdictSection({ season, busy, onEnableConsequences }: { season: Season
   </>
 }
 
-export function BoardPanel({ season, busy = false, onEnable, onEnableFunding, onEnableConsequences, onEnableRivalries }: BoardPanelProps) {
+export function BoardPanel({ season, busy = false, onEnable, onEnableFunding, onEnableConsequences, onEnableRivalries, onEnableCareerMoves }: BoardPanelProps) {
   const summary = getBoardSummary(season)
   const { mandate, objective, latest } = summary
   const review = latest?.club
@@ -146,6 +188,7 @@ export function BoardPanel({ season, busy = false, onEnable, onEnableFunding, on
           <p>The review assessment starts at 50, then adds the results, injury and financial contributions above. Confidence moves towards it by no more than 8 points per review. {season.facilities.fundingSince ? 'It records the board\'s view and decides capital requests; it does not change match performance, budget limits or your job.' : 'It records the board\'s view; it does not change match performance, budget limits or your job.'}</p>
         </details>
       </> : <p className="board-empty">Objectives start next season. The completed season will not be reviewed retroactively.</p>}
+      <CareerSection season={season} busy={busy} onEnableCareerMoves={onEnableCareerMoves} />
       <VerdictSection season={season} busy={busy} onEnableConsequences={onEnableConsequences} />
       <RivalrySection season={season} busy={busy} onEnableRivalries={onEnableRivalries} />
       <PresidentSection season={season} busy={busy} onEnableFunding={onEnableFunding} />

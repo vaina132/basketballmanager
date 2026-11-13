@@ -6,10 +6,19 @@ Updated: 12 November 2026.
 
 The product discovery has eighteen answers. Core design, world/match specifications, source strategy, architecture and milestone plan are recorded in this repository. Coefficients are proposals and require calibration. The historical database audit is incomplete.
 
-## In progress: dismissal and job changes
+## Level 7 acceptance (13 November 2026)
+
+- Overpricing: above the sell-out price, attendance falls faster than the price rises (elasticity 1.4), so overcharging loses crowd and income; the automatic price maximizes gate revenue (`tests/level7-acceptance.test.ts`, `tests/finance.test.ts`).
+- No free money: sponsor payments never exceed their agreements (or the fixed EUR 200,000 before negotiations), board capital is approved immediately before the upgrade it funds, stays within the season's owner capital and at most the upgrade cost (plus the documented EUR 150,000 cushion for automatic requests), and each project is paid exactly once; the strict save check replays all of it.
+- Automatic control: every construction start is covered by the club's cash; automatic sponsor signings and board capital decisions appear in the Inbox, and every payment appears in the Club ledger.
+- Dismissal: the world keeps all clubs, squads, results and history; the former club continues under automatic control with a full squad and the career continues at the new club.
+- Health run (three all-automatic five-season careers, seeds 3, 7 and 227): 8 of 90 club-seasons ended Under pressure, 2 dismissals in 15 manager-seasons with both careers continuing, arenas 93-94% full, sponsorship EUR 171,000-192,000 per club-season, no club with negative cash, one club with EUR 11,775 unpaid, 6.2 MB saves validating in 0.75-1.2 s.
+
+## Implemented: dismissal and job changes
 
 - Groundwork (format 37): a career can record a change of club at the end of a season, after the final board review; the new club runs that offseason and later seasons, and the former club continues under automatic control. The save checker credits every earlier decision (sponsorship, facilities, academy, press, squad conversations, recruitment) to the club managed at that time.
-- Dismissal and offers (format 38): with the setting on (new careers), a season that ends Under pressure dismisses the manager. Clubs whose season also went badly replace their coach and offer the job according to the manager's reputation (the last three final board ratings); a dismissed manager always receives an offer. For now a dismissed manager joins the best offer automatically, and the manager's desk and the Inbox report the change; offers to a manager who kept the job are not yet shown. The choice screen, the Board page section and the switch for older careers follow in the next part.
+- Dismissal and offers (format 38): with the setting on (new careers), a season that ends Under pressure dismisses the manager. Clubs whose season also went badly replace their coach and offer the job according to the manager's reputation (the last three final board ratings); a dismissed manager always receives an offer.
+- Continuing after the final match shows the verdict and the offers before the matchday is recorded: join a club, stay (when not dismissed) or decide later. Club > Board > Your job shows reputation, whether the job is safe or at risk, and every club managed; older careers switch it on there, from the next season end. The manager's desk warns when the job is at risk, and the Inbox records club changes and declined offers. Unemployed seasons, mid-season dismissals and a protected first season remain suggestions.
 
 ## Implemented: facility condition and upkeep plans
 
@@ -636,7 +645,7 @@ Watched and skipped managed matches still run on the main thread; matchday compl
 
 The user-directed usability work, dated offseason calendar, reservations and competing club offers are implemented. They do not complete the broader management milestones below.
 
-1. Sponsorship negotiations, board funding requests with president traits, board season verdicts, press conferences with the Inbox, rivalries and facility upkeep are implemented. Optional dismissal and job changes are in progress (groundwork done), in several parts (Level 7 in [HANDOVER.md](../HANDOVER.md)). Board objectives and dated confidence reviews provide the board foundation. Squad roles, playing-time promises and bounded morale now provide the first player-relationship foundation; deeper personalities, chemistry and conversation consequences remain. Broader commercial/board/career mechanics follow the [implementation plan](implementation-plan.md), alongside richer development and long-run calibration.
+1. Sponsorship negotiations, board funding requests with president traits, board season verdicts, press conferences with the Inbox, rivalries, facility upkeep and optional dismissal with job changes are implemented; the Level 7 acceptance pass follows (Level 7 in [HANDOVER.md](../HANDOVER.md)). Board objectives and dated confidence reviews provide the board foundation. Squad roles, playing-time promises and bounded morale now provide the first player-relationship foundation; deeper personalities, chemistry and conversation consequences remain. Broader commercial/board/career mechanics follow the [implementation plan](implementation-plan.md), alongside richer development and long-run calibration.
 2. In parallel, extend the downloaded reference data to the missing competitions, reconstruct opening-day rosters, and resolve intended-use permissions before bundling a career database. The [data acquisition plan](data-acquisition.md) records immediate free and paid routes.
 3. Calibrate the possession model against verified team/game denominators, broaden off-ball creation and defensive decisions, and implement competition-specific rules. Repeatable diagnostics expose action counts, shot context and isolated tactical effects; they do not complete these acceptance gates.
 4. Extend the working career calendar and health foundation with validated real competition calendars, registration rules, promotion/qualification transitions and the remaining management layers.

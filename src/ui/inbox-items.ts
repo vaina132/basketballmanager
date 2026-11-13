@@ -12,6 +12,8 @@ import { governingDerby } from '../world/rivalries'
 import { FACILITY_TYPES, getFacilityCondition, getFacilityLevel, maintenancePlanOn } from '../world/facilities-policy'
 import { clubRetirementsThisSeason } from './PlayerLifecycle'
 import { careerMoveText } from './career-text'
+import { careerMovesGovern, managedClubFor } from '../world/career'
+import { seasonEndOutlook } from '../world/career-policy'
 import { medicalDate } from './SeasonMedicalReport'
 
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
@@ -42,15 +44,17 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
 
   if (season.board.enabledSince) {
     for (const mandate of season.board.mandates) {
-      const objective = mandate.clubs[clubId]
+      // Objectives belong to the club managed in that season.
+      const objective = mandate.clubs[managedClubFor(season, mandate.seasonNumber, false)]
       if (objective && objective.games > 0) items.push({ id: mandate.id, date: mandate.date, category: 'board', title: `Board objectives · ${seasonLabel(mandate.seasonNumber)}`, detail: `Win ${objective.targetWins} of ${objective.games} counted games${objective.startingUnpaid !== null ? ` and keep unpaid costs at or below ${money(objective.startingUnpaid)}` : ''}.`, needsAction: false, target: 'board' })
     }
     const summary = getBoardSummary(season)
     if (summary.latest) items.push({ id: summary.latest.id, date: summary.latest.date, category: 'board', title: `Board review · ${summary.confidenceLabel}`, detail: `Confidence ${summary.latest.club.confidence}/100 after matchday ${summary.latest.round}.`, needsAction: false, target: 'board' })
     const since = season.board.consequencesSince
     if (since) for (let year = since.seasonNumber; year <= season.seasonNumber; year += 1) {
-      const verdict = seasonVerdict(season.board, clubId, year)
+      const judged = managedClubFor(season, year, false), verdict = seasonVerdict(season.board, judged, year)
       if (!verdict) continue
+      if (judged !== clubId) { items.push({ id: `verdict-${year}`, date: verdict.date, category: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `${season.clubs.find(club => club.id === judged)!.name}'s board after ${seasonLabel(year)}.`, needsAction: false, target: 'board' }); continue }
       const budgets = verdictBudgets(clubId, verdict.verdict)
       items.push({ id: `verdict-${year}`, date: verdict.date, category: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `${seasonLabel(year + 1)}: ${money(budgets.staff)} staff budget and ${money(budgets.capital)} owner capital.`, needsAction: false, target: 'board' })
     }
@@ -80,6 +84,13 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     if (getFacilityLevel(season, type, clubId) === 1) continue
     const condition = getFacilityCondition(season, type, clubId)
     if (condition < 60) items.push({ id: `worn-${type}`, date: season.date, category: 'club', title: `${FACILITIES[type]} wearing`, detail: `Condition ${condition}/100 under ${maintenancePlanOn(season.facilities, clubId, season.date)} upkeep; its benefit shrinks until full upkeep restores it.`, needsAction: maintenancePlanOn(season.facilities, clubId) === 'reduced', target: 'club' })
+  }
+  // Offers turned down: rebuilt from each governed season end at which the manager stayed.
+  const lastEnded = season.status === 'complete' ? season.seasonNumber : season.seasonNumber - 1
+  if (season.career?.enabledSince) for (let year = season.career.enabledSince.effectiveFrom; year <= lastEnded && careerMovesGovern(season.career, year); year += 1) {
+    if (season.career.moves.some(move => move.seasonNumber === year)) continue
+    const outlook = seasonEndOutlook(season, year)
+    if (outlook?.offers.length && !outlook.dismissed) items.push({ id: `offers-declined-${year}`, date: outlook.verdict.date, category: 'board', title: outlook.offers.length === 1 ? 'Job offer declined' : 'Job offers declined', detail: `You stayed at ${season.clubs.find(club => club.id === outlook.clubId)!.name} after ${seasonLabel(year)}; ${outlook.offers.map(offer => season.clubs.find(club => club.id === offer.clubId)!.name).join(' and ')} had offered you ${outlook.offers.length === 1 ? 'its job' : 'their jobs'}.`, needsAction: false, target: 'board' })
   }
   for (const move of season.career?.moves ?? []) { const text = careerMoveText(season, move); items.push({ id: `career-move-${move.seasonNumber}`, date: move.date, category: 'board', title: text.title, detail: text.detail, needsAction: false, target: 'board' }) }
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })

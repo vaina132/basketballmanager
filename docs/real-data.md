@@ -1,5 +1,7 @@
 # Real data available now
 
+When real-data integration starts, follow the owner's plan in [real-data-integration-plan.md](real-data-integration-plan.md).
+
 Verified on 5 November 2026. The official EuroLeague Basketball data service returned real 2025-26 EuroLeague and EuroCup records immediately, without an account, API key or payment. This supersedes the earlier recommendation to wait for supplier email replies before obtaining any data.
 
 ## Open the downloaded records

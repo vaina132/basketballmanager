@@ -3,6 +3,7 @@ import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/seas
 import type { Side, Team } from '../domain/types'
 import { getActiveFixture, getStandings, seasonLabel } from '../world/season'
 import { getFixtureTeams } from '../world/rosters'
+import { managedClubFor } from '../world/career'
 import { Icon } from './Icon'
 import { SeasonLeaders } from './SeasonLeaders'
 import { getFixtureMvp, hasPlayerParticipated, playerPIR, selectMatchMvp } from '../world/performance-rating'
@@ -54,11 +55,13 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const standings = getStandings({ clubs: season.clubs, fixtures: selectedFixtures })
   const club = (id: string) => season.clubs.find(team => team.id === id)!
   const active = getActiveFixture(season)
-  const managed = club(season.managedClubId)
+  // The club the manager ran in the season shown; after a move, the new club appears from the next season.
+  const managedId = managedClubFor(season, selectedNumber, false)
+  const managed = club(managedId)
   const complete = archived || season.status === 'complete'
   const matchFinished = season.activeMatch.status === 'finished'
   const champion = complete ? club(standings[0]!.clubId) : null
-  const fixtures = selectedFixtures.filter(fixture => (round === 'all' || fixture.round === Number(round)) && (!ownFixtures || fixture.homeClubId === season.managedClubId || fixture.awayClubId === season.managedClubId))
+  const fixtures = selectedFixtures.filter(fixture => (round === 'all' || fixture.round === Number(round)) && (!ownFixtures || fixture.homeClubId === managedId || fixture.awayClubId === managedId))
   const review = selectedFixtures.find(fixture => fixture.id === reviewId && fixture.result?.stats)
   const reviewTeams = review ? getFixtureTeams(season, review, selectedNumber) : null
   const totalRounds = Math.max(...selectedFixtures.map(fixture => fixture.round))
@@ -103,7 +106,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
     <section className="season-standings panel" aria-labelledby="season-table-title">
       <header className="season-panel-heading"><div><h2 id="season-table-title">League table</h2><p>Fictional development league · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
       <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th><th scope="col" title="Points for">PF</th><th scope="col" title="Points against">PA</th><th scope="col" title="Point difference">Diff</th></tr></thead><tbody>{standings.map(row => <tr key={row.clubId} data-club-id={row.clubId} className={row.clubId === season.managedClubId ? 'season-managed-row' : ''}>
-        <td>{row.position}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === season.managedClubId} /></th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td><td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
+        <td>{row.position}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} /></th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td><td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
       </tr>)}</tbody></table></div>
       <p className="season-table-note">Ranked by wins, overall point difference, points scored, then club ID.</p>
     </section>
@@ -116,7 +119,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
         const mvp = fixture.result ? getFixtureMvp(season, fixture, selectedNumber) : null
         const isActive = !archived && fixture.id === season.activeFixtureId
         const score = fixture.result?.officialScore ?? (isActive && season.activeMatch.status !== 'ready' ? season.activeMatch.result?.officialScore ?? season.activeMatch.score : null)
-        return <tr key={fixture.id} data-fixture-id={fixture.id} className={fixture.homeClubId === season.managedClubId || fixture.awayClubId === season.managedClubId ? 'season-managed-row' : ''}>
+        return <tr key={fixture.id} data-fixture-id={fixture.id} className={fixture.homeClubId === managedId || fixture.awayClubId === managedId ? 'season-managed-row' : ''}>
           <td><time dateTime={fixture.date}>{formatDate(fixture.date)}</time><small>Matchday {fixture.round}</small></td><td><ClubName club={club(fixture.homeClubId)} /></td><td className="season-fixture-score">{score ? `${score.home} : ${score.away}` : '—'}</td><td><ClubName club={club(fixture.awayClubId)} /></td>
           <td>{fixture.result ? fixture.result.stats ? <button className="text-button" aria-label={`Review ${club(fixture.homeClubId).shortName} vs ${club(fixture.awayClubId).shortName}`} onClick={event => openFixtureReview(fixture.id, event.currentTarget)} aria-expanded={reviewId === fixture.id} aria-controls="season-result-review" disabled={busy}>Review<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">{fixture.result.kind === 'default' ? 'Awarded by default' : fixture.result.periods > 4 ? `Full time · ${fixture.result.periods - 4} OT` : 'Full time'} · Box score unavailable</span> : isActive ? <button className="text-button" onClick={onOpenMatch} disabled={busy}>{matchFinished ? 'Played · pending' : season.activeMatch.status === 'ready' ? 'Pre-match' : 'In progress'}<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">Scheduled</span>}{mvp && <small className="season-fixture-mvp" data-fixture-mvp={mvp.playerId}>MVP {mvp.player.name} &middot; {mvp.pir} PIR</small>}</td>
         </tr>

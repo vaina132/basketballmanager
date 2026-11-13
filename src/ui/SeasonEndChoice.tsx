@@ -1,0 +1,67 @@
+import { useEffect, useRef } from 'react'
+import type { SeasonState } from '../domain/season'
+import type { ClubVacancy, SeasonEndOutlook } from '../world/career-policy'
+import { BOARD_VERDICT_EFFECTS } from '../world/board-consequences'
+import { seasonLabel } from '../world/season'
+import { Icon } from './Icon'
+import './season-end-choice.css'
+
+interface SeasonEndChoiceProps {
+  season: SeasonState
+  outlook: SeasonEndOutlook
+  busy?: boolean
+  /** A club id to take that job, or null to stay. */
+  onChoose: (clubId: string | null) => void
+  onClose: () => void
+}
+
+const ordinal = (position: number) => `${position}${position % 10 === 1 && position !== 11 ? 'st' : position % 10 === 2 && position !== 12 ? 'nd' : position % 10 === 3 && position !== 13 ? 'rd' : 'th'}`
+
+export function offerReason(offer: ClubVacancy, reputation: number): string {
+  const why = offer.reason === 'pressure' ? 'Its own season ended Under pressure, so it is replacing its coach.' : 'Its board, the least confident in the league, is making a change.'
+  return `${why} It looks for a reputation of ${offer.requirement}${offer.requirement > reputation ? '; it offers you the job anyway after your dismissal' : ''}.`
+}
+
+/** The manager's decision before the offseason: shown before the final matchday is committed, so nothing changes until a choice. */
+export function SeasonEndChoice({ season, outlook, busy = false, onChoose, onClose }: SeasonEndChoiceProps) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const first = useRef<HTMLButtonElement>(null)
+  const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? id
+  const current = name(outlook.clubId), label = BOARD_VERDICT_EFFECTS[outlook.verdict.verdict].label
+
+  useEffect(() => {
+    const element = dialog.current!
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    if (!element.open) element.showModal()
+    first.current?.focus({ preventScroll: true })
+    return () => {
+      element.close()
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true })
+    }
+  }, [])
+
+  return <dialog ref={dialog} id="season-end-choice" className="season-end-choice" aria-labelledby="season-end-choice-title" aria-describedby="season-end-choice-lead" data-dismissed={outlook.dismissed} onCancel={event => { event.preventDefault(); onClose() }}>
+    <header className="season-end-choice-heading">
+      <h2 id="season-end-choice-title"><Icon name="shield" size={17} />{outlook.dismissed ? `Dismissed by ${current}` : 'Job offers'}</h2>
+      <span>{seasonLabel(outlook.seasonNumber)} · final review</span>
+    </header>
+    <div className="season-end-choice-body">
+      <p id="season-end-choice-lead" className="season-end-choice-lead">{outlook.dismissed
+        ? `The board's season verdict is ${label} (confidence ${outlook.verdict.confidence}/100), and it has ended your job. Choose your next club; ${current} continues under automatic control.`
+        : `${current}'s board gives the verdict ${label} (confidence ${outlook.verdict.confidence}/100). ${outlook.offers.length === 1 ? 'Another club wants' : `${outlook.offers.length} clubs want`} you as their next coach. Take a job, or stay at ${current}.`}</p>
+      <dl className="season-end-choice-facts">
+        <div><dt>Your reputation</dt><dd data-reputation={outlook.reputation.value}>{outlook.reputation.value}<small>/100</small></dd></div>
+        <div><dt>Based on</dt><dd>{outlook.reputation.seasons.map(item => `${seasonLabel(item.seasonNumber)}: ${item.confidence}`).join(' · ') || 'No final review yet'}</dd></div>
+      </dl>
+      <ul className="season-end-offers" aria-label="Job offers">{outlook.offers.map((offer, index) => <li key={offer.clubId} data-offer-club={offer.clubId}>
+        <div><strong>{name(offer.clubId)}</strong><span>Finished {ordinal(offer.position)} · board confidence {offer.confidence}</span><p>{offerReason(offer, outlook.reputation.value)}</p></div>
+        <button ref={index === 0 ? first : undefined} className="button" data-join-club={offer.clubId} onClick={() => onChoose(offer.clubId)} disabled={busy}>Join {name(offer.clubId)}</button>
+      </li>)}</ul>
+      <p className="season-end-choice-note">Your choice takes effect when the final matchday is recorded: the new club runs this offseason, including recruitment, and the next seasons. Contracts, staff and results stay where they are.</p>
+    </div>
+    <footer className="season-end-choice-actions">
+      <button className="text-button" id="season-end-later" onClick={onClose} disabled={busy}>Decide later</button>
+      {!outlook.dismissed && <button className="button" id="season-end-stay" onClick={() => onChoose(null)} disabled={busy}>Stay at {current}</button>}
+    </footer>
+  </dialog>
+}

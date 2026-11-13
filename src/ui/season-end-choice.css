@@ -1,0 +1,26 @@
+.season-end-choice{width:min(640px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);margin:auto;padding:0;border:2px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);font-size:12px;overflow:hidden}
+.season-end-choice[open]{display:flex;flex-direction:column}
+.season-end-choice::backdrop{background:#05070bb8}
+.season-end-choice[data-dismissed="true"]{border-top-color:var(--accent)}
+.season-end-choice-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2);flex:none}
+.season-end-choice-heading h2{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
+.season-end-choice-heading h2 svg{color:var(--accent)}
+.season-end-choice-heading span{color:var(--muted);white-space:nowrap}
+.season-end-choice-body{min-height:0;overflow:auto;overscroll-behavior:contain;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.season-end-choice-lead{font-size:13px;line-height:1.55}
+.season-end-choice-facts{display:grid;grid-template-columns:auto 1fr;gap:4px 18px;margin:0;padding:8px 10px;background:var(--surface-2);border-left:2px solid var(--accent)}
+.season-end-choice-facts div{display:contents}
+.season-end-choice-facts dt{color:var(--muted)}
+.season-end-choice-facts dd{margin:0;font-variant-numeric:tabular-nums}
+.season-end-choice-facts small{color:var(--muted)}
+.season-end-offers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--border)}
+.season-end-offers li{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.season-end-offers li:last-child{border-bottom:0}
+.season-end-offers li>div{min-width:0;display:flex;flex-direction:column;gap:2px}
+.season-end-offers strong{font-size:13px;font-weight:600}
+.season-end-offers span{color:var(--muted)}
+.season-end-offers p{margin-top:2px;line-height:1.5;color:var(--text)}
+.season-end-offers .button{flex:none;white-space:nowrap}
+.season-end-choice-note{color:var(--muted);line-height:1.5}
+.season-end-choice-actions{display:flex;justify-content:flex-end;align-items:center;gap:16px;padding:10px 14px;border-top:1px solid var(--border);background:var(--surface-2);flex:none}
+@media(max-width:600px){.season-end-choice{width:calc(100vw - 20px);max-height:calc(100dvh - 20px)}.season-end-choice-heading{flex-wrap:wrap;gap:4px;padding:10px}.season-end-choice-body{padding:10px}.season-end-offers li{flex-direction:column;align-items:stretch}.season-end-offers .button{width:100%}.season-end-choice-actions{padding:10px}}

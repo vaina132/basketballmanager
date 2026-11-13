@@ -14,6 +14,7 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 | 2.6a A versioned, private game pack | Done |
 | 2.6b Friendly matches between real clubs from a loaded pack (exhibition) | Done |
 | 2.7 A repeat import that leaves existing careers unchanged | Planned |
+| 2.8 A new career with the real clubs from a pack (owner's plan, phase 5 item 9; feasibility report point 5) | Planned: steps to be agreed with the owner. The step list above stopped at friendlies; the owner noticed (13 November 2026) that a new career still uses the fictional clubs. |
 
 ## How it works
 
@@ -46,6 +47,8 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 ## Real-club friendlies (step 2.6b)
 
 In an exhibition, **Match setup › Real-club friendly…** opens a window (`src/ui/RealClubFriendly.tsx`) that loads a pack file from this computer, checks it (`parseDataPack` in `src/world/data-pack.ts`: the SHA-256 fingerprint must match the contents, every player and club must be complete) and lists its clubs by competition. **Start** plays the friendly on the normal match screen with the chosen replay code. Each side fields its twelve best-rated players (`matchdayTeam`: players without statistics last, a starting five covering PG, SG, SF, PF and C where possible, shirt numbers kept unless missing or repeated); players are drawn as neutral figures, never with a guessed appearance, and clubs without verified colours appear in grey. The pack stays in browser memory only and is never uploaded; the sidebar reads "Real clubs · private pack". Tests: `tests/data-pack.test.js` (3). Headless Edge with the real pack: a changed copy is refused with a plain explanation; the real pack loads (37 clubs, 595 players); Fenerbahçe vs Real Madrid starts with real players; window and match screen fit 1440 and 390 px; no page errors. Verified: typecheck, build, full serial suite 131 files / 2,101 tests (475 s).
+
+**Overall rating (owner request, 13 November 2026):** the owner found no real player above three and a half stars (Vezenkov and Mike James at 3.5). The cause was the star formula, not the ratings: it averaged all seven skills, so a great shooter's weaker rebounding pulled him down and five stars needed 20 in everything. The game now shows a position-weighted overall rating from 1 to 99 with stars (rules in `docs/decisions.md`). On this pack: 17 five-star, 34 four-and-a-half, 57 four, 68 three-and-a-half, 92 three, 72 two-and-a-half, 71 two, 46 one-and-a-half and 119 one-star players (576 with statistics); for example Edy Tavares 95, Aleksandar Vezenkov 94, Facundo Campazzo 89, Kendrick Nunn 86, Mike James 83, Shane Larkin 75. **Open:** Cameron Krutwig (Phoenix Hagen, BBL) at 93 shows that the measured BBL factor (0.896, from 22 players in both competitions) is not enough: a player who carries a weaker BBL club produces star numbers there. A fix (for example taking the club's strength into account, or a stronger factor for players without European minutes) needs a new ratings and pack version.
 
 **Scoring finding:** simulated games score low for every club: about 57 points per team with real clubs and 62 with the fictional ones (real basketball: about 80). The real ratings are therefore on the engine's scale; the engine itself produces too few shots and free throws per game. Match calibration is sprint 4.
 

@@ -3,7 +3,8 @@ import type { PlayerKnowledge } from '../src/domain/scouting';
 import type { ArchivedFixture, SeasonState } from '../src/domain/season';
 import type { PlayerAttributes, PlayerStats, Team } from '../src/domain/types';
 import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match';
-import { abilityRating, attributeAbilityStars, getFixtureMvp, getMatchMvp, hasPlayerParticipated, overallAbilityStars, playerMatchRating, playerPIR, selectMatchMvp } from '../src/world/performance-rating';
+import { abilityRating, attributeAbilityStars, getFixtureMvp, getMatchMvp, hasPlayerParticipated, OVR_POSITION_WEIGHTS, overallAbilityStars, overallRating, overallRatingStars, playerMatchRating, playerPIR, selectMatchMvp } from '../src/world/performance-rating';
+import { DEVELOPMENT_CLUBS } from '../src/data/development-league';
 import { advanceSeason, createSeason, managedSide } from '../src/world/season';
 
 const attributes = (value: number): PlayerAttributes => ({ twoPoint: value, threePoint: value, freeThrow: value, passing: value, defense: value, rebounding: value, stamina: value });
@@ -38,32 +39,60 @@ describe('game box-score rating', () => {
   });
 });
 
+describe('overall rating (1-99) and its stars', () => {
+  const center: PlayerAttributes = { twoPoint: 16, threePoint: 4, freeThrow: 10, passing: 8, defense: 16, rebounding: 18, stamina: 12 };
+
+  it('turns the seven skills into a 1-99 rating: a weighted 12 is 60, each skill point is worth 8', () => {
+    for (const weights of Object.values(OVR_POSITION_WEIGHTS)) expect(Object.values(weights).reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1, 10);
+    expect(overallRating(attributes(12), 'PG')).toBe(60);
+    expect(overallRating(attributes(15), 'C')).toBe(84);
+    expect(overallRating(attributes(1))).toBe(1);
+    expect(overallRating(attributes(20))).toBe(99);
+  });
+
+  it('weights skills by what the position needs, so strengths are not cancelled by unrelated weaknesses', () => {
+    expect(overallRating(center, 'C')).toBe(83);
+    expect(overallRating(center, 'PG')).toBe(49);
+    expect(overallRating(center)).toBe(64);
+  });
+
+  it('shows 85 or more as five stars and every 6 points less as half a star less, down to one star', () => {
+    expect([99, 85, 84, 79, 78, 73, 72, 67, 61, 55, 49, 43, 42, 1].map(overallRatingStars)).toEqual([5, 5, 4.5, 4.5, 4, 4, 3.5, 3.5, 3, 2.5, 2, 1.5, 1, 1]);
+    expect(overallAbilityStars(center, 'C')).toBe(4.5);
+    expect(overallAbilityStars(center, 'PG')).toBe(2);
+  });
+
+  it('spreads the fictional league across the star scale instead of bunching everyone together', () => {
+    const players = DEVELOPMENT_CLUBS.flatMap(team => team.players);
+    const stars = new Set(players.map(player => overallAbilityStars(player.attributes, player.position)));
+    expect(stars.size).toBeGreaterThanOrEqual(4);
+    expect(Math.max(...stars)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe('ability stars preserve knowledge boundaries', () => {
-  it('uses all seven skills and half-star steps within 1–5', () => {
-    expect(overallAbilityStars(attributes(1))).toBe(1);
-    expect(overallAbilityStars(attributes(20))).toBe(5);
-    expect(overallAbilityStars(attributes(10))).toBe(2.5);
-    expect(overallAbilityStars({ ...attributes(10), passing: 20, stamina: 20 })).toBe(3);
+  it('rates single skills on their own 1-20 scale', () => {
     expect(attributeAbilityStars(13)).toBe(3.5);
     expect(attributeAbilityStars(12)).toBe(3);
   });
 
-  it('shows exact owned ability while individual skills use the same scale', () => {
+  it('shows exact owned ability, by position when known, while individual skills keep their own scale', () => {
     const own = knowledge({ kind: 'own', attributes: { ...attributes(10), defense: 18 } });
-    expect(abilityRating(own)).toEqual({ kind: 'exact', min: 3, max: 3 });
-    expect(abilityRating(own, 'defense')).toEqual({ kind: 'exact', min: 4.5, max: 4.5 });
+    expect(abilityRating(own)).toEqual({ kind: 'exact', min: 2.5, max: 2.5, low: 56, high: 56 });
+    expect(abilityRating(own, { position: 'C' })).toEqual({ kind: 'exact', min: 2.5, max: 2.5, low: 58, high: 58 });
+    expect(abilityRating(own, { attribute: 'defense' })).toEqual({ kind: 'exact', min: 4.5, max: 4.5, low: 18, high: 18 });
   });
 
   it('never uses raw attribute fields for unknown or scouted outsiders', () => {
-    expect(abilityRating(knowledge({ attributes: attributes(20) }))).toEqual({ kind: 'unknown', min: null, max: null });
-    expect(abilityRating(knowledge({ kind: 'report', ranges: ranges(8, 16), attributes: attributes(20) }))).toEqual({ kind: 'range', min: 2, max: 4 });
-    expect(abilityRating(knowledge({ kind: 'report' }))).toEqual({ kind: 'unknown', min: null, max: null });
+    expect(abilityRating(knowledge({ attributes: attributes(20) }))).toEqual({ kind: 'unknown', min: null, max: null, low: null, high: null });
+    expect(abilityRating(knowledge({ kind: 'report', ranges: ranges(8, 16), attributes: attributes(20) }))).toEqual({ kind: 'range', min: 1, max: 5, low: 28, high: 92 });
+    expect(abilityRating(knowledge({ kind: 'report' }))).toEqual({ kind: 'unknown', min: null, max: null, low: null, high: null });
   });
 
   it('retains visible uncertainty when half-star rounding would collapse a scouting range', () => {
-    expect(abilityRating(knowledge({ kind: 'report', ranges: ranges(10, 10.5) }))).toEqual({ kind: 'range', min: 2, max: 3 });
-    expect(abilityRating(knowledge({ kind: 'report', ranges: ranges(1, 2) }))).toEqual({ kind: 'range', min: 1, max: 1.5 });
-    expect(abilityRating(knowledge({ kind: 'report', ranges: ranges(19, 20) }), 'passing')).toEqual({ kind: 'range', min: 4.5, max: 5 });
+    expect(abilityRating(knowledge({ kind: 'report', ranges: ranges(10, 10.5) }))).toEqual({ kind: 'range', min: 1, max: 2, low: 44, high: 48 });
+    expect(abilityRating(knowledge({ kind: 'report', ranges: ranges(1, 2) }))).toEqual({ kind: 'range', min: 1, max: 1.5, low: 1, high: 1 });
+    expect(abilityRating(knowledge({ kind: 'report', ranges: ranges(19, 20) }), { attribute: 'passing' })).toEqual({ kind: 'range', min: 4.5, max: 5, low: 19, high: 20 });
   });
 });
 

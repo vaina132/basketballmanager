@@ -354,7 +354,7 @@ Use a clean dark theme, recognizable portraits, and one accent color, with reada
 The home screen prioritizes the next fixture, availability concerns, time-sensitive decisions, and a compact club status.
 Inbox items distinguish action required, useful report, and routine information; optional reports never stop time progression by default.
 Each intervention explains the affected mechanism and uncertainty without disclosing hidden true ratings.
-Maintain a consistent scale legend: player ability 1–20, condition/morale 0–100, staff half-stars out of five.
+Maintain a consistent scale legend: player skills 1–20, player overall rating 1–99 shown as half-stars out of five, condition/morale 0–100, staff half-stars out of five.
 Acceptance scenarios include an unhappy injured starter, an unregistered signing, simultaneous accepted offers, an expiring scouting report, and a retiring captain.
 Business scenarios include sold-out fixtures, overlapping season-ticket inventory, an exclusive sponsor renewal, an arena project reducing capacity, and delegated spending competing with an accepted transfer.
 Youth scenarios include a promotion near a registration deadline, a prospect shared between squads, and insufficient academy capacity at annual intake.

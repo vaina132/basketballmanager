@@ -1,6 +1,7 @@
 import type { PlayerKnowledge } from '../domain/scouting';
 import type { Scout } from '../domain/scouts';
 import type { SeasonState } from '../domain/season';
+import type { Position } from '../domain/types';
 import { getActiveCareerPlayers } from './player-catalog';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { getClubScouts } from './scout-policy';
@@ -65,7 +66,7 @@ export function scoutDiscoveryGain(state: SeasonState, scout: Scout, clubId = st
 }
 
 export type ScoutingListSort = 'name-asc' | 'name-desc' | 'age-asc' | 'age-desc' | 'rating-asc' | 'rating-desc';
-export interface ScoutingSortEntry { id: string; name: string; age: number | null; knowledge: PlayerKnowledge }
+export interface ScoutingSortEntry { id: string; name: string; position: Position; age: number | null; knowledge: PlayerKnowledge }
 
 /** Unknowns stay last in both directions; estimated ability uses conservative bounds. */
 export function compareScoutingPlayers(left: ScoutingSortEntry, right: ScoutingSortEntry, sort: ScoutingListSort): number {
@@ -75,7 +76,7 @@ export function compareScoutingPlayers(left: ScoutingSortEntry, right: ScoutingS
     if (left.age === null || right.age === null) return left.age === right.age ? byName : left.age === null ? 1 : -1;
     return (sort === 'age-desc' ? right.age - left.age : left.age - right.age) || byName;
   }
-  const first = abilityRating(left.knowledge), second = abilityRating(right.knowledge);
+  const first = abilityRating(left.knowledge, { position: left.position }), second = abilityRating(right.knowledge, { position: right.position });
   if (first.kind === 'unknown' || second.kind === 'unknown') return first.kind === second.kind ? byName : first.kind === 'unknown' ? 1 : -1;
-  return (sort === 'rating-desc' ? second.min! - first.min! || second.max! - first.max! : first.max! - second.max! || first.min! - second.min!) || byName;
+  return (sort === 'rating-desc' ? second.low! - first.low! || second.high! - first.high! : first.high! - second.high! || first.low! - second.low!) || byName;
 }

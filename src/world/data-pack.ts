@@ -1,4 +1,5 @@
 import type { Player, PlayerAttributes, Position, Team } from '../domain/types';
+import { overallRating } from './performance-rating';
 
 /**
  * Real-data game packs (scripts/real-data-pack.mjs). A pack is a private file loaded from the player's own computer;
@@ -72,7 +73,8 @@ export async function parseDataPack(fileText: string): Promise<DataPack> {
   return pack as unknown as DataPack;
 }
 
-const average = (player: DataPackPlayer) => ATTRIBUTES.reduce((sum, key) => sum + player.attributes[key], 0) / ATTRIBUTES.length;
+/** The same position-weighted overall rating the player sees next to the stars. */
+const overall = (player: DataPackPlayer) => overallRating(player.attributes, player.position);
 
 /**
  * A club's matchday squad: its twelve best-rated players (those without any statistics last), with a starting five
@@ -82,7 +84,7 @@ export function matchdayTeam(pack: DataPack, clubId: string, size = MATCHDAY_SQU
   const club = pack.clubs.find(item => item.id === clubId);
   if (!club) throw new Error('Choose a club from the loaded data pack.');
   const byId = new Map(pack.players.map(player => [player.id, player]));
-  const ranked = club.playerIds.map(id => byId.get(id)!).sort((a, b) => Number(a.estimated.includes('all-abilities')) - Number(b.estimated.includes('all-abilities')) || average(b) - average(a) || a.name.localeCompare(b.name));
+  const ranked = club.playerIds.map(id => byId.get(id)!).sort((a, b) => Number(a.estimated.includes('all-abilities')) - Number(b.estimated.includes('all-abilities')) || overall(b) - overall(a) || a.name.localeCompare(b.name));
   const chosen = ranked.slice(0, Math.min(size, ranked.length));
   const starters: DataPackPlayer[] = [];
   for (const position of POSITIONS) {

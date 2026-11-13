@@ -60,7 +60,7 @@ describe('scout discovery range', () => {
     expect(newlyVisible.length).toBe(12);
     for (const id of newlyVisible) {
       expect(getPlayerKnowledge(high, id)).toMatchObject({ kind: 'unknown', attributes: null, ranges: null });
-      expect(abilityRating(getPlayerKnowledge(high, id))).toEqual({ kind: 'unknown', min: null, max: null });
+      expect(abilityRating(getPlayerKnowledge(high, id))).toEqual({ kind: 'unknown', min: null, max: null, low: null, high: null });
       expect(quoteScoutingAssignment(baseline, id).canAssign).toBe(true);
     }
   });
@@ -106,7 +106,7 @@ describe('scout discovery range', () => {
 describe('scouting list sorting', () => {
   function row(id: string, name: string, age: number | null, bounds?: [number, number]): ScoutingSortEntry {
     const knowledge: PlayerKnowledge = { playerId: id, kind: bounds ? 'report' : 'unknown', level: bounds ? 1 : 0, attributes: null, ranges: bounds ? Object.fromEntries(SCOUTING_ATTRIBUTES.map(attribute => [attribute, { min: bounds[0], max: bounds[1] }])) as PlayerKnowledge['ranges'] : null, observedOn: null, observedClubId: null, ageDays: null, freshness: 'unknown', source: null, observations: 0 };
-    return { id, name, age, knowledge };
+    return { id, name, position: 'SF', age, knowledge };
   }
 
   it('sorts youngest and oldest first, keeping unknown ages last and equal ages stable by name', () => {

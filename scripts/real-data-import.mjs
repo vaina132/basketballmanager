@@ -13,6 +13,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { applyIdentities } from './real-data-identities.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SUPABASE_URL = 'https://kesxznybhotzduvcwiwm.supabase.co';
@@ -80,6 +81,12 @@ async function write(table, rows, { onConflict, returning = false } = {}) {
     if (returning) saved.push(...result);
   }
   return saved;
+}
+
+/** Database access for companion scripts (club identities, ratings); reads the Supabase secret key once. */
+export async function databaseHelpers() {
+  if (!DB_KEY) DB_KEY = await secret('supabase-key.local', 'Supabase secret key');
+  return { db, selectAll, write };
 }
 
 /** "Larkin Shane" -> "Shane Larkin": the provider lists the surname first. Initials-only names stay as they are. */
@@ -210,6 +217,10 @@ async function main() {
         console.log(`${competition.name} ${label}: ${teams.length} clubs, ${games.length} games, ${pending.length} new box scores (${requests} requests so far)`);
       }
     }
+    // Hand-maintained names, cities, arenas and colours (real-data/club-identities.csv) are applied after every import.
+    const identities = await applyIdentities({ selectAll, write, provider: PROVIDER });
+    for (const name of identities.unmatched) issue('club', name, 'Listed in club-identities.csv but not imported');
+    console.log(`Club identities applied to ${identities.updated} clubs; colours still missing for ${identities.missingColours.length}.`);
     if (issues.length) await write('data_quality_issues', issues.map(item => ({ ...item, run_id: run.id })));
     await db('PATCH', `import_runs?id=eq.${run.id}`, { status: 'succeeded', finished_at: new Date().toISOString(), requests_used: requests, notes: JSON.stringify({ ...counts, issues: issues.length }) }, 'return=minimal');
     console.log(`Import ${run.id} succeeded: ${JSON.stringify(counts)}, ${issues.length} issues noted, ${requests} API requests.`);

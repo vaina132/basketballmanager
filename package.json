@@ -14,6 +14,7 @@
     "data:fetch": "node scripts/euroleague-data.mjs",
     "data:api-sports-probe": "node scripts/api-sports-probe.mjs",
     "data:import": "node scripts/real-data-import.mjs",
+    "data:identities": "node scripts/real-data-identities.mjs",
     "benchmark:match": "node scripts/benchmark-match.mjs",
     "fixtures:capture": "node scripts/capture-season-fixtures.mjs"
   },

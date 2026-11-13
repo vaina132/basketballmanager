@@ -8,7 +8,7 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 | --- | --- |
 | 2.1 Database tables in the owner's Supabase project | Done |
 | 2.2 Importer: German BBL and EuroLeague, 2025-26 and 2026-27 | Done |
-| 2.3 Club identities: city, arena and colours (hand-maintained, owner checks) | Next |
+| 2.3 Club identities: city, arena and colours (hand-maintained, owner checks) | In progress: file applied, awaiting the owner's check |
 | 2.4 Player ratings from statistics, with a top-player list for a human check | Planned |
 | 2.5 A versioned game pack, and a new career that starts from it | Planned |
 | 2.6 A repeat import that leaves existing careers unchanged | Planned |
@@ -17,6 +17,7 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 
 - **Keys** live in two private files in the project folder, `api-sports-key.local` and `supabase-key.local`. Git ignores them; never print, commit or bundle them.
 - **Database:** Supabase project `BasketBallManager` (`kesxznybhotzduvcwiwm`, free plan). The schema is in `supabase/migrations/`; every table has row level security with no policies, so only the importer's secret key can read or write. The game never reads the database.
+- **Club identities:** `real-data/club-identities.csv` holds each club's display name, three-letter short name, country, city, arena, colours and a confidence (sure, likely or unknown). Unknown colours stay empty rather than guessed. `npm.cmd run data:identities` applies the file without any API request; every import also applies it. `tests/real-data-identities.test.js` keeps the file valid.
 - **Import:** `npm.cmd run data:import` (`scripts/real-data-import.mjs`). It matches clubs, players and competitions through their API-Sports IDs, so it can be rerun safely; finished games whose statistics are stored are not requested again. Each run is logged in `import_runs`; problems go to `data_quality_issues`.
 
 ## First import (13 November 2026)

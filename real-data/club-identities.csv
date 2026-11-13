@@ -1,0 +1,40 @@
+api_sports_id,display_name,short_name,country,city,arena,primary_colour,primary_hex,secondary_colour,secondary_hex,confidence,notes
+6496,Dubai Basketball,DUB,United Arab Emirates,Dubai,Coca-Cola Arena,,,,,unknown,API lists the country as "Dubai"; colours to fill
+26,LDLC ASVEL,ASV,France,Villeurbanne,LDLC Arena,green,#00843d,white,#ffffff,likely,
+16,AS Monaco,MON,Monaco,Monaco,Salle Gaston-Médecin,red,#e2001a,white,#ffffff,sure,Played in the EuroLeague 2025-26 only
+108,Paris Basketball,PRS,France,Paris,Adidas Arena,black,#111111,white,#ffffff,likely,Some games at Accor Arena
+519,Alba Berlin,ALB,Germany,Berlin,Uber Arena,yellow,#ffd200,blue,#003b8e,sure,
+520,Bamberg Baskets,BAM,Germany,Bamberg,Brose Arena,,,,,unknown,Colours to fill
+521,Basketball Löwen Braunschweig,BRA,Germany,Braunschweig,Volkswagen Halle,,,,,unknown,Colours to fill
+522,Bayern Munich,BAY,Germany,Munich,SAP Garden,red,#dc052d,white,#ffffff,sure,Former arena BMW Park
+524,Telekom Baskets Bonn,BON,Germany,Bonn,Telekom Dome,magenta,#e20074,white,#ffffff,sure,
+550,Niners Chemnitz,CHE,Germany,Chemnitz,Messe Chemnitz,,,,,unknown,Colours to fill
+526,Skyliners Frankfurt,FRA,Germany,Frankfurt,Süwag Energie Arena,,,,,unknown,Colours to fill
+529,Veolia Towers Hamburg,HAM,Germany,Hamburg,Inselpark Arena,,,,,unknown,Colours to fill
+552,MLP Academics Heidelberg,HEI,Germany,Heidelberg,SNP Dome,,,,,unknown,BBL 2025-26 only; colours to fill
+553,Science City Jena,JEN,Germany,Jena,Sparkassen-Arena,,,,,unknown,Colours to fill
+530,MHP Riesen Ludwigsburg,LUD,Germany,Ludwigsburg,MHPArena,,,,,unknown,Colours to fill
+532,EWE Baskets Oldenburg,OLD,Germany,Oldenburg,Große EWE Arena,blue,#0069b4,white,#ffffff,likely,
+560,Phoenix Hagen,HAG,Germany,Hagen,Ischelandhalle,,,,,unknown,BBL 2026-27 only; colours to fill
+561,Rostock Seawolves,ROS,Germany,Rostock,Stadthalle Rostock,,,,,unknown,Colours to fill
+2263,Syntainics MBC,MBC,Germany,Weißenfels,Stadthalle Weißenfels,,,,,unknown,Colours to fill
+563,Gladiators Trier,TRI,Germany,Trier,SWT Arena,,,,,unknown,Colours to fill
+533,ratiopharm Ulm,ULM,Germany,Neu-Ulm,ratiopharm arena,orange,#f39200,white,#ffffff,likely,
+534,RASTA Vechta,VEC,Germany,Vechta,RASTA Dome,,,,,unknown,Colours to fill
+5923,Würzburg Baskets,WUR,Germany,Würzburg,tectake Arena,,,,,unknown,Colours to fill
+1542,Olympiacos,OLY,Greece,Piraeus,Peace and Friendship Stadium,red,#c8102e,white,#ffffff,sure,
+614,Panathinaikos,PAO,Greece,Athens,OAKA Olympic Indoor Hall,green,#007a33,white,#ffffff,sure,
+682,Hapoel Tel Aviv,HTA,Israel,Tel Aviv,Drive in Arena,red,#d50032,white,#ffffff,sure,Some home games played abroad
+687,Maccabi Tel Aviv,MTA,Israel,Tel Aviv,Menora Mivtachim Arena,yellow,#ffd100,blue,#002b7f,sure,Some home games played abroad
+722,Olimpia Milano,MIL,Italy,Milan,Unipol Forum,red,#e31b23,white,#ffffff,sure,
+732,Virtus Bologna,VIR,Italy,Bologna,Virtus Arena,black,#111111,white,#ffffff,sure,Also plays at PalaDozza
+796,Žalgiris Kaunas,ZAL,Lithuania,Kaunas,Žalgirio Arena,green,#006a44,white,#ffffff,sure,
+1065,Crvena zvezda,CZV,Serbia,Belgrade,Aleksandar Nikolić Hall,red,#d71920,white,#ffffff,sure,Big games at Belgrade Arena
+1068,Partizan,PAR,Serbia,Belgrade,Belgrade Arena,black,#111111,white,#ffffff,sure,
+2329,FC Barcelona,BAR,Spain,Barcelona,Palau Blaugrana,blue,#004d98,garnet,#a50044,sure,
+2331,Baskonia,BKN,Spain,Vitoria-Gasteiz,Fernando Buesa Arena,navy blue,#002f6c,red,#d50032,likely,
+2338,Real Madrid,RMA,Spain,Madrid,Movistar Arena,white,#ffffff,purple,#3d195b,sure,
+2341,Valencia Basket,VAL,Spain,Valencia,Roig Arena,orange,#f37021,black,#111111,sure,Moved from Fuente de San Luis in 2025
+1263,Anadolu Efes,EFS,Turkey,Istanbul,Basketbol Gelişim Merkezi,navy blue,#002f6c,white,#ffffff,likely,
+1266,Beşiktaş,BJK,Turkey,Istanbul,BJK Akatlar Arena,black,#111111,white,#ffffff,sure,EuroLeague 2026-27
+1270,Fenerbahçe,FEN,Turkey,Istanbul,Ülker Sports and Event Hall,yellow,#ffed00,navy blue,#002d72,sure,

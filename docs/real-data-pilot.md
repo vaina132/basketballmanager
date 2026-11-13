@@ -11,7 +11,8 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 | 2.3 Club identities: city, arena and colours (hand-maintained, owner checks) | In progress: file applied, awaiting the owner's check |
 | 2.4 Player ratings from statistics, with a top-player list for a human check | Done (draft `2026.11-pilot`; owner's check of the top lists welcome) |
 | 2.5 Merge the provider's duplicate player listings | Done |
-| 2.6 A versioned game pack, and a new career that starts from it | Planned |
+| 2.6a A versioned, private game pack | Done |
+| 2.6b Friendly matches between real clubs from a loaded pack (exhibition) | Done |
 | 2.7 A repeat import that leaves existing careers unchanged | Planned |
 
 ## How it works
@@ -20,6 +21,7 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 - **Database:** Supabase project `BasketBallManager` (`kesxznybhotzduvcwiwm`, free plan). The schema is in `supabase/migrations/`; every table has row level security with no policies, so only the importer's secret key can read or write. The game never reads the database.
 - **Club identities:** `real-data/club-identities.csv` holds each club's display name, three-letter short name, country, city, arena, colours and a confidence (sure, likely or unknown). Unknown colours stay empty rather than guessed. `npm.cmd run data:identities` applies the file without any API request; every import also applies it. `tests/real-data-identities.test.js` keeps the file valid.
 - **Ratings:** `npm.cmd run data:ratings` (`scripts/real-data-ratings.mjs`, rules in `RATING_RULES`) rates every player with statistics into draft dataset version `2026.11-pilot` (`player_ratings`, with `method` and `estimated` per player) and writes a top-15 list per competition to `.local-data/real-data/ratings-report.md`. Season totals come from the `player_season_totals` view.
+- **Pack:** `npm.cmd run data:pack` (`scripts/real-data-pack.mjs`) builds `.local-data/real-data/packs/real-<version>.json`: the current season's competitions, clubs (with identities) and squads with game abilities, positions and estimated builds, plus source and a notice that the data is private. Checks run first (every club at least ten players, every ability 1-20, unique short names); a failed pack is not written. The file holds a SHA-256 fingerprint and the version is marked published in `dataset_versions`. **Versions are immutable:** rebuilding one with different contents is refused, and the ratings script refuses to change a published version, so newer data always gets a new version. Real player data stays on this computer (Git ignores `.local-data/`) and must not be uploaded or deployed until its rights are cleared (owner's plan, section 11).
 - **Import:** `npm.cmd run data:import` (`scripts/real-data-import.mjs`). It matches clubs, players and competitions through their API-Sports IDs, so it can be rerun safely; finished games whose statistics are stored are not requested again. Each run is logged in `import_runs`; problems go to `data_quality_issues`.
 
 ## First import (13 November 2026)
@@ -40,6 +42,16 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 **Free-throw problem found and handled:** the provider's EuroLeague free throws are unreliable. In 2025-26, about 1,330 of 8,520 lines have no free throws although the points need them; in 2026-27, players "made" more free throws than they attempted (116% overall; 91% even on lines whose points add up). The `player_season_totals` view now also adds up free throws over consistent lines only, and the ratings ignore a competition season whose league-wide free-throw rate is outside 65-85% (currently only EuroLeague 2026-27). BBL data is clean (about 0.5% of lines inconsistent). Suggested improvement: take EuroLeague and EuroCup players' free throws, steals, blocks, turnovers and fouls from the official EuroLeague data (free, already used locally) once its terms are checked.
 
 **Open calibration question:** the top BBL players (about 14.5 average) sit close to EuroLeague starters (about 14-16). The factor rests on 22 Bayern players; with the other domestic leagues imported, many more players will play both competitions and the factor can be re-measured.
+
+## Real-club friendlies (step 2.6b)
+
+In an exhibition, **Match setup › Real-club friendly…** opens a window (`src/ui/RealClubFriendly.tsx`) that loads a pack file from this computer, checks it (`parseDataPack` in `src/world/data-pack.ts`: the SHA-256 fingerprint must match the contents, every player and club must be complete) and lists its clubs by competition. **Start** plays the friendly on the normal match screen with the chosen replay code. Each side fields its twelve best-rated players (`matchdayTeam`: players without statistics last, a starting five covering PG, SG, SF, PF and C where possible, shirt numbers kept unless missing or repeated); players are drawn as neutral figures, never with a guessed appearance, and clubs without verified colours appear in grey. The pack stays in browser memory only and is never uploaded; the sidebar reads "Real clubs · private pack". Tests: `tests/data-pack.test.js` (3). Headless Edge with the real pack: a changed copy is refused with a plain explanation; the real pack loads (37 clubs, 595 players); Fenerbahçe vs Real Madrid starts with real players; window and match screen fit 1440 and 390 px; no page errors. Verified: typecheck, build, full serial suite 131 files / 2,101 tests (475 s).
+
+**Scoring finding:** simulated games score low for every club: about 57 points per team with real clubs and 62 with the fictional ones (real basketball: about 80). The real ratings are therefore on the engine's scale; the engine itself produces too few shots and free throws per game. Match calibration is sprint 4.
+
+## First pack (step 2.6a, 13 November 2026)
+
+`2026.11-pilot`: 2 competitions (BBL and EuroLeague 2026-27), 37 clubs (Bayern in both), 595 players in their latest squads (12-26 per club). 19 squad members without statistics yet carry estimated below-average abilities (9); 14 clubs still lack verified colours. Example: Shane Larkin, Fenerbahçe, PG, three-point 16, free throws 16, passing 15 (height and weight estimated).
 
 ## Duplicate players (step 2.5)
 

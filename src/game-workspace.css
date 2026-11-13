@@ -43,6 +43,7 @@
 .simulation-options label { font-size: 11px; color: var(--text); }
 .simulation-options input { width: 100%; font-size: 12px; }
 .simulation-options p { grid-column: 1 / -1; font-size: 11px; line-height: 1.5; }
+.simulation-options .real-friendly-open { grid-column: 1 / -1; justify-self: start; font-size: 12px; }
 /* A dense roster with a selected-player inspector. */
 .game-shell .squad-summary { padding: 10px 14px; margin-bottom: 10px; }
 .game-shell .squad-summary h2 { font-size: 15px; }

@@ -1,0 +1,102 @@
+import type { Player, PlayerAttributes, Position, Team } from '../domain/types';
+
+/**
+ * Real-data game packs (scripts/real-data-pack.mjs). A pack is a private file loaded from the player's own computer;
+ * it never ships with the game. This pilot uses packs for friendly matches between real clubs.
+ */
+export const DATA_PACK_FORMAT = 'basketball-manager-data-pack';
+export const MAX_DATA_PACK_BYTES = 20 * 1024 * 1024;
+/** Real players are drawn as neutral figures, never with a guessed appearance. */
+export const NEUTRAL_APPEARANCE = Object.freeze({ skinTone: '#9aa0a8', hairColor: '#3b3f45' });
+/** Clubs whose colours are not yet verified use a neutral colour. */
+export const NEUTRAL_CLUB_COLOR = '#6b7280';
+export const MATCHDAY_SQUAD = 12;
+
+export interface DataPackPlayer {
+  id: string; name: string; clubId: string; number: number | null; position: Position; nationality: string | null; age: number | null;
+  heightCm: number; weightKg: number; attributes: PlayerAttributes; estimated: string[];
+}
+export interface DataPackClub {
+  id: string; name: string; shortName: string; country: string | null; city: string | null; arena: string | null;
+  color: string | null; secondaryColor: string | null; identitySource: string | null; playerIds: string[];
+}
+export interface DataPackCompetition { id: string; name: string; country: string | null; tier: number; kind: 'domestic' | 'european'; season: string; clubIds: string[] }
+export interface DataPack {
+  format: typeof DATA_PACK_FORMAT; formatVersion: 1; version: string; season: string; source: Record<string, unknown>; notice: string;
+  competitions: DataPackCompetition[]; clubs: DataPackClub[]; players: DataPackPlayer[];
+}
+
+const POSITIONS: readonly Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
+const ATTRIBUTES: readonly (keyof PlayerAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
+const ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/u;
+const COLOR = /^#[0-9a-f]{6}$/u;
+
+function fail(reason: string): never { throw new Error(`This data pack cannot be used: ${reason}.`); }
+const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+const text = (value: unknown, label: string, max = 120): string => { if (typeof value !== 'string' || !value.trim() || value.length > max) fail(`${label} is missing or too long`); return value; };
+
+async function sha256(value: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** Reads a pack file, refusing it unless its fingerprint matches its contents and every club and player is complete. */
+export async function parseDataPack(fileText: string): Promise<DataPack> {
+  if (fileText.length > MAX_DATA_PACK_BYTES) fail('the file is larger than 20 MB');
+  let file: unknown;
+  try { file = JSON.parse(fileText); } catch { fail('it is not a data pack file'); }
+  if (!isObject(file) || typeof file.checksum !== 'string' || !isObject(file.pack)) fail('it is not a data pack file');
+  const pack = file.pack as Record<string, unknown>;
+  if (pack.format !== DATA_PACK_FORMAT || pack.formatVersion !== 1) fail('it uses an unsupported pack format');
+  if (await sha256(JSON.stringify(pack)) !== file.checksum) fail('its contents do not match its fingerprint (the file was changed or damaged)');
+  text(pack.version, 'the version'); text(pack.season, 'the season');
+  if (!Array.isArray(pack.clubs) || !Array.isArray(pack.players) || !Array.isArray(pack.competitions)) fail('clubs, players or competitions are missing');
+  const players = new Map<string, DataPackPlayer>();
+  for (const raw of pack.players) {
+    if (!isObject(raw) || typeof raw.id !== 'string' || !ID.test(raw.id) || players.has(raw.id)) fail('a player has a missing or repeated identity');
+    text(raw.name, 'a player name');
+    if (!POSITIONS.includes(raw.position as Position)) fail(`${raw.name} has an unknown position`);
+    if (!isObject(raw.attributes) || ATTRIBUTES.some(key => !Number.isInteger((raw.attributes as Record<string, unknown>)[key]) || ((raw.attributes as Record<string, number>)[key]! < 1 || (raw.attributes as Record<string, number>)[key]! > 20))) fail(`${raw.name} has abilities outside 1-20`);
+    if (!Number.isInteger(raw.heightCm) || (raw.heightCm as number) < 150 || (raw.heightCm as number) > 240 || !Number.isInteger(raw.weightKg) || (raw.weightKg as number) < 50 || (raw.weightKg as number) > 180) fail(`${raw.name} has an impossible height or weight`);
+    players.set(raw.id, raw as unknown as DataPackPlayer);
+  }
+  const clubIds = new Set<string>();
+  for (const raw of pack.clubs) {
+    if (!isObject(raw) || typeof raw.id !== 'string' || !ID.test(raw.id) || clubIds.has(raw.id)) fail('a club has a missing or repeated identity');
+    text(raw.name, 'a club name'); text(raw.shortName, 'a club short name', 12);
+    if (raw.color !== null && (typeof raw.color !== 'string' || !COLOR.test(raw.color))) fail(`${raw.name} has an invalid colour`);
+    if (!Array.isArray(raw.playerIds) || raw.playerIds.length < 5 || raw.playerIds.some(id => !players.has(id as string) || players.get(id as string)!.clubId !== raw.id)) fail(`${raw.name} has an incomplete squad`);
+    clubIds.add(raw.id);
+  }
+  for (const raw of pack.competitions) if (!isObject(raw) || !Array.isArray(raw.clubIds) || raw.clubIds.some(id => !clubIds.has(id as string))) fail('a competition lists an unknown club');
+  return pack as unknown as DataPack;
+}
+
+const average = (player: DataPackPlayer) => ATTRIBUTES.reduce((sum, key) => sum + player.attributes[key], 0) / ATTRIBUTES.length;
+
+/**
+ * A club's matchday squad: its twelve best-rated players (those without any statistics last), with a starting five
+ * covering the five positions where possible. Shirt numbers stay unless missing or repeated.
+ */
+export function matchdayTeam(pack: DataPack, clubId: string, size = MATCHDAY_SQUAD): Team {
+  const club = pack.clubs.find(item => item.id === clubId);
+  if (!club) throw new Error('Choose a club from the loaded data pack.');
+  const byId = new Map(pack.players.map(player => [player.id, player]));
+  const ranked = club.playerIds.map(id => byId.get(id)!).sort((a, b) => Number(a.estimated.includes('all-abilities')) - Number(b.estimated.includes('all-abilities')) || average(b) - average(a) || a.name.localeCompare(b.name));
+  const chosen = ranked.slice(0, Math.min(size, ranked.length));
+  const starters: DataPackPlayer[] = [];
+  for (const position of POSITIONS) {
+    const best = chosen.find(player => player.position === position && !starters.includes(player));
+    if (best) starters.push(best);
+  }
+  for (const player of chosen) if (starters.length < 5 && !starters.includes(player)) starters.push(player);
+  const ordered = [...starters, ...chosen.filter(player => !starters.includes(player))];
+  const used = new Set<number>();
+  const numbered = ordered.map(player => {
+    let number = player.number !== null && player.number >= 0 && player.number <= 99 && !used.has(player.number) ? player.number : -1;
+    if (number < 0) { number = 0; while (used.has(number)) number += 1; }
+    used.add(number);
+    return Object.freeze({ id: player.id, name: player.name, number, position: player.position, heightCm: player.heightCm, weightKg: player.weightKg, ...NEUTRAL_APPEARANCE, attributes: Object.freeze({ ...player.attributes }) }) satisfies Player;
+  });
+  return Object.freeze({ id: club.id, name: club.name, shortName: club.shortName, color: club.color ?? NEUTRAL_CLUB_COLOR, players: Object.freeze(numbered) });
+}

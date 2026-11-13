@@ -170,6 +170,9 @@ async function main() {
   const factor = leagueFactor(rows), freeThrows = trustedFreeThrowSeasons(rows);
   const ratings = computeRatings(rows, players, factor.factor, freeThrows);
   const ignored = [...freeThrows].filter(([, value]) => !value.trusted).map(([key, value]) => `${key} (${Math.round(value.rate * 100)}%)`);
+  // A published version is immutable: its pack was built from these ratings.
+  const [existing] = await db('GET', `dataset_versions?id=eq.${encodeURIComponent(VERSION)}&select=status`);
+  if (existing?.status === 'published') throw new Error(`Version ${VERSION} is published and cannot change; rate into a new version, for example --version ${VERSION}b.`);
   const [run] = await db('GET', 'import_runs?status=eq.succeeded&order=id.desc&limit=1&select=id');
   await write('dataset_versions', [{ id: VERSION, status: 'draft', source_run_id: run?.id ?? null, notes: `Pilot ratings (rating-1); domestic factor ${factor.factor} (${factor.measured ? `measured from ${factor.players} players in both competitions` : 'default'}); free throws ignored for ${ignored.join(', ') || 'none'}` }], { onConflict: 'id' });
   await db('DELETE', `player_ratings?dataset_version_id=eq.${encodeURIComponent(VERSION)}`);

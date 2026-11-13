@@ -12,11 +12,12 @@ import { acceptSponsorshipOffer, declineSponsorshipOffer, enableCommercial, requ
 import { getDevelopmentSponsor } from './data/development-sponsors'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import type { MatchState, Player, Side } from './domain/types'
+import type { MatchState, Player, Side, Team } from './domain/types'
 import type { ManagerProfile } from './domain/manager'
 import { managerAge, setManagerProfile } from './world/manager'
 import type { CareerSetup } from './ui/CareerStart'
-import { createMatch, isPlayerEligible, simulateToEnd, simulateToQuarterEnd, stepMatch } from './engine/match'
+import { createFixtureMatch, createMatch, isPlayerEligible, simulateToEnd, simulateToQuarterEnd, stepMatch } from './engine/match'
+import type { DataPack } from './world/data-pack'
 import { loadLocalMatch, MAX_SAVE_BYTES, parseMatch, saveLocalMatch, serializeMatch } from './storage/match-storage'
 import { Avatar } from './ui/Avatar'
 import { Icon } from './ui/Icon'
@@ -53,6 +54,7 @@ import { readSeasonJournal, SeasonSaveConflictError } from './storage/season-ind
 import type { CheckpointReason } from './storage/season-indexed-db'
 import { CareerSaveHistory } from './ui/CareerSaveHistory'
 import { SeasonEndChoice } from './ui/SeasonEndChoice'
+const RealClubFriendly = lazy(() => import('./ui/RealClubFriendly').then(module => ({ default: module.RealClubFriendly })))
 import { SeasonWorkspace } from './ui/SeasonWorkspace'
 import { TrainingWorkspace } from './ui/TrainingWorkspace'
 import { SquadPerformance } from './ui/SquadPerformance'
@@ -120,6 +122,9 @@ export default function App() {
   const [seasonOperation, setSeasonOperation] = useState<'round' | 'rollover' | 'market' | 'preview'>('round')
   // The board's season-end decision and job offers, shown before the final matchday is committed.
   const [seasonEnd, setSeasonEnd] = useState<SeasonEndOutlook | null>(null)
+  // A private real-data pack loaded from this computer for friendlies; it stays in memory only.
+  const [realPack, setRealPack] = useState<DataPack | null>(null)
+  const [friendlyOpen, setFriendlyOpen] = useState(false)
   const [leavingSeason, setLeavingSeason] = useState(false)
   const seasonWorker = useRef<Worker | null>(null)
   const seasonJob = useRef(0)
@@ -479,6 +484,19 @@ export default function App() {
     }
     install({ kind: 'exhibition', match: createMatch(seed) }); if (entryView) navigate('match'); setNotice({ message: current.kind === 'season' ? 'Season saved. New exhibition ready.' : 'New exhibition ready.' }); if (setupRef.current) setupRef.current.open = false
   }
+  /** A friendly between two real clubs from the loaded pack, played on the normal match screen with the chosen replay code. */
+  function startFriendly(home: Team, away: Team, pack: DataPack) {
+    if (seasonWorker.current || persistenceBusy.current || sessionRef.current.kind === 'season') return
+    const seed = Number(seedInput)
+    if (seedInput.trim() === '' || !Number.isSafeInteger(seed) || seed < 0 || seed > 4294967295) { setNotice({ message: 'Choose a whole-number replay code between 0 and 4,294,967,295.', error: true }); return }
+    try {
+      replacementRequest.current += 1
+      setPlaying(false); settlePlayback()
+      install({ kind: 'exhibition', match: createFixtureMatch(seed, home, away) })
+      setFriendlyOpen(false); if (setupRef.current) setupRef.current.open = false
+      navigate('match'); setNotice({ message: `Friendly ready: ${home.name} vs ${away.name} (data pack ${pack.version}).` })
+    } catch (error) { setNotice({ message: messageOf(error), error: true }) }
+  }
   function startSeason({ seed, clubId, injuryMode, manager }: CareerSetup) {
     if (seasonWorker.current || persistenceBusy.current) return
     try {
@@ -578,6 +596,7 @@ export default function App() {
   const careerSummary = (state: SeasonState) => ({ managerName: state.manager?.name ?? 'Manager profile not set', clubName: state.clubs.find(club => club.id === state.managedClubId)!.name, date: state.date })
   const overlays = <>
     <input ref={importRef} type="file" accept=".json,application/json" onChange={importSave} className="visually-hidden" aria-label="Import game save" />
+    {friendlyOpen && !season && <Suspense fallback={null}><RealClubFriendly pack={realPack} busy={saving || advancing} onPackLoaded={setRealPack} onStart={startFriendly} onClose={() => setFriendlyOpen(false)} /></Suspense>}
     {seasonEnd && season && <SeasonEndChoice season={season} outlook={seasonEnd} busy={advancing || saving} onChoose={clubId => { setSeasonEnd(null); processSeason('round', { decision: clubId ? { moveTo: clubId } : undefined }) }} onClose={() => setSeasonEnd(null)} />}
     {saveHistoryOpen && <CareerSaveHistory entries={saveHistory?.entries ?? []} loading={historyLoading} error={historyError} busy={saving} onRefresh={() => { void refreshSaveHistory() }} onRestore={revision => { void restoreCheckpoint(revision) }} onClose={closeSaveHistory} />}
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
@@ -592,7 +611,7 @@ export default function App() {
       <nav aria-label="Main navigation" className="main-nav">
         {([{ id: 'home', label: 'Overview', icon: 'home' }, ...(season ? [{ id: 'inbox', label: 'Inbox', icon: 'mail' }] : []), { id: 'squad', label: 'Squad', icon: 'people' }, ...(season ? [{ id: 'academy', label: 'Academy', icon: 'people' }, { id: 'training', label: 'Training', icon: 'training' }, { id: 'medical', label: 'Medical', icon: 'medical' }, { id: 'staff', label: 'Staff', icon: 'staff' }, { id: 'scouting', label: 'Scouting', icon: 'search' }, { id: 'transfers', label: 'Transfers', icon: 'swap' }, { id: 'club', label: 'Club', icon: 'building' }] : []), { id: 'match', label: 'Match center', icon: 'court' }, { id: 'season', label: 'Competitions', icon: 'ball' }] as { id: Page; label: string; icon: IconName }[]).map(item => <button key={item.id} className={`nav-item ${page === item.id ? 'active' : ''}`} onClick={() => navigate(item.id)} disabled={saving || leavingSeason} aria-label={item.label} title={item.label} aria-current={page === item.id ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span>{page === item.id && <span className="nav-current-dot" />}</button>)}
       </nav>
-      <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />{season ? 'Season' : 'Exhibition'}</div><p>Fictional squads</p>{season ? <button id="manager-profile" className="manager manager-profile-button" onClick={openManagerProfile} disabled={saving || advancing} aria-label={season.manager ? 'Edit manager profile' : 'Set manager profile'}><span className="manager-avatar">{season.manager ? season.manager.name.split(/\s+/u).map(part => Array.from(part)[0]).slice(0, 2).join('').toUpperCase() : 'YOU'}</span><span className="manager-identity"><strong data-manager-name>{season.manager?.name ?? 'Set manager profile'}</strong><small>Head coach</small>{season.manager && <small data-manager-details>{managerAge(season.manager, season.date)} years · {season.manager.nationality}</small>}</span></button> : <div className="manager"><span className="manager-avatar">YOU</span><div>Head coach<small>{managedTeam.name}</small></div></div>}</div>
+      <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />{season ? 'Season' : 'Exhibition'}</div><p>{!season && match.home.id.startsWith('club-') ? 'Real clubs · private pack' : 'Fictional squads'}</p>{season ? <button id="manager-profile" className="manager manager-profile-button" onClick={openManagerProfile} disabled={saving || advancing} aria-label={season.manager ? 'Edit manager profile' : 'Set manager profile'}><span className="manager-avatar">{season.manager ? season.manager.name.split(/\s+/u).map(part => Array.from(part)[0]).slice(0, 2).join('').toUpperCase() : 'YOU'}</span><span className="manager-identity"><strong data-manager-name>{season.manager?.name ?? 'Set manager profile'}</strong><small>Head coach</small>{season.manager && <small data-manager-details>{managerAge(season.manager, season.date)} years · {season.manager.nationality}</small>}</span></button> : <div className="manager"><span className="manager-avatar">YOU</span><div>Head coach<small>{managedTeam.name}</small></div></div>}</div>
     </aside>
 
     <div className="main-shell">
@@ -658,7 +677,7 @@ export default function App() {
           </>}
         </>}
 
-        <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />{season ? 'Save & open exhibition' : 'New exhibition'}</button>{season && <button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button>}<details ref={setupRef} className="simulation-options" hidden={!!season}><summary>Match setup</summary><div className="seed-controls"><label htmlFor="match-seed">Replay code</label><input id="match-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-label="Exhibition replay code" /><p>Same code and choices repeat the same match. This does not change difficulty.</p></div></details></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
+        <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />{season ? 'Save & open exhibition' : 'New exhibition'}</button>{season && <button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button>}<details ref={setupRef} className="simulation-options" hidden={!!season}><summary>Match setup</summary><div className="seed-controls"><label htmlFor="match-seed">Replay code</label><input id="match-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-label="Exhibition replay code" /><p>Same code and choices repeat the same match. This does not change difficulty.</p><button id="open-real-friendly" className="text-button real-friendly-open" onClick={() => setFriendlyOpen(true)} disabled={saving || advancing}>Real-club friendly…</button></div></details></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
         </Suspense>
       </main>
     </div>

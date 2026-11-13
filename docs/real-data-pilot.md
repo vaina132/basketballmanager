@@ -10,7 +10,7 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 | 2.2 Importer: German BBL and EuroLeague, 2025-26 and 2026-27 | Done |
 | 2.3 Club identities: city, arena and colours (hand-maintained, owner checks) | In progress: file applied, awaiting the owner's check |
 | 2.4 Player ratings from statistics, with a top-player list for a human check | Done (draft `2026.11-pilot`; owner's check of the top lists welcome) |
-| 2.5 Merge the provider's duplicate player listings | Planned |
+| 2.5 Merge the provider's duplicate player listings | Done |
 | 2.6 A versioned game pack, and a new career that starts from it | Planned |
 | 2.7 A repeat import that leaves existing careers unchanged | Planned |
 
@@ -40,5 +40,9 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 **Free-throw problem found and handled:** the provider's EuroLeague free throws are unreliable. In 2025-26, about 1,330 of 8,520 lines have no free throws although the points need them; in 2026-27, players "made" more free throws than they attempted (116% overall; 91% even on lines whose points add up). The `player_season_totals` view now also adds up free throws over consistent lines only, and the ratings ignore a competition season whose league-wide free-throw rate is outside 65-85% (currently only EuroLeague 2026-27). BBL data is clean (about 0.5% of lines inconsistent). Suggested improvement: take EuroLeague and EuroCup players' free throws, steals, blocks, turnovers and fouls from the official EuroLeague data (free, already used locally) once its terms are checked.
 
 **Open calibration question:** the top BBL players (about 14.5 average) sit close to EuroLeague starters (about 14-16). The factor rests on 22 Bayern players; with the other domestic leagues imported, many more players will play both competitions and the factor can be re-measured.
+
+## Duplicate players (step 2.5)
+
+`merge_duplicate_players()` (migration `20261113140000_merge_duplicate_players.sql`) merges two records only when the initials-only names match exactly, both are in the same club's squad in the same season, and they never appear in the same game. The kept record (more box-score lines, then the older) receives the provider IDs, box scores and squad places; the duplicate is marked `merged_into` rather than deleted (the Supabase connector refuses migrations that delete rows), and ratings and packs ignore marked records. Every merge is logged in `player_merges`. The importer runs it after every import, and repeated provider IDs of a merged player are collapsed before saving. First run: E. Colbert and K. Dye (Würzburg) merged; the two M. Weathers records (Heidelberg) were kept apart because they appear in the same game eleven times; the two J. Wright records belong to different clubs. 835 players are now rated.
 
 **Data-quality findings** (latest run): 339 squad entries with incomplete provider details (initials only, or no nationality or position), 47 names whose order should be checked, 9 box-score lines placed by squad and 2 skipped, 3 games whose reported arena is a person. The provider lists three players twice under different IDs in the same squad (all initials-only: E. Colbert and K. Dye at Würzburg, M. Weathers at Heidelberg); they need merging before ratings. Two "J. Wright" entries at Bamberg and Bonn are probably different players.

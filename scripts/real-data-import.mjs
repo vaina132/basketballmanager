@@ -128,7 +128,8 @@ async function main() {
         counts.playersAdded += saved.length;
       }
       // Newer squad observations refresh the provider facts of known players.
-      const known = entries.filter(entry => entry.country !== undefined && !fresh.includes(entry));
+      // Merged players have several provider IDs; one row per player keeps the batch valid.
+      const known = [...new Map(entries.filter(entry => entry.country !== undefined && !fresh.includes(entry)).map(entry => [playerIds.get(String(entry.id)), entry])).values()];
       if (known.length) await write('players', known.map(entry => ({ id: playerIds.get(String(entry.id)), full_name: displayName(entry.name), provider_name: entry.name, nationality: entry.country ?? null, position: entry.position ?? null, age_observed: entry.age ?? null, age_observed_on: entry.age ? TODAY : null, updated_at: new Date().toISOString() })), { onConflict: 'id' });
     }
 
@@ -161,7 +162,8 @@ async function main() {
             const number = Number.parseInt(entry.number, 10);
             return { season_id: season.id, club_id: clubId, player_id: playerId, shirt_number: Number.isInteger(number) && number >= 0 && number <= 99 ? number : null, first_seen_on: existing.get(`${clubId}/${playerId}`) ?? TODAY, last_seen_on: TODAY, source: PROVIDER };
           });
-          await write('roster_memberships', memberships, { onConflict: 'season_id,club_id,player_id' });
+          const unique = [...new Map(memberships.map(row => [row.player_id, row])).values()];
+          await write('roster_memberships', unique, { onConflict: 'season_id,club_id,player_id' });
           for (const membership of memberships) squadClub.set(membership.player_id, clubId);
           counts.memberships += memberships.length;
         }
@@ -206,7 +208,7 @@ async function main() {
             rebounds: line.rebounds?.total ?? null, assists: line.assists ?? null, points: line.points ?? null,
             }];
           });
-          await write('player_game_stats', rows, { onConflict: 'game_id,player_id' });
+          await write('player_game_stats', [...new Map(rows.map(row => [`${row.game_id}/${row.player_id}`, row])).values()], { onConflict: 'game_id,player_id' });
           for (const id of ids) {
             const count = rows.filter(row => row.game_id === byProviderId.get(id).id).length;
             if (!count) issue('game', id, 'Finished game without player statistics');
@@ -217,6 +219,9 @@ async function main() {
         console.log(`${competition.name} ${label}: ${teams.length} clubs, ${games.length} games, ${pending.length} new box scores (${requests} requests so far)`);
       }
     }
+    // Players the provider lists twice in one squad are merged (supabase/migrations/*merge_duplicate_players.sql).
+    const merged = await db('POST', 'rpc/merge_duplicate_players', {});
+    if (merged) console.log(`Merged ${merged} duplicate player listing(s); see player_merges.`);
     // Hand-maintained names, cities, arenas and colours (real-data/club-identities.csv) are applied after every import.
     const identities = await applyIdentities({ selectAll, write, provider: PROVIDER });
     for (const name of identities.unmatched) issue('club', name, 'Listed in club-identities.csv but not imported');

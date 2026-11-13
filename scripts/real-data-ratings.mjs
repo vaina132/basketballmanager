@@ -165,7 +165,8 @@ async function main() {
   const { databaseHelpers } = await import('./real-data-import.mjs');
   const { db, selectAll, write } = await databaseHelpers();
   const rows = await selectAll('player_season_totals?select=*');
-  const players = await selectAll('players?select=id,full_name,position,age_observed');
+  // Records merged into another player (provider duplicates) are not rated.
+  const players = await selectAll('players?select=id,full_name,position,age_observed&merged_into=is.null');
   const factor = leagueFactor(rows), freeThrows = trustedFreeThrowSeasons(rows);
   const ratings = computeRatings(rows, players, factor.factor, freeThrows);
   const ignored = [...freeThrows].filter(([, value]) => !value.trusted).map(([key, value]) => `${key} (${Math.round(value.rate * 100)}%)`);

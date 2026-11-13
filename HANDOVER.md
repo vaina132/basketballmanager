@@ -64,6 +64,29 @@ Step notes:
 - **7.8 Level 7 acceptance:** `tests/level7-acceptance.test.ts` (4) checks the plan's four acceptance criteria on a seed-3 all-automatic career that is dismissed after season 1 and continues into season 3: overpricing lowers crowd and income beyond the sell-out price and the automatic price maximizes revenue; sponsor payments stay within agreements, board capital immediately precedes its upgrade and stays within owner capital and the project cost (plus the documented EUR 150,000 cushion for automatic requests, rule from 7.2); every construction start is covered by cash and automatic decisions are reported (Inbox, ledger); the world, squads and history survive the dismissal and the save validates. A five-season health run on seeds 3, 7 and 227 is summarized in `docs/implementation-status.md#level-7-acceptance-13-november-2026`. The first draft of the test assumed board capital never exceeds the upgrade cost; automatic requests include the cushion by the approved rule, so the test now checks the rule as written. Remaining Level 7 scope for later: project financing and loans, further president traits, contract-future requests, unemployed seasons and the other suggestions in the 7.5c note. Verified: typecheck, build, full serial suite 126 files / 2,088 tests (564 s).
 - **Remaining long-career cost (not fixed in P3):** validation grows faster than career length (21 seasons: about 7 s per save, now in the background while save-sensitive buttons wait). Profiles attribute about 31% to the academy history replay (`getYouthPlayerStatus`, `processAcademyWeek`) and 24% to the relationship replay, where `getPlayerRelationship` → `gamesFor` rescans every fixture of every season for each player at each preparation. Caching those needs care because some world functions mutate shallow copies; treat it as a dedicated performance step before release.
 
+## Saved for later: ideas the owner wants built
+
+The owner considers these essential (13 November 2026). They were left out of Level 7 only to keep each step small. Include them when planning the next levels, and propose where each fits before building it. The reasons and technical notes are in the step notes above and in `docs/decisions.md`.
+
+Career and board:
+- **Unemployed seasons:** after a dismissal, the manager can stay out of work, watch the league continue and wait for offers. The design documents disagree on whether this should exist, so confirm with the owner first.
+- **Protected first season** at a new club: no dismissal at the end of a manager's first season there.
+- **Fresh board confidence for a new coach**, instead of taking over the previous coach's rating.
+- **Mid-season dismissals and resignations**: today, boards decide only at the season end.
+- **More president personalities**: patience (how quickly a board dismisses), ambition and interference, beside today's generosity.
+- **Board verdicts affecting the player salary budget**: today they set only the staff budget and owner capital.
+- **Other board objectives**: youth development and club culture, beside results and finances.
+
+Players and media:
+- **Players asking about new contracts** when their deals are running out (deferred in 7.4 because it needs its own save-check design).
+- **Richer press topics**: rivalries, transfers and board verdicts, plus a media reputation.
+- **Rivalries that grow from results**: new fictional rivalries after repeated close games, plus rivalry press questions.
+
+Club business and facilities:
+- **Loans and other financing** for building projects, and leases.
+- **More facility types**: medical and scouting facilities, and repair projects for worn facilities.
+- **More commercial deals**: ending a sponsor deal early, and other deals such as arena naming rights.
+
 ## Current state and stopping point
 
 The latest completed feature is **press conferences and the Inbox (Level 7 step 7.4)** on `main`, after board season verdicts (7.3), board funding requests and presidents (7.2) and Club > Main sponsor (7.1); see the step notes above. Rivalries (7.6) and facility upkeep (7.7) are also done; Optional dismissal and job changes (7.5, in three parts) are done too, and **Level 7 passed its acceptance check (7.8) on 13 November 2026**. Per the working agreement, work stops here for the owner's Level 7 summary; before starting another level, report on it (state, gaps, steps) and wait for approval. Before Level 7 began, the latest feature was **Club > Board expectations and confidence** (`2b3fad5`), and the original handover cleanup is `dff4479`. The sections below describe the state at that original handover unless a step note above says otherwise.

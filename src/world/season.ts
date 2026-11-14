@@ -10,6 +10,7 @@ import { createRelationships, enableRelationships, automateRelationships, prepar
 import { createFacilities, enableBoardFunding, enableFacilities, enableFacilityMaintenance, processFacilityProjects, automateFacilities } from './facilities';
 import type { ArchivedFixture, ClubPlan, FixtureResult, SeasonFixture, SeasonState, Standing } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
+import { archiveFinancialHistory } from './finance-archives';
 import type { InjuryMode, MatchState, Side, Team } from '../domain/types';
 import type { ManagerProfile } from '../domain/manager';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-league';
@@ -457,6 +458,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
     })) },
     coaching: { ...state.coaching, contracts: [] },
   };
+  next = archiveFinancialHistory(next);
   next = processFacilityProjects(next);
   next = prepareAcademySeason(next);
   next = prepareYouthSeason(next);

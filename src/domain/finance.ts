@@ -41,7 +41,22 @@ export interface SeasonFinance {
   roundPrices: Record<string, number>;
   /** Present after facilities activation; prepared seats stay fixed through that matchday. */
   roundCapacities?: Record<string, number>;
+  /** Active tail. Use the logical ledger helpers when reading transactions or writing absolute anchors. */
   ledger: FinanceEntry[];
+  /** Lossless completed-season prefixes; absent on careers without archived finances. */
+  archives?: FinanceArchiveBlock[];
+}
+
+export type FinanceArchiveDetails = Omit<FinanceEntry, 'id' | 'clubId' | 'seasonNumber' | 'round' | 'kind' | 'amount' | 'sourceId' | 'ticket' | 'coach' | 'payroll'> &
+  Partial<Pick<FinanceEntry, 'ticket' | 'coach' | 'payroll'>>;
+/** Null ticket/coach/payroll fields are implicit; every non-null and optional payload is retained. */
+export type FinanceArchiveRow = [clubId: string, round: number, kind: FinanceEntry['kind'], amount: number, sourceId: string, details: FinanceArchiveDetails];
+export interface FinanceArchiveBlock {
+  model: 'finance-archive-1';
+  seasonNumber: number;
+  /** Absolute zero-based position of the first row. IDs remain finance-(position + 1). */
+  firstIndex: number;
+  rows: FinanceArchiveRow[];
 }
 
 export interface FinanceBalance { cash: number; unpaid: number }

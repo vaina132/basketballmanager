@@ -1,3 +1,4 @@
+import { financeLedgerSlice } from '../src/world/finance-ledger';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { FinanceEntry } from '../src/domain/finance';
 import type { SeasonState } from '../src/domain/season';
@@ -91,10 +92,10 @@ describe('authored season wages and payroll activation', () => {
     expect(stepMatch(state.activeMatch)).toEqual(stepMatch(original.activeMatch));
     expect(original).toEqual(before);
     const next = advanceSeason(finish(state));
-    expect(next.finance.ledger.filter(entry => entry.payroll?.type === 'installment')).toHaveLength(6);
-    expect(next.finance.ledger.filter(entry => entry.payroll).every(entry => entry.round >= 4)).toBe(true);
-    expect(next.finance.ledger.find(entry => entry.payroll?.type === 'installment' && entry.clubId === otherId)?.payroll?.items).toHaveLength(10);
-    expect(next.finance.ledger.filter(entry => entry.payroll?.type === 'prepayment').every(entry => entry.round === 5)).toBe(true);
+    expect(financeLedgerSlice(next.finance).filter(entry => entry.payroll?.type === 'installment')).toHaveLength(6);
+    expect(financeLedgerSlice(next.finance).filter(entry => entry.payroll).every(entry => entry.round >= 4)).toBe(true);
+    expect(financeLedgerSlice(next.finance).find(entry => entry.payroll?.type === 'installment' && entry.clubId === otherId)?.payroll?.items).toHaveLength(10);
+    expect(financeLedgerSlice(next.finance).filter(entry => entry.payroll?.type === 'prepayment').every(entry => entry.round === 5)).toBe(true);
   });
 });
 
@@ -108,7 +109,7 @@ describe('discounted settlement and protected wage commitments', () => {
     expect(row).toMatchObject({ prepaid: true, futureCommitted: 0, nextInstallment: 0, charged: getSeasonWage(playerId) - discount, savings: discount });
     expect(getFinanceBalance(next.finance, clubId).cash).toBe(getFinanceBalance(state.finance, clubId).cash - quote.amount);
     expect(getPayrollReserve(next, clubId)).toBe(quote.otherCommitments);
-    expect(next.finance.ledger.at(-1)).toMatchObject({ kind: 'payroll', amount: -quote.amount, sourceId: `prepay-${quote.agreementId}`, payroll: { type: 'prepayment', fromRound: 2, throughRound: 10, items: [{ agreementId: quote.agreementId, playerId, gross, discount, amount: quote.amount }] } });
+    expect(financeLedgerSlice(next.finance).at(-1)).toMatchObject({ kind: 'payroll', amount: -quote.amount, sourceId: `prepay-${quote.agreementId}`, payroll: { type: 'prepayment', fromRound: 2, throughRound: 10, items: [{ agreementId: quote.agreementId, playerId, gross, discount, amount: quote.amount }] } });
     expect(next.activeMatch).toBe(state.activeMatch);
     expect(next.training).toBe(state.training);
     expect(next.coaching).toBe(state.coaching);
@@ -245,16 +246,16 @@ describe('atomic payroll calendar and retained agreements', () => {
     expect(next.payroll.agreements).toHaveLength(120);
     expect(next.payroll.agreements.slice(0, 60)).toEqual(before.payroll.agreements);
     expect(next.payroll.agreements.slice(60).every(agreement => agreement.seasonNumber === 2 && agreement.startsRound === 1)).toBe(true);
-    expect(next.finance.ledger.slice(0, before.finance.ledger.length)).toEqual(before.finance.ledger);
+    expect(financeLedgerSlice(next.finance).slice(0, before.finance.ledger.length)).toEqual(before.finance.ledger);
     expect(getFinanceBalance(next.finance, clubId)).toEqual({ cash: ANNUAL_SPONSORSHIP - 5_000_000, unpaid: 0 });
     expect(getPayrollReserve(next, clubId)).toBe(annualClubWages);
     expect(getSpendableCash(next, clubId)).toBe(0);
     expect(getClubCoaching(next.coaching, clubId)).toHaveLength(0);
-    expect(next.finance.ledger.slice(before.finance.ledger.length, before.finance.ledger.length + 6).every(entry => entry.kind === 'sponsor')).toBe(true);
+    expect(financeLedgerSlice(next.finance).slice(before.finance.ledger.length, before.finance.ledger.length + 6).every(entry => entry.kind === 'sponsor')).toBe(true);
     expect(() => startPayrollSeason(next)).toThrow(/already exist/);
     expect(rolloverSeason(before)).toEqual(next);
     expect(before.payroll.agreements).toHaveLength(60);
-    expect(next.payroll.agreements.slice(0, 60).every(agreement => agreementCommitted(agreement, next.finance.ledger, 10, 10) === 0)).toBe(true);
+    expect(next.payroll.agreements.slice(0, 60).every(agreement => agreementCommitted(agreement, financeLedgerSlice(next.finance), 10, 10) === 0)).toBe(true);
   });
 
   it('supports final-round activation and never back-charges earlier rounds', () => {

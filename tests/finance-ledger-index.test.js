@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseSeason } from '../src/storage/season-storage';
-import { financeAtLedgerBoundary, financeLedgerSlice } from '../src/world/finance-ledger';
+import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerSlice } from '../src/world/finance-ledger';
 import { ledgerClubBalance, ledgerClubNet, payrollLedgerReader } from '../src/world/finance-ledger-index';
 import { getFinanceBalance, financeLedgerRows } from '../src/world/finance';
 import { agreementCommitted, isAgreementPrepaid, payrollInstallment } from '../src/world/payroll-policy';
@@ -55,7 +55,7 @@ describe('validation-scoped financial prefix accounting', () => {
     const finance = freeze(structuredClone(genuine.finance)), clubs = [...genuine.clubs.map(club => club.id), 'missing'];
     const ids = [...genuine.payroll.agreements.map(agreement => agreement.id), 'unknown'];
     withCalculationCache(() => {
-      for (let end = 0; end <= finance.ledger.length; end += 1) {
+      for (let end = 0; end <= financeLedgerCount(finance); end += 1) {
         const prefix = financeAtLedgerBoundary(finance, end);
         check(prefix, clubs, ids);
         const nested = financeAtLedgerBoundary(prefix, Math.floor(end / 2));

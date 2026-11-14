@@ -28,7 +28,7 @@ import { getArenaCapacity, getFacilityUpkeepBreakdown, quoteFacilityUpgrade } fr
 import { governingDerby, RIVALRY_CROWD_PERCENT } from './rivalries';
 import { agreementFor, commercialGovernsSeason, openingSponsorshipClubs, sponsorshipInstallment, sponsorshipSourceId, type DueSponsorshipPayment } from './commercial-policy';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
-import { appendFinanceLedgerEntry, financeLedgerCount, financeLedgerEntries } from './finance-ledger';
+import { appendFinanceLedgerEntry, financeLedgerCount, financeLedgerEntries, financeLedgerTicket } from './finance-ledger';
 import { ledgerClubBalance } from './finance-ledger-index';
 
 export { clubFinanceDefinition } from './career-world';
@@ -241,10 +241,7 @@ function winShare(state: FinanceContext, clubId: string, beforeRound: number): n
 export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'> & { date?: string }, price: number): GateForecast {
   validatePrice(price);
   const venue = clubFinanceDefinition(worldOf(state), fixture.homeClubId);
-  let recorded: number | undefined;
-  if (state.finance) for (const entry of financeLedgerEntries(state.finance)) {
-    if (entry.ticket?.fixtureId === fixture.id) { recorded = entry.ticket.capacity; break; }
-  }
+  const recorded = state.finance ? financeLedgerTicket(state.finance, fixture.id)?.capacity : undefined;
   const capacity = recorded ?? (fixture.round === state.round ? state.finance?.roundCapacities?.[fixture.homeClubId] : undefined) ?? getArenaCapacity(state, fixture.homeClubId, fixture.date ?? state.date);
   const own = winShare(state, fixture.homeClubId, fixture.round), opponent = winShare(state, fixture.awayClubId, fixture.round);
   const derby = state.seasonNumber === undefined ? null : governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round, worldOf(state));

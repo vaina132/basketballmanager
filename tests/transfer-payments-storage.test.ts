@@ -1,3 +1,4 @@
+import { financeAtLedgerBoundary, financeLedgerCount } from '../src/world/finance-ledger';
 import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
@@ -90,6 +91,7 @@ describe('installment transfer saves', () => {
     const delegated = setPayrollDelegation(state, true);
     expect(parseSeason(serializeSeason(delegated))).toEqual(delegated);
     const corrupted = structuredClone(state);
+    corrupted.finance = financeAtLedgerBoundary(corrupted.finance, financeLedgerCount(corrupted.finance));
     const partial = corrupted.employment.transfers.find(transfer => transfer.toClubId === managed && transfer.payments.some(payment => payment.installmentIndex === 2 && payment.amount < transfer.installments[2]!.amount))!;
     expect(partial).toBeDefined();
     const removed = partial.payments.pop()!;

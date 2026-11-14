@@ -1,3 +1,4 @@
+import { financeAtLedgerBoundary, financeLedgerSlice } from '../src/world/finance-ledger';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
@@ -59,7 +60,7 @@ describe('Level 7 acceptance', () => {
   });
 
   it('pays sponsors only what their agreements promise and board capital only towards real construction', () => {
-    const state = secondSeasonEnd, ledger = state.finance.ledger;
+    const state = secondSeasonEnd, ledger = financeLedgerSlice(state.finance);
     for (const club of state.clubs) for (const season of [1, 2]) {
       const sponsor = ledger.filter(entry => entry.kind === 'sponsor' && entry.clubId === club.id && entry.seasonNumber === season);
       const agreed = sponsor.filter(entry => entry.sponsorship);
@@ -93,10 +94,10 @@ describe('Level 7 acceptance', () => {
   });
 
   it('keeps automatic decisions within the money a club has and reports them to the manager', () => {
-    const state = secondSeasonEnd, ledger = state.finance.ledger;
+    const state = secondSeasonEnd, ledger = financeLedgerSlice(state.finance);
     for (const event of state.facilities.events) if (event.type === 'start') {
       const project = state.facilities.projects.find(item => item.id === event.projectId)!;
-      expect(getFinanceBalance({ ...state.finance, ledger: ledger.slice(0, event.ledgerIndex) }, event.clubId).cash).toBeGreaterThanOrEqual(project.cost);
+      expect(getFinanceBalance(financeAtLedgerBoundary(state.finance, event.ledgerIndex), event.clubId).cash).toBeGreaterThanOrEqual(project.cost);
     }
     const managed = state.managedClubId, inbox = getInboxItems(state);
     const automaticSigning = state.commercial.agreements.find(agreement => agreement.clubId === managed && agreement.automatic);

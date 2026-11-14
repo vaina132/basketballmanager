@@ -1,3 +1,4 @@
+import { financeLedgerSlice } from '../src/world/finance-ledger';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { stepMatch } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
@@ -119,7 +120,7 @@ describe('physiotherapy across actual career boundaries', () => {
     const { completed, nextYear } = careers;
     expect(nextYear.physio.rehabilitation).toEqual(completed.physio.rehabilitation);
     expect(nextYear.physio.contracts.slice(0, completed.physio.contracts.length)).toEqual(completed.physio.contracts);
-    expect(nextYear.finance.ledger.slice(0, completed.finance.ledger.length)).toEqual(completed.finance.ledger);
+    expect(financeLedgerSlice(nextYear.finance).slice(0, completed.finance.ledger.length)).toEqual(completed.finance.ledger);
     expect(staffCommitmentsByRole(nextYear, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 2_000_000, physio: 2_000_000, assistant: 0, youth: 0, total: 10_000_000 });
     expect(Object.values(nextYear.conditions).every(value => value === 100)).toBe(true);
     const updated = setPhysioRenewal(nextYear, getClubPhysio(nextYear).id, false);

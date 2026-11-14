@@ -1,3 +1,4 @@
+import { financeAtLedgerBoundary, financeLedgerCount } from '../src/world/finance-ledger';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION, currentSeasonFile } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
@@ -44,7 +45,7 @@ describe('historical roster persistence', () => {
     expect(restored.fixtures.filter(fixture => fixture.result).every(fixture => fixture.result!.stats !== null)).toBe(true);
     expect(restored.activeMatch).toEqual(source.activeMatch);
     expect(restored.payroll).toEqual(source.payroll);
-    expect(restored.finance).toEqual(source.finance);
+    expect(financeAtLedgerBoundary(restored.finance, financeLedgerCount(restored.finance))).toEqual(source.finance);
     expect(restored.injuries).toEqual(source.injuries);
     expect(restored.training.points).toEqual(source.training.points);
     expect(JSON.parse(text).state).toEqual(source);

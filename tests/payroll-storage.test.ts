@@ -1,3 +1,4 @@
+import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerSlice } from '../src/world/finance-ledger';
 import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION, currentSeasonFile } from './helpers/season-format';
@@ -26,7 +27,10 @@ function renumber(state: SeasonState): void { state.finance.ledger.forEach((entr
 function installment(state: SeasonState, id = clubId): FinanceEntry { return state.finance.ledger.find(entry => entry.clubId === id && entry.payroll?.type === 'installment')!; }
 function prepayment(state: SeasonState, id = clubId): FinanceEntry { return state.finance.ledger.find(entry => entry.clubId === id && entry.payroll?.type === 'prepayment')!; }
 function reject(state: SeasonState, change: (state: SeasonState) => void): void {
-  const damaged = structuredClone(state); change(damaged);
+  const damaged = structuredClone(state);
+  damaged.finance = financeAtLedgerBoundary(damaged.finance, financeLedgerCount(damaged.finance));
+  validateSeasonState(damaged);
+  change(damaged);
   expect(() => validateSeasonState(damaged)).toThrow();
   expect(() => parseSeason(currentSeasonFile(damaged))).toThrow();
 }
@@ -118,7 +122,7 @@ describe('format 6 migration and prospective activation', () => {
     expect(restored).toEqual(withUnavailableArchivedStats(original));
     expect(restored.payroll).toEqual(createPayroll(original.clubs, clubId));
     expect(JSON.stringify(restored.activeMatch)).toBe(JSON.stringify(source.activeMatch));
-    expect(restored.finance.ledger.map(({ payroll: _payroll, ...entry }) => entry)).toEqual(source.finance.ledger);
+    expect(financeLedgerSlice(restored.finance).map(({ payroll: _payroll, ...entry }) => entry)).toEqual(source.finance.ledger);
     expect(restored.training).toEqual(original.training);
     expect(restored.coaching).toEqual(source.coaching);
     if (original.status === 'complete') expect(rolloverSeason(restored)).toEqual(rolloverSeason(withUnavailableArchivedStats(original)));
@@ -137,7 +141,7 @@ describe('format 6 migration and prospective activation', () => {
 
   it.each(['current year', 'later year'] as const)('records activation after preexisting fees in the %s, without invented backpay', boundary => {
     const original = boundary === 'current year' ? legacyLive : rolloverSeason(legacyComplete), enabled = enablePayroll(original);
-    expect(enabled.payroll.enabledSince).toEqual({ seasonNumber: original.seasonNumber, round: original.round, ledgerIndex: original.finance.ledger.length });
+    expect(enabled.payroll.enabledSince).toEqual({ seasonNumber: original.seasonNumber, round: original.round, ledgerIndex: financeLedgerCount(original.finance) });
     expect(enabled.finance.ledger).toEqual(original.finance.ledger);
     expect(enabled.payroll.agreements.every(agreement => agreement.startsRound === original.round && agreement.seasonNumber === original.seasonNumber)).toBe(true);
     expect(restore(enabled)).toEqual(enabled);

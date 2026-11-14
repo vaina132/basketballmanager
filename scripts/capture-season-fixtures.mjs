@@ -23,10 +23,10 @@ const server = await createServer({
 
 try {
   const load = path => server.ssrLoadModule(path);
-  const [world, engine, storage, finance, facilities, employment, market, marketPolicy, relationships, press] = await Promise.all([
+  const [world, engine, storage, finance, facilities, employment, market, marketPolicy, relationships, press, ledger] = await Promise.all([
     '/src/world/season.ts', '/src/engine/match.ts', '/src/storage/season-storage.ts', '/src/world/finance.ts',
     '/src/world/facilities.ts', '/src/world/employment.ts', '/src/world/market.ts', '/src/world/market-policy.ts',
-    '/src/world/relationships.ts', '/src/world/press-policy.ts',
+    '/src/world/relationships.ts', '/src/world/press-policy.ts', '/src/world/finance-ledger.ts',
   ].map(load));
   const version = storage.SEASON_SCHEMA_VERSION;
   const prefix = `season${version}-board`;
@@ -63,7 +63,7 @@ try {
     assert.deepEqual(storage.parseSeason(text), value);
     const zipped = gzipSync(text);
     await writeFile(`tests/fixtures/${name}.json.gz`, zipped);
-    report.push({ name, season: value.seasonNumber, round: value.round, date: value.date, status: value.status, ledgerEntries: value.finance.ledger.length, boardReviews: value.board.reviews.length, jsonBytes: text.length, gzipBytes: zipped.length });
+    report.push({ name, season: value.seasonNumber, round: value.round, date: value.date, status: value.status, ledgerEntries: ledger.financeLedgerCount(value.finance), boardReviews: value.board.reviews.length, jsonBytes: text.length, gzipBytes: zipped.length });
   }
   console.log(JSON.stringify(report, null, 2));
 } finally {

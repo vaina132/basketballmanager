@@ -1,3 +1,4 @@
+import { financeLedgerSlice } from '../src/world/finance-ledger';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -73,7 +74,7 @@ describe('assistant save migration, payment provenance and career history', () =
     const { completed, nextYear, noRenewal, nextWithoutRenewal } = careers;
     for (const state of [completed, nextYear, noRenewal, nextWithoutRenewal]) expect(restore(state)).toEqual(state);
     expect(nextYear.assistant.contracts.slice(0, completed.assistant.contracts.length)).toEqual(completed.assistant.contracts);
-    expect(nextYear.finance.ledger.slice(0, completed.finance.ledger.length)).toEqual(completed.finance.ledger);
+    expect(financeLedgerSlice(nextYear.finance).slice(0, completed.finance.ledger.length)).toEqual(completed.finance.ledger);
     expect(getClubAssistant(nextYear).assistantId).toBe(getClubAssistant(completed).assistantId);
     expect(getClubAssistant(nextWithoutRenewal)).toBeNull();
     expect(advanceAssistantCareer(restore(nextYear))).toEqual(advanceAssistantCareer(nextYear));

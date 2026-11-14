@@ -1,3 +1,4 @@
+import { financeLedgerSlice } from '../src/world/finance-ledger';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { FinanceEntry, SeasonFinance } from '../src/domain/finance';
 import type { SeasonState } from '../src/domain/season';
@@ -96,7 +97,7 @@ describe('fictional gates and locked ticket decisions', () => {
     const cheaper = setTicketPlan(pending, { delegated: false, price: 0 });
     expect(cheaper.finance.roundPrices).toBe(original.finance.roundPrices);
     const next = advanceSeason(cheaper);
-    expect(next.finance.ledger.find(entry => entry.ticket?.fixtureId === original.activeFixtureId)?.ticket?.price).toBe(1800);
+    expect(financeLedgerSlice(next.finance).find(entry => entry.ticket?.fixtureId === original.activeFixtureId)?.ticket?.price).toBe(1800);
     expect(next.finance.roundPrices[clubId]).toBe(0);
     expect(stepMatch(revised.activeMatch)).toEqual(stepMatch(original.activeMatch));
   });
@@ -169,7 +170,7 @@ describe('cash, unpaid obligations and staff affordability', () => {
     expect(getClubCoaching(next.coaching, clubId)).toEqual(getClubCoaching(poor.coaching, clubId));
     expect(next.coaching.contracts.length).toBeGreaterThan(poor.coaching.contracts.length);
     for (const contract of next.coaching.contracts) {
-      const fees = next.finance.ledger.filter(entry => entry.coach?.contractId === contract.id);
+      const fees = financeLedgerSlice(next.finance).filter(entry => entry.coach?.contractId === contract.id);
       expect(fees).toHaveLength(1);
       expect(fees[0]!.amount).toBe(-DEVELOPMENT_COACHES.find(coach => coach.id === contract.coachId)!.fee);
     }
@@ -220,8 +221,8 @@ describe('calendar finance commits and carryover', () => {
     input = { ...input, finance: { ...input.finance, roundPrices: { ...input.finance.roundPrices, [clubId]: 0 } } };
     const next = processFinanceRound(freeze(input));
     expect(getFinanceBalance(next.finance, clubId)).toEqual({ cash: 0, unpaid: ROUND_OPERATING_COST });
-    expect(next.finance.ledger.filter(entry => entry.kind === 'operations' && entry.clubId === clubId)).toHaveLength(2);
-    expect(next.finance.ledger.find(entry => entry.kind === 'tickets' && entry.clubId === clubId)?.amount).toBe(0);
+    expect(financeLedgerSlice(next.finance).filter(entry => entry.kind === 'operations' && entry.clubId === clubId)).toHaveLength(2);
+    expect(financeLedgerSlice(next.finance).find(entry => entry.kind === 'tickets' && entry.clubId === clubId)?.amount).toBe(0);
   });
 
   it('leaves input unchanged if a later gate fails after earlier gates were calculated', () => {
@@ -241,10 +242,10 @@ describe('calendar finance commits and carryover', () => {
     legacy = releaseCoach(legacy, getClubCoaching(legacy.coaching, clubId)[0]!.id);
     const before = freeze(legacy), next = enableFinance(before);
     expect(next.finance.enabledSince).toEqual({ seasonNumber: 1, round: 3 });
-    expect(next.finance.ledger.every(entry => entry.round === 3)).toBe(true);
-    expect(next.finance.ledger.some(entry => ['tickets', 'operations'].includes(entry.kind))).toBe(false);
+    expect(financeLedgerSlice(next.finance).every(entry => entry.round === 3)).toBe(true);
+    expect(financeLedgerSlice(next.finance).some(entry => ['tickets', 'operations'].includes(entry.kind))).toBe(false);
     expect(getFinanceBalance(next.finance, clubId).cash).toBe(OPENING_CASH + ANNUAL_SPONSORSHIP * .8 - coachingCommitted(next.coaching, clubId));
-    expect(next.finance.ledger.filter(entry => entry.kind === 'coaching')).toHaveLength(legacy.coaching.contracts.length);
+    expect(financeLedgerSlice(next.finance).filter(entry => entry.kind === 'coaching')).toHaveLength(legacy.coaching.contracts.length);
     expect(next.activeMatch).toBe(before.activeMatch);
     expect(next.fixtures).toBe(before.fixtures);
     expect(next.coaching).toBe(before.coaching);
@@ -268,22 +269,22 @@ describe('calendar finance commits and carryover', () => {
     expect(final.finance.ledger.every(entry => entry.round === 10)).toBe(true);
     expect(final.fixtures).toEqual(advanceSeason(pending).fixtures);
     const next = rolloverSeason(final);
-    expect(next.finance.ledger.filter(entry => entry.kind === 'opening')).toHaveLength(6);
-    expect(next.finance.ledger.filter(entry => entry.kind === 'sponsor')).toHaveLength(12);
+    expect(financeLedgerSlice(next.finance).filter(entry => entry.kind === 'opening')).toHaveLength(6);
+    expect(financeLedgerSlice(next.finance).filter(entry => entry.kind === 'sponsor')).toHaveLength(12);
   });
 
   it('carries the full ledger, receives yearly sponsorship once and pays renewed contracts after funding', () => {
     const initial = freeze(setCoachRenewal(completed, getClubCoaching(completed.coaching, clubId)[0]!.id, false));
     const before = structuredClone(initial), next = rolloverSeason(initial);
     expect(next.seasonNumber).toBe(2);
-    expect(next.finance.ledger.slice(0, initial.finance.ledger.length)).toEqual(initial.finance.ledger);
-    const additions = next.finance.ledger.slice(initial.finance.ledger.length);
+    expect(financeLedgerSlice(next.finance).slice(0, initial.finance.ledger.length)).toEqual(initial.finance.ledger);
+    const additions = financeLedgerSlice(next.finance).slice(initial.finance.ledger.length);
     expect(additions.slice(0, 6).map(entry => entry.kind)).toEqual(Array(6).fill('sponsor'));
     expect(additions.slice(0, 6).every(entry => entry.amount === ANNUAL_SPONSORSHIP && entry.round === 1 && entry.seasonNumber === 2)).toBe(true);
     expect(additions.some(entry => entry.kind === 'opening')).toBe(false);
     expect(getClubCoaching(next.coaching, clubId)).toHaveLength(0);
     expect(getFinanceBalance(next.finance, clubId).cash).toBe(getFinanceBalance(initial.finance, clubId).cash + ANNUAL_SPONSORSHIP);
-    for (const contract of next.coaching.contracts) expect(next.finance.ledger.filter(entry => entry.coach?.contractId === contract.id)).toHaveLength(1);
+    for (const contract of next.coaching.contracts) expect(financeLedgerSlice(next.finance).filter(entry => entry.coach?.contractId === contract.id)).toHaveLength(1);
     expect(() => startFinanceSeason(next)).toThrow(/already been recorded/);
     expect(rolloverSeason(initial)).toEqual(next);
     expect(initial).toEqual(before);
@@ -295,7 +296,7 @@ describe('calendar finance commits and carryover', () => {
     const next = rolloverSeason(freeze(indebted));
     expect(getFinanceBalance(next.finance, clubId)).toEqual({ cash: 0, unpaid: 1 });
     expect(getClubCoaching(next.coaching, clubId)).toHaveLength(0);
-    expect(next.finance.ledger.some(entry => entry.seasonNumber === 2 && entry.kind === 'coaching' && entry.clubId === clubId)).toBe(false);
+    expect(financeLedgerSlice(next.finance).some(entry => entry.seasonNumber === 2 && entry.kind === 'coaching' && entry.clubId === clubId)).toBe(false);
     expect(() => renewSeasonCoaching(completed, completed.coaching)).toThrow(/opening day/);
   });
 

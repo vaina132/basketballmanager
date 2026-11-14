@@ -1,3 +1,4 @@
+import { archiveFinancialHistory } from '../../src/world/finance-archives';
 import type { SeasonState } from '../../src/domain/season';
 import type { Team } from '../../src/domain/types';
 import { SEASON_SCHEMA_VERSION } from '../../src/domain/season';
@@ -56,7 +57,8 @@ export function expectedMigration<T extends LegacyIdentity>(raw: T, fromFormat: 
   const added = ADDED_BY_FORMAT.filter(([format]) => format > fromFormat).reduce<Partial<SeasonState>>((systems, [, defaults]) => ({ ...systems, ...defaults({ ...raw, ...systems }) }), {});
   const upgraded = { ...raw, ...added, schemaVersion: SEASON_SCHEMA_VERSION };
   const academyUpgraded = fromFormat < 42 ? summarizeAcademyHistory(upgraded as unknown as SeasonState) : upgraded as unknown as SeasonState;
-  return (fromFormat < 43 ? summarizeYouthHistory(academyUpgraded) : academyUpgraded) as unknown as typeof upgraded;
+  const youthUpgraded = fromFormat < 43 ? summarizeYouthHistory(academyUpgraded) : academyUpgraded;
+  return (fromFormat < 44 ? archiveFinancialHistory(youthUpgraded) : youthUpgraded) as unknown as typeof upgraded;
 }
 
 /** A current-format season file around any state, typically a deliberately damaged copy for rejection tests. */

@@ -93,10 +93,10 @@ async function modules() {
   const server = await createServer({ root, configFile: false, logLevel: 'error', cacheDir: 'node_modules/.vite-save-benchmark',
     optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, hmr: false, watch: null }, appType: 'custom' });
   try {
-    const [world, engine, storage, seals, employment, market, marketPolicy, real, packs, compact] = await Promise.all([
+    const [world, engine, storage, seals, employment, market, marketPolicy, real, packs, compact, ledger] = await Promise.all([
       '/src/world/season.ts', '/src/engine/match.ts', '/src/storage/season-storage.ts', '/src/storage/save-seal.ts',
       '/src/world/employment.ts', '/src/world/market.ts', '/src/world/market-policy.ts', '/src/world/real-world.ts',
-      '/src/world/data-pack.ts', '/src/storage/compact-json.ts',
+      '/src/world/data-pack.ts', '/src/storage/compact-json.ts', '/src/world/finance-ledger.ts',
     ].map(path => server.ssrLoadModule(path)));
     const advance = state => world.advanceSeason({ ...state, activeMatch: engine.simulateToEnd(engine.setAutoSubstitutions(state.activeMatch, world.managedSide(state), true)) });
     const rollover = state => {
@@ -105,11 +105,11 @@ async function modules() {
       return world.rolloverSeason(state);
     };
     const continuation = state => advance(state.status === 'active' ? state : rollover(state));
-    return { server, world, storage, seals, employment, real, packs, compact, advance, rollover, continuation };
+    return { server, world, storage, seals, employment, real, packs, compact, ledger, advance, rollover, continuation };
   } catch (error) { await server.close(); throw error; }
 }
 
-function describeState(state, compact, serialized) {
+function describeState(state, compact, serialized, ledger) {
   const bytes = value => Buffer.byteLength(JSON.stringify(compact.compactJson(value)) ?? 'null', 'utf8');
   const envelope = JSON.parse(serialized);
   const legacy = compact.compactJson(state);
@@ -128,7 +128,7 @@ function describeState(state, compact, serialized) {
     encodingReductionPercent: 100 * (compact1EquivalentBytes - storedBytes) / compact1EquivalentBytes,
     compact1SubsystemBytes: Object.fromEntries(Object.entries(state).map(([key, value]) => [key, bytes(value)]).sort((a, b) => b[1] - a[1]).slice(0, 15)),
     historySeasons: state.history.length, youthSeasons: state.youthCompetition?.seasons.length ?? 0,
-    ledgerEntries: state.finance.ledger.length,
+    ledgerEntries: ledger.financeLedgerCount(state.finance), activeLedgerEntries: state.finance.ledger.length, financeArchiveBlocks: state.finance.archives?.length ?? 0,
   };
 }
 
@@ -144,7 +144,7 @@ async function retainState(runtime, state, name, out) {
   return { name, fixture, sha256: hash(text), utf8Bytes: Buffer.byteLength(text, 'utf8'), gzipBytes: gzipSync(text).length,
     expectedStateSha256: originalHash, expectedContinuationSha256: stateHash(next),
     continuation: state.status === 'active' ? 'one matchday' : 'offseason, rollover, one matchday',
-    ...describeState(state, runtime.compact, text) };
+    ...describeState(state, runtime.compact, text, runtime.ledger) };
 }
 
 async function generate(opts, out) {
@@ -239,7 +239,7 @@ async function worker(jobPath) {
       fullExportMs: exported.ms, validatedCheckpointAndSealMs: checkpoint.ms, sealAvailable: typeof checkpoint.value.seal === 'string',
       verifiedSealedLoadMs: sealedLoadMs, verifiedSealedLoadMedianMs: median(sealedLoadMs),
       exactStateAndContinuation: true, maxResidentSetKiB: process.resourceUsage().maxRSS,
-      ...describeState(state, runtime.compact, exported.value) };
+      ...describeState(state, runtime.compact, exported.value, runtime.ledger) };
     writeFileSync(job.resultPath, json(result), { flag: 'wx' });
     console.log(`${item.name}: ${(result.outputBytes / 1e6).toFixed(2)} MB (${result.encodingReductionPercent.toFixed(1)}% smaller than compact-1 of identical state), cold strict ${(cold.ms / 1000).toFixed(2)} s, warm strict ${(result.warmStrictParseMedianMs / 1000).toFixed(2)} s, sealed ${(result.verifiedSealedLoadMedianMs / 1000).toFixed(2)} s`);
   } finally { await runtime.server.close(); }

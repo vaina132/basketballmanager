@@ -88,12 +88,14 @@ import { COMPACT_JSON_ENCODING, LEGACY_COMPACT_JSON_ENCODING, compactJson2, expa
 import { cachedCalculation, withCalculationCache } from '../world/pure-cache';
 import { ledgerBoundaryIndex } from './ledger-boundaries';
 import { appendFinanceLedgerEntry, financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
+import { archiveFinancialHistory, MAX_FINANCE_LOGICAL_ENTRIES, MAX_FINANCE_SEGMENT_ENTRIES } from '../world/finance-archives';
+import { expandFinanceForValidation } from './finance-archive-validation';
 
 export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -1905,7 +1907,9 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     const capacities = record(fields.roundCapacities, 'finance.roundCapacities', clubIds);
     for (const club of clubs) if (capacities[club.id] !== getArenaCapacity({ facilities, ...worldContext }, club.id, dateForRound(round, seasonNumber))) fail(`finance.roundCapacities.${club.id}`, 'must retain the capacity locked for the prepared fixture');
   } else if (Object.hasOwn(fields, 'roundCapacities')) fail('finance.roundCapacities', 'must be absent while facilities are disabled');
-  if (!Array.isArray(fields.ledger) || fields.ledger.length > 20_000) fail('finance.ledger', 'must contain at most 20000 entries');
+  // Format 44 has already checked each stored segment before constructing this temporary complete view.
+  const ledgerLimit = version >= 44 ? MAX_FINANCE_LOGICAL_ENTRIES : MAX_FINANCE_SEGMENT_ENTRIES;
+  if (!Array.isArray(fields.ledger) || fields.ledger.length > ledgerLimit) fail('finance.ledger', `must contain at most ${ledgerLimit} entries`);
   if (fields.enabledSince === null) {
     if (payroll?.enabledSince) fail('payroll.enabledSince', 'requires active club finances');
     if (fields.ledger.length) fail('finance.ledger', 'must be empty while finances are disabled');
@@ -2460,7 +2464,13 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
 
 /** Older schemas keep their original constraints before migration adds career fields. */
 function validateState(value: unknown, version: SeasonFormatVersion): void {
-  withCalculationCache(() => validateStateUncached(value, version));
+  // Never keep a second full ledger in live state, or carry a cached acceptance across mutable inputs.
+  if (version >= 44 && value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    const state = value as Record<string, unknown>;
+    if (state.finance && typeof state.finance === 'object' && Object.hasOwn(state.finance, 'archives')) checkJsonTree(value);
+    const finance = expandFinanceForValidation(state.finance, state.seasonNumber);
+    withCalculationCache(() => validateStateUncached(finance === state.finance ? state : { ...state, finance }, version));
+  } else withCalculationCache(() => validateStateUncached(value, version));
 }
 
 function validateStateUncached(value: unknown, version: SeasonFormatVersion): void {
@@ -2764,8 +2774,8 @@ function decodeSeasonText(text: string): { version: SeasonFormatVersion; state: 
   checkJsonTree(parsed);
   // Plain envelopes remain readable for tools. Each compact encoding belongs to an explicit format version.
   const fields = parsed !== null && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
-  const compact = (fields.formatVersion === 40 || fields.formatVersion === 41 || fields.formatVersion === 42 || fields.formatVersion === 43) && Object.hasOwn(fields, 'encoding');
-  const sharedNodes = compact && (fields.formatVersion === 41 || fields.formatVersion === 42 || fields.formatVersion === 43);
+  const compact = SUPPORTED_FORMATS.includes(fields.formatVersion as number) && (fields.formatVersion as number) >= 40 && Object.hasOwn(fields, 'encoding');
+  const sharedNodes = compact && (fields.formatVersion as number) >= 41;
   const envelope = record(parsed, 'envelope', ['format', 'formatVersion', 'engineVersion', ...(compact ? ['encoding', 'strings', 'shapes'] : []), ...(sharedNodes ? ['nodes'] : []), 'state']);
   if (envelope.format !== FORMAT || !SUPPORTED_FORMATS.includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
   if (compact) {
@@ -2793,8 +2803,9 @@ export function parseSeason(text: string): SeasonState {
   // introduced after that format: an existing format-42 academy history keeps its chosen full/outcome detail.
   const academyUpgraded = version < 42 ? summarizeAcademyHistory(upgraded) : upgraded;
   const summarized = version < 43 ? summarizeYouthHistory(academyUpgraded) : academyUpgraded;
-  validateSeasonState(summarized);
-  return summarized;
+  const archived = archiveFinancialHistory(summarized);
+  validateSeasonState(archived);
+  return archived;
 }
 
 export async function saveLocalSeason(state: SeasonState, expectedRevision: number): Promise<void> { await writeLocalSeason(serializeSeasonCompact(state), expectedRevision); }

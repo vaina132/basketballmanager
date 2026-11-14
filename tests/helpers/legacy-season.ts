@@ -1,3 +1,4 @@
+import { financeAtLedgerBoundary, financeLedgerCount } from '../../src/world/finance-ledger';
 import type { SeasonState } from '../../src/domain/season';
 
 /** Recreate the actual pre-roster schema, including the archive data those versions discarded. */
@@ -129,6 +130,9 @@ export function stripFacilityMaintenance(value: object): void {
 /** Format36 predates dismissal and job changes. */
 export function stripCareer(value: object): void {
   delete (value as Record<string, unknown>).career;
+  // These rule-replay fixtures predate archive blocks; retain their complete original transaction layout.
+  const state = value as Partial<SeasonState>;
+  if (state.finance?.archives) state.finance = financeAtLedgerBoundary(state.finance, financeLedgerCount(state.finance));
 }
 
 /** Format31 predates board funding requests. */

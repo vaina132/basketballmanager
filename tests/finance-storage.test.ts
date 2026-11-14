@@ -1,3 +1,4 @@
+import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerSlice } from '../src/world/finance-ledger';
 import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION, currentSeasonFile } from './helpers/season-format';
@@ -28,7 +29,10 @@ function formatFive(season: SeasonState): string {
 function renumber(state: SeasonState): void { state.finance.ledger.forEach((entry, index) => { entry.id = `finance-${index + 1}`; }); }
 function firstEntry(state: SeasonState, kind: FinanceEntry['kind']): FinanceEntry { return state.finance.ledger.find(entry => entry.kind === kind)!; }
 function reject(state: SeasonState, change: (state: SeasonState) => void): void {
-  const damaged = structuredClone(state); change(damaged);
+  const damaged = structuredClone(state);
+  damaged.finance = financeAtLedgerBoundary(damaged.finance, financeLedgerCount(damaged.finance));
+  validateSeasonState(damaged);
+  change(damaged);
   expect(() => validateSeasonState(damaged)).toThrow();
   expect(() => parseSeason(currentSeasonFile(damaged))).toThrow();
 }
@@ -112,9 +116,9 @@ describe('finance ledger persistence', () => {
     expect(completed.finance.ledger.filter(entry => entry.kind === 'tickets')).toHaveLength(30);
     expect(completed.finance.ledger.filter(entry => entry.kind === 'operations')).toHaveLength(60);
     expect(restore(nextYear)).toEqual(nextYear);
-    expect(nextYear.finance.ledger.slice(0, completed.finance.ledger.length)).toEqual(completed.finance.ledger);
-    expect(nextYear.finance.ledger.filter(entry => entry.seasonNumber === 2 && entry.kind === 'sponsor')).toHaveLength(6);
-    expect(nextYear.finance.ledger.filter(entry => entry.kind === 'opening')).toHaveLength(6);
+    expect(financeLedgerSlice(nextYear.finance).slice(0, completed.finance.ledger.length)).toEqual(completed.finance.ledger);
+    expect(financeLedgerSlice(nextYear.finance).filter(entry => entry.seasonNumber === 2 && entry.kind === 'sponsor')).toHaveLength(6);
+    expect(financeLedgerSlice(nextYear.finance).filter(entry => entry.kind === 'opening')).toHaveLength(6);
     expect(rolloverSeason(restore(completed))).toEqual(nextYear);
     expect(restore(advanceSeason(finish(nextYear)))).toEqual(advanceSeason(finish(nextYear)));
   });

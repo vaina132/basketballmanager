@@ -72,3 +72,12 @@ The four `season42-board-*` fixtures were captured with `npm.cmd run fixtures:ca
 | season42-board-career | `ad7435c76c1f70ac099e8d8692ea7ace3649baac45d0f3336942657c1a87b413` |
 | season42-board-complete | `869366f6b5fec07f9adc88e2d92bdc68640218d8c9938652a38bea37101f93d6` |
 | season42-board-opening | `e7840e39b25b1cce57c93f61e2bd4b9d64d6ef470637dfa6f9803f261804c093` |
+
+The four `season43-board-*` fixtures were captured with `npm.cmd run fixtures:capture` from unchanged commit `1826be5` on 14 November 2026, **before** format 44 introduced financial archive blocks. They are ordinary fictional careers with a complete flat financial ledger, including a closed offseason and its independently recorded next opening. No original fixture or schema number was rewritten. `tests/finance-archives.test.js` compares every reconstructed transaction, exact original state and rollover, and rejects damaged archived evidence. Original gzip SHA-256 hashes:
+
+| Fixture | SHA-256 |
+| --- | --- |
+| season43-board-career-next | `4c02db072ca44a5a6527026bd1f6d0489de883b37ca32f289cd58777401e522a` |
+| season43-board-career | `0ce19adc9bbd2ba8cf8c214abe22b002318d3eb25123d4af03a3143dadbf25b6` |
+| season43-board-complete | `f185dcca0675a215b146b5533c606975de316567fc7fdc6d153921fb85657312` |
+| season43-board-opening | `3a3cba27457bb7bbf19deb9abfda873d6d7487c5ee9c80f9f3e234e8a4dfdaff` |

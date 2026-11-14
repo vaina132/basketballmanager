@@ -1,3 +1,4 @@
+import { financeLedgerSlice } from '../src/world/finance-ledger';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -103,7 +104,7 @@ describe('fitness coaching across actual career boundaries', () => {
     expect(getClubFitnessCoach(nextYear)).toMatchObject({ seasonNumber: 2, startedRound: 1 });
     expect(staffCommitmentsByRole(nextYear, club)).toEqual({ coaches: 4_000_000, scouts: 2_000_000, fitness: 2_000_000, physio: 0, assistant: 0, youth: 0, total: 8_000_000 });
     expect(nextYear.fitness.contracts.slice(0, completed.fitness.contracts.length)).toEqual(completed.fitness.contracts);
-    expect(nextYear.finance.ledger.slice(0, completed.finance.ledger.length)).toEqual(completed.finance.ledger);
+    expect(financeLedgerSlice(nextYear.finance).slice(0, completed.finance.ledger.length)).toEqual(completed.finance.ledger);
     const updated = setFitnessRenewal(nextYear, getClubFitnessCoach(nextYear).id, false);
     expect(updated.finance).toEqual(nextYear.finance);
     expect(updated.training).toEqual(nextYear.training);

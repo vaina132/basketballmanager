@@ -1,3 +1,4 @@
+import { financeAtLedgerBoundary, financeLedgerCount } from '../src/world/finance-ledger';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -30,6 +31,7 @@ function fullReference(candidate, original) {
     fixture.away = structuredClone(previous.away);
     fixture.startingConditions = structuredClone(previous.startingConditions);
   }
+  restored.finance = financeAtLedgerBoundary(restored.finance, financeLedgerCount(restored.finance));
   restored.schemaVersion = 42;
   return restored;
 }

@@ -18,7 +18,7 @@ Sources: Sega support, [Which leagues are playable in FM24](https://support.sega
 | Level | Who | What runs |
 | --- | --- | --- |
 | **Full** | Every club of the leagues chosen at career start (the manager's league is always one) | Everything that runs today: finances, staff, academy, board, contracts, transfers, training and health; every game with the match engine; the league's real format with playoffs; promotion and relegation between a country's two divisions |
-| **Background club** | Clubs of leagues not chosen that play a European competition, and European clubs from countries outside the six | A real squad of twelve from the data pack, colours and arena; European games with the match engine (box scores, injuries, fitness); no finances, staff, academy, board, contracts or transfers. Their players cannot be signed in this sprint. Squads stay as in the pack during a season; at rollover they age like everyone else |
+| **Background club** | Clubs of leagues not chosen that play a European competition, and European clubs from countries outside the six | The real club roster from the data pack, with a legal matchday selection, colours and arena; European games with the match engine (box scores, injuries, fitness); no finances, staff, academy, board, contracts or transfers. Their players cannot be signed in this sprint. Squads stay as in the pack during a season; at rollover they age like everyone else |
 | **Background table** | Leagues of the six countries that were not chosen | No games are played. At each season end a final table is estimated from squad strength with a seeded random element and shown as "estimated". It decides only European places |
 
 Clubs from countries outside the six (for example Žalgiris, Partizan or Maccabi) have no domestic data: they keep their European place each season.
@@ -45,6 +45,8 @@ Clubs from countries outside the six (for example Žalgiris, Partizan or Maccabi
 
 ## Records that scale
 
+These are targets, not completed behavior. A local checkpoint fingerprint may skip repeat checks only for already validated, unchanged text; an imported fingerprint cannot authenticate omitted historical evidence. Portable summaries need explicit, independently checked invariants.
+
 - **Finished seasons are sealed:** a season is checked in full when it ends, and later loads check its fingerprint and summaries instead of replaying it, so loading time stops growing with every season.
 - **Lighter records for clubs the manager does not run:** weekly academy reports in detail only for the manager's club (other clubs keep their outcomes); past seasons keep full box scores for the manager's games and season totals for the rest.
 - **Targets to measure:** a world of three full leagues plus Europe should load in about 5 seconds and stay well inside the 32 MB save limit after five seasons.
@@ -52,20 +54,23 @@ Clubs from countries outside the six (for example Žalgiris, Partizan or Maccabi
 ## League selection at career start
 
 - The player chooses the countries to run in full (at least one). A country brings both of its divisions where it has two, so promotion and relegation always work within the full world. The three European competitions are always included.
+- Put a country flag and readable country name first, with league name and division underneath. Use flag assets that render on Windows; flags supplement accessible country labels and never replace them. Keep keyboard and tablet selection usable.
 - The screen shows an estimate of speed and save size for the selection, as FM does.
 - The manager then chooses a club from the selected leagues; real clubs only, as decided.
+- Show squad strength with a compact labeled bar or stars, based on the actual position-weighted ratings, with the numeric value available as detail. Show the actual full-club player count, distinct from the selected matchday squad. Keep this a compact game setup screen.
 - Below a second division (and below the German and Greek top divisions), relegated clubs leave the full world as background clubs and can return; promoted clubs come from the real next division's clubs, with squads generated where the data has no players (step 3.4 records the details).
 
 ## Steps
 
 | Step | What | Status |
 | --- | --- | --- |
-| 3.1 | Data: import the other eight domestic divisions, the EuroCup and the BCL (2025-26 and 2026-27); club identities; ratings that compare every league with the European level (rating-3); a new private pack with all thirteen competitions | Done |
-| 3.2 | Save checks that scale: sealed seasons and lighter records for clubs the manager does not run | In progress: validated checkpoint fast loads and lossless format 41; bounded history/write scaling remains |
+| 3.1 | Data: import the other eight domestic divisions, the EuroCup and the BCL (2025-26 and 2026-27); club identities; ratings that compare every league with the European level (rating-3); a new private pack with all thirteen competitions | Import complete; roster fidelity/freshness follow-up below remains |
+| 3.2 | Save checks that scale: sealed seasons and lighter records for clubs the manager does not run | In progress: validated checkpoint fast loads, lossless format 41 and faster strict historical checks; bounded history remains |
+| 3.1 follow-up / 3.3 prerequisite | Distinguish full club rosters, competition registration and matchday selection; preserve variable real roster sizes and audit fresh API memberships | Planned after the current 3.2 work, before selection acceptance |
 | 3.3 | One calendar for several leagues: competitions in the world, game days, days without the manager's game, a table per league, amounts per week or home game | Planned |
 | 3.4 | Domestic playoffs, titles, and promotion and relegation (real formats, checked per league) | Planned |
 | 3.5 | European competitions in their real formats on midweek dates, with background clubs and background tables; European places for the next season | Planned |
-| 3.6 | League selection at career start, with the speed and size estimate | Planned |
+| 3.6 | League selection at career start: country flags/names, league/division, visual squad strength, actual roster counts and the speed/size estimate | Planned; includes owner feedback of 14 November |
 | 3.7 | Final check: a multi-league season with Europe in the browser, save and load, rollover into season two, measurements | Planned |
 
 Order as approved on 14 November 2026. Each step is tested and recorded in `HANDOVER.md`; the owner commits.
@@ -93,6 +98,18 @@ League strength in 2026-27 (average overall rating of each club's best eight; me
 
 Tests: `tests/real-data-import.test.js` (scope and `--only`), `tests/real-data-ratings.test.js` (rating-3: direct, chained and default levels; a second division rates lower; second-division players cannot move the scale), `tests/real-data-pack.test.js` (eight-player minimum), `tests/real-world.test.ts` (generated reserves).
 
+### Roster fidelity and freshness follow-up (owner feedback, 14 November 2026)
+
+The identical twelve-player squads are an implementation restriction, not what the API supplies. `REAL_WORLD_RULES.squadSize` uses `MAX_ROSTER_SIZE = 12`; `matchdayTeam` trims large squads and `withReserves` fills small ones. The unchanged private pack has **9–25 players per club**: 149 of 223 clubs have more than twelve, 29 have fewer; Fenerbahçe has 17 and Beşiktaş 15. Removing only the truncation would violate current registration, contract, payroll and match validations.
+
+Before league selection acceptance, separate full club membership from competition eligibility and the twelve-player matchday roster. Preserve real players outside the matchday selection; do not add fictional players merely to make every club twelve. Handle genuinely incomplete coverage explicitly, label any generated fallback, and test roster sizes through transfers, academy promotion, injuries, rollover, save/load and historical reviews. Existing careers retain their embedded world and results; a new pack does not silently rewrite them.
+
+The pack was built at **2026-11-14 08:05:37 UTC** from observed 2026–27 memberships. It is a latest-observed snapshot, **not a verified opening-day roster**, although careers start on opening day. Expose the season and snapshot date and preserve that distinction. The importer currently upserts memberships without expiring absent entries: a refresh needs a scoped, reviewed reconciliation of provider/season/competition membership, not deletion on one missing response or a blind union.
+
+Three fresh read-only API-Sports requests on 14 November checked two clubs: Fenerbahçe's domestic endpoint returned the same 17 identities as the pack; Beşiktaş's domestic and European endpoints each returned 14, with different coverage. Their union exactly matches the pack's 15 (Y. Aksu appears only domestically, DaQuan Jeffries only in Europe). No stale identity was established in these samples; they do not certify all thirteen competitions or imply those fifteen are eligible in every competition. All calls succeeded without provider errors; no database or pack was changed. Evidence: `.artifacts/api-roster-freshness-2026-11-14T11-09-54-394Z.json` and `.artifacts/api-roster-freshness-besiktas-europe-2026-11-14T11-12-48-836Z.json` (ignored, no credentials).
+
+**Sprint 4 rating calibration:** the owner's Beşiktaş/Fenerbahçe comparison is an explicit review case. Audit provider statistics, minutes, positions, sample sizes, cross-league conversion, squad-depth aggregation and simulated results. Ratings remain estimates pending this work; do not hardcode a preferred club order by reputation. Country flags and visual strength belong to 3.6 and are not implemented in this save increment.
+
 ## Step 3.2: save scaling (14 November 2026)
 
 The resumed session found an unfinished optimization that fingerprinted checkpoints without first checking their gameplay state. That path has been removed. Every new checkpoint now passes the same full validation as an export, then optionally stores a SHA-256 integrity fingerprint beside the text in IndexedDB. A matching current checks-version fingerprint allows a local reload to unpack the already validated text without repeating historical replay. Imports always validate in full. Missing, stale or mismatched fingerprints, or unavailable/rejected Web Crypto, use full checks. The unfinished version-1 fingerprints are explicitly invalidated; checks version 2 starts from validated saves.
@@ -119,6 +136,27 @@ Local evidence: `.artifacts/save-benchmark-2026-11-14T10-24-53-860Z/report.json`
 **Next implementation inside 3.2:** design a versioned historical summary that preserves financial anchors, effective registrations, academy outcomes and the club managed at each season; validate and seal completed boundaries, then validate current-season changes against those anchors. Keep compatibility and corruption tests, and remeasure the retained careers before advancing to 3.3. Do not reinstate unchecked checkpoint writing to hide the cost.
 
 **Verification:** build passed; the full serial suite passed 2,207 tests in 141 files (563.57 seconds). The new compact-codec, validation-fingerprint, legacy-continuation and importer tests are included, with no private pack required for the ordinary suite. The existing Vite large-chunk advisory remains. Source was unchanged between the final benchmark, build/browser checks and full regression; later edits only document the result.
+
+### Step 3.2b: faster strict historical checks (14 November 2026)
+
+Following the owner-committed `1b7e14a`, strict validation now reuses temporary ledger, academy and financial-boundary indexes during one synchronous check. Relationship evidence is collected once per squad calculation. Prefix checks still examine every relevant row; unordered or malformed inputs retain the previous rejection semantics. None of the new validation-scoped indexes survives into a new validation, and they never cache acceptance verdicts; modifying the same object requires fresh checks. Recruitment avoids rebuilding the player catalog for each player. Every checkpoint write and portable import/export remains fully validated; the format stays **41**, with identical state and bytes.
+
+The audit also fixed a schema/league-size mix-up: archived rosters were gated by `version >= worldRounds - 1` instead of the original format-9 threshold. Long-league careers now validate their original historical squads correctly. Local checks certificates are **version 3**; version-2 certificates require a strict recheck before a new validated save can use the fast path. A genuine simulated 24-club, 46-round career covers transfer, rollover, historical reviews and roster corruption rejection.
+
+Remeasuring the same retained careers, with one warm sample and no concurrent heavy jobs:
+
+| State | Format 41 bytes | Full load, cold / warm | Validated write + fingerprint | Previously validated local reload |
+| --- | --- | --- | --- | --- |
+| Season 1 complete | 2,957,021 | 2.60 / 2.12 s | 2.10 s | 0.25 s |
+| Season 2 complete | 5,502,472 | 4.81 / 4.18 s | 4.13 s | 0.45 s |
+| Season 3 complete | 7,877,419 | 8.61 / 6.85 s | 6.58 s | 0.59 s |
+| Season 4 opening | 7,848,316 | 7.26 / 7.25 s | 9.57 s | 0.86 s |
+
+Third-season warm strict loads fell from 17.91 to 6.85 seconds; fourth-opening validated writes fell from 27.09 to 9.57 seconds. These are Node observations, excluding worker messaging and IndexedDB. Byte counts are unchanged, and exact-state, independent continuation and input/source hash checks all passed. Report: `.artifacts/save-benchmark-2026-11-14T10-59-59-384Z/report.json`. A separate profile showed essentially unchanged heap use; this is a speed improvement, not bounded memory or save growth.
+
+Build/typecheck and the focused 24-club/index/academy/relationship checks passed. Eight real Edge/worker/IndexedDB checks passed, including old-certificate fallback and reissue at checks version 3 (`.artifacts/step32b-browser-smoke-report.json`); helpers were closed. The full serial regression passed **2,232 tests across 145 files in 526.36 seconds**, with no failed or skipped cases (`.artifacts/step32b-full-tests-20261114-121005.log`). Only documentation changed after source verification.
+
+**Still open before 3.3:** versioned bounded historical summaries and strict portable-summary validation. Finance still has its own 20,000-row limit despite the generic 200,000-entry guard; do not silently raise it. Preserve absolute journal/prefix references, academy/health/development outcomes, scouting and relationship evidence, original rosters and `managedClubFor(state, year, false)` when summarizing earlier seasons. A job change before rollover must not erase the previous club's records. Recheck memory and growth, then run the multi-league target once those systems exist.
 
 ## Not in this sprint (suggestions)
 

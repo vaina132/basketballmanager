@@ -15,6 +15,7 @@ import { youthCoachAssignments } from './youth-policy';
 import { getYouthPlayerStatus } from './youth-competition';
 import { roundKey, seasonRounds } from './career-world';
 import type { CareerWorld } from '../domain/world';
+import { cachedCalculation } from './pure-cache';
 
 export function createAcademy(): SeasonAcademy { return { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }; }
 
@@ -133,18 +134,58 @@ export function processAcademyWeek(input: AcademyWeekInput): SeasonAcademy {
   return { ...academy, points, weeks: [...academy.weeks, week] };
 }
 
+const ACADEMY_POINTS_INDEX = Symbol('academy points by player');
+const ACADEMY_BOUNDARY = Symbol('academy boundary membership');
+interface PointHistory { ordered: boolean; entries: { at: number; points: TrainingPoints }[] }
+
+/** Each weekly report is visited once per validation, rather than again for every historical offer. */
+function pointHistory(academy: SeasonAcademy): Map<string, PointHistory> {
+  return cachedCalculation(academy, ACADEMY_POINTS_INDEX, '', () => {
+    const players = new Map<string, PointHistory>();
+    for (const week of academy.weeks) {
+      const at = roundKey(week.seasonNumber, week.afterRound);
+      for (const [id, report] of Object.entries(week.players)) {
+        let history = players.get(id);
+        if (!history) { history = { ordered: true, entries: [] }; players.set(id, history); }
+        if (!Number.isFinite(at) || history.entries.length && history.entries.at(-1)!.at > at) history.ordered = false;
+        history.entries.push({ at, points: report.pointsAfter });
+      }
+    }
+    return players;
+  });
+}
+
+function pointsBefore(history: PointHistory | undefined, at: number): TrainingPoints {
+  if (!history) return emptyAcademyPoints();
+  const entries = history.entries;
+  // Invalid chronology must not become accepted by sorting it. Preserve the old selector's array-order behavior;
+  // the academy validator still rejects the inconsistent journal in full.
+  if (!history.ordered) {
+    for (let index = entries.length - 1; index >= 0; index -= 1) if (entries[index]!.at < at) return { ...entries[index]!.points };
+    return emptyAcademyPoints();
+  }
+  let lower = 0, upper = entries.length;
+  while (lower < upper) {
+    const middle = Math.floor((lower + upper) / 2);
+    if (entries[middle]!.at < at) lower = middle + 1; else upper = middle;
+  }
+  return lower ? { ...entries[lower - 1]!.points } : emptyAcademyPoints();
+}
+
 /** Historical journals must not see future intakes, training or unaccepted promotions. */
 export function academyAtBoundary(academy: SeasonAcademy, seasonNumber: number, round: number, contractCountPrefix?: number, intakeCountPrefix = academy.intakes.length): SeasonAcademy {
   const at = roundKey(seasonNumber, round);
   if (!academy.enabledSince || roundKey(academy.enabledSince.seasonNumber, academy.enabledSince.round) > at) return createAcademy();
-  const intakes = academy.intakes.slice(0, intakeCountPrefix).filter(record => roundKey(record.seasonNumber, record.round) <= at);
-  const retainedIds = new Set(intakes.flatMap(intake => intake.prospectIds));
-  const prospects = academy.prospects.filter(prospect => roundKey(prospect.intakeSeason, prospect.intakeRound) <= at && retainedIds.has(prospect.player.id));
-  const ids = new Set(prospects.map(prospect => prospect.player.id));
-  const weeks = academy.weeks.filter(week => roundKey(week.seasonNumber, week.afterRound) < at);
-  const points = Object.fromEntries(prospects.map(prospect => [prospect.player.id, emptyAcademyPoints()]));
+  const boundary = cachedCalculation(academy, ACADEMY_BOUNDARY, `${at}/${intakeCountPrefix}`, () => {
+    const intakes = academy.intakes.slice(0, intakeCountPrefix).filter(record => roundKey(record.seasonNumber, record.round) <= at);
+    const retainedIds = new Set(intakes.flatMap(intake => intake.prospectIds));
+    const prospects = academy.prospects.filter(prospect => roundKey(prospect.intakeSeason, prospect.intakeRound) <= at && retainedIds.has(prospect.player.id));
+    return { intakes, prospects, ids: new Set(prospects.map(prospect => prospect.player.id)), weeks: academy.weeks.filter(week => roundKey(week.seasonNumber, week.afterRound) < at) };
+  });
+  const { ids } = boundary, intakes = boundary.intakes.slice(), prospects = boundary.prospects.slice(), weeks = boundary.weeks.slice();
+  const history = pointHistory(academy);
+  const points = Object.fromEntries(prospects.map(prospect => [prospect.player.id, pointsBefore(history.get(prospect.player.id), at)]));
   const focus = Object.fromEntries(prospects.map(prospect => [prospect.player.id, academy.focus[prospect.player.id]!])) as Record<string, TrainingFocus>;
-  for (const week of weeks) for (const [id, report] of Object.entries(week.players)) if (ids.has(id)) points[id] = { ...report.pointsAfter };
   const graduates = academy.graduates.filter(graduate => roundKey(graduate.availableSince.seasonNumber, graduate.availableSince.round) <= at && (graduate.kind === 'age-out' || contractCountPrefix === undefined || Number(graduate.contractId?.replace('employment-contract-', '')) <= contractCountPrefix));
   return { ...academy, prospects, intakes, weeks, graduates: graduates.filter(graduate => ids.has(graduate.prospectId)), points, focus };
 }

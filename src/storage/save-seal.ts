@@ -11,7 +11,8 @@ import { SEASON_SCHEMA_VERSION } from '../domain/season';
  * are checked in full once more.
  */
 // Version 1 was produced by an unfinished path that skipped validation before writing. Always re-check those saves.
-export const SAVE_CHECKS_VERSION = 2;
+// Version 3 also requires archived roster validation in every format from 9 onward, regardless of league length.
+export const SAVE_CHECKS_VERSION = 3;
 const SEAL_PREFIX = `courtside-save-seal|format-${SEASON_SCHEMA_VERSION}|checks-${SAVE_CHECKS_VERSION}|`;
 export const SEAL_PATTERN = /^[0-9a-f]{64}$/;
 

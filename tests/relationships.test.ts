@@ -131,6 +131,41 @@ describe('roles, meaningful conversations and dated playing-time promises', () =
     expect(getPlayerRelationship(next, id).promises[0]).toEqual(before);
   });
 
+  it('keeps squad evidence chronological when fixture and roster storage order differs', () => {
+    const state = atRound(initial(), 6, [4, 8, 12, 16, 20]);
+    const expected = getSquadRelationships(freeze(structuredClone(state)));
+    const shuffled = freeze({ ...state, fixtures: [...state.fixtures].reverse(), rosters: [...state.rosters].reverse() });
+    expect(getSquadRelationships(shuffled)).toEqual(expected);
+    expect(getPlayerRelationship(shuffled, target(state))).toEqual(expected[0]);
+    const missing = { ...state, rosters: state.rosters.filter(roster => roster.clubId !== clubId) };
+    expect(() => getSquadRelationships(missing)).toThrow(/roster|registration/i);
+  });
+
+  it('rechecks edited minutes, eligibility and dates on the next call with the same state object', () => {
+    const state = atRound(initial(), 5, 20), id = target(state);
+    const before = getSquadRelationships(state)[0]!;
+    expect(before).toMatchObject({ eligibleGames: 4, averageMinutes: 20 });
+    const fixture = state.fixtures.find(fixture => fixture.round === 4 && [fixture.homeClubId, fixture.awayClubId].includes(clubId))!;
+    fixture.result!.stats[id]!.secondsPlayed = 0;
+    expect(getSquadRelationships(state)[0]).toMatchObject({ eligibleGames: 4, averageMinutes: 15 });
+    fixture.result!.stats[id]!.fouls = 5;
+    expect(getSquadRelationships(state)[0]).toMatchObject({ eligibleGames: 3, averageMinutes: 20 });
+    state.date = dateForRound(2);
+    expect(getSquadRelationships(state)[0]).toMatchObject({ eligibleGames: 2, averageMinutes: 20 });
+    expect(before).toMatchObject({ eligibleGames: 4, averageMinutes: 20 });
+  });
+
+  it('rechecks a departure and return appended after reading the same squad', () => {
+    const base = initial(), id = target(base);
+    const state = atRound(agreeSquadRole(base, id, 'starter'), 6, 24);
+    expect(getSquadRelationships(state)[0]!.role).toBe('starter');
+    const roster = state.rosters.find(roster => roster.clubId === clubId)!;
+    state.rosters.push({ ...roster, id: `${roster.id}-depart`, fromRound: 4, players: roster.players.filter(player => player.id !== id) });
+    state.rosters.push({ ...roster, id: `${roster.id}-return`, fromRound: 5, players: [...roster.players] });
+    expect(getSquadRelationships(state)[0]).toMatchObject({ role: 'rotation', eligibleGames: 1, averageMinutes: 24 });
+    expect(getPlayerRelationship(state, id)).toEqual(getSquadRelationships(state)[0]);
+  });
+
   it('freezes the same round for all matches and AI obeys normal conversation guards', () => {
     const concerned = prepareRelationshipsRound(atRound(initial(), 4)), id = target(concerned), before = getPreparedRelationshipMorale(concerned)!;
     const spoken = talkToPlayer(concerned, id, 'explain');

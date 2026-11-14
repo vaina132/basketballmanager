@@ -1,5 +1,48 @@
 # Project handover
 
+## Latest continuation: step 3.2b (14 November 2026)
+
+**Start here.** The owner committed the previous data/save increment as `1b7e14a` (`c11`, parent `039472a`) and asked to continue. This section supersedes the earlier continuation and Level 7 notes below. Work is on `main`; leave this increment uncommitted for the owner, as required by `CLAUDE.md`. No new competition or UI feature was started. The active plan remains [multi-league sprint 3](docs/multi-league-world.md#steps).
+
+### Done in this increment
+
+- Strict history validation now reuses derived ledger, academy and staff-budget indexes within one synchronous validation only. Finance maintains validated running order state and standings per year; recruitment builds its player-ID set once per boundary. Relationship calculations share club history within one squad read. Nothing caches an acceptance verdict across calls, and changed objects are checked afresh.
+- Fixed archived-roster validation using a league-round count as a schema threshold. Format 9 is the correct threshold, independent of league size. A simulated 24-club / 46-round career covers actual transfer, rollover, original historical rosters and corruption rejection.
+- The save schema stays **41 / compact-2**. **`SAVE_CHECKS_VERSION = 3`** invalidates earlier local certificates because of the stricter roster checks. Imports/exports and checkpoint writes remain strict. No state, histories or bytes were removed.
+- On the same retained Bayern/Bundesliga career, third-season warm strict loading fell from **17.91 to 6.85 seconds** and fourth-opening validated writing from **27.09 to 9.57 seconds**. Exact state, byte identity, independent continuation and hash guards passed. This is one warm sample in Node, excluding browser messaging/storage; memory and history growth are unchanged. Full table and evidence are in [3.2b](docs/multi-league-world.md#step-32b-faster-strict-historical-checks-14-november-2026).
+
+### Verification
+
+- Typecheck and production build passed; only the existing large-chunk advisory remains.
+- Four new index/academy/large-league suites passed **22 tests**, and the relationship suites passed **46 tests**. Comparing 390 relationship outputs across six genuine format-40 fixtures against the prior implementation found no differences.
+- Eight real Edge/module-worker/IndexedDB checks passed, including older certificate fallback, reissue at checks version 3, exact reload/export/import, stale-write rejection and corrupted-current recovery. Evidence: `.artifacts/step32b-browser-smoke-report.json`. Browser and server helpers were closed.
+- Retained-fixture benchmark: `.artifacts/save-benchmark-2026-11-14T10-59-59-384Z/report.json`; original fixtures remain under `.artifacts/save-benchmark-2026-11-14T10-15-28-454Z/`. Input files and private pack were not rewritten.
+- Full serial regression passed **2,232 tests across 145 files**, with no failed or skipped cases, in **526.36 seconds**. Log: `.artifacts/step32b-full-tests-20261114-121005.log`. Source was frozen for the benchmark, browser checks and regression; later edits only document the result. The private pack SHA-256 remains `9025CBF0BB8324AA1FAC80000B8D45B8AACD1BE224B9D425AE869B1AF140FB8F`; `git diff --check` passed.
+
+### Owner feedback and data audit
+
+The owner asked for country flags, visual club strength, authentic variable roster sizes and a review of club/player strengths (Beşiktaş versus Fenerbahçe as an example). Recorded in the [plan](docs/multi-league-world.md#roster-fidelity-and-freshness-follow-up-owner-feedback-14-november-2026) and [decisions](docs/decisions.md#country-selection-real-rosters-and-rating-review):
+
+- **3.6:** flags and country names before league/division labels; Windows-compatible flag assets; compact strength bars/stars with accessible values; true full-club roster counts. Not built in this increment.
+- **3.1 follow-up / 3.3 prerequisite:** preserve full club rosters separately from competition eligibility and twelve-player matchday selection. The pack already contains 9–25 players per club; our builder truncates/fills every squad to twelve. Current recruitment/employment limits are twelve and world/match limits twenty, while some real clubs exceed twenty. `real-world.ts` discards excluded players from profiles/wages too. Simply raising one limit is unsafe: update historical match snapshots, guards, AI, payroll and estimated budgets together. Under the existing wage formula Real Madrid's full 22-player roster would exceed the EUR 240,000 salary budget. Keep the existing budget categories distinct; calibrate coherent estimates rather than bypassing guards.
+- **Freshness:** three authorized read-only API-Sports GETs checked Fenerbahçe (17 domestic players) and Beşiktaş (14 domestic / 14 European, union 15). The sampled club identities match the unchanged pack. Beşiktaş's lists differ by Y. Aksu and DaQuan Jeffries; neither absence proves a departure. This is a two-club spot-check, not a complete provider audit. Responses are retained under ignored `.artifacts/api-roster-freshness-*.json`, without credentials; no DB writes/imports occurred. The importer upserts without expiring absent memberships, so future refresh needs scoped effective-date/competition reconciliation and incomplete-response handling.
+- The pack was built at **2026-11-14 08:05:37 UTC** from latest-observed **2026–27** memberships, not verified opening-day rosters. Future setup must distinguish snapshot date from career opening date. New packs must never silently rewrite existing embedded career worlds.
+- **Sprint 4:** calibrate ratings using source statistics, positions, minutes/sample sizes, cross-league conversion, roster-depth aggregation and simulation results. The owner permits deferral; do not force famous clubs above others by name.
+
+### Next steps and remaining issues
+
+1. Finish **3.2** with versioned bounded historical summaries and independently checked portable-summary invariants. Keep full write validation. A supplied hash cannot prove that an imported file's omitted history was valid.
+2. Preserve absolute ledger/contract/recruitment/negotiation prefixes or version their offsets; academy training, health and promotion evidence; scouting and relationship history; and original match registrations. Use `managedClubFor(state, year, false)` for historical retention, since a manager can move before rollover. Current whole-season performance coverage treats missing stats as unavailable; summaries need corresponding accessors rather than nulling arbitrary results.
+3. Recheck growing careers' memory, size and timings. Finance has a separate **20,000-entry ledger limit**, despite the generic 200,000-entry guard; an 18-club career may encounter it after several seasons. Do not solve this by silently raising limits. The five-season / three-league-plus-Europe target is still untested because those systems do not exist yet.
+4. Resolve the roster/data follow-up as a registration prerequisite, then **3.3** shared calendar/byes/per-week economy, **3.4** domestic formats/playoffs/promotion, **3.5** European formats/background clubs/qualification, **3.6** country/league/club selection, **3.7** integrated browser acceptance. Sprint 4 follows with match/rating calibration.
+5. Existing data issues remain: generated-reserve disclosure is incomplete in the UI; 189 clubs lack verified colors; salary/venue/ratings assumptions need calibration; provider European participant lists include qualifying/extra entries. These are not fixed by faster saves.
+
+Run in PowerShell with Node 24.14+ and installed dependencies: `npm.cmd run dev`, `npm.cmd run typecheck`, `npm.cmd run build`, `npm.cmd test -- --maxWorkers=1 --testTimeout=120000`. Keep heavy tests, build and benchmark sequential. Opt-in diagnostic: `npm.cmd run benchmark:saves -- --reuse .artifacts/save-benchmark-2026-11-14T10-15-28-454Z --warm 1`; `--help` describes public fixtures and fresh private-pack runs. Ordinary tests require no API key/private pack. Never commit `.local-data`, `.artifacts` or credential files.
+
+Verified and ready for the owner to commit: `perf: speed up strict career history validation`. Include the new `src/storage/ledger-boundaries.ts` and four new test files along with modified source/docs; no commit or push was performed by the agent.
+
+## Earlier handover and completed work
+
 Prepared 12 November 2026 and updated at every Level 7 step. Repository: `basketballmanager`; work happens directly on `main` (the owner asked for no branches on 12 November 2026). Level 7 commits follow `acc5c27`; they were made on a local `level-7` branch that was fast-forwarded into `main` and deleted. [CLAUDE.md](CLAUDE.md) records the owner's working agreement.
 
 ## Current continuation: sprint 3, save scaling (14 November 2026)

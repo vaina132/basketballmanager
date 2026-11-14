@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { createBoard } from '../src/world/board';
 import { createRelationships } from '../src/world/relationships';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -78,10 +79,12 @@ describe('same-club career rollover', () => {
     expect(archive.seasonNumber).toBe(1);
     expect(archive.fixtures).toHaveLength(30);
     expect(getStandings({ clubs: next.clubs, fixtures: archive.fixtures })).toEqual(getStandings(completed));
+    expect(restoreSeniorDetail(next, completed).history[0]!.fixtures).toEqual(completed.fixtures);
     for (let index = 0; index < archive.fixtures.length; index += 1) {
       const old = completed.fixtures[index]!, saved = archive.fixtures[index]!;
       expect(saved).toMatchObject({ id: old.id, date: old.date, homeClubId: old.homeClubId, awayClubId: old.awayClubId, round: old.round });
-      expect(saved.result).toEqual(old.result);
+      if ([old.homeClubId, old.awayClubId].includes(completed.managedClubId)) expect(saved.result).toEqual(old.result);
+      else expect(saved.result.appearances).toBeDefined();
       expect(saved.result.stats).not.toBe(old.result!.stats);
       expect(saved.result.rosterIds).not.toBe(old.result!.rosterIds);
       expect(saved.result).not.toHaveProperty('events');

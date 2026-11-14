@@ -1,3 +1,5 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -18,13 +20,13 @@ beforeAll(() => { original = JSON.parse(originalText('opening')).state; migrated
 describe('lossless completed-season financial archives', () => {
   it('migrates a genuine old save without changing a single logical transaction or other retained field', () => {
     expect(original.schemaVersion).toBe(43);
-    expect(migrated.schemaVersion).toBe(44);
+    expect(migrated.schemaVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(migrated.finance.archives).toHaveLength(1);
     expect(migrated.finance.archives[0]).toMatchObject({ model: 'finance-archive-1', firstIndex: 0, seasonNumber: 1 });
     expect(migrated.finance.ledger.every(row => row.seasonNumber === 2)).toBe(true);
     expect(financeLedgerSlice(migrated.finance)).toEqual(original.finance.ledger);
     const { archives: _archives, ...finance } = migrated.finance;
-    expect({ ...migrated, schemaVersion: 43, finance: { ...finance, ledger: financeLedgerSlice(migrated.finance) } }).toEqual(original);
+    expect({ ...restoreSeniorDetail(migrated, original), schemaVersion: 43, finance: { ...finance, ledger: financeLedgerSlice(migrated.finance) } }).toEqual(original);
     expect(JSON.stringify(migrated.finance).length).toBeLessThan(JSON.stringify(original.finance).length);
     expect(parseSeason(serializeSeasonCompact(migrated))).toEqual(migrated);
   });

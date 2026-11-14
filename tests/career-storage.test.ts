@@ -47,13 +47,13 @@ beforeAll(() => {
 }, 60_000);
 
 describe('career save boundaries', () => {
-  it('writes format 9 with the original season table preserved after rollover', () => {
+  it('writes the current format with the original season table preserved after rollover', () => {
     const text = serializeSeason(secondStart), restored = parseSeason(text);
     expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restored).toEqual(secondStart);
     expect(restored.history).toHaveLength(1);
     expect(getStandings({ clubs: restored.clubs, fixtures: restored.history[0]!.fixtures })).toEqual(getStandings(firstComplete));
-    expect(restored.history[0]!.fixtures.every(fixture => fixture.result.stats !== null)).toBe(true);
+    expect(restored.history[0]!.fixtures.every(fixture => fixture.result.stats !== null || fixture.result.appearances !== undefined)).toBe(true);
     expect(restored.activeFixtureId).toBe('dev-s2-r1-g1');
     expect(restored.date).toBe('2027-09-04');
   });
@@ -95,7 +95,7 @@ describe('career save boundaries', () => {
       seasonNumber: index + 1,
       rosters: createRosterSnapshots(season.clubs, index + 1),
       fixtures: createSchedule(season.clubs, index + 1).map((fixture, fixtureIndex) => ({
-        ...fixture, result: { ...structuredClone(secondStart.history[0]!.fixtures[fixtureIndex]!.result), injuries: {}, stats: null, rosterIds: { home: rosterForRound(createRosterSnapshots(season.clubs, index + 1), fixture.homeClubId, fixture.round).id, away: rosterForRound(createRosterSnapshots(season.clubs, index + 1), fixture.awayClubId, fixture.round).id } },
+        ...fixture, result: { ...structuredClone(firstComplete.fixtures[fixtureIndex]!.result!), injuries: {}, stats: null, rosterIds: { home: rosterForRound(createRosterSnapshots(season.clubs, index + 1), fixture.homeClubId, fixture.round).id, away: rosterForRound(createRosterSnapshots(season.clubs, index + 1), fixture.awayClubId, fixture.round).id } },
       })),
     }));
     season.fixtures = createSchedule(season.clubs, season.seasonNumber);

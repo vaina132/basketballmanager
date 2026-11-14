@@ -3,6 +3,7 @@ import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import { dateForRound } from './season';
 import { rosterForRound } from './rosters';
+import { fixturePlayerEvidence } from './senior-history';
 import { getPlayerRetirement } from './lifecycle-policy';
 import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, pressImpact } from './press-policy';
 import { governingDerby, RIVALRY_MORALE_WEIGHT } from './rivalries';
@@ -95,7 +96,7 @@ function clubHistory(state: SeasonState, clubId: string) {
       for (let index = window.first ? start : end - 1; index >= start && index < end && games.length < window.limit; index += window.first ? 1 : -1) {
         const game = fixtures[index]!;
         if (!game.players.has(playerId)) continue;
-        const fixture = game.fixture, result = fixture.result!, stats = result.stats?.[playerId];
+        const fixture = game.fixture, result = fixture.result!, stats = fixturePlayerEvidence(fixture, playerId);
         const eligible = !!stats && result.kind === 'normal' && !result.injuries[playerId] && stats.fouls < 5;
         if (window.eligibleOnly && !eligible || window.beforeDate && fixture.date >= window.beforeDate) continue;
         game.derby ??= !!governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, game.seasonNumber, fixture.round, worldOf(state));

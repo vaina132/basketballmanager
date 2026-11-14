@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
@@ -83,7 +84,7 @@ describe('scouting report persistence', () => {
   });
 
   it('migrates an actual format 10 career with transfers and retains all prior state while scouting remains disabled', () => {
-    const previous = structuredClone(nextYear) as unknown as Record<string, unknown>;
+    const previous = restoreSeniorDetail(nextYear, completed) as unknown as Record<string, unknown>;
     stripInSeasonRecruitment(previous); delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts; delete previous.market; delete previous.scouting; delete previous.negotiations; previous.schemaVersion = 10;
     const restored = parseSeason(envelope(previous, 10));
     expect(restored.scouting.enabledSince).toBeNull();

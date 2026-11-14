@@ -314,3 +314,12 @@ Step 3.2i narrows relationship calculations to the precise game windows already 
 5. What performance targets are sustainable with the full player and fixture population on a representative laptop/tablet?
 
 These are research and validation tasks. They should not be turned into questions asking the user to supply facts that can be investigated.
+
+
+## Step 3.2 archive and replay completion
+
+14 November 2026: apply the already approved rival senior-season detail policy in schema 45. Keep manager games full using historical job ownership; retain exact rival season totals and the per-game medical/participation evidence consumed by existing rules. Do not pretend aggregate invariants authenticate discarded per-game counting statistics. Older unknown statistics stay unknown. The UI must label partial detailed match logs without fabricating ratings or MVPs.
+
+Reuse deterministic academy/board calculations across strict checks only by exact complete calculation inputs, with bounded private memory and independent returned values. Validation verdicts, raw input object identity across calls and imported seals are not reusable authority. All original chronological/accounting comparisons still run. Use the existing compact codec and shared structural key blocks to bound duplicated cache content. Cold checks, eviction, changed dependencies and unavailable local fingerprints retain strict fallback. No financial rule, match RNG, data pack or provider data changes are part of this work.
+
+Close the single-league 3.2 implementation after verification; retain the combined three-league/Europe performance acceptance explicitly for 3.7. Do not claim constant lifetime file size, unlimited retained history or combined-world performance from a single-league benchmark. The next implementation is full-club/competition/matchday roster separation and provider freshness, then the shared calendar.

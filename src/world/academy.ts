@@ -84,7 +84,7 @@ export function prepareAcademySeason(state: SeasonState): SeasonState {
 
 export interface AcademyWeekInput { facilities?: SeasonState['facilities']; academy: SeasonAcademy; youth: SeasonYouth; youthCompetition?: SeasonYouthCompetition; clubs: readonly Pick<Team, 'id'>[]; seasonNumber: number; afterRound: number; fromDate: string; toDate: string; /** Matchdays in the season. */ rounds: number; /** The career's world (built-in league when omitted). */ world?: CareerWorld }
 /** One real calendar interval; youth sessions do not borrow senior fixtures or match RNG. */
-export function processAcademyWeek(input: AcademyWeekInput): SeasonAcademy {
+export function processAcademyWeek(input: AcademyWeekInput, calculate: (input: AcademyWeekCalculation) => AcademyWeek = buildAcademyWeek): SeasonAcademy {
   const { academy, youth, clubs, seasonNumber, afterRound, fromDate, toDate, rounds } = input;
   if (!academy.enabledSince) return academy;
   const at = roundKey(seasonNumber, afterRound), enabled = roundKey(academy.enabledSince.seasonNumber, academy.enabledSince.round);
@@ -94,9 +94,20 @@ export function processAcademyWeek(input: AcademyWeekInput): SeasonAcademy {
   const expectedYear = previous ? previous.afterRound === rounds - 1 ? previous.seasonNumber + 1 : previous.seasonNumber : academy.enabledSince.seasonNumber;
   const expectedRound = previous ? previous.afterRound === rounds - 1 ? 1 : previous.afterRound + 1 : academy.enabledSince.round;
   if (seasonNumber !== expectedYear || afterRound !== expectedRound) throw new Error('Process every academy training interval in calendar order.');
+  const week = calculate({ ...input, academy: { prospects: academy.prospects, graduates: academy.graduates, points: academy.points, focus: academy.focus }, weekNumber: academy.weeks.length + 1 });
+  return { ...academy, points: { ...academy.points, ...Object.fromEntries(Object.entries(week.players).map(([id, report]) => [id, { ...report.pointsAfter }])) }, weeks: [...academy.weeks, week] };
+}
+
+/** All inputs to one report, independent of already checked reports. Used by strict historical replay too. */
+export interface AcademyWeekCalculation extends Omit<AcademyWeekInput, 'academy'> {
+  academy: Pick<SeasonAcademy, 'prospects' | 'graduates' | 'points' | 'focus'>;
+  weekNumber: number;
+}
+export function buildAcademyWeek(input: AcademyWeekCalculation): AcademyWeek {
+  const { academy, youth, clubs, seasonNumber, afterRound, fromDate, toDate } = input;
+  const at = roundKey(seasonNumber, afterRound);
   const coaches = youthCoachAssignments(youth, clubs, seasonNumber, afterRound);
-  const points = { ...academy.points };
-  const week: AcademyWeek = { id: `academy-week-${academy.weeks.length + 1}`, seasonNumber, afterRound, fromDate, toDate, coaches, players: {} };
+  const week: AcademyWeek = { id: `academy-week-${input.weekNumber}`, seasonNumber, afterRound, fromDate, toDate, coaches, players: {} };
   for (const prospect of academy.prospects) {
     const id = prospect.player.id;
     if (roundKey(prospect.intakeSeason, prospect.intakeRound) > at || academy.graduates.some(graduate => graduate.prospectId === id && roundKey(graduate.availableSince.seasonNumber, graduate.availableSince.round) <= at)) continue;
@@ -129,10 +140,9 @@ export function processAcademyWeek(input: AcademyWeekInput): SeasonAcademy {
       gains[key] = after[key] - before[key]; coachingGains[key] = coached - withoutCoach;
       facilityGains[key] = after[key] - coached;
     }
-    points[id] = after;
     week.players[id] = { clubId: prospect.clubId, focus, pointsBefore: { ...before }, gains, coachingGains, pointsAfter: { ...after }, ...(availability ? { availability } : {}), ...(facilitiesActive ? { facility: { earnedPoints: facilityPoints, gains: facilityGains } } : {}) };
   }
-  return { ...academy, points, weeks: [...academy.weeks, week] };
+  return week;
 }
 
 const ACADEMY_POINTS_INDEX = Symbol('academy points by player');

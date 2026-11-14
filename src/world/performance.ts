@@ -1,6 +1,7 @@
 import type { SeasonState } from '../domain/season';
 import type { MatchResult, Player, PlayerStats, Team } from '../domain/types';
 import { getFixtureTeams, getSeasonRosterData } from './rosters';
+import { emptySeniorTotals, SENIOR_TOTAL_KEYS } from './senior-history';
 
 export type PerformanceTotals = Omit<PlayerStats, 'condition'>;
 export type PerformanceMode = 'per-game' | 'totals' | 'per-40';
@@ -34,21 +35,19 @@ export interface SeasonPlayerPerformance {
   games: number;
   totals: PerformanceTotals;
   log: PlayerGameLog[];
+  /** Registered matches included in the totals whose individual box scores were summarized. */
+  summaryGames?: number;
 }
 
 export const LEADER_QUALIFICATION_TEXT = 'At least half of club games played and 5 minutes per club game.';
-const TOTAL_KEYS: readonly (keyof PerformanceTotals)[] = [
-  'secondsPlayed', 'points', 'fieldGoalsMade', 'fieldGoalsAttempted', 'threePointersMade',
-  'threePointersAttempted', 'freeThrowsMade', 'freeThrowsAttempted', 'rebounds', 'assists',
-  'steals', 'blocks', 'turnovers', 'fouls',
-];
+const TOTAL_KEYS = SENIOR_TOTAL_KEYS;
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
-const emptyTotals = (): PerformanceTotals => Object.fromEntries(TOTAL_KEYS.map(key => [key, 0])) as PerformanceTotals;
+const emptyTotals = emptySeniorTotals;
 
 /** Missing legacy box scores are unavailable history, never zero performances. */
 export function getPerformanceCoverage(season: SeasonState, seasonNumber = season.seasonNumber): 'complete' | 'unavailable' {
   const data = getSeasonRosterData(season, seasonNumber);
-  return data.fixtures.some(fixture => fixture.result !== null && fixture.result.stats === null) ? 'unavailable' : 'complete';
+  return data.fixtures.some(fixture => fixture.result !== null && fixture.result.stats === null && !('appearances' in fixture.result)) ? 'unavailable' : 'complete';
 }
 
 export function performanceRecordKey(seasonNumber: number, clubId: string, playerId: string): string {
@@ -74,7 +73,17 @@ export function getSeasonPerformance(season: SeasonState, seasonNumber = season.
   const fixtures = data.fixtures.filter(fixture => fixture.result !== null).sort((left, right) => compareText(right.date, left.date) || right.round - left.round || compareText(left.id, right.id));
   for (const fixture of fixtures) {
     const result = fixture.result!;
-    if (result.stats === null) throw new Error('Player statistics were not retained for this season.');
+    if (result.stats === null) {
+      if (!('appearances' in result) || !result.appearances || !data.summary) throw new Error('Player statistics were not retained for this season.');
+      for (const clubId of [fixture.homeClubId, fixture.awayClubId]) {
+        const team = getFixtureTeams(season, fixture, seasonNumber)[clubId === fixture.homeClubId ? 'home' : 'away'];
+        for (const player of team.players) {
+          const row = records.get(performanceRecordKey(seasonNumber, clubId, player.id))!;
+          row.summaryGames = (row.summaryGames ?? 0) + 1;
+        }
+      }
+      continue;
+    }
     const teams = getFixtureTeams(season, fixture, seasonNumber);
     for (const home of [true, false]) {
       const clubId = home ? fixture.homeClubId : fixture.awayClubId;
@@ -99,6 +108,12 @@ export function getSeasonPerformance(season: SeasonState, seasonNumber = season.
         });
       }
     }
+  }
+  for (const summary of data.summary?.players ?? []) {
+    const row = records.get(performanceRecordKey(seasonNumber, summary.clubId, summary.playerId));
+    if (!row) throw new Error('Season totals refer to an unknown registration.');
+    row.games += summary.games;
+    for (const key of TOTAL_KEYS) row.totals[key] += summary.totals[key];
   }
   return [...records.values()];
 }

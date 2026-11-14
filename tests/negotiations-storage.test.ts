@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
@@ -65,7 +66,7 @@ describe('negotiation journal persistence', () => {
     expect(acceptedRecords.map(record => record.contractId)).toEqual(newContracts.map(contract => contract.id));
     expect(acceptedRecords.some(record => record.clubId !== clubId)).toBe(true);
     expect(second.payroll.agreements.find(agreement => agreement.playerId === incomingId && agreement.seasonNumber === 2)!.seasonWage).toBe(requiredNegotiationWage(incomingId, 2));
-    expect(second.history[0]!.fixtures.map(fixture => fixture.result)).toEqual(completed.fixtures.map(fixture => fixture.result));
+    expect(restoreSeniorDetail(second, completed).history[0]!.fixtures.map(fixture => fixture.result)).toEqual(completed.fixtures.map(fixture => fixture.result));
   });
 
   it('persists counteroffers repeated on a later matchday without duplicating the same-boundary response', () => {
@@ -89,7 +90,7 @@ describe('negotiation journal persistence', () => {
   });
 
   it('migrates actual format 11 with transferred squads and scouting history intact, leaving negotiations disabled', () => {
-    const previous = structuredClone(secondWeek) as unknown as Record<string, unknown>;
+    const previous = restoreSeniorDetail(secondWeek, completed) as unknown as Record<string, unknown>;
     stripInSeasonRecruitment(previous); delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts; delete previous.market; delete previous.negotiations; previous.schemaVersion = 11;
     const restored = parseSeason(envelope(previous, 11));
     expect(restored.negotiations).toEqual({ model: 'negotiations-1', enabledSince: null, records: [] });

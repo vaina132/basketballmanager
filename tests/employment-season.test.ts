@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_PLAYERS } from '../src/data/development-players';
@@ -73,7 +74,7 @@ describe('employment across real season boundaries', () => {
     expect(next.payroll.agreements.find(term => term.playerId === retainedId && term.seasonNumber === 2)?.seasonWage).toBe(2_000_000);
     expect(next.payroll.agreements.find(term => term.playerId === incomingId && term.seasonNumber === 2)?.clubId).toBe(club.id);
     expect(next.history[0]!.rosters).toEqual(recruited.rosters);
-    expect(getSeasonPerformance(next, 1)).toEqual(historical);
+    expect(getSeasonPerformance(restoreSeniorDetail(next, recruited), 1)).toEqual(historical);
     expect(next.activeMatch[managedSide(next)].players.map(player => player.id)).toEqual(club.players.map(player => player.id));
     expect(parseSeason(serializeSeason(next))).toEqual(next);
   });

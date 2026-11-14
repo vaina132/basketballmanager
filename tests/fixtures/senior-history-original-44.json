@@ -1,0 +1,29 @@
+{
+  "commit": "7f7629431a6c2c9c116f7ad07cbc9ff8d06cc43c",
+  "fixtures": [
+    {
+      "source": "season43-board-career.json.gz",
+      "sourceSha256": "0ce19adc9bbd2ba8cf8c214abe22b002318d3eb25123d4af03a3143dadbf25b6",
+      "file": "season44-board-career.json.gz",
+      "sha256": "610f8d34cfe9888005fcf9de20794ed8430efe92ec1001a9216273e3aac0c7b3"
+    },
+    {
+      "source": "season43-board-complete.json.gz",
+      "sourceSha256": "f185dcca0675a215b146b5533c606975de316567fc7fdc6d153921fb85657312",
+      "file": "season44-board-complete.json.gz",
+      "sha256": "8ed53ea9bdb35382dd20dc467e382feb9d7f0fba2926c1acfccc4db0611f87ca"
+    },
+    {
+      "source": "season43-board-opening.json.gz",
+      "sourceSha256": "3a3cba27457bb7bbf19deb9abfda873d6d7487c5ee9c80f9f3e234e8a4dfdaff",
+      "file": "season44-board-opening.json.gz",
+      "sha256": "c23fd1719073b704d742c9d056231337e543c446180736e0019b318d3b2cf9a8"
+    },
+    {
+      "source": "season40-world8-career-next.json.gz",
+      "sourceSha256": "845e9bbfba071c775e3f21619f8157cd645772af691a282393eb7384c1e064ef",
+      "file": "season44-world8-career-next.json.gz",
+      "sha256": "b52f23ae2abd1e0187599f51c5f7a38b0060178a11e1eead24e335ecee244ebd"
+    }
+  ]
+}

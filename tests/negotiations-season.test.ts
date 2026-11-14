@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { getSeasonWage } from '../src/data/development-wages';
@@ -60,7 +61,7 @@ describe('contract negotiations in persistent careers', () => {
     const performances = getSeasonPerformance(market);
     const next = rolloverSeason(market);
     expect(next.negotiations.records.slice(0, history.length)).toEqual(history);
-    expect(getSeasonPerformance(next, 1)).toEqual(performances);
+    expect(getSeasonPerformance(restoreSeniorDetail(next, market), 1)).toEqual(performances);
     expect(next.payroll.agreements.find(term => term.playerId === incoming.id && term.seasonNumber === 2)).toMatchObject({ clubId, seasonWage: agreement.seasonWage });
     expect(contractForSeason(next.employment, incoming.id, 4)?.seasonWage).toBe(agreement.seasonWage);
     expect(getLatestNegotiation(next, playerId)).toBeNull();

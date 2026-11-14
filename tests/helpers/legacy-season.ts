@@ -11,9 +11,10 @@ export function stripRosterHistory(state: Record<string, unknown>): void {
   delete state.employment;
   delete state.rosters;
   for (const fixture of state.fixtures as Array<{ result: Record<string, unknown> | null }>) if (fixture.result) delete fixture.result.rosterIds;
-  for (const archive of (state.history ?? []) as Array<{ rosters?: unknown; fixtures: Array<{ result: Record<string, unknown> }> }>) {
+  for (const archive of (state.history ?? []) as Array<{ rosters?: unknown; summary?: unknown; fixtures: Array<{ result: Record<string, unknown> }> }>) {
     delete archive.rosters;
-    for (const fixture of archive.fixtures) { delete fixture.result.rosterIds; delete fixture.result.stats; }
+    delete archive.summary;
+    for (const fixture of archive.fixtures) { delete fixture.result.rosterIds; delete fixture.result.stats; delete fixture.result.appearances; }
   }
   const training = state.training as { lastWeek: Record<string, unknown> | null } | undefined;
   if (training?.lastWeek) delete training.lastWeek.rosterIds;
@@ -75,7 +76,12 @@ export function stripAcademy(value: object): void {
 
 /** Past player statistics cannot be recovered from an old-format archive. */
 export function withUnavailableArchivedStats(state: SeasonState): SeasonState {
-  return { ...state, history: state.history.map(archive => ({ ...archive, fixtures: archive.fixtures.map(fixture => ({ ...fixture, result: { ...fixture.result, stats: null } })) })) };
+  const result = structuredClone(state);
+  for (const archive of result.history) {
+    delete archive.summary;
+    for (const fixture of archive.fixtures) { fixture.result.stats = null; delete fixture.result.appearances; }
+  }
+  return result;
 }
 
 /** Format25 predates dated senior aging and retirement reviews. */

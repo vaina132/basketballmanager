@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { financeAtLedgerBoundary, financeLedgerCount } from '../src/world/finance-ledger';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -19,7 +20,7 @@ beforeAll(() => { states = Object.fromEntries(names.map(name => [name, parseSeas
 
 /** Independent original squads may restore discarded detail only after every retained field has matched. */
 function fullReference(candidate, original) {
-  const restored = structuredClone(candidate), byId = new Map(fixtures(original).map(fixture => [fixture.id, fixture]));
+  const restored = restoreSeniorDetail(candidate, original), byId = new Map(fixtures(original).map(fixture => [fixture.id, fixture]));
   for (const fixture of fixtures(restored)) if (fixture.detail === 'outcome') {
     const previous = byId.get(fixture.id);
     expect(previous, `${fixture.id} requires independent original evidence`).toBeDefined();

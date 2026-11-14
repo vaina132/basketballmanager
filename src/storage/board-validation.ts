@@ -1,9 +1,8 @@
 import type { BoardAnchor, BoardMandate, SeasonBoard } from '../domain/board';
 import type { SeasonFixture, SeasonState } from '../domain/season';
-import { buildBoardMandate, buildBoardReview, createBoard } from '../world/board';
+import { buildBoardMandate, buildBoardReview, createBoard, type BoardCalculationContext } from '../world/board';
+import { validationReplayCache } from './replay-cache';
 import { dateForRound } from '../world/season';
-import { rosterForRound } from '../world/rosters';
-import { managedClubFor } from '../world/career';
 import { openingSponsorshipClubs } from '../world/commercial-policy';
 import { roundOrdinal, seasonRounds } from '../world/career-world';
 import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
@@ -35,7 +34,7 @@ function seasonRecords(state: SeasonState, year: number) {
 }
 
 /** Board assessments see only registrations, cash and results that existed at their recorded boundary. */
-function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard): SeasonState {
+function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard): BoardCalculationContext {
   const source = seasonRecords(state, anchor.seasonNumber), rosters = source.rosters.slice(0, anchor.rosterCount);
   const completed = anchor.completedRounds - ordinal(anchor.seasonNumber, 0, seasonRounds(state));
   const fixtures = source.fixtures.map(fixture => ({ ...fixture, result: fixture.round <= completed ? fixture.result : null })) as SeasonFixture[];
@@ -43,9 +42,9 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard):
   const committed = new Set([...history.flatMap(archive => archive.fixtures), ...fixtures].filter(fixture => fixture.result).map(fixture => fixture.id));
   const finance = financeAtLedgerBoundary(state.finance, anchor.ledgerCount), ledger = finance.ledger;
   return {
-    ...state, managedClubId: managedClubFor(state, anchor.seasonNumber, false), seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
-    status: completed === seasonRounds(state) ? 'complete' : 'active', rosters, fixtures, history, board,
-    clubs: state.clubs.map(club => ({ ...club, players: rosterForRound(rosters, club.id, anchor.round).players })),
+    ...(state.world ? { world: state.world } : {}), dataPackId: state.dataPackId, seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
+    rosters, fixtures, board, employment: { transfers: state.employment.transfers }, physio: state.physio, rivalries: state.rivalries,
+    clubs: state.clubs.map(({ id }) => ({ id })),
     injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
     finance: { ...finance, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
   };
@@ -137,7 +136,7 @@ export function validateBoard(state: SeasonState, version: number): void {
     }
     chronological(anchor, path);
     let expected: BoardMandate;
-    try { expected = buildBoardMandate(contextAt(state, anchor, board), startsRound); } catch (error) { fail(path, `cannot rebuild objectives: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
+    try { expected = validationReplayCache.calculate('board-mandate', { state: contextAt(state, anchor, board), startsRound }, input => buildBoardMandate(input.state, input.startsRound)); } catch (error) { fail(path, `cannot rebuild objectives: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
     if (!equal(raw, expected)) fail(path, 'must retain the exact objective and resources frozen from its original registrations and payment prefix');
     board = { ...board, mandates: [...board.mandates, expected] }; mandateIndex += 1;
     const through = year === state.seasonNumber ? state.status === 'complete' ? seasonRounds(state) : state.round - 1 : seasonRounds(state);
@@ -148,7 +147,7 @@ export function validateBoard(state: SeasonState, version: number): void {
       if (reviewAnchor.seasonNumber !== year || reviewAnchor.round !== round) fail(reviewPath, 'must retain one review after every eligible committed matchday');
       chronological(reviewAnchor, reviewPath);
       let review;
-      try { review = buildBoardReview(contextAt(state, reviewAnchor, board), expected); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
+      try { review = validationReplayCache.calculate('board-review', { state: contextAt(state, reviewAnchor, board), mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
       if (!equal(reviewRaw, review)) fail(reviewPath, 'must exactly reproduce results, inherited costs, injury context and bounded confidence');
       board = { ...board, reviews: [...board.reviews, review] }; reviewIndex += 1;
     }

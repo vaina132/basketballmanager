@@ -17,16 +17,21 @@ const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(ma
 /** Matchdays as one sequence across seasons; stored in anchors and counted forward, so it uses the season length. */
 const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
 const rounded = (n: number) => Math.round(n * 1000) / 1000;
+/** Explicit dependency boundary for historical objectives and reviews. */
+export type BoardCalculationContext = Pick<SeasonState, 'world' | 'dataPackId' | 'rosters' | 'seasonNumber' | 'round' | 'date' | 'fixtures' | 'finance' | 'board' | 'injuries' | 'physio' | 'rivalries'> & {
+  clubs: readonly Pick<SeasonState['clubs'][number], 'id'>[];
+  employment: Pick<SeasonState['employment'], 'transfers'>;
+};
 
 export function createBoard(): SeasonBoard { return { model: 'board-1', enabledSince: null, mandates: [], reviews: [], consequencesSince: null }; }
 
-export function boardEventAnchor(state: SeasonState): BoardAnchor {
+export function boardEventAnchor(state: Pick<BoardCalculationContext, 'world' | 'dataPackId' | 'fixtures' | 'seasonNumber' | 'round' | 'date' | 'finance' | 'rosters'>): BoardAnchor {
   const completed = state.fixtures.filter(fixture => fixture.result).reduce((round, fixture) => Math.max(round, fixture.round), 0);
   return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), ledgerCount: financeLedgerCount(state.finance), rosterCount: state.rosters.length };
 }
 
 /** Restrict transfer evidence to receipts in this ledger prefix, including same-day decisions. */
-export function boardUnpaidCosts(state: SeasonState, clubId: string): number | null {
+export function boardUnpaidCosts(state: Pick<BoardCalculationContext, 'finance' | 'employment' | 'date'>, clubId: string): number | null {
   let opened = false;
   const receipts = new Set<string>();
   for (const entry of financeLedgerEntries(state.finance)) {
@@ -39,7 +44,7 @@ export function boardUnpaidCosts(state: SeasonState, clubId: string): number | n
 }
 
 /** The mandate uses immutable registration snapshots, never later skill growth or arrivals. */
-export function buildBoardMandate(state: SeasonState, startsRound: number): BoardMandate {
+export function buildBoardMandate<T extends BoardCalculationContext>(state: T, startsRound: number): BoardMandate {
   if (!Number.isInteger(startsRound) || startsRound < 1 || startsRound > seasonRounds(state) + 1) throw new Error('Choose an actual prospective board assessment window.');
   const resources = state.clubs.map(club => {
     const roster = rosterForRound(state.rosters, club.id, state.round);
@@ -80,7 +85,7 @@ export function prepareBoardSeason(state: SeasonState): SeasonState {
 }
 
 /** Pure review builder: only committed results, original registrations and booked costs count. */
-export function buildBoardReview(state: SeasonState, mandate: BoardMandate): BoardReview {
+export function buildBoardReview<T extends BoardCalculationContext>(state: T, mandate: BoardMandate): BoardReview {
   if (mandate.seasonNumber !== state.seasonNumber || state.round < mandate.startsRound || state.date !== dateForRound(state.round, state.seasonNumber)) throw new Error('Review only an eligible committed matchday of this mandate.');
   const fixtures = state.fixtures.filter(fixture => fixture.round >= mandate.startsRound && fixture.round <= state.round);
   if (!fixtures.length || fixtures.some(fixture => !fixture.result)) throw new Error('Commit every fixture in the board review window first.');

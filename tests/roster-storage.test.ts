@@ -6,6 +6,7 @@ import { setAutoSubstitutions, simulateToEnd, simulateToQuarterEnd, stepMatch } 
 import { parseSeason, serializeSeason, validateSeasonState } from '../src/storage/season-storage';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
+import { getSeasonPerformance } from '../src/world/performance';
 
 const clubId = 'atlantic-pilots';
 const manager = { name: 'Historical Coach', dateOfBirth: '1980-03-17', nationality: 'Turkish' };
@@ -18,6 +19,14 @@ function oldFormat(state: SeasonState, version: 7 | 8): string {
   return JSON.stringify({ format: 'basketball-manager-season', formatVersion: version, engineVersion: 'possession-3', state: previous });
 }
 let firstComplete: SeasonState, secondLive: SeasonState;
+function expectRetainedHistory(state: SeasonState): void {
+  const totals = (source: SeasonState, year = source.seasonNumber) => getSeasonPerformance(source, year).map(({ log, summaryGames, ...row }) => row);
+  expect(totals(state, 1)).toEqual(totals(firstComplete));
+  for (const fixture of state.history[0]!.fixtures) {
+    if ([fixture.homeClubId, fixture.awayClubId].includes(clubId)) expect(fixture.result).toEqual(firstComplete.fixtures.find(row => row.id === fixture.id)!.result);
+    else { expect(fixture.result.stats).toBeNull(); expect(fixture.result.appearances).toBeDefined(); }
+  }
+}
 beforeAll(() => {
   firstComplete = completed(createSeason(9, clubId, 'standard', true, true, true, true, manager));
   const next = advanceSeason(finish(rolloverSeason(firstComplete)));
@@ -31,7 +40,7 @@ describe('historical roster persistence', () => {
     expect(restored).toEqual(secondLive);
     expect(restored.manager).toEqual(manager);
     expect(restored.history[0]!.rosters).toEqual(firstComplete.rosters);
-    expect(restored.history[0]!.fixtures.map(fixture => fixture.result)).toEqual(firstComplete.fixtures.map(fixture => fixture.result));
+    expectRetainedHistory(restored);
     expect(restored.training.lastWeek!.rosterIds[clubId]).toBe('roster-s2-atlantic-pilots-r1');
     expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(secondLive.activeMatch));
     expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(secondLive)));
@@ -56,7 +65,7 @@ describe('historical roster persistence', () => {
     const migrated = parseSeason(oldFormat(firstComplete, 8));
     expect(migrated).toEqual(firstComplete);
     const next = rolloverSeason(migrated);
-    expect(next.history[0]!.fixtures.map(fixture => fixture.result)).toEqual(firstComplete.fixtures.map(fixture => fixture.result));
+    expectRetainedHistory(next);
     expect(parseSeason(serializeSeason(next))).toEqual(next);
   });
 

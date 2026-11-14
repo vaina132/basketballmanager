@@ -23,11 +23,17 @@ function record(state: SeasonState, fixture: SeasonFixture, scorer?: string): Fi
 }
 
 describe('historical performance and roster attribution', () => {
-  it('retains exact season statistics, player logs and box scores after rollover', () => {
+  it('retains exact season statistics and manager match detail after rollover', () => {
     expect(getPerformanceCoverage(nextYear, 1)).toBe('complete');
-    expect(getSeasonPerformance(nextYear, 1)).toEqual(getSeasonPerformance(completed));
+    const before = getSeasonPerformance(completed), after = getSeasonPerformance(nextYear, 1);
+    const totals = (rows: typeof before) => rows.map(({ log, summaryGames, ...row }) => row);
+    expect(totals(after)).toEqual(totals(before));
+    expect(after.filter(row => row.club.id === completed.managedClubId)).toEqual(before.filter(row => row.club.id === completed.managedClubId));
     expect(getSeasonPerformance(nextYear).every(row => row.games === 0 && row.log.length === 0)).toBe(true);
-    expect(nextYear.history[0]!.fixtures.map(fixture => fixture.result.stats)).toEqual(completed.fixtures.map(fixture => fixture.result!.stats));
+    for (const fixture of nextYear.history[0]!.fixtures) {
+      if ([fixture.homeClubId, fixture.awayClubId].includes(completed.managedClubId)) expect(fixture.result).toEqual(completed.fixtures.find(row => row.id === fixture.id)!.result);
+      else { expect(fixture.result.stats).toBeNull(); expect(fixture.result.appearances).toBeDefined(); }
+    }
     expect(getFixtureTeams(nextYear, nextYear.history[0]!.fixtures[0]!, 1)).toEqual(getFixtureTeams(completed, completed.fixtures[0]!));
   });
 
@@ -70,7 +76,8 @@ describe('historical performance and roster attribution', () => {
   it('reports unavailable legacy statistics without inventing zero rows or erasing team scores', () => {
     const legacy = structuredClone(nextYear);
     const scores = legacy.history[0]!.fixtures.map(fixture => fixture.result.officialScore);
-    for (const fixture of legacy.history[0]!.fixtures) fixture.result.stats = null;
+    delete legacy.history[0]!.summary;
+    for (const fixture of legacy.history[0]!.fixtures) { fixture.result.stats = null; delete fixture.result.appearances; }
     expect(getPerformanceCoverage(legacy, 1)).toBe('unavailable');
     expect(getSeasonPerformance(legacy, 1)).toEqual([]);
     expect(legacy.history[0]!.fixtures.map(fixture => fixture.result.officialScore)).toEqual(scores);

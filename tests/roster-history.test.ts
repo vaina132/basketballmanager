@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { RosterSnapshot } from '../src/domain/roster';
@@ -99,12 +100,13 @@ describe('fixture, training and archive ownership', () => {
     expect(archive.rosters).not.toBe(completed.rosters);
     expect(archive.rosters[0]!.players[0]!.attributes).not.toBe(completed.rosters[0]!.players[0]!.attributes);
     expect(nextYear.rosters).toEqual(createRosterSnapshots(nextYear.clubs, 2));
-    expect(archive.fixtures).toEqual(completed.fixtures);
+    expect(restoreSeniorDetail(nextYear, completed).history[0]!.fixtures).toEqual(completed.fixtures);
     for (const [index, fixture] of archive.fixtures.entries()) {
-      expect(fixture.result.stats).not.toBeNull();
       expect(fixture.result.stats).not.toBe(completed.fixtures[index]!.result!.stats);
-      const playerId = Object.keys(fixture.result.stats!)[0]!;
-      expect(fixture.result.stats![playerId]).not.toBe(completed.fixtures[index]!.result!.stats[playerId]);
+      if (fixture.result.stats) {
+        const playerId = Object.keys(fixture.result.stats)[0]!;
+        expect(fixture.result.stats[playerId]).not.toBe(completed.fixtures[index]!.result!.stats[playerId]);
+      } else expect(fixture.result.appearances).toBeDefined();
       expect(fixture.result.rosterIds).not.toBe(completed.fixtures[index]!.result!.rosterIds);
     }
     expect(getSeasonRosterData(nextYear, 1)).toBe(archive);

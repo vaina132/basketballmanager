@@ -68,18 +68,25 @@ export interface SeasonFixture {
 
 /** Older imports lack box scores; newly archived seasons retain complete results. */
 export interface ArchivedFixture extends Omit<SeasonFixture, 'result'> {
-  result: Omit<FixtureResult, 'stats'> & { stats: Record<string, PlayerStats> | null };
+  result: Omit<FixtureResult, 'stats'> & { stats: Record<string, PlayerStats> | null; appearances?: Record<string, ArchivedAppearance> };
 }
+
+/** Retained per-game evidence for historical morale, scouting and injury checks. No invented box score. */
+export interface ArchivedAppearance { secondsPlayed: number; fouls: number; appeared: boolean }
+export interface ArchivedPlayerTotals { clubId: string; playerId: string; games: number; totals: Omit<PlayerStats, 'condition'> }
+export interface SeniorSeasonSummary { model: 'senior-totals-1'; players: ArchivedPlayerTotals[] }
 
 export interface SeasonArchive {
   seasonNumber: number;
   rosters: RosterSnapshot[];
   fixtures: ArchivedFixture[];
+  /** Totals for the fixtures with appearances instead of full box scores, never counted twice. */
+  summary?: SeniorSeasonSummary;
 }
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
 /** Format 39 carries the world; 40 compacts strings/shapes; 41 shares subtrees; 42 summarizes rival academy reports; 43 summarizes rival youth fixtures. */
-export const SEASON_SCHEMA_VERSION = 44;
+export const SEASON_SCHEMA_VERSION = 45;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

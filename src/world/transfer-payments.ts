@@ -39,7 +39,7 @@ export function getTransferObligationReserve(state: Partial<Pick<SeasonState, 'e
   return (state.employment?.transfers ?? []).filter(transfer => transfer.toClubId === clubId && transfer.id !== excludeTransferId).reduce((total, transfer) => total + getTransferInstallments(transfer).reduce((sum, _installment, index) => sum + getTransferInstallmentRemaining(transfer, index), 0), 0);
 }
 
-export function getTransferPaymentSummary(state: Pick<SeasonState, 'date'> & Partial<Pick<SeasonState, 'employment'>>, clubId: string): TransferPaymentSummary {
+export function getTransferPaymentSummary(state: Pick<SeasonState, 'date'> & { employment?: Pick<SeasonState['employment'], 'transfers'> }, clubId: string): TransferPaymentSummary {
   const summary: TransferPaymentSummary = { outgoingRemaining: 0, futureDue: 0, overdue: 0, nextDueOn: null, incomingRemaining: 0, incomingOverdue: 0 };
   for (const transfer of state.employment?.transfers ?? []) {
     if (transfer.toClubId !== clubId && transfer.fromClubId !== clubId) continue;

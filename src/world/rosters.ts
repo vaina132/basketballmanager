@@ -63,6 +63,7 @@ export interface SeasonRosterData {
   seasonNumber: number;
   rosters: readonly RosterSnapshot[];
   fixtures: readonly (SeasonFixture | ArchivedFixture)[];
+  summary?: SeasonState['history'][number]['summary'];
 }
 
 export function getSeasonRosterData(season: SeasonState, seasonNumber = season.seasonNumber): SeasonRosterData {

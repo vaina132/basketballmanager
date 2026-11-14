@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
@@ -17,11 +18,13 @@ const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simu
 const encode = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 let opening: SeasonState, pending: SeasonState, accepted: SeasonState, paid: SeasonState, competition: SeasonState, withdrawn: SeasonState;
 let playerId: string;
+let firstComplete: SeasonState;
 
 beforeAll(() => {
   let state = createSeason(63, clubId, 'off', true, true, true, true, null, true, true);
   while (state.status === 'active') state = play(state);
   for (const player of state.clubs.find(club => club.id === clubId)!.players.slice(0, 8)) state = offerPlayerContract(state, player.id, getSeasonWage(player.id), 1);
+  firstComplete = state;
   opening = enableInSeasonRecruitment(enableNegotiations(rolloverSeason(state)));
   playerId = getInSeasonCandidates(opening)[0]!.id;
   pending = submitInSeasonOffer(opening, playerId, getSeasonWage(playerId));
@@ -34,7 +37,7 @@ beforeAll(() => {
 
 describe('in-season recruitment persistence', () => {
   it('migrates genuine format18 arrivals and their payroll while keeping paid transfers disabled', () => {
-    const previous = structuredClone(accepted) as unknown as Record<string, unknown>;
+    const previous = restoreSeniorDetail(accepted, firstComplete) as unknown as Record<string, unknown>;
     stripInSeasonTransfers(previous); previous.schemaVersion = 18;
     const restored = parseSeason(encode(previous, 18));
     expect(restored).toEqual(accepted);
@@ -66,7 +69,7 @@ describe('in-season recruitment persistence', () => {
   });
 
   it('validates format17 before adding disabled recruitment and round-one contract metadata', () => {
-    const legacy = structuredClone(opening) as unknown as Record<string, unknown>;
+    const legacy = restoreSeniorDetail(opening, firstComplete) as unknown as Record<string, unknown>;
     stripInSeasonRecruitment(legacy); legacy.schemaVersion = 17;
     const restored = parseSeason(encode(legacy, 17));
     expect(restored).toEqual({ ...opening, recruitment: { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] } });

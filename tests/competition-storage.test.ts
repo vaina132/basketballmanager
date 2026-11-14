@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
@@ -18,7 +19,7 @@ function complete(state: SeasonState): SeasonState { while (state.status === 'ac
 
 /** Reconstruct the format13 shape from a window explicitly replayed under its original rules. */
 function format13(state: SeasonState): string {
-  const previous = structuredClone(state) as unknown as Record<string, unknown>;
+  const previous = restoreSeniorDetail(state, opened) as unknown as Record<string, unknown>;
   stripInSeasonRecruitment(previous); previous.schemaVersion = 13;
   delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts;
   const market = previous.market as { windows: Array<Record<string, unknown>> };

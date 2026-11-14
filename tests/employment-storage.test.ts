@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
@@ -46,7 +47,7 @@ describe('employment persistence across registrations', () => {
     expect(own.players.some(player => player.id === incomingId)).toBe(true);
     expect(new Set(own.players.map(player => player.number)).size).toBe(own.players.length);
     expect(second.history[0]!.rosters).toEqual(offseason.rosters);
-    expect(second.history[0]!.fixtures.map(fixture => fixture.result)).toEqual(offseason.fixtures.map(fixture => fixture.result));
+    expect(restoreSeniorDetail(second, offseason).history[0]!.fixtures.map(fixture => fixture.result)).toEqual(offseason.fixtures.map(fixture => fixture.result));
     const before = second.payroll.agreements.find(agreement => agreement.playerId === renewedId && agreement.seasonNumber === 1)!;
     const after = second.payroll.agreements.find(agreement => agreement.playerId === renewedId && agreement.seasonNumber === 2)!;
     expect(before.seasonWage).toBe(getSeasonWage(renewedId));
@@ -78,7 +79,7 @@ describe('employment persistence across registrations', () => {
   it('migrates actual format 9 with full historical statistics and employment disabled', () => {
     const legacy = complete(createSeason(9, clubId, 'off'));
     const previous = rolloverSeason(legacy);
-    const old = structuredClone(previous) as unknown as Record<string, unknown>;
+    const old = restoreSeniorDetail(previous, legacy) as unknown as Record<string, unknown>;
     stripInSeasonRecruitment(old); delete old.market; delete old.employment; delete old.scouting; delete old.negotiations; old.schemaVersion = 9;
     const restored = parseSeason(envelope(old, 9));
     expect(restored).toEqual(previous);

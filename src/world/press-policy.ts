@@ -1,6 +1,7 @@
 import type { PressAnswer, PressQuestion, PressTopic } from '../domain/relationships';
 import type { SeasonState } from '../domain/season';
 import { rosterForRound } from './rosters';
+import { fixturePlayerEvidence } from './senior-history';
 import { roundOrdinal, seasonRounds } from './career-world';
 import type { WorldContext } from '../domain/world';
 
@@ -57,7 +58,7 @@ export function getPressQuestion(state: Pick<SeasonState, 'relationships' | 'fix
   const minutes = new Map<string, number>();
   for (const fixture of run) {
     const roster = rosterForRound(state.rosters, clubId, fixture.round);
-    for (const player of roster.players) minutes.set(player.id, (minutes.get(player.id) ?? 0) + (fixture.result!.stats?.[player.id]?.secondsPlayed ?? 0));
+    for (const player of roster.players) minutes.set(player.id, (minutes.get(player.id) ?? 0) + (fixturePlayerEvidence(fixture, player.id)?.secondsPlayed ?? 0));
   }
   const playerIds = (state.clubs.find(club => club.id === clubId)?.players ?? []).map(player => player.id).sort(compareText);
   const coreIds = [...minutes.entries()].filter(([id, seconds]) => seconds > 0 && playerIds.includes(id)).sort((a, b) => b[1] - a[1] || compareText(a[0], b[0])).slice(0, PRESS_CORE_PLAYERS).map(([id]) => id).sort(compareText);

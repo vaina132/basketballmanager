@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_PLAYERS } from '../src/data/development-players';
@@ -120,7 +121,7 @@ describe('offseason calendar through genuine season boundaries', () => {
     expect(next.market.windows).toHaveLength(1);
     expect(next.market.windows[0]).toMatchObject({ closed: true, seasonNumber: 1, date: resolved.date, offers: getMarketWindow(resolved)!.offers });
     expect(next.negotiations.records).toEqual(resolved.negotiations.records);
-    expect(getSeasonPerformance(next, 1)).toEqual(oldPerformance);
+    expect(getSeasonPerformance(restoreSeniorDetail(next, resolved), 1)).toEqual(oldPerformance);
     expect(Object.values(next.conditions).every(condition => condition === 100)).toBe(true);
     expect(parseSeason(serializeSeason(next))).toEqual(next);
     expect(play(parseSeason(serializeSeason(next)))).toEqual(play(next));

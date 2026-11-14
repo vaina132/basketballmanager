@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { stripInSeasonRecruitment } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
@@ -109,7 +110,7 @@ describe('paid transfer persistence and accounting', () => {
     expect(nextYear.clubs.find(club => club.id === managed)!.players.some(player => player.id === target)).toBe(true);
     expect(nextYear.clubs.find(club => club.id === seller)!.players.some(player => player.id === target)).toBe(false);
     expect(nextYear.payroll.agreements.find(agreement => agreement.playerId === target && agreement.seasonNumber === 2)).toMatchObject({ clubId: managed, seasonWage: getSeasonWage(target) + 200_000 });
-    expect(nextYear.history[0]!.fixtures).toEqual(ready.fixtures);
+    expect(restoreSeniorDetail(nextYear, ready).history[0]!.fixtures).toEqual(ready.fixtures);
   });
 
   it('preserves format14 state and decisions before allowing new paid proposals', () => {

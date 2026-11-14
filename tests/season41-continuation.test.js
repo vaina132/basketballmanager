@@ -1,3 +1,4 @@
+import { restoreSeniorDetail } from './helpers/senior-reference';
 import { financeAtLedgerBoundary, financeLedgerCount } from '../src/world/finance-ledger';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -20,7 +21,7 @@ beforeAll(() => { states = Object.fromEntries(names.map(name => [name, parseSeas
 
 /** Restore omitted display details from the independently recorded old fixture, only after proving every retained value. */
 function fullReference(candidate, original) {
-  const restored = structuredClone(candidate);
+  const restored = restoreSeniorDetail(candidate, original);
   const byWeek = new Map(original.academy.weeks.map(week => [week.id, week]));
   for (const week of restored.academy.weeks) for (const [id, report] of Object.entries(week.players)) if (report.detail === 'outcome') {
     const previous = byWeek.get(week.id)?.players[id];

@@ -15,7 +15,7 @@ import { roundKey } from './career-world';
 
 export const YOUTH_SQUAD_SIZE = 8;
 const DAY_MS = 86_400_000;
-type YouthContext = { academy: SeasonAcademy; youthCompetition?: SeasonYouthCompetition; date?: string };
+type YouthContext = { youthCompetition?: SeasonYouthCompetition; date?: string };
 // Save validation replays these conversions many times per career; both are pure.
 const calendarNumber = memoizePure((date: string): number => {
   const value = Date.parse(`${date}T00:00:00Z`);

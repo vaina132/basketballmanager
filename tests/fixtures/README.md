@@ -81,3 +81,6 @@ The four `season43-board-*` fixtures were captured with `npm.cmd run fixtures:ca
 | season43-board-career | `0ce19adc9bbd2ba8cf8c214abe22b002318d3eb25123d4af03a3143dadbf25b6` |
 | season43-board-complete | `f185dcca0675a215b146b5533c606975de316567fc7fdc6d153921fb85657312` |
 | season43-board-opening | `3a3cba27457bb7bbf19deb9abfda873d6d7487c5ee9c80f9f3e234e8a4dfdaff` |
+
+
+The four `season44-*` fixtures listed in `senior-history-original-44.json` were captured from untouched commit `7f76294` before format 45 and senior summaries were implemented. The manifest records the source fixture hashes, source commit and captured gzip hashes. They include the ordinary board career, complete season, next opening and an eight-club career opening. `senior-history.test.js` checks original all-player totals, historical manager logs, relationship reports, migration, corruption rejection and idempotence. Do not regenerate these baselines with the summarized runtime.

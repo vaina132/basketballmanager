@@ -65,7 +65,7 @@ These are targets, not completed behavior. A local checkpoint fingerprint may sk
 | Step | What | Status |
 | --- | --- | --- |
 | 3.1 | Data: import the other eight domestic divisions, the EuroCup and the BCL (2025-26 and 2026-27); club identities; ratings that compare every league with the European level (rating-3); a new private pack with all thirteen competitions | Import complete; roster fidelity/freshness follow-up below remains |
-| 3.2 | Save checks that scale: sealed seasons and lighter records for clubs the manager does not run | In progress: validated local reads, historical checks, academy/youth outcomes and lossless financial archives; bounded total history and incremental strict checks remain |
+| 3.2 | Save checks that scale: sealed seasons and lighter records for clubs the manager does not run | Single-league implementation and verification complete. Combined-world capacity/load acceptance remains at 3.7 |
 | 3.1 follow-up / 3.3 prerequisite | Distinguish full club rosters, competition registration and matchday selection; preserve variable real roster sizes and audit fresh API memberships | Planned after the current 3.2 work, before selection acceptance |
 | 3.3 | One calendar for several leagues: competitions in the world, game days, days without the manager's game, a table per league, amounts per week or home game | Planned |
 | 3.4 | Domestic playoffs, titles, and promotion and relegation (real formats, checked per league) | Planned |
@@ -329,6 +329,48 @@ The three-sample whole-operation comparison passed exact state, bytes, all relat
 Evidence: `.artifacts/step32i-profile-2026-11-14T19-26-13-930Z/`, `.artifacts/step32i-paired-2026-11-14T19-32-23-617Z/comparison.json`, `.artifacts/step32i-isolated-2026-11-14T19-37-52-110Z.json`. Source/input guards and original next-step equality passed; original fixtures/reports/manifests were not regenerated.
 
 **3.2 remains in progress:** total-history growth, resource limits and incremental strict validation are still open, with academy/board replay also prominent in the profile. Next comes roster/registration separation and freshness, then steps 3.3-3.7 above and sprint 4 rating/match calibration. Core single-league management and data import are implemented; the shared multi-league European world is not yet implemented.
+
+## Step 3.2 completion: senior history and bounded replay reuse (14 November 2026)
+
+The owner requested the remaining 3.2 work together. Format **45** now summarizes completed senior rival games into exact season totals plus the per-match participation/minutes/fouls needed by scouting, morale and injury checks. Full manager-game box scores remain, using the club managed in that historical season. Current-season detail stays full, and genuinely unavailable old statistics remain unknown. The small UI changes distinguish season totals from detailed logs. Format-44 and older evidence is checked before migration; summaries have independent membership, timing, participation and statistical invariants, not an imported proof of omitted box scores. See [architecture](architecture.md#senior-season-summaries-and-format-45).
+
+Strict validation reuses pure academy-week and board calculations only when every typed input matches exactly. The codec's private cache interns shared field shapes and fixed blocks of long input keys, stores results with the existing compact codec and returns independent objects. It is bounded to a conservative 64 MiB payload/metadata allowance and 250,000 entries; overflow falls back to ordinary computation and suspends cache construction for later checks with the same or larger club-season workload. Smaller workloads/reset/new workers may retry; this hint affects caching only. Legacy evidence is checked without filling this cache, then its migrated current representation can use it. Every record comparison and chronology/accounting guard still runs. No cache is persisted, imported, or used to authorize a game command. Inputs are walked again on each check; in-place changes and validation failures inside the replay scope cannot reuse stale facts. Non-JSON-exact outputs, including signed zero, are recomputed. Current schema 45 and checks version 3 invalidate older format seals through the existing format salt.
+
+Four genuine public format-44 fixtures and the original real-career read models were captured from untouched `7f76294` before implementation. Existing fixtures/manifests remain unchanged. Tests compare all season totals, original manager match logs, historical ownership, relationships and migration; the legacy test helper restores omitted detail only from retained original games after checking every summary field. The full original/current five-season comparison also passed exact declared state/next-matchday projections and all 204 registration boundaries.
+
+On the same real 18-club career with five completed seasons, three alternating old/current Node samples measured:
+
+| Operation | Previous 44 | Current 45 |
+| --- | --- | --- |
+| Sixth-opening save | 8,294,537 bytes | 7,737,744 bytes (6.71% smaller) |
+| Repeat strict load, median | 14.616 s | 9.842 s |
+| Validated write, median | 16.856 s | 10.192 s |
+| Verified local reopen, median | 0.931 s | 0.883 s |
+| Ordinary next matchday, median | 2.402 s | 2.483 s |
+
+Strict-check medians are lower, but **all operation ranges overlap** and timings varied substantially between runs; do not claim a reliable percentage improvement or a general hardware guarantee. The current write samples range from 9.722 to 17.208 s. Cold strict read was 16.262 / 13.026 s in this final run; the earlier run had a slower current cold read while building reusable calculations. First old-format migration took 32.989 s because original evidence and the migrated state both validate. These are fixture-specific Node results, not combined-world acceptance. The cache retained 47,015,342 budgeted bytes / 141,074 entries without eviction for repeated operations. A smaller initial cache was ineffective on the long fixture; shared keys, compact results and the explicit bounded budget replaced it. Final source-frozen report: `.artifacts/step32-completion-compare-2026-11-14T21-05-29-431Z/report.json`; original input/source hashes and every equivalence guard passed. The earlier comparison at `20-40-42-119Z` predates admission backoff and the legacy-cache bypass; keep it as historical evidence, not the final implementation's timing claim.
+
+### Extended full-management capacity
+
+The real 18-club career continued with all enabled management systems to **season 10 opening**, retaining nine completed seasons and **21,847 logical transactions**. This exceeds the former lifetime transaction ceiling without turning off academy, staff, board or transfer behavior. Strict checkpoint roundtrips, final reload continuation, original input-state immutability and source/input hash guards passed.
+
+| Boundary | Save bytes | Logical transactions | Strict write / read |
+| --- | --- | --- | --- |
+| Season 9 opening | 12,019,396 | 19,465 | See retained report |
+| Season 9 end | 14,559,395 | 21,604 | 73.03 / 36.50 s |
+| Season 10 opening | 13,464,963 | 21,847 | 49.53 / 37.12 s |
+
+The final opening retains 243 active transactions, nine financial blocks, 1,625 contracts, 444 academy prospects, 297 academy weeks and ten youth seasons. The resumed diagnostic passed in 579.99 s with peak Node RSS **1,968,292 KiB (about 1.88 GiB)**. **Strict save/import costs remain high at this age**, even with bounded cache admission; they require further profiling in integrated 3.7 acceptance before broader release. File size still grows with retained history. A verified local reopen does not rerun these strict operations.
+
+The first leg, `.artifacts/career-benchmark-2026-11-14T20-44-45-806Z/`, retained verified checkpoints through season 8 end and was explicitly stopped while checking the following opening to implement admission backoff. Its `stopped.json` records the interruption; it is not a whole-command pass. The successful resumed run is `.artifacts/career-benchmark-2026-11-14T20-55-30-169Z/`, with final save SHA-256 `01e972e7966d78e71bf1da3dd2f738804e1ac283ea02bf28e7af1d1f72e975cb` and state SHA-256 `309d6547556af47575dff7466a5bad02051980028cb1b55ea3cc9dfcba783672`. Outputs may contain private data and stay ignored.
+
+**Acceptance boundary:** all record forms in the original 3.2 design now exist (local validation fingerprints, rival academy/youth outcomes, financial archives and senior season totals), with bounded replay reuse for unchanged calculations. This does not make total lifetime history constant in size or promise infinite seasons in a fixed 32 MiB file. Existing file, expanded-value, journal and financial-segment guards remain. The actual **three full leagues plus Europe / five-season / approximately five-second local load** acceptance must run at 3.7, after the calendar, competitions and registration systems exist; adding independent league file sizes is not a substitute. Roster fidelity/registration and freshness come next, before 3.3; no country-selection or competition gameplay has been added here.
+
+### Final verification
+
+Full serial regression passed **2,429 tests across 162 files in 737.45 s**, without failures or skips (`.artifacts/step32-completion-final-tests.log`). Two corruption cases were then strengthened to mutate real `twoPoint` values instead of an unsupported property; all **25 replay-cache tests passed again** (`step32-completion-final-cache-tests.log`). Production source/scripts remain unchanged from the final paired comparison. Typecheck and build passed with the existing large-chunk advisory (`step32-completion-final-build-verified.log`, native exit 0). The first build wrapper treated warning stderr as a PowerShell failure; an explicit native exit confirmed success.
+
+**15 real Edge/module-worker/IndexedDB checks passed without browser errors** (`step32-completion-browser-smoke-report.json`), preserving original financial models/budgets, senior totals and manager logs through migration, import/export, reload, recovery and certificate fallback, while rejecting corrupt imports and stale writes. The five-completed-season real career strictly imported in **16.86 s**, validated/wrote in **14.20 s**, and then reopened through a fresh page and worker in **1.99 s**, with identical retained state and only a `parse-sealed` request. This measures the storage operation, not complete interface readiness, and is not the later combined-world target. The first harness attempt passed 14 checks before rejecting its unsupported checkpoint reason; correcting that ignored harness to the existing `manual` operation produced the successful rerun without product changes. See the current HANDOVER.md entry for artifacts and continuation instructions.
 
 ## Not in this sprint (suggestions)
 

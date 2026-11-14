@@ -1,4 +1,6 @@
 import { getFacilityUpkeep } from './facilities-policy';
+import type { FinanceEntry } from '../domain/finance';
+import { financeLedgerEntries } from './finance-ledger';
 import type { CashOutlookInstallment, CashOutlookRow, CashOutlookScenario, ClubCashOutlook } from '../domain/finance-outlook';
 import type { SeasonState } from '../domain/season';
 import { forecastGate, getFinanceBalance, recommendTicketPrice, ROUND_OPERATING_COST } from './finance';
@@ -58,7 +60,8 @@ export function getClubCashOutlook(state: SeasonState, clubId = state.managedClu
   };
   if (!enabled) return outlook;
 
-  const ledger = state.finance.ledger.filter(entry => entry.clubId === clubId);
+  const ledger: FinanceEntry[] = [];
+  for (const entry of financeLedgerEntries(state.finance)) if (entry.clubId === clubId) ledger.push(entry);
   const dueNow = emptyRow(state.date, 'due-now');
   dueNow.unpaidCosts = balance.unpaid;
   const scheduled = new Map<string, CashOutlookRow>();

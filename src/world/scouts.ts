@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { ScoutContract, SeasonScouts } from '../domain/scouts';
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
@@ -13,14 +14,14 @@ export function enableScouts(state: SeasonState): SeasonState {
   if (state.scouts.enabledSince) return state;
   if (!state.finance.enabledSince || !state.scouting.enabledSince) throw new Error('Enable club finances and scouting before recruiting scouts.');
   if (state.status !== 'active') throw new Error('Start the next season before enabling scout recruitment.');
-  const next = { ...state, scouts: { ...state.scouts, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length } } };
+  const next = { ...state, scouts: { ...state.scouts, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } };
   return prepareScoutingAssignments(recruitAiScouts(next));
 }
 
 function hireForClub(state: SeasonState, scoutId: string, clubId: string): SeasonState {
   const quote = quoteScoutHire(state, scoutId, clubId);
   if (!quote.canHire) throw new Error(quote.reason!);
-  const contract: ScoutContract = { id: `scout-contract-${state.scouts.contracts.length + 1}`, scoutId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: state.finance.ledger.length };
+  const contract: ScoutContract = { id: `scout-contract-${state.scouts.contracts.length + 1}`, scoutId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: financeLedgerCount(state.finance) };
   return recordScoutFee({ ...state, scouts: { ...state.scouts, contracts: [...state.scouts.contracts, contract] } }, contract);
 }
 
@@ -37,7 +38,7 @@ function managedContract(state: SeasonState, contractId: string): ScoutContract 
 export function releaseScout(state: SeasonState, contractId: string): SeasonState {
   const contract = managedContract(state, contractId), club = state.scouting.clubs[state.managedClubId]!;
   return { ...state,
-    scouts: { ...state.scouts, contracts: state.scouts.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: state.finance.ledger.length } : item) },
+    scouts: { ...state.scouts, contracts: state.scouts.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) },
     scouting: { ...state.scouting, clubs: { ...state.scouting.clubs, [state.managedClubId]: { ...club, assignments: club.assignments.filter(assignment => assignment.observer?.contractId !== contract.id) } } },
   };
 }

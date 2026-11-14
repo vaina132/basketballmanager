@@ -42,3 +42,8 @@ export function cachedCalculation<T>(owner: object, namespace: symbol, key: stri
   values.set(key, value);
   return value;
 }
+
+/** Optional indexes can keep their cheap scanning path when no synchronous calculation scope is active. */
+export function scopedCalculation<T>(owner: object, namespace: symbol, key: string, compute: () => T): T | undefined {
+  return calculationScope ? cachedCalculation(owner, namespace, key, compute) : undefined;
+}

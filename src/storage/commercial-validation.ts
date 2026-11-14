@@ -5,6 +5,7 @@ import { managedClubAtLedger } from '../world/career';
 import { incumbentSponsorId, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
 import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, createCommercial, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_RENEWAL_ROUND } from '../world/commercial-policy';
 import { dateForRound, MAX_SEASON_NUMBER, seasonStartDate } from '../world/season';
+import { financeLedgerCount } from '../world/finance-ledger';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'ledgerCount'] as const;
 const EVENT_KEYS: Record<CommercialEvent['type'], readonly string[]> = {
@@ -57,7 +58,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
     const value = record(raw, path, ANCHOR_KEYS);
     const seasonNumber = integer(value.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber);
     const round = integer(value.round, `${path}.round`, 1, seasonNumber === state.seasonNumber ? state.round : seasonRounds(state));
-    const ledgerCount = integer(value.ledgerCount, `${path}.ledgerCount`, 0, ledger.length);
+    const ledgerCount = integer(value.ledgerCount, `${path}.ledgerCount`, 0, financeLedgerCount({ ledger }));
     if (typeof value.date !== 'string' || value.date > state.date) fail(`${path}.date`, 'must be an actual career date');
     const matchday = dateForRound(round, seasonNumber);
     const latest = seasonNumber < MAX_SEASON_NUMBER ? dayBefore(seasonStartDate(seasonNumber + 1)) : '9999-12-31';
@@ -83,7 +84,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
   let index = 0, previous: CommercialAnchor = activation;
 
   const seasonFixtures = (seasonNumber: number) => seasonNumber === state.seasonNumber ? state.fixtures : state.history.find(archive => archive.seasonNumber === seasonNumber)?.fixtures ?? fail('commercial', 'requires the original fixtures of every negotiated season');
-  const completionStart = (seasonNumber: number) => { const first = ledger.findIndex(entry => entry.seasonNumber === seasonNumber && entry.round === seasonRounds(state) && entry.kind === 'tickets'); return first < 0 ? ledger.length : first; };
+  const completionStart = (seasonNumber: number) => { const first = ledger.findIndex(entry => entry.seasonNumber === seasonNumber && entry.round === seasonRounds(state) && entry.kind === 'tickets'); return first < 0 ? financeLedgerCount({ ledger }) : first; };
   const eventAt = (position: number): CommercialEvent => {
     const path = `commercial.events[${position}]`;
     const raw = events[position];

@@ -6,6 +6,7 @@ import { seasonRounds } from './career-world';
 import { getReservedTransferFees } from './market-policy';
 import { getTransferObligationReserve } from './transfer-payments';
 import { getReservedInSeasonFees, getReservedInSeasonWages } from './recruitment-policy';
+import { ledgerClubNet, payrollLedgerReader, type PayrollLedgerReader } from './finance-ledger-index';
 
 /** Installments in the built-in league's season; every season pays one installment per matchday (`seasonRounds`). */
 export const PAYROLL_INSTALLMENTS = 10;
@@ -20,13 +21,18 @@ export function payrollInstallment(seasonWage: number, round: number, installmen
 }
 
 export function isAgreementPrepaid(agreementId: string, ledger: readonly FinanceEntry[]): boolean {
-  return ledger.some(entry => entry.payroll?.type === 'prepayment' && entry.payroll.items.some(item => item.agreementId === agreementId));
+  return payrollLedgerReader({ ledger })(agreementId).prepaid;
 }
 
 /** Remaining gross obligations exclude both posted installments and prepaid future installments. */
 export function agreementCommitted(agreement: PlayerWageAgreement, ledger: readonly FinanceEntry[], throughRound: number, installments: number): number {
+  return agreementCommittedFromLedger(agreement, throughRound, installments, payrollLedgerReader({ ledger }));
+}
+
+/** The same obligation calculation when a caller already owns a reader for this exact ledger boundary. */
+export function agreementCommittedFromLedger(agreement: PlayerWageAgreement, throughRound: number, installments: number, readPayroll: PayrollLedgerReader): number {
   const gross = Array.from({ length: Math.max(0, throughRound - agreement.startsRound + 1) }, (_, index) => payrollInstallment(agreement.seasonWage, agreement.startsRound + index, installments)).reduce((sum, amount) => sum + amount, 0);
-  const recorded = ledger.reduce((sum, entry) => sum + (entry.payroll?.items.reduce((amount, item) => amount + (item.agreementId === agreement.id ? item.gross : 0), 0) ?? 0), 0);
+  const recorded = readPayroll(agreement.id).gross;
   return Math.max(0, gross - recorded);
 }
 
@@ -39,12 +45,13 @@ export function agreementThroughRound(state: Partial<Pick<SeasonState, 'employme
 export function getPayrollReserve(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'round' | 'employment'>> & WorldContext, clubId: string): number {
   if (!state.payroll.enabledSince) return 0;
   const rounds = seasonRounds(state);
-  return state.payroll.agreements.filter(agreement => agreement.clubId === clubId && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= (state.round ?? rounds)).reduce((sum, agreement) => sum + agreementCommitted(agreement, state.finance.ledger, agreementThroughRound(state, agreement), rounds), 0);
+  const readPayroll = payrollLedgerReader(state.finance);
+  return state.payroll.agreements.filter(agreement => agreement.clubId === clubId && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= (state.round ?? rounds)).reduce((sum, agreement) => sum + agreementCommittedFromLedger(agreement, agreementThroughRound(state, agreement), rounds, readPayroll), 0);
 }
 
 /** Reconciled net wealth after every reservation; negative when commitments already exceed cash. */
 export function getSpendablePosition(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'employment' | 'recruitment' | 'round'>> & WorldContext, clubId: string, excludeOfferId?: string, excludeTransferId?: string, excludeInSeasonOfferId?: string): number {
-  const net = state.finance.ledger.filter(entry => entry.clubId === clubId).reduce((sum, entry) => sum + entry.amount, 0);
+  const net = ledgerClubNet(state.finance, clubId);
   return net - getPayrollReserve(state, clubId) - getReservedTransferFees(state, clubId, excludeOfferId) - getTransferObligationReserve(state, clubId, excludeTransferId) - getReservedInSeasonWages(state, clubId, excludeInSeasonOfferId) - getReservedInSeasonFees(state, clubId, excludeInSeasonOfferId);
 }
 

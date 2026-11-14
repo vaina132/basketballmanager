@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { CareerAnchor, CareerMove, CareerMoveReason, SeasonCareer } from '../domain/career';
 import type { SeasonState } from '../domain/season';
 import type { SeasonAcademy } from '../domain/academy';
@@ -87,7 +88,7 @@ export function appointManager(state: SeasonState, toClubId: string, reason: Car
   const refusal = careerMoveRefusal(state, toClubId);
   if (refusal) throw new Error(refusal);
   const from = state.managedClubId;
-  const move: CareerMove = { seasonNumber: state.seasonNumber, date: state.date, fromClubId: from, toClubId, reason, ledgerCount: state.finance.ledger.length };
+  const move: CareerMove = { seasonNumber: state.seasonNumber, date: state.date, fromClubId: from, toClubId, reason, ledgerCount: financeLedgerCount(state.finance) };
   let next: SeasonState = {
     ...state,
     managedClubId: toClubId,

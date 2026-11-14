@@ -87,6 +87,7 @@ import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTO
 import { COMPACT_JSON_ENCODING, LEGACY_COMPACT_JSON_ENCODING, compactJson2, expandJson } from './compact-json';
 import { cachedCalculation, withCalculationCache } from '../world/pure-cache';
 import { ledgerBoundaryIndex } from './ledger-boundaries';
+import { appendFinanceLedgerEntry, financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
 
 export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
@@ -367,7 +368,7 @@ function validateScouts(value: unknown, state: SeasonState, coaching: SeasonCoac
   const anchor = record(fields.enabledSince, 'scouts.enabledSince', ['seasonNumber', 'round', 'ledgerIndex']);
   const firstYear = number(anchor.seasonNumber, 'scouts.enabledSince.seasonNumber', 1, state.seasonNumber);
   const firstRound = number(anchor.round, 'scouts.enabledSince.round', 1, firstYear === state.seasonNumber ? state.round : seasonRounds(state));
-  const firstLedger = number(anchor.ledgerIndex, 'scouts.enabledSince.ledgerIndex', 0, ledger.length);
+  const firstLedger = number(anchor.ledgerIndex, 'scouts.enabledSince.ledgerIndex', 0, financeLedgerCount({ ledger }));
   const firstBoundary = roundKey(firstYear, firstRound);
   if ([state.finance.enabledSince, state.scouting.enabledSince].some(enabled => roundKey(enabled.seasonNumber, enabled.round) > firstBoundary)) fail('scouts.enabledSince', 'cannot precede finances or scouting activation');
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'scouts.enabledSince.ledgerIndex');
@@ -384,17 +385,17 @@ function validateScouts(value: unknown, state: SeasonState, coaching: SeasonCoac
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? state.round : seasonRounds(state));
     if (roundKey(year, round) < previousBoundary) fail(path, 'must retain chronological appointment order');
     previousBoundary = roundKey(year, round);
-    const hired = number(entry.hiredLedgerIndex, `${path}.hiredLedgerIndex`, previousLedger + 1, ledger.length - 1);
+    const hired = number(entry.hiredLedgerIndex, `${path}.hiredLedgerIndex`, previousLedger + 1, financeLedgerCount({ ledger }) - 1);
     previousLedger = hired;
     validateLedgerBoundary(ledger, hired, year, round, `${path}.hiredLedgerIndex`);
-    const charged = ledger[hired];
+    const charged = financeLedgerEntry({ ledger }, hired);
     if (!charged || charged.kind !== 'scouting' || charged.clubId !== entry.clubId || charged.seasonNumber !== year || charged.round !== round || charged.sourceId !== `scouting-${entry.id}`) fail(path, 'must be followed immediately by its actual appointment fee');
     if (typeof entry.renew !== 'boolean') fail(`${path}.renew`, 'must be boolean');
     if (entry.releasedRound === null) {
       if (entry.releasedLedgerIndex !== null) fail(`${path}.releasedLedgerIndex`, 'must be empty for an unreleased appointment');
     } else {
       const releasedRound = number(entry.releasedRound, `${path}.releasedRound`, round, year === state.seasonNumber ? state.round : seasonRounds(state));
-      const released = number(entry.releasedLedgerIndex, `${path}.releasedLedgerIndex`, hired + 1, ledger.length);
+      const released = number(entry.releasedLedgerIndex, `${path}.releasedLedgerIndex`, hired + 1, financeLedgerCount({ ledger }));
       validateLedgerBoundary(ledger, released, year, releasedRound, `${path}.releasedLedgerIndex`);
     }
     const active = contracts.filter(contract => contract.seasonNumber === year && (contract.releasedLedgerIndex === null || contract.releasedLedgerIndex > hired));
@@ -423,7 +424,7 @@ function validateFitness(value: unknown, state: SeasonState, coaching: SeasonCoa
   const anchor = record(fields.enabledSince, 'fitness.enabledSince', ['seasonNumber', 'round', 'ledgerIndex']);
   const firstYear = number(anchor.seasonNumber, 'fitness.enabledSince.seasonNumber', 1, state.seasonNumber);
   const firstRound = number(anchor.round, 'fitness.enabledSince.round', 1, firstYear === state.seasonNumber ? Math.min((seasonRounds(state) - 1), state.round) : (seasonRounds(state) - 1));
-  const firstLedger = number(anchor.ledgerIndex, 'fitness.enabledSince.ledgerIndex', 0, ledger.length);
+  const firstLedger = number(anchor.ledgerIndex, 'fitness.enabledSince.ledgerIndex', 0, financeLedgerCount({ ledger }));
   const firstBoundary = roundKey(firstYear, firstRound);
   if ([state.finance.enabledSince, state.training.enabledSince].some(enabled => roundKey(enabled.seasonNumber, enabled.round) > firstBoundary)) fail('fitness.enabledSince', 'cannot precede finances or training activation');
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'fitness.enabledSince.ledgerIndex');
@@ -440,17 +441,17 @@ function validateFitness(value: unknown, state: SeasonState, coaching: SeasonCoa
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? Math.min((seasonRounds(state) - 1), state.round) : (seasonRounds(state) - 1));
     if (roundKey(year, round) < previousBoundary) fail(path, 'must retain chronological appointment order');
     previousBoundary = roundKey(year, round);
-    const hired = number(entry.hiredLedgerIndex, `${path}.hiredLedgerIndex`, previousLedger + 1, ledger.length - 1);
+    const hired = number(entry.hiredLedgerIndex, `${path}.hiredLedgerIndex`, previousLedger + 1, financeLedgerCount({ ledger }) - 1);
     previousLedger = hired;
     validateLedgerBoundary(ledger, hired, year, round, `${path}.hiredLedgerIndex`);
-    const charged = ledger[hired];
+    const charged = financeLedgerEntry({ ledger }, hired);
     if (!charged || charged.kind !== 'fitness' || charged.clubId !== entry.clubId || charged.seasonNumber !== year || charged.round !== round || charged.sourceId !== `fitness-${entry.id}`) fail(path, 'must be followed immediately by its actual appointment fee');
     if (typeof entry.renew !== 'boolean') fail(`${path}.renew`, 'must be boolean');
     if (entry.releasedRound === null) {
       if (entry.releasedLedgerIndex !== null) fail(`${path}.releasedLedgerIndex`, 'must be empty for an unreleased appointment');
     } else {
       const releasedRound = number(entry.releasedRound, `${path}.releasedRound`, round, year === state.seasonNumber ? state.round : seasonRounds(state));
-      const released = number(entry.releasedLedgerIndex, `${path}.releasedLedgerIndex`, hired + 1, ledger.length);
+      const released = number(entry.releasedLedgerIndex, `${path}.releasedLedgerIndex`, hired + 1, financeLedgerCount({ ledger }));
       validateLedgerBoundary(ledger, released, year, releasedRound, `${path}.releasedLedgerIndex`);
     }
     const active = contracts.filter(contract => contract.seasonNumber === year && (contract.releasedLedgerIndex === null || contract.releasedLedgerIndex > hired));
@@ -479,7 +480,7 @@ function validatePhysio(value: unknown, state: SeasonState, coaching: SeasonCoac
   const anchor = record(fields.enabledSince, 'physio.enabledSince', ['seasonNumber', 'round', 'ledgerIndex']);
   const firstYear = number(anchor.seasonNumber, 'physio.enabledSince.seasonNumber', 1, state.seasonNumber);
   const firstRound = number(anchor.round, 'physio.enabledSince.round', 1, firstYear === state.seasonNumber ? Math.min((seasonRounds(state) - 1), state.round) : (seasonRounds(state) - 1));
-  const firstLedger = number(anchor.ledgerIndex, 'physio.enabledSince.ledgerIndex', 0, ledger.length);
+  const firstLedger = number(anchor.ledgerIndex, 'physio.enabledSince.ledgerIndex', 0, financeLedgerCount({ ledger }));
   const firstBoundary = roundKey(firstYear, firstRound);
   if ([state.finance.enabledSince].some(enabled => roundKey(enabled.seasonNumber, enabled.round) > firstBoundary)) fail('physio.enabledSince', 'cannot precede finances activation');
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'physio.enabledSince.ledgerIndex');
@@ -496,17 +497,17 @@ function validatePhysio(value: unknown, state: SeasonState, coaching: SeasonCoac
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? Math.min((seasonRounds(state) - 1), state.round) : (seasonRounds(state) - 1));
     if (roundKey(year, round) < previousBoundary) fail(path, 'must retain chronological appointment order');
     previousBoundary = roundKey(year, round);
-    const hired = number(entry.hiredLedgerIndex, `${path}.hiredLedgerIndex`, previousLedger + 1, ledger.length - 1);
+    const hired = number(entry.hiredLedgerIndex, `${path}.hiredLedgerIndex`, previousLedger + 1, financeLedgerCount({ ledger }) - 1);
     previousLedger = hired;
     validateLedgerBoundary(ledger, hired, year, round, `${path}.hiredLedgerIndex`);
-    const charged = ledger[hired];
+    const charged = financeLedgerEntry({ ledger }, hired);
     if (!charged || charged.kind !== 'physio' || charged.clubId !== entry.clubId || charged.seasonNumber !== year || charged.round !== round || charged.sourceId !== `physio-${entry.id}`) fail(path, 'must be followed immediately by its actual appointment fee');
     if (typeof entry.renew !== 'boolean') fail(`${path}.renew`, 'must be boolean');
     if (entry.releasedRound === null) {
       if (entry.releasedLedgerIndex !== null) fail(`${path}.releasedLedgerIndex`, 'must be empty for an unreleased appointment');
     } else {
       const releasedRound = number(entry.releasedRound, `${path}.releasedRound`, round, year === state.seasonNumber ? state.round : seasonRounds(state));
-      const released = number(entry.releasedLedgerIndex, `${path}.releasedLedgerIndex`, hired + 1, ledger.length);
+      const released = number(entry.releasedLedgerIndex, `${path}.releasedLedgerIndex`, hired + 1, financeLedgerCount({ ledger }));
       validateLedgerBoundary(ledger, released, year, releasedRound, `${path}.releasedLedgerIndex`);
     }
     const active = contracts.filter(contract => contract.seasonNumber === year && (contract.releasedLedgerIndex === null || contract.releasedLedgerIndex > hired));
@@ -535,7 +536,7 @@ function validateAssistant(value: unknown, state: SeasonState, coaching: SeasonC
   const anchor = record(fields.enabledSince, 'assistant.enabledSince', ['seasonNumber', 'round', 'ledgerIndex']);
   const firstYear = number(anchor.seasonNumber, 'assistant.enabledSince.seasonNumber', 1, state.seasonNumber);
   const firstRound = number(anchor.round, 'assistant.enabledSince.round', 1, firstYear === state.seasonNumber ? state.round : seasonRounds(state));
-  const firstLedger = number(anchor.ledgerIndex, 'assistant.enabledSince.ledgerIndex', 0, ledger.length);
+  const firstLedger = number(anchor.ledgerIndex, 'assistant.enabledSince.ledgerIndex', 0, financeLedgerCount({ ledger }));
   const firstBoundary = roundKey(firstYear, firstRound);
   if ([state.finance.enabledSince].some(enabled => roundKey(enabled.seasonNumber, enabled.round) > firstBoundary)) fail('assistant.enabledSince', 'cannot precede finances activation');
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'assistant.enabledSince.ledgerIndex');
@@ -554,10 +555,10 @@ function validateAssistant(value: unknown, state: SeasonState, coaching: SeasonC
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? state.round : seasonRounds(state));
     if (roundKey(year, round) < previousBoundary) fail(path, 'must retain chronological appointment order');
     previousBoundary = roundKey(year, round);
-    const hired = number(entry.hiredLedgerIndex, `${path}.hiredLedgerIndex`, previousLedger + 1, ledger.length - 1);
+    const hired = number(entry.hiredLedgerIndex, `${path}.hiredLedgerIndex`, previousLedger + 1, financeLedgerCount({ ledger }) - 1);
     previousLedger = hired;
     validateLedgerBoundary(ledger, hired, year, round, `${path}.hiredLedgerIndex`);
-    const charged = ledger[hired];
+    const charged = financeLedgerEntry({ ledger }, hired);
     if (!charged || charged.kind !== 'assistant' || charged.clubId !== entry.clubId || charged.seasonNumber !== year || charged.round !== round || charged.sourceId !== `assistant-${entry.id}`) fail(path, 'must be followed immediately by its actual appointment fee');
     if (round === seasonRounds(state) && finalRoundCommitted(year, hired)) fail(path, 'cannot appoint an assistant after the final matchday financial commit');
     if (typeof entry.renew !== 'boolean') fail(`${path}.renew`, 'must be boolean');
@@ -565,7 +566,7 @@ function validateAssistant(value: unknown, state: SeasonState, coaching: SeasonC
       if (entry.releasedLedgerIndex !== null) fail(`${path}.releasedLedgerIndex`, 'must be empty for an unreleased appointment');
     } else {
       const releasedRound = number(entry.releasedRound, `${path}.releasedRound`, round, year === state.seasonNumber ? state.round : seasonRounds(state));
-      const released = number(entry.releasedLedgerIndex, `${path}.releasedLedgerIndex`, hired + 1, ledger.length);
+      const released = number(entry.releasedLedgerIndex, `${path}.releasedLedgerIndex`, hired + 1, financeLedgerCount({ ledger }));
       validateLedgerBoundary(ledger, released, year, releasedRound, `${path}.releasedLedgerIndex`);
     }
     const active = contracts.filter(contract => contract.seasonNumber === year && (contract.releasedLedgerIndex === null || contract.releasedLedgerIndex > hired));
@@ -594,7 +595,7 @@ function validateYouth(value: unknown, state: SeasonState, coaching: SeasonCoach
   const anchor = record(fields.enabledSince, 'youth.enabledSince', ['seasonNumber', 'round', 'ledgerIndex']);
   const firstYear = number(anchor.seasonNumber, 'youth.enabledSince.seasonNumber', 1, state.seasonNumber);
   const firstRound = number(anchor.round, 'youth.enabledSince.round', 1, firstYear === state.seasonNumber ? Math.min(state.round, (seasonRounds(state) - 1)) : (seasonRounds(state) - 1));
-  const firstLedger = number(anchor.ledgerIndex, 'youth.enabledSince.ledgerIndex', 0, ledger.length);
+  const firstLedger = number(anchor.ledgerIndex, 'youth.enabledSince.ledgerIndex', 0, financeLedgerCount({ ledger }));
   const firstBoundary = roundKey(firstYear, firstRound);
   if ([state.finance.enabledSince, state.academy.enabledSince].some(enabled => roundKey(enabled.seasonNumber, enabled.round) > firstBoundary)) fail('youth.enabledSince', 'cannot precede finances or academy activation');
   if (roundKey(state.academy.enabledSince.seasonNumber, state.academy.enabledSince.round) === firstBoundary && firstLedger < state.academy.enabledSince.ledgerIndex) fail('youth.enabledSince.ledgerIndex', 'cannot precede academy activation within the same matchday');
@@ -612,17 +613,17 @@ function validateYouth(value: unknown, state: SeasonState, coaching: SeasonCoach
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? Math.min(state.round, (seasonRounds(state) - 1)) : (seasonRounds(state) - 1));
     if (roundKey(year, round) < previousBoundary) fail(path, 'must retain chronological appointment order');
     previousBoundary = roundKey(year, round);
-    const hired = number(entry.hiredLedgerIndex, `${path}.hiredLedgerIndex`, previousLedger + 1, ledger.length - 1);
+    const hired = number(entry.hiredLedgerIndex, `${path}.hiredLedgerIndex`, previousLedger + 1, financeLedgerCount({ ledger }) - 1);
     previousLedger = hired;
     validateLedgerBoundary(ledger, hired, year, round, `${path}.hiredLedgerIndex`);
-    const charged = ledger[hired];
+    const charged = financeLedgerEntry({ ledger }, hired);
     if (!charged || charged.kind !== 'youth' || charged.clubId !== entry.clubId || charged.seasonNumber !== year || charged.round !== round || charged.sourceId !== `youth-${entry.id}`) fail(path, 'must be followed immediately by its actual appointment fee');
     if (typeof entry.renew !== 'boolean') fail(`${path}.renew`, 'must be boolean');
     if (entry.releasedRound === null) {
       if (entry.releasedLedgerIndex !== null) fail(`${path}.releasedLedgerIndex`, 'must be empty for an unreleased appointment');
     } else {
       const releasedRound = number(entry.releasedRound, `${path}.releasedRound`, round, year === state.seasonNumber ? state.round : seasonRounds(state));
-      const released = number(entry.releasedLedgerIndex, `${path}.releasedLedgerIndex`, hired + 1, ledger.length);
+      const released = number(entry.releasedLedgerIndex, `${path}.releasedLedgerIndex`, hired + 1, financeLedgerCount({ ledger }));
       validateLedgerBoundary(ledger, released, year, releasedRound, `${path}.releasedLedgerIndex`);
     }
     const active = contracts.filter(contract => contract.seasonNumber === year && (contract.releasedLedgerIndex === null || contract.releasedLedgerIndex > hired));
@@ -650,7 +651,7 @@ function validateAcademyShape(value: unknown, state: SeasonState, version: numbe
   const anchor = record(fields.enabledSince, 'academy.enabledSince', ['seasonNumber', 'round', 'ledgerIndex', 'contractCount', 'negotiationCount']);
   const year = number(anchor.seasonNumber, 'academy.enabledSince.seasonNumber', 1, state.seasonNumber);
   const round = number(anchor.round, 'academy.enabledSince.round', 1, year === state.seasonNumber ? Math.min(state.round, (seasonRounds(state) - 1)) : (seasonRounds(state) - 1));
-  const ledger = number(anchor.ledgerIndex, 'academy.enabledSince.ledgerIndex', 0, state.finance.ledger.length);
+  const ledger = number(anchor.ledgerIndex, 'academy.enabledSince.ledgerIndex', 0, financeLedgerCount(state.finance));
   number(anchor.contractCount, 'academy.enabledSince.contractCount', 0, state.employment.contracts.length);
   number(anchor.negotiationCount, 'academy.enabledSince.negotiationCount', 0, state.negotiations.records.length);
   validateLedgerBoundary(state.finance.ledger, ledger, year, round, 'academy.enabledSince.ledgerIndex');
@@ -699,7 +700,7 @@ function validateYouthCompetitionShape(value: unknown, state: SeasonState, versi
   const firstYear = number(anchor.seasonNumber, 'youthCompetition.enabledSince.seasonNumber', 1, state.seasonNumber);
   const firstRound = number(anchor.round, 'youthCompetition.enabledSince.round', 1, firstYear === state.seasonNumber ? state.round : seasonRounds(state));
   if (anchor.date !== dateForRound(firstRound, firstYear)) fail('youthCompetition.enabledSince.date', 'must identify its actual active matchday');
-  number(anchor.ledgerIndex, 'youthCompetition.enabledSince.ledgerIndex', 0, state.finance.ledger.length);
+  number(anchor.ledgerIndex, 'youthCompetition.enabledSince.ledgerIndex', 0, financeLedgerCount(state.finance));
   number(anchor.contractCount, 'youthCompetition.enabledSince.contractCount', 0, state.employment.contracts.length);
   number(anchor.negotiationCount, 'youthCompetition.enabledSince.negotiationCount', 0, state.negotiations.records.length);
   number(anchor.recruitmentEventCount, 'youthCompetition.enabledSince.recruitmentEventCount', 0, state.recruitment.events.length);
@@ -796,7 +797,7 @@ function activateYouthReplay(replay: SeasonState, original: SeasonState): Season
   for (const [index, contract] of original.employment.contracts.entries()) if (index < anchor.contractCount ? roundKey(contract.signedSeason, contract.signedRound) > boundary : roundKey(contract.signedSeason, contract.signedRound) < boundary) fail(`${path}.contractCount`, 'must identify a chronological agreement prefix');
   for (const [index, reply] of original.negotiations.records.entries()) if (index < anchor.negotiationCount ? roundKey(reply.seasonNumber, reply.round) > boundary : roundKey(reply.seasonNumber, reply.round) < boundary) fail(`${path}.negotiationCount`, 'must identify a chronological response prefix');
   for (const [index, event] of original.recruitment.events.entries()) if (index < anchor.recruitmentEventCount ? roundKey(event.seasonNumber, event.round) > boundary : roundKey(event.seasonNumber, event.round) < boundary) fail(`${path}.recruitmentEventCount`, 'must identify a chronological recruitment prefix');
-  const enabled = enableYouthCompetition({ ...replay, finance: { ...original.finance, ledger: original.finance.ledger.slice(0, anchor.ledgerIndex) }, employment: { ...original.employment, contracts }, negotiations: { ...original.negotiations, records: replies }, recruitment: { ...original.recruitment, events } });
+  const enabled = enableYouthCompetition({ ...replay, finance: financeAtLedgerBoundary(original.finance, anchor.ledgerIndex), employment: { ...original.employment, contracts }, negotiations: { ...original.negotiations, records: replies }, recruitment: { ...original.recruitment, events } });
   if (!sameData(enabled.youthCompetition.enabledSince, anchor)) fail(path, 'must preserve the exact pre-supplement intake, graduation and command boundaries');
   return enabled;
 }
@@ -825,7 +826,7 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
   for (const [index, reply] of state.negotiations.records.entries()) if (index < anchor.negotiationCount ? roundKey(reply.seasonNumber, reply.round) > boundary : roundKey(reply.seasonNumber, reply.round) < boundary) fail('academy.enabledSince.negotiationCount', 'must identify a chronological response prefix');
   let replay: SeasonState = {
     ...state, academy: createAcademy(), youthCompetition: createYouthCompetition(), seasonNumber: anchor.seasonNumber, round: anchor.round, date: dateForRound(anchor.round, anchor.seasonNumber), status: 'active',
-    finance: { ...state.finance, ledger: state.finance.ledger.slice(0, anchor.ledgerIndex) }, employment: { ...state.employment, contracts: firstContracts }, negotiations: { ...state.negotiations, records: firstReplies },
+    finance: financeAtLedgerBoundary(state.finance, anchor.ledgerIndex), employment: { ...state.employment, contracts: firstContracts }, negotiations: { ...state.negotiations, records: firstReplies },
     conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => originalIds.has(id))),
     training: { ...state.training, points: Object.fromEntries(Object.entries(state.training.points).filter(([id]) => originalIds.has(id))) },
   };
@@ -920,7 +921,7 @@ function validateLifecycleHistory(state: SeasonState, recruitmentHolds: Recruitm
     const path = `lifecycle.reviews[${index}]`, year = first.seasonNumber + index, round = index === 0 ? first.round : 1;
     if (review.id !== `lifecycle-review-${index + 1}` || review.seasonNumber !== year || review.round !== round || review.date !== dateForRound(round, year)) fail(path, 'must identify activation followed by each canonical season opening');
     if (index === 0 && !sameData(Object.fromEntries(LIFECYCLE_ANCHOR_KEYS.map(key => [key, review[key]])), first)) fail('lifecycle.enabledSince', 'must match the first retained review source exactly');
-    const ledgerIndex = number(review.ledgerIndex, `${path}.ledgerIndex`, 0, state.finance.ledger.length);
+    const ledgerIndex = number(review.ledgerIndex, `${path}.ledgerIndex`, 0, financeLedgerCount(state.finance));
     const contractCount = number(review.contractCount, `${path}.contractCount`, 0, state.employment.contracts.length);
     const negotiationCount = number(review.negotiationCount, `${path}.negotiationCount`, 0, state.negotiations.records.length);
     const recruitmentEventCount = number(review.recruitmentEventCount, `${path}.recruitmentEventCount`, 0, state.recruitment.events.length);
@@ -941,7 +942,7 @@ function validateLifecycleHistory(state: SeasonState, recruitmentHolds: Recruitm
       for (const anchor of [state.academy.enabledSince, state.payroll.enabledSince]) if (anchor && roundKey(anchor.seasonNumber, anchor.round) === boundary && anchor.ledgerIndex > ledgerIndex) fail(`${path}.ledgerIndex`, 'cannot precede required feature activation on the same matchday');
       if (state.academy.enabledSince!.contractCount > contractCount || state.academy.enabledSince!.negotiationCount > negotiationCount) fail(path, 'cannot precede academy activation journal prefixes');
     }
-    const ledger = state.finance.ledger.slice(0, ledgerIndex), paidSources = new Set(ledger.map(entry => entry.sourceId));
+    const finance = financeAtLedgerBoundary(state.finance, ledgerIndex), ledger = finance.ledger, paidSources = new Set(ledger.map(entry => entry.sourceId));
     const contracts = state.employment.contracts.slice(0, contractCount);
     const employment = { ...state.employment, contracts, transfers: state.employment.transfers.filter(transfer => contracts.some(contract => contract.id === transfer.contractId)).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => paidSources.has(payment.id)) })), buyouts: state.employment.buyouts.filter(buyout => paidSources.has(buyout.id)), market: null };
     const youthAnchor = state.youthCompetition.enabledSince;
@@ -953,7 +954,7 @@ function validateLifecycleHistory(state: SeasonState, recruitmentHolds: Recruitm
     const context: SeasonState = {
       ...state, managedClubId: managedClubFor(state, year, false), seasonNumber: year, round, date: review.date, status: 'active', academy, lifecycle: replayed, youthCompetition, employment,
       clubs: clubsForEmploymentYear(employment, year, round, { world: worldOf(state), academy, lifecycle: replayed, seasonNumber: year, round }),
-      finance: { ...state.finance, ledger }, negotiations: { ...state.negotiations, records: replies },
+      finance, negotiations: { ...state.negotiations, records: replies },
       recruitment: { ...state.recruitment, events: state.recruitment.events.slice(0, recruitmentEventCount), offers }, market: { ...state.market, windows },
     };
     try { replayed = (index === 0 ? enableLifecycle(context) : prepareLifecycleSeason(context)).lifecycle; }
@@ -1035,7 +1036,7 @@ function validateFacilitiesShape(value: unknown, state: SeasonState, version: nu
   const checkAnchor = (raw: unknown, path: string): FacilityAnchor => {
     const anchor = record(raw, path, FACILITY_ANCHOR_KEYS);
     const year = number(anchor.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber), round = number(anchor.round, `${path}.round`, 1, year === state.seasonNumber ? state.round : seasonRounds(state));
-    const ledgerIndex = number(anchor.ledgerIndex, `${path}.ledgerIndex`, 0, state.finance.ledger.length);
+    const ledgerIndex = number(anchor.ledgerIndex, `${path}.ledgerIndex`, 0, financeLedgerCount(state.finance));
     const contractCount = number(anchor.contractCount, `${path}.contractCount`, 0, state.employment?.contracts.length ?? 0);
     const negotiationCount = number(anchor.negotiationCount, `${path}.negotiationCount`, 0, state.negotiations?.records.length ?? 0);
     const recruitmentCount = number(anchor.recruitmentEventCount, `${path}.recruitmentEventCount`, 0, recruitmentEvents.length);
@@ -1121,7 +1122,7 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
       const next = source.events[index + 1];
       if (next?.type !== 'start' || next.clubId !== event.clubId || next.facilityType !== event.facilityType || next.date !== event.date || next.ledgerIndex !== event.ledgerIndex + 1) fail(path, 'must start the funded upgrade immediately after the board approves its capital');
     }
-    const ledger = state.finance.ledger.slice(0, event.ledgerIndex);
+    const finance = financeAtLedgerBoundary(state.finance, event.ledgerIndex), ledger = finance.ledger;
     const contracts = state.employment.contracts.slice(0, event.contractCount);
     const sourceIds = new Set(ledger.map(entry => entry.sourceId));
     const employment: SeasonEmployment = event.contractCount === 0 ? createEmployment() : { ...state.employment, contracts, transfers: state.employment.transfers.filter(transfer => contracts.some(contract => contract.id === transfer.contractId)).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => sourceIds.has(payment.id)) })), buyouts: state.employment.buyouts.filter(buyout => sourceIds.has(buyout.id)), market: null };
@@ -1137,7 +1138,7 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
     const payroll = payrollVisible ? { ...state.payroll, agreements: state.payroll.agreements.filter(agreement => agreement.seasonNumber < year || agreement.seasonNumber === year && agreement.startsRound <= round && (!employment.enabledSince || contractForRound(employment, agreement.playerId, year, agreement.startsRound)?.clubId === agreement.clubId)) } : createPayroll(clubs, state.managedClubId);
     const trainingAnchor = state.training.enabledSince;
     const training = trainingAnchor && roundKey(trainingAnchor.seasonNumber, trainingAnchor.round) <= roundKey(year, round) ? state.training : { ...state.training, enabledSince: null };
-    let replay: SeasonState = { ...state, managedClubId: managedClubAtLedger(state, event.ledgerIndex), training, seasonNumber: year, round, date: event.date, status: round === seasonRounds(state) && ledger.some(entry => entry.seasonNumber === year && entry.round === seasonRounds(state) && entry.kind === 'operations') ? 'complete' : 'active', clubs, academy, lifecycle, employment, facilities, finance: { ...state.finance, ledger }, payroll, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, event.negotiationCount) }, recruitment: { ...state.recruitment, events: state.recruitment.events.slice(0, event.recruitmentEventCount), offers: live }, market };
+    let replay: SeasonState = { ...state, managedClubId: managedClubAtLedger(state, event.ledgerIndex), training, seasonNumber: year, round, date: event.date, status: round === seasonRounds(state) && ledger.some(entry => entry.seasonNumber === year && entry.round === seasonRounds(state) && entry.kind === 'operations') ? 'complete' : 'active', clubs, academy, lifecycle, employment, facilities, finance, payroll, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, event.negotiationCount) }, recruitment: { ...state.recruitment, events: state.recruitment.events.slice(0, event.recruitmentEventCount), offers: live }, market };
     if (event.ledgerIndex < previousLedger) fail(path, 'cannot rewind cash after a funded approval');
     for (const [i, command] of state.recruitment.events.entries()) {
       const nextLedger = event.ledgerIndex + Number(event.type === 'start');
@@ -1150,7 +1151,7 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
     }
     try { replay = applyFacilityEvent(replay, event); } catch (error) { fail(path, `does not follow construction rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     if (!samePrefix(replay.finance.ledger, state.finance.ledger)) fail(path, 'must pay the exact approved project once at its anchored cash boundary');
-    facilities = replay.facilities; previousLedger = replay.finance.ledger.length;
+    facilities = replay.facilities; previousLedger = financeLedgerCount(replay.finance);
   }
   if (fundingFormat) facilities = { ...facilities, fundingSince };
   if (maintenanceFormat) facilities = { ...facilities, maintenanceSince };
@@ -1430,7 +1431,7 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
     const beforePaymentIds = new Set(beforeTransfers.flatMap(transfer => transfer.payments.filter(payment => payment.paidOn <= openedOn).map(payment => payment.id)));
     const previousMarketEvents = windows.reduce((sum, item) => sum + item.events.length, 0);
     const beforeLedger = state.finance.ledger.filter(entry => (entry.seasonNumber < year || entry.seasonNumber === year && (entry.kind !== 'buyout' && (entry.kind !== 'transfer' || beforePaymentIds.has(entry.sourceId)))) && (facilityProjectOf(entry) === null || state.facilities.events[state.facilities.projects.find(project => project.id === facilityProjectOf(entry))!.startEventIndex]!.marketEventCount <= previousMarketEvents));
-    if (!sameData(beforeLedger, state.finance.ledger.slice(0, beforeLedger.length))) fail(path, 'must open after a contiguous financial history, before the transfer fees for this window');
+    if (!sameData(beforeLedger, financeLedgerSlice(state.finance, 0, beforeLedger.length))) fail(path, 'must open after a contiguous financial history, before the transfer fees for this window');
     const employment = { ...state.employment, contracts: state.employment.contracts.slice(0, expectedContractCount), transfers: beforeTransfers.map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => beforePaymentIds.has(payment.id)) })), buyouts: beforeBuyouts, market: { seasonNumber: year + 1 } };
     const initialWindow: MarketWindow = { seasonNumber: year, openedOn, closesOn, date: openedOn, contractCountBefore: expectedContractCount, negotiationCountBefore: expectedNegotiationCount, closed: false, competitionFromEvent, events: [], offers: [] };
     let replay: SeasonState = {
@@ -1438,22 +1439,25 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
       negotiations: { ...state.negotiations, records: beforeRecords },
       market: { model: 'market-1', enabledSince: { seasonNumber: firstYear, round: firstRound, contractCount, negotiationCount }, windows: [...windows, initialWindow] },
       conditions: { ...state.conditions },
-      finance: { ...state.finance, ledger: beforeLedger }, recruitment: createRecruitment(),
+      finance: financeAtLedgerBoundary(state.finance, beforeLedger.length), recruitment: createRecruitment(),
     };
     replay.clubs = getContractedClubs(replay, year);
     const synchronizeFacilities = (count: number, date: string) => {
       // Facilities are independent commands between market decisions. Only their exact paid prefix
       // may enter the next offer quote; later construction cannot finance or cancel an earlier bid.
       while (true) {
-        const entry = state.finance.ledger[replay.finance.ledger.length];
+        const entry = financeLedgerEntry(state.finance, financeLedgerCount(replay.finance));
         // Board capital precedes the upgrade it funds and follows the same project boundary.
         if (!entry || facilityProjectOf(entry) === null) break;
         const project = state.facilities.projects.find(project => project.id === facilityProjectOf(entry));
         const event = project && state.facilities.events[project.startEventIndex];
         if (!event || event.seasonNumber !== year || event.marketEventCount > count || event.date > date || event.contractCount > replay.employment.contracts.length || event.negotiationCount > replay.negotiations.records.length) break;
-        replay = { ...replay, finance: { ...replay.finance, ledger: [...replay.finance.ledger, entry] } };
+        const { id, ...charge } = entry;
+        const finance = appendFinanceLedgerEntry(replay.finance, charge);
+        if (financeLedgerEntry(finance, financeLedgerCount(finance) - 1)!.id !== id) fail(path, 'must retain the exact sequential identity at this facility payment boundary');
+        replay = { ...replay, finance };
       }
-      replay.facilities = facilitiesAtPrefix(state, date, replay.finance.ledger.length, replay.employment.contracts.length, replay.negotiations.records.length, state.recruitment.events.filter(event => event.seasonNumber <= year).length, count);
+      replay.facilities = facilitiesAtPrefix(state, date, financeLedgerCount(replay.finance), replay.employment.contracts.length, replay.negotiations.records.length, state.recruitment.events.filter(event => event.seasonNumber <= year).length, count);
       snapshots.push({ eventCount: count, seasonNumber: year, market: replay.market });
     };
     synchronizeFacilities(previousMarketEvents, openedOn);
@@ -1476,7 +1480,7 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
       else if (type === 'buyout' && (typeof event.id !== 'string' || typeof event.clubId !== 'string' || typeof event.playerId !== 'string')) fail(eventPath, 'must identify the release, player and club');
       else if (type === 'withdraw' && typeof event.offerId !== 'string') fail(`${eventPath}.offerId`, 'must identify a live proposal');
       synchronizeFacilities(previousMarketEvents + eventIndex, event.date as string);
-      replay.lifecycle = lifecycleAtBoundary(state.lifecycle, year, seasonRounds(state), replay.employment.contracts.length, state.recruitment.events.filter(event => event.seasonNumber <= year).length, windows.reduce((sum, item) => sum + item.events.length, 0) + eventIndex, replay.finance.ledger.length, replay.negotiations.records.length);
+      replay.lifecycle = lifecycleAtBoundary(state.lifecycle, year, seasonRounds(state), replay.employment.contracts.length, state.recruitment.events.filter(event => event.seasonNumber <= year).length, windows.reduce((sum, item) => sum + item.events.length, 0) + eventIndex, financeLedgerCount(replay.finance), replay.negotiations.records.length);
       try { replay = applyMarketEvent(replay, event as unknown as MarketEvent); }
       catch (error) { fail(eventPath, `does not follow the market rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     }
@@ -1528,7 +1532,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
   const firstRound = number(anchor.round, 'recruitment.enabledSince.round', 1, firstYear === state.seasonNumber ? state.round : seasonRounds(state));
   const firstBoundary = roundOrdinal(firstYear, firstRound, seasonRounds(state));
   const lastBoundary = roundOrdinal(state.seasonNumber, state.round, seasonRounds(state));
-  const anchorLedger = number(anchor.ledgerIndex, 'recruitment.enabledSince.ledgerIndex', 0, state.finance.ledger.length);
+  const anchorLedger = number(anchor.ledgerIndex, 'recruitment.enabledSince.ledgerIndex', 0, financeLedgerCount(state.finance));
   const anchorContracts = number(anchor.contractCount, 'recruitment.enabledSince.contractCount', 0, state.employment.contracts.length);
   const anchorNegotiations = number(anchor.negotiationCount, 'recruitment.enabledSince.negotiationCount', 0, state.negotiations.records.length);
   if (!state.employment.enabledSince || !state.finance.enabledSince || !state.payroll.enabledSince || !state.negotiations.enabledSince || [state.employment.enabledSince, state.finance.enabledSince, state.payroll.enabledSince, state.negotiations.enabledSince].some(item => roundOrdinal(item.seasonNumber, item.round, seasonRounds(state)) > firstBoundary)) fail('recruitment.enabledSince', 'requires employment, finance, payroll and negotiations already active');
@@ -1565,7 +1569,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     const eventBoundary = roundOrdinal(year, round, seasonRounds(state));
     if (eventBoundary !== boundary + (type === 'resolve' ? 1 : 0) || event.date !== dateForRound(round, year)) fail(path, 'must process each successive matchday before new commands at that boundary');
     boundary = eventBoundary;
-    const ledgerIndex = number(event.ledgerIndexBefore, `${path}.ledgerIndexBefore`, previousLedger, state.finance.ledger.length);
+    const ledgerIndex = number(event.ledgerIndexBefore, `${path}.ledgerIndexBefore`, previousLedger, financeLedgerCount(state.finance));
     const contractCount = number(event.contractCountBefore, `${path}.contractCountBefore`, previousContracts, state.employment.contracts.length);
     const negotiationCount = number(event.negotiationCountBefore, `${path}.negotiationCountBefore`, previousNegotiations, state.negotiations.records.length);
     verifyPrefix(year, round, ledgerIndex, contractCount, negotiationCount, path);
@@ -1574,7 +1578,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
       const allowed = state.finance.ledger.filter(entry => entry.seasonNumber < year || entry.seasonNumber === year && (entry.round < round || round === 1 && entry.round === 1 && (entry.kind === 'opening' || entry.kind === 'sponsor'))).length;
       if (ledgerIndex !== allowed) fail(`${path}.ledgerIndexBefore`, 'must resolve after the prior matchday and before new matchday discretionary spending');
     }
-    const ledger = state.finance.ledger.slice(0, ledgerIndex), sourceIds = new Set(ledger.filter(entry => entry.kind === 'transfer').map(entry => entry.sourceId));
+    const finance = financeAtLedgerBoundary(state.finance, ledgerIndex), ledger = finance.ledger, sourceIds = new Set(ledger.filter(entry => entry.kind === 'transfer').map(entry => entry.sourceId));
     const contracts = state.employment.contracts.slice(0, contractCount);
     const employment: SeasonEmployment = { ...state.employment, contracts, transfers: state.employment.transfers.filter(transfer => contracts.some(contract => contract.id === transfer.contractId)).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => sourceIds.has(payment.id)) })), buyouts: state.employment.buyouts.filter(buyout => ledger.some(entry => entry.kind === 'buyout' && entry.sourceId === buyout.id)), market: null };
     const youthAnchor = state.youthCompetition.enabledSince;
@@ -1587,7 +1591,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     const rosters = createRosterSnapshots(clubsForEmploymentYear(employment, year, 1, catalogContext), year);
     for (let at = 2; at <= round; at += 1) for (const club of clubsForEmploymentYear(employment, year, at, catalogContext)) if (!sameData(rosterForRound(rosters, club.id, at).players, club.players)) rosters.push({ id: `roster-s${year}-${club.id}-r${at}`, clubId: club.id, fromRound: at, players: [...club.players] });
     const catalogIds = new Set(getCareerPlayers(catalogContext).map(player => player.id));
-    let replay: SeasonState = { ...state, managedClubId: managedClubFor(state, year, false), academy, lifecycle, youthCompetition, conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => catalogIds.has(id))), training: { ...state.training, points: Object.fromEntries(Object.entries(state.training.points).filter(([id]) => catalogIds.has(id))) }, seasonNumber: year, round, date: event.date as string, status: 'active', clubs, rosters, employment, recruitment, finance: { ...state.finance, ledger }, payroll: { ...state.payroll, agreements: state.payroll.agreements.filter(agreement => agreement.seasonNumber < year || agreement.seasonNumber === year && agreement.startsRound <= round && contractForRound(employment, agreement.playerId, year, agreement.startsRound)?.clubId === agreement.clubId) }, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, negotiationCount) }, market: createMarket() };
+    let replay: SeasonState = { ...state, managedClubId: managedClubFor(state, year, false), academy, lifecycle, youthCompetition, conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => catalogIds.has(id))), training: { ...state.training, points: Object.fromEntries(Object.entries(state.training.points).filter(([id]) => catalogIds.has(id))) }, seasonNumber: year, round, date: event.date as string, status: 'active', clubs, rosters, employment, recruitment, finance, payroll: { ...state.payroll, agreements: state.payroll.agreements.filter(agreement => agreement.seasonNumber < year || agreement.seasonNumber === year && agreement.startsRound <= round && contractForRound(employment, agreement.playerId, year, agreement.startsRound)?.clubId === agreement.clubId) }, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, negotiationCount) }, market: createMarket() };
     try { replay = applyInSeasonEvent(replay, event as unknown as InSeasonEvent); }
     catch (error) { fail(path, `does not follow recruitment rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     if (!sameData(replay.employment.contracts, state.employment.contracts.slice(0, replay.employment.contracts.length)) || !sameData(replay.negotiations.records, state.negotiations.records.slice(0, replay.negotiations.records.length))) fail(path, 'must preserve the exact agreements and player replies generated at this boundary');
@@ -1599,7 +1603,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     for (const contract of replay.employment.contracts.slice(contractCount)) generatedContracts.add(contract.id);
     for (const response of replay.negotiations.records.slice(negotiationCount)) generatedResponses.add(response.id);
     recruitment = replay.recruitment;
-    previousLedger = replay.finance.ledger.length; previousContracts = replay.employment.contracts.length; previousNegotiations = replay.negotiations.records.length;
+    previousLedger = financeLedgerCount(replay.finance); previousContracts = replay.employment.contracts.length; previousNegotiations = replay.negotiations.records.length;
     const liveOffers = recruitment.offers.filter(offer => offer.seasonNumber === year && (offer.status === 'pending' || offer.status === 'club-review'));
     holds.push({ eventCount: index + 1, ledgerIndex, seasonNumber: year, round, negotiationCount: replay.negotiations.records.length, offers: liveOffers, amounts: Object.fromEntries(clubs.map(club => [club.id, liveOffers.filter(offer => offer.clubId === club.id).reduce((sum, offer) => sum + offer.remainingWages + (offer.transfer?.fee ?? 0), 0)])) });
   }
@@ -1719,7 +1723,7 @@ function validateScouting(value: unknown, state: SeasonState, version: number): 
     }
     if (!enabled || boundary < roundKey(enabled.seasonNumber, enabled.round)) fail(`${path}.observer`, 'cannot precede scout recruitment activation');
     const source = record(entry.observer, `${path}.observer`, ['contractId', 'scoutId', 'evidence', 'assignedLedgerIndex']);
-    const assigned = number(source.assignedLedgerIndex, `${path}.observer.assignedLedgerIndex`, enabled.ledgerIndex, state.finance.ledger.length);
+    const assigned = number(source.assignedLedgerIndex, `${path}.observer.assignedLedgerIndex`, enabled.ledgerIndex, financeLedgerCount(state.finance));
     validateLedgerBoundary(state.finance.ledger, assigned, year, round, `${path}.observer.assignedLedgerIndex`);
     const commit = ledgerBoundaryIndex(state.finance.ledger).commits.get(boundary);
     if (commit && assigned > commit.first) fail(`${path}.observer.assignedLedgerIndex`, 'must assign the observation before its matchday result is financially committed');
@@ -2117,7 +2121,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       if (!expected || expected.kind !== 'transfer' || expected.seasonNumber !== year || expected.round !== entryRound || amount !== expected.amount) fail(path, 'must match one side of a recorded transfer payment');
       const receipt = transferReceipts.get(entry.sourceId)!;
       if (amount < 0 && receipt.paymentIndex !== (paidTransferCounts.get(receipt.transfer.id) ?? 0)) fail(path, 'must book transfer receipts in their retained order');
-      const paired = fields.ledger[index + (amount < 0 ? 1 : -1)] as FinanceEntry | undefined;
+      const paired = financeLedgerEntry({ ledger: fields.ledger as FinanceEntry[] }, index + (amount < 0 ? 1 : -1));
       if (!paired || paired.kind !== 'transfer' || paired.sourceId !== entry.sourceId || paired.amount !== -amount || paired.clubId !== (amount < 0 ? receipt.transfer.fromClubId : receipt.transfer.toClubId)) fail(path, 'must retain an adjacent buyer debit followed by the matching seller credit');
       const balance = balances.get(entry.clubId)!;
       if (amount < 0 && (balance.unpaid > 0 || balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound))) fail(path, 'must fund the transfer fee while retaining wages and settling unpaid costs');
@@ -2278,21 +2282,22 @@ function validateTransferPaymentBoundaries(state: SeasonState): void {
     const date = dateForRound(round, year), key = `${count}/${date}`;
     if (checked.has(key)) return;
     checked.add(key);
-    const prefix = ledger.slice(0, count), paidIds = new Set(prefix.filter(entry => entry.kind === 'transfer' && entry.amount < 0).map(entry => entry.sourceId));
+    const finance = financeAtLedgerBoundary(state.finance, count), prefix = finance.ledger, paidIds = new Set(prefix.filter(entry => entry.kind === 'transfer' && entry.amount < 0).map(entry => entry.sourceId));
     const transfers = state.employment.transfers.filter(transfer => paidIds.has(transfer.id)).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => paidIds.has(payment.id)) }));
     const agreements = state.payroll.agreements.filter(agreement => {
       const incoming = state.employment.transfers.find(transfer => transfer.startsRound > 1 && transfer.startsSeason === agreement.seasonNumber && transfer.startsRound === agreement.startsRound && transfer.playerId === agreement.playerId && transfer.toClubId === agreement.clubId);
       return !incoming || paidIds.has(incoming.id);
     });
-    const replay = { ...state, seasonNumber: year, round, date, employment: { ...state.employment, transfers }, payroll: { ...state.payroll, agreements }, finance: { ...state.finance, ledger: prefix } };
-    const expected = processTransferPayments(replay).finance.ledger.slice(count);
-    if (!sameData(expected, ledger.slice(count, count + expected.length))) fail('finance.ledger', 'must settle due transfer installments at the recorded calendar boundary using only then-available cash');
+    const replay = { ...state, seasonNumber: year, round, date, employment: { ...state.employment, transfers }, payroll: { ...state.payroll, agreements }, finance };
+    const expected = financeLedgerSlice(processTransferPayments(replay).finance, count);
+    // A truncated invalid log must reach the same exact-payment comparison; the bounded adapter does not clamp.
+    if (!sameData(expected, financeLedgerSlice(state.finance, count, Math.min(count + expected.length, financeLedgerCount(state.finance))))) fail('finance.ledger', 'must settle due transfer installments at the recorded calendar boundary using only then-available cash');
   };
   const lastClub = state.clubs.at(-1)!.id;
   const openingSponsor = (entry: FinanceEntry | undefined, seasonNumber: number) => entry?.kind === 'sponsor' && entry.round === 1 && entry.seasonNumber === seasonNumber;
   for (const [index, entry] of ledger.entries()) {
     // The season-opening sponsorship block ends with the last paid club, which under agreements may not be the last club.
-    const openingBlockEnd = openingSponsor(entry, entry.seasonNumber) && entry.seasonNumber > state.finance.enabledSince!.seasonNumber && !openingSponsor(ledger[index + 1], entry.seasonNumber);
+    const openingBlockEnd = openingSponsor(entry, entry.seasonNumber) && entry.seasonNumber > state.finance.enabledSince!.seasonNumber && !openingSponsor(financeLedgerEntry(state.finance, index + 1), entry.seasonNumber);
     if (openingBlockEnd || entry.clubId === lastClub && entry.kind === 'payroll' && entry.payroll?.type === 'installment') audit(index + 1, entry.seasonNumber, entry.round);
   }
   const firstYear = Math.min(...state.employment.transfers.map(transfer => transfer.startsSeason));
@@ -2303,7 +2308,7 @@ function validateTransferPaymentBoundaries(state: SeasonState): void {
       let boundary = ledger.findIndex(entry => entry.seasonNumber === year && entry.round === round && (entry.kind === 'tickets' || entry.kind === 'operations'));
       if (boundary < 0) {
         if (year !== state.seasonNumber || round !== state.round || state.status !== 'active') continue;
-        boundary = ledger.length;
+        boundary = financeLedgerCount({ ledger });
       }
       // A manual salary prepayment can follow preparation on the same date and
       // release discount cash without running the calendar again. Its ledger row
@@ -2311,12 +2316,13 @@ function validateTransferPaymentBoundaries(state: SeasonState): void {
       // receipt block, never to that optional later command's resulting cash.
       let lastReceipt = boundary - 1;
       const automaticReceipt = (entry: FinanceEntry) => entry.kind === 'transfer' && receipts.get(entry.sourceId)?.paidOn === date && state.employment.transfers.some(transfer => transfer.payments.slice(1).some(payment => payment.id === entry.sourceId));
-      while (lastReceipt >= 0 && ledger[lastReceipt]!.seasonNumber === year && ledger[lastReceipt]!.round === round && !automaticReceipt(ledger[lastReceipt]!)) lastReceipt -= 1;
-      if (lastReceipt >= 0 && ledger[lastReceipt]!.seasonNumber === year && ledger[lastReceipt]!.round === round && ledger[lastReceipt]!.kind === 'transfer' && receipts.get(ledger[lastReceipt]!.sourceId)?.paidOn === date) boundary = lastReceipt + 1;
-      else if (ledger.slice(lastReceipt + 1, boundary).some(entry => entry.payroll?.type === 'prepayment')) continue;
+      let receipt = financeLedgerEntry(state.finance, lastReceipt);
+      while (receipt && receipt.seasonNumber === year && receipt.round === round && !automaticReceipt(receipt)) receipt = financeLedgerEntry(state.finance, --lastReceipt);
+      if (receipt && receipt.seasonNumber === year && receipt.round === round && receipt.kind === 'transfer' && receipts.get(receipt.sourceId)?.paidOn === date) boundary = lastReceipt + 1;
+      else if (financeLedgerSlice(state.finance, lastReceipt + 1, boundary).some(entry => entry.payroll?.type === 'prepayment')) continue;
       // Preparation can follow automatic salary prepayments. Rebuild its trailing
       // receipt block instead of running payments a second time after seller income.
-      while (boundary > 0 && automaticReceipt(ledger[boundary - 1]!)) boundary -= 1;
+      while (boundary > 0 && automaticReceipt(financeLedgerEntry(state.finance, boundary - 1)!)) boundary -= 1;
       audit(boundary, year, round);
     }
   }
@@ -2591,7 +2597,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version >= 7) {
     const finance = record(state.finance, 'finance', ['model', 'enabledSince', 'plans', 'roundPrices', 'ledger', ...(version >= 28 && Object.hasOwn(state.finance as object, 'roundCapacities') ? ['roundCapacities'] : [])]);
     if (!Array.isArray(finance.ledger)) fail('finance.ledger', 'must be an array');
-    payroll = validatePayroll(state.payroll, clubs, seasonNumber, round, state.managedClubId, finance.ledger.length, employment, careerContext);
+    payroll = validatePayroll(state.payroll, clubs, seasonNumber, round, state.managedClubId, financeLedgerCount({ ledger: finance.ledger as FinanceEntry[] }), employment, careerContext);
     if (employment?.enabledSince) {
       const anchor = payroll.enabledSince;
       if (!anchor || roundKey(anchor.seasonNumber, anchor.round) > roundKey(employment.enabledSince.seasonNumber, employment.enabledSince.round)) fail('employment.enabledSince', 'requires payroll active from the employment activation boundary');

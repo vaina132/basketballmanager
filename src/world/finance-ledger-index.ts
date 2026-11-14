@@ -1,0 +1,100 @@
+import type { FinanceBalance, FinanceEntry } from '../domain/finance';
+import { financeLedgerEntries, scopedFinanceLedgerIndex, type FinanceLedgerSource } from './finance-ledger';
+
+interface Point<T> { through: number; value: T }
+interface ClubTotals extends FinanceBalance { net: number }
+export interface LedgerPayrollTotals { gross: number; amount: number; discount: number; prepaid: boolean }
+export type PayrollLedgerReader = (agreementId: string) => LedgerPayrollTotals;
+const CLUB_TOTALS = Symbol('validation club financial prefixes');
+const WAGE_TOTALS = Symbol('validation wage financial prefixes');
+const emptyClub = (): ClubTotals => ({ cash: 0, unpaid: 0, net: 0 });
+const emptyWage = (): LedgerPayrollTotals => ({ gross: 0, amount: 0, discount: 0, prepaid: false });
+
+function addAmount(previous: ClubTotals, amount: number): ClubTotals {
+  if (amount >= 0) {
+    const settled = Math.min(previous.unpaid, amount);
+    return { cash: previous.cash + amount - settled, unpaid: previous.unpaid - settled, net: previous.net + amount };
+  }
+  const paid = Math.min(previous.cash, -amount);
+  return { cash: previous.cash - paid, unpaid: previous.unpaid - amount - paid, net: previous.net + amount };
+}
+
+/** Index positions, not dates: same-day payments must not become visible before their original command. */
+function atBoundary<T>(points: readonly Point<T>[] | undefined, through: number): T | undefined {
+  if (!points) return undefined;
+  let low = 0, high = points.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (points[middle]!.through <= through) low = middle + 1; else high = middle;
+  }
+  return low ? points[low - 1]!.value : undefined;
+}
+
+function clubIndex(finance: FinanceLedgerSource): Map<string, Point<ClubTotals>[]> {
+  const clubs = new Map<string, Point<ClubTotals>[]>();
+  let through = 0;
+  for (const row of financeLedgerEntries(finance)) {
+    through += 1;
+    const points = clubs.get(row.clubId) ?? [];
+    points.push({ through, value: addAmount(points.at(-1)?.value ?? emptyClub(), row.amount) });
+    clubs.set(row.clubId, points);
+  }
+  return clubs;
+}
+
+function clubTotals(finance: FinanceLedgerSource, clubId: string): ClubTotals {
+  const scoped = scopedFinanceLedgerIndex(finance, CLUB_TOTALS, clubIndex);
+  if (scoped) return atBoundary(scoped.index.get(clubId), scoped.through) ?? emptyClub();
+  let totals = emptyClub();
+  for (const row of financeLedgerEntries(finance)) if (row.clubId === clubId) totals = addAmount(totals, row.amount);
+  return totals;
+}
+
+export function ledgerClubBalance(finance: FinanceLedgerSource, clubId: string): FinanceBalance {
+  const { cash, unpaid } = clubTotals(finance, clubId);
+  return { cash, unpaid };
+}
+
+export function ledgerClubNet(finance: FinanceLedgerSource, clubId: string): number { return clubTotals(finance, clubId).net; }
+
+function wagesInRow(row: FinanceEntry): Map<string, LedgerPayrollTotals> {
+  const wages = new Map<string, LedgerPayrollTotals>();
+  for (const item of row.payroll?.items ?? []) {
+    const previous = wages.get(item.agreementId) ?? emptyWage();
+    wages.set(item.agreementId, { gross: previous.gross + item.gross, amount: previous.amount + item.amount,
+      discount: previous.discount + item.discount, prepaid: row.payroll!.type === 'prepayment' });
+  }
+  return wages;
+}
+
+function addWages(previous: LedgerPayrollTotals, charge: LedgerPayrollTotals): LedgerPayrollTotals {
+  return { gross: previous.gross + charge.gross, amount: previous.amount + charge.amount,
+    discount: previous.discount + charge.discount, prepaid: previous.prepaid || charge.prepaid };
+}
+
+function wageIndex(finance: FinanceLedgerSource): Map<string, Point<LedgerPayrollTotals>[]> {
+  const wages = new Map<string, Point<LedgerPayrollTotals>[]>();
+  let through = 0;
+  for (const row of financeLedgerEntries(finance)) {
+    through += 1;
+    if (!row.payroll) continue;
+    for (const [id, charge] of wagesInRow(row)) {
+      const points = wages.get(id) ?? [];
+      points.push({ through, value: addWages(points.at(-1)?.value ?? emptyWage(), charge) });
+      wages.set(id, points);
+    }
+  }
+  return wages;
+}
+
+/** One local reader can serve all players in a squad; only validation scopes retain reusable prefix indexes. */
+export function payrollLedgerReader(finance: FinanceLedgerSource): PayrollLedgerReader {
+  const scoped = scopedFinanceLedgerIndex(finance, WAGE_TOTALS, wageIndex);
+  if (scoped) return id => ({ ...(atBoundary(scoped.index.get(id), scoped.through) ?? emptyWage()) });
+  const wages = new Map<string, LedgerPayrollTotals>();
+  for (const row of financeLedgerEntries(finance)) {
+    if (!row.payroll) continue;
+    for (const [id, charge] of wagesInRow(row)) wages.set(id, addWages(wages.get(id) ?? emptyWage(), charge));
+  }
+  return id => ({ ...(wages.get(id) ?? emptyWage()) });
+}

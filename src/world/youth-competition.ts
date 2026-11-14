@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { SeasonAcademy } from '../domain/academy';
 import type { SeasonInjury, SeasonState, Standing } from '../domain/season';
 import type { Team } from '../domain/types';
@@ -124,7 +125,7 @@ export function enableYouthCompetition(state: SeasonState): SeasonState {
   if (state.youthCompetition.enabledSince) return state;
   if (!state.academy.enabledSince) throw new Error('Enable the academy before arranging youth matches.');
   if (state.status !== 'active') throw new Error('Enable youth matches during an active season.');
-  const enabledSince = { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex: state.finance.ledger.length, contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length, recruitmentEventCount: state.recruitment.events.length, academyIntakeCount: state.academy.intakes.length, academyGraduateCount: state.academy.graduates.length };
+  const enabledSince = { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex: financeLedgerCount(state.finance), contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length, recruitmentEventCount: state.recruitment.events.length, academyIntakeCount: state.academy.intakes.length, academyGraduateCount: state.academy.graduates.length };
   return prepare({ ...state, youthCompetition: { ...state.youthCompetition, enabledSince } }, state.round);
 }
 

@@ -28,6 +28,8 @@ import { getArenaCapacity, getFacilityUpkeepBreakdown, quoteFacilityUpgrade } fr
 import { governingDerby, RIVALRY_CROWD_PERCENT } from './rivalries';
 import { agreementFor, commercialGovernsSeason, openingSponsorshipClubs, sponsorshipInstallment, sponsorshipSourceId, type DueSponsorshipPayment } from './commercial-policy';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
+import { appendFinanceLedgerEntry, financeLedgerCount, financeLedgerEntries } from './finance-ledger';
+import { ledgerClubBalance } from './finance-ledger-index';
 
 export { clubFinanceDefinition } from './career-world';
 export type { FinanceBalance, FinanceLedgerRow, GateForecast } from '../domain/finance';
@@ -68,22 +70,23 @@ function applyAmount(balance: FinanceBalance, amount: number): FinanceBalance {
 }
 
 export function getFinanceBalance(finance: SeasonFinance, clubId: string): FinanceBalance {
-  return finance.ledger.filter(entry => entry.clubId === clubId).reduce((balance, entry) => applyAmount(balance, entry.amount), { cash: 0, unpaid: 0 });
+  return ledgerClubBalance(finance, clubId);
 }
 
 /** Newest-first display rows preserve both the original obligation and its actual cash effects. */
 export function financeLedgerRows(finance: SeasonFinance, clubId: string): FinanceLedgerRow[] {
   let balance: FinanceBalance = { cash: 0, unpaid: 0 };
-  return finance.ledger.filter(entry => entry.clubId === clubId).map(entry => {
+  const rows: FinanceLedgerRow[] = [];
+  for (const entry of financeLedgerEntries(finance)) if (entry.clubId === clubId) {
     const previous = balance;
     balance = applyAmount(previous, entry.amount);
-    return { ...entry, cashDelta: balance.cash - previous.cash, unpaidDelta: balance.unpaid - previous.unpaid, cashAfter: balance.cash, unpaidAfter: balance.unpaid };
-  }).reverse();
+    rows.push({ ...entry, cashDelta: balance.cash - previous.cash, unpaidDelta: balance.unpaid - previous.unpaid, cashAfter: balance.cash, unpaidAfter: balance.unpaid });
+  }
+  return rows.reverse();
 }
 
 function append(state: SeasonState, entry: Omit<FinanceEntry, 'id'>): SeasonState {
-  if (state.finance.ledger.some(previous => previous.clubId === entry.clubId && previous.kind === entry.kind && previous.sourceId === entry.sourceId)) throw new Error('This financial event has already been recorded.');
-  return { ...state, finance: { ...state.finance, ledger: [...state.finance.ledger, { ...entry, id: `finance-${state.finance.ledger.length + 1}` }] } };
+  return { ...state, finance: appendFinanceLedgerEntry(state.finance, entry) };
 }
 
 function book(state: SeasonState, clubId: string, kind: FinanceEntry['kind'], amount: number, sourceId: string, ticket: FinanceEntry['ticket'] = null, coach: FinanceEntry['coach'] = null, payroll: PayrollCharge | null = null): SeasonState {
@@ -100,7 +103,7 @@ export function recordPayrollCharge(state: SeasonState, clubId: string, payroll:
 /** Construction is paid in full on approval; cancellation does not refund this retained investment. */
 export function recordFacilityInvestment(state: SeasonState, project: FacilityProject): SeasonState {
   const stored = state.facilities.projects.at(-1), event = state.facilities.events.at(-1);
-  if (!state.facilities.enabledSince || !state.finance.enabledSince || !stored || JSON.stringify(stored) !== JSON.stringify(project) || project.id !== `facility-project-${state.facilities.projects.length}` || event?.type !== 'start' || event.projectId !== project.id || event.ledgerIndex !== state.finance.ledger.length || project.startEventIndex !== state.facilities.events.length - 1 || project.startedOn !== state.date || project.completedOn !== null || project.cancelledOn !== null) throw new Error('Pay only the exact newly approved facility project.');
+  if (!state.facilities.enabledSince || !state.finance.enabledSince || !stored || JSON.stringify(stored) !== JSON.stringify(project) || project.id !== `facility-project-${state.facilities.projects.length}` || event?.type !== 'start' || event.projectId !== project.id || event.ledgerIndex !== financeLedgerCount(state.finance) || project.startEventIndex !== state.facilities.events.length - 1 || project.startedOn !== state.date || project.completedOn !== null || project.cancelledOn !== null) throw new Error('Pay only the exact newly approved facility project.');
   const before = { ...state, facilities: { ...state.facilities, projects: state.facilities.projects.slice(0, -1), events: state.facilities.events.slice(0, -1) } };
   const quote = quoteFacilityUpgrade(before, project.type, project.clubId);
   if (!quote.canStart || quote.cost !== project.cost || quote.fromLevel !== project.fromLevel || quote.toLevel !== project.toLevel || quote.dueOn !== project.dueOn) throw new Error(quote.reason ?? 'Fund exactly the approved construction terms.');
@@ -110,7 +113,7 @@ export function recordFacilityInvestment(state: SeasonState, project: FacilityPr
 /** Owner capital for exactly the approved board decision just recorded; the funded upgrade starts next. */
 export function recordBoardCapital(state: SeasonState, projectId: string): SeasonState {
   const decision = state.facilities.events.at(-1);
-  if (!state.finance.enabledSince || decision?.type !== 'funding' || !decision.approved || decision.ledgerIndex !== state.finance.ledger.length || projectId !== `facility-project-${state.facilities.projects.length + 1}` || !Number.isSafeInteger(decision.amount) || decision.amount <= 0) throw new Error('Book owner capital only for the board decision just approved.');
+  if (!state.finance.enabledSince || decision?.type !== 'funding' || !decision.approved || decision.ledgerIndex !== financeLedgerCount(state.finance) || projectId !== `facility-project-${state.facilities.projects.length + 1}` || !Number.isSafeInteger(decision.amount) || decision.amount <= 0) throw new Error('Book owner capital only for the board decision just approved.');
   return append(state, { clubId: decision.clubId, kind: 'board-capital', amount: decision.amount, sourceId: `board-capital-${projectId}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, boardCapital: { projectId, facilityType: decision.facilityType } });
 }
 
@@ -118,7 +121,7 @@ export function recordBoardCapital(state: SeasonState, projectId: string): Seaso
 export function recordContractBuyout(state: SeasonState, buyout: EmploymentBuyout): SeasonState {
   const records = state.employment.buyouts ?? [], recorded = records.at(-1);
   if (!recorded || JSON.stringify(recorded) !== JSON.stringify(buyout) || buyout.id !== `employment-buyout-${records.length}`) throw new Error('A buyout payment requires the exact newly recorded contract release.');
-  if (state.finance.ledger.some(entry => entry.kind === 'buyout' && entry.sourceId === buyout.id)) throw new Error('This contract buyout has already been paid.');
+  for (const entry of financeLedgerEntries(state.finance)) if (entry.kind === 'buyout' && entry.sourceId === buyout.id) throw new Error('This contract buyout has already been paid.');
   const before = { ...state, employment: { ...state.employment, buyouts: records.slice(0, -1) } };
   const quote = quoteContractBuyout(before, buyout.playerId, buyout.clubId);
   if (!quote.canBuyout) throw new Error(quote.reason!);
@@ -132,7 +135,8 @@ export function recordTransferFee(state: SeasonState, transfer: EmploymentTransf
   if (!state.finance.enabledSince || !completed || completed.offerId !== transfer.offerId || completed.contractId !== transfer.contractId || completed.fromClubId !== transfer.fromClubId || completed.toClubId !== transfer.toClubId || completed.fee !== transfer.fee || completed.mode !== transfer.mode || completed.seasonNumber !== transfer.seasonNumber || completed.startsSeason !== transfer.startsSeason || completed.startsRound !== transfer.startsRound || completed.playerId !== transfer.playerId || completed.completedOn !== transfer.completedOn) throw new Error('A transfer payment requires the exact completed employment transfer.');
   const inSeason = transfer.startsSeason === state.seasonNumber && transfer.startsRound === state.round && state.round > 1;
   if (state.status !== (inSeason ? 'active' : 'complete') || transfer.seasonNumber !== state.seasonNumber || transfer.completedOn !== state.date || transfer.fromClubId === transfer.toClubId || !Number.isSafeInteger(transfer.fee) || transfer.fee <= 0) throw new Error('Choose a completed transfer at its recorded registration boundary.');
-  if (transfer.payments.length || state.finance.ledger.some(entry => entry.kind === 'transfer' && entry.sourceId === transfer.id)) throw new Error('This transfer payment has already been recorded.');
+  if (transfer.payments.length) throw new Error('This transfer payment has already been recorded.');
+  for (const entry of financeLedgerEntries(state.finance)) if (entry.kind === 'transfer' && entry.sourceId === transfer.id) throw new Error('This transfer payment has already been recorded.');
   if (completed.paymentPlan !== transfer.paymentPlan || JSON.stringify(completed.installments) !== JSON.stringify(transfer.installments) || JSON.stringify(transfer.installments) !== JSON.stringify(getTransferPaymentSchedule(transfer.fee, transfer.paymentPlan, transfer.completedOn, transfer.startsSeason, transfer.startsRound))) throw new Error('Use the agreed transfer payment schedule.');
   if (transfer.mode === 'release-clause' && (transfer.paymentPlan !== 'upfront' || transfer.releasedContractIds.length !== 1 || !state.employment.contracts.some(contract => contract.id === transfer.releasedContractIds[0] && contract.clubId === transfer.fromClubId && contract.playerId === transfer.playerId && contract.releaseFee === transfer.fee))) throw new Error('Release-clause completion must pay the exact single source agreement fee in full.');
   if (getFinanceBalance(state.finance, transfer.toClubId).unpaid > 0 || getSpendableCash(state, transfer.toClubId, transfer.offerId, transfer.id, inSeason ? transfer.offerId : undefined) < transfer.fee) throw new Error('The transfer fee exceeds the remaining budget after other commitments.');
@@ -177,7 +181,7 @@ export function recordCoachFee(state: SeasonState, contract: CoachingContract): 
 export function recordScoutFee(state: SeasonState, contract: ScoutContract): SeasonState {
   const scout = SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId);
   const stored = state.scouts.contracts.at(-1);
-  if (!state.finance.enabledSince || !state.scouts.enabledSince || !state.scouting.enabledSince || state.status !== 'active' || !scout || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== state.finance.ledger.length || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `scout-contract-${state.scouts.contracts.length}`) throw new Error('Pay only the exact newly appointed scout contract.');
+  if (!state.finance.enabledSince || !state.scouts.enabledSince || !state.scouting.enabledSince || state.status !== 'active' || !scout || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `scout-contract-${state.scouts.contracts.length}`) throw new Error('Pay only the exact newly appointed scout contract.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a scout.');
   if (getSpendableCash(state, contract.clubId) < scout.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a scout.');
@@ -187,7 +191,7 @@ export function recordScoutFee(state: SeasonState, contract: ScoutContract): Sea
 export function recordFitnessFee(state: SeasonState, contract: FitnessContract): SeasonState {
   const coach = FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId);
   const stored = state.fitness.contracts.at(-1);
-  if (!state.finance.enabledSince || !state.fitness.enabledSince || !state.training.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== state.finance.ledger.length || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `fitness-contract-${state.fitness.contracts.length}`) throw new Error('Pay only the exact newly appointed fitness coach contract.');
+  if (!state.finance.enabledSince || !state.fitness.enabledSince || !state.training.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `fitness-contract-${state.fitness.contracts.length}`) throw new Error('Pay only the exact newly appointed fitness coach contract.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a fitness coach.');
   if (getSpendableCash(state, contract.clubId) < coach.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a fitness coach.');
@@ -197,7 +201,7 @@ export function recordFitnessFee(state: SeasonState, contract: FitnessContract):
 export function recordPhysioFee(state: SeasonState, contract: PhysioContract): SeasonState {
   const staff = PHYSIO_DIRECTORY.find(staff => staff.id === contract.physioId);
   const stored = state.physio.contracts.at(-1);
-  if (!state.finance.enabledSince || !state.physio.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !staff || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== state.finance.ledger.length || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `physio-contract-${state.physio.contracts.length}`) throw new Error('Pay only the exact newly appointed physio contract.');
+  if (!state.finance.enabledSince || !state.physio.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !staff || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `physio-contract-${state.physio.contracts.length}`) throw new Error('Pay only the exact newly appointed physio contract.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a physio.');
   if (getSpendableCash(state, contract.clubId) < staff.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a physio.');
@@ -208,7 +212,7 @@ export function recordPhysioFee(state: SeasonState, contract: PhysioContract): S
 export function recordAssistantFee(state: SeasonState, contract: AssistantContract): SeasonState {
   const coach = ASSISTANT_DIRECTORY.find(coach => coach.id === contract.assistantId);
   const stored = state.assistant.contracts.at(-1);
-  if (!state.finance.enabledSince || !state.assistant.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch.status === 'finished' || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== state.finance.ledger.length || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `assistant-contract-${state.assistant.contracts.length}`) throw new Error('Pay only the exact newly appointed assistant-coach contract.');
+  if (!state.finance.enabledSince || !state.assistant.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch.status === 'finished' || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `assistant-contract-${state.assistant.contracts.length}`) throw new Error('Pay only the exact newly appointed assistant-coach contract.');
   const active = state.assistant.contracts.filter(item => item.seasonNumber === state.seasonNumber && item.releasedRound === null);
   if (!state.clubs.some(club => club.id === contract.clubId) || active.filter(item => item.clubId === contract.clubId).length !== 1 || active.filter(item => item.assistantId === contract.assistantId).length !== 1) throw new Error('Only one active assistant coach is allowed per club and per person.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
@@ -219,7 +223,7 @@ export function recordAssistantFee(state: SeasonState, contract: AssistantContra
 
 export function recordYouthFee(state: SeasonState, contract: YouthCoachContract): SeasonState {
   const coach = YOUTH_COACH_DIRECTORY.find(coach => coach.id === contract.coachId), stored = state.youth.contracts.at(-1);
-  if (!state.finance.enabledSince || !state.youth.enabledSince || !state.academy.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== state.finance.ledger.length || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `youth-contract-${state.youth.contracts.length}`) throw new Error('Pay only the exact newly appointed youth-coach contract.');
+  if (!state.finance.enabledSince || !state.youth.enabledSince || !state.academy.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `youth-contract-${state.youth.contracts.length}`) throw new Error('Pay only the exact newly appointed youth-coach contract.');
   const active = state.youth.contracts.filter(item => item.seasonNumber === state.seasonNumber && item.releasedRound === null);
   if (!state.clubs.some(club => club.id === contract.clubId) || active.filter(item => item.clubId === contract.clubId).length !== 1 || active.filter(item => item.coachId === contract.coachId).length !== 1) throw new Error('Only one active youth coach is allowed per club and person.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
@@ -237,7 +241,10 @@ function winShare(state: FinanceContext, clubId: string, beforeRound: number): n
 export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'> & { date?: string }, price: number): GateForecast {
   validatePrice(price);
   const venue = clubFinanceDefinition(worldOf(state), fixture.homeClubId);
-  const recorded = state.finance?.ledger.find(entry => entry.ticket?.fixtureId === fixture.id)?.ticket?.capacity;
+  let recorded: number | undefined;
+  if (state.finance) for (const entry of financeLedgerEntries(state.finance)) {
+    if (entry.ticket?.fixtureId === fixture.id) { recorded = entry.ticket.capacity; break; }
+  }
   const capacity = recorded ?? (fixture.round === state.round ? state.finance?.roundCapacities?.[fixture.homeClubId] : undefined) ?? getArenaCapacity(state, fixture.homeClubId, fixture.date ?? state.date);
   const own = winShare(state, fixture.homeClubId, fixture.round), opponent = winShare(state, fixture.awayClubId, fixture.round);
   const derby = state.seasonNumber === undefined ? null : governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round, worldOf(state));

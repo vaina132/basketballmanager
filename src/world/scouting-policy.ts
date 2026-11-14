@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { PlayerKnowledge, ScoutingAssignmentQuote, ScoutingRanges, ScoutingReview } from '../domain/scouting';
 import type { SeasonState } from '../domain/season';
 import type { PlayerAttributes } from '../domain/types';
@@ -94,7 +95,7 @@ export function quoteScoutingAssignment(state: SeasonState, playerId: string, cl
   else if (!selected) reason = scoutContractId !== undefined && scoutContractId !== null ? 'Choose an active scout at this club.' : state.scouts.enabledSince ? 'All observation slots are occupied for this matchday.' : 'Both scouting assignments are occupied for this matchday.';
   else if (!selected.available) reason = selected.reason;
   else if (club.reviews.some(review => review.playerId === playerId && review.seasonNumber === state.seasonNumber && review.round === state.round)) reason = 'This player has already been reviewed on this matchday.';
-  return { playerId, clubId, canAssign: reason === null, reason, ...(state.scouts.enabledSince && selected ? { observer: { contractId: selected.contractId, scoutId: selected.scoutId, evidence: selected.evidence, assignedLedgerIndex: state.finance.ledger.length } } : {}) };
+  return { playerId, clubId, canAssign: reason === null, reason, ...(state.scouts.enabledSince && selected ? { observer: { contractId: selected.contractId, scoutId: selected.scoutId, evidence: selected.evidence, assignedLedgerIndex: financeLedgerCount(state.finance) } } : {}) };
 }
 
 /** Unknown outsiders receive a neutral prior, never a peek at catalog skill ratings. */

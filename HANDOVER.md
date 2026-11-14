@@ -1,5 +1,43 @@
 # Project handover
 
+## Latest continuation: step 3.2e (14 November 2026)
+
+**Start here.** The owner committed 3.2d as `3ca0e94` (`13v`) and approved the next step. This section supersedes the earlier handovers. The active work remains [multi-league sprint 3](docs/multi-league-world.md#steps), with **3.2 still in progress**. Work stays on `main`, uncommitted for the owner. No provider calls, private-pack changes or new gameplay screens were part of this increment.
+
+### Implemented
+
+- Added `src/world/finance-ledger.ts`: shared logical transaction count, absolute lookup, bounded ordered iteration, fresh array slices, prefix-finance snapshots and immutable append with the existing duplicate-event guard and sequential IDs. Runtime anchor writers and historical replay consumers use this layer. Raw legacy/shape checks still inspect arrays deliberately.
+- Added `src/world/finance-ledger-index.ts`: club balances/net position and per-agreement gross wages, charged amounts, discounts and prepayment status at exact transaction boundaries. During one synchronous validation, fresh prefix arrays can share indexes derived from their original ledger. Prefix provenance and indexes are discarded afterward; they never certify a mutable input or survive into another load. Outside validation, accounting reads scan their own ledger and payroll readers are local snapshots. Returned balance/payroll values are fresh objects.
+- Payroll reserve, player/club summaries, installment handling and annual schedule checks reuse a reader only for an unchanged ledger boundary. Same-day hiring, transfer receipts, board capital, facilities, sponsorship and job-change anchors retain their original absolute positions. Transfer debit/credit adjacency and chronology checks remain independent.
+- **Schema 43, compact-2, checks version 3, financial rules and the 20,000-entry guard are unchanged.** No rows, fields, statistics or histories are removed. This is the necessary access/index foundation before financial archive blocks; it does not increase supported career length or shrink save files.
+
+### Audit and independent evidence
+
+The retained 18-club career has 2,515 / 4,930 / 7,313 ledger rows after years 1 / 2 / 3 and **7,538** at the fourth opening. That state contains **6,089 absolute references spanning 538 distinct offsets**. Repeated operating costs, upkeep and even zero-amount payroll rows carry chronology; deleting or aggregating them would invalidate decisions. At recent growth rates the 20,000-row guard would be reached around season 9; this is an extrapolation, not a nine-season test. Audit: `.artifacts/finance-growth-audit-43/report-complete.json`.
+
+Before source edits, captured **19 original format-43 states**, exact compact/state/financial-read-model hashes and all **538** real prefix fingerprints under `.artifacts/finance-ledger-baseline-43-2026-11-14T12-43-21-299Z/`. Cases include ordinary continuation/rollover, transfer installments, salary prepayment, sale of a prepaid player and a genuine seed-10 job move. The existing four real format-43 fixtures/manifests remain independent original-runtime references.
+
+### Verification
+
+- Typecheck passed. The focused finance/payroll/storage suite passed **245 tests across ten files in 40.43 seconds**; this includes 27 new adapter/accounting/boundary tests. Log: `.artifacts/step32e-focused-tests.log`.
+- All **19 original states** matched exactly in complete state, compact bytes and financial read models, including ordinary continuation and job/transfer branches. All **538 real ledger-prefix fingerprints** matched through the new accessors. Evidence: `.artifacts/finance-ledger-baseline-43-2026-11-14T12-43-21-299Z/comparison-2026-11-14T12-57-38-774Z.json`. Original inputs remained unchanged.
+- Retained-fixture benchmark passed exact state, save bytes, original-runtime continuation and hash guards at all four boundaries: `.artifacts/save-benchmark-2026-11-14T12-58-13-274Z/report.json`. Fourth-opening single samples: **9.35 seconds** warm strict load, **9.13 seconds** validated write, **0.54 seconds** verified local reload. Peak process RSS across the diagnostic was about **1.16 GiB**. These Node timings exclude browser messaging/IndexedDB and are not a memory or speed improvement claim.
+- The slower fourth-opening sample did not repeat in the paired old/current diagnostic against unchanged `3ca0e94`. Three-sample median strict load: **6.450 / 6.197 seconds**; validated write: **6.571 / 6.716 seconds**, with overlapping write ranges. This does not establish a meaningful speed change or justify further cache complexity. Exact state, bytes and source/input hashes passed; helpers closed cleanly. Report: `.artifacts/finance-ledger-43-paired-2026-11-14T13-02-09-220Z/comparison.json`.
+- Production build passed with the existing large-chunk advisory. **13 real Edge/module-worker/IndexedDB checks passed**, with no browser or worker errors. All captured financial read models and all three budget values remained exact across import, local read/reload, Blob export/import, recovery and certificate rewrite. Existing history, corrupted-import and stale-revision checks passed too. Report: `.artifacts/step32e-browser-smoke-report.json`; helpers exited and ports 5187/9347 were released.
+- Full serial regression passed **2,329 tests across 156 files in 492.34 seconds**, with no failures or skips. Log: `.artifacts/step32e-full-tests-20261114-140630.log`. Source and tests remained frozen through the accepted benchmark/comparison, build, browser and full-suite checks; subsequent edits only document results.
+
+### Next steps and conventions
+
+Next within **3.2**: introduce versioned lossless completed-season financial blocks through the shared ledger layer. Preserve every logical row/ID, payload, ordering and absolute reference, with explicit block/count/byte limits; do not simply raise the lifetime cap or replace transactions with unchecked season totals. Imported blocks must reconstruct independently checkable evidence. Strict validation may use one temporary expanded view; ordinary gameplay must avoid a permanently cached duplicate of the whole ledger. Manager ownership for financial history uses `managedClubAtLedger`, because a job move can precede offseason transactions in the same season. Earlier club transactions must remain reviewable after a move.
+
+This does not finish bounded history or incremental strict validation. After the remaining 3.2 work, resolve full real-club rosters versus competition/matchday registration, then **3.3** shared calendar/byes, **3.4** domestic formats/promotion, **3.5** Europe/background clubs, **3.6** country/league/club selection, and **3.7** integrated acceptance. Flags and visual strength remain in 3.6; source freshness/eligibility is the registration prerequisite; rating calibration remains sprint 4. The existing generated-reserve disclosure, missing club colors, financial assumptions and European participant-list issues remain open.
+
+Keep calculation-scope inputs immutable. Current replay appends create new arrays; the index also keys appended work arrays by length. Do not replace/reorder entries at the same length inside a live scope and then reuse its facts. Imported objects may be changed between checks: every new validation creates a new scope, and prefixes/read results are tested for independent mutation outside it.
+
+Run in PowerShell: `npm.cmd run dev`, `npm.cmd run typecheck`, `npm.cmd run build`, `npm.cmd test -- --maxWorkers=1 --testTimeout=120000`. Keep heavy checks sequential. The unchanged real fixtures can be reused with `npm.cmd run benchmark:saves -- --reuse .artifacts/youth-history-43-fixtures-2026-11-14T12-16-45-457Z --warm 1`; never rewrite expected hashes to bypass comparisons. Credentials, private data and `.artifacts` remain ignored. Suggested owner commit: `refactor: centralize financial history boundaries and accounting`.
+
+**Ready for the owner to commit:** include both new ledger modules and all three new test suites with the modified source/docs. No commit or push was performed. The private pack remains unchanged (SHA-256 `9025CBF0BB8324AA1FAC80000B8D45B8AACD1BE224B9D425AE869B1AF140FB8F`).
+
 ## Latest continuation: step 3.2d (14 November 2026)
 
 **Start here.** The owner committed 3.2c as `76fa3bd` (`v12`) and asked to continue. This section supersedes the earlier dated handovers. The active plan is [multi-league sprint 3](docs/multi-league-world.md#steps); **3.2 is still in progress**. Work stays on `main`, uncommitted for the owner. No API calls, private-pack refreshes or new competition/selection features were part of this increment.

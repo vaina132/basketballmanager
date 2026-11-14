@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { SeasonYouth, YouthCoachContract } from '../domain/youth';
 import type { SeasonState } from '../domain/season';
 import { recordYouthFee } from './finance';
@@ -9,12 +10,12 @@ export function enableYouth(state: SeasonState): SeasonState {
   if (state.youth.enabledSince) return state;
   if (!state.academy.enabledSince || !state.finance.enabledSince) throw new Error('Enable the academy and club finances before recruiting a youth coach.');
   if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Recruit youth coaches while academy training weeks remain, before the final matchday.');
-  return recruitAiYouthCoaches({ ...state, youth: { ...state.youth, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length } } });
+  return recruitAiYouthCoaches({ ...state, youth: { ...state.youth, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } });
 }
 function hireForClub(state: SeasonState, coachId: string, clubId: string): SeasonState {
   const quote = quoteYouthCoachHire(state, coachId, clubId);
   if (!quote.canHire) throw new Error(quote.reason!);
-  const contract: YouthCoachContract = { id: `youth-contract-${state.youth.contracts.length + 1}`, coachId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: state.finance.ledger.length };
+  const contract: YouthCoachContract = { id: `youth-contract-${state.youth.contracts.length + 1}`, coachId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: financeLedgerCount(state.finance) };
   return recordYouthFee({ ...state, youth: { ...state.youth, contracts: [...state.youth.contracts, contract] } }, contract);
 }
 export function hireYouthCoach(state: SeasonState, coachId: string): SeasonState { return hireForClub(state, coachId, state.managedClubId); }
@@ -25,7 +26,7 @@ function managedContract(state: SeasonState, contractId: string): YouthCoachCont
 }
 export function releaseYouthCoach(state: SeasonState, contractId: string): SeasonState {
   const contract = managedContract(state, contractId);
-  return { ...state, youth: { ...state.youth, contracts: state.youth.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: state.finance.ledger.length } : item) } };
+  return { ...state, youth: { ...state.youth, contracts: state.youth.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } };
 }
 export function setYouthCoachRenewal(state: SeasonState, contractId: string, renew: boolean): SeasonState {
   if (typeof renew !== 'boolean') throw new Error('Choose whether the youth-coach contract should renew.');

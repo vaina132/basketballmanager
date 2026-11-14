@@ -1,3 +1,4 @@
+import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
 import type { BoardAnchor, BoardClubReview, BoardMandate, BoardReview, BoardSummary, SeasonBoard } from '../domain/board';
 import type { SeasonState } from '../domain/season';
 import { getFinanceBalance } from './finance';
@@ -21,13 +22,18 @@ export function createBoard(): SeasonBoard { return { model: 'board-1', enabledS
 
 export function boardEventAnchor(state: SeasonState): BoardAnchor {
   const completed = state.fixtures.filter(fixture => fixture.result).reduce((round, fixture) => Math.max(round, fixture.round), 0);
-  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), ledgerCount: state.finance.ledger.length, rosterCount: state.rosters.length };
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), ledgerCount: financeLedgerCount(state.finance), rosterCount: state.rosters.length };
 }
 
 /** Restrict transfer evidence to receipts in this ledger prefix, including same-day decisions. */
 export function boardUnpaidCosts(state: SeasonState, clubId: string): number | null {
-  if (!state.finance.ledger.some(entry => entry.clubId === clubId && entry.kind === 'opening')) return null;
-  const receipts = new Set(state.finance.ledger.filter(entry => entry.kind === 'transfer' && entry.amount < 0).map(entry => entry.sourceId));
+  let opened = false;
+  const receipts = new Set<string>();
+  for (const entry of financeLedgerEntries(state.finance)) {
+    if (entry.clubId === clubId && entry.kind === 'opening') opened = true;
+    if (entry.kind === 'transfer' && entry.amount < 0) receipts.add(entry.sourceId);
+  }
+  if (!opened) return null;
   const transfers = state.employment.transfers.filter(transfer => receipts.has(transfer.id)).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => receipts.has(payment.id)) }));
   return getFinanceBalance(state.finance, clubId).unpaid + getTransferPaymentSummary({ date: state.date, employment: { ...state.employment, transfers } }, clubId).overdue;
 }

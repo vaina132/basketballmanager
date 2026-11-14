@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { LifecycleAnchor, LifecycleReview, RetirementNotice, SeasonLifecycle } from '../domain/lifecycle';
 import type { SeasonState } from '../domain/season';
 import { getCareerPlayerAge, getCareerPlayers } from './player-catalog';
@@ -9,7 +10,7 @@ import { roundKey } from './career-world';
 export function createLifecycle(): SeasonLifecycle { return { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }; }
 
 function anchor(state: SeasonState): LifecycleAnchor {
-  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex: state.finance.ledger.length, contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length, recruitmentEventCount: state.recruitment.events.length, marketEventCount: state.market.windows.reduce((sum, window) => sum + window.events.length, 0) };
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex: financeLedgerCount(state.finance), contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length, recruitmentEventCount: state.recruitment.events.length, marketEventCount: state.market.windows.reduce((sum, window) => sum + window.events.length, 0) };
 }
 
 /** A notice may never invalidate signed terms or a proposal already awaiting a reply. */

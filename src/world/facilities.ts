@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { FacilityAnchor, FacilityEvent, FacilityProject, FacilityType, MaintenancePlan, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
@@ -12,7 +13,7 @@ export function createFacilities(clubs: readonly Pick<Team, 'id'>[] = [], manage
 }
 
 export function facilityEventAnchor(state: SeasonState): FacilityAnchor {
-  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex: state.finance.ledger.length, contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length, recruitmentEventCount: state.recruitment.events.length, marketEventCount: state.market.windows.reduce((count, window) => count + window.events.length, 0) };
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex: financeLedgerCount(state.finance), contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length, recruitmentEventCount: state.recruitment.events.length, marketEventCount: state.market.windows.reduce((count, window) => count + window.events.length, 0) };
 }
 
 /**

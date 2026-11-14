@@ -6,6 +6,7 @@ import { rosterForRound } from '../world/rosters';
 import { managedClubFor } from '../world/career';
 import { openingSponsorshipClubs } from '../world/commercial-policy';
 import { roundOrdinal, seasonRounds } from '../world/career-world';
+import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'ledgerCount', 'rosterCount'] as const;
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
@@ -40,13 +41,13 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard):
   const fixtures = source.fixtures.map(fixture => ({ ...fixture, result: fixture.round <= completed ? fixture.result : null })) as SeasonFixture[];
   const history = state.history.filter(archive => archive.seasonNumber < anchor.seasonNumber);
   const committed = new Set([...history.flatMap(archive => archive.fixtures), ...fixtures].filter(fixture => fixture.result).map(fixture => fixture.id));
-  const ledger = state.finance.ledger.slice(0, anchor.ledgerCount);
+  const finance = financeAtLedgerBoundary(state.finance, anchor.ledgerCount), ledger = finance.ledger;
   return {
     ...state, managedClubId: managedClubFor(state, anchor.seasonNumber, false), seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
     status: completed === seasonRounds(state) ? 'complete' : 'active', rosters, fixtures, history, board,
     clubs: state.clubs.map(club => ({ ...club, players: rosterForRound(rosters, club.id, anchor.round).players })),
     injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
-    finance: { ...state.finance, ledger, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
+    finance: { ...finance, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
   };
 }
 
@@ -57,10 +58,10 @@ function reviewLedgerCount(state: SeasonState, year: number, round: number): num
   for (const [index, entry] of ledger.entries()) {
     if (entry.seasonNumber < year || entry.seasonNumber === year && entry.round < round || entry.seasonNumber === year && entry.round === round && ['tickets', 'operations', 'facility-upkeep', 'payroll'].includes(entry.kind)) count = index + 1;
   }
-  const initial = new Set(ledger.slice(0, count).filter(entry => entry.kind === 'transfer').map(entry => entry.sourceId));
+  const initial = new Set(financeLedgerSlice(state.finance, 0, count).filter(entry => entry.kind === 'transfer').map(entry => entry.sourceId));
   const existingPayments = new Set(state.employment.transfers.filter(transfer => initial.has(transfer.id)).flatMap(transfer => transfer.payments.map(payment => payment.id)));
-  while (count < ledger.length) {
-    const entry = ledger[count]!;
+  while (count < financeLedgerCount({ ledger })) {
+    const entry = financeLedgerEntry(state.finance, count)!;
     if (entry.seasonNumber !== year || entry.round !== round || entry.kind !== 'transfer' || !existingPayments.has(entry.sourceId)) break;
     count += 1;
   }
@@ -94,7 +95,7 @@ export function validateBoard(state: SeasonState, version: number): void {
     const dates = new Set([dateForRound(round, year)]);
     if (kind !== 'review' && completed === at && round === seasonRounds(state)) for (const event of state.market.windows.find(window => window.seasonNumber === year)?.events ?? []) if (event.type === 'advance') dates.add(event.date);
     if (typeof anchor.date !== 'string' || !dates.has(anchor.date) || anchor.date > state.date) fail(`${path}.date`, 'must identify an actual calendar boundary');
-    const ledgerCount = integer(anchor.ledgerCount, `${path}.ledgerCount`, 0, state.finance.ledger.length);
+    const ledgerCount = integer(anchor.ledgerCount, `${path}.ledgerCount`, 0, financeLedgerCount(state.finance));
     if (kind === 'review') {
       if (ledgerCount !== reviewLedgerCount(state, year, round)) fail(path, 'must review the complete mandatory payment boundary before later hiring and offseason choices');
     } else {

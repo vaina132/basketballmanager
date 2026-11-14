@@ -1,6 +1,7 @@
 import type { InSeasonSaleQuote, InSeasonTransferQuote } from '../domain/recruitment';
 import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
+import { financeLedgerEntries } from './finance-ledger';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import type { Player } from '../domain/types';
 import { getActiveCareerPlayers } from './player-catalog';
@@ -130,5 +131,10 @@ export function quoteInSeasonSale(state: SeasonState, offerId: string): InSeason
   if (!acceptReason && offer.responseRound <= state.round) acceptReason = 'This transfer review has expired.';
   const counterReason = acceptReason ?? (transfer.fee >= transfer.requiredFee ? 'This offer already meets the asking fee. Accept or reject it.' : null);
   const released = getInSeasonReleasedContractIds(state, offer.playerId, transfer.sellerClubId);
-  return { offerId, playerId: offer.playerId, sellerClubId: transfer.sellerClubId, buyerClubId: offer.clubId, fee: transfer.fee, paymentPlan: transfer.paymentPlan, requiredFee: transfer.requiredFee, rosterAfter, annualSalaryFreed: current?.clubId === transfer.sellerClubId ? current.seasonWage : 0, remainingWagesFreed: sellerPayroll && !sellerPayroll.prepaid ? Math.min(sellerPayroll.futureCommitted, remainingSeasonWages(sellerPayroll.seasonWages, offer.responseRound, seasonRounds(state))) : 0, salaryAlreadyCharged: sellerPayroll?.charged ?? 0, nonRefundablePrepayment: sellerPayroll?.prepaid ? state.finance.ledger.flatMap(entry => entry.payroll?.type === 'prepayment' ? entry.payroll.items : []).filter(item => item.agreementId === sellerPayroll.agreement.id).reduce((sum, item) => sum + item.amount, 0) : 0, releasedThroughSeason: Math.max(state.seasonNumber, ...state.employment.contracts.filter(contract => released.includes(contract.id)).map(contract => contract.endsSeason)), decisionDeadline: offer.responseOn, responseRound: offer.responseRound, responseOn: offer.responseOn, canAccept: acceptReason === null, acceptReason, canCounter: counterReason === null, counterReason };
+  let nonRefundablePrepayment = 0;
+  if (sellerPayroll?.prepaid) for (const entry of financeLedgerEntries(state.finance)) {
+    if (entry.payroll?.type !== 'prepayment') continue;
+    for (const item of entry.payroll.items) if (item.agreementId === sellerPayroll.agreement.id) nonRefundablePrepayment += item.amount;
+  }
+  return { offerId, playerId: offer.playerId, sellerClubId: transfer.sellerClubId, buyerClubId: offer.clubId, fee: transfer.fee, paymentPlan: transfer.paymentPlan, requiredFee: transfer.requiredFee, rosterAfter, annualSalaryFreed: current?.clubId === transfer.sellerClubId ? current.seasonWage : 0, remainingWagesFreed: sellerPayroll && !sellerPayroll.prepaid ? Math.min(sellerPayroll.futureCommitted, remainingSeasonWages(sellerPayroll.seasonWages, offer.responseRound, seasonRounds(state))) : 0, salaryAlreadyCharged: sellerPayroll?.charged ?? 0, nonRefundablePrepayment, releasedThroughSeason: Math.max(state.seasonNumber, ...state.employment.contracts.filter(contract => released.includes(contract.id)).map(contract => contract.endsSeason)), decisionDeadline: offer.responseOn, responseRound: offer.responseRound, responseOn: offer.responseOn, canAccept: acceptReason === null, acceptReason, canCounter: counterReason === null, counterReason };
 }

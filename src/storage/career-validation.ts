@@ -5,6 +5,7 @@ import { seasonEndOutlook } from '../world/career-policy';
 import type { SeasonCareer } from '../domain/career';
 import { roundOrdinal, seasonRounds } from '../world/career-world';
 import type { WorldContext } from '../domain/world';
+import { financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
 
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
 const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
@@ -63,9 +64,9 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
     if (previous && move.fromClubId !== previous.toClubId) fail(`${location}.fromClubId`, 'must be the club managed after the previous move');
     if (move.reason !== 'moved' && (move.reason !== 'dismissed' || version < 38)) fail(`${location}.reason`, 'must record a supported reason');
     // The move follows the committed final matchday (its tickets and operating costs) and precedes later seasons.
-    const ledgerCount = integer(move.ledgerCount, `${location}.ledgerCount`, previous?.ledgerCount ?? 0, ledger.length);
+    const ledgerCount = integer(move.ledgerCount, `${location}.ledgerCount`, previous?.ledgerCount ?? 0, financeLedgerCount({ ledger }));
     const matchdayEnd = ledger.reduce((end, entry, position) => entry.seasonNumber === season && entry.round === seasonRounds(state) && (entry.kind === 'tickets' || entry.kind === 'operations') ? position + 1 : end, 0);
-    if (ledgerCount < matchdayEnd || ledger.slice(0, ledgerCount).some(entry => entry.seasonNumber > season) || (ledger[ledgerCount]?.seasonNumber ?? season + 1) < season) fail(`${location}.ledgerCount`, 'must mark the ledger position at the end of that season\'s final matchday');
+    if (ledgerCount < matchdayEnd || financeLedgerSlice(state.finance, 0, ledgerCount).some(entry => entry.seasonNumber > season) || (financeLedgerEntry(state.finance, ledgerCount)?.seasonNumber ?? season + 1) < season) fail(`${location}.ledgerCount`, 'must mark the ledger position at the end of that season\'s final matchday');
     previous = { seasonNumber: season, toClubId: move.toClubId, ledgerCount };
   }
   if (previous && previous.toClubId !== state.managedClubId) fail('career.moves', 'must end at the club managed now');

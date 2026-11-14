@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { FitnessContract, SeasonFitness } from '../domain/fitness';
 import type { SeasonState } from '../domain/season';
 import { recordFitnessFee } from './finance';
@@ -10,13 +11,13 @@ export function enableFitness(state: SeasonState): SeasonState {
   if (state.fitness.enabledSince) return state;
   if (!state.finance.enabledSince || !state.training.enabledSince) throw new Error('Enable club finances and training before recruiting fitness coaches.');
   if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Enable fitness coaches when weekly training is available, before the final matchday.');
-  return recruitAiFitnessCoaches({ ...state, fitness: { ...state.fitness, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length } } });
+  return recruitAiFitnessCoaches({ ...state, fitness: { ...state.fitness, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } });
 }
 
 function hireForClub(state: SeasonState, coachId: string, clubId: string): SeasonState {
   const quote = quoteFitnessHire(state, coachId, clubId);
   if (!quote.canHire) throw new Error(quote.reason!);
-  const contract: FitnessContract = { id: `fitness-contract-${state.fitness.contracts.length + 1}`, coachId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: state.finance.ledger.length };
+  const contract: FitnessContract = { id: `fitness-contract-${state.fitness.contracts.length + 1}`, coachId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: financeLedgerCount(state.finance) };
   return recordFitnessFee({ ...state, fitness: { ...state.fitness, contracts: [...state.fitness.contracts, contract] } }, contract);
 }
 
@@ -30,7 +31,7 @@ function managedContract(state: SeasonState, contractId: string): FitnessContrac
 
 export function releaseFitnessCoach(state: SeasonState, contractId: string): SeasonState {
   const contract = managedContract(state, contractId);
-  return { ...state, fitness: { ...state.fitness, contracts: state.fitness.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: state.finance.ledger.length } : item) } };
+  return { ...state, fitness: { ...state.fitness, contracts: state.fitness.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } };
 }
 
 export function setFitnessRenewal(state: SeasonState, contractId: string, renew: boolean): SeasonState {

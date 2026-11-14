@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { FacilityFundingDecision, FacilityType, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
 import type { DevelopmentPresident } from '../data/development-presidents';
@@ -22,7 +23,7 @@ export function requiredBoardConfidence(president: Pick<DevelopmentPresident, 'g
 
 /** The latest board confidence already reviewed at this boundary; 50 before the first review. */
 export function boardConfidenceNow(state: Pick<SeasonState, 'board' | 'finance' | 'date'>, clubId: string): number {
-  return state.board.reviews.filter(review => review.ledgerCount <= state.finance.ledger.length && review.date <= state.date).at(-1)?.clubs[clubId]?.confidence ?? 50;
+  return state.board.reviews.filter(review => review.ledgerCount <= financeLedgerCount(state.finance) && review.date <= state.date).at(-1)?.clubs[clubId]?.confidence ?? 50;
 }
 
 export function boardCapitalGranted(facilities: Pick<SeasonFacilities, 'events'>, clubId: string, seasonNumber: number): number {

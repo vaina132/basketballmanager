@@ -1,3 +1,5 @@
+import { financeLedgerCount, financeLedgerEntries, financeLedgerSlice } from './finance-ledger';
+import type { FinanceEntry } from '../domain/finance';
 import type { CommercialAnchor, CommercialEvent, SeasonCommercial, SponsorshipAgreement, SponsorshipOffer, SponsorshipWindow } from '../domain/commercial';
 import type { SeasonState } from '../domain/season';
 import { incumbentSponsorId, seasonRounds, worldOf } from './career-world';
@@ -9,7 +11,7 @@ import type { WorldContext } from '../domain/world';
 export { createCommercial } from './commercial-policy';
 
 export function commercialAnchor(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'date' | 'finance'>): CommercialAnchor {
-  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerCount: state.finance.ledger.length };
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerCount: financeLedgerCount(state.finance) };
 }
 
 /** Committed matchdays in the current season; a played but uncommitted match does not count yet. */
@@ -26,7 +28,8 @@ function finalPosition(state: Pick<SeasonState, 'clubs' | 'fixtures' | 'seasonNu
 }
 
 function paymentsDueNow(state: SeasonState): DueSponsorshipPayment[] {
-  const booked = new Set(state.finance.ledger.filter(entry => entry.kind === 'sponsor').map(entry => `${entry.clubId}/${entry.sourceId}`));
+  const booked = new Set<string>();
+  for (const entry of financeLedgerEntries(state.finance)) if (entry.kind === 'sponsor') booked.add(`${entry.clubId}/${entry.sourceId}`);
   return sponsorshipPaymentsDue(state.commercial, state.clubs.length, { seasonNumber: state.seasonNumber, round: state.round, complete: state.status === 'complete' }, finalPosition(state))
     .filter(payment => payment.seasonNumber === state.seasonNumber && payment.round === state.round && payment.sponsorship.installment !== 1 && !booked.has(`${payment.clubId}/${payment.sourceId}`));
 }
@@ -53,9 +56,11 @@ export function openSponsorshipWindows(state: SeasonState, window: SponsorshipWi
   if (!state.commercial.enabledSince || state.seasonNumber >= MAX_SEASON_NUMBER) return state;
   let commercial = state.commercial;
   const anchor = commercialAnchor(state), completedRounds = completedSeasonRounds(state);
+  let ledger: FinanceEntry[] | undefined;
   for (const club of state.clubs) {
     if (!needsSponsorshipOffers(commercial, club.id, state.seasonNumber)) continue;
-    const appeal = sponsorAppeal({ clubs: state.clubs, fixtures: state.fixtures, ledger: state.finance.ledger, seasonNumber: state.seasonNumber, completedRounds, world: worldOf(state) }, club.id).appeal;
+    ledger ??= financeLedgerSlice(state.finance);
+    const appeal = sponsorAppeal({ clubs: state.clubs, fixtures: state.fixtures, ledger, seasonNumber: state.seasonNumber, completedRounds, world: worldOf(state) }, club.id).appeal;
     const offers = buildSponsorshipOffers({ seed: state.seed, commercial, clubId: club.id, window, anchor, appeal, world: worldOf(state) });
     if (!offers.length) continue;
     commercial = { ...commercial, offers: [...commercial.offers, ...offers], events: [...commercial.events, { ...anchor, type: 'offers', clubId: club.id, window, completedRounds, offerIds: offers.map(offer => offer.id) }] };
@@ -196,7 +201,11 @@ export function getClubSponsorship(state: SeasonState, clubId = state.managedClu
   const fixedThisSeason = !commercialGovernsSeason(commercial, state.seasonNumber);
   const payments: SponsorshipPaymentRow[] = [];
   if (current && !fixedThisSeason && !current.prepaidSeasons.includes(state.seasonNumber)) {
-    const received = (installment: 1 | 2 | 'bonus') => state.finance.ledger.some(entry => entry.kind === 'sponsor' && entry.clubId === clubId && entry.sourceId === sponsorshipSourceId(current, state.seasonNumber, installment));
+    const received = (installment: 1 | 2 | 'bonus') => {
+      const sourceId = sponsorshipSourceId(current, state.seasonNumber, installment);
+      for (const entry of financeLedgerEntries(state.finance)) if (entry.kind === 'sponsor' && entry.clubId === clubId && entry.sourceId === sourceId) return true;
+      return false;
+    };
     payments.push({ label: 'Opening installment', date: dateForRound(1, state.seasonNumber), amount: sponsorshipInstallment(current, 1), status: received(1) ? 'received' : 'scheduled' });
     payments.push({ label: 'Matchday 6 installment', date: dateForRound(SPONSORSHIP_SECOND_INSTALLMENT_ROUND, state.seasonNumber), amount: sponsorshipInstallment(current, 2), status: received(2) ? 'received' : 'scheduled' });
     if (current.bonus > 0) payments.push({ label: 'Top-half bonus', date: dateForRound(seasonRounds(state), state.seasonNumber), amount: current.bonus, status: received('bonus') ? 'received' : state.status === 'complete' ? 'not-earned' : 'conditional' });

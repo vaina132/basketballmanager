@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { AssistantContract, SeasonAssistant } from '../domain/assistant';
 import type { SeasonState } from '../domain/season';
 import { recordAssistantFee } from './finance';
@@ -10,13 +11,13 @@ export function enableAssistant(state: SeasonState): SeasonState {
   if (state.assistant.enabledSince) return state;
   if (!state.finance.enabledSince) throw new Error('Enable club finances before recruiting assistant coaches.');
   if (state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch.status === 'finished') throw new Error('Enable assistant coaches before the final match finishes, or when the next season starts.');
-  return recruitAiAssistants({ ...state, assistant: { ...state.assistant, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length } } });
+  return recruitAiAssistants({ ...state, assistant: { ...state.assistant, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } });
 }
 
 function hireForClub(state: SeasonState, assistantId: string, clubId: string): SeasonState {
   const quote = quoteAssistantHire(state, assistantId, clubId);
   if (!quote.canHire) throw new Error(quote.reason!);
-  const contract: AssistantContract = { id: `assistant-contract-${state.assistant.contracts.length + 1}`, assistantId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: state.finance.ledger.length };
+  const contract: AssistantContract = { id: `assistant-contract-${state.assistant.contracts.length + 1}`, assistantId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: financeLedgerCount(state.finance) };
   return recordAssistantFee({ ...state, assistant: { ...state.assistant, contracts: [...state.assistant.contracts, contract] } }, contract);
 }
 
@@ -30,7 +31,7 @@ function managedContract(state: SeasonState, contractId: string): AssistantContr
 }
 export function releaseAssistant(state: SeasonState, contractId: string): SeasonState {
   const contract = managedContract(state, contractId);
-  return { ...state, assistant: { ...state.assistant, contracts: state.assistant.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: state.finance.ledger.length } : item) } };
+  return { ...state, assistant: { ...state.assistant, contracts: state.assistant.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } };
 }
 export function setAssistantRenewal(state: SeasonState, contractId: string, renew: boolean): SeasonState {
   if (typeof renew !== 'boolean') throw new Error('Choose whether the assistant-coach contract should renew.');

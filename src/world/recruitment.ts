@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import type { ContractOfferOptions, EmploymentContract, EmploymentTransfer } from '../domain/employment';
 import type { InSeasonEvent, InSeasonEventAnchor, InSeasonOffer, SeasonRecruitment } from '../domain/recruitment';
 import type { SeasonState } from '../domain/season';
@@ -23,7 +24,7 @@ import { seasonRounds } from './career-world';
 export function createInSeasonRecruitment(): SeasonRecruitment { return { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] }; }
 
 function eventAnchor(state: SeasonState): InSeasonEventAnchor {
-  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndexBefore: state.finance.ledger.length, contractCountBefore: state.employment.contracts.length, negotiationCountBefore: state.negotiations.records.length };
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndexBefore: financeLedgerCount(state.finance), contractCountBefore: state.employment.contracts.length, negotiationCountBefore: state.negotiations.records.length };
 }
 
 function boundary(state: SeasonState): { seasonNumber: number; round: number } {
@@ -54,7 +55,7 @@ export function enableInSeasonRecruitment(state: SeasonState): SeasonState {
   if (state.recruitment?.enabledSince) return state;
   if (state.status !== 'active') throw new Error('Start the next season before enabling in-season recruitment.');
   if (!state.employment.enabledSince || !state.finance.enabledSince || !state.payroll.enabledSince || !state.negotiations.enabledSince) throw new Error('Enable player contracts, finances, payroll and negotiations first.');
-  const next: SeasonState = { ...state, recruitment: { model: 'recruitment-1', enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length, contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length }, transfersEnabledSince: null, events: [], offers: [] } };
+  const next: SeasonState = { ...state, recruitment: { model: 'recruitment-1', enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance), contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length }, transfersEnabledSince: null, events: [], offers: [] } };
   return scheduleInSeasonRecruitment(next);
 }
 
@@ -68,7 +69,7 @@ export function applyInSeasonEvent(state: SeasonState, event: InSeasonEvent): Se
   if (event.type === 'enable-transfers') {
     requirePreparedBoundary(state);
     if (state.recruitment.transfersEnabledSince) throw new Error('In-season club transfers are already enabled.');
-    return { ...state, recruitment: { ...state.recruitment, transfersEnabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length, contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length }, events: [...state.recruitment.events, { ...event }] } };
+    return { ...state, recruitment: { ...state.recruitment, transfersEnabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance), contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length }, events: [...state.recruitment.events, { ...event }] } };
   }
   if (event.type === 'offer') {
     requirePreparedBoundary(state);

@@ -1,3 +1,4 @@
+import { financeLedgerCount } from './finance-ledger';
 import { facilityPracticeBonusPercent } from './facilities-policy';
 import type { AcademyGraduate, AcademyWeek, SeasonAcademy } from '../domain/academy';
 import type { SeasonState } from '../domain/season';
@@ -36,7 +37,7 @@ export function enableAcademy(state: SeasonState): SeasonState {
   if (state.academy.enabledSince) return state;
   if (!state.recruitment.enabledSince || !state.finance.enabledSince || !state.employment.enabledSince || !state.payroll.enabledSince || !state.negotiations.enabledSince) throw new Error('Enable finances, player contracts, payroll and in-season recruitment before the academy.');
   if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Enable the academy before the final matchday, or start the next season.');
-  const academy = { ...state.academy, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length, contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length } };
+  const academy = { ...state.academy, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance), contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length } };
   return intake({ ...state, academy }, true);
 }
 

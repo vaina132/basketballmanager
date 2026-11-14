@@ -1,5 +1,31 @@
 # Project handover
 
+## Current continuation: step 3.2h (14 November 2026)
+
+**Start here.** The owner committed 3.2g as `2f9c899` (`nn`) and asked to continue. Work stays on `main`, uncommitted for the owner. This increment optimizes strict historical registration replay. **Overall 3.2 remains open.** Schema 44, compact-2, checks version 3, history and game rules are unchanged. No provider requests, private-pack refresh or UI changes.
+
+### Implemented
+
+- A sixth-opening CPU profile found repeated squad reconstruction at every historical matchday during recruitment validation. `registrationChangeRounds` now exposes the registration engine's existing sorted contract/transfer start boundaries. Storage reconstructs opening squads and candidate changes, instead of rebuilding identical squads on intervening days.
+- Current/archived roster validation and recruitment event-prefix replay share that reconstruction. Exact player records, snapshot order, jerseys, final membership and original journal checks remain authoritative. The boundary list is fresh for each prefix; there is no new cache, saved verdict or relaxed import check.
+- Thirteen new tests compare seven genuine format 23-43 saved states against exhaustive reconstruction at every matchday, preserve original roster snapshots, roundtrip current saves and reject altered dates, missing arrivals, changed jerseys and extra unchanged snapshots after prior validation of the same object. Fixture bytes were not rewritten.
+
+### Evidence and verification
+
+Profile: `.artifacts/step32h-profile-2026-11-14T18-40-48-780Z/`. Three alternating old/current samples against pinned `2f9c899` used the untouched **8,294,537-byte sixth opening** with five completed seasons and 12,304 transactions. Median strict read: **9.863 / 8.118 seconds (17.7% lower)**. Validated compact write: **9.523 / 8.712 seconds (8.5% lower)**. Both sets of strict-check ranges are separated in this run. Ordinary matchday advancement: **1.479 / 1.635 seconds**, with overlapping ranges; no matchday speed improvement is claimed. These are Node measurements for this fixture, not browser latency or a general hardware guarantee. Save size is unchanged.
+
+Complete state, exact save bytes, next matchday and all **204 registration boundaries** matched the original runtime. Source/input guards passed, and the input's original retained SHA-256 was independently checked. Report: `.artifacts/step32h-paired-2026-11-14T18-49-48-040Z/comparison.json`. Original career evidence, checkpoints and manifests remain untouched.
+
+**164 focused tests across 7 files passed** in 15.87 seconds (`.artifacts/step32h-focused-tests.log`). Typecheck and the production build passed, retaining the existing large-chunk advisory (`.artifacts/step32h-build.log`). **13 real Edge/module-worker/IndexedDB checks passed with no errors**, covering original financial read models and all three budgets, legacy migration, corrupt-input rejection, import/export, local reload/recovery, stale revisions and certificate fallback (`.artifacts/step32h-browser-smoke-report.json`). **Full serial regression passed all 2,371 tests across 159 files in 458.06 seconds**, without failures or skips (`.artifacts/step32h-full-tests.log`). Source/tests/scripts stayed frozen after the paired measurement; subsequent edits only document results. Test/browser helpers exited and ports 5187/9347 were released.
+
+### Next / conventions
+
+Continue 3.2 using the retained fifth/sixth-season checkpoints: full-history checks and history growth still need work (the profile also identifies academy, relationship and board replay). This is not incremental write validation or bounded total-history acceptance. Do not regenerate evidence or relax checks to make a benchmark pass. Keep heavy checks sequential and source/tests frozen during measurements.
+
+After 3.2: roster/registration separation and API freshness audit; 3.3 shared calendar/byes; 3.4 domestic formats/playoffs/promotion; 3.5 Europe/background clubs/qualification; 3.6 country flags, selection and visual strength; 3.7 integration; sprint 4 rating and match calibration. The existing 40-club annual-calendar overlap/negative-recovery bug remains for 3.3. Existing pack freshness, generated-reserve disclosure, missing colors, estimated finances and European participant reconciliation issues remain open. The game still runs one domestic league per career, not the full shared European world.
+
+Preserve the game interface and separate budget rules in AGENTS.md, exact historical roster order and absolute financial anchors. Run `npm.cmd run dev`, `npm.cmd run build`, `npm.cmd test -- --maxWorkers=1 --testTimeout=120000`. **Ready for the owner to commit.** No commit or push was performed. Suggested owner commit: `perf: replay roster history only at registration changes`. Include the new `tests/registration-replay.test.js` file.
+
 ## Current continuation: step 3.2g (14 November 2026)
 
 **Start here.** The owner committed 3.2f as `5bedc0d` (`v`) and asked to continue. Work stays on `main`, uncommitted for the owner. **Schema 44, compact-2, checks version 3, retained evidence and gameplay/financial rules are unchanged.** No API calls, pack refresh or UI changes. Overall 3.2 is still in progress.

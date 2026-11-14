@@ -79,7 +79,7 @@ import { applyInSeasonEvent, createInSeasonRecruitment as createRecruitment } fr
 import { getTransferPaymentSchedule, processTransferPayments } from '../world/transfer-payments';
 import { addMarketDays, MARKET_MAX_EVENTS, MARKET_WINDOW_DAYS, isLiveMarketOffer } from '../world/market-policy';
 import { evaluateNegotiation } from '../world/negotiations-policy';
-import { contractForSeason, contractForRound, effectiveContractsForSeason, effectiveContractsForRound, getContractedClubs, getContractedClubsForRound, quotePlayerContract, EMPLOYMENT_BUDGET, MIN_ROSTER_SIZE, MAX_ROSTER_SIZE, MIN_CONTRACT_WAGE, MAX_CONTRACT_WAGE, MAX_CONTRACT_SEASONS, WAGE_STEP, MIN_ROSTER_WAGE_RESERVE } from '../world/employment-policy';
+import { contractForSeason, contractForRound, effectiveContractsForSeason, effectiveContractsForRound, getContractedClubs, getContractedClubsForRound, registrationChangeRounds, quotePlayerContract, EMPLOYMENT_BUDGET, MIN_ROSTER_SIZE, MAX_ROSTER_SIZE, MIN_CONTRACT_WAGE, MAX_CONTRACT_WAGE, MAX_CONTRACT_SEASONS, WAGE_STEP, MIN_ROSTER_WAGE_RESERVE } from '../world/employment-policy';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
 import { MAX_SEASON_COLLECTION_ENTRIES, MAX_SEASON_SAVE_BYTES, MAX_SEASON_SAVE_VALUES } from './season-limits';
@@ -235,10 +235,7 @@ function validateArchivedResult(value: unknown, path: string, home: Team, away: 
 /** Each registration boundary retains the precise players and jersey assignments then in force. */
 function validateRosters(value: unknown, path: string, clubs: readonly Team[], seasonNumber: number, employment?: SeasonEmployment, throughRound?: number, context: CareerPlayerContext = {}): RosterSnapshot[] {
   throughRound ??= seasonRounds(context);
-  const expected = createRosterSnapshots(clubsForEmploymentYear(employment, seasonNumber, 1, context), seasonNumber);
-  for (let round = 2; round <= throughRound; round += 1) for (const club of clubsForEmploymentYear(employment, seasonNumber, round, context)) {
-    if (!sameData(rosterForRound(expected, club.id, round).players, club.players)) expected.push({ id: `roster-s${seasonNumber}-${club.id}-r${round}`, clubId: club.id, fromRound: round, players: club.players.map(player => ({ ...player, attributes: { ...player.attributes } })) });
-  }
+  const expected = rostersForEmploymentYear(employment, seasonNumber, throughRound, context);
   if (!sameData(value, expected) || !sameData(clubs, clubsForEmploymentYear(employment, seasonNumber, throughRound, context))) fail(path, 'must preserve the exact opening and arrival roster snapshots at their registration boundaries');
   return value as RosterSnapshot[];
 }
@@ -1006,6 +1003,23 @@ function clubsForEmploymentYear(employment: SeasonEmployment | undefined, season
   return employment ? getContractedClubsForRound({ ...context, employment, clubs: definitions }, seasonNumber, round) : definitions;
 }
 
+/** Registration stays unchanged between contract/transfer starts. Rebuild only possible changes, in order;
+ * still compare complete player records, since a candidate boundary need not actually change a squad.
+ * This is a fresh reconstruction from the supplied contract prefix, never a saved snapshot or cached verdict.
+ */
+function rostersForEmploymentYear(employment: SeasonEmployment | undefined, year: number, throughRound: number, context: CareerPlayerContext): RosterSnapshot[] {
+  const rosters = createRosterSnapshots(clubsForEmploymentYear(employment, year, 1, context), year);
+  for (const round of employment ? registrationChangeRounds(employment, year, throughRound) : []) {
+    for (const club of clubsForEmploymentYear(employment, year, round, context)) {
+      if (!sameData(rosterForRound(rosters, club.id, round).players, club.players)) {
+        rosters.push({ id: `roster-s${year}-${club.id}-r${round}`, clubId: club.id, fromRound: round,
+          players: club.players.map(player => ({ ...player, attributes: { ...player.attributes } })) });
+      }
+    }
+  }
+  return rosters;
+}
+
 /** Earlier transfers were settled in full; preserve the original cash event identity. */
 function migrateTransferPayments(employment: SeasonEmployment): SeasonEmployment {
   return { ...employment, transfers: (employment.transfers ?? []).map(transfer => ({
@@ -1590,8 +1604,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     const lifecycle = lifecycleAtBoundary(state.lifecycle, year, round, contractCount, index, state.market.windows.filter(window => window.seasonNumber < year).reduce((sum, window) => sum + window.events.length, 0), ledgerIndex, negotiationCount);
     const catalogContext = { world: worldOf(state), academy, lifecycle, seasonNumber: year, round };
     const clubs = clubsForEmploymentYear(employment, year, round, catalogContext);
-    const rosters = createRosterSnapshots(clubsForEmploymentYear(employment, year, 1, catalogContext), year);
-    for (let at = 2; at <= round; at += 1) for (const club of clubsForEmploymentYear(employment, year, at, catalogContext)) if (!sameData(rosterForRound(rosters, club.id, at).players, club.players)) rosters.push({ id: `roster-s${year}-${club.id}-r${at}`, clubId: club.id, fromRound: at, players: [...club.players] });
+    const rosters = rostersForEmploymentYear(employment, year, round, catalogContext);
     const catalogIds = new Set(getCareerPlayers(catalogContext).map(player => player.id));
     let replay: SeasonState = { ...state, managedClubId: managedClubFor(state, year, false), academy, lifecycle, youthCompetition, conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => catalogIds.has(id))), training: { ...state.training, points: Object.fromEntries(Object.entries(state.training.points).filter(([id]) => catalogIds.has(id))) }, seasonNumber: year, round, date: event.date as string, status: 'active', clubs, rosters, employment, recruitment, finance, payroll: { ...state.payroll, agreements: state.payroll.agreements.filter(agreement => agreement.seasonNumber < year || agreement.seasonNumber === year && agreement.startsRound <= round && contractForRound(employment, agreement.playerId, year, agreement.startsRound)?.clubId === agreement.clubId) }, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, negotiationCount) }, market: createMarket() };
     try { replay = applyInSeasonEvent(replay, event as unknown as InSeasonEvent); }

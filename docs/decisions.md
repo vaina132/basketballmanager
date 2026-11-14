@@ -297,6 +297,10 @@ Use direct archive amount/payload reads for frequent cash, payroll and ticket-ca
 
 Measure continuation on the same input and compare to a pinned original runtime. Retain strict checkpoints and progress for lengthy diagnostics, with a declared operation-boundary time budget and explicit failure reporting. The resulting five completed seasons in one full domestic league do not establish combined-league/Europe acceptance or bounded lifetime history. Results and remaining costs: [3.2g](multi-league-world.md#step-32g-career-calculations-and-resumable-diagnostics-14-november-2026).
 
+## Registration replay boundary policy
+
+Step 3.2h reuses the registration engine's contract/transfer effective-start boundaries when reconstructing roster history. A possible boundary is not evidence that a change was legal or actually happened: strict validation still checks every original contract, transfer, recruitment event and exact roster snapshot. All boundaries are recalculated for the supplied prefix, including departures. There is no persisted acceptance cache, relaxed import check or change to save format, rules, retained history or simulation order. Unchanged matchdays need no duplicate squad reconstruction. Overall step 3.2 remains open.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all thirteen competitions in the current scope?

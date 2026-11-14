@@ -154,11 +154,18 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+/** Possible in-season registration changes. Opening contracts/buyouts are handled by the opening squad.
+ * This derives work boundaries, not permission: callers must still validate the journal and compare actual squads.
+ */
+export function registrationChangeRounds(employment: SeasonEmployment, seasonNumber: number, throughRound: number): number[] {
+  return [...new Set([
+    ...employment.contracts.filter(contract => contract.startsSeason === seasonNumber).map(contract => contract.startsRound ?? 1),
+    ...employment.transfers.filter(transfer => transfer.startsSeason === seasonNumber).map(transfer => transfer.startsRound ?? 1),
+  ].filter(at => at > 1 && at <= throughRound))].sort((left, right) => left - right);
+}
+
 function contractedClubsForRound(state: { employment: SeasonEmployment; clubs: readonly Team[] } & CareerPlayerContext, definitions: readonly Team[], seasonNumber: number, round: number): readonly Team[] {
-  const changeRounds = [...new Set([
-    ...state.employment.contracts.filter(contract => contract.startsSeason === seasonNumber).map(contract => contract.startsRound ?? 1),
-    ...state.employment.transfers.filter(transfer => transfer.startsSeason === seasonNumber).map(transfer => transfer.startsRound ?? 1),
-  ].filter(at => at > 1 && at <= round))].sort((left, right) => left - right);
+  const changeRounds = registrationChangeRounds(state.employment, seasonNumber, round);
   // One catalog and registration grouping per boundary, shared by every club in this reconstruction.
   // Keep catalog order for opening squads and contract order for later arrivals: both decide shirt numbers.
   const termsByClub = (at: number) => {

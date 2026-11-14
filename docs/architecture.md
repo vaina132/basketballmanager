@@ -138,6 +138,8 @@ Format 44 allows at most **20,000 active-tail rows**, **20,000 rows per archived
 
 AI candidate filtering for coaches, scouts, fitness coaches, physios, assistants and youth coaches runs inside a short `withCalculationCache` scope. Only quotes against unchanged state share financial indexes. The scope is released before sorting/selection and before the authoritative hire command, which checks affordability again. A later club or appointment receives a fresh scope. Never hold these derived facts across state mutation or use them to accept imported evidence.
 
+**Registration replay boundaries (step 3.2h, format 44 unchanged).** `registrationChangeRounds` shares the existing sorted, distinct contract/transfer effective-start rounds with storage. `rostersForEmploymentYear` reconstructs the opening squad and each candidate change, comparing complete player records before adding a snapshot. Both current/archived roster validation and recruitment event-prefix replay use it. Skipping unchanged matchdays removes redundant work; contract/transfer chronology, exact snapshot arrays, final club membership and all event evidence are still checked. The helper derives fresh boundaries from each supplied prefix; it never trusts saved snapshots, a fingerprint or a previous validation result. Opening buyouts and shirt-number ordering retain the existing registration rules.
+
 ## 9. Performance budgets and evidence
 
 Initial measurement goals, not current guarantees: responsive controls during a simulated day; a representative watched match near display refresh rate; no growing memory allocation per rendered frame; resumable season work with visible progress; bounded historical replay storage.

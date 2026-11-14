@@ -1,0 +1,6 @@
+{
+  "positions": [
+    { "apiSportsId": "12394", "officialPersonCode": "014102", "name": "Kai Jones", "season": "2026-27", "position": "C", "observedOn": "2026-11-14", "sources": ["https://api-live.euroleague.net/v2/competitions/E/seasons/E2026/people", "https://www.anadoluefessk.org/en/team-players"], "note": "EuroLeague primary role is Center; Efes also lists PF/C." },
+    { "apiSportsId": "387", "officialPersonCode": "012609", "name": "Collin Malcolm", "season": "2026-27", "position": "SF", "observedOn": "2026-11-14", "sources": ["https://www.anadoluefessk.org/en/team-players"], "note": "Official club roster gives the precise small-forward role." }
+  ]
+}

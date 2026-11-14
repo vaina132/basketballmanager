@@ -15,6 +15,12 @@ const ratings = players.slice(0, 19).map(player => ({ player_id: player.id, two_
 const input = { version: 'test-1', season: '2026-27', competitions: [{ id: 'c', name: 'League', country: 'X', tier: 1, kind: 'domestic', clubIds: ['a', 'b'] }], clubs, memberships, players, ratings, source: { provider: 'test' } };
 
 describe('real-data pack', () => {
+  it('does not trust old rating flags for precise positions or provider ages', () => {
+    const { pack } = buildPack(input);
+    expect(pack.players.find(player => player.id === 'player-p0')).toMatchObject({ position: 'SG', estimated: expect.arrayContaining(['game_position', 'age-unverified']) });
+    expect(pack.players.find(player => player.id === 'player-p2')).toMatchObject({ position: 'C' });
+    expect(pack.players.find(player => player.id === 'player-p2').estimated).not.toContain('game_position');
+  });
   it('assembles current squads from the latest membership, skips merged records and estimates unrated players', () => {
     const { pack, problems, warnings, summary } = buildPack(input);
     expect([pack.format, pack.version, pack.season]).toEqual([PACK_FORMAT, 'test-1', '2026-27']);

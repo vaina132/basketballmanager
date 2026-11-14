@@ -66,7 +66,7 @@ These are targets, not completed behavior. A local checkpoint fingerprint may sk
 | --- | --- | --- |
 | 3.1 | Data: import the other eight domestic divisions, the EuroCup and the BCL (2025-26 and 2026-27); club identities; ratings that compare every league with the European level (rating-3); a new private pack with all thirteen competitions | Import complete; roster fidelity/freshness follow-up below remains |
 | 3.2 | Save checks that scale: sealed seasons and lighter records for clubs the manager does not run | Single-league implementation and verification complete. Combined-world capacity/load acceptance remains at 3.7 |
-| 3.1 follow-up / 3.3 prerequisite | Distinguish full club rosters, competition registration and matchday selection; preserve variable real roster sizes and audit fresh API memberships | Planned after the current 3.2 work, before selection acceptance |
+| 3.1 follow-up / 3.3 prerequisite | Distinguish full club rosters, competition registration and matchday selection; preserve variable real roster sizes and audit fresh API memberships | In progress: full provider observation audit and 630 official profile corrections completed; membership reconciliation and roster separation remain |
 | 3.3 | One calendar for several leagues: competitions in the world, game days, days without the manager's game, a table per league, amounts per week or home game | Planned |
 | 3.4 | Domestic playoffs, titles, and promotion and relegation (real formats, checked per league) | Planned |
 | 3.5 | European competitions in their real formats on midweek dates, with background clubs and background tables; European places for the next season | Planned |
@@ -109,6 +109,12 @@ The pack was built at **2026-11-14 08:05:37 UTC** from observed 2026–27 member
 Three fresh read-only API-Sports requests on 14 November checked two clubs: Fenerbahçe's domestic endpoint returned the same 17 identities as the pack; Beşiktaş's domestic and European endpoints each returned 14, with different coverage. Their union exactly matches the pack's 15 (Y. Aksu appears only domestically, DaQuan Jeffries only in Europe). No stale identity was established in these samples; they do not certify all thirteen competitions or imply those fifteen are eligible in every competition. All calls succeeded without provider errors; no database or pack was changed. Evidence: `.artifacts/api-roster-freshness-2026-11-14T11-09-54-394Z.json` and `.artifacts/api-roster-freshness-besiktas-europe-2026-11-14T11-12-48-836Z.json` (ignored, no credentials).
 
 **Sprint 4 rating calibration:** the owner's Beşiktaş/Fenerbahçe comparison is an explicit review case. Audit provider statistics, minutes, positions, sample sizes, cross-league conversion, squad-depth aggregation and simulated results. Ratings remain estimates pending this work; do not hardcode a preferred club order by reputation. Country flags and visual strength belong to 3.6 and are not implemented in this save increment.
+
+### Profile correctness and hiring fix (14 November 2026)
+
+Following completed single-league 3.2 work, the owner reported incorrect Efes positions and a black screen after hiring a coach. The crash came from three UI workspaces using the small authored coach list while recruitment used the expanded directory. Staff, Training and Club now resolve the full directory, including released staff and saved careers. Regression tests and a real-browser Hire → Training → Club → save/reload → release flow cover the defect.
+
+The next prerequisite has started with a complete 280-endpoint read-only provider audit. A separate private `2026.11-world-2` revision corrects 630 profiles against official evidence, including Kai Jones C and Collin Malcolm SF; broad or missing source positions remain explicitly estimated. Club assignments and ability values are retained. **166 conflicting provider memberships, 199 unmatched official registrations and 17 additional provider identities still need reconciliation.** These categories overlap. Full roster separation, opening-day verification and competition participant reconciliation remain open. See [player data quality](player-data-quality.md) for evidence, limitations and the repeatable workflow.
 
 ## Step 3.2: save scaling (14 November 2026)
 

@@ -14,6 +14,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolvePosition } from './real-data-position.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argument = (name, fallback) => { const index = process.argv.indexOf(name); return index > 0 ? process.argv[index + 1] : fallback; };
@@ -44,13 +45,14 @@ export function buildPack(input) {
   }
   const packPlayers = [...latest.values()].map(row => {
     const player = playerById.get(row.player_id), rating = ratingById.get(row.player_id);
-    const position = rating?.game_position ?? UNRATED.position[player.position] ?? 'SF';
+    const resolution = resolvePosition(player.position, rating?.game_position ?? UNRATED.position[player.position] ?? 'SF');
+    const position = resolution.position;
     const [height, weight] = rating ? [rating.height_cm, rating.weight_kg] : UNRATED.build[position];
     const attributes = Object.fromEntries(ABILITIES.map(key => [GAME_KEYS[key], rating ? rating[key] : UNRATED.ability]));
     return {
       id: `player-${row.player_id}`, name: player.full_name, clubId: `club-${row.club_id}`, number: row.shirt_number ?? null, position,
       nationality: player.nationality ?? null, age: player.age_observed ?? null, heightCm: height, weightKg: weight, attributes,
-      estimated: rating ? [...rating.estimated].sort() : ['all-abilities', 'game_position', 'height_cm', 'weight_kg'],
+      estimated: [...new Set([...(rating ? rating.estimated.filter(field => field !== 'game_position') : ['all-abilities', 'height_cm', 'weight_kg']), 'age-unverified', ...(resolution.estimated ? ['game_position'] : [])])].sort(),
     };
   }).sort((a, b) => a.clubId.localeCompare(b.clubId) || a.name.localeCompare(b.name));
   const squads = new Map();

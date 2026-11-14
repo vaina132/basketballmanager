@@ -10,6 +10,8 @@ import { overallRating } from '../world/overall-rating'
 import { careerCompetitions, worldFromPack } from '../world/real-world'
 import { managerAge, MAX_MANAGER_NAME_LENGTH, MAX_MANAGER_NATIONALITY_LENGTH, validateManagerProfile } from '../world/manager'
 import { Avatar } from './Avatar'
+import { PositionLabel } from './PositionLabel'
+import { DataPackDetails } from './DataPackDetails'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
 import { NATIONALITY_SUGGESTIONS } from './nationality-suggestions'
@@ -188,7 +190,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
         {!props.profileOnly && step === 1 && (!props.pack || !world || !club ? <div className="career-pack-layout">
           <section className="panel" aria-labelledby="career-pack-title"><header className="career-start-panel-heading"><h2 id="career-pack-title">Real club data</h2><Icon name="upload" size={17} /></header>
             <div className="career-pack-body">
-              <p>Careers use real clubs and players from your private data pack, built on this computer with <code>npm.cmd run data:pack</code> (for example <code>real-2026.11-pilot-2.json</code>). The file is read here and stays on this computer.</p>
+              <p>Choose your club data file to load real clubs and players. The file stays on this computer.</p>
               <input ref={packInput} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />
               <button id="career-load-pack" type="button" className="button primary" disabled={packLoading} onClick={() => packInput.current?.click()}><Icon name="upload" size={16} />{packLoading ? 'Checking data pack…' : props.pack ? 'Load another data pack' : 'Load data pack'}</button>
               {packError && <p id="career-pack-error" className="career-pack-error" role="alert">{packError}</p>}
@@ -201,10 +203,11 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
             <p className="career-league-summary"><strong>{world.name}</strong> · {world.clubs.length} clubs · {worldRounds(world)} matchdays</p>
             <div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{world.clubs.map(team => <label className={`career-club-option${club.id === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={club.id === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players · squad {squadRating(team)}</small></span></label>)}</div>
             <button type="button" className="text-button career-pack-change" onClick={() => packInput.current?.click()} disabled={packLoading}>Load another data pack</button>
+            <DataPackDetails pack={props.pack} />
             <input ref={packInput} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />
             {packError && <p className="career-pack-error" role="alert">{packError}</p>}
           </section>
-          <section className="panel" aria-labelledby="career-roster-title"><header className="career-start-panel-heading"><h2 id="career-roster-title">{club.name}</h2><span>First team</span></header><div className="career-start-roster-scroll" tabIndex={0} role="region" aria-label={`${club.name} roster preview`}><table className="career-start-roster"><thead><tr><th scope="col">Player</th><th scope="col">Position</th><th scope="col">Overall</th><th scope="col">Height</th></tr></thead><tbody>{club.players.map(player => <tr key={player.id}><td><span className="career-start-player"><span aria-hidden="true"><Avatar player={player} color={club.color} size={30} /></span><span>{player.name}<small>#{player.number}</small></span></span></td><td>{player.position}</td><td>{overallRating(player.attributes, player.position)}</td><td>{player.heightCm} cm</td></tr>)}</tbody></table></div></section>
+          <section className="panel" aria-labelledby="career-roster-title"><header className="career-start-panel-heading"><h2 id="career-roster-title">{club.name}</h2><span>First team</span></header><div className="career-start-roster-scroll" tabIndex={0} role="region" aria-label={`${club.name} roster preview`}><table className="career-start-roster"><thead><tr><th scope="col">Player</th><th scope="col">Position</th><th scope="col">Overall</th><th scope="col">Height</th></tr></thead><tbody>{club.players.map(player => <tr key={player.id}><td><span className="career-start-player"><span aria-hidden="true"><Avatar player={player} color={club.color} size={30} /></span><span>{player.name}<small>#{player.number}</small></span></span></td><td><PositionLabel position={player.position} profile={world.playerProfiles[player.id]} /></td><td>{overallRating(player.attributes, player.position)}</td><td>{player.heightCm} cm</td></tr>)}</tbody></table></div></section>
         </div>)}
 
         {!props.profileOnly && step === 2 && <>

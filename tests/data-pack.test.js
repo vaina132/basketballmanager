@@ -23,6 +23,16 @@ const pack = {
 const file = (contents, checksum = createHash('sha256').update(JSON.stringify(contents)).digest('hex')) => JSON.stringify({ checksum, writtenAt: '2026-11-13T00:00:00Z', pack: contents });
 
 describe('real-data packs in the game', () => {
+  it('rejects invalid dates and contradictory position evidence even with a recomputed fingerprint', async () => {
+    const invalid = structuredClone(pack);
+    invalid.players[0].birthDate = '2000-02-31';
+    await expect(parseDataPack(file(invalid))).rejects.toThrow(/birth date/);
+    invalid.players[0].birthDate = '2001-01-19';
+    invalid.players[0].profileEvidence = { observedAt: '2026-11-14T12:00:00Z', positionSource: 'estimated', membership: 'provider-observed', sources: ['https://provider.example/player'] };
+    await expect(parseDataPack(file(invalid))).rejects.toThrow(/inconsistent position/);
+    invalid.players[0].estimated.push('game_position');
+    expect((await parseDataPack(file(invalid))).players[0].birthDate).toBe('2001-01-19');
+  });
   it('accepts a pack whose fingerprint matches and refuses a changed one', async () => {
     expect((await parseDataPack(file(pack))).version).toBe('test-1');
     const changed = JSON.parse(file(pack));

@@ -1,6 +1,35 @@
 # Project handover
 
-## Current continuation: remaining step 3.2 (14 November 2026)
+## Current continuation: player profile audit and coach hiring fix (14 November 2026)
+
+**Start here.** The owner committed the completed single-league 3.2 work as `1a87d94` and asked for the next item, reporting incorrect real-player positions and a black screen after hiring a coach. This continuation addresses those defects and starts the **3.1 follow-up / 3.3 roster prerequisite**. It does not implement shared leagues, European gameplay or variable career rosters. Work remains uncommitted for the owner.
+
+### Done
+
+- Fixed Staff, Training and Club using the small authored coach list instead of the full recruitment directory. Generated coach hires, released coaches, ledger descriptions and saved careers now render using the same identities as the command layer. No staff costs, contracts or hiring rules changed.
+- Completed a read-only audit of **280 provider team/season endpoints across all 13 imported competitions and 223 clubs**. Retained exact responses and official EuroLeague/EuroCup profiles privately. No database writes or old pack changes.
+- Added source-aware position conversion: broad Guard/Forward and missing roles are estimates, including when consuming older stored ratings. Precise roles override statistical guesses. Official profiles matched 630 players within reviewed club identities; ambiguous names are not accepted.
+- Created private **`real-2026.11-world-2.json`** with 630 corrected profiles, including **Kai Jones C** and **Collin Malcolm SF**. 198 positions changed; names, age/DOB, measurements and shirt numbers were also corrected where supported. All ability values and club assignments remain unchanged. See [the audit](docs/player-data-quality.md) for exact scope, sources, hashes and limitations.
+- New careers retain researched birth dates and position evidence. The Club selection has a compact data disclosure; Squad/profile positions mark estimates, and age-derived ages are marked as estimates. Earlier careers retain their embedded world. Schema **45**, `compact-2` and checks **3** are unchanged.
+- New scripts: `data:roster-snapshot` retains complete scoped provider responses; `data:refresh-pack` creates a separate immutable private revision and audit report. Both refuse unsafe partial inputs/overwrites and never change the source database. Reviewed crosswalks/precise evidence live under `real-data/`; raw datasets remain ignored.
+
+### Verification
+
+The original defect was reproduced before the fix in four focused UI regressions (`.artifacts/generated-coach-before-fix.log`). All **71 coach/UI/storage tests** passed after the directory fix. The final profile/pack/world/UI focused run passed **45 tests across 7 files** (`.artifacts/profile-coach-focused-final.log`). **Full serial regression passed all 2,451 tests across 165 files in 571.43 seconds**, with no failures or skips (`.artifacts/profile-coach-full-tests.log`). The final typecheck/production build passed, native exit 0, with the existing large-chunk advisory and a bundler timing advisory (`.artifacts/profile-coach-build.log`). Source and tests stayed unchanged during that full run and all subsequent verification.
+
+**Seven real Edge checks passed with no browser errors** (`.artifacts/profile-coach-browser-report.json`): corrected Efes profiles create and strictly roundtrip a fully enabled career; actual Recruit/Hire clicks; Training and Club identity display; IndexedDB/worker save/reload; release with retained fee; the actual New career file picker and corrected Efes preview; 1024px tablet layout without page overflow. Screenshots are retained at `.artifacts/profile-coach-hired.png` and `.artifacts/profile-pack-tablet.png`. The first browser harness attempt incorrectly inspected only the first existing coach; its failed selector report is retained separately. Correcting the harness required no product fix. The test used an isolated profile/origin and closed its browser/server. `git diff --check` passed, and the private dataset/artifact paths remain ignored.
+
+### Still open / next
+
+**Do not call the database fully verified.** There are **166 multiple-club provider membership conflicts**, **199 unmatched official registrations** and **17 additional provider identities** to reconcile; categories overlap. **2,811 precise positions remain estimates**. Current observations do not establish opening-day rosters. Domestic-only profile verification, European participant reconciliation and ability calibration remain open. The new pack is a profile revision, not a fully reconciled roster release. The ordinary importer still upserts membership observations; do not use a blind refresh to overwrite published data or infer transfers from a last-seen tie.
+
+Next: finish **full club roster / competition registration / matchday selection separation**, with reviewed membership reconciliation and variable roster sizes. Career creation still selects/fills twelve players. Then **3.3 shared calendar/byes; 3.4 domestic formats/playoffs/promotion; 3.5 Europe/background clubs/qualification; 3.6 selection/flags/strength; 3.7 integrated performance; sprint 4 rating/match calibration**. Single-league 3.2 is complete; integrated capacity acceptance remains at 3.7. Preserve the older save-performance limitations documented below.
+
+To use the revision: **New career → Club → Load another data pack**, then choose `.local-data/real-data/packs/real-2026.11-world-2.json`. Existing saves are intentionally not rewritten. The hiring fix works with existing careers too.
+
+Run Node 24.14+: `npm.cmd run dev`, `npm.cmd run typecheck`, `npm.cmd test -- --maxWorkers=1 --testTimeout=120000`, `npm.cmd run build`. See [player-data-quality.md](docs/player-data-quality.md) for repeatable data commands. Never commit keys, raw provider data, private packs or `.artifacts`. Keep heavy checks sequential and follow AGENTS.md's compact game interface. No commit or push was performed.
+
+## Previous continuation: remaining step 3.2 (14 November 2026)
 
 **Start here. Earlier continuation entries below are historical.** The owner committed 3.2i as `7f76294` and requested the rest of 3.2 together. Work is on `main`, uncommitted for the owner. **The single-league 3.2 implementation and verification are complete.** The combined-world performance acceptance still requires 3.3-3.7. This does not add multi-league gameplay.
 

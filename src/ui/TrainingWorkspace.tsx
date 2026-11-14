@@ -1,7 +1,7 @@
 import type { SeasonState } from '../domain/season'
 import type { TrainingFocus, TrainingPlan, TrainingWeekReport } from '../domain/training'
 import type { Team } from '../domain/types'
-import { COACHES } from '../data/development-coaches'
+import { COACH_DIRECTORY as COACHES } from '../data/staff-directory'
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness'
 import { getClubFitnessEffects } from '../world/fitness-policy'
 import { FitnessBenefits, FitnessPortrait, fitnessNumber } from './FitnessBenefits'

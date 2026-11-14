@@ -16,6 +16,9 @@ export const MATCHDAY_SQUAD = 12;
 export interface DataPackPlayer {
   id: string; name: string; clubId: string; number: number | null; position: Position; nationality: string | null; age: number | null;
   heightCm: number; weightKg: number; attributes: PlayerAttributes; estimated: string[];
+  /** Optional researched profile facts; older packs keep their original estimates. */
+  birthDate?: string;
+  profileEvidence?: { observedAt: string; positionSource: 'estimated' | 'official' | 'provider'; membership: 'needs-review' | 'official-registration-observed' | 'provider-observed'; sources: string[] };
 }
 export interface DataPackClub {
   id: string; name: string; shortName: string; country: string | null; city: string | null; arena: string | null;
@@ -57,6 +60,13 @@ export async function parseDataPack(fileText: string): Promise<DataPack> {
     if (!isObject(raw) || typeof raw.id !== 'string' || !ID.test(raw.id) || players.has(raw.id)) fail('a player has a missing or repeated identity');
     text(raw.name, 'a player name');
     if (!POSITIONS.includes(raw.position as Position)) fail(`${raw.name} has an unknown position`);
+    if (!Array.isArray(raw.estimated) || raw.estimated.some(field => typeof field !== 'string')) fail(`${raw.name} has invalid estimate labels`);
+    if (raw.birthDate !== undefined && (typeof raw.birthDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw.birthDate) || !Number.isFinite(Date.parse(raw.birthDate)) || new Date(raw.birthDate).toISOString().slice(0, 10) !== raw.birthDate || raw.birthDate < `${Number(String(pack.season).slice(0, 4)) - 61}-09-05` || raw.birthDate > `${Number(String(pack.season).slice(0, 4)) - 12}-09-05`)) fail(`${raw.name} has an invalid birth date`);
+    if (raw.profileEvidence !== undefined) {
+      const evidence = raw.profileEvidence;
+      if (!isObject(evidence) || typeof evidence.observedAt !== 'string' || !Number.isFinite(Date.parse(evidence.observedAt)) || !['estimated', 'official', 'provider'].includes(evidence.positionSource as string) || !['needs-review', 'official-registration-observed', 'provider-observed'].includes(evidence.membership as string) || !Array.isArray(evidence.sources) || evidence.sources.some(url => typeof url !== 'string' || !url.startsWith('https://'))) fail(`${raw.name} has invalid profile evidence`);
+      if ((evidence.positionSource === 'estimated') !== raw.estimated.includes('game_position')) fail(`${raw.name} has inconsistent position evidence`);
+    }
     if (!isObject(raw.attributes) || ATTRIBUTES.some(key => !Number.isInteger((raw.attributes as Record<string, unknown>)[key]) || ((raw.attributes as Record<string, number>)[key]! < 1 || (raw.attributes as Record<string, number>)[key]! > 20))) fail(`${raw.name} has abilities outside 1-20`);
     if (!Number.isInteger(raw.heightCm) || (raw.heightCm as number) < 150 || (raw.heightCm as number) > 240 || !Number.isInteger(raw.weightKg) || (raw.weightKg as number) < 50 || (raw.weightKg as number) > 180) fail(`${raw.name} has an impossible height or weight`);
     players.set(raw.id, raw as unknown as DataPackPlayer);

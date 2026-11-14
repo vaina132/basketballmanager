@@ -80,7 +80,7 @@ describe('a career world from a real-data pack', () => {
 
   it('estimates birth dates from ages and gives fictional wages within the contract rules', () => {
     const world = worldFromPack(pack, 'competition-league');
-    expect(world.playerProfiles['player-a-1']).toEqual({ dateOfBirth: '2005-01-01', source: 'estimated-from-age' });
+    expect(world.playerProfiles['player-a-1']).toEqual({ dateOfBirth: '2005-01-01', source: 'estimated-from-age', positionSource: 'unverified' });
     expect(world.playerProfiles['player-a-0']!.dateOfBirth).toBe(`${2026 - REAL_WORLD_RULES.defaultAge}-01-01`);
     for (const club of world.clubs) {
       for (const item of club.players) {
@@ -92,6 +92,20 @@ describe('a career world from a real-data pack', () => {
       }
     }
     expect(realWorldWage(90)).toBeGreaterThan(realWorldWage(60));
+  });
+
+  it('keeps researched birth dates and position evidence through career saves without rewriting older careers', () => {
+    const oldWorld = worldFromPack(pack, 'competition-league');
+    const oldSaved = serializeSeason(createSeason({ seed: 3, world: oldWorld, managedClubId: 'club-a' }));
+    const corrected = structuredClone(pack);
+    corrected.version = 'test.3';
+    const player = corrected.players.find(item => item.id === 'player-a-1')!;
+    player.birthDate = '2001-01-19';
+    player.profileEvidence = { observedAt: '2026-11-14T12:00:00Z', positionSource: 'official', membership: 'official-registration-observed', sources: ['https://official.example/roster'] };
+    const world = worldFromPack(corrected, 'competition-league');
+    const loaded = parseSeason(serializeSeason(createSeason({ seed: 3, world, managedClubId: 'club-a' })));
+    expect(loaded.world!.playerProfiles['player-a-1']).toEqual({ dateOfBirth: '2001-01-19', source: 'official-profile', positionSource: 'official' });
+    expect(parseSeason(oldSaved).world!.playerProfiles).toEqual(oldWorld.playerProfiles);
   });
 
   it('gives stronger squads bigger arenas and labels the board, sponsors and budgets as fictional estimates', () => {

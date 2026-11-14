@@ -10,8 +10,8 @@ import { overallRating } from './overall-rating';
 
 /**
  * A career world from a private real-data pack: one domestic league's real clubs, squads, positions and ratings.
- * The pack has no wages, budgets, presidents, sponsors or birth dates, so those are fictional or estimated here,
- * by visible rules, and labelled as such; derbies are left out rather than invented between real clubs.
+ * Wages, budgets, presidents and sponsors are fictional estimates. Researched birth dates are retained;
+ * missing dates are estimated from ages. Derbies are left out rather than invented between real clubs.
  */
 export const REAL_WORLD_RULES = Object.freeze({
   /** Every club starts with the game's full registration of twelve: its best-rated players with statistics. */
@@ -128,7 +128,8 @@ export function worldFromPack(pack: DataPack, competitionId: string): CareerWorl
     clubs: teams,
     playerProfiles: Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, Object.hasOwn(reserveAges, player.id)
       ? { dateOfBirth: `${2026 - reserveAges[player.id]!}-01-01`, source: 'generated-reserve' as const }
-      : { dateOfBirth: `${2026 - (byId.get(player.id)?.age ?? REAL_WORLD_RULES.defaultAge)}-01-01`, source: 'estimated-from-age' as const }]))),
+      : { dateOfBirth: byId.get(player.id)?.birthDate ?? `${2026 - (byId.get(player.id)?.age ?? REAL_WORLD_RULES.defaultAge)}-01-01`, source: byId.get(player.id)?.birthDate ? 'official-profile' as const : 'estimated-from-age' as const,
+        positionSource: byId.get(player.id)?.profileEvidence?.positionSource ?? (byId.get(player.id)?.estimated.includes('game_position') ? 'estimated' as const : 'unverified' as const) }]))),
     wages: Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, realWorldWage(overallRating(player.attributes, player.position))]))),
     finances: teams.map((team, index) => {
       const club = pack.clubs.find(item => item.id === team.id)!, t = share(team.id);

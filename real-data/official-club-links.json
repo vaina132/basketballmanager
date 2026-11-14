@@ -1,0 +1,269 @@
+{
+  "observedOn": "2026-11-14",
+  "sources": [
+    "https://api-live.euroleague.net/v2/competitions/E/seasons/E2026/people",
+    "https://api-live.euroleague.net/v2/competitions/U/seasons/U2026/people"
+  ],
+  "clubs": [
+    {
+      "officialCode": "BAS",
+      "apiSportsId": "2331",
+      "name": "Baskonia"
+    },
+    {
+      "officialCode": "HTA",
+      "apiSportsId": "682",
+      "name": "Hapoel Tel Aviv"
+    },
+    {
+      "officialCode": "ASV",
+      "apiSportsId": "26",
+      "name": "LDLC ASVEL"
+    },
+    {
+      "officialCode": "ULK",
+      "apiSportsId": "1270",
+      "name": "Fenerbahçe"
+    },
+    {
+      "officialCode": "BAR",
+      "apiSportsId": "2329",
+      "name": "FC Barcelona"
+    },
+    {
+      "officialCode": "OLY",
+      "apiSportsId": "1542",
+      "name": "Olympiacos"
+    },
+    {
+      "officialCode": "PAR",
+      "apiSportsId": "1068",
+      "name": "Partizan"
+    },
+    {
+      "officialCode": "ZAL",
+      "apiSportsId": "796",
+      "name": "Žalgiris Kaunas"
+    },
+    {
+      "officialCode": "TEL",
+      "apiSportsId": "687",
+      "name": "Maccabi Tel Aviv"
+    },
+    {
+      "officialCode": "RED",
+      "apiSportsId": "1065",
+      "name": "Crvena zvezda"
+    },
+    {
+      "officialCode": "BES",
+      "apiSportsId": "1266",
+      "name": "Beşiktaş"
+    },
+    {
+      "officialCode": "MAD",
+      "apiSportsId": "2338",
+      "name": "Real Madrid"
+    },
+    {
+      "officialCode": "IST",
+      "apiSportsId": "1263",
+      "name": "Anadolu Efes"
+    },
+    {
+      "officialCode": "DUB",
+      "apiSportsId": "6496",
+      "name": "Dubai Basketball"
+    },
+    {
+      "officialCode": "PAN",
+      "apiSportsId": "614",
+      "name": "Panathinaikos"
+    },
+    {
+      "officialCode": "VIR",
+      "apiSportsId": "732",
+      "name": "Virtus Bologna"
+    },
+    {
+      "officialCode": "PAM",
+      "apiSportsId": "2341",
+      "name": "Valencia Basket"
+    },
+    {
+      "officialCode": "PRS",
+      "apiSportsId": "108",
+      "name": "Paris Basketball"
+    },
+    {
+      "officialCode": "MUN",
+      "apiSportsId": "522",
+      "name": "Bayern Munich"
+    },
+    {
+      "officialCode": "MIL",
+      "apiSportsId": "722",
+      "name": "Olimpia Milano"
+    },
+    {
+      "officialCode": "BGS",
+      "apiSportsId": "1699",
+      "name": "San Pablo Burgos"
+    },
+    {
+      "officialCode": "MAN",
+      "apiSportsId": "1698",
+      "name": "Manresa"
+    },
+    {
+      "officialCode": "TNF",
+      "apiSportsId": "2339",
+      "name": "La Laguna Tenerife"
+    },
+    {
+      "officialCode": "TRT",
+      "apiSportsId": "700",
+      "name": "Derthona Tortona"
+    },
+    {
+      "officialCode": "WRO",
+      "apiSportsId": "914",
+      "name": "Śląsk Wrocław"
+    },
+    {
+      "officialCode": "BUR",
+      "apiSportsId": "1276",
+      "name": "Tofaş"
+    },
+    {
+      "officialCode": "CLU",
+      "apiSportsId": "3419",
+      "name": "U-BT Cluj-Napoca"
+    },
+    {
+      "officialCode": "LKB",
+      "apiSportsId": "790",
+      "name": "Lietkabelis"
+    },
+    {
+      "officialCode": "LEM",
+      "apiSportsId": "23",
+      "name": "Le Mans Sarthe"
+    },
+    {
+      "officialCode": "RIG",
+      "apiSportsId": "6100",
+      "name": "Rīgas Zeļļi"
+    },
+    {
+      "officialCode": "LJU",
+      "apiSportsId": "1800",
+      "name": "Cedevita Olimpija"
+    },
+    {
+      "officialCode": "JER",
+      "apiSportsId": "1792",
+      "name": "Hapoel Jerusalem"
+    },
+    {
+      "officialCode": "NIN",
+      "apiSportsId": "550",
+      "name": "Niners Chemnitz"
+    },
+    {
+      "officialCode": "BOU",
+      "apiSportsId": "24",
+      "name": "JL Bourg"
+    },
+    {
+      "officialCode": "BAH",
+      "apiSportsId": "1264",
+      "name": "Bahçeşehir Koleji"
+    },
+    {
+      "officialCode": "BCR",
+      "apiSportsId": "7903",
+      "name": "BC Roma"
+    },
+    {
+      "officialCode": "PAO",
+      "apiSportsId": "613",
+      "name": "PAOK"
+    },
+    {
+      "officialCode": "TRN",
+      "apiSportsId": "727",
+      "name": "Aquila Trento"
+    },
+    {
+      "officialCode": "BLK",
+      "apiSportsId": "1369",
+      "name": "Balkan Botevgrad"
+    },
+    {
+      "officialCode": "ARI",
+      "apiSportsId": "606",
+      "name": "Aris Thessaloniki"
+    },
+    {
+      "officialCode": "SIA",
+      "apiSportsId": "795",
+      "name": "Šiauliai"
+    },
+    {
+      "officialCode": "MRO",
+      "apiSportsId": "7904",
+      "name": "Maxima Roma"
+    },
+    {
+      "officialCode": "ULM",
+      "apiSportsId": "533",
+      "name": "ratiopharm Ulm"
+    },
+    {
+      "officialCode": "VNC",
+      "apiSportsId": "731",
+      "name": "Reyer Venezia"
+    },
+    {
+      "officialCode": "TTK",
+      "apiSportsId": "1277",
+      "name": "Türk Telekom"
+    },
+    {
+      "officialCode": "NAP",
+      "apiSportsId": "690",
+      "name": "Napoli Basket"
+    },
+    {
+      "officialCode": "KLA",
+      "apiSportsId": "791",
+      "name": "Neptūnas Klaipėda"
+    },
+    {
+      "officialCode": "FRA",
+      "apiSportsId": "526",
+      "name": "Skyliners Frankfurt"
+    },
+    {
+      "officialCode": "BOS",
+      "apiSportsId": "2544",
+      "name": "KK Bosna"
+    },
+    {
+      "officialCode": "LLI",
+      "apiSportsId": "1329",
+      "name": "London Lions"
+    },
+    {
+      "officialCode": "BUD",
+      "apiSportsId": "1615",
+      "name": "Budućnost"
+    },
+    {
+      "officialCode": "RTK",
+      "apiSportsId": "561",
+      "name": "Rostock Seawolves"
+    }
+  ]
+}

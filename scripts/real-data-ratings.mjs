@@ -11,6 +11,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { overallRating, overallRatingStars } from '../src/world/overall-rating.ts';
+import { resolvePosition } from './real-data-position.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const versionArg = process.argv.indexOf('--version');
@@ -351,8 +352,10 @@ export function computeRatings(rows, players, gap, freeThrowSeasons = trustedFre
     const age = profile.age_observed;
     if (age && age > rules.staminaAge) values.stamina = clampScale(values.stamina - Math.min(4, age - rules.staminaAge));
     if (!age) estimated.add('age');
-    const position = name === 'Center' ? 'C' : name === 'Guard' ? (f.assists >= guardAssists ? 'PG' : 'SG') : name === 'Forward' ? (f.rebounds >= forwardRebounds && f.threeRate <= forwardThrees ? 'PF' : 'SF') : f.assists >= pct70(allAssists) ? 'PG' : f.rebounds >= pct70(allRebounds) ? 'PF' : 'SF';
-    if (name === 'Unknown') estimated.add('game_position');
+    const inferred = name === 'Center' ? 'C' : name === 'Guard' ? (f.assists >= guardAssists ? 'PG' : 'SG') : name === 'Forward' ? (f.rebounds >= forwardRebounds && f.threeRate <= forwardThrees ? 'PF' : 'SF') : f.assists >= pct70(allAssists) ? 'PG' : f.rebounds >= pct70(allRebounds) ? 'PF' : 'SF';
+    const resolution = resolvePosition(profiles.get(id).position, inferred);
+    const position = resolution.position;
+    if (resolution.estimated) estimated.add('game_position');
     const [height, weight] = rules.build[position];
     const round = value => Math.round(value * 100) / 100;
     return {

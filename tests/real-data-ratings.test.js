@@ -36,6 +36,9 @@ describe('real-data ratings', () => {
     expect(average(0, 'passing')).toBeGreaterThan(average(2, 'passing'));
     expect(by('p2').game_position).toBe('C');
     expect(['PG', 'SG']).toContain(by('p0').game_position);
+    expect(by('p0').estimated).toContain('game_position');
+    expect(by('p1').estimated).toContain('game_position');
+    expect(by('p2').estimated).not.toContain('game_position');
   });
 
   it('rates players with very few minutes from their position and marks every ability as estimated', () => {

@@ -1,4 +1,5 @@
 import { financeLedgerCount } from './finance-ledger';
+import { withCalculationCache } from './pure-cache';
 import type { PhysioContract, SeasonPhysio } from '../domain/physio';
 import type { SeasonState } from '../domain/season';
 import { recordPhysioFee } from './finance';
@@ -38,7 +39,7 @@ export function recruitAiPhysios(state: SeasonState): SeasonState {
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     if (getClubPhysio(next, club.id)) continue;
-    const physio = availablePhysios(next).filter(physio => quotePhysioHire(next, physio.id, club.id).canHire).sort((left, right) => physioEffects(right).creditPerDay / right.fee - physioEffects(left).creditPerDay / left.fee || left.id.localeCompare(right.id, 'en'))[0];
+    const physio = withCalculationCache(() => availablePhysios(next).filter(physio => quotePhysioHire(next, physio.id, club.id).canHire)).sort((left, right) => physioEffects(right).creditPerDay / right.fee - physioEffects(left).creditPerDay / left.fee || left.id.localeCompare(right.id, 'en'))[0];
     if (physio) next = hireForClub(next, physio.id, club.id);
   }
   return next;

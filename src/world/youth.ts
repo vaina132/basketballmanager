@@ -1,4 +1,5 @@
 import { financeLedgerCount } from './finance-ledger';
+import { withCalculationCache } from './pure-cache';
 import type { SeasonYouth, YouthCoachContract } from '../domain/youth';
 import type { SeasonState } from '../domain/season';
 import { recordYouthFee } from './finance';
@@ -38,7 +39,7 @@ export function recruitAiYouthCoaches(state: SeasonState): SeasonState {
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     if (getClubYouthCoach(next, club.id)) continue;
-    const coach = availableYouthCoaches(next).filter(coach => quoteYouthCoachHire(next, coach.id, club.id).canHire).sort((left, right) => youthCoachEffects(right).bonusPercent / right.fee - youthCoachEffects(left).bonusPercent / left.fee || left.fee - right.fee || left.id.localeCompare(right.id, 'en'))[0];
+    const coach = withCalculationCache(() => availableYouthCoaches(next).filter(coach => quoteYouthCoachHire(next, coach.id, club.id).canHire)).sort((left, right) => youthCoachEffects(right).bonusPercent / right.fee - youthCoachEffects(left).bonusPercent / left.fee || left.fee - right.fee || left.id.localeCompare(right.id, 'en'))[0];
     if (coach) next = hireForClub(next, coach.id, club.id);
   }
   return next;

@@ -134,6 +134,10 @@ Frequent unscoped balance, payroll and ticket-capacity reads use `financeLedgerA
 
 Format 44 allows at most **20,000 active-tail rows**, **20,000 rows per archived season**, **100 archive blocks** and **200,000 logical transactions**. Original formats retain their 20,000-total constraint before migration. The existing 32 MiB file guard remains; the 16-million-value, 200,000-element collection and depth-40 guards also apply to decoded/reconstructed data. Append checks the season being written, allowing strict replay's temporary multi-season prefix to exceed 20,000; it still enforces the logical total and prevents writes into archived years. These are explicit finite safety limits, not an unlimited-career or multi-league capacity guarantee. Other journals have their own limits. Financial ownership continues to use `managedClubAtLedger`, including same-season job moves.
 
+**Career calculation batches (step 3.2g, format 44 unchanged).** Historical registration reconstruction builds each calendar boundary's player lookup and contracts grouped by club once per reconstruction. Opening membership still follows catalog order; later arrivals follow contract order, preserving jersey collisions, departures/returns and graduate availability. These local lookups do not add a persistent cache.
+
+AI candidate filtering for coaches, scouts, fitness coaches, physios, assistants and youth coaches runs inside a short `withCalculationCache` scope. Only quotes against unchanged state share financial indexes. The scope is released before sorting/selection and before the authoritative hire command, which checks affordability again. A later club or appointment receives a fresh scope. Never hold these derived facts across state mutation or use them to accept imported evidence.
+
 ## 9. Performance budgets and evidence
 
 Initial measurement goals, not current guarantees: responsive controls during a simulated day; a representative watched match near display refresh rate; no growing memory allocation per rendered frame; resumable season work with visible progress; bounded historical replay storage.

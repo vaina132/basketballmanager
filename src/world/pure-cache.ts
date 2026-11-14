@@ -14,9 +14,10 @@ export function memoizePure<K extends string | number, T>(compute: (key: K) => T
 }
 
 /**
- * Derived indexes used only during one synchronous validation. Save inputs may be mutated between calls, so
- * identity alone must never make their derived data survive into the next validation. Nested calls get their own
- * scope and restore the outer one; exceptions release the scope too. No validation verdicts are cached here.
+ * Derived indexes used only during one synchronous calculation batch (validation or quotes on unchanged state).
+ * Inputs may be mutated between calls, so identity alone must never carry derived data into the next batch.
+ * End a quote batch before applying a command. Nested calls get their own scope and restore the outer one;
+ * exceptions release the scope too. No validation verdicts are cached here.
  */
 type CalculationScope = WeakMap<object, Map<symbol, Map<string, unknown>>>;
 let calculationScope: CalculationScope | undefined;

@@ -4,6 +4,7 @@ import type { SeasonState } from '../domain/season';
 import { recordAssistantFee } from './finance';
 import { assistantEffects, availableAssistants, getClubAssistant, quoteAssistantHire } from './assistant-policy';
 import { seasonRounds } from './career-world';
+import { withCalculationCache } from './pure-cache';
 
 export function createAssistant(): SeasonAssistant { return { model: 'assistant-1', enabledSince: null, contracts: [] }; }
 
@@ -45,7 +46,8 @@ export function recruitAiAssistants(state: SeasonState): SeasonState {
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     if (getClubAssistant(next, club.id)) continue;
-    const coach = availableAssistants(next).filter(coach => quoteAssistantHire(next, coach.id, club.id).canHire).sort((left, right) => {
+    // Candidate quotes share one unchanged accounting boundary. Release it before any appointment changes funds.
+    const coach = withCalculationCache(() => availableAssistants(next).filter(coach => quoteAssistantHire(next, coach.id, club.id).canHire)).sort((left, right) => {
       // Resolution is the actual benefit. Identical-effect candidates use fee, then stable ID.
       const leftValue = 1 / assistantEffects(left).skillStep / left.fee, rightValue = 1 / assistantEffects(right).skillStep / right.fee;
       return rightValue - leftValue || left.fee - right.fee || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);

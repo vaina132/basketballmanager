@@ -285,6 +285,27 @@ Fourth-opening saving: **296,183 bytes (5.39%)**. Its finance subtree's ordinary
 
 **Next within 3.2:** assess remaining lifetime history/resource growth and the cost of validating complete careers on each write. Archives remove repeated representation, not the underlying number of records. Do not mark bounded history, incremental validation or the multi-league performance target complete. After the remaining 3.2 work, resolve full rosters versus competition/matchday registration, then 3.3 calendar/byes, 3.4 domestic formats/promotion, 3.5 Europe/background clubs, 3.6 flags/selection/visual strength, and 3.7 integrated acceptance. Rating calibration remains sprint 4.
 
+### Step 3.2g: career calculations and resumable diagnostics (14 November 2026)
+
+The owner committed 3.2f as `5bedc0d` and approved continuation. CPU profiling identified repeated historical squad reconstruction and AI staff affordability queries. Registration reconstruction now shares per-boundary catalogs and contracts grouped by club, preserving catalog/arrival order and jersey assignment. All six AI staff roles evaluate candidates in a short calculation scope on unchanged state; the scope ends before an appointment, whose normal command rechecks funds. No new persistent cache, save-format change, evidence reduction or budget/rule change.
+
+Three alternating comparisons against pinned `5bedc0d` on the real fourth opening measured median matchday progression **2.117 to 1.573 seconds (25.7% lower)**. Strict read remained effectively unchanged (**6.335 / 6.399 seconds**); validated-write medians were **7.106 / 6.366 seconds**, with overlapping ranges. Complete state, exact save bytes, next matchday and all 136 historical registration boundaries matched. Report: `.artifacts/step32g-paired-2026-11-14T14-59-46-128Z/comparison.json`. These Node samples do not establish general loading, browser-latency or memory improvements.
+
+New opt-in command: `npm.cmd run benchmark:career -- --fixture PATH --seasons 2`. It continues the systems already enabled in an existing JSON/gzip save, retains progress, strictly checks and retains each season end/opening, and checks final reload continuation. Resume with a retained checkpoint as the next `--fixture`. `--max-seconds` is checked between synchronous operations; an incomplete run retains earlier checkpoints and reports failure. Outputs default to local/ignored `.artifacts` and may contain private data. Run separately from other heavy checks.
+
+The 18-club full-management career passed **68 matchdays and two rollovers from the fourth opening to the sixth**, with five strict roundtrips and identical reload continuation. Total including checks: **200.18 seconds**, peak process RSS about **1.35 GiB**. Independent simulation of both seasons with the pinned original engine matched every checkpoint's complete state and exact save bytes, plus the final next matchday. Evidence: `.artifacts/career-benchmark-2026-11-14T15-05-14-505Z/report.json` and `original-runtime-comparison.json`. Original inputs, manifests and pack remain untouched.
+
+| Boundary | Compact bytes | Logical financial entries | Strict write / read |
+| --- | --- | --- | --- |
+| Season 4 end | 7,724,095 | 9,691 | 7.69 / 7.71 s |
+| Season 5 opening | 6,753,746 | 9,918 | 9.08 / 7.79 s |
+| Season 5 end | 9,303,360 | 12,071 | 10.21 / 10.06 s |
+| Season 6 opening | 8,294,537 | 12,304 | 9.98 / 9.80 s |
+
+**Verification:** typecheck and 67 focused tests across seven files passed. The production build passed with its existing large-chunk advisory. Thirteen real Edge/worker/IndexedDB storage checks passed without errors; isolated helpers exited and ports were released. A deliberately tiny diagnostic time budget produced the expected failure report/exit without claiming a completed career. **Full serial regression passed all 2,358 tests across 158 files in 421.16 seconds**, with no failures or skips (`.artifacts/step32g-full-tests.log`). Source/tests remained unchanged during the final build, browser and regression run.
+
+**Remaining 3.2 work:** full-history validation/write cost and retained evidence still grow. This demonstrates five completed seasons in one full domestic league, not three leagues plus Europe, unlimited careers or full-management capacity above 20,000 transactions. Use retained checkpoints for subsequent replay/history work instead of regenerating inputs. The 40-club calendar issue remains for 3.3. Roster fidelity/freshness, calendar, domestic formats, Europe, selection and rating calibration retain their existing place in the plan.
+
 ## Not in this sprint (suggestions)
 
 - Signing players from background clubs, and background clubs signing players.

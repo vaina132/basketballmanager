@@ -110,6 +110,19 @@ describe('assistant appointments and shared five-role staff allocation', () => {
     expect(remainingStaffBudget(unpaid)).toBe(0);
   });
 
+  it('rechecks funds after an unsuccessful automated candidate search on the same input', () => {
+    // The normal manager club has a vacancy. Let AI manage it for this isolated funding boundary.
+    const poor = expense({ ...initial, managedClubId: initial.clubs.find(team => team.id !== club)!.id }, getSpendableCash(initial, club) - 1_000_000);
+    expect(recruitAiAssistants(poor)).toBe(poor);
+    // A caller changing this input must not inherit accounting from the completed candidate-search scope.
+    poor.finance.ledger.at(-1)!.amount = 0;
+    const before = structuredClone(poor), hired = recruitAiAssistants(poor);
+    expect(getClubAssistant(hired, club)).not.toBeNull();
+    expect(staffCommitted(hired, club)).toBeLessThanOrEqual(STAFF_BUDGET);
+    expect(hired.finance.ledger.length).toBe(poor.finance.ledger.length + 1);
+    expect(poor).toEqual(before);
+  });
+
   it('permits advice for the final game but closes new appointments after its final whistle', () => {
     const finalReady = { ...initial, round: 10, date: dateForRound(10) };
     expect(quoteAssistantHire(finalReady, 'assistant-06').canHire).toBe(true);

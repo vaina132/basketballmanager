@@ -1,4 +1,5 @@
 import type { Coach, CoachingContract, CoachingWeekAssignment, SeasonCoaching } from '../domain/coaching';
+import { withCalculationCache } from './pure-cache';
 import type { SeasonState } from '../domain/season';
 import type { TrainingFocus } from '../domain/training';
 import type { PlayerAttributes, Team } from '../domain/types';
@@ -139,7 +140,7 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
     while (getClubCoaching(next.coaching, club.id).length < MAX_COACHES) {
       const assignments = coachingAssignments(next.coaching, state.clubs, state.seasonNumber, state.round)![club.id]!;
       const remaining = staffAllocation(next, club.id) - staffCommitted(next, club.id);
-      const candidates = availableCoaches(next.coaching, next).filter(coach => coach.fee <= remaining && canPayCoach(next, club.id, coach)).flatMap(coach => FOCUSES.map(focus => ({ coach, focus, utility: ATTRIBUTES.reduce((sum, attribute) => {
+      const candidates = withCalculationCache(() => availableCoaches(next.coaching, next).filter(coach => coach.fee <= remaining && canPayCoach(next, club.id, coach))).flatMap(coach => FOCUSES.map(focus => ({ coach, focus, utility: ATTRIBUTES.reduce((sum, attribute) => {
         const current = coachingRatingForAttribute(assignments, attribute);
         const next = coachingRatingForAttribute([{ contractId: '', coachId: coach.id, focus }], attribute);
         return sum + demand[attribute] * Math.max(0, next - current);

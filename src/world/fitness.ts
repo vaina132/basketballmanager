@@ -1,4 +1,5 @@
 import { financeLedgerCount } from './finance-ledger';
+import { withCalculationCache } from './pure-cache';
 import type { FitnessContract, SeasonFitness } from '../domain/fitness';
 import type { SeasonState } from '../domain/season';
 import { recordFitnessFee } from './finance';
@@ -46,7 +47,7 @@ export function recruitAiFitnessCoaches(state: SeasonState): SeasonState {
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     if (getClubFitnessCoach(next, club.id)) continue;
-    const coach = availableFitnessCoaches(next).filter(coach => quoteFitnessHire(next, coach.id, club.id).canHire).sort((left, right) => (right.skills.recovery + right.skills.workload) / right.fee - (left.skills.recovery + left.skills.workload) / left.fee || left.id.localeCompare(right.id, 'en'))[0];
+    const coach = withCalculationCache(() => availableFitnessCoaches(next).filter(coach => quoteFitnessHire(next, coach.id, club.id).canHire)).sort((left, right) => (right.skills.recovery + right.skills.workload) / right.fee - (left.skills.recovery + left.skills.workload) / left.fee || left.id.localeCompare(right.id, 'en'))[0];
     if (coach) next = hireForClub(next, coach.id, club.id);
   }
   return next;

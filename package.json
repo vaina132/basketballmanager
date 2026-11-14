@@ -20,6 +20,7 @@
     "data:verify": "node scripts/real-data-verify.mjs",
     "benchmark:match": "node scripts/benchmark-match.mjs",
     "benchmark:saves": "node scripts/benchmark-saves.mjs",
+    "benchmark:career": "node scripts/benchmark-career.mjs",
     "fixtures:capture": "node scripts/capture-season-fixtures.mjs"
   },
   "dependencies": {

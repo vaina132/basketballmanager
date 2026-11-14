@@ -159,8 +159,19 @@ function contractedClubsForRound(state: { employment: SeasonEmployment; clubs: r
     ...state.employment.contracts.filter(contract => contract.startsSeason === seasonNumber).map(contract => contract.startsRound ?? 1),
     ...state.employment.transfers.filter(transfer => transfer.startsSeason === seasonNumber).map(transfer => transfer.startsRound ?? 1),
   ].filter(at => at > 1 && at <= round))].sort((left, right) => left - right);
-  const openingTerms = effectiveContractsForRound(state.employment, seasonNumber, 1);
-  const changes = changeRounds.map(at => ({ at, terms: effectiveContractsForRound(state.employment, seasonNumber, at) }));
+  // One catalog and registration grouping per boundary, shared by every club in this reconstruction.
+  // Keep catalog order for opening squads and contract order for later arrivals: both decide shirt numbers.
+  const termsByClub = (at: number) => {
+    const groups = new Map<string, EmploymentContract[]>();
+    for (const contract of effectiveContractsForRound(state.employment, seasonNumber, at)) {
+      const terms = groups.get(contract.clubId) ?? [];
+      terms.push(contract); groups.set(contract.clubId, terms);
+    }
+    return groups;
+  };
+  const openingTerms = termsByClub(1), openingPlayers = getCareerPlayers(state, seasonNumber, 1);
+  const changes = changeRounds.map(at => ({ terms: termsByClub(at),
+    players: new Map(getCareerPlayers(state, seasonNumber, at).map(player => [player.id, player])) }));
   return definitions.map(definition => {
     let numbers = new Set<number>();
     const append = (player: Player): Player => {
@@ -169,14 +180,17 @@ function contractedClubsForRound(state: { employment: SeasonEmployment; clubs: r
       numbers.add(number);
       return { ...player, number, attributes: { ...player.attributes } };
     };
-    const opening = new Set(openingTerms.filter(contract => contract.clubId === definition.id).map(contract => contract.playerId));
-    let players = getCareerPlayers(state, seasonNumber, 1).filter(player => opening.has(player.id)).map(append);
+    const opening = new Set((openingTerms.get(definition.id) ?? []).map(contract => contract.playerId));
+    let players = openingPlayers.filter(player => opening.has(player.id)).map(append);
     for (const changed of changes) {
-      const terms = changed.terms.filter(contract => contract.clubId === definition.id);
+      const terms = changed.terms.get(definition.id) ?? [];
       const registered = new Set(terms.map(contract => contract.playerId));
       players = players.filter(player => registered.has(player.id));
       numbers = new Set(players.map(player => player.number));
-      for (const contract of terms) if (!players.some(player => player.id === contract.playerId)) players.push(append(getCareerPlayers(state, seasonNumber, changed.at).find(player => player.id === contract.playerId)!));
+      const present = new Set(players.map(player => player.id));
+      for (const contract of terms) if (!present.has(contract.playerId)) {
+        players.push(append(changed.players.get(contract.playerId)!)); present.add(contract.playerId);
+      }
     }
     return { ...definition, players };
   });

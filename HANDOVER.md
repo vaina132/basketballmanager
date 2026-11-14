@@ -1,5 +1,45 @@
 # Project handover
 
+## Current continuation: step 3.2g (14 November 2026)
+
+**Start here.** The owner committed 3.2f as `5bedc0d` (`v`) and asked to continue. Work stays on `main`, uncommitted for the owner. **Schema 44, compact-2, checks version 3, retained evidence and gameplay/financial rules are unchanged.** No API calls, pack refresh or UI changes. Overall 3.2 is still in progress.
+
+### Implemented
+
+- Historical registration reconstruction groups contracts by club and builds each boundary's catalog once. Opening squads retain catalog order; later arrivals retain chronological contract order. Incumbent jerseys, departures/returns, graduate timing and independent attribute copies retain their original behavior.
+- All six AI staff candidate searches reuse financial indexes inside one short calculation scope on unchanged state. End the scope before hiring: the ordinary hire command quotes and checks current funds again. No facts or acceptance verdicts persist into another command; no new lifetime caches.
+- Added `npm.cmd run benchmark:career -- --fixture PATH --seasons 2`. It continues a JSON/gzip save with its enabled systems, reports progress every five matchdays/during offseason, retains strict season-end/opening checkpoints and verifies final reload continuation. Inputs are read-only; outputs default to ignored `.artifacts` and may contain private data. Resume using a retained checkpoint as `--fixture`. `--max-seconds` stops between operations, retains previous checkpoints and writes failure evidence; it cannot interrupt synchronous work mid-operation.
+- Three new registration tests cover shirt collisions, arrivals/returns, graduate timing and buyouts. A staff test changes funds after an unsuccessful search on the same object, checking fresh accounting and immutable commands.
+
+### Evidence
+
+CPU profile: `.artifacts/step32g-profile-2026-11-14T14-56-27-529Z/`. It identified historical squad reconstruction during strict checks and repeated staff affordability reads during advancement.
+
+Three alternating old/current samples against pinned `5bedc0d` used the same real fourth opening. Median matchday advancement: **2.117 / 1.573 seconds (25.7% lower)**. Strict read: **6.335 / 6.399 seconds**, effectively unchanged. Validated write: **7.106 / 6.366 seconds**, with overlapping ranges. Do not claim a general save-loading/memory improvement. Complete state, exact save bytes, next matchday and all 136 registration boundaries matched. Report: `.artifacts/step32g-paired-2026-11-14T14-59-46-128Z/comparison.json`. These are Node timings, not browser latency.
+
+The full-management 18-club real career advanced **68 matchdays, two offseasons and two rollovers**, from the fourth opening to the sixth. Five retained checkpoints passed strict roundtrip; final reload continuation, input-state immutability and source/input hashes passed. Total including checks: **200.18 seconds**; peak process RSS **1,416,500 KiB (about 1.35 GiB)**. Evidence/checkpoints: `.artifacts/career-benchmark-2026-11-14T15-05-14-505Z/`.
+
+| Boundary | Save bytes | Logical transactions | Strict write / read |
+| --- | --- | --- | --- |
+| Season 4 end | 7,724,095 | 9,691 | 7.69 / 7.71 s |
+| Season 5 opening | 6,753,746 | 9,918 | 9.08 / 7.79 s |
+| Season 5 end | 9,303,360 | 12,071 | 10.21 / 10.06 s |
+| Season 6 opening | 8,294,537 | 12,304 | 9.98 / 9.80 s |
+
+The sixth opening retains five finance blocks, 233 live transactions, 992 contracts, 307 prospects and 165 academy weeks. This establishes five completed seasons in **one full domestic league**, not combined leagues/Europe, unlimited careers or full-management capacity above 20,000 transactions. History and strict-write costs still grow. The original pack and prior fixtures/manifests remain untouched.
+
+Independent simulation of both seasons using pinned `5bedc0d` passed: all five checkpoint states and exact byte sequences, plus final continuation, match. Report: `.artifacts/career-benchmark-2026-11-14T15-05-14-505Z/original-runtime-comparison.json`; source/input guards passed. Its 186.41-second duration excludes the new diagnostic's repeated strict reads, so it is not comparable to the 200.18-second run as a speed benchmark.
+
+Typecheck and **67 focused tests / 7 files passed**. The diagnostic's one-second budget test stopped with the expected nonzero result and failure report before retaining a checkpoint; it was not recorded as a successful career run (`.artifacts/step32g-budget-stop.log`). The production build passed with its existing large-chunk advisory, and **13 real Edge/worker/IndexedDB checks passed with no errors** (`.artifacts/step32g-browser-smoke-report.json`); helpers exited and ports 5187/9347 were released. **Full serial regression passed all 2,358 tests across 158 files in 421.16 seconds**, with no failures or skips (`.artifacts/step32g-full-tests.log`). Production algorithms stayed frozen after the accepted measurements; the later `pure-cache.ts` edit only clarified the scope lifetime comment. No source/tests changed during build, browser and full regression checks.
+
+### Next / conventions
+
+Use retained fifth/sixth-season checkpoints to address remaining full-history replay/write cost and bounded history in 3.2; do not regenerate inputs unnecessarily. The 40-club annual-calendar/recovery issue from 3.2f remains for 3.3. Then full-club roster/registration separation and freshness, 3.3 calendar/byes, 3.4 domestic formats/promotion/relegation, 3.5 Europe/background clubs, 3.6 flags/selection/visual strength, 3.7 integration, then sprint 4 ratings/match calibration. Existing pack-quality issues remain as recorded below.
+
+Keep inputs immutable inside calculation scopes and end candidate scopes before applying commands. Preserve logical ledger helpers, absolute anchors and `managedClubAtLedger` ownership. Run PowerShell `npm.cmd run dev`, `npm.cmd run build`, `npm.cmd test -- --maxWorkers=1 --testTimeout=120000`; heavy checks sequentially. Do not commit or push. Suggested owner commit: `perf: reduce repeated career calculations and add resumable diagnostics`. Include the new diagnostic and registration test.
+
+**Ready for the owner to commit.** No commit or push was performed. The private pack's SHA-256 remains `9025CBF0BB8324AA1FAC80000B8D45B8AACD1BE224B9D425AE869B1AF140FB8F`. This completes increment 3.2g, not overall 3.2 or the multi-league game.
+
 ## Current continuation: step 3.2f (14 November 2026)
 
 **Start here.** The owner committed 3.2e as `1826be5` (`dsd`) and approved the next increment. Work stays on `main`, uncommitted for the owner. No provider calls, private-pack changes or gameplay/UI additions were made. The active plan is still **multi-league sprint 3, step 3.2 in progress**.

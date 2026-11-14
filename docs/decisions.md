@@ -291,6 +291,12 @@ Genuine format-43 public fixtures were captured from unchanged `1826be5` before 
 
 Use direct archive amount/payload reads for frequent cash, payroll and ticket-capacity queries. A controlled old/current matchday comparison caught a large regression from repeated row reconstruction; direct reads removed that regression while retaining original continuation. Do not add persistent acceptance caches or summary totals to solve this. The focused finance/payroll career also passed strict save/load at 20,012 transactions and matched the pinned original world engine's equivalent expanded-state continuation. This demonstrates financial archive capacity, not full-management or multi-league acceptance. Remaining full-history validation cost and other journal limits stay open in 3.2.
 
+## Career calculation scope policy
+
+14 November 2026, step 3.2g: profile the fixed archive runtime before changing long-career behavior. Share registration catalogs/contract grouping only within reconstruction, preserving opening catalog order and chronological arrival order. Allow synchronous financial calculation scopes during AI staff candidate filtering, but end each scope before any appointment changes state. Actual hire commands must still recheck their normal guards. No cached quote authorizes a later command; no cached fact accepts an imported save. Keep schema 44, checks version 3 and all retained evidence unchanged.
+
+Measure continuation on the same input and compare to a pinned original runtime. Retain strict checkpoints and progress for lengthy diagnostics, with a declared operation-boundary time budget and explicit failure reporting. The resulting five completed seasons in one full domestic league do not establish combined-league/Europe acceptance or bounded lifetime history. Results and remaining costs: [3.2g](multi-league-world.md#step-32g-career-calculations-and-resumable-diagnostics-14-november-2026).
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all thirteen competitions in the current scope?

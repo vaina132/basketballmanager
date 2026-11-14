@@ -1,4 +1,5 @@
 import { financeLedgerCount } from './finance-ledger';
+import { withCalculationCache } from './pure-cache';
 import type { ScoutContract, SeasonScouts } from '../domain/scouts';
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
@@ -55,7 +56,7 @@ export function recruitAiScouts(state: SeasonState): SeasonState {
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     if (getClubScouts(next, club.id).length) continue;
-    const scout = availableScouts(next).filter(scout => quoteScoutHire(next, scout.id, club.id).canHire).sort((left, right) => scoutEvidence(right) / right.fee - scoutEvidence(left) / left.fee || left.id.localeCompare(right.id, 'en'))[0];
+    const scout = withCalculationCache(() => availableScouts(next).filter(scout => quoteScoutHire(next, scout.id, club.id).canHire)).sort((left, right) => scoutEvidence(right) / right.fee - scoutEvidence(left) / left.fee || left.id.localeCompare(right.id, 'en'))[0];
     if (scout) next = hireForClub(next, scout.id, club.id);
   }
   return next;

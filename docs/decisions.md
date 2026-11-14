@@ -301,6 +301,10 @@ Measure continuation on the same input and compare to a pinned original runtime.
 
 Step 3.2h reuses the registration engine's contract/transfer effective-start boundaries when reconstructing roster history. A possible boundary is not evidence that a change was legal or actually happened: strict validation still checks every original contract, transfer, recruitment event and exact roster snapshot. All boundaries are recalculated for the supplied prefix, including departures. There is no persisted acceptance cache, relaxed import check or change to save format, rules, retained history or simulation order. Unchanged matchdays need no duplicate squad reconstruction. Overall step 3.2 remains open.
 
+## Relationship evidence query policy
+
+Step 3.2i narrows relationship calculations to the precise game windows already specified by the existing rules. It preserves healthy nonappearances, injury/foul/default exemptions, promise creation/deadline/departure boundaries, current registration stints, fixture tie ordering and chronological arithmetic. Role and talk events share a fresh per-club/player lookup within one calculation. Full promise/conversation history, morale/trust values, frozen matchday morale and strict replay remain unchanged; no save schema or gameplay policy changes, history deletion or persistent cache are introduced. Original reports captured before editing serve as independent regression evidence. This targeted speed work does not complete bounded history or incremental strict validation in 3.2.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all thirteen competitions in the current scope?

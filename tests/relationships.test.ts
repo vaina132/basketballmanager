@@ -141,6 +141,33 @@ describe('roles, meaningful conversations and dated playing-time promises', () =
     expect(() => getSquadRelationships(missing)).toThrow(/roster|registration/i);
   });
 
+  it('finds the last four eligible games even when the latest three opportunities were excluded', () => {
+    const state = atRound(initial(), 10, [1, 2, 3, 4, 5, 6, 7, 8, 9], { 7: 'injury', 8: 'fouls', 9: 'default' });
+    const row = getPlayerRelationship(freeze(state), target(state));
+    expect(row).toMatchObject({ eligibleGames: 4, averageMinutes: 4.5 });
+    expect(row.evidenceFixtureIds).toEqual([3, 4, 5, 6].map(round => state.fixtures.find(fixture => fixture.round === round && [fixture.homeClubId, fixture.awayClubId].includes(clubId))!.id));
+  });
+
+  it('counts the promise deadline itself and excludes an eligible result dated after the current boundary', () => {
+    const concern = atRound(initial(), 4), promised = talkToPlayer(concern, target(concern), 'minutes-promise');
+    const state = atRound(promised, 11, [0, 0, 0, 0, 0, 0, 0, 28, 30, 32], { 5: 'injury', 6: 'fouls', 7: 'default' });
+    const id = target(state), before = getPlayerRelationship(state, id).promises[0]!;
+    expect(before).toMatchObject({ status: 'kept', eligibleGames: 3, averageMinutes: 30, outcomeDate: dateForRound(10) });
+    const last = state.fixtures.find(fixture => fixture.round === 10 && [fixture.homeClubId, fixture.awayClubId].includes(clubId))!;
+    last.date = dateForRound(1, 2);
+    expect(getPlayerRelationship(state, id).promises[0]).toMatchObject({ status: 'unresolved', eligibleGames: 2, averageMinutes: 29 });
+    expect(before.status).toBe('kept');
+  });
+
+  it('reads a newly appended role decision on the next calculation using the same state object', () => {
+    const state = atRound(initial(), 5), id = target(state), before = getSquadRelationships(state);
+    const changed = agreeSquadRole(state, id, 'development');
+    state.relationships.events.push(changed.relationships.events.at(-1)!);
+    expect(getSquadRelationships(state)[0]).toMatchObject({ role: 'development', minMinutes: 0 });
+    expect(getPlayerRelationship(state, id)).toEqual(getSquadRelationships(state)[0]);
+    expect(before[0]!.role).toBe('rotation');
+  });
+
   it('rechecks edited minutes, eligibility and dates on the next call with the same state object', () => {
     const state = atRound(initial(), 5, 20), id = target(state);
     const before = getSquadRelationships(state)[0]!;

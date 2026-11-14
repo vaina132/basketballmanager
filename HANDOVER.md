@@ -1,5 +1,33 @@
 # Project handover
 
+## Current continuation: step 3.2i (14 November 2026)
+
+**Start here.** The owner committed 3.2h as `75deff4` (`cc`), requested the next increment and asked where the development plan stands. Work stays on `main`, uncommitted for the owner. The core single-league management game and 3.1 data import are implemented; **3.2 save/history scaling remains in progress**. Shared multi-league and European competition gameplay are still ahead.
+
+### Implemented
+
+- `world/relationships.ts` now queries the exact evidence windows already required by morale/promise rules: latest four eligible playing-time games, latest four recent results after activation/current stint, and the first three eligible promise games after creation through the six-game deadline and before departure. It skips unrelated history and returns chronological evidence even when searching backwards.
+- One fresh club calculation groups role/talk events by player in original journal order. It shares those lookups across a squad; individual reads and subsequent calls rebuild them. No persisted cache, acceptance verdict, history deletion or changed morale/AI/press rule. Saved reports, complete promises/conversations, schema 44, compact-2 and checks version 3 are unchanged. No UI, API or private-pack changes.
+- Before editing, captured complete relationship report fingerprints from untouched `75deff4` for eight genuine public format 29-43 saves (470 player reports). The new `tests/fixtures/relationships-read-models-44.json` retains source commit/hash and original fixture hashes. Never regenerate these expectations from optimized code to hide a mismatch. Eight compatibility tests and three policy edge tests cover exact original reports, recent exclusions, the promise deadline/future-dated results, and a newly appended role on the same state object.
+
+### Measurement and verification
+
+Profile: `.artifacts/step32i-profile-2026-11-14T19-26-13-930Z/`. Morale-history replay accounted for about 1.8-2.1 seconds in strict checks. The unchanged sixth-opening input still retains five completed seasons, 12,304 transactions and **8,294,537 bytes**.
+
+Three alternating old/current whole-operation samples passed exact state, save bytes, original next matchday, all squad relationship reports and 204 registration boundaries, with unchanged source/input hashes. Original retained checkpoint/continuation hashes also match. Median strict read was **8.716 / 8.436 seconds** and validated write **8.818 / 8.544 seconds**, but ranges overlap and one current read took 11.495 seconds. **Do not claim a reliable overall loading/saving gain from this run.** Matchday medians were 1.603 / 1.760 seconds, prompting the isolated check below. Report: `.artifacts/step32i-paired-2026-11-14T19-32-23-617Z/comparison.json`.
+
+Five alternating samples isolated relationship validation in a fresh calculation scope: medians **1.139 / 0.585 seconds (48.6% lower)**; ranges 1.062-1.189 / 0.547-0.709 seconds. A separate five-sample ordinary-matchday comparison measured **1.184 / 1.125 seconds**, with overlapping ranges, and did not reproduce the apparent slowdown. All continuations matched the original retained result; input/source guards passed. Report: `.artifacts/step32i-isolated-2026-11-14T19-37-52-110Z.json`. These are fixture-specific Node measurements, not browser latency or whole-career performance acceptance.
+
+Typecheck and **79 focused tests / 6 files passed** in 14.53 seconds (`.artifacts/step32i-focused-tests.log`). The production build passed with the existing large-chunk advisory (`.artifacts/step32i-build.log`). **13 real Edge/module-worker/IndexedDB checks passed with no errors**, covering original financial read models and budgets, legacy migration, corruption rejection, import/export, local reload/recovery, stale revisions and certificate fallback (`.artifacts/step32i-browser-smoke-report.json`). **Full serial regression passed all 2,382 tests across 160 files in 441.08 seconds**, with no failures or skips (`.artifacts/step32i-full-tests.log`). Source/tests/scripts stayed frozen through final measurements and checks; later edits only document results. Helpers exited and browser ports 5187/9347 were released.
+
+### Next plan items / conventions
+
+Continue 3.2 with the existing fifth/sixth-season checkpoints: academy/board replay costs, bounded history/resource limits and incremental strict-write work remain. This increment narrows relationship reads; it does not solve total-history growth. Do not regenerate baseline careers unnecessarily. Keep heavy checks sequential and source/tests frozen during measurements.
+
+Then, in order: full-roster/competition-registration/matchday-selection separation and API freshness audit; **3.3 shared calendar and byes; 3.4 domestic playoffs/titles/promotion/relegation; 3.5 Europe, background clubs and qualification; 3.6 flags, readable league selection and visual strength; 3.7 integrated multi-league/Europe testing; sprint 4 rating/match calibration**. The game still runs a separate domestic league per career. The existing 40-club annual-calendar overlap/negative recovery issue remains for 3.3. Pack freshness, generated-reserve disclosure, missing club colors, estimated finances and European participant reconciliation remain open.
+
+Preserve AGENTS.md's game interface, distinct budgets, exact journal/evidence order and fresh calculation lifetimes. Run `npm.cmd run dev`, `npm.cmd run build`, `npm.cmd test -- --maxWorkers=1 --testTimeout=120000`. **Ready for the owner to commit.** No commit or push was performed. Suggested owner commit: `perf: narrow relationship history queries to relevant games`. Include the new read-model test and its public baseline JSON.
+
 ## Current continuation: step 3.2h (14 November 2026)
 
 **Start here.** The owner committed 3.2g as `2f9c899` (`nn`) and asked to continue. Work stays on `main`, uncommitted for the owner. This increment optimizes strict historical registration replay. **Overall 3.2 remains open.** Schema 44, compact-2, checks version 3, history and game rules are unchanged. No provider requests, private-pack refresh or UI changes.

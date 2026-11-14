@@ -1,0 +1,63 @@
+{
+  "description": "Complete squad relationship read models captured from the unmodified original runtime, before step 3.2i. Fixture order and all returned fields are significant; canonicalization sorts object keys only.",
+  "commit": "75deff42e5d402b6477c3548b532e3d524dd6d7e",
+  "sourceSha256": "1fea449e928a505a0c13b59a5e52cf50877d3301d59a75b158f75aa84e4c8345",
+  "fixtures": [
+    {
+      "file": "season29-relationships-career.json.gz",
+      "sha256": "af3793f6af336645c3b3b20c5736fd614b7d575ab35104c9f7712fd539723704",
+      "players": 60,
+      "promises": 1,
+      "readModelSha256": "ea6683fb699004ea51af1f2bd2998fa7a85735f2c1e387f5cf8492dd80c250d1"
+    },
+    {
+      "file": "season29-relationships-complete.json.gz",
+      "sha256": "0c04d4ddee7154cf151d2f0daa3ee20bab423c19c769ba0802a35743268a56cc",
+      "players": 60,
+      "promises": 1,
+      "readModelSha256": "9196614a52f89520de7155c6e352fa03a471361c366dac9e881ce808b1153632"
+    },
+    {
+      "file": "season29-relationships-opening.json.gz",
+      "sha256": "df9630e3a331795d8407c79aff358797a98b7fdfa98bced1725a3dce75989dc5",
+      "players": 50,
+      "promises": 1,
+      "readModelSha256": "c85d52f8017fbd63ca8733e962463708a869109dbf9fcbee0b7468f815b0097c"
+    },
+    {
+      "file": "season34-board-career-next.json.gz",
+      "sha256": "c509eedb0da3756afad47d5fffadbd1066605e42db34384f735a2c9340274469",
+      "players": 60,
+      "promises": 0,
+      "readModelSha256": "24b2881cfb3ddc3c9fc4d602a6d186d159b7518fc1c7573e73d9830521345414"
+    },
+    {
+      "file": "season35-board-complete.json.gz",
+      "sha256": "e3e59ea2882c0f875aba1d0dc88b9a8840a8cd85d9a2906b2ff7c512ba6f12de",
+      "players": 60,
+      "promises": 2,
+      "readModelSha256": "e88a186a61a146d497990360fd8bed7fcee5200600ca9b21a7736c3e95d88751"
+    },
+    {
+      "file": "season38-board-opening.json.gz",
+      "sha256": "230499075569bcf8897f612017d3e6b4d9790f9f5378a1490d3086063a18ab1e",
+      "players": 50,
+      "promises": 2,
+      "readModelSha256": "fe5832a4b2a79c74d98498a502e45d81cb46285e3b581edfad20c6638907673b"
+    },
+    {
+      "file": "season40-world8-career-next.json.gz",
+      "sha256": "845e9bbfba071c775e3f21619f8157cd645772af691a282393eb7384c1e064ef",
+      "players": 80,
+      "promises": 1,
+      "readModelSha256": "4447343ac33425f729caed51df7cfd269921e28581524d20a0223b68bc9a80c1"
+    },
+    {
+      "file": "season43-board-opening.json.gz",
+      "sha256": "3a3cba27457bb7bbf19deb9abfda873d6d7487c5ee9c80f9f3e234e8a4dfdaff",
+      "players": 50,
+      "promises": 2,
+      "readModelSha256": "fe5832a4b2a79c74d98498a502e45d81cb46285e3b581edfad20c6638907673b"
+    }
+  ]
+}

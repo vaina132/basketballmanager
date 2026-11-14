@@ -1,3 +1,4 @@
+import { clubRosterLimit } from '../world/club-roster-policy'
 import { clubRetirementsThisSeason, PlayerCareerStatus } from './PlayerLifecycle'
 import { getPlayerRetirement } from '../world/lifecycle-policy'
 import { getCareerPlayer, getCareerWage } from '../world/player-catalog'
@@ -6,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { SeasonState } from '../domain/season'
 import type { TransferPaymentPlan } from '../domain/transfer-payments'
 import type { Position } from '../domain/types'
-import { contractForSeason, getAvailablePlayers, getClubContractSummary, MAX_CONTRACT_SEASONS, MAX_ROSTER_SIZE, MIN_CONTRACT_WAGE, MIN_ROSTER_SIZE, quotePlayerContract } from '../world/employment-policy'
+import { contractForSeason, getAvailablePlayers, getClubContractSummary, MAX_CONTRACT_SEASONS, MIN_CONTRACT_WAGE, MIN_ROSTER_SIZE, quotePlayerContract } from '../world/employment-policy'
 import { MAX_SEASON_NUMBER, seasonLabel as supportedSeasonLabel } from '../world/season'
 import { getPlayerKnowledge } from '../world/scouting-policy'
 import { getLatestNegotiation } from '../world/negotiations'
@@ -94,7 +95,7 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
   const retired = clubRetirementsThisSeason(season)
   const expiring = enabled ? club.players.filter(player => (getPlayerRetirement(season, player.id).notice?.lastSeason ?? Infinity) > season.seasonNumber && contractForSeason(season.employment, player.id, season.seasonNumber)?.endsSeason === season.seasonNumber && !contractForSeason(season.employment, player.id, nextYear)).length : 0
   const enableReason = !season.finance.enabledSince ? 'Enable club finances in Club before starting player contracts.' : !season.payroll.enabledSince ? 'Enable player payroll in Squad before starting player contracts.' : null
-  const startReason = datedMarket ? getMarketStartReason(season) : summary.rosterSize < MIN_ROSTER_SIZE ? `Sign ${MIN_ROSTER_SIZE - summary.rosterSize} more ${MIN_ROSTER_SIZE - summary.rosterSize === 1 ? 'player' : 'players'} for next season.` : summary.rosterSize > MAX_ROSTER_SIZE ? `The squad must contain no more than ${MAX_ROSTER_SIZE} players.` : null
+  const startReason = datedMarket ? getMarketStartReason(season) : summary.rosterSize < MIN_ROSTER_SIZE ? `Sign ${MIN_ROSTER_SIZE - summary.rosterSize} more ${MIN_ROSTER_SIZE - summary.rosterSize === 1 ? 'player' : 'players'} for next season.` : summary.rosterSize > clubRosterLimit(season) ? `The squad must contain no more than ${clubRosterLimit(season)} players.` : null
   const focused = focusedPlayerId ? getCareerPlayer(season, focusedPlayerId) : null
   const focusedContract = focused ? contractForSeason(season.employment, focused.id, nextYear) : null
   const focusedTransfer = marketOpen && datedMarket && focusedContract && focusedContract.clubId !== club.id
@@ -140,7 +141,7 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
   return <div className="transfers-workspace" onFocusCapture={event => { if (event.target instanceof HTMLElement) lastFocus.current = event.target }}>
     <section className="transfers-overview panel" aria-labelledby="transfers-heading">
       <header className="transfers-heading"><div><h2 id="transfers-heading" tabIndex={-1}>{club.name} · Contracts</h2><span>{seasonLabel(season.seasonNumber)}{marketOpen ? ' · Offseason recruitment' : ' · Squad planning'}</span></div>{enabled && marketOpen && <div className="transfers-start"><button id="start-contract-season" className="button primary" onClick={onStartSeason} disabled={disabled || !!startReason} aria-describedby={startReason ? 'contract-season-reason' : undefined}>Start {seasonLabel(nextYear)}<Icon name="chevron" size={15} /></button>{startReason && <small id="contract-season-reason">{startReason}</small>}</div>}</header>
-      {enabled && hasNextYear && <div className="transfers-squad-plan"><div className="transfers-squad-count"><Icon name="people" size={24} /><div><strong data-next-contract-roster={summary.rosterSize}>{summary.rosterSize}<small> / {MIN_ROSTER_SIZE}–{MAX_ROSTER_SIZE}</small></strong><span>Next season's squad</span></div></div><div className="transfers-squad-slots" aria-hidden="true">{Array.from({ length: Math.max(MIN_ROSTER_SIZE, summary.rosterSize + summary.reservedRosterSize) }, (_, index) => {
+      {enabled && hasNextYear && <div className="transfers-squad-plan"><div className="transfers-squad-count"><Icon name="people" size={24} /><div><strong data-next-contract-roster={summary.rosterSize}>{summary.rosterSize}<small> / {MIN_ROSTER_SIZE}–{clubRosterLimit(season)}</small></strong><span>Next season's squad</span></div></div><div className="transfers-squad-slots" aria-hidden="true">{Array.from({ length: Math.max(MIN_ROSTER_SIZE, summary.rosterSize + summary.reservedRosterSize) }, (_, index) => {
         const contract = summary.contracts[index]
         const pending = nextSquadOffers[index - summary.contracts.length]
         return contract ? <span className="transfers-filled-slot" key={contract.id} title={getCareerPlayer(season, contract.playerId).name}><Avatar player={getCareerPlayer(season, contract.playerId)} color={club.color} size={34} /></span> : pending ? <span className="transfers-reserved-slot" key={pending.id} title={`Offer pending: ${getCareerPlayer(season, pending.playerId).name}`}><Avatar player={getCareerPlayer(season, pending.playerId)} color={club.color} size={34} /></span> : <span className="transfers-empty-slot" key={index}><Icon name="people" size={19} /></span>

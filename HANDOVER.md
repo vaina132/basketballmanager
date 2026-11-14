@@ -1,5 +1,34 @@
 # Project handover
 
+## Current continuation: full club rosters and matchday selection (14 November 2026)
+
+**Start here.** The owner committed the previous player-profile/hiring fixes as `b51e375` and asked for the next item. This increment implements the club-roster/matchday separation prerequisite before 3.3. Changes remain uncommitted for the owner. Earlier entries below describe their own completed increments, not the current task list.
+
+### Done
+
+- New real-data careers retain every imported club member. No twelve-player truncation or invented reserve fill. Current playable data has variable club sizes. Career creation rejects fewer than eight or more than forty imported members explicitly.
+- **Squad > Selection** shows the complete club with portraits/condition and direct matchday checkboxes. Select five to twelve before tipoff, or use Assistant selection. Selection saves automatically and locks when play begins. Manual choices persist; transfers/rollover remove departed choices, reverting to automatic when fewer than five remain. The assistant considers availability, developed ability, condition and positional coverage.
+- Non-selected members keep contracts, payroll, training, medical history and playing-time expectations. Scouting an omitted player yields no minutes and no hidden knowledge. Historical box scores/MVP use the actual selected squads and original identities. No statistics are invented for members outside the matchday squad.
+- Employment, recruitment, academy promotion and annual salary guards use the whole club. New-career estimated annual player allocations equal opening estimated wages plus 10%, rounded up to EUR 5,000, with a EUR 240,000 minimum. Cash and staff budgets remain separate. Forty is a prototype capacity, **not an official competition rule**. AI recruitment targets each new world's original club size subject to normal affordability/minimum-squad guards.
+- **Schema 46**, `compact-2`, checks version **3**. New worlds carry `rosterModel: club-roster-1` and `real-full-...` IDs. Old saves retain their embedded roster, original twelve-player cap, salary allocation and decisions. No old save is expanded from current pack data. A genuine format-45 baseline/next-state pair captured from `b51e375` is stored with SHA-256 manifest; never regenerate it from changed code.
+- `FixtureResult.selection` retains original selected IDs and `rested` condition for everyone else at that fixture's registration. Strict imports validate membership, selected statistics, conditions and historical totals. The existing senior-summary rules retain nonappearance evidence and exact played totals after rollover.
+
+### Verification
+
+**All 2,460 tests across 167 files passed** in the full serial run (735.93 s, no failures or skips; `.artifacts/full-roster-full-tests.log`). Typecheck and production build passed with native exit 0; the existing large-chunk advisory remains (`full-roster-build.log`). **Eight real Edge checks passed with no browser errors** (`full-roster-browser-report.json`): complete roster/profiles, mouse and keyboard replacement, IndexedDB/worker reload, tablet layout, tipoff lock and real matchday-worker advancement, persisted assistant policy, actual new-career file selection/full club preview, and tablet preview layout. Screenshot: `.artifacts/full-roster-squad-tablet.png`. The first browser attempt used the nonexistent navigation label `Match`; correcting the harness to the existing `Match center` required no product changes. Its report is retained separately. Source/tests remained unchanged during the final full regression, build and browser verification. `git diff --check` passed; private datasets/artifacts remain ignored. Focused full-roster tests cover 9/14/17/25-player synthetic clubs, manual selection, transfers above twelve, wages/training, scouting, playing-time concerns, corrupted imports, rollover and original format-45 continuation. A private serial check built every currently playable real-data league, retained all imported members, advanced one matchday and strictly roundtripped each save: **nine leagues, club sizes 9-22** (`.artifacts/full-roster-private-report.json`). No provider requests or private pack changes were made.
+
+### Remaining plan and known limitations
+
+Registration remains automatic from employment in the **single playable domestic league**. Separate competition lists, foreign/homegrown quotas and registration dates still require researched rules and shared competition/calendar state. Continue the 3.1 follow-up with membership reconciliation, then **3.3 shared calendar/byes; 3.4 domestic formats/playoffs/promotion; 3.5 Europe/background clubs/qualification; 3.6 flags/readable league selection/visual strength; 3.7 integrated multi-league validation; sprint 4 rating/match calibration**. Single-league 3.2 is complete; combined-world capacity acceptance remains open.
+
+Do not call the private database fully verified: **166 provider membership conflicts, 199 unmatched official registrations, 17 additional identities and 2,811 estimated precise positions** remain from the previous audit (categories overlap). See [player-data-quality.md](docs/player-data-quality.md). This increment preserves all pack members; it does not adjudicate those club assignments or establish opening-day rosters. The odd 17-club TBL and existing 40-club annual-calendar overlap remain for 3.3. Long-career strict validation still grows expensive; keep the previous measured limitations.
+
+### Run and continue safely
+
+Node 24.14+: `npm.cmd run dev`, `npm.cmd run typecheck`, `npm.cmd test -- --maxWorkers=1 --testTimeout=120000`, `npm.cmd run build`. Use **New career > Club**, load `.local-data/real-data/packs/real-2026.11-world-2.json`, choose a playable league/club, then **Squad > Selection**. Existing careers keep old rosters intentionally.
+
+Key code: `club-roster-policy.ts` owns capacity/budget mode; `matchday-selection.ts` owns selections; `season.ts` owns the pre-tipoff command and commits; `rosters.ts` owns dated registrations. Pass world context into financial/roster rules, preserve legacy decision text, use authoritative commands from UI, and retain original historical IDs. Follow AGENTS.md's compact game interface and distinct budgets. Keep heavy checks sequential; never commit keys, provider datasets, private packs or `.artifacts`. No commit or push performed.
+
 ## Current continuation: player profile audit and coach hiring fix (14 November 2026)
 
 **Start here.** The owner committed the completed single-league 3.2 work as `1a87d94` and asked for the next item, reporting incorrect real-player positions and a black screen after hiring a coach. This continuation addresses those defects and starts the **3.1 follow-up / 3.3 roster prerequisite**. It does not implement shared leagues, European gameplay or variable career rosters. Work remains uncommitted for the owner.

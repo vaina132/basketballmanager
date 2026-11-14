@@ -1,3 +1,4 @@
+import { clubRosterTarget } from './club-roster-policy';
 import { processFacilityProjects, automateFacilities } from './facilities';
 import type { MarketEvent, MarketOffer, MarketWindow, SeasonMarket } from '../domain/market';
 import type { ContractOfferOptions } from '../domain/employment';
@@ -220,7 +221,7 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
   }
   for (const club of state.clubs) {
     if (club.id === state.managedClubId && !state.employment.delegated) continue;
-    const target = club.id === state.managedClubId ? 10 : MIN_ROSTER_SIZE;
+    const target = clubRosterTarget(state, club.id, club.id === state.managedClubId ? 10 : MIN_ROSTER_SIZE);
     for (let count = 0; count < target; count += 1) {
       const summary = getClubContractSummary(next, club.id);
       if (summary.rosterSize + summary.reservedRosterSize >= target) break;

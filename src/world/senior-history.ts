@@ -17,7 +17,7 @@ export const compareSeniorTotals = (a: Pick<ArchivedPlayerTotals, 'clubId' | 'pl
 /** A missing legacy record stays missing; this only exposes evidence actually retained by that fixture. */
 export function fixturePlayerEvidence(fixture: Pick<SeasonFixture | ArchivedFixture, 'result'>, playerId: string): PlayerStats | ArchivedAppearance | undefined {
   const result = fixture.result;
-  return result?.stats?.[playerId] ?? (result && 'appearances' in result ? result.appearances?.[playerId] : undefined);
+  return result?.stats?.[playerId] ?? (result && 'appearances' in result ? result.appearances?.[playerId] : undefined) ?? (result?.selection && Object.hasOwn(result.selection.rested, playerId) ? { secondsPlayed: 0, fouls: 0, appeared: false } : undefined);
 }
 
 function summarizeArchive(archive: SeasonArchive, managedClubId: string): SeasonArchive {
@@ -30,6 +30,7 @@ function summarizeArchive(archive: SeasonArchive, managedClubId: string): Season
     const result = fixture.result, appearances: Record<string, ArchivedAppearance> = {};
     for (const clubId of [fixture.homeClubId, fixture.awayClubId]) {
       for (const player of rosterForRound(archive.rosters, clubId, fixture.round).players) {
+        if (result.selection && !result.selection[clubId === fixture.homeClubId ? 'home' : 'away'].includes(player.id)) continue;
         const stats = result.stats![player.id];
         if (!stats) throw new Error('Cannot summarize a match without its registered player statistics.');
         const appeared = SENIOR_TOTAL_KEYS.some(key => stats[key] !== 0);

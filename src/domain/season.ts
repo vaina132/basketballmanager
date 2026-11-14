@@ -30,6 +30,8 @@ export interface ClubPlan {
   tactics: Tactics;
   lineup: string[];
   autoSubstitutions: boolean;
+  /** Explicit preference for the next matchday; null delegates selection. Present only in full-roster careers. */
+  matchday?: string[] | null;
 }
 
 /** Compact completed fixture: no duplicated animation history. */
@@ -43,6 +45,8 @@ export interface FixtureResult {
   rosterIds: Record<Side, string>;
   /** All injured players at the final whistle, including carried absences. */
   injuries: Record<string, SeasonInjury['kind']>;
+  /** Original selected players plus end-of-matchday condition for club members who did not dress. */
+  selection?: { home: string[]; away: string[]; rested: Record<string, number> };
 }
 
 /** A deterministic development-model recovery episode, not a medical diagnosis. */
@@ -86,7 +90,7 @@ export interface SeasonArchive {
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
 /** Format 39 carries the world; 40 compacts strings/shapes; 41 shares subtrees; 42 summarizes rival academy reports; 43 summarizes rival youth fixtures. */
-export const SEASON_SCHEMA_VERSION = 45;
+export const SEASON_SCHEMA_VERSION = 46;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

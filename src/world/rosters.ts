@@ -4,6 +4,7 @@ import type { Team } from '../domain/types';
 import type { EmploymentContract } from '../domain/employment';
 import { getContractedClubsForRound } from './employment-policy';
 import { MAX_SEASON_ROUNDS } from './career-world';
+import { reconcileMatchdayPlan, selectedTeam } from './matchday-selection';
 
 /** Capture identities once at registration; match development never rewrites them. */
 export function createRosterSnapshots(clubs: readonly Team[], seasonNumber: number): RosterSnapshot[] {
@@ -41,7 +42,7 @@ export function registerInSeasonArrivals(state: SeasonState, contracts: readonly
     if (!affected.has(club.id)) return [club.id, plan];
     const registered = new Set(club.players.map(player => player.id));
     const lineup = [...new Set([...plan.lineup.filter(id => registered.has(id)), ...club.players.map(player => player.id)])].slice(0, 5);
-    return [club.id, { ...plan, lineup }];
+    return [club.id, reconcileMatchdayPlan({ ...plan, lineup }, club)];
   })), training: { ...state.training, plans: Object.fromEntries(clubs.map(club => {
     const plan = state.training.plans[club.id]!;
     return [club.id, affected.has(club.id) ? { ...plan, individual: Object.fromEntries(club.players.map(player => [player.id, plan.individual[player.id] ?? 'team'])) } : plan];
@@ -82,7 +83,8 @@ export function getFixtureTeams(season: SeasonState, fixture: SeasonFixture | Ar
     const expected = rosterForRound(rosters, clubId, fixture.round);
     const snapshot = fixture.result ? rosters.find(candidate => candidate.id === fixture.result!.rosterIds[side]) : expected;
     if (!snapshot || snapshot.clubId !== clubId || snapshot.id !== expected.id) throw new Error('The fixture refers to an invalid historical roster.');
-    return { ...club, players: snapshot.players };
+    const registered = { ...club, players: snapshot.players };
+    return fixture.result?.selection ? selectedTeam(registered, fixture.result.selection[side]) : registered;
   }
   const home = team(fixture.homeClubId, 'home'), away = team(fixture.awayClubId, 'away');
   const players = [...home.players, ...away.players].map(player => player.id);

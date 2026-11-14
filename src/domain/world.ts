@@ -15,6 +15,8 @@ export interface CareerWorld {
   id: string;
   name: string;
   source: 'fictional-development' | 'real-data-pack';
+  /** New careers separate contracted club membership from the twelve-player matchday selection. */
+  rosterModel?: 'club-roster-1';
   /** First matchday of season one (a Saturday). */
   startDate: string;
   clubs: readonly Team[];

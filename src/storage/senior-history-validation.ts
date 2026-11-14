@@ -47,6 +47,7 @@ export function validateSeniorSummary(archive: SeasonArchive, managedClubId: str
       const clubId = side === 'home' ? fixture.homeClubId : fixture.awayClubId;
       points.set(clubId, (points.get(clubId) ?? 0) + fixture.result.score[side]);
       for (const player of rosterForRound(archive.rosters, clubId, fixture.round).players) {
+        if (fixture.result.selection && !fixture.result.selection[clubId === fixture.homeClubId ? 'home' : 'away'].includes(player.id)) continue;
         const key = seniorTotalKey(clubId, player.id), evidence = fixture.result.appearances![player.id] as ArchivedAppearance;
         const row = expected.get(key) ?? { clubId, playerId: player.id, games: 0, seconds: 0, fouls: 0, fixtures: 0 };
         row.games += Number(evidence.appeared); row.seconds += evidence.secondsPlayed; row.fouls += evidence.fouls; row.fixtures += 1;

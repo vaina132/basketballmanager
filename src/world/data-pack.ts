@@ -86,6 +86,13 @@ export async function parseDataPack(fileText: string): Promise<DataPack> {
 /** The same position-weighted overall rating the player sees next to the stars. */
 const overall = (player: DataPackPlayer) => overallRating(player.attributes, player.position);
 
+/** Every imported member, with stable ordering/jersey collision handling shared with friendly selections. */
+export function clubTeam(pack: DataPack, clubId: string): Team {
+  const club = pack.clubs.find(club => club.id === clubId);
+  if (!club) throw new Error('Choose a club from the loaded data pack.');
+  return matchdayTeam(pack, clubId, club.playerIds.length);
+}
+
 /**
  * A club's matchday squad: its twelve best-rated players (those without any statistics last), with a starting five
  * covering the five positions where possible. Shirt numbers stay unless missing or repeated.

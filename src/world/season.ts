@@ -46,6 +46,9 @@ import { createMarket, enableMarket } from './market';
 import { getMarketStartReason, getMarketWindow } from './market-policy';
 import { memoizePure } from './pure-cache';
 import { ASSISTANT_DIRECTORY } from '../data/staff-directory';
+import { usesFullClubRoster } from './club-roster-policy';
+import { canSelectMatchday, captureMatchdaySelection, reconcileMatchdayPlan, selectedTeam, teamForMatchday } from './matchday-selection';
+import type { WorldContext } from '../domain/world';
 
 export const ROUND_INTERVAL_DAYS = 7;
 export const DAILY_RECOVERY = 3;
@@ -139,17 +142,19 @@ export function managedSide(season: SeasonState): Side {
   throw new Error('The active fixture must include the managed club.');
 }
 
-function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships'>>, fixture: SeasonFixture): MatchState {
-  const home = season.clubs.find(club => club.id === fixture.homeClubId);
-  const away = season.clubs.find(club => club.id === fixture.awayClubId);
-  if (!home || !away) throw new Error('A fixture refers to a missing club.');
+function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships'>> & WorldContext, fixture: SeasonFixture): MatchState {
+  const homeClub = season.clubs.find(club => club.id === fixture.homeClubId);
+  const awayClub = season.clubs.find(club => club.id === fixture.awayClubId);
+  if (!homeClub || !awayClub) throw new Error('A fixture refers to a missing club.');
+  const home = teamForMatchday(season, homeClub, fixture), away = teamForMatchday(season, awayClub, fixture);
   const homePlan = season.plans[home.id]!, awayPlan = season.plans[away.id]!;
+  const lineup = (club: Team, plan: ClubPlan) => [...new Set([...plan.lineup.filter(id => club.players.some(player => player.id === id)), ...club.players.map(player => player.id)])].slice(0, 5);
   const registeredPlayers = new Set([...home.players, ...away.players].map(player => player.id));
   const preparedMorale = season.relationships ? getPreparedRelationshipMorale(season as SeasonState, fixture.round, season.seasonNumber) : undefined;
   const morale = preparedMorale ? { ...preparedMorale, values: Object.fromEntries([...home.players, ...away.players].map(player => [player.id, preparedMorale.values[player.id]!])) } : undefined;
   let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), developClub(home, season.training, { ...season, date: fixture.date }), developClub(away, season.training, { ...season, date: fixture.date }), {
     ...(morale ? { morale } : {}),
-    lineups: { home: homePlan.lineup, away: awayPlan.lineup },
+    lineups: { home: lineup(home, homePlan), away: lineup(away, awayPlan) },
     tactics: { home: homePlan.tactics, away: awayPlan.tactics },
     autoSubstitutions: { home: home.id === season.managedClubId ? homePlan.autoSubstitutions : true, away: away.id === season.managedClubId ? awayPlan.autoSubstitutions : true },
     conditions: Object.fromEntries([...home.players, ...away.players].map(player => [player.id, season.conditions[player.id]!])),
@@ -163,6 +168,19 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
     if (coach && match.status !== 'finished') match = applyAssistantTactics(match, side, coach);
   }
   return match;
+}
+
+/** One pre-tipoff command for every UI selection route. No fees, random draws or completed history are changed. */
+export function setMatchdaySelection(state: SeasonState, playerIds: readonly string[] | null): SeasonState {
+  if (!canSelectMatchday(state)) throw new Error('Choose the matchday squad before tipoff.');
+  const club = state.clubs.find(club => club.id === state.managedClubId)!;
+  if (playerIds !== null) selectedTeam(club, playerIds);
+  const ids = playerIds === null ? null : club.players.filter(player => playerIds.includes(player.id)).map(player => player.id);
+  const plan = state.plans[club.id]!;
+  // Keep pre-match tactics and lineup edits already made on the prepared match.
+  const side = managedSide(state), edited = state.activeMatch;
+  const next = { ...state, plans: { ...state.plans, [club.id]: { ...plan, tactics: { ...edited.tactics[side] }, autoSubstitutions: edited.autoSubstitutions[side], lineup: [...edited.lineups[side]], matchday: ids } } };
+  return { ...next, activeMatch: prepareMatch(next, getActiveFixture(next)) };
 }
 
 /** Optional career systems, named. Omitted systems keep the positional defaults (training, coaching, finance and payroll on). */
@@ -235,7 +253,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId))!;
   const preparation = {
     ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled),
-    plans: Object.fromEntries(clubs.map(club => [club.id, defaultPlan(club, club.id !== managedClubId)])),
+    plans: Object.fromEntries(clubs.map(club => [club.id, { ...defaultPlan(club, club.id !== managedClubId), ...(usesFullClubRoster({ world }) ? { matchday: null } : {}) }])),
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
@@ -289,10 +307,12 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
     const snapshot = rosterForRound(season.rosters, match[side].id, fixture.round);
     const registeredIds = new Set(snapshot.players.map(player => player.id));
     const matchIds = match[side].players.map(player => player.id);
-    if (registeredIds.size !== snapshot.players.length || new Set(matchIds).size !== matchIds.length || matchIds.length !== registeredIds.size || matchIds.some(id => !registeredIds.has(id))) throw new Error('The match squad does not match its registered roster.');
+    if (registeredIds.size !== snapshot.players.length || new Set(matchIds).size !== matchIds.length || (!usesFullClubRoster(season) && matchIds.length !== registeredIds.size) || matchIds.some(id => !registeredIds.has(id))) throw new Error('The match squad does not match its registered roster.');
+    if (usesFullClubRoster(season)) selectedTeam({ ...match[side], players: snapshot.players }, matchIds);
     rosterIds[side] = snapshot.id;
   }
   fixture.result = compactResult(match, rosterIds);
+  if (usesFullClubRoster(season)) fixture.result.selection = captureMatchdaySelection(season.clubs, match.home, match.away, season.conditions);
   for (const injury of injuriesFromMatch(season.seed, fixture, match)) {
     if (season.injuries.some(existing => existing.id === injury.id || existing.playerId === injury.playerId && isRecovering(existing, fixture.date, season.physio))) throw new Error('An unavailable player cannot receive a duplicate injury episode.');
     season.injuries.push(injury);
@@ -302,7 +322,7 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
     // Fouls reset next game. Keep the final lineup, filling any excluded-player
     // vacancies from the previous starters and then the roster's stable order.
     const lineup = [...new Set([...match.lineups[side], ...previous.lineup, ...club.players.map(player => player.id)])].slice(0, 5);
-    season.plans[club.id] = { tactics: { ...match.tactics[side] }, lineup, autoSubstitutions: club.id === season.managedClubId ? match.autoSubstitutions[side] : true };
+    season.plans[club.id] = { ...previous, tactics: { ...match.tactics[side] }, lineup, autoSubstitutions: club.id === season.managedClubId ? match.autoSubstitutions[side] : true };
     for (const player of club.players) season.conditions[player.id] = match.stats[player.id]!.condition;
   }
 }
@@ -436,7 +456,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
       getFixtureTeams(state, fixture);
       return {
         id: fixture.id, round: fixture.round, date: fixture.date, homeClubId: fixture.homeClubId, awayClubId: fixture.awayClubId,
-        result: { score: { ...result.score }, officialScore: { ...result.officialScore }, winnerClubId: result.winnerClubId, kind: result.kind, periods: result.periods, injuries: { ...result.injuries }, rosterIds: { ...result.rosterIds }, stats: Object.fromEntries(Object.entries(result.stats).map(([id, stats]) => [id, { ...stats }])) },
+        result: { score: { ...result.score }, officialScore: { ...result.officialScore }, winnerClubId: result.winnerClubId, kind: result.kind, periods: result.periods, injuries: { ...result.injuries }, rosterIds: { ...result.rosterIds }, stats: Object.fromEntries(Object.entries(result.stats).map(([id, stats]) => [id, { ...stats }])), ...(result.selection ? { selection: { home: [...result.selection.home], away: [...result.selection.away], rested: { ...result.selection.rested } } } : {}) },
       };
     }),
   };
@@ -449,7 +469,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
       const plan = state.plans[club.id]!;
       const registered = new Set(club.players.map(player => player.id));
       const lineup = [...new Set([...plan.lineup.filter(id => registered.has(id)), ...club.players.map(player => player.id)])].slice(0, 5);
-      return [club.id, { ...plan, tactics: { ...plan.tactics }, lineup }];
+      return [club.id, reconcileMatchdayPlan({ ...plan, tactics: { ...plan.tactics }, lineup }, club)];
     })),
     conditions: Object.fromEntries(Object.entries(state.conditions).map(([id, condition]) => [id, Math.min(100, Math.round((condition + DAILY_RECOVERY * recoveryDays) * 1000) / 1000)])),
     injuries: state.injuries.map(injury => ({ ...injury })),

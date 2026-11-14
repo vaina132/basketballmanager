@@ -93,7 +93,7 @@ export function appointManager(state: SeasonState, toClubId: string, reason: Car
     ...state,
     managedClubId: toClubId,
     career: { ...state.career, moves: [...state.career.moves, move] },
-    plans: { ...state.plans, [from]: { ...state.plans[from]!, autoSubstitutions: true }, [toClubId]: { ...state.plans[toClubId]!, autoSubstitutions: state.plans[from]!.autoSubstitutions } },
+    plans: { ...state.plans, [from]: { ...state.plans[from]!, autoSubstitutions: true, ...(Object.hasOwn(state.plans[from]!, 'matchday') ? { matchday: null } : {}) }, [toClubId]: { ...state.plans[toClubId]!, autoSubstitutions: state.plans[from]!.autoSubstitutions } },
     training: { ...state.training, plans: { ...state.training.plans, [from]: { ...state.training.plans[from]!, delegated: true } } },
     finance: { ...state.finance, plans: { ...state.finance.plans, [from]: { ...state.finance.plans[from]!, delegated: true }, [toClubId]: { ...state.finance.plans[toClubId]!, delegated: false } } },
     payroll: { ...state.payroll, delegated: { ...state.payroll.delegated, [from]: true, [toClubId]: false } },

@@ -132,8 +132,8 @@ export function processScoutingRound(state: SeasonState): SeasonState {
       const fixture = fixtures.find(fixture => fixture.homeClubId === target.id || fixture.awayClubId === target.id)!;
       const roster = rosterForRound(state.rosters, target.id, state.round);
       const stats = fixture.result!.stats[assignment.playerId];
-      if (!stats) throw new Error('The observed player must belong to the committed fixture roster.');
-      const observed = stats.secondsPlayed > 0;
+      if (!stats && !Object.hasOwn(fixture.result!.selection?.rested ?? {}, assignment.playerId)) throw new Error('The observed player must belong to the committed fixture roster.');
+      const observed = !!stats && stats.secondsPlayed > 0;
       reviews.push({ playerId: assignment.playerId, seasonNumber: state.seasonNumber, round: state.round, date: state.date, clubId: target.id, rosterId: roster.id, outcome: observed ? 'observed' : 'no-minutes', attributes: observed ? scoutingActualAttributes(state, assignment.playerId) : null, ...(assignment.observer ? { observer: { ...assignment.observer } } : {}) });
     }
     if (reviews.length) next = updateClub(next, observer.id, { ...club, assignments: [], reviews: [...club.reviews, ...reviews] });

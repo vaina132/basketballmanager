@@ -41,41 +41,28 @@ describe('a career world from a real-data pack', () => {
     expect(() => worldFromPack(pack, 'competition-cup')).toThrow(/domestic league/);
   });
 
-  it('builds the league\'s real clubs with full twelve-player squads, neutral figures and the pack\'s identities', () => {
+  it('builds the league\'s real clubs with complete imported squads, neutral figures and the pack\'s identities', () => {
     const world = worldFromPack(pack, 'competition-league');
     expect(() => validateWorld(world)).not.toThrow();
-    expect(world).toMatchObject({ id: 'real-test-2-competition-league', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
-    expect(world.clubs.map(club => club.players.length)).toEqual([12, 12, 12, 12]);
-    // Players without statistics come last and are left out when a squad is full.
-    expect(world.clubs.every(club => club.players.every(item => !item.id.endsWith('-13')))).toBe(true);
+    expect(world).toMatchObject({ id: 'real-full-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
+    expect(world.clubs.map(club => club.players.length)).toEqual([14, 14, 14, 14]);
+    // Missing statistics must not silently discard a real identity.
+    expect(world.clubs.every(club => club.players.some(item => item.id.endsWith('-13')))).toBe(true);
     expect(world.clubs[0]!.players[0]).toMatchObject(NEUTRAL_APPEARANCE);
     expect(world.clubs[1]!.color).toBe(NEUTRAL_CLUB_COLOR);
     expect(world.finances[0]!.venue).toBe('Alpha Hall');
     expect(world.finances[1]!.venue).toBe('Club B Arena');
-    expect(new Set(world.clubs[0]!.players.map(item => item.number)).size).toBe(12);
+    expect(new Set(world.clubs[0]!.players.map(item => item.number)).size).toBe(14);
   });
 
-  it('fills a squad the data leaves short with generated reserves below its weakest real players', () => {
-    // Club A keeps only nine of its players in this variant.
+  it('keeps smaller squads intact and rejects incomplete data without invented reserves', () => {
     const shortPack: DataPack = { ...pack, clubs: pack.clubs.map(club => club.id === 'club-a' ? { ...club, playerIds: club.playerIds.slice(0, 9) } : club) };
     const world = worldFromPack(shortPack, 'competition-league');
-    const club = world.clubs.find(item => item.id === 'club-a')!;
-    expect(club.players).toHaveLength(12);
-    const reserves = club.players.filter(item => isGeneratedReserve(item.id)), real = club.players.filter(item => !isGeneratedReserve(item.id));
-    expect(reserves.map(item => item.id)).toEqual(['club-a-reserve-1', 'club-a-reserve-2', 'club-a-reserve-3']);
-    expect(new Set(club.players.map(item => item.number)).size).toBe(12);
-    expect(new Set(club.players.map(item => item.name)).size).toBe(12);
-    const weakestReal = Math.min(...real.map(item => overallRating(item.attributes, item.position)));
-    for (const reserve of reserves) {
-      expect(overallRating(reserve.attributes, reserve.position)).toBeLessThan(weakestReal);
-      expect(world.playerProfiles[reserve.id]).toMatchObject({ source: 'generated-reserve' });
-      expect(Number(world.playerProfiles[reserve.id]!.dateOfBirth.slice(0, 4))).toBeGreaterThanOrEqual(2004);
-      expect(world.wages[reserve.id]).toBe(realWorldWage(overallRating(reserve.attributes, reserve.position)));
-    }
-    // Full squads get no reserves, and the same club always gets the same reserves.
-    expect(world.clubs.filter(item => item.id !== 'club-a').every(item => item.players.every(member => !isGeneratedReserve(member.id)))).toBe(true);
-    expect(worldFromPack(shortPack, 'competition-league').clubs[0]).toEqual(club);
+    expect(world.clubs.map(club => club.players.length)).toEqual([9, 14, 14, 14]);
+    expect(world.clubs.flatMap(club => club.players).some(player => isGeneratedReserve(player.id))).toBe(false);
     expect(() => validateWorld(world)).not.toThrow();
+    const incomplete = { ...shortPack, clubs: shortPack.clubs.map(club => ({ ...club, playerIds: club.playerIds.slice(0, 7) })) };
+    expect(() => worldFromPack(incomplete, 'competition-league')).toThrow(/no players have been added or discarded/);
   });
 
   it('estimates birth dates from ages and gives fictional wages within the contract rules', () => {

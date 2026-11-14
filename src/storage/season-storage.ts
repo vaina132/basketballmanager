@@ -1,3 +1,5 @@
+import { clubRosterLimit, clubSalaryBudget, usesFullClubRoster } from '../world/club-roster-policy';
+import { selectedTeam } from '../world/matchday-selection';
 import { createBoard } from '../world/board';
 import type { SeasonBoard } from '../domain/board';
 import type { SeasonCommercial } from '../domain/commercial';
@@ -7,7 +9,7 @@ import { commercialGovernsSeason, createCommercial, openingSponsorshipClubs, spo
 import { createRelationships } from '../world/relationships';
 import type { SeasonRelationships } from '../domain/relationships';
 import { validateRelationships } from './relationships-validation';
-import type { ArchivedFixture, FixtureResult, SeasonArchive, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
+import type { ArchivedFixture, ClubPlan, FixtureResult, SeasonArchive, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import type { FacilityAnchor, FacilityEvent, SeasonFacilities } from '../domain/facilities';
 import { createFacilities, applyFacilityEvent, facilitiesAtEventCount } from '../world/facilities';
@@ -80,7 +82,7 @@ import { applyInSeasonEvent, createInSeasonRecruitment as createRecruitment } fr
 import { getTransferPaymentSchedule, processTransferPayments } from '../world/transfer-payments';
 import { addMarketDays, MARKET_MAX_EVENTS, MARKET_WINDOW_DAYS, isLiveMarketOffer } from '../world/market-policy';
 import { evaluateNegotiation } from '../world/negotiations-policy';
-import { contractForSeason, contractForRound, effectiveContractsForSeason, effectiveContractsForRound, getContractedClubs, getContractedClubsForRound, registrationChangeRounds, quotePlayerContract, EMPLOYMENT_BUDGET, MIN_ROSTER_SIZE, MAX_ROSTER_SIZE, MIN_CONTRACT_WAGE, MAX_CONTRACT_WAGE, MAX_CONTRACT_SEASONS, WAGE_STEP, MIN_ROSTER_WAGE_RESERVE } from '../world/employment-policy';
+import { contractForSeason, contractForRound, effectiveContractsForSeason, effectiveContractsForRound, getContractedClubs, getContractedClubsForRound, registrationChangeRounds, quotePlayerContract, MIN_ROSTER_SIZE, MIN_CONTRACT_WAGE, MAX_CONTRACT_WAGE, MAX_CONTRACT_SEASONS, WAGE_STEP, MIN_ROSTER_WAGE_RESERVE } from '../world/employment-policy';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
 import { MAX_SEASON_COLLECTION_ENTRIES, MAX_SEASON_SAVE_BYTES, MAX_SEASON_SAVE_VALUES } from './season-limits';
@@ -98,7 +100,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -189,8 +191,8 @@ function validateResultSummary(fields: Record<string, unknown>, path: string, ho
 }
 
 /** Completed matches retain accounting, not a second copy of their event history. */
-function validateResult(value: unknown, path: string, home: Team, away: Team, legacy: boolean, rosterAware = false): FixtureResult {
-  const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'stats', ...(legacy ? [] : ['injuries']), ...(rosterAware ? ['rosterIds'] : [])]);
+function validateResult(value: unknown, path: string, home: Team, away: Team, legacy: boolean, rosterAware = false, selection = false): FixtureResult {
+  const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'stats', ...(legacy ? [] : ['injuries']), ...(rosterAware ? ['rosterIds'] : []), ...(selection ? ['selection'] : [])]);
   const injuries = legacy ? {} : validateInjuryMap(fields.injuries, `${path}.injuries`, [...home.players, ...away.players].map(player => player.id));
   const { periods, earned, loser } = validateResultSummary(fields, path, home, away);
   const elapsedLimit = periods <= 4 ? periods * 600 : 2400 + (periods - 4) * 300;
@@ -227,16 +229,16 @@ function validateResult(value: unknown, path: string, home: Team, away: Team, le
 }
 
 /** Migrated archives have no box scores; newly retained ones validate all player accounting. */
-function validateArchivedResult(value: unknown, path: string, home: Team, away: Team, rosterAware = false, outcomes = false): ArchivedFixture['result'] {
+function validateArchivedResult(value: unknown, path: string, home: Team, away: Team, rosterAware = false, outcomes = false, selection = false): ArchivedFixture['result'] {
   const summarized = outcomes && value !== null && typeof value === 'object' && Object.hasOwn(value, 'appearances');
-  const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'injuries', ...(rosterAware ? ['stats', 'rosterIds'] : []), ...(summarized ? ['appearances'] : [])]);
+  const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'injuries', ...(rosterAware ? ['stats', 'rosterIds'] : []), ...(summarized ? ['appearances'] : []), ...(selection ? ['selection'] : [])]);
   if (summarized) {
     validateResultSummary(fields, path, home, away);
     validateInjuryMap(fields.injuries, `${path}.injuries`, [...home.players, ...away.players].map(player => player.id));
     validateArchivedAppearances(fields as unknown as ArchivedFixture['result'], path, home, away);
     return fields as unknown as ArchivedFixture['result'];
   }
-  if (rosterAware && fields.stats !== null) return validateResult(value, path, home, away, false, true);
+  if (rosterAware && fields.stats !== null) return validateResult(value, path, home, away, false, true, selection);
   validateResultSummary(fields, path, home, away);
   validateInjuryMap(fields.injuries, `${path}.injuries`, [...home.players, ...away.players].map(player => player.id));
   return fields as unknown as ArchivedFixture['result'];
@@ -250,16 +252,27 @@ function validateRosters(value: unknown, path: string, clubs: readonly Team[], s
   return value as RosterSnapshot[];
 }
 
-function recordedTeams(value: unknown, fixture: SeasonFixture, clubs: readonly Team[], rosters: readonly RosterSnapshot[], path: string, outcomes = false): { home: Team; away: Team } {
+function recordedTeams(value: unknown, fixture: SeasonFixture, clubs: readonly Team[], rosters: readonly RosterSnapshot[], path: string, outcomes = false, selection = false): { home: Team; away: Team } {
   const summarized = outcomes && value !== null && typeof value === 'object' && Object.hasOwn(value, 'appearances');
-  const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'injuries', 'stats', 'rosterIds', ...(summarized ? ['appearances'] : [])]);
+  const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'injuries', 'stats', 'rosterIds', ...(summarized ? ['appearances'] : []), ...(selection ? ['selection'] : [])]);
   const refs = record(fields.rosterIds, `${path}.rosterIds`, SIDES);
-  return Object.fromEntries(SIDES.map(side => {
+  const selected = selection ? record(fields.selection, `${path}.selection`, ['home', 'away', 'rested']) : null;
+  const restingIds: string[] = [];
+  const teams = Object.fromEntries(SIDES.map(side => {
     const clubId = side === 'home' ? fixture.homeClubId : fixture.awayClubId;
     const snapshot = rosterForRound(rosters, clubId, fixture.round);
     if (refs[side] !== snapshot.id) fail(`${path}.rosterIds.${side}`, 'must identify this club\'s registered roster at the fixture boundary');
-    return [side, { ...clubs.find(club => club.id === clubId)!, players: snapshot.players }];
+    const registered = { ...clubs.find(club => club.id === clubId)!, players: snapshot.players };
+    if (!selected) return [side, registered];
+    if (!Array.isArray(selected[side])) fail(`${path}.selection.${side}`, 'must list selected players');
+    const ids = selected[side] as string[];
+    let chosen: Team;
+    try { chosen = selectedTeam(registered, ids); } catch { fail(`${path}.selection.${side}`, 'must select five to twelve distinct registered players'); }
+    restingIds.push(...snapshot.players.filter(player => !ids.includes(player.id)).map(player => player.id));
+    return [side, chosen];
   })) as unknown as { home: Team; away: Team };
+  if (selected) { const resting = record(selected.rested, `${path}.selection.rested`, restingIds); for (const id of restingIds) number(resting[id], `${path}.selection.rested.${id}`, 35, 100, false); }
+  return teams;
 }
 
 /** Compact result diagnoses identify both new injuries and players already unavailable. */
@@ -1377,7 +1390,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     if (index >= catalog.length) for (let year = startsSeason; year <= endsSeason; year += 1) {
       const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
-      if (annual.length > MAX_ROSTER_SIZE || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > EMPLOYMENT_BUDGET) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > clubSalaryBudget(context, entry.clubId as string)) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
   }
   const employment = normalized;
@@ -1385,7 +1398,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
   for (let year = firstYear; year <= seasonNumber; year += 1) for (const clubId of clubIds) {
     for (let at = 1; at <= (year === seasonNumber ? round : seasonRounds(context)); at += 1) {
       const registrations = effectiveContractsForRound(employment, year, at).filter(contract => contract.clubId === clubId);
-      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > MAX_ROSTER_SIZE || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > EMPLOYMENT_BUDGET) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
+      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > clubSalaryBudget(context, clubId)) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
     }
   }
   if (!datedMarket && status === 'complete' && seasonNumber < MAX_SEASON_NUMBER) for (const clubId of clubIds) {
@@ -2458,7 +2471,7 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
       number(entry.availableDays, `${path}.availableDays`, 0, 7);
       number(entry.conditionBefore, `${path}.conditionBefore`, 35, 100, false);
       number(entry.conditionAfter, `${path}.conditionAfter`, 35, 100, false);
-      conditionsBefore[player.id] = fixture.result!.stats[player.id]!.condition;
+      conditionsBefore[player.id] = (fixture.result!.stats[player.id]?.condition ?? fixture.result!.selection?.rested[player.id])!;
       if (entry.conditionBefore !== conditionsBefore[player.id]) fail(`${path}.conditionBefore`, 'must match the preceding committed match');
       const gains = record(entry.gains, `${path}.gains`, TRAINING_ATTRIBUTES);
       const coachingGains = coaching ? record(entry.coachingGains, `${path}.coachingGains`, TRAINING_ATTRIBUTES) : null;
@@ -2515,6 +2528,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     if (state.dataPackId !== (state.world as CareerWorld).id || state.dataPackId === DEVELOPMENT_DATA_PACK_ID) fail('dataPackId', 'must name the world the career carries');
   } else if (state.dataPackId !== DEVELOPMENT_DATA_PACK_ID) fail('state', 'uses an unsupported data pack');
   const world = worldOf(state as unknown as SeasonState);
+  const fullRoster = usesFullClubRoster({ world });
+  if (fullRoster && version < 46) fail('world.rosterModel', 'requires format 46 or later');
   if (version >= 8 && state.manager !== null && !sameData(state.manager, validateManagerProfile(state.manager, DEVELOPMENT_START_DATE))) fail('manager', 'must contain normalized profile details valid at the initial career date');
   const seed = number(state.seed, 'seed', 0, 0xffff_ffff), round = number(state.round, 'round', 1, worldRounds(world));
   const seasonNumber = career ? number(state.seasonNumber, 'seasonNumber', 1, MAX_SEASON_NUMBER) : 1;
@@ -2550,7 +2565,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const registeredPlayers = new Set(clubs.flatMap(club => club.players.map(player => player.id)));
   for (const playerId of playerIds) if (!registeredPlayers.has(playerId) && conditions[playerId] !== 100) fail(`conditions.${playerId}`, 'must retain offseason recovery while the player remains unregistered');
   for (const club of clubs) {
-    const plan = record(plans[club.id], `plans.${club.id}`, ['tactics', 'lineup', 'autoSubstitutions']);
+    const plan = record(plans[club.id], `plans.${club.id}`, ['tactics', 'lineup', 'autoSubstitutions', ...(fullRoster ? ['matchday'] : [])]);
+    if (fullRoster && plan.matchday !== null) { try { selectedTeam(club, plan.matchday as string[]); } catch { fail(`plans.${club.id}.matchday`, 'must select five to twelve distinct registered players'); } }
     const tactics = record(plan.tactics, `plans.${club.id}.tactics`, ['tempo', 'outsideShare', 'pressure']);
     for (const key of ['tempo', 'outsideShare', 'pressure']) number(tactics[key], `plans.${club.id}.tactics.${key}`, 0, 1, false);
     const lineup = array(plan.lineup, `plans.${club.id}.lineup`, 5);
@@ -2604,8 +2620,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
         const location = `${path}.fixtures[${index}]`, expected = schedule[index]!;
         const fixture = record(value, location, ['id', 'round', 'date', 'homeClubId', 'awayClubId', 'result']);
         for (const key of ['id', 'round', 'date', 'homeClubId', 'awayClubId'] as const) if (fixture[key] !== expected[key]) fail(location, 'does not match the versioned schedule');
-        const { home, away } = archivedRosters ? recordedTeams(fixture.result, expected, clubs, archivedRosters, `${location}.result`, version >= 45) : { home: clubs.find(club => club.id === expected.homeClubId)!, away: clubs.find(club => club.id === expected.awayClubId)! };
-        const result = validateArchivedResult(fixture.result, `${location}.result`, home, away, version >= 9, version >= 45);
+        const { home, away } = archivedRosters ? recordedTeams(fixture.result, expected, clubs, archivedRosters, `${location}.result`, version >= 45, fullRoster) : { home: clubs.find(club => club.id === expected.homeClubId)!, away: clubs.find(club => club.id === expected.awayClubId)! };
+        const result = validateArchivedResult(fixture.result, `${location}.result`, home, away, version >= 9, version >= 45, fullRoster);
         if (version >= 9) {
           const available = result.stats !== null || result.appearances !== undefined;
           if (hasPlayerStats !== undefined && available !== hasPlayerStats) fail(`${path}.fixtures`, 'must have consistent player-statistics coverage for the archived season');
@@ -2624,8 +2640,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     for (const key of ['id', 'round', 'date', 'homeClubId', 'awayClubId'] as const) if (fixture[key] !== expected[key]) fail(path, 'does not match the versioned schedule');
     if (expected.round <= committedRound) {
       if (fixture.result === null) fail(`${path}.result`, 'is missing from a completed matchday');
-      const { home, away } = rosters ? recordedTeams(fixture.result, expected, clubs, rosters, `${path}.result`) : { home: clubs.find(club => club.id === expected.homeClubId)!, away: clubs.find(club => club.id === expected.awayClubId)! };
-      const result = validateResult(fixture.result, `${path}.result`, home, away, legacy, version >= 9);
+      const { home, away } = rosters ? recordedTeams(fixture.result, expected, clubs, rosters, `${path}.result`, false, fullRoster) : { home: clubs.find(club => club.id === expected.homeClubId)!, away: clubs.find(club => club.id === expected.awayClubId)! };
+      const result = validateResult(fixture.result, `${path}.result`, home, away, legacy, version >= 9, fullRoster);
       if (!legacy) recordFixtureInjuries(result, expected, home, away, path, result.stats);
     } else if (fixture.result !== null) fail(`${path}.result`, 'cannot be committed before its matchday');
   }
@@ -2675,7 +2691,11 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version >= 38) validateCareerDecisions(normalizedState);
   const match = state.activeMatch;
   if (match.engineVersion !== 'possession-3' || match.seed !== fixtureSeed(seed, active.id)) fail('activeMatch', 'has the wrong engine or fixture seed');
-  const home = clubs.find(club => club.id === active.homeClubId)!, away = clubs.find(club => club.id === active.awayClubId)!;
+  let home = clubs.find(club => club.id === active.homeClubId)!, away = clubs.find(club => club.id === active.awayClubId)!;
+  if (fullRoster) {
+    try { home = selectedTeam(home, match.home.players.map(player => player.id)); away = selectedTeam(away, match.away.players.map(player => player.id)); } catch { fail('activeMatch', 'must use legal matchday selections from the registered clubs'); }
+    for (const side of SIDES) { const plan = (plans[match[side].id] as unknown as ClubPlan); if (plan.matchday !== null && !sameData(plan.matchday, match[side].players.map(player => player.id))) fail('activeMatch', 'must retain the chosen matchday selection'); }
+  }
   if (!sameData(match.home, development ? developClub(home, development.training, { ...careerContext, date: active.date }) : home) || !sameData(match.away, development ? developClub(away, development.training, { ...careerContext, date: active.date }) : away)) fail('activeMatch', 'must use the fixture home and away squads with their current development');
   const opposition: Side = active.homeClubId === matchClub ? 'away' : 'home';
   if (!match.autoSubstitutions[opposition]) fail('activeMatch.autoSubstitutions', 'must enable opponent substitutions');
@@ -2695,19 +2715,19 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   }
   if (state.status === 'complete') {
     if (match.status !== 'finished' || !match.result) fail('activeMatch', 'must be finished when the season is complete');
-    const result = { score: match.score, officialScore: match.result.officialScore, winnerClubId: match[match.result.winner].id, kind: match.result.kind, periods: match.period, stats: match.stats, ...(legacy ? {} : { injuries: Object.fromEntries(Object.entries(match.injuries).map(([id, injury]) => [id, injury.kind])) }), ...(rosters ? { rosterIds: { home: rosterForRound(rosters, home.id, round).id, away: rosterForRound(rosters, away.id, round).id } } : {}) };
+    const result = { score: match.score, officialScore: match.result.officialScore, winnerClubId: match[match.result.winner].id, kind: match.result.kind, periods: match.period, stats: match.stats, ...(legacy ? {} : { injuries: Object.fromEntries(Object.entries(match.injuries).map(([id, injury]) => [id, injury.kind])) }), ...(rosters ? { rosterIds: { home: rosterForRound(rosters, home.id, round).id, away: rosterForRound(rosters, away.id, round).id } } : {}), ...(fullRoster ? { selection: active.result!.selection } : {}) };
     if (!sameData(active.result, result)) fail('activeMatch', 'does not match its committed final result');
   }
   // Recovery belongs to a completed matchday, so imports cannot run it twice.
   for (const club of clubs) {
     for (const player of club.players) {
-      const latest = (fixtures as SeasonFixture[]).find(fixture => fixture.round === committedRound && fixture.result?.stats[player.id]);
-      const previous = latest?.result?.stats[player.id]?.condition ?? 100;
+      const latest = (fixtures as SeasonFixture[]).find(fixture => fixture.round === committedRound && (fixture.result?.stats[player.id] || Object.hasOwn(fixture.result?.selection?.rested ?? {}, player.id)));
+      const previous = latest?.result?.stats[player.id]?.condition ?? latest?.result?.selection?.rested[player.id] ?? 100;
       const marketRecoveryDays = state.status === 'complete' && marketWindow ? (Date.parse(`${marketWindow.date}T00:00:00.000Z`) - Date.parse(`${active.date}T00:00:00.000Z`)) / 86_400_000 : 0;
       const arrival = academy.graduates.find(graduate => graduate.player.id === player.id && graduate.availableSince.seasonNumber === seasonNumber && graduate.availableSince.round === round);
       const expected = state.status === 'complete' ? Math.min(100, Math.round((previous + DAILY_RECOVERY * marketRecoveryDays) * 1000) / 1000) : development?.conditionsAfter?.[player.id] ?? (!latest && arrival?.condition !== undefined ? arrival.condition : Math.min(100, Math.round((previous + DAILY_RECOVERY * ROUND_INTERVAL_DAYS) * 1000) / 1000));
       if (conditions[player.id] !== expected) fail(`conditions.${player.id}`, 'does not match the last committed recovery boundary');
-      if (match.status === 'ready' && (club.id === home.id || club.id === away.id) && match.stats[player.id]!.condition !== conditions[player.id]) fail(`activeMatch.stats.${player.id}.condition`, 'must match current season condition before tipoff');
+      if (match.status === 'ready' && (club.id === home.id || club.id === away.id) && match.stats[player.id] && match.stats[player.id]!.condition !== conditions[player.id]) fail(`activeMatch.stats.${player.id}.condition`, 'must match current season condition before tipoff');
     }
   }
 }

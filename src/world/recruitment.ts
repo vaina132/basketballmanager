@@ -1,3 +1,4 @@
+import { clubRosterLimit, clubRosterTarget } from './club-roster-policy';
 import { financeLedgerCount } from './finance-ledger';
 import type { ContractOfferOptions, EmploymentContract, EmploymentTransfer } from '../domain/employment';
 import type { InSeasonEvent, InSeasonEventAnchor, InSeasonOffer, SeasonRecruitment } from '../domain/recruitment';
@@ -6,7 +7,7 @@ import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import { getCareerPlayer, getCareerWage } from './player-catalog';
 import { graduateAcademyProspect } from './academy';
 import { getClubAcademy } from './academy-policy';
-import { effectiveContractsForRound, MAX_ROSTER_SIZE } from './employment-policy';
+import { effectiveContractsForRound } from './employment-policy';
 import { recordTransferFee } from './finance';
 import { isRecovering } from './health';
 import { appendNegotiationResponse } from './negotiations';
@@ -222,13 +223,13 @@ export function scheduleInSeasonRecruitment(state: SeasonState): SeasonState {
   const knownMedical = state.physio ? { ...state.physio, rehabilitation: state.physio.rehabilitation.filter(record => record.toDate <= state.date) } : undefined;
   for (const club of state.clubs) {
     if (club.id === state.managedClubId && !state.employment.delegated) continue;
-    for (let count = 0; count < MAX_ROSTER_SIZE; count += 1) {
+    for (let count = 0; count < clubRosterLimit(state); count += 1) {
       const registered = effectiveContractsForRound(next.employment, next.seasonNumber, next.round).filter(contract => contract.clubId === club.id);
       const pending = getInSeasonOffers(next, club.id, true);
       const departing = new Set(getInSeasonOffers(next, undefined, true).filter(offer => offer.transfer?.sellerClubId === club.id && offer.transfer.clubStatus === 'accepted').map(offer => offer.playerId));
       const healthy = registered.filter(contract => !departing.has(contract.playerId) && !next.injuries.some(injury => injury.playerId === contract.playerId && isRecovering(injury, responseOn, knownMedical))).length;
-      const needed = club.id === state.managedClubId ? 10 - registered.length + departing.size - pending.length : 8 - healthy - pending.length;
-      if (needed <= 0 || registered.length + pending.length >= MAX_ROSTER_SIZE) break;
+      const needed = club.id === state.managedClubId ? clubRosterTarget(state, club.id) - registered.length + departing.size - pending.length : 8 - healthy - pending.length;
+      if (needed <= 0 || registered.length + pending.length >= clubRosterLimit(state)) break;
       const positions = new Map<string, number>();
       for (const playerId of [...registered.map(contract => contract.playerId), ...pending.map(offer => offer.playerId)]) {
         const position = getCareerPlayer(next, playerId).position;

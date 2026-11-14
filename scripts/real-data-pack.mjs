@@ -65,10 +65,10 @@ export function buildPack(input) {
   const packCompetitions = competitions.map(competition => ({ id: `competition-${competition.id}`, name: competition.name, country: competition.country ?? null, tier: competition.tier, kind: competition.kind, season, clubIds: competition.clubIds.map(id => `club-${id}`).sort() }));
 
   // Checks: a failed pack is never written.
-  // Real squads need eight players; with eight or nine the game adds generated reserves when it builds a world.
+  // Career squads need eight imported players; smaller valid squads stay intact.
   for (const club of packClubs) {
     if (club.playerIds.length < PACK_SQUAD.minimum) problems.push(`${club.name} has only ${club.playerIds.length} players in ${season}`);
-    else if (club.playerIds.length < PACK_SQUAD.full) warnings.push(`${club.name} has ${club.playerIds.length} players in ${season}; the game adds generated reserves`);
+    else if (club.playerIds.length < PACK_SQUAD.full) warnings.push(`${club.name} has ${club.playerIds.length} players in ${season}; small roster; no generated players will be added`);
   }
   for (const player of packPlayers) for (const [key, value] of Object.entries(player.attributes)) if (!Number.isInteger(value) || value < 1 || value > 20) problems.push(`${player.name} has ${key} ${value}`);
   const names = new Map();

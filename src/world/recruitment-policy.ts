@@ -1,3 +1,4 @@
+import { clubRosterLimitText, clubRosterLimit, clubSalaryBudget } from './club-roster-policy';
 import type { InSeasonBudget, InSeasonOffer, InSeasonOfferQuote } from '../domain/recruitment';
 import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
@@ -6,7 +7,7 @@ import { getCareerPlayers, getActiveCareerPlayers } from './player-catalog';
 import { retirementContractReason } from './lifecycle-policy';
 import { getAcademyProspect } from './academy-policy';
 import { getYouthPlayerStatus } from './youth-competition';
-import { contractForSeason, effectiveContractsForRound, EMPLOYMENT_BUDGET, MAX_CONTRACT_WAGE, MAX_ROSTER_SIZE, MIN_CONTRACT_WAGE, WAGE_STEP } from './employment-policy';
+import { contractForSeason, effectiveContractsForRound, MAX_CONTRACT_WAGE, MIN_CONTRACT_WAGE, WAGE_STEP } from './employment-policy';
 import { getFinanceBalance } from './finance';
 import { getSpendableCash, payrollInstallment } from './payroll-policy';
 import { dateForRound } from './season';
@@ -39,7 +40,8 @@ export function getInSeasonBudget(state: SeasonState, clubId = state.managedClub
   const offers = getInSeasonOffers(state, clubId, true).filter(offer => offer.id !== excludeOfferId);
   const seasonWages = contracts.reduce((sum, contract) => sum + contract.seasonWage, 0);
   const reservedWages = offers.reduce((sum, offer) => sum + offer.seasonWage, 0);
-  return { budget: EMPLOYMENT_BUDGET, seasonWages, reservedWages, remainingBudget: Math.max(0, EMPLOYMENT_BUDGET - seasonWages - reservedWages), rosterSize: contracts.length, reservedRosterSize: offers.length, remainingWagesReserved: offers.reduce((sum, offer) => sum + offer.remainingWages, 0), spendableCash: getSpendableCash(state, clubId, undefined, undefined, excludeOfferId) };
+  const allocation = clubSalaryBudget(state, clubId);
+  return { budget: allocation, seasonWages, reservedWages, remainingBudget: Math.max(0, allocation - seasonWages - reservedWages), rosterSize: contracts.length, reservedRosterSize: offers.length, remainingWagesReserved: offers.reduce((sum, offer) => sum + offer.remainingWages, 0), spendableCash: getSpendableCash(state, clubId, undefined, undefined, excludeOfferId) };
 }
 
 /** One rest-of-season proposal; the current prepared match remains unchanged. */
@@ -67,10 +69,10 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   else if (contractForSeason(state.employment, playerId, state.seasonNumber)) reason = 'Choose a free agent without an employer for this season.';
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before offering another salary.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before offering another salary.';
-  else if (budget.rosterSize + budget.reservedRosterSize + 1 > MAX_ROSTER_SIZE) reason = 'The squad already has twelve registered players or reserved places.';
-  else if (budget.seasonWages + budget.reservedWages + seasonWage > EMPLOYMENT_BUDGET) reason = 'This offer exceeds the current season player salary budget.';
+  else if (budget.rosterSize + budget.reservedRosterSize + 1 > clubRosterLimit(state)) reason = `The squad already has ${clubRosterLimitText(state)} registered players or reserved places.`;
+  else if (budget.seasonWages + budget.reservedWages + seasonWage > budget.budget) reason = 'This offer exceeds the current season player salary budget.';
   else if (budget.spendableCash < remainingWages) reason = 'The remaining salary exceeds the available budget after existing commitments.';
-  return { playerId, clubId, seasonWage, remainingWages, responseRound, responseOn, remainingBudgetAfter: Math.max(0, budget.spendableCash - remainingWages), annualBudgetRemaining: Math.max(0, EMPLOYMENT_BUDGET - budget.seasonWages - budget.reservedWages - (validWage ? seasonWage : 0)), rosterSize: budget.rosterSize + budget.reservedRosterSize + 1, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
+  return { playerId, clubId, seasonWage, remainingWages, responseRound, responseOn, remainingBudgetAfter: Math.max(0, budget.spendableCash - remainingWages), annualBudgetRemaining: Math.max(0, budget.budget - budget.seasonWages - budget.reservedWages - (validWage ? seasonWage : 0)), rosterSize: budget.rosterSize + budget.reservedRosterSize + 1, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
 }
 
 export function getInSeasonCandidates(state: SeasonState): readonly Player[] {

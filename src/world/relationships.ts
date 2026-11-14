@@ -3,6 +3,7 @@ import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import { dateForRound } from './season';
 import { rosterForRound } from './rosters';
+import { isRecovering } from './health';
 import { fixturePlayerEvidence } from './senior-history';
 import { getPlayerRetirement } from './lifecycle-policy';
 import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, pressImpact } from './press-policy';
@@ -97,7 +98,8 @@ function clubHistory(state: SeasonState, clubId: string) {
         const game = fixtures[index]!;
         if (!game.players.has(playerId)) continue;
         const fixture = game.fixture, result = fixture.result!, stats = fixturePlayerEvidence(fixture, playerId);
-        const eligible = !!stats && result.kind === 'normal' && !result.injuries[playerId] && stats.fouls < 5;
+        const recoveringOutsideSquad = result.selection && Object.hasOwn(result.selection.rested, playerId) && state.injuries.some(injury => injury.playerId === playerId && isRecovering(injury, fixture.date, state.physio));
+        const eligible = !!stats && result.kind === 'normal' && !result.injuries[playerId] && !recoveringOutsideSquad && stats.fouls < 5;
         if (window.eligibleOnly && !eligible || window.beforeDate && fixture.date >= window.beforeDate) continue;
         game.derby ??= !!governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, game.seasonNumber, fixture.round, worldOf(state));
         games.push({ at: game.at, id: fixture.id, date: fixture.date, eligible,

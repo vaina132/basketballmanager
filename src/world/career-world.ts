@@ -2,6 +2,7 @@ import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import type { Rivalry } from '../domain/rivalries';
 import type { Player } from '../domain/types';
+import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { CareerWorld, WorldContext } from '../domain/world';
 import { DEVELOPMENT_PLAYERS } from '../data/development-players';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
@@ -141,8 +142,9 @@ const exactKeys = (value: unknown, keys: readonly string[]) => isObject(value) &
 export function validateWorld(value: unknown): asserts value is CareerWorld {
   if (isObject(value) && validated.has(value)) return;
   const fail = (path: string, reason: string): never => { throw new Error(`Invalid career world: ${path} ${reason}.`); };
-  if (!exactKeys(value, WORLD_KEYS)) fail('world', 'must contain exactly the world fields');
+  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : [])])) fail('world', 'must contain exactly the world fields');
   const world = value as unknown as CareerWorld;
+  if (Object.hasOwn(world, 'rosterModel') && world.rosterModel !== FULL_ROSTER_MODEL) fail('world.rosterModel', 'has an unsupported value');
   if (!isText(world.id, 80) || !ID.test(world.id)) fail('world.id', 'must be a supported identifier');
   if (!isText(world.name)) fail('world.name', 'must be a nonempty, bounded text value');
   if (world.source !== 'fictional-development' && world.source !== 'real-data-pack') fail('world.source', 'has an unsupported value');
@@ -156,7 +158,8 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
     if (!isText(club.id, 80) || !ID.test(club.id) || clubIds.has(club.id)) fail(`${path}.id`, 'must be a unique supported identifier');
     clubIds.add(club.id);
     if (!isText(club.name) || !isText(club.shortName, 12) || typeof club.color !== 'string' || !COLOUR.test(club.color)) fail(path, 'needs a name, a short name and a colour');
-    if (!Array.isArray(club.players) || club.players.length < 5 || club.players.length > 20) fail(`${path}.players`, 'must list between 5 and 20 players');
+    const maximum = world.rosterModel === FULL_ROSTER_MODEL ? MAX_CLUB_ROSTER_SIZE : 20;
+    if (!Array.isArray(club.players) || club.players.length < 5 || club.players.length > maximum) fail(`${path}.players`, `must list between 5 and ${maximum} players`);
     const numbers = new Set<number>();
     for (const [playerIndex, player] of club.players.entries()) {
       const playerPath = `${path}.players[${playerIndex}]`;

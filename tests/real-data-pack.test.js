@@ -31,7 +31,7 @@ describe('real-data pack', () => {
     expect(pack.clubs.find(club => club.id === 'club-b')).toMatchObject({ color: null, city: 'B-town', arena: 'B Hall' });
     // Alpha lost p0 to Beta and has nine players left: allowed (eight are needed), and noted.
     expect(problems).toEqual([]);
-    expect(warnings).toContain('Alpha has 9 players in 2026-27; the game adds generated reserves');
+    expect(warnings).toContain('Alpha has 9 players in 2026-27; small roster; no generated players will be added');
     // Seven real players are too few for a pack.
     const thin = buildPack({ ...input, memberships: memberships.filter(row => !['p1', 'p2'].includes(row.player_id)) });
     expect(thin.problems).toEqual(['Alpha has only 7 players in 2026-27']);

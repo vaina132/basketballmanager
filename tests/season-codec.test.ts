@@ -52,6 +52,28 @@ describe('season save codec', () => {
     await expect(codec.serialize({ ...state, round: 0 } as SeasonState)).rejects.toThrow(/Invalid season save/);
   });
 
+  it('routes verified local checkpoints through the worker while portable imports stay strict', async () => {
+    const worker = new FakeWorker();
+    const codec = createWorkerSeasonCodec(() => worker);
+    await expect(codec.parseSealed!(text)).resolves.toEqual(state);
+    expect(worker.received.map(request => request.kind)).toEqual(['parse-sealed']);
+    const damaged = structuredClone(state);
+    damaged.conditions[Object.keys(damaged.conditions)[0]!] = 37;
+    const invalid = JSON.stringify({ format: 'basketball-manager-season', formatVersion: state.schemaVersion, engineVersion: state.engineVersion, state: damaged });
+    await expect(codec.parse(invalid)).rejects.toThrow(/Invalid season save/);
+    await expect(codec.serialize(damaged)).rejects.toThrow(/Invalid season save/);
+  });
+
+  it('finishes a verified checkpoint read if the worker fails', async () => {
+    const worker = new FakeWorker({ holdReplies: true });
+    const codec = createWorkerSeasonCodec(() => worker);
+    const loaded = codec.parseSealed!(text);
+    worker.crash();
+    await expect(loaded).resolves.toEqual(state);
+    expect(worker.terminated).toBe(true);
+    await expect(createWorkerSeasonCodec(null).parseSealed!(text)).resolves.toEqual(state);
+  });
+
   it('finishes waiting requests on the main thread if the worker fails, then stops using it', async () => {
     let created = 0;
     const worker = new FakeWorker({ holdReplies: true });

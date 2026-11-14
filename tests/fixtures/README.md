@@ -42,4 +42,15 @@ The `season37-board-*` fixtures are genuine format-37 saves captured with `npm r
 
 The `season38-board-*` fixtures are genuine format-38 saves captured with `npm run fixtures:capture` from the committed Level 7 / pilot 2.7 code (the work in progress was set aside with `git stash`) before format 39 let careers carry their own world (real-data pilot step 2.8a). They are careers in the built-in league and store no world; `tests/season38-continuation.test.js` checks that they load, continue and roll over exactly as recorded. Replaying the same career with the format-39 code gave identical contents.
 
-The `season39-board-*` fixtures are genuine format-39 saves captured with `npm run fixtures:capture` from the working tree after step 2.8c and before format 40 introduced the compact save layout (step 2.8d). The `season39-world8-*` fixtures are format-39 saves of an eight-club test world (`tests/world-fixtures.ts`, renamed built-in clubs, no real data) after six and seven matchdays, captured by a one-off test at the same point. `tests/season39-continuation.test.js` checks that both kinds continue, roll over and round-trip through the plain and compact format-40 layouts.
+The `season39-board-*` fixtures are genuine format-39 saves captured with `npm run fixtures:capture` from the working tree after step 2.8c and before format 40 introduced the compact save layout (step 2.8d). The `season39-world8-*` fixtures are format-39 saves of an eight-club test world (`tests/world-fixtures.ts`, renamed built-in clubs, no real data) after six and seven matchdays, captured by a one-off test at the same point. `tests/season39-continuation.test.js` checks that both kinds continue, roll over and round-trip through the current plain and compact layouts.
+
+The six `season40-*` fixtures were already present in Claude's unfinished step 3.2 working tree when development resumed on 14 November 2026, before format 41 was implemented. The four `board-*` files use the plain format-40 envelope; the two `world8-*` files use genuine `compact-1` envelopes. They have been retained unchanged. `tests/season40-continuation.test.js` checks full migration, independently recorded next matchdays and rollover, and exact strict/local-checkpoint reads through format 41. They contain fictional test worlds, not the private real-data pack. Their initial SHA-256 hashes (gzip bytes) are:
+
+| Fixture | SHA-256 |
+| --- | --- |
+| season40-board-career-next | `72d96dc77a56e24a46990263d13106f3613ba6e8dc32fed7468ddc0bc007c0b9` |
+| season40-board-career | `e3193ef33c463aebc11714e508b4330150192db1c1a8b7827b4f0d4260ebf266` |
+| season40-board-complete | `96af4aa0b5bc596dbe74271a416299c76f1ce48091d10abbe122cde1cd0e0e9f` |
+| season40-board-opening | `93873d3b54ab54e3dc7c995b30a785209554f99d6e9a66d879767fab9a340c4b` |
+| season40-world8-career-next | `845e9bbfba071c775e3f21619f8157cd645772af691a282393eb7384c1e064ef` |
+| season40-world8-career | `1ee97b31b24f4a1e75bf5814800620f980da46243f63ee9d92032c3863776dae` |

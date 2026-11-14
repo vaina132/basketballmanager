@@ -23,8 +23,12 @@ describe('real-data pack', () => {
     expect(pack.players.some(player => player.id === 'player-p20')).toBe(false);
     expect(pack.players.find(player => player.id === 'player-p19')).toMatchObject({ attributes: { twoPoint: 9, stamina: 9 }, estimated: expect.arrayContaining(['all-abilities']) });
     expect(pack.clubs.find(club => club.id === 'club-b')).toMatchObject({ color: null, city: 'B-town', arena: 'B Hall' });
-    // Alpha lost p0 to Beta and has nine players left, below the ten a squad needs.
-    expect(problems).toEqual(['Alpha has only 9 players in 2026-27']);
+    // Alpha lost p0 to Beta and has nine players left: allowed (eight are needed), and noted.
+    expect(problems).toEqual([]);
+    expect(warnings).toContain('Alpha has 9 players in 2026-27; the game adds generated reserves');
+    // Seven real players are too few for a pack.
+    const thin = buildPack({ ...input, memberships: memberships.filter(row => !['p1', 'p2'].includes(row.player_id)) });
+    expect(thin.problems).toEqual(['Alpha has only 7 players in 2026-27']);
     expect(warnings.join(' ')).toMatch(/No verified colours yet for 1 clubs: Beta/);
   });
 

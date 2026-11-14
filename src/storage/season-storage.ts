@@ -82,13 +82,13 @@ import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
 import { MAX_SEASON_COLLECTION_ENTRIES, MAX_SEASON_SAVE_BYTES, MAX_SEASON_SAVE_VALUES } from './season-limits';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
-import { COMPACT_JSON_ENCODING, compactJson, expandJson } from './compact-json';
+import { COMPACT_JSON_ENCODING, LEGACY_COMPACT_JSON_ENCODING, compactJson2, expandJson } from './compact-json';
 
 export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -1574,7 +1574,7 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
   let prefix = contracts.slice(0, contractCount);
   const entries: SeasonNegotiations['records'] = [];
   const conversations = new Map<string, { offeredWage: number; offeredSeasons: number; releaseFee?: number; boundary: number; date: string }>();
-  let previousBoundary = firstYear * 22 + firstRound * 2;
+  let previousBoundary = roundKey(firstYear, firstRound) * 2;
   let previousDate = dateForRound(firstRound, firstYear);
   for (const [index, value] of fields.records.entries()) {
     const path = `negotiations.records[${index}]`;
@@ -1587,7 +1587,8 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
     getCareerPlayer(state, entry.playerId, year, round);
     if (entry.status !== 'active' && entry.status !== 'complete') fail(`${path}.status`, 'must identify the calendar phase when the offer was made');
     if (entry.status === 'complete' && (round !== seasonRounds(state) || year === state.seasonNumber && state.status !== 'complete')) fail(`${path}.status`, 'cannot negotiate in an offseason before it begins');
-    const boundary = year * 22 + round * 2 + (entry.status === 'complete' ? 1 : 0);
+    // Ordered by season, matchday and then the offseason after the final matchday (seasons of any length, step 3.2 fix).
+    const boundary = roundKey(year, round) * 2 + (entry.status === 'complete' ? 1 : 0);
     if (boundary < previousBoundary || typeof entry.date !== 'string' || entry.date < previousDate) fail(path, 'must retain chronological offer order from activation onward');
     previousBoundary = boundary;
     previousDate = entry.date;
@@ -2593,7 +2594,9 @@ export function validateSeasonState(value: unknown): asserts value is SeasonStat
 /** The plain layout: readable, used by tests and tools. The game's own saves use `serializeSeasonCompact`. */
 export function serializeSeason(state: SeasonState): string {
   validateSeasonState(state);
-  const text = JSON.stringify({ format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', state });
+  const envelope = { format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', state };
+  checkJsonTree(envelope);
+  const text = JSON.stringify(envelope);
   checkSize(text);
   return text;
 }
@@ -2604,8 +2607,11 @@ export function serializeSeason(state: SeasonState): string {
  */
 export function serializeSeasonCompact(state: SeasonState): string {
   validateSeasonState(state);
-  const { strings, shapes, value } = compactJson(state);
-  const text = JSON.stringify({ format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', encoding: COMPACT_JSON_ENCODING, strings, shapes, state: value });
+  const { strings, shapes, nodes, value } = compactJson2(state);
+  const envelope = { format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', encoding: COMPACT_JSON_ENCODING, strings, shapes, nodes, state: value };
+  // Encoded tables, object markers and the envelope must fit the reader's limits too.
+  checkJsonTree(envelope);
+  const text = JSON.stringify(envelope);
   checkSize(text);
   return text;
 }
@@ -2654,21 +2660,47 @@ function migrateMarketTransfers(market: SeasonMarket): SeasonMarket {
   return { ...market, windows: market.windows.map(window => ({ ...window, offers: window.offers.map(offer => ({ ...offer, transfer: null })) })) };
 }
 
-export function parseSeason(text: string): SeasonState {
+/**
+ * Internal local-checkpoint reader. The caller MUST verify a current checks-version seal issued only after full
+ * serialization validation (`career-saves.ts`). An integrity fingerprint is not itself proof of valid gameplay.
+ * Imports, missing/mismatched seals and older formats use parseSeason. Never route an imported file directly here.
+ */
+export function parseSealedSeason(text: string): SeasonState {
+  const { version, state } = decodeSeasonText(text);
+  if (version !== SEASON_SCHEMA_VERSION) return parseSeason(text);
+  if (state === null || typeof state !== 'object' || Array.isArray(state)) fail('state', 'must be an object');
+  const fields = state as Record<string, unknown>;
+  checkJsonTree(state);
+  if (fields.schemaVersion !== SEASON_SCHEMA_VERSION || fields.engineVersion !== 'possession-3') fail('state', 'uses an unsupported schema or engine');
+  if (Object.hasOwn(fields, 'world')) {
+    try { validateWorld(fields.world); } catch (error) { fail('world', error instanceof Error ? error.message.replace(/^Invalid career world: /, '').replace(/\.$/, '') : 'is invalid'); }
+    if (fields.dataPackId !== (fields.world as CareerWorld).id || fields.dataPackId === DEVELOPMENT_DATA_PACK_ID) fail('dataPackId', 'must name the world the career carries');
+  } else if (fields.dataPackId !== DEVELOPMENT_DATA_PACK_ID) fail('state', 'uses an unsupported data pack');
+  return state as SeasonState;
+}
+
+/** The envelope's format version and its (expanded) state, before any check of the state's contents. */
+function decodeSeasonText(text: string): { version: SeasonFormatVersion; state: unknown } {
   checkSize(text);
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { throw new Error('This is not a valid JSON season file.'); }
   checkJsonTree(parsed);
-  // Format 40 files are either plain (tests, tools) or compact (the game's saves), told apart by `encoding`.
-  const compact = parsed !== null && typeof parsed === 'object' && (parsed as Record<string, unknown>).formatVersion === 40 && Object.hasOwn(parsed, 'encoding');
-  const envelope = record(parsed, 'envelope', ['format', 'formatVersion', 'engineVersion', ...(compact ? ['encoding', 'strings', 'shapes'] : []), 'state']);
+  // Plain envelopes remain readable for tools. Each compact encoding belongs to an explicit format version.
+  const fields = parsed !== null && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+  const compact = (fields.formatVersion === 40 || fields.formatVersion === 41) && Object.hasOwn(fields, 'encoding');
+  const sharedNodes = compact && fields.formatVersion === 41;
+  const envelope = record(parsed, 'envelope', ['format', 'formatVersion', 'engineVersion', ...(compact ? ['encoding', 'strings', 'shapes'] : []), ...(sharedNodes ? ['nodes'] : []), 'state']);
   if (envelope.format !== FORMAT || !SUPPORTED_FORMATS.includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
-  const version = envelope.formatVersion as SeasonFormatVersion;
-  // Format 40 stores the state compactly; expand it before any check of its contents.
   if (compact) {
-    if (envelope.encoding !== COMPACT_JSON_ENCODING) throw new Error('This season file uses an unsupported save encoding.');
-    try { envelope.state = expandJson({ strings: envelope.strings, shapes: envelope.shapes, value: envelope.state }); } catch (error) { throw new Error(`Invalid season save: ${error instanceof Error ? error.message : 'the compact data is damaged'}`); }
+    if (envelope.encoding !== (sharedNodes ? COMPACT_JSON_ENCODING : LEGACY_COMPACT_JSON_ENCODING)) throw new Error('This season file uses an unsupported save encoding.');
+    try { envelope.state = expandJson({ strings: envelope.strings, shapes: envelope.shapes, ...(sharedNodes ? { nodes: envelope.nodes } : {}), value: envelope.state }); } catch (error) { throw new Error(`Invalid season save: ${error instanceof Error ? error.message : 'the compact data is damaged'}`); }
   }
+  return { version: envelope.formatVersion as SeasonFormatVersion, state: envelope.state };
+}
+
+export function parseSeason(text: string): SeasonState {
+  const { version, state } = decodeSeasonText(text);
+  const envelope = { state };
   // Validate the original shape and accounting before adding any recoverable metadata.
   validateState(envelope.state, version);
   if (version === SEASON_SCHEMA_VERSION) return envelope.state as SeasonState;

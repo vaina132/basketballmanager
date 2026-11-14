@@ -1,8 +1,11 @@
 /** Authored fictional biographies for the development database, not researched personal data. */
 export interface DevelopmentPlayerProfile {
   readonly dateOfBirth: string;
-  /** Authored fictional dates, or a date estimated from a real player's age (1 January of the birth year). */
-  readonly source: 'fictional-development' | 'estimated-from-age';
+  /**
+   * Authored fictional dates, a date estimated from a real player's age (1 January of the birth year), or the date of a
+   * generated reserve who fills a real squad the data does not complete (sprint 3).
+   */
+  readonly source: 'fictional-development' | 'estimated-from-age' | 'generated-reserve';
 }
 
 const birthDates: Readonly<Record<string, readonly string[]>> = {

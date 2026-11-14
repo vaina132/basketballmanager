@@ -82,7 +82,7 @@ describe('careers in another world', () => {
   it('carry the world in the save and load it back exactly', () => {
     for (const state of [opening, complete, nextSeason]) {
       const file = JSON.parse(serializeSeason(state));
-      expect(file.formatVersion).toBe(40);
+      expect(file.formatVersion).toBe(state.schemaVersion);
       expect(file.state.world.id).toBe('test-world-1');
       expect(roundTrip(state)).toEqual(state);
       expect(parseSeason(serializeSeasonCompact(state))).toEqual(state);

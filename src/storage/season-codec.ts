@@ -1,5 +1,5 @@
 import type { SeasonState } from '../domain/season';
-import { parseSeason, serializeSeasonCompact } from './season-storage';
+import { parseSealedSeason, parseSeason, serializeSeasonCompact } from './season-storage';
 
 /**
  * Validated conversion between a career and its save text. The browser runs it in a worker so strict
@@ -8,24 +8,32 @@ import { parseSeason, serializeSeasonCompact } from './season-storage';
 export interface SeasonCodec {
   serialize(state: SeasonState): Promise<string>;
   parse(text: string): Promise<SeasonState>;
+  /** Unpack a previously validated local checkpoint after its current-version seal has been verified. */
+  parseSealed?(text: string): Promise<SeasonState>;
 }
 
-type SeasonCodecJob = { kind: 'serialize'; state: SeasonState } | { kind: 'parse'; text: string };
+type SeasonCodecJob = { kind: 'serialize'; state: SeasonState } | { kind: 'parse'; text: string } | { kind: 'parse-sealed'; text: string };
 export type SeasonCodecRequest = SeasonCodecJob & { requestId: number };
 export type SeasonCodecReply = { requestId: number; result: string | SeasonState } | { requestId: number; error: string };
 
 export const directSeasonCodec: SeasonCodec = {
   serialize: async state => serializeSeasonCompact(state),
   parse: async text => parseSeason(text),
+  parseSealed: async text => parseSealedSeason(text),
 };
 
-const runDirectly = (job: SeasonCodecJob): Promise<string | SeasonState> => job.kind === 'serialize' ? directSeasonCodec.serialize(job.state) : directSeasonCodec.parse(job.text);
+function runDirectly(job: SeasonCodecJob): Promise<string | SeasonState> {
+  if (job.kind === 'serialize') return directSeasonCodec.serialize(job.state);
+  if (job.kind === 'parse-sealed') return directSeasonCodec.parseSealed!(job.text);
+  return directSeasonCodec.parse(job.text);
+}
 
 /** The worker's entire behavior: identical validation and messages to the direct codec. */
 export function handleSeasonCodecRequest(request: SeasonCodecRequest): SeasonCodecReply {
   try {
     if (request.kind === 'serialize') return { requestId: request.requestId, result: serializeSeasonCompact(request.state) };
     if (request.kind === 'parse') return { requestId: request.requestId, result: parseSeason(request.text) };
+    if (request.kind === 'parse-sealed') return { requestId: request.requestId, result: parseSealedSeason(request.text) };
     throw new Error('Unsupported save operation.');
   } catch (error) {
     return { requestId: request.requestId, error: error instanceof Error ? error.message : 'The season save could not be processed.' };
@@ -89,6 +97,7 @@ export function createWorkerSeasonCodec(createWorker: (() => SeasonCodecWorker) 
   return {
     serialize: state => run({ kind: 'serialize', state }) as Promise<string>,
     parse: text => run({ kind: 'parse', text }) as Promise<SeasonState>,
+    parseSealed: text => run({ kind: 'parse-sealed', text }) as Promise<SeasonState>,
     dispose() {
       worker?.terminate();
       worker = null;

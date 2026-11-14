@@ -243,6 +243,25 @@ Save format 40 (step 2.8d, 14 November 2026): the game writes saves in a lossles
 
 Real-club worlds (step 2.8c, 14 November 2026; reversible choices taken while the owner asked for continuous work): squads of twelve (the registration maximum) chosen by the friendly selection rule; birth dates estimated as 1 January of the birth year from the pack's age (26 when unknown); fictional wages of EUR 9,000 plus 220 per overall-rating point above 40 (EUR 500 steps, 5,000-30,000), on the same scale as the built-in league so contracts and salary budgets keep working; arenas of 3,000-6,500 seats and usual crowds of 72-82% by squad strength within the league; generated presidents shown as fictional; the fictional sponsor market; no invented derbies between real clubs (`REAL_WORLD_RULES` in `src/world/real-world.ts`).
 
+## Multi-league world and European competitions
+
+Decided by the owner on 14 November 2026 when approving sprint 3: European competitions use their **real format**, and clubs of leagues that were not selected **still play in European competitions, in less detail, as in Football Manager**. The plan, the formats with sources and the steps are in [multi-league-world.md](multi-league-world.md).
+
+Reversible defaults taken under the owner's instruction to keep working (each can change without affecting the rest of the plan):
+- **Three levels of detail:** full clubs (all clubs of the chosen leagues: every system and every game), background clubs (clubs of unchosen leagues and of countries outside the six that play in Europe: real squads of twelve and European games with the match engine; no finances, staff, academy, board, contracts or transfers; their players cannot be signed in this sprint) and background tables (unchosen leagues of the six countries: an estimated final table from squad strength each season, used only for European places).
+- **Selection by country:** a chosen country brings both of its divisions where it has two; at least one country; the European competitions are always included.
+- **Calendar:** domestic games on Saturdays, European games midweek (EuroCup and BCL on Tuesdays and Wednesdays, EuroLeague on Thursdays and also Tuesdays in double-round weeks); every regular season ends on the same weekend; playoff dates are reserved for every possible game.
+- **European places after season one:** each of the six countries keeps its 2026-27 number of places per competition, filled from the final domestic order (EuroLeague, then EuroCup, then BCL); EuroLeague long-term licence clubs keep their place and its one-year places go to the EuroCup winner and the best domestic finisher not yet qualified; clubs from outside the six countries keep their places.
+- **Per-matchday amounts** (running costs, upkeep, facility wear, training gains, ticket income) become per week or per home game when game days stop being one a week.
+- **Ratings rating-3 (step 3.1):** every competition converted to the EuroLeague level through players linking competitions (same season, or a domestic move to the next season at half weight), solved together with a default per kind and tier worth 1,500 minutes; the scale set by top-division and EuroLeague players; small samples pulled towards the player's own league.
+- **Squads the data leaves short (step 3.1):** a pack club needs eight real players; a career world fills each squad to twelve with generated reserves (fictional names, one point below the average of the club's three weakest real players, in the positions it lacks), labelled as generated.
+
+## Save scaling without losing career evidence
+
+14 November 2026, resumed step 3.2: replace the unfinished unchecked checkpoint shortcut with full validation before every write and optional, versioned local integrity fingerprints for subsequent loads. Fingerprints remain outside portable save files; they are corruption checks, not authentication against someone editing their own browser database. Older/unknown fingerprints and unavailable Web Crypto always select strict validation.
+
+Format 41 first reduces repeated data losslessly (`compact-2`) instead of immediately deleting rival-club histories. Financial replay, youth development and historical manager-club attribution currently need those records. This is a reversible implementation sequence within 3.2, not removal of the planned archive work: bounded historical summaries/incremental checks and multi-league measurements remain open. Imported/exported state and deterministic outcomes must stay identical. Full writes remain checked even when that is slower than trusting in-memory state.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all fifteen competitions?

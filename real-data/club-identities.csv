@@ -38,3 +38,188 @@ api_sports_id,display_name,short_name,country,city,arena,primary_colour,primary_
 1263,Anadolu Efes,EFS,Turkey,Istanbul,Basketbol Gelişim Merkezi,navy blue,#002f6c,white,#ffffff,likely,
 1266,Beşiktaş,BJK,Turkey,Istanbul,BJK Akatlar Arena,black,#111111,white,#ffffff,sure,EuroLeague 2026-27
 1270,Fenerbahçe,FEN,Turkey,Istanbul,Ülker Sports and Event Hall,yellow,#ffed00,navy blue,#002d72,sure,
+1264,Bahçeşehir Koleji,BAH,Turkey,Istanbul,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+7931,Bordo Bandırma,BND,Turkey,Bandırma,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1267,Bursaspor,BRS,Turkey,Bursa,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+5678,Çayırova Belediyesi,CAY,Turkey,Kocaeli,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+5505,Denizli Basket,DNZ,Turkey,Denizli,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+5680,Esenler Erokspor,ESE,Turkey,Istanbul,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1271,Galatasaray,GAL,Turkey,Istanbul,,yellow,#fdb912,red,#a90432,likely,Added 14 November 2026 (sprint 3)
+1274,Karşıyaka,KSK,Turkey,İzmir,,green,#00843d,red,#e30613,likely,Added 14 November 2026 (sprint 3)
+7961,Körfez Basket,KRF,Turkey,Kocaeli,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2264,Aliağa Petkimspor,PET,Turkey,Aliağa,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1276,Tofaş,TOF,Turkey,Bursa,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1736,Trabzonspor,TRB,Turkey,Trabzon,,claret,#7b1d3a,sky blue,#6cace4,likely,Added 14 November 2026 (sprint 3)
+1277,Türk Telekom,TTK,Turkey,Ankara,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+605,AEK Athens,AEK,Greece,Athens,,yellow,#ffd700,black,#000000,likely,Added 14 November 2026 (sprint 3)
+606,Aris Thessaloniki,ARI,Greece,Thessaloniki,,yellow,#ffd200,black,#000000,likely,Added 14 November 2026 (sprint 3)
+590,AS Karditsa,KAR,Greece,Karditsa,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+609,Iraklis Thessaloniki,IRA,Greece,Thessaloniki,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+610,Kolossos Rhodes,KOL,Greece,Rhodes,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1535,Lefkada,LEF,Greece,Lefkada,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1529,Maroussi,MAR,Greece,Athens,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6176,Mykonos,MYK,Greece,Mykonos,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+613,PAOK,PAK,Greece,Thessaloniki,,black,#000000,white,#ffffff,likely,Added 14 November 2026 (sprint 3)
+616,Peristeri,PER,Greece,Athens,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+617,Promitheas Patras,PRO,Greece,Patras,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6179,Vikos,VIK,Greece,,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+690,Napoli Basket,NAP,Italy,Naples,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+7903,BC Roma,ROM,Italy,Rome,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+719,Cantù,CAN,Italy,Cantù,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+7904,Maxima Roma,MXR,Italy,Rome,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+725,Reggiana,REG,Italy,Reggio Emilia,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+699,Scafati,SCA,Italy,Scafati,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+700,Derthona Tortona,TOR,Italy,Tortona,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+727,Aquila Trento,TRN,Italy,Trento,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+728,Treviso,TRV,Italy,Treviso,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+729,Trieste,TRS,Italy,Trieste,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+714,APU Udine,UDI,Italy,Udine,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+730,Varese,VAR,Italy,Varese,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+731,Reyer Venezia,VEN,Italy,Venice,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+716,Verona,VER,Italy,Verona,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2330,Basket Zaragoza,ZAR,Spain,Zaragoza,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1139,Bàsquet Girona,GIR,Spain,Girona,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1695,Bilbao Basket,BIL,Spain,Bilbao,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1120,Río Breogán,BRE,Spain,Lugo,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1123,Força Lleida,LLE,Spain,Lleida,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2334,Joventut Badalona,JOV,Spain,Badalona,,green,#00843d,black,#000000,likely,Added 14 November 2026 (sprint 3)
+1127,Básquet Coruña,COR,Spain,A Coruña,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1698,Manresa,MAN,Spain,Manresa,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2335,MoraBanc Andorra,AND,Andorra,Andorra la Vella,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2336,UCAM Murcia,MUR,Spain,Murcia,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2337,Obradoiro,OBR,Spain,Santiago de Compostela,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1699,San Pablo Burgos,BUG,Spain,Burgos,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2339,La Laguna Tenerife,TEN,Spain,San Cristóbal de La Laguna,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2340,Unicaja,UNI,Spain,Málaga,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+22,Boulazac,BOU,France,Boulazac,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+20,Élan Chalon,CHA,France,Chalon-sur-Saône,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+18,Cholet Basket,CHO,France,Cholet,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+10,JDA Dijon,DIJ,France,Dijon,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+17,BCM Gravelines-Dunkerque,GRA,France,Gravelines,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+24,JL Bourg,JLB,France,Bourg-en-Bresse,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+23,Le Mans Sarthe,LMS,France,Le Mans,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+27,Limoges CSP,LIM,France,Limoges,,green,#00843d,white,#ffffff,likely,Added 14 November 2026 (sprint 3)
+100,SLUC Nancy,NCY,France,Nancy,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+21,Nanterre 92,NTR,France,Nanterre,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+3007,Élan Béarnais Pau-Orthez,PAU,France,Pau,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+19,Chorale Roanne,ROA,France,Roanne,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+106,Saint-Quentin,STQ,France,Saint-Quentin,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+25,SIG Strasbourg,SIG,France,Strasbourg,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+95,ADA Blois,BLO,France,Blois,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+104,Aix Maurienne,AIX,France,Aix-les-Bains,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+107,Antibes Sharks,ANT,France,Antibes,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+3067,ASA,ASA,France,,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+114,Caen Basket Calvados,CAE,France,Caen,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+12,Champagne Basket,CHB,France,Reims,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+94,Denain Voltaire,DNV,France,Denain,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+105,ALM Évreux,EVR,France,Évreux,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+110,Fos Provence,FOS,France,Fos-sur-Mer,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1480,Hyères-Toulon,HTV,France,Toulon,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2311,Stade Rochelais,LRO,France,La Rochelle,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1481,STB Le Havre,LHV,France,Le Havre,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+14,Levallois,LEV,France,Levallois-Perret,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+97,Hermine Nantes,NTE,France,Nantes,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+15,Orléans Loiret,ORL,France,Orléans,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+109,Poitiers Basket 86,POI,France,Poitiers,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+99,UJAP Quimper,QUI,France,Quimper,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+101,Rouen Métropole,ROU,France,Rouen,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+102,Saint-Chamond,STC,France,Saint-Chamond,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+98,JA Vichy,VIC,France,Vichy,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1136,Albacete Basket,ABC,Spain,Albacete,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1118,HLA Alicante,ALI,Spain,Alicante,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6507,Caja 87,CJA,Spain,,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6508,Córdoba,CDB,Spain,Córdoba,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1142,Estela,ETL,Spain,,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+284,Estudiantes,EST,Spain,Madrid,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1128,Fibwi Palma,PAL,Spain,Palma,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2332,Fuenlabrada,FUE,Spain,Fuenlabrada,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1124,Gipuzkoa Basket,GIP,Spain,San Sebastián,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2333,Gran Canaria,GCA,Spain,Las Palmas de Gran Canaria,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1125,Fundación CB Granada,GRN,Spain,Granada,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6040,Hestia Menorca,MEN,Spain,Mahón,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1130,Club Ourense Baloncesto,OUR,Spain,Ourense,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1131,Oviedo CB,OVI,Spain,Oviedo,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1132,Palencia Baloncesto,PLN,Spain,Palencia,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6074,Palmer Basket,PMB,Spain,Palma,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1156,Tizona Burgos,TIZ,Spain,Burgos,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1159,Zamora,ZAM,Spain,Zamora,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6499,Avellino Basket,AVE,Italy,Avellino,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+691,Basket Torino,BTO,Italy,Turin,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+718,Brindisi,BRI,Italy,Brindisi,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+704,Juvecaserta,CAS,Italy,Caserta,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+5981,Cento,CEN,Italy,Cento,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+5007,UEB Cividale,CIV,Italy,Cividale del Friuli,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+706,Forlì,FOR,Italy,Forlì,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+721,Fortitudo Bologna,FOB,Italy,Bologna,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+5008,JuVi Cremona,CRM,Italy,Cremona,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6500,Libertas Livorno,LIV,Italy,Livorno,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+7460,Mestre,MES,Italy,Venice,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+7914,Montecatini,MNT,Italy,Montecatini Terme,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+723,Victoria Libertas Pesaro,PES,Italy,Pesaro,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+724,Pistoia,PIS,Italy,Pistoia,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+5009,Rimini,RIM,Italy,Rimini,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+7461,Ruvo di Puglia,RUV,Italy,Ruvo di Puglia,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+726,Dinamo Sassari,SAS,Italy,Sassari,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6158,Sebastiani Rieti,RIE,Italy,Rieti,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+715,Urania Milano,URA,Italy,Milan,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6044,Vigevano,VIG,Italy,Vigevano,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1279,TED Ankara Kolejliler,TED,Turkey,Ankara,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1295,Balıkesir,BLK,Turkey,Balıkesir,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1268,Büyükçekmece,BUY,Turkey,Istanbul,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+3191,CO Basket,COB,Turkey,,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1269,Darüşşafaka,DAR,Turkey,Istanbul,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+3194,Fenerbahçe II,FBK,Turkey,Istanbul,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1300,Final Spor,FIN,Turkey,Bursa,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1272,Gaziantep,GAZ,Turkey,Gaziantep,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6573,Göztepe,GOZ,Turkey,İzmir,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2461,Harem Spor,HAR,Turkey,Istanbul,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1275,iLab Basketbol,ILB,Turkey,,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6574,Kahramanmaraş,KAH,Turkey,Kahramanmaraş,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+7516,Keçiören Bağlum,KEC,Turkey,Ankara,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+5684,Konya BBSK,KON,Turkey,Konya,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1760,Mersin SK,MER,Turkey,Mersin,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1764,MKE Ankaragücü,MKE,Turkey,Ankara,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1273,OGM Ormanspor,OGM,Turkey,Ankara,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+7523,Absheron Lions,ABS,Azerbaijan,Baku,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1389,AEK Larnaca,AEL,Cyprus,Larnaca,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+300,Antwerp Giants,ANW,Belgium,Antwerp,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+464,Bakken Bears,BAK,Denmark,Aarhus,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+5237,Batumi,BAT,Georgia,Batumi,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+933,Benfica,BEN,Portugal,Lisbon,,red,#e3001b,white,#ffffff,likely,Added 14 November 2026 (sprint 3)
+1566,Bnei Herzliya,BNE,Israel,Herzliya,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+410,Cibona,CIB,Croatia,Zagreb,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+975,CSM Oradea,ORA,Romania,Oradea,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2272,Dziki Warszawa,DZI,Poland,Warsaw,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+936,FC Porto,POR,Portugal,Porto,,blue,#003b94,white,#ffffff,likely,Added 14 November 2026 (sprint 3)
+1230,Fribourg Olympic,FRI,Switzerland,Fribourg,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1231,Geneva Lions,GEN,Switzerland,Geneva,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+680,Hapoel Holon,HHO,Israel,Holon,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2556,Igokea,IGO,Bosnia and Herzegovina,Aleksandrovac,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+789,Juventus Utena,JUV,Lithuania,Utena,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+910,Legia Warsaw,LEG,Poland,Warsaw,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1073,Patrioti Levice,LVC,Slovakia,Levice,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+7491,Manchester Basketball,MNC,United Kingdom,Manchester,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+448,Opava,OPA,Czech Republic,Opava,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+449,Pardubice,PRD,Czech Republic,Pardubice,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1374,Rilski Sportist,RIL,Bulgaria,Samokov,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+794,Rytas Vilnius,RYT,Lithuania,Vilnius,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6262,Sabah Baku,SAB,Azerbaijan,Baku,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+495,Salon Vilpas,SVI,Finland,Salo,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+7901,Slavia Prague,SLA,Czech Republic,Prague,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1670,Spartak Subotica,SPA,Serbia,Subotica,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+631,Falco Szombathely,SZO,Hungary,Szombathely,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1663,VEF Riga,VEF,Latvia,Riga,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2521,BC Vienna,VIE,Austria,Vienna,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+852,Landstede Hammers Zwolle,ZWO,Netherlands,Zwolle,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1369,Balkan Botevgrad,BLN,Bulgaria,Botevgrad,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1615,Budućnost,BUD,Montenegro,Podgorica,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1800,Cedevita Olimpija,CED,Slovenia,Ljubljana,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+3419,U-BT Cluj-Napoca,CLU,Romania,Cluj-Napoca,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1792,Hapoel Jerusalem,HJE,Israel,Jerusalem,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2544,KK Bosna,BOS,Bosnia and Herzegovina,Sarajevo,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+790,Lietkabelis,LIE,Lithuania,Panevėžys,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+1329,London Lions,LON,United Kingdom,London,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+791,Neptūnas Klaipėda,NEP,Lithuania,Klaipėda,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+6100,Rīgas Zeļļi,RZE,Latvia,Riga,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+795,Šiauliai,SIA,Lithuania,Šiauliai,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+914,Śląsk Wrocław,SLK,Poland,Wrocław,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill

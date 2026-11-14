@@ -1,5 +1,6 @@
 import type { SeasonState } from '../domain/season';
 import type { MatchState } from '../domain/types';
+import { sealMatches, saveSeal } from './save-seal';
 import { directSeasonCodec, type SeasonCodec } from './season-codec';
 import { readSeasonJournal, writeSeasonCheckpoint } from './season-indexed-db';
 import type { CheckpointReason, SeasonCheckpoint, SeasonJournal } from './season-indexed-db';
@@ -44,21 +45,32 @@ export interface CareerSaveList {
 
 export type CurrentCareerSave = Omit<CareerSaveList, 'entries'>;
 
-type StoredParser = (value: unknown) => Promise<SeasonState>;
+type StoredParser = (value: unknown, seal?: string) => Promise<SeasonState>;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'The stored season data is invalid.';
 }
 
-/** Identical stored text (usually the current save and its newest checkpoint) is validated only once. */
-function storedParser(codec: SeasonCodec): StoredParser {
+/**
+ * Identical stored text (usually the current save and its newest checkpoint) is validated only once. A matching
+ * fingerprint identifies unchanged text fully checked before its local write; other text takes the strict path.
+ */
+function storedParser(codec: SeasonCodec, seals: ReadonlyMap<unknown, string> = new Map()): StoredParser {
   const parsed = new Map<string, Promise<SeasonState>>();
-  return value => {
+  return (value, seal = seals.get(value)) => {
     if (typeof value !== 'string') return Promise.reject(new Error('The stored season must be a save-file string.'));
     let result = parsed.get(value);
-    if (!result) { result = codec.parse(value); parsed.set(value, result); }
+    if (!result) {
+      result = (async () => codec.parseSealed && await sealMatches(value, seal) ? codec.parseSealed(value) : codec.parse(value))();
+      parsed.set(value, result);
+    }
     return result;
   };
+}
+
+/** Each stored text's seal, from the checkpoints that hold it; the current slot shares its newest checkpoint's text. */
+function sealsOf(journal: SeasonJournal): Map<unknown, string> {
+  return new Map(journal.checkpoints.filter(checkpoint => checkpoint.seal).map(checkpoint => [checkpoint.serialized, checkpoint.seal!]));
 }
 
 /** A legacy current slot remains visible until the first journal write preserves it. */
@@ -105,13 +117,13 @@ async function readCurrent(journal: SeasonJournal, parse: StoredParser): Promise
 export async function readCurrentCareer(codec: SeasonCodec = directSeasonCodec, known?: { revision: number; state: SeasonState }): Promise<CurrentCareerSave> {
   const journal = await readSeasonJournal();
   if (known && journal.revision > 0 && journal.revision === known.revision && typeof journal.current === 'string') return { revision: journal.revision, current: known.state, currentError: null };
-  return readCurrent(journal, storedParser(codec));
+  return readCurrent(journal, storedParser(codec, sealsOf(journal)));
 }
 
 /** Inspect every saved snapshot without silently replacing a damaged current save. */
 export async function readCareerSaves(codec: SeasonCodec = directSeasonCodec): Promise<CareerSaveList> {
   const journal = await readSeasonJournal();
-  const parse = storedParser(codec);
+  const parse = storedParser(codec, sealsOf(journal));
   const current = await readCurrent(journal, parse);
   const entries: CareerSaveEntry[] = [];
   for (const checkpoint of checkpointsFor(journal)) entries.push(await describeCheckpoint(checkpoint, parse));
@@ -124,11 +136,15 @@ export async function loadCareerCheckpoint(revision: number, codec: SeasonCodec 
   const journal = await readSeasonJournal();
   const checkpoint = checkpointsFor(journal).find(entry => entry.revision === revision);
   if (!checkpoint) throw new Error('That checkpoint is no longer available. Refresh save history and choose another checkpoint.');
-  try { return { state: await storedParser(codec)(checkpoint.serialized), revision: journal.revision }; }
+  try { return { state: await storedParser(codec, sealsOf(journal))(checkpoint.serialized), revision: journal.revision }; }
   catch (error) { throw new Error(`This checkpoint cannot be loaded. ${errorMessage(error)}`); }
 }
 
-/** Serialization validates the unchanged season format before any local write begins. */
+/**
+ * Fully validate every checkpoint before any local write, then optionally fingerprint that exact serialized text.
+ * An unavailable fingerprint only costs a full check on the next load; it never prevents saving a valid career.
+ */
 export async function saveCareerCheckpoint(state: SeasonState, expectedRevision: number, reason: CheckpointReason, codec: SeasonCodec = directSeasonCodec): Promise<SeasonCheckpoint> {
-  return writeSeasonCheckpoint(await codec.serialize(state), expectedRevision, reason);
+  const serialized = await codec.serialize(state);
+  return writeSeasonCheckpoint(serialized, expectedRevision, reason, await saveSeal(serialized));
 }

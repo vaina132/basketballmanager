@@ -1,3 +1,4 @@
+import { SEAL_PATTERN } from './save-seal';
 import { MAX_SEASON_SAVE_BYTES } from './season-limits';
 
 export const MAX_SEASON_CHECKPOINTS = 5;
@@ -12,6 +13,8 @@ export interface SeasonCheckpoint {
   reason: CheckpointReason;
   /** Stored payloads stay raw so one damaged snapshot cannot hide healthy history. */
   serialized: unknown;
+  /** Optional integrity fingerprint of fully validated text; its checks version is verified by the save service. */
+  seal?: string;
 }
 
 export interface SeasonJournal {
@@ -30,6 +33,7 @@ export class SeasonSaveConflictError extends Error {
 
 const REASONS: readonly CheckpointReason[] = ['manual', 'new-game', 'matchday', 'rollover', 'recovery', 'legacy'];
 const CHECKPOINT_FIELDS = ['revision', 'savedAt', 'reason', 'serialized'];
+const OPTIONAL_CHECKPOINT_FIELDS = ['seal'];
 
 function metadataError(detail: string): never { throw new Error(`The local career checkpoint metadata is damaged: ${detail}.`); }
 
@@ -51,13 +55,15 @@ function validateSerialized(value: unknown): asserts value is string {
 function decodeCheckpoint(value: unknown): SeasonCheckpoint {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) metadataError('a checkpoint is not an object');
   const fields = value as Record<string, unknown>;
-  if (CHECKPOINT_FIELDS.some(key => !Object.hasOwn(fields, key)) || Object.keys(fields).some(key => !CHECKPOINT_FIELDS.includes(key))) metadataError('a checkpoint has missing or unsupported fields');
+  if (CHECKPOINT_FIELDS.some(key => !Object.hasOwn(fields, key)) || Object.keys(fields).some(key => !CHECKPOINT_FIELDS.includes(key) && !OPTIONAL_CHECKPOINT_FIELDS.includes(key))) metadataError('a checkpoint has missing or unsupported fields');
+  // A malformed seal is ignored rather than trusted: the save is then checked in full.
+  const seal = typeof fields.seal === 'string' && SEAL_PATTERN.test(fields.seal) ? fields.seal : undefined;
   if (!validRevision(fields.revision)) metadataError('a checkpoint revision is invalid');
   if (!REASONS.includes(fields.reason as CheckpointReason)) metadataError('a checkpoint reason is invalid');
   if (fields.reason === 'legacy') {
     if (fields.revision !== 0 || fields.savedAt !== null) metadataError('a legacy checkpoint must use revision zero and an unknown save time');
   } else if (fields.revision === 0 || !validSavedAt(fields.savedAt)) metadataError('a checkpoint save time or revision is invalid');
-  return { revision: fields.revision, savedAt: fields.savedAt as string | null, reason: fields.reason as CheckpointReason, serialized: fields.serialized };
+  return { revision: fields.revision, savedAt: fields.savedAt as string | null, reason: fields.reason as CheckpointReason, serialized: fields.serialized, ...(seal ? { seal } : {}) };
 }
 
 /** Validate bookkeeping only; game payloads are independently validated by the save service. */
@@ -83,12 +89,13 @@ export function decodeSeasonJournal(current: unknown, storedRevision: unknown, r
 }
 
 /** Plan a compare-and-swap without mutating the snapshot or dropping it on failure. */
-export function prepareSeasonCheckpoint(journal: SeasonJournal, serialized: string, expectedRevision: number, reason: CheckpointReason, savedAt: string): { checkpoint: SeasonCheckpoint; checkpoints: SeasonCheckpoint[] } {
+export function prepareSeasonCheckpoint(journal: SeasonJournal, serialized: string, expectedRevision: number, reason: CheckpointReason, savedAt: string, seal?: string): { checkpoint: SeasonCheckpoint; checkpoints: SeasonCheckpoint[] } {
   if (!validRevision(expectedRevision)) throw new Error('Choose a valid expected local career revision.');
   if (journal.revision !== expectedRevision) throw new SeasonSaveConflictError();
   if (reason === 'legacy' || !REASONS.includes(reason)) throw new Error('Legacy checkpoints are read-only. Choose a supported save reason.');
   if (journal.revision >= MAX_SEASON_REVISION) throw new Error('The local career revision limit has been reached. Export your game before creating a new local save.');
   validateSerialized(serialized);
-  const checkpoint = decodeCheckpoint({ revision: journal.revision + 1, savedAt, reason, serialized });
+  if (seal !== undefined && !SEAL_PATTERN.test(seal)) throw new Error('A checkpoint seal must be 64 hexadecimal digits.');
+  const checkpoint = decodeCheckpoint({ revision: journal.revision + 1, savedAt, reason, serialized, ...(seal ? { seal } : {}) });
   return { checkpoint, checkpoints: [checkpoint, ...journal.checkpoints].slice(0, MAX_SEASON_CHECKPOINTS) };
 }

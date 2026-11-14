@@ -6,7 +6,7 @@ import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { requireWorldContexts, seasonRounds, validateWorld } from '../src/world/career-world';
 import { MAX_CONTRACT_WAGE, MIN_CONTRACT_WAGE, WAGE_STEP } from '../src/world/employment-policy';
 import { overallRating } from '../src/world/overall-rating';
-import { careerCompetitions, REAL_WORLD_RULES, realWorldWage, worldFromPack } from '../src/world/real-world';
+import { careerCompetitions, isGeneratedReserve, REAL_WORLD_RULES, realWorldWage, worldFromPack } from '../src/world/real-world';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
 
 const positions = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
@@ -53,6 +53,29 @@ describe('a career world from a real-data pack', () => {
     expect(world.finances[0]!.venue).toBe('Alpha Hall');
     expect(world.finances[1]!.venue).toBe('Club B Arena');
     expect(new Set(world.clubs[0]!.players.map(item => item.number)).size).toBe(12);
+  });
+
+  it('fills a squad the data leaves short with generated reserves below its weakest real players', () => {
+    // Club A keeps only nine of its players in this variant.
+    const shortPack: DataPack = { ...pack, clubs: pack.clubs.map(club => club.id === 'club-a' ? { ...club, playerIds: club.playerIds.slice(0, 9) } : club) };
+    const world = worldFromPack(shortPack, 'competition-league');
+    const club = world.clubs.find(item => item.id === 'club-a')!;
+    expect(club.players).toHaveLength(12);
+    const reserves = club.players.filter(item => isGeneratedReserve(item.id)), real = club.players.filter(item => !isGeneratedReserve(item.id));
+    expect(reserves.map(item => item.id)).toEqual(['club-a-reserve-1', 'club-a-reserve-2', 'club-a-reserve-3']);
+    expect(new Set(club.players.map(item => item.number)).size).toBe(12);
+    expect(new Set(club.players.map(item => item.name)).size).toBe(12);
+    const weakestReal = Math.min(...real.map(item => overallRating(item.attributes, item.position)));
+    for (const reserve of reserves) {
+      expect(overallRating(reserve.attributes, reserve.position)).toBeLessThan(weakestReal);
+      expect(world.playerProfiles[reserve.id]).toMatchObject({ source: 'generated-reserve' });
+      expect(Number(world.playerProfiles[reserve.id]!.dateOfBirth.slice(0, 4))).toBeGreaterThanOrEqual(2004);
+      expect(world.wages[reserve.id]).toBe(realWorldWage(overallRating(reserve.attributes, reserve.position)));
+    }
+    // Full squads get no reserves, and the same club always gets the same reserves.
+    expect(world.clubs.filter(item => item.id !== 'club-a').every(item => item.players.every(member => !isGeneratedReserve(member.id)))).toBe(true);
+    expect(worldFromPack(shortPack, 'competition-league').clubs[0]).toEqual(club);
+    expect(() => validateWorld(world)).not.toThrow();
   });
 
   it('estimates birth dates from ages and gives fictional wages within the contract rules', () => {

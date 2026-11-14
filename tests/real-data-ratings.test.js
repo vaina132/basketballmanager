@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeRatings, leagueGap, RATING_RULES, ratingOverall, trustedFreeThrowSeasons } from '../scripts/real-data-ratings.mjs';
+import { competitionLevels, computeRatings, leagueGap, RATING_RULES, ratingOverall, trustedFreeThrowSeasons } from '../scripts/real-data-ratings.mjs';
 
 const GAP = { volume: { twoAttempts: 0.85, threeAttempts: 0.85, rebounds: 0.85, assists: 0.85, minutesPerGame: 0.95 }, shooting: { two: 0.02, three: 0.01 }, players: 6, measured: true };
 
@@ -66,7 +66,7 @@ describe('real-data ratings', () => {
     const home = rated.find(rating => rating.player_id === 'home'), away = rated.find(rating => rating.player_id === 'away');
     expect(ratingOverall(away)).toBeGreaterThan(ratingOverall(home));
     for (const key of ['two_point', 'rebounding', 'passing']) expect(away[key]).toBeGreaterThanOrEqual(home[key]);
-    expect(home.method).toMatchObject({ rules: 'rating-2', leagueGap: { volume: GAP.volume, shooting: GAP.shooting } });
+    expect(home.method).toMatchObject({ rules: 'rating-3', mainCompetition: 'League', conversion: { League: { volume: GAP.volume, shooting: GAP.shooting } } });
   });
 
   it('does not give a handful of full games top minutes, stamina or defence', () => {
@@ -80,6 +80,50 @@ describe('real-data ratings', () => {
     expect(by('hot').stamina).toBeLessThan(by('steady').stamina);
     expect(by('hot').defense).toBeLessThanOrEqual(by('steady').defense);
     expect(by('hot').method.weightedGames).toBe(8);
+  });
+
+  describe('rating-3: every competition converted to the reference level', () => {
+    const COMPETITIONS = [
+      { name: 'EuroLeague', kind: 'european', tier: 1 }, { name: 'Top', kind: 'domestic', tier: 1 },
+      { name: 'Second', kind: 'domestic', tier: 2 }, { name: 'Quiet', kind: 'domestic', tier: 1 },
+    ];
+    // Twenty players play the top league and the EuroLeague in one season, rebounding a quarter less in Europe;
+    // twenty others moved from the second division to the top league, rebounding a fifth less after the move.
+    const european = Array.from({ length: 20 }, (_, index) => [row(`e${index}`, { competition: 'Top' }), row(`e${index}`, { competition: 'EuroLeague', kind: 'european', rebounds: 60 })]).flat();
+    const movers = Array.from({ length: 20 }, (_, index) => [row(`m${index}`, { competition: 'Second', season_label: '2025-26', rebounds: 100 }), row(`m${index}`, { competition: 'Top' })]).flat();
+
+    it('measures leagues linked directly, chains a league linked only through another, and keeps defaults without links', () => {
+      const levels = competitionLevels([...european, ...movers], COMPETITIONS);
+      expect(levels.get('EuroLeague')).toMatchObject({ volume: { rebounds: 1, twoAttempts: 1 }, shooting: { two: 0, three: 0 } });
+      const top = levels.get('Top'), second = levels.get('Second'), quiet = levels.get('Quiet');
+      // Measured: 20 x 500 minutes of links outweigh the default's 1,500 minutes.
+      expect(top.volume.rebounds).toBeGreaterThan(0.75); expect(top.volume.rebounds).toBeLessThan(0.8);
+      expect(top.volume.twoAttempts).toBeGreaterThan(0.93);
+      expect(top).toMatchObject({ measured: true, players: 40 });
+      // The second division reaches the EuroLeague only through the top league, and sits below it.
+      expect(second.measured).toBe(true);
+      expect(second.volume.rebounds).toBeLessThan(top.volume.rebounds); expect(second.volume.rebounds).toBeLessThan(0.7);
+      expect(second.volume.rebounds).toBeGreaterThanOrEqual(RATING_RULES.levels.volumeRange[0]);
+      // No player links the quiet league: it keeps the default for a top division.
+      expect(quiet).toMatchObject({ volume: { twoAttempts: 0.85, rebounds: 0.85, minutesPerGame: 1 }, shooting: { two: 0.02, three: 0.01 }, players: 0, measured: false });
+    });
+
+    it('rates the same production lower in a second division, and lets only top divisions and the reference set the scale', () => {
+      const levels = competitionLevels([...european, ...movers], COMPETITIONS);
+      const line = { two_made: 70, three_made: 32, rebounds: 120, assists: 60 };
+      // The varied synthetic population plays the top league and sets the scale.
+      const both = [...rows.map(item => ({ ...item, competition: 'Top' })), row('top', { ...line, competition: 'Top' }), row('second', { ...line, competition: 'Second' })];
+      const profiles = [...players, { id: 'top', full_name: 'Top', position: 'Forward', age_observed: 27 }, { id: 'second', full_name: 'Second', position: 'Forward', age_observed: 27 }];
+      const rated = computeRatings(both, profiles, levels, undefined, { competitions: COMPETITIONS });
+      const top = rated.find(rating => rating.player_id === 'top'), second = rated.find(rating => rating.player_id === 'second');
+      expect(ratingOverall(top)).toBeGreaterThan(ratingOverall(second));
+      expect(second.method).toMatchObject({ rules: 'rating-3', mainCompetition: 'Second', conversion: { Second: { volume: levels.get('Second').volume } } });
+      // A crowd of strong-looking second-division players does not move the top league's scale.
+      const crowd = Array.from({ length: 30 }, (_, index) => row(`c${index}`, { competition: 'Second', two_made: 90, rebounds: 200 }));
+      const crowdProfiles = crowd.map(item => ({ id: item.player_id, full_name: item.player_id, position: 'Forward', age_observed: 27 }));
+      const withCrowd = computeRatings([...both, ...crowd], [...profiles, ...crowdProfiles], levels, undefined, { competitions: COMPETITIONS });
+      expect(withCrowd.find(rating => rating.player_id === 'top')).toMatchObject({ two_point: top.two_point, rebounding: top.rebounding });
+    });
   });
 
   it('reports the game\'s own overall rating for a stored rating row', () => {

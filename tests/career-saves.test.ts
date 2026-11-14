@@ -31,6 +31,9 @@ function previousFormat(state: SeasonState, version: 1 | 2): string {
   return JSON.stringify({ format: 'basketball-manager-season', formatVersion: version, engineVersion: 'possession-3', state: value });
 }
 
+// Web Crypto is available here: checkpoints carry a fingerprint only after full validation.
+const SEALED = expect.stringMatching(/^[0-9a-f]{64}$/);
+
 beforeEach(() => { vi.resetAllMocks(); });
 
 describe('validated career checkpoint listing', () => {
@@ -133,7 +136,7 @@ describe('checkpoint restore and append', () => {
     const next = { ...checkpoint(10, olderState), reason: 'recovery' as const };
     storage.writeSeasonCheckpoint.mockResolvedValue(next);
     expect(await saveCareerCheckpoint(restored.state, restored.revision, 'recovery')).toEqual(next);
-    expect(storage.writeSeasonCheckpoint).toHaveBeenCalledExactlyOnceWith(older.serialized, 9, 'recovery');
+    expect(storage.writeSeasonCheckpoint).toHaveBeenCalledExactlyOnceWith(older.serialized, 9, 'recovery', SEALED);
     expect(journal.checkpoints).toEqual([newer, older]);
     expect(journal.current).toBe(newer.serialized);
   });
@@ -158,7 +161,7 @@ describe('checkpoint restore and append', () => {
     const state = createSeason(7), conflict = new Error('A newer local save exists.');
     storage.writeSeasonCheckpoint.mockRejectedValue(conflict);
     await expect(saveCareerCheckpoint(state, 4, 'matchday')).rejects.toBe(conflict);
-    expect(storage.writeSeasonCheckpoint).toHaveBeenCalledExactlyOnceWith(serializeSeason(state), 4, 'matchday');
+    expect(storage.writeSeasonCheckpoint).toHaveBeenCalledExactlyOnceWith(serializeSeason(state), 4, 'matchday', SEALED);
     expect(storage.readSeasonJournal).not.toHaveBeenCalled();
   });
 
@@ -167,7 +170,7 @@ describe('checkpoint restore and append', () => {
     storage.writeSeasonCheckpoint.mockResolvedValue(saved);
     expect(await saveCareerCheckpoint(state, 1, 'manual')).toEqual(saved);
     const serialized = storage.writeSeasonCheckpoint.mock.calls[0]![0] as string;
-    expect(Object.keys(JSON.parse(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'encoding', 'strings', 'shapes', 'state']);
+    expect(Object.keys(JSON.parse(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'encoding', 'strings', 'shapes', 'nodes', 'state']);
     expect(JSON.parse(serialized).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(parseSeason(serialized)).toEqual(state);
     expect(state).toEqual(before);
@@ -248,6 +251,6 @@ describe('save history work and the background codec', () => {
     await saveCareerCheckpoint(state, 1, 'manual', codec);
     expect(parsed).toEqual([saved.serialized]);
     expect(serialized).toEqual([state]);
-    expect(storage.writeSeasonCheckpoint).toHaveBeenCalledExactlyOnceWith(saved.serialized, 1, 'manual');
+    expect(storage.writeSeasonCheckpoint).toHaveBeenCalledExactlyOnceWith(saved.serialized, 1, 'manual', SEALED);
   });
 });

@@ -1,6 +1,12 @@
 # Implementation status
 
-Updated: 12 November 2026.
+Updated: 14 November 2026.
+
+## Current work: multi-league sprint 3
+
+Level 7 and the real-data pilot are complete. Step 3.1 supplies a private pack of 13 competitions, 223 clubs and 3,087 players. Nine even-sized domestic leagues currently support separate careers; the 17-club Turkish second division needs byes. Europe is imported data, with competition gameplay still planned. See [the active step order](multi-league-world.md#steps).
+
+Step 3.2 is in progress: format 41 losslessly shares repeated save data, every checkpoint is fully validated before writing, and versioned local fingerprints allow fast reads of unchanged validated checkpoints. Unavailable fingerprinting falls back safely; imports/exports keep strict checks, and formats 1–40 migrate. A reproducible three-season benchmark and genuine format-40 continuation fixtures cover the change. Bounded historical summaries/incremental write validation remain open; multi-league performance targets are not yet accepted. [HANDOVER.md](../HANDOVER.md) records the recovered work, verification and next steps.
 
 ## Design
 

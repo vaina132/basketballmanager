@@ -8,7 +8,9 @@ import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { MAX_WORLD_CLUBS, requireWorldContexts, roundOrdinal, seasonRounds, validateWorld, worldRounds } from '../src/world/career-world';
 import { availableCoaches } from '../src/world/coaching';
-import { setEmploymentDelegation } from '../src/world/employment';
+import { offerPlayerContract, setEmploymentDelegation } from '../src/world/employment';
+import { getAvailablePlayers, MIN_CONTRACT_WAGE, quotePlayerContract } from '../src/world/employment-policy';
+import { getCareerWage } from '../src/world/player-catalog';
 import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
 import { advanceSeason, createSchedule, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
@@ -126,5 +128,19 @@ describe('a full career in an eight-club league (14 matchdays)', () => {
 
   it('saves and loads the eight-club career exactly at the start, the end and the next opening', () => {
     for (const state of [opening, complete, nextSeason]) expect(parseSeason(serializeSeason(state))).toEqual(state);
+  }, 600_000);
+
+  it('keeps contract offers from the offseason and from the next season in order (step 3.2 fix)', () => {
+    // The check once ordered offers as season x 22 + matchday x 2, which only works for ten matchdays: offers in the
+    // offseason after matchday 14 sorted after offers early in season two, and the career could no longer be saved
+    // (found in a real 34-matchday league at the end of season two).
+    const managed = nextSeason.clubs.find(club => club.id === nextSeason.managedClubId)!;
+    const candidates = [...managed.players.map(player => player.id), ...getAvailablePlayers(nextSeason).map(player => player.id)];
+    const playerId = candidates.find(id => quotePlayerContract(nextSeason, id, getCareerWage(nextSeason, id), 1).canOffer)!;
+    // A low offer on the opening matchday of season two: the player turns it down, and the answer is recorded.
+    const state = offerPlayerContract(nextSeason, playerId, MIN_CONTRACT_WAGE, 1);
+    expect(state.negotiations.records.some(entry => entry.seasonNumber === 1 && entry.status === 'complete')).toBe(true);
+    expect(state.negotiations.records.at(-1)).toMatchObject({ seasonNumber: 2, round: 1, status: 'active', playerId });
+    expect(parseSeason(serializeSeason(state))).toEqual(state);
   }, 600_000);
 });

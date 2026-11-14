@@ -4,6 +4,7 @@ import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/sto
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { testWorld } from './world-fixtures';
+import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 
 const roundTrip = (value: unknown) => expandJson(JSON.parse(JSON.stringify(compactJson(value))));
 
@@ -40,7 +41,7 @@ describe('the compact save layout', () => {
     expect(parseSeason(plain)).toEqual(state);
     expect(compact.length).toBeLessThan(plain.length * 0.5);
     const file = JSON.parse(compact);
-    expect(file).toMatchObject({ formatVersion: 40, encoding: 'compact-1' });
+    expect(file).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-2' });
     expect(() => parseSeason(JSON.stringify({ ...file, encoding: 'other' }))).toThrow(/unsupported save encoding/);
     // Change the managed club's seed field inside the compact state: the ordinary checks must still notice.
     const seedIndex = file.shapes[file.state[1]].indexOf('seed');

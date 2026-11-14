@@ -76,7 +76,7 @@ export async function readSeasonJournal(): Promise<SeasonJournal> {
 }
 
 /** Current, revision, retained legacy snapshot and pruning commit or abort together. */
-export async function writeSeasonCheckpoint(serialized: string, expectedRevision: number, reason: CheckpointReason): Promise<SeasonCheckpoint> {
+export async function writeSeasonCheckpoint(serialized: string, expectedRevision: number, reason: CheckpointReason, seal?: string): Promise<SeasonCheckpoint> {
   const database = await openDatabase();
   try {
     return await new Promise<SeasonCheckpoint>((resolve, reject) => {
@@ -89,7 +89,7 @@ export async function writeSeasonCheckpoint(serialized: string, expectedRevision
         transaction.abort();
       };
       readJournalSnapshot(transaction, journal => {
-        const planned = prepareSeasonCheckpoint(journal, serialized, expectedRevision, reason, new Date().toISOString());
+        const planned = prepareSeasonCheckpoint(journal, serialized, expectedRevision, reason, new Date().toISOString(), seal);
         const seasons = transaction.objectStore(STORE_NAME), checkpoints = transaction.objectStore(CHECKPOINT_STORE_NAME);
         checkpoint = planned.checkpoint;
         if (journal.revision === 0 && journal.checkpoints[0]?.reason === 'legacy') checkpoints.put(journal.checkpoints[0]);

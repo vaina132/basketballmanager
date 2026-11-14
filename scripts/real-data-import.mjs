@@ -7,7 +7,7 @@
  * games whose player statistics are stored are not requested again. Each run is recorded in `import_runs`, and every
  * problem found is listed in `data_quality_issues`. The game never reads this database directly.
  *
- *   node scripts/real-data-import.mjs [--budget 1500]
+ *   node scripts/real-data-import.mjs [--budget 1500] [--only 104,102] [--refresh-stats]   (--only: provider league IDs to import)
  */
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -23,11 +23,42 @@ const budgetArg = process.argv.indexOf('--budget');
 const BUDGET = budgetArg > 0 ? Number(process.argv[budgetArg + 1]) : 1500;
 const TODAY = new Date().toISOString().slice(0, 10);
 
-// Pilot scope (owner's plan, phase 5): the German BBL and the EuroLeague, previous and current season.
-const PILOT = [
-  { providerId: '40', name: 'Basketball Bundesliga', country: 'Germany', tier: 1, kind: 'domestic', seasons: [['2025-26', '2025-2026'], ['2026-27', '2026-2027']] },
-  { providerId: '120', name: 'EuroLeague', country: null, tier: 1, kind: 'european', seasons: [['2025-26', '2025'], ['2026-27', '2026']] },
-];
+const onlyArg = process.argv.indexOf('--only');
+const ONLY = onlyArg > 0 ? String(process.argv[onlyArg + 1] ?? '').split(',').map(id => id.trim()).filter(Boolean) : null;
+/** --refresh-stats requests the player statistics of every finished game again (for example after a parsing fix); use it with --only. */
+const REFRESH_STATS = process.argv.includes('--refresh-stats');
+if (REFRESH_STATS && !ONLY) throw new Error('--refresh-stats requests every finished game again: name the leagues with --only.');
+
+const DOMESTIC_SEASONS = Object.freeze([['2025-26', '2025-2026'], ['2026-27', '2026-2027']]);
+const EUROPEAN_SEASONS = Object.freeze([['2025-26', '2025'], ['2026-27', '2026']]);
+/**
+ * First-release scope (owner, 13 November 2026): top and second divisions of Turkey, Spain, Italy and France, top
+ * divisions of Greece and Germany, and the three European competitions; previous and current season. The pilot
+ * imported the first two; sprint 3 adds the rest (docs/multi-league-world.md, step 3.1). IDs are API-Sports leagues.
+ */
+export const COMPETITIONS = Object.freeze([
+  { providerId: '40', name: 'Basketball Bundesliga', country: 'Germany', tier: 1, kind: 'domestic', seasons: DOMESTIC_SEASONS },
+  { providerId: '120', name: 'EuroLeague', country: null, tier: 1, kind: 'european', seasons: EUROPEAN_SEASONS },
+  { providerId: '104', name: 'Basketbol Süper Ligi', country: 'Turkey', tier: 1, kind: 'domestic', seasons: DOMESTIC_SEASONS },
+  { providerId: '102', name: 'Türkiye Basketbol Ligi', country: 'Turkey', tier: 2, kind: 'domestic', seasons: DOMESTIC_SEASONS },
+  { providerId: '117', name: 'Liga ACB', country: 'Spain', tier: 1, kind: 'domestic', seasons: DOMESTIC_SEASONS },
+  { providerId: '95', name: 'Primera FEB', country: 'Spain', tier: 2, kind: 'domestic', seasons: DOMESTIC_SEASONS },
+  { providerId: '52', name: 'Lega Basket Serie A', country: 'Italy', tier: 1, kind: 'domestic', seasons: DOMESTIC_SEASONS },
+  { providerId: '242', name: 'Serie A2', country: 'Italy', tier: 2, kind: 'domestic', seasons: DOMESTIC_SEASONS },
+  { providerId: '2', name: 'LNB Élite', country: 'France', tier: 1, kind: 'domestic', seasons: DOMESTIC_SEASONS },
+  { providerId: '8', name: 'Élite 2', country: 'France', tier: 2, kind: 'domestic', seasons: DOMESTIC_SEASONS },
+  { providerId: '45', name: 'Greek Basket League', country: 'Greece', tier: 1, kind: 'domestic', seasons: DOMESTIC_SEASONS },
+  { providerId: '194', name: 'EuroCup', country: null, tier: 2, kind: 'european', seasons: EUROPEAN_SEASONS },
+  { providerId: '202', name: 'Basketball Champions League', country: null, tier: 2, kind: 'european', seasons: EUROPEAN_SEASONS },
+]);
+
+/** The competitions one run imports: all of them, or those named with --only (unknown IDs are refused). */
+export function competitionsToImport(only = null) {
+  if (!only) return [...COMPETITIONS];
+  const unknown = only.filter(id => !COMPETITIONS.some(competition => competition.providerId === id));
+  if (unknown.length || !only.length) throw new Error(`Unknown league ID(s) for --only: ${unknown.join(', ') || '(none given)'}. Known: ${COMPETITIONS.map(item => `${item.providerId} ${item.name}`).join('; ')}.`);
+  return COMPETITIONS.filter(competition => only.includes(competition.providerId));
+}
 const FINISHED = new Set(['FT', 'AOT']);
 
 async function secret(file, label) {
@@ -96,14 +127,20 @@ export function displayName(providerName) {
   const parts = name.split(' ');
   return `${parts.at(-1)} ${parts.slice(0, -1).join(' ')}`;
 }
-const seconds = minutes => { const match = /^(\d+):(\d{1,2})$/.exec(String(minutes ?? '')); return match ? Number(match[1]) * 60 + Number(match[2]) : null; };
+/** Playing time in seconds: the provider writes "25:14" for most leagues and whole minutes ("25") for some, such as the Italian Serie A. */
+export const seconds = minutes => {
+  const text = String(minutes ?? '').trim(), match = /^(\d+):(\d{1,2})$/.exec(text);
+  const value = match && Number(match[2]) < 60 ? Number(match[1]) * 60 + Number(match[2]) : /^\d+$/.test(text) ? Number(text) * 60 : null;
+  return Number.isSafeInteger(value) ? value : null;
+};
 const issues = [];
 const issue = (entityType, entityRef, text, details) => issues.push({ entity_type: entityType, entity_ref: entityRef, issue: text, details: details ?? null });
 
 async function main() {
   API_KEY = await secret('api-sports-key.local', 'API-Sports key');
   DB_KEY = await secret('supabase-key.local', 'Supabase secret key');
-  const [run] = await write('import_runs', [{ provider: PROVIDER, scope: { competitions: PILOT.map(item => ({ provider_id: item.providerId, seasons: item.seasons.map(([label]) => label) })) } }], { returning: true });
+  const SCOPE = competitionsToImport(ONLY);
+  const [run] = await write('import_runs', [{ provider: PROVIDER, scope: { competitions: SCOPE.map(item => ({ provider_id: item.providerId, seasons: item.seasons.map(([label]) => label) })) } }], { returning: true });
   const counts = { clubsAdded: 0, playersAdded: 0, memberships: 0, games: 0, boxScoreGames: 0, boxScoreRows: 0 };
   try {
     const competitionIds = new Map((await selectAll(`competition_provider_ids?provider=eq.${PROVIDER}&select=provider_id,competition_id`)).map(row => [row.provider_id, row.competition_id]));
@@ -133,7 +170,7 @@ async function main() {
       if (known.length) await write('players', known.map(entry => ({ id: playerIds.get(String(entry.id)), full_name: displayName(entry.name), provider_name: entry.name, nationality: entry.country ?? null, position: entry.position ?? null, age_observed: entry.age ?? null, age_observed_on: entry.age ? TODAY : null, updated_at: new Date().toISOString() })), { onConflict: 'id' });
     }
 
-    for (const competition of PILOT) {
+    for (const competition of SCOPE) {
       let competitionId = competitionIds.get(competition.providerId);
       if (!competitionId) {
         const [row] = await write('competitions', [{ name: competition.name, country: competition.country, tier: competition.tier, kind: competition.kind }], { returning: true });
@@ -182,7 +219,7 @@ async function main() {
 
         // Player statistics for finished games not yet stored, several games per request (paid plan).
         const byProviderId = new Map(savedGames.map(row => [row.provider_id, row]));
-        const pending = games.filter(game => FINISHED.has(game.status?.short) && (stored.get(String(game.id))?.stats_rows ?? null) === null).map(game => String(game.id));
+        const pending = games.filter(game => FINISHED.has(game.status?.short) && (REFRESH_STATS || (stored.get(String(game.id))?.stats_rows ?? null) === null)).map(game => String(game.id));
         let batch = 20;
         for (let start = 0; start < pending.length; start += batch) {
           let ids = pending.slice(start, start + batch), lines;

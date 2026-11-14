@@ -5,7 +5,7 @@ import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/ma
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { getClubAcademy, quoteAcademyPromotion } from '../src/world/academy-policy';
 import { offerAcademyPromotion } from '../src/world/academy';
-import { enableYouthCompetition, getYouthFixtures, getYouthPlayerStatus, getYouthStandings } from '../src/world/youth-competition';
+import { enableYouthCompetition, getYouthFixtures, getYouthFixtureTeams, getYouthPlayerStatus, getYouthStandings } from '../src/world/youth-competition';
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
 import { advanceYouthCareer as advance, createYouthCompetitionCareers, createYouthInjuryCareers, createYouthShortageCareers, createManagedYouthShortageCareers } from './helpers/youth-competition-careers';
 import { currentSeasonFile, expectedMigration } from './helpers/season-format';
@@ -87,9 +87,25 @@ describe('youth competition persistence and chronological academy replay', () =>
     expect(advance(restore(careers.pending))).toEqual(careers.promoted);
   });
 
-  it('archives the full competition and replenishes only at the next opening', () => {
+  it('archives complete results and reconstructable squads and replenishes only at the next opening', () => {
     for (const key of ['complete', 'opening', 'openingNext']) expect(restore(careers[key])).toEqual(careers[key]);
-    expect(careers.opening.youthCompetition.seasons[0]).toEqual(careers.complete.youthCompetition.seasons[0]);
+    const originalSeason = careers.complete.youthCompetition.seasons[0], archived = careers.opening.youthCompetition.seasons[0];
+    expect({ ...archived, fixtures: originalSeason.fixtures }).toEqual(originalSeason);
+    expect(archived.fixtures.map(fixture => fixture.id)).toEqual(originalSeason.fixtures.map(fixture => fixture.id));
+    const latestByClub = new Map();
+    for (const fixture of originalSeason.fixtures) for (const id of [fixture.homeClubId, fixture.awayClubId]) latestByClub.set(id, fixture.id);
+    let outcomes = 0;
+    for (const [index, fixture] of archived.fixtures.entries()) {
+      const original = originalSeason.fixtures[index];
+      expect(getYouthFixtureTeams(fixture, careers.opening)).toEqual({ home: original.home, away: original.away });
+      if (fixture.detail === 'outcome') {
+        expect([fixture.homeClubId, fixture.awayClubId]).not.toContain(careers.complete.managedClubId);
+        expect([fixture.homeClubId, fixture.awayClubId].some(id => latestByClub.get(id) === fixture.id)).toBe(false);
+        expect(fixture).toEqual({ ...original, home: null, away: null, startingConditions: null, detail: 'outcome', playerIds: { home: original.home.players.map(player => player.id), away: original.away.players.map(player => player.id) } });
+        outcomes += 1;
+      } else expect(fixture).toEqual(original);
+    }
+    expect(outcomes).toBeGreaterThan(0);
     expect(getYouthFixtures(careers.opening).every(item => item.result === null)).toBe(true);
     for (const club of careers.opening.clubs) expect(getClubAcademy(careers.opening, club.id)).toHaveLength(8);
     expect(rolloverSeason(restore(careers.complete))).toEqual(careers.opening);

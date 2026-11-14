@@ -27,19 +27,35 @@ export interface YouthFixtureResult {
   reason: string | null;
 }
 
-export interface YouthFixture {
+interface YouthFixtureIdentity {
   id: string;
   seasonNumber: number;
   round: number;
   date: string;
   homeClubId: string;
   awayClubId: string;
+}
+
+export interface YouthFixtureFull extends YouthFixtureIdentity {
   /** Frozen at settlement, before subsequent practice or promotion changes. */
   home: Team | null;
   away: Team | null;
   startingConditions: Record<string, number> | null;
   result: YouthFixtureResult | null;
 }
+
+/** Historical rival squads can be reconstructed from the retained academy records at this matchday. */
+export interface YouthFixtureOutcome extends YouthFixtureIdentity {
+  detail: 'outcome';
+  home: null;
+  away: null;
+  startingConditions: null;
+  /** Includes every original squad member in order, even when no play took place. */
+  playerIds: { home: string[]; away: string[] };
+  result: YouthFixtureResult;
+}
+
+export type YouthFixture = YouthFixtureFull | YouthFixtureOutcome;
 
 export interface YouthCompetitionSeason {
   seasonNumber: number;

@@ -78,8 +78,8 @@ export interface SeasonArchive {
 }
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
-/** Format 39 carries the world; 40 compacts strings/shapes; 41 shares repeated subtrees; 42 retains eligible historical rival academy outcomes. */
-export const SEASON_SCHEMA_VERSION = 42;
+/** Format 39 carries the world; 40 compacts strings/shapes; 41 shares subtrees; 42 summarizes rival academy reports; 43 summarizes rival youth fixtures. */
+export const SEASON_SCHEMA_VERSION = 43;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

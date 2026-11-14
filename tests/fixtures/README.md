@@ -63,3 +63,12 @@ The four `season41-board-*` fixtures were captured with `npm.cmd run fixtures:ca
 | season41-board-career | `870ab97aebfe2bdb181d12ef633cf17723e9b653aa365325d29b8046408e6763` |
 | season41-board-complete | `eee9d5930324845de22991bdb956e462256a8b729e9fd92689c46c7166a2c90e` |
 | season41-board-opening | `bb25eadc9a4147d8bf3799362a32652278500fcddb4485b4b1e5f97e7ffc7ad0` |
+
+The four `season42-board-*` fixtures were captured with `npm.cmd run fixtures:capture` from unchanged commit `76fa3bd` on 14 November 2026, **before** format 43 introduced youth fixture outcomes. They retain full frozen youth squads and starting conditions, while the opening fixture already contains format-42 academy outcomes. They use the plain envelope and the ordinary fictional test career. `tests/season42-continuation.test.js` proves independent continuation and migration; `tests/youth-history-storage.test.js` rejects corrupted original detail before migration. Original gzip SHA-256 hashes:
+
+| Fixture | SHA-256 |
+| --- | --- |
+| season42-board-career-next | `24655a029ef337d11e539ba5ec680b493e441953f3dab3f83ca1819dfcdc5b49` |
+| season42-board-career | `ad7435c76c1f70ac099e8d8692ea7ace3649baac45d0f3336942657c1a87b413` |
+| season42-board-complete | `869366f6b5fec07f9adc88e2d92bdc68640218d8c9938652a38bea37101f93d6` |
+| season42-board-opening | `e7840e39b25b1cce57c93f61e2bd4b9d64d6ef470637dfa6f9803f261804c093` |

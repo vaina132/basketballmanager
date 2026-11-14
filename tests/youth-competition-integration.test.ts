@@ -5,7 +5,8 @@ import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { offerAcademyPromotion } from '../src/world/academy';
 import { getClubAcademy, quoteAcademyPromotion } from '../src/world/academy-policy';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
-import { enableYouthCompetition, getYouthFixtures, getYouthPlayerStatus } from '../src/world/youth-competition';
+import { enableYouthCompetition, getYouthFixtures, getYouthFixtureTeams, getYouthPlayerStatus } from '../src/world/youth-competition';
+import { isYouthOutcome } from '../src/world/youth-history';
 import { setEmploymentDelegation } from '../src/world/employment';
 import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
@@ -95,7 +96,21 @@ describe('youth matches in the actual career calendar', () => {
     for (let step = 0; getMarketStartReason(state) && step < 60; step += 1) state = advanceMarket(state);
     expect(getMarketStartReason(state)).toBeNull();
     const next = rolloverSeason(state);
-    expect(getYouthFixtures(next, 1)).toEqual(oldFixtures);
+    const retained = getYouthFixtures(next, 1), latestByClub = new Map<string, string>();
+    for (const fixture of oldFixtures) for (const id of [fixture.homeClubId, fixture.awayClubId]) latestByClub.set(id, fixture.id);
+    expect(retained.map(fixture => fixture.id)).toEqual(oldFixtures.map(fixture => fixture.id));
+    let outcomes = 0;
+    for (const [index, fixture] of retained.entries()) {
+      const original = oldFixtures[index]!;
+      expect(getYouthFixtureTeams(fixture, next)).toEqual({ home: original.home, away: original.away });
+      if (isYouthOutcome(fixture)) {
+        expect([fixture.homeClubId, fixture.awayClubId]).not.toContain(state.managedClubId);
+        expect([fixture.homeClubId, fixture.awayClubId].some(id => latestByClub.get(id) === fixture.id)).toBe(false);
+        expect(fixture).toEqual({ ...original, home: null, away: null, startingConditions: null, detail: 'outcome', playerIds: { home: original.home!.players.map(player => player.id), away: original.away!.players.map(player => player.id) } });
+        outcomes += 1;
+      } else expect(fixture).toEqual(original);
+    }
+    expect(outcomes).toBeGreaterThan(0);
     expect(getYouthFixtures(next, 2)).toHaveLength(30);
     expect(getYouthFixtures(next, 2).every(fixture => fixture.result === null)).toBe(true);
     for (const club of next.clubs) expect(getClubAcademy(next, club.id)).toHaveLength(8);

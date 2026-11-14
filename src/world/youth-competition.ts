@@ -1,10 +1,12 @@
 import type { SeasonAcademy } from '../domain/academy';
 import type { SeasonInjury, SeasonState, Standing } from '../domain/season';
 import type { Team } from '../domain/types';
-import type { SeasonYouthCompetition, YouthCompetitionSeason, YouthFixture, YouthPlayerStatus } from '../domain/youth-competition';
+import type { SeasonYouthCompetition, YouthCompetitionSeason, YouthFixture, YouthFixtureFull, YouthPlayerStatus } from '../domain/youth-competition';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { createSchedule } from './season';
 import { developAcademyPlayer, emptyAcademyPoints, getAcademyProspect } from './academy-policy';
+import { academyAtBoundary } from './academy';
+import { isYouthOutcome } from './youth-history';
 import { generateYouthSquadProspects } from './academy-generation';
 import { injuriesFromMatch, isRecovering } from './health';
 import { memoizePure } from './pure-cache';
@@ -27,8 +29,33 @@ export function getYouthFixtures(state: Pick<SeasonState, 'youthCompetition' | '
   return state.youthCompetition.seasons.find(season => season.seasonNumber === seasonNumber)?.fixtures ?? [];
 }
 
-export function getYouthFixtureTeams(fixture: YouthFixture): { home: Team; away: Team } | null {
-  return fixture.home && fixture.away ? { home: fixture.home, away: fixture.away } : null;
+export function getYouthFixtureTeams(fixture: YouthFixture, state?: Pick<SeasonState, 'clubs' | 'academy'>): { home: Team; away: Team } | null {
+  if (!isYouthOutcome(fixture)) return fixture.home && fixture.away ? { home: fixture.home, away: fixture.away } : null;
+  if (!state) throw new Error('A historical youth outcome needs its career academy records for review.');
+  // Settlement follows this round's accepted promotions and precedes its next practice interval. Reconstruct at
+  // the fixture's own boundary, including on the final matchday when there is no subsequent practice report.
+  const context = { clubs: state.clubs, academy: academyAtBoundary(state.academy, fixture.seasonNumber, fixture.round), seasonNumber: fixture.seasonNumber, round: fixture.round };
+  const home = buildYouthClubTeam(context, fixture.homeClubId), away = buildYouthClubTeam(context, fixture.awayClubId);
+  for (const side of ['home', 'away'] as const) {
+    const team = side === 'home' ? home : away, ids = fixture.playerIds[side];
+    if (team.players.length !== ids.length || team.players.some((player, index) => player.id !== ids[index])) throw new Error('The historical youth squad does not match its retained match membership.');
+  }
+  return { home, away };
+}
+
+/** The same ordered prospect membership and shirt-number assignment serve live matches and historical reviews. */
+function buildYouthClubTeam(state: Pick<SeasonState, 'clubs' | 'academy' | 'seasonNumber' | 'round'>, clubId: string): Team {
+  const club = state.clubs.find(club => club.id === clubId);
+  if (!club) throw new Error('A youth fixture must use clubs in this league.');
+  const numbers = new Set<number>();
+  const players = state.academy.prospects.filter(prospect => prospect.clubId === clubId && getAcademyProspect(state, prospect.player.id)).map(prospect => {
+    const player = developAcademyPlayer(prospect, state.academy.points[prospect.player.id]!);
+    let number = player.number;
+    if (numbers.has(number)) { number = 1; while (numbers.has(number)) number += 1; }
+    numbers.add(number);
+    return { ...player, number };
+  });
+  return { id: club.id, name: `${club.name} Academy`, shortName: club.shortName, color: club.color, players };
 }
 
 /**
@@ -118,20 +145,7 @@ export function youthFixtureSeed(seed: number, fixtureId: string): number {
 
 export function prepareYouthFixture(state: SeasonState, fixture: YouthFixture): { home: Team; away: Team; startingConditions: Record<string, number>; unavailable: Record<string, SeasonInjury['kind']>; lineups: { home: string[]; away: string[] } } {
   if (fixture.seasonNumber !== state.seasonNumber || fixture.round !== state.round || fixture.date !== state.date) throw new Error('Prepare youth teams on their scheduled matchday.');
-  const clubTeam = (clubId: string): Team => {
-    const club = state.clubs.find(club => club.id === clubId);
-    if (!club) throw new Error('A youth fixture must use clubs in this league.');
-    const numbers = new Set<number>();
-    const players = state.academy.prospects.filter(prospect => prospect.clubId === clubId && getAcademyProspect(state, prospect.player.id)).map(prospect => {
-      const player = developAcademyPlayer(prospect, state.academy.points[prospect.player.id]!);
-      let number = player.number;
-      if (numbers.has(number)) { number = 1; while (numbers.has(number)) number += 1; }
-      numbers.add(number);
-      return { ...player, number };
-    });
-    return { id: club.id, name: `${club.name} Academy`, shortName: club.shortName, color: club.color, players };
-  };
-  const home = clubTeam(fixture.homeClubId), away = clubTeam(fixture.awayClubId);
+  const home = buildYouthClubTeam(state, fixture.homeClubId), away = buildYouthClubTeam(state, fixture.awayClubId);
   const statuses = [...home.players, ...away.players].map(player => getYouthPlayerStatus(state, player.id, fixture.date, fixture.id));
   const startingConditions = Object.fromEntries(statuses.map(status => [status.playerId, status.condition]));
   const unavailable = Object.fromEntries(statuses.filter(status => status.injury).map(status => [status.playerId, status.injury!.kind]));
@@ -148,7 +162,7 @@ export function prepareYouthFixture(state: SeasonState, fixture: YouthFixture): 
 }
 
 /** Actual engine statistics when playable; explicit unplayed decisions never manufacture minutes or an MVP. */
-export function settleYouthFixture(state: SeasonState, fixture: YouthFixture): YouthFixture {
+export function settleYouthFixture(state: SeasonState, fixture: YouthFixture): YouthFixtureFull {
   if (fixture.result) throw new Error('A youth fixture can be settled only once.');
   const prepared = prepareYouthFixture(state, fixture), { home, away, startingConditions, lineups, unavailable } = prepared;
   const homeShort = lineups.home.length < 5, awayShort = lineups.away.length < 5;
@@ -176,7 +190,7 @@ export function processYouthRound(state: SeasonState): SeasonState {
 /** Strip future results for historical practice, injury and promotion replay. */
 export function youthCompetitionAtBoundary(competition: SeasonYouthCompetition, seasonNumber: number, round: number, includeCurrentRound = false): SeasonYouthCompetition {
   if (!competition.enabledSince || roundKey(competition.enabledSince.seasonNumber, competition.enabledSince.round) > roundKey(seasonNumber, round)) return createYouthCompetition();
-  return { ...competition, seasons: competition.seasons.filter(season => season.seasonNumber <= seasonNumber).map(season => ({ ...season, fixtures: season.fixtures.map(fixture => fixture.seasonNumber < seasonNumber || fixture.round < round || includeCurrentRound && fixture.round === round ? fixture : { ...fixture, home: null, away: null, startingConditions: null, result: null }) })) };
+  return { ...competition, seasons: competition.seasons.filter(season => season.seasonNumber <= seasonNumber).map(season => ({ ...season, fixtures: season.fixtures.map(fixture => fixture.seasonNumber < seasonNumber || fixture.round < round || includeCurrentRound && fixture.round === round ? fixture : { id: fixture.id, seasonNumber: fixture.seasonNumber, round: fixture.round, date: fixture.date, homeClubId: fixture.homeClubId, awayClubId: fixture.awayClubId, home: null, away: null, startingConditions: null, result: null }) })) };
 }
 
 export function getYouthStandings(state: Pick<SeasonState, 'youthCompetition' | 'seasonNumber' | 'clubs'>, seasonNumber = state.seasonNumber): Standing[] {

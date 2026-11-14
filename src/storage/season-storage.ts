@@ -25,7 +25,7 @@ import type { SeasonAssistant, AssistantContract } from '../domain/assistant';
 import type { SeasonAcademy } from '../domain/academy';
 import type { SeasonLifecycle } from '../domain/lifecycle';
 import type { SeasonYouth, YouthCoachContract } from '../domain/youth';
-import type { SeasonYouthCompetition, YouthFixture } from '../domain/youth-competition';
+import type { SeasonYouthCompetition, YouthFixture, YouthFixtureFull } from '../domain/youth-competition';
 import type { SeasonNegotiations } from '../domain/negotiations';
 import type { MarketEvent, MarketWindow, SeasonMarket } from '../domain/market';
 import type { InSeasonEvent, SeasonRecruitment } from '../domain/recruitment';
@@ -61,6 +61,7 @@ import { academyAtBoundary, createAcademy, enableAcademy, graduateAcademyProspec
 import { canSummarizeAcademyReport, createAcademyHistoryContext, isAcademyOutcome, summarizeAcademyHistory, summarizeAcademyPlayer } from '../world/academy-history';
 import { createYouth } from '../world/youth';
 import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, prepareYouthFixture, settleYouthFixture, getYouthPlayerStatus, youthCompetitionAtBoundary } from '../world/youth-competition';
+import { canSummarizeYouthFixture, createYouthHistoryContext, isYouthOutcome, summarizeYouthFixture, summarizeYouthHistory, type YouthHistoryContext } from '../world/youth-history';
 import { createLifecycle, enableLifecycle, lifecycleAtBoundary, prepareLifecycleSeason } from '../world/lifecycle';
 import { getPlayerAging, type LifecycleContext } from '../world/lifecycle-policy';
 import { processRehabilitationWeek } from '../world/rehabilitation';
@@ -91,7 +92,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -687,7 +688,7 @@ function validateAcademyShape(value: unknown, state: SeasonState, version: numbe
 }
 
 /** A separate prospective competition; disabled imports contain no fabricated youth history. */
-function validateYouthCompetitionShape(value: unknown, state: SeasonState): SeasonYouthCompetition {
+function validateYouthCompetitionShape(value: unknown, state: SeasonState, version: SeasonFormatVersion): SeasonYouthCompetition {
   const fields = record(value, 'youthCompetition', ['model', 'enabledSince', 'seasons']);
   if (fields.model !== 'youth-competition-1' || !Array.isArray(fields.seasons) || fields.seasons.length > MAX_SEASON_NUMBER) fail('youthCompetition', 'must retain a supported bounded competition history');
   if (fields.enabledSince === null) {
@@ -713,7 +714,16 @@ function validateYouthCompetitionShape(value: unknown, state: SeasonState): Seas
     const fixtures = array(season.fixtures, `${path}.fixtures`, (seasonRounds(state) + 1 - fromRound) * (state.clubs.length / 2));
     for (const [fixtureIndex, value] of fixtures.entries()) {
       const fixturePath = `${path}.fixtures[${fixtureIndex}]`;
-      const fixture = record(value, fixturePath, ['id', 'seasonNumber', 'round', 'date', 'homeClubId', 'awayClubId', 'home', 'away', 'startingConditions', 'result']);
+      const outcome = version >= 43 && value !== null && typeof value === 'object' && 'detail' in value && value.detail === 'outcome';
+      const fixture = record(value, fixturePath, ['id', 'seasonNumber', 'round', 'date', 'homeClubId', 'awayClubId', 'home', 'away', 'startingConditions', 'result', ...(outcome ? ['detail', 'playerIds'] : [])]);
+      if (outcome) {
+        if (fixture.result === null || fixture.home !== null || fixture.away !== null || fixture.startingConditions !== null) fail(fixturePath, 'must retain a completed outcome without replacement squads or starting conditions');
+        const players = record(fixture.playerIds, `${fixturePath}.playerIds`, SIDES);
+        for (const side of SIDES) {
+          const ids = players[side];
+          if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) fail(`${fixturePath}.playerIds.${side}`, 'must retain distinct original players in squad order');
+        }
+      }
       if (fixture.result === null) {
         if (fixture.home !== null || fixture.away !== null || fixture.startingConditions !== null) fail(fixturePath, 'cannot retain a frozen squad or condition before settlement');
       } else {
@@ -725,7 +735,7 @@ function validateYouthCompetitionShape(value: unknown, state: SeasonState): Seas
 }
 
 /** Replay fixed inputs and result accounting without replaying thousands of historical possessions. */
-function replayYouthRound(replay: SeasonState, original: SeasonState): SeasonState {
+function replayYouthRound(replay: SeasonState, original: SeasonState, historyContext: YouthHistoryContext | null): SeasonState {
   if (!replay.youthCompetition.enabledSince) return replay;
   const season = replay.youthCompetition.seasons.find(item => item.seasonNumber === replay.seasonNumber)!;
   const saved = original.youthCompetition.seasons.find(item => item.seasonNumber === replay.seasonNumber);
@@ -735,10 +745,18 @@ function replayYouthRound(replay: SeasonState, original: SeasonState): SeasonSta
     const path = `youthCompetition.${fixture.id}`, stored = saved.fixtures.find(item => item.id === fixture.id);
     if (!stored?.result) fail(path, 'must retain its completed matchday result');
     const prepared = prepareYouthFixture(replay, fixture);
-    if (!sameData({ ...fixture, home: prepared.home, away: prepared.away, startingConditions: prepared.startingConditions, result: stored.result }, stored)) fail(path, 'must preserve its exact calendar, academy membership, development and starting condition');
+    const fullFixture: YouthFixtureFull = {
+      id: fixture.id, seasonNumber: fixture.seasonNumber, round: fixture.round, date: fixture.date,
+      homeClubId: fixture.homeClubId, awayClubId: fixture.awayClubId,
+      home: prepared.home, away: prepared.away, startingConditions: prepared.startingConditions, result: stored.result,
+    };
+    const outcome = isYouthOutcome(stored);
+    if (outcome && (!historyContext || !canSummarizeYouthFixture(historyContext, fullFixture))) fail(path, 'must retain full detail for current, manager and latest club fixtures');
+    if (!sameData(outcome ? summarizeYouthFixture(fullFixture) : fullFixture, stored)) fail(path, 'must preserve its exact calendar, academy membership, development and starting condition');
     const result = stored.result;
     if (prepared.lineups.home.length < 5 || prepared.lineups.away.length < 5) {
-      if (!sameData(settleYouthFixture(replay, fixture), stored)) fail(`${path}.result`, 'must retain the canonical unplayed forfeit or no-contest without invented statistics');
+      const canonical = settleYouthFixture(replay, fixture);
+      if (!sameData(outcome ? summarizeYouthFixture(canonical) : canonical, stored)) fail(`${path}.result`, 'must retain the canonical unplayed forfeit or no-contest without invented statistics');
     } else {
       if (result.played !== true || !['played', 'default'].includes(result.kind)) fail(`${path}.result`, 'must retain an actual played result for two eligible starting teams');
       if (result.reason !== (result.kind === 'default' ? 'The match ended after a team had fewer than two eligible players.' : null)) fail(`${path}.result.reason`, 'must describe only the supported match outcome');
@@ -758,6 +776,8 @@ function replayYouthRound(replay: SeasonState, original: SeasonState): SeasonSta
       for (const id of Object.keys(prepared.unavailable)) requireNoPlay(result.stats[id]!, `${path}.result.stats.${id}`);
       for (const id of diagnosed) if (result.stats[id]!.secondsPlayed === 0) fail(`${path}.result.injuries`, 'requires actual exposure before a new diagnosis');
     }
+    // Retain the checked representation only after independently reconstructed squads have passed every
+    // result, participation and injury check. Later condition calculations use the same complete statistics.
     settlements.set(fixture.id, stored);
   }
   return { ...replay, youthCompetition: { ...replay.youthCompetition, seasons: replay.youthCompetition.seasons.map(item => item === season ? { ...item, fixtures: item.fixtures.map(fixture => settlements.get(fixture.id) ?? fixture) } : item) } };
@@ -795,6 +815,7 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
   const originalIds = new Set(worldOf(state).clubs.flatMap(club => club.players.map(player => player.id)));
   const prospects = new Map(academy.prospects.map(prospect => [prospect.player.id, prospect]));
   const historyContext = version >= 42 ? createAcademyHistoryContext(state) : null;
+  const youthHistoryContext = version >= 43 ? createYouthHistoryContext(state) : null;
   const focus = record(academy.focus, 'academy.focus', [...prospects.keys()]);
   record(academy.points, 'academy.points', [...prospects.keys()]);
   for (const [id, value] of Object.entries(focus)) if (!TRAINING_FOCUSES.includes(value as TrainingPlan['focus']) || prospects.get(id)!.clubId !== state.managedClubId && value !== 'balanced') fail(`academy.focus.${id}`, 'must retain a supported manager instruction or the automatic club focus');
@@ -824,7 +845,7 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
       replay = activateYouthReplay(replay, state);
     }
     for (let round = firstRound + 1; round <= lastRound; round += 1) {
-      replay = replayYouthRound(replay, state);
+      replay = replayYouthRound(replay, state, youthHistoryContext);
       const raw = academy.weeks[weekIndex], path = `academy.weeks[${weekIndex}]`, afterRound = round - 1;
       if (!raw) fail(path, 'must retain every completed academy interval');
       const active = replay.academy.prospects.filter(prospect => !replay.academy.graduates.some(graduate => graduate.prospectId === prospect.player.id));
@@ -858,7 +879,7 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
       }
       replay = activateYouthReplay(replay, state);
     }
-    if (year < state.seasonNumber || state.status === 'complete') replay = replayYouthRound(replay, state);
+    if (year < state.seasonNumber || state.status === 'complete') replay = replayYouthRound(replay, state, youthHistoryContext);
   }
   if (weekIndex !== academy.weeks.length) fail('academy.weeks', 'cannot retain future or duplicate development intervals');
   const finalFocus = { ...replay.academy.focus };
@@ -2459,7 +2480,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (!isWorldClub(world, state.managedClubId)) fail('managedClubId', 'must identify a club in this league');
   const academy = version >= 25 ? validateAcademyShape(state.academy, state as unknown as SeasonState, version) : createAcademy();
   const lifecycle = version >= 26 ? validateLifecycleShape(state.lifecycle, state as unknown as SeasonState) : createLifecycle();
-  const youthCompetition = version >= 27 ? validateYouthCompetitionShape(state.youthCompetition, state as unknown as SeasonState) : createYouthCompetition();
+  const youthCompetition = version >= 27 ? validateYouthCompetitionShape(state.youthCompetition, state as unknown as SeasonState, version) : createYouthCompetition();
   const facilities = version >= 28 ? validateFacilitiesShape(state.facilities, state as unknown as SeasonState, version) : createFacilities(world.clubs, state.managedClubId);
   const relationships = version >= 29 ? state.relationships as unknown as SeasonRelationships : createRelationships();
   const board = version >= 30 ? state.board as unknown as SeasonBoard : createBoard();
@@ -2737,8 +2758,8 @@ function decodeSeasonText(text: string): { version: SeasonFormatVersion; state: 
   checkJsonTree(parsed);
   // Plain envelopes remain readable for tools. Each compact encoding belongs to an explicit format version.
   const fields = parsed !== null && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
-  const compact = (fields.formatVersion === 40 || fields.formatVersion === 41 || fields.formatVersion === 42) && Object.hasOwn(fields, 'encoding');
-  const sharedNodes = compact && (fields.formatVersion === 41 || fields.formatVersion === 42);
+  const compact = (fields.formatVersion === 40 || fields.formatVersion === 41 || fields.formatVersion === 42 || fields.formatVersion === 43) && Object.hasOwn(fields, 'encoding');
+  const sharedNodes = compact && (fields.formatVersion === 41 || fields.formatVersion === 42 || fields.formatVersion === 43);
   const envelope = record(parsed, 'envelope', ['format', 'formatVersion', 'engineVersion', ...(compact ? ['encoding', 'strings', 'shapes'] : []), ...(sharedNodes ? ['nodes'] : []), 'state']);
   if (envelope.format !== FORMAT || !SUPPORTED_FORMATS.includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
   if (compact) {
@@ -2762,9 +2783,10 @@ export function parseSeason(text: string): SeasonState {
     scouting: version >= 11 ? previous.scouting : createScouting(previous.clubs, previous.managedClubId), negotiations: version >= 12 ? previous.negotiations : createNegotiations(),
     market: { ...previousMarket, windows: previousMarket.windows.map(window => ({ ...window, offers: window.offers.map(offer => ({ ...offer, transfer: offer.transfer ? { ...offer.transfer, paymentPlan: version < 16 ? 'upfront' as const : offer.transfer.paymentPlan } : null })) })) },
   } : migrateRosterHistory(previous, version);
-  // The original full history has already passed its format's complete replay checks. Only then may the
-  // migration discard derived rival detail; the resulting outcomes pass current-format replay as well.
-  const summarized = summarizeAcademyHistory(upgraded);
+  // The original history has already passed its format's complete replay checks. Apply only the projections
+  // introduced after that format: an existing format-42 academy history keeps its chosen full/outcome detail.
+  const academyUpgraded = version < 42 ? summarizeAcademyHistory(upgraded) : upgraded;
+  const summarized = version < 43 ? summarizeYouthHistory(academyUpgraded) : academyUpgraded;
   validateSeasonState(summarized);
   return summarized;
 }

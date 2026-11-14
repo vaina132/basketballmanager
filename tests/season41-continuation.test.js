@@ -27,6 +27,17 @@ function fullReference(candidate, original) {
     expect(report).toEqual(outcome(previous));
     week.players[id] = structuredClone(previous);
   }
+  const youthById = new Map(original.youthCompetition.seasons.flatMap(season => season.fixtures).map(fixture => [fixture.id, fixture]));
+  for (const season of restored.youthCompetition.seasons) for (const fixture of season.fixtures) if (fixture.detail === 'outcome') {
+    const previous = youthById.get(fixture.id);
+    expect(previous, `${fixture.id} requires original youth evidence`).toBeDefined();
+    expect(fixture).toEqual({ ...previous, home: null, away: null, startingConditions: null, detail: 'outcome', playerIds: { home: previous.home.players.map(player => player.id), away: previous.away.players.map(player => player.id) } });
+    delete fixture.detail;
+    delete fixture.playerIds;
+    fixture.home = structuredClone(previous.home);
+    fixture.away = structuredClone(previous.away);
+    fixture.startingConditions = structuredClone(previous.startingConditions);
+  }
   restored.schemaVersion = 41;
   return restored;
 }

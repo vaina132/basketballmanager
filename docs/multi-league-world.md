@@ -65,7 +65,7 @@ These are targets, not completed behavior. A local checkpoint fingerprint may sk
 | Step | What | Status |
 | --- | --- | --- |
 | 3.1 | Data: import the other eight domestic divisions, the EuroCup and the BCL (2025-26 and 2026-27); club identities; ratings that compare every league with the European level (rating-3); a new private pack with all thirteen competitions | Import complete; roster fidelity/freshness follow-up below remains |
-| 3.2 | Save checks that scale: sealed seasons and lighter records for clubs the manager does not run | In progress: fast validated local reads, faster strict checks and format-42 older rival academy outcomes; bounded total history remains |
+| 3.2 | Save checks that scale: sealed seasons and lighter records for clubs the manager does not run | In progress: fast validated local reads, faster strict checks, format-42 academy outcomes and format-43 youth fixture outcomes; bounded total history remains |
 | 3.1 follow-up / 3.3 prerequisite | Distinguish full club rosters, competition registration and matchday selection; preserve variable real roster sizes and audit fresh API memberships | Planned after the current 3.2 work, before selection acceptance |
 | 3.3 | One calendar for several leagues: competitions in the world, game days, days without the manager's game, a table per league, amounts per week or home game | Planned |
 | 3.4 | Domestic playoffs, titles, and promotion and relegation (real formats, checked per league) | Planned |
@@ -184,6 +184,48 @@ No completed previous season exists at the first boundary, so it has no eligible
 Original fixture hashes, complete state outside the declared projection and independent original-runtime continuations all passed. The original manifest was not rewritten: `.artifacts/academy-history-42-fixtures-2026-11-14T11-33-06-980Z/comparison.json` proves migration against it and supplies a new manifest for `benchmark:saves --reuse`. Timings: `.artifacts/save-benchmark-2026-11-14T11-35-20-575Z/report.json`. Production code did not change during or after measurement; the UI test's file extension was corrected afterward to use the project's JavaScript fixture-test convention.
 
 **Final verification:** production build passed; the full serial suite passed **2,262 tests across 149 files in 454.09 seconds**, with no failures or skips (`.artifacts/step32c-full-tests-20261114-123911.log`). Ten real Edge/worker/IndexedDB checks passed, including retained report protections, strict corrupt-outcome rejection without altering the saved career, migration, reload/recovery, stale-write rejection and certificate fallback (`.artifacts/step32c-browser-smoke-report.json`). Browser helpers were closed. The existing large-chunk build advisory remains; no source changes followed final verification.
+
+### Step 3.2d: historical youth fixture outcomes (14 November 2026)
+
+The owner committed 3.2c as `76fa3bd` and approved continuation. Format **43** reduces redundant frozen squad and starting-condition snapshots in eligible older rival youth fixtures. An explicit `detail: 'outcome'` record keeps the fixture's calendar and club IDs, ordered `playerIds.home`/`playerIds.away`, and the complete original result. Its `home`, `away` and `startingConditions` fields are null. Every player statistic, injury episode, score, winner and unplayed default/no-contest reason remains; even unplayed squads retain their ordered memberships.
+
+Full records remain for the current season, fixtures involving the club managed during their season, and each club's latest completed fixture. The protection applies to both clubs in a fixture, including after a job change. Eligible older full fixtures remain valid. Rollover summarizes immutably after academy report summarization, without removing fixtures or changing sporting random state.
+
+Historical reviews rebuild the original teams from immutable prospect identities and `academyAtBoundary` at the fixture's actual season and round. Live and historical teams share the same membership and shirt-number construction; the review verifies the retained ID order. This preserves attributes before later practice, excludes promotions already effective that matchday, and handles the final round without assuming a subsequent practice report. Reviews do not replay possessions or compute new player health. Boundary views remove the outcome marker and memberships when hiding results that had not happened yet.
+
+**Strict migration and validation:** genuine formats 1–42 validate under their original rules before migration. Formats below 42 receive the academy projection; existing format-42 academy records keep their exact representation. Youth projection then produces format 43 and the entire upgraded state validates again. Current-format imports do not normalize optional full old fixtures. Strict replay independently prepares the original teams and starting conditions, compares the outcome's calendar/membership projection, and applies the existing full result, participation, injury and default checks. Format 43 still uses `compact-2` and checks version 3; the schema in the fingerprint salt prevents an old format-42 seal from bypassing the new validation.
+
+The four public format-42 fixtures were captured from unchanged `76fa3bd` before editing; provenance and hashes are in `tests/fixtures/README.md`. Independent original-runtime continuations are retained under `.artifacts/youth-history-baseline-42/`. This increment made no provider API requests and changed no database or data pack.
+
+The independently retained Bayern/Bundesliga career compares as follows. These are exact compact save bytes; the existing `compact-2` encoding already shares repeated snapshots, so the portable saving is modest even when the domain records shrink substantially.
+
+| State | Format 42 bytes | Format 43 bytes | Reduction |
+| --- | --- | --- | --- |
+| Season 1 complete | 2,957,021 | 2,957,021 | 0% |
+| Season 2 complete | 4,713,865 | 4,683,972 | 0.6% |
+| Season 3 complete | 6,390,127 | 6,298,114 | 1.4% |
+| Season 4 opening | 5,630,117 | 5,497,279 | 2.36% |
+
+At the fourth opening, 808 youth fixtures become outcomes. The youth competition's ordinary JSON representation decreases from **10,597,942 to 6,580,498 bytes (37.9%)**. This measures structural size, not heap improvement. All result statistics and injury evidence remain. Fixture count, total memory and replay time are not bounded by this change.
+
+All four real-career boundaries passed independent original-state/projection comparisons: `.artifacts/youth-history-43-fixtures-2026-11-14T12-16-45-457Z/comparison.json`. Five fictional original format-42 states passed both direct legacy import and ordinary continuation comparisons, including older academy representation retained exactly: `.artifacts/youth-history-baseline-42/comparison-2026-11-14T12-16-32-777Z.json`. The focused suite passed **117 tests across 10 files** (`.artifacts/step32d-focused-tests.log`).
+
+The completed benchmark used the same migrated real fixtures and one warm sample per operation:
+
+| State | Full load, cold / warm | Validated write + fingerprint | Previously validated local reload |
+| --- | --- | --- | --- |
+| Season 1 complete | 2.54 / 2.00 s | 2.19 s | 0.22 s |
+| Season 2 complete | 4.81 / 4.87 s | 4.68 s | 0.38 s |
+| Season 3 complete | 7.34 / 7.68 s | 7.10 s | 0.59 s |
+| Season 4 opening | 6.74 / 7.06 s | 7.44 s | 0.47 s |
+
+Report: `.artifacts/save-benchmark-2026-11-14T12-18-39-720Z/report.json`. Exact state/continuation, source hashes and seal checks passed at every boundary. These Node timings exclude browser messaging and IndexedDB. Maximum measured process resident memory was about 1 GiB; smaller JSON does not establish lower heap use.
+
+The slower single samples compared with the preceding session prompted a paired old/current diagnostic. Across three samples, median strict read was **6.57 → 6.43 seconds** and fully validated write **6.67 → 6.62 seconds**. Both versions' first samples were much slower and subsequent samples overlapped: timings were effectively unchanged, with no meaningful speed improvement or sustained regression observed. Source, fixture and pack hashes and state equivalence all passed. Report: `.artifacts/youth-history-43-paired-2026-11-14T12-31-37-157Z/comparison.json`.
+
+The production build passed with the existing large-chunk advisory. **Thirteen real Edge/worker/IndexedDB checks passed**, including 18 migrated youth outcomes with reconstructed original squads/jerseys/attributes, 12 protected full matches, unchanged statistics/injuries, strict member-order/stat/academy corruption rejection without changing the checkpoint, old-format seal rejection, reload/recovery and stale-write handling. Report: `.artifacts/step32d-browser-smoke-report.json`; the isolated browser/server helpers closed cleanly. The full serial suite passed **2,302 tests across 153 files in 524.50 seconds**, with no failures or skips (`.artifacts/step32d-full-tests-20261114-132303.log`). Production code remained unchanged after the source freeze; only documentation was updated after verification.
+
+**Next within 3.2:** address financial-history growth and the separate 20,000-row finance guard without silently raising it; design independently verifiable summaries or incremental validation that preserve absolute journal prefixes, recruitment/board/facility anchors and historical manager reviews. Senior statistics, youth statistics and diagnoses, and other replay-dependent evidence remain retained. Re-measure actual memory, save growth and strict write cost before accepting 3.2. Then proceed to the roster/registration prerequisite and steps 3.3–3.7 in the table; the multi-league performance target cannot be accepted before those competitions exist.
 
 ## Not in this sprint (suggestions)
 

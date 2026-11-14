@@ -5,6 +5,7 @@ import { applyAgingAttributes, isPlayerRetired } from './lifecycle-policy';
 import { getCareerPlayer, getCareerPlayers, type CareerPlayerContext } from './player-catalog';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { getClubScouts, scoutEvidence } from './scout-policy';
+import { SCOUT_DIRECTORY } from '../data/staff-directory';
 
 export const SCOUTING_CAPACITY = 2;
 export const MAX_KNOWLEDGE_LEVEL = 3;
@@ -23,7 +24,7 @@ export function getScoutingObservers(state: SeasonState, clubId = state.managedC
   const baseline: ScoutingObserverOption = { contractId: null, scoutId: null, name: 'Club observation', evidence: 100, available: baselineUsed < SCOUTING_CAPACITY, reason: baselineUsed < SCOUTING_CAPACITY ? null : 'Both club observation slots are occupied for this matchday.' };
   if (!state.scouts.enabledSince) return [baseline];
   return [baseline, ...getClubScouts(state, clubId).map(contract => {
-    const scout = DEVELOPMENT_SCOUTS.find(scout => scout.id === contract.scoutId)!;
+    const scout = SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!;
     const busy = club?.assignments.some(assignment => assignment.observer?.scoutId === scout.id) || club?.reviews.some(review => review.seasonNumber === state.seasonNumber && review.round === state.round && review.observer?.scoutId === scout.id);
     return { contractId: contract.id, scoutId: scout.id, name: scout.name, evidence: scoutEvidence(scout), available: !busy, reason: busy ? 'This scout already has an observation for this matchday.' : null };
   })];

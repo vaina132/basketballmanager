@@ -4,6 +4,8 @@ import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { recordScoutFee } from './finance';
 import { availableScouts, getClubScouts, quoteScoutHire, scoutEvidence } from './scout-policy';
 import { prepareScoutingAssignments } from './scouting';
+import { seasonRounds } from './career-world';
+import { SCOUT_DIRECTORY } from '../data/staff-directory';
 
 export function createScouts(): SeasonScouts { return { model: 'scouts-1', enabledSince: null, contracts: [] }; }
 
@@ -48,7 +50,7 @@ export function setScoutRenewal(state: SeasonState, contractId: string, renew: b
 
 /** One dedicated scout before optional additional coaches; no hidden budget or catalog knowledge. */
 export function recruitAiScouts(state: SeasonState): SeasonState {
-  if (!state.scouts.enabledSince || state.status !== 'active' || state.round === 10) return state;
+  if (!state.scouts.enabledSince || state.status !== 'active' || state.round === seasonRounds(state)) return state;
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     if (getClubScouts(next, club.id).length) continue;
@@ -64,6 +66,6 @@ export function renewSeasonScouts(state: SeasonState): SeasonState {
   if (!state.scouts.enabledSince) return state;
   let next = state;
   const previous = state.scouts.contracts.filter(contract => contract.seasonNumber === state.seasonNumber - 1 && contract.releasedRound === null && contract.renew);
-  for (const contract of previous) if (DEVELOPMENT_SCOUTS.some(scout => scout.id === contract.scoutId) && quoteScoutHire(next, contract.scoutId, contract.clubId).canHire) next = hireForClub(next, contract.scoutId, contract.clubId);
+  for (const contract of previous) if (SCOUT_DIRECTORY.some(scout => scout.id === contract.scoutId) && quoteScoutHire(next, contract.scoutId, contract.clubId).canHire) next = hireForClub(next, contract.scoutId, contract.clubId);
   return next;
 }

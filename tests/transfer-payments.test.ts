@@ -125,7 +125,7 @@ describe('transfer payment schedules and protected obligations', () => {
     const overdue = withCash(atRound(completed, 1), buyer, 100_000_000);
     const snapshot = structuredClone(overdue);
     expect(() => payTransferInstallment(overdue, transfer.id, 1, transfer.installments[1]!.amount + 1)).toThrow(/outstanding/);
-    expect(() => hireCoach(overdue, availableCoaches(overdue.coaching)[0]!.id)).toThrow(/overdue/);
+    expect(() => hireCoach(overdue, availableCoaches(overdue.coaching, overdue)[0]!.id)).toThrow(/overdue/);
     // Put the unpaid installment in an open recruitment accounting snapshot.
     const market = { ...completed, employment: { ...completed.employment, transfers: completed.employment.transfers.map(item => ({ ...item, installments: item.installments.map(installment => ({ ...installment, dueOn: completed.date })) })) } };
     const other = effectiveContractsForSeason(ready.employment, 2).find(contract => contract.clubId === seller && contract.playerId !== target)!.playerId;

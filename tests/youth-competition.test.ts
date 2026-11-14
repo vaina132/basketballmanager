@@ -10,7 +10,7 @@ import { createYouthCompetition, enableYouthCompetition, getYouthFixtures, getYo
 
 const create = (enabled = true) => createSeason(227, 'rhine-falcons', 'off', true, false, true, true, null, true, false, true, false, false, false, false, false, true, false, false, enabled);
 const freeze = <T>(value: T): T => { if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
-const week = (state: SeasonState) => ({ academy: state.academy, youth: state.youth, youthCompetition: state.youthCompetition, clubs: state.clubs, seasonNumber: state.seasonNumber, afterRound: state.round, fromDate: state.date, toDate: dateForRound(state.round + 1, state.seasonNumber) });
+const week = (state: SeasonState) => ({ rounds: 10, academy: state.academy, youth: state.youth, youthCompetition: state.youthCompetition, clubs: state.clubs, seasonNumber: state.seasonNumber, afterRound: state.round, fromDate: state.date, toDate: dateForRound(state.round + 1, state.seasonNumber) });
 
 describe('real youth fixtures and explicit supplemental intake', () => {
   let initial: SeasonState, played: SeasonState;

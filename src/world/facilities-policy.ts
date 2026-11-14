@@ -1,7 +1,7 @@
 import type { ClubFacilities, FacilityProject, FacilityType, FacilityUpgradeQuote, MaintenancePlan, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
 import type { WorldContext } from '../domain/world';
-import { clubFinanceDefinition, worldOf } from './career-world';
+import { clubFinanceDefinition, seasonRounds, worldOf } from './career-world';
 import { getFinanceBalance } from './finance';
 import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
@@ -47,12 +47,13 @@ export function maintenancePlanOn(facilities: SeasonFacilities | undefined, club
   return plan;
 }
 
-/** Senior matchday dates from a start date (inclusive) up to an end date (exclusive), keyed "from|before". */
+/** Senior matchday dates from a start date (inclusive) up to an end date (exclusive), keyed "from|before|matchdays per season". */
 const matchdayDates = memoizePure((key: string): readonly string[] => {
-  const [from, before] = key.split('|') as [string, string];
+  const [from, before, length] = key.split('|') as [string, string, string];
+  const rounds = Number(length);
   const dates: string[] = [];
   const first = Math.max(1, Number(from.slice(0, 4)) - 2027), last = Math.min(MAX_SEASON_NUMBER, Number(before.slice(0, 4)) - 2024);
-  for (let season = first; season <= last; season += 1) for (let round = 1; round <= 10; round += 1) {
+  for (let season = first; season <= last; season += 1) for (let round = 1; round <= rounds; round += 1) {
     const date = dateForRound(round, season);
     if (date >= from && date < before) dates.push(date);
   }
@@ -67,13 +68,13 @@ export function getFacilityCondition(state: FacilitiesContext, type: FacilityTyp
   const facilities = state.facilities, since = facilities?.maintenanceSince;
   if (!facilities || !since || getFacilityLevel(state, type, clubId, onDate) === 1) return 100;
   const completed = facilities.projects.filter(project => project.clubId === clubId && project.type === type && project.completedOn !== null && project.completedOn <= onDate).map(project => project.completedOn!).sort().at(-1)!;
-  const key = `${clubId}|${completed}|${onDate}|${since.date}`;
+  const rounds = seasonRounds(state), key = `${clubId}|${completed}|${onDate}|${since.date}|${rounds}`;
   let cache = conditionsByEvents.get(facilities.events);
   if (!cache) { cache = new Map(); conditionsByEvents.set(facilities.events, cache); }
   const known = cache.get(key);
   if (known !== undefined) return known;
   let condition = 100;
-  for (const date of matchdayDates(`${completed}|${onDate}`)) {
+  for (const date of matchdayDates(`${completed}|${onDate}|${rounds}`)) {
     if (date <= since.date) continue;
     condition = maintenancePlanOn(facilities, clubId, date) === 'reduced' ? Math.max(0, condition - FACILITY_WEAR_PER_MATCHDAY) : Math.min(100, condition + FACILITY_RECOVERY_PER_MATCHDAY);
   }

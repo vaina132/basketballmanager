@@ -13,6 +13,8 @@ import { dateForRound } from './season';
 import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES } from './training';
 import { youthCoachAssignments } from './youth-policy';
 import { getYouthPlayerStatus } from './youth-competition';
+import { roundKey, seasonRounds } from './career-world';
+import type { CareerWorld } from '../domain/world';
 
 export function createAcademy(): SeasonAcademy { return { model: 'academy-1', enabledSince: null, prospects: [], intakes: [], focus: {}, points: {}, weeks: [], graduates: [] }; }
 
@@ -32,7 +34,7 @@ function intake(state: SeasonState, initial: boolean): SeasonState {
 export function enableAcademy(state: SeasonState): SeasonState {
   if (state.academy.enabledSince) return state;
   if (!state.recruitment.enabledSince || !state.finance.enabledSince || !state.employment.enabledSince || !state.payroll.enabledSince || !state.negotiations.enabledSince) throw new Error('Enable finances, player contracts, payroll and in-season recruitment before the academy.');
-  if (state.status !== 'active' || state.round === 10) throw new Error('Enable the academy from matchday one to nine, or start the next season.');
+  if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Enable the academy before the final matchday, or start the next season.');
   const academy = { ...state.academy, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length, contractCount: state.employment.contracts.length, negotiationCount: state.negotiations.records.length } };
   return intake({ ...state, academy }, true);
 }
@@ -40,7 +42,7 @@ export function enableAcademy(state: SeasonState): SeasonState {
 export function setAcademyFocus(state: SeasonState, playerId: string, focus: TrainingFocus): SeasonState {
   const prospect = getAcademyProspect(state, playerId);
   if (!prospect || prospect.clubId !== state.managedClubId) throw new Error('Choose a current prospect in your academy.');
-  if (state.status !== 'active' || state.round === 10) throw new Error('Academy development resumes with the next season.');
+  if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Academy development resumes with the next season.');
   if (!TRAINING_FOCUSES.includes(focus)) throw new Error('Choose a supported academy training focus.');
   return state.academy.focus[playerId] === focus ? state : { ...state, academy: { ...state.academy, focus: { ...state.academy.focus, [playerId]: focus } } };
 }
@@ -78,24 +80,24 @@ export function prepareAcademySeason(state: SeasonState): SeasonState {
   return intake(next, false);
 }
 
-export interface AcademyWeekInput { facilities?: SeasonState['facilities']; academy: SeasonAcademy; youth: SeasonYouth; youthCompetition?: SeasonYouthCompetition; clubs: readonly Pick<Team, 'id'>[]; seasonNumber: number; afterRound: number; fromDate: string; toDate: string }
+export interface AcademyWeekInput { facilities?: SeasonState['facilities']; academy: SeasonAcademy; youth: SeasonYouth; youthCompetition?: SeasonYouthCompetition; clubs: readonly Pick<Team, 'id'>[]; seasonNumber: number; afterRound: number; fromDate: string; toDate: string; /** Matchdays in the season. */ rounds: number; /** The career's world (built-in league when omitted). */ world?: CareerWorld }
 /** One real calendar interval; youth sessions do not borrow senior fixtures or match RNG. */
 export function processAcademyWeek(input: AcademyWeekInput): SeasonAcademy {
-  const { academy, youth, clubs, seasonNumber, afterRound, fromDate, toDate } = input;
+  const { academy, youth, clubs, seasonNumber, afterRound, fromDate, toDate, rounds } = input;
   if (!academy.enabledSince) return academy;
-  const at = seasonNumber * 10 + afterRound, enabled = academy.enabledSince.seasonNumber * 10 + academy.enabledSince.round;
-  if (!Number.isInteger(afterRound) || afterRound < 1 || afterRound > 9 || fromDate !== dateForRound(afterRound, seasonNumber) || toDate !== dateForRound(afterRound + 1, seasonNumber) || at < enabled) throw new Error('Academy development needs an enabled, real between-matchday week.');
-  if (academy.weeks.some(week => week.seasonNumber * 10 + week.afterRound >= at)) throw new Error('This academy interval has already been processed.');
+  const at = roundKey(seasonNumber, afterRound), enabled = roundKey(academy.enabledSince.seasonNumber, academy.enabledSince.round);
+  if (!Number.isInteger(afterRound) || afterRound < 1 || afterRound > rounds - 1 || fromDate !== dateForRound(afterRound, seasonNumber) || toDate !== dateForRound(afterRound + 1, seasonNumber) || at < enabled) throw new Error('Academy development needs an enabled, real between-matchday week.');
+  if (academy.weeks.some(week => roundKey(week.seasonNumber, week.afterRound) >= at)) throw new Error('This academy interval has already been processed.');
   const previous = academy.weeks.at(-1);
-  const expectedYear = previous ? previous.afterRound === 9 ? previous.seasonNumber + 1 : previous.seasonNumber : academy.enabledSince.seasonNumber;
-  const expectedRound = previous ? previous.afterRound === 9 ? 1 : previous.afterRound + 1 : academy.enabledSince.round;
+  const expectedYear = previous ? previous.afterRound === rounds - 1 ? previous.seasonNumber + 1 : previous.seasonNumber : academy.enabledSince.seasonNumber;
+  const expectedRound = previous ? previous.afterRound === rounds - 1 ? 1 : previous.afterRound + 1 : academy.enabledSince.round;
   if (seasonNumber !== expectedYear || afterRound !== expectedRound) throw new Error('Process every academy training interval in calendar order.');
   const coaches = youthCoachAssignments(youth, clubs, seasonNumber, afterRound);
   const points = { ...academy.points };
   const week: AcademyWeek = { id: `academy-week-${academy.weeks.length + 1}`, seasonNumber, afterRound, fromDate, toDate, coaches, players: {} };
   for (const prospect of academy.prospects) {
     const id = prospect.player.id;
-    if (prospect.intakeSeason * 10 + prospect.intakeRound > at || academy.graduates.some(graduate => graduate.prospectId === id && graduate.availableSince.seasonNumber * 10 + graduate.availableSince.round <= at)) continue;
+    if (roundKey(prospect.intakeSeason, prospect.intakeRound) > at || academy.graduates.some(graduate => graduate.prospectId === id && roundKey(graduate.availableSince.seasonNumber, graduate.availableSince.round) <= at)) continue;
     if (!clubs.some(club => club.id === prospect.clubId)) throw new Error('Academy development requires each prospect\'s registered academy club.');
     const focus = academy.focus[id]!;
     if (!TRAINING_FOCUSES.includes(focus)) throw new Error('Every prospect needs a supported development focus.');
@@ -133,16 +135,16 @@ export function processAcademyWeek(input: AcademyWeekInput): SeasonAcademy {
 
 /** Historical journals must not see future intakes, training or unaccepted promotions. */
 export function academyAtBoundary(academy: SeasonAcademy, seasonNumber: number, round: number, contractCountPrefix?: number, intakeCountPrefix = academy.intakes.length): SeasonAcademy {
-  const at = seasonNumber * 10 + round;
-  if (!academy.enabledSince || academy.enabledSince.seasonNumber * 10 + academy.enabledSince.round > at) return createAcademy();
-  const intakes = academy.intakes.slice(0, intakeCountPrefix).filter(record => record.seasonNumber * 10 + record.round <= at);
+  const at = roundKey(seasonNumber, round);
+  if (!academy.enabledSince || roundKey(academy.enabledSince.seasonNumber, academy.enabledSince.round) > at) return createAcademy();
+  const intakes = academy.intakes.slice(0, intakeCountPrefix).filter(record => roundKey(record.seasonNumber, record.round) <= at);
   const retainedIds = new Set(intakes.flatMap(intake => intake.prospectIds));
-  const prospects = academy.prospects.filter(prospect => prospect.intakeSeason * 10 + prospect.intakeRound <= at && retainedIds.has(prospect.player.id));
+  const prospects = academy.prospects.filter(prospect => roundKey(prospect.intakeSeason, prospect.intakeRound) <= at && retainedIds.has(prospect.player.id));
   const ids = new Set(prospects.map(prospect => prospect.player.id));
-  const weeks = academy.weeks.filter(week => week.seasonNumber * 10 + week.afterRound < at);
+  const weeks = academy.weeks.filter(week => roundKey(week.seasonNumber, week.afterRound) < at);
   const points = Object.fromEntries(prospects.map(prospect => [prospect.player.id, emptyAcademyPoints()]));
   const focus = Object.fromEntries(prospects.map(prospect => [prospect.player.id, academy.focus[prospect.player.id]!])) as Record<string, TrainingFocus>;
   for (const week of weeks) for (const [id, report] of Object.entries(week.players)) if (ids.has(id)) points[id] = { ...report.pointsAfter };
-  const graduates = academy.graduates.filter(graduate => graduate.availableSince.seasonNumber * 10 + graduate.availableSince.round <= at && (graduate.kind === 'age-out' || contractCountPrefix === undefined || Number(graduate.contractId?.replace('employment-contract-', '')) <= contractCountPrefix));
+  const graduates = academy.graduates.filter(graduate => roundKey(graduate.availableSince.seasonNumber, graduate.availableSince.round) <= at && (graduate.kind === 'age-out' || contractCountPrefix === undefined || Number(graduate.contractId?.replace('employment-contract-', '')) <= contractCountPrefix));
   return { ...academy, prospects, intakes, weeks, graduates: graduates.filter(graduate => ids.has(graduate.prospectId)), points, focus };
 }

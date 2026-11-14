@@ -14,12 +14,12 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 | 2.6a A versioned, private game pack | Done |
 | 2.6b Friendly matches between real clubs from a loaded pack (exhibition) | Done |
 | 2.7 A repeat import and a second version that leave earlier versions and saved games unchanged | Done (`2026.11-pilot-2`, rules rating-2) |
-| 2.8 A new career with the real clubs from a pack (owner's plan, phase 5 item 9; feasibility report point 5); real clubs only (owner, 13 November 2026) | In progress: 2.8a done; next 2.8b |
+| 2.8 A new career with the real clubs from a pack (owner's plan, phase 5 item 9; feasibility report point 5); real clubs only (owner, 13 November 2026) | Done (2.8a-e) |
 | 2.8a Each career carries its own world (clubs, players, wages, venues, presidents, sponsors, rivals); save format 39 | Done |
-| 2.8b Leagues of any size: schedule, season length and timings follow the league; staff and sponsor markets grow with it | Next |
-| 2.8c A real world from a pack, and the New career screen offering real clubs only | Planned |
-| 2.8d Speed and save size with 18 clubs and 34 matchdays | Planned |
-| 2.8e A full real-club season: start, play, save and load | Planned |
+| 2.8b Leagues of any size: schedule, season length and timings follow the league; staff and sponsor markets grow with it | Done |
+| 2.8c A real world from a pack, and the New career screen offering real clubs only | Done |
+| 2.8d Speed and save size with 18 clubs and 34 matchdays | Done |
+| 2.8e A full real-club season: start, play, save and load | Done |
 
 ## How it works
 
@@ -41,6 +41,54 @@ Started 13 November 2026 after the owner approved the [feasibility report](real-
 | EuroLeague 2026-27 | 20 | 389 | 380 | 107 | 2,416 |
 
 902 players and 39 clubs (Bayern plays both competitions); about 160 API requests over two runs. The first run stopped on a box-score line naming a club the provider lists nowhere (ID 7886); the importer now places such a line by the player's squad when that squad played the game, otherwise skips it, and records either case. The rerun continued where the first stopped.
+
+## A full real-club season (step 2.8e, 14 November 2026): pilot complete
+
+**In the game (headless Edge, the owner's pack):** New career, manager details, load the pack, choose Bayern Munich, Start career; three matchdays played through the match screen (when a player fouled out, the manager handed substitutions to the assistant, as the game asks); the table showed Matchday 4 of 34. The page was then reloaded and **Continue saved career** loaded the career from the browser's compact checkpoint: same club, Matchday 4 of 34 and an identical league table, no page errors.
+
+**Whole season (private run with the final code, every system on, automatic contracts):** all 306 games of the 34 matchdays in 35 seconds; the season-end save is 3.6 MB (compact), written in 2.8 seconds and loaded in 3.2 seconds, loading back identical; the offseason and rollover open season two on 4 September 2027 with all 18 clubs; three more matchdays and another identical save (3.5 MB). Final table of that run: Syntainics MBC 29-5, Bayern Munich 23-11, Niners Chemnitz 23-11, Rostock Seawolves 21-13.
+
+**The pilot (sprint 2) is complete:** real BBL and EuroLeague data imported and updated safely, rated, versioned and packed privately; real-club friendlies; and real-club careers in the German league that play full seasons and save and load. Open points for the owner and later sprints:
+1. **Balance in long seasons:** per-matchday money and development (running costs, ticket income, upkeep, wear, training gains) add up 3.4 times over a 34-matchday season while wages, sponsorship and staff fees are per season; the first measurement ended with the richest club at EUR 1.7 million and another at zero. Suggested: decide together with match realism (sprint 4).
+2. **Ratings and results realism:** in that run Syntainics MBC (Spencer Reaves, 85) finished ahead of Bayern; the owner's planned fairness check of the ratings and the match calibration (sprint 4) apply.
+3. **Save checks grow with every season** (about 3 seconds per season of an 18-club league today): before careers span several leagues and many seasons, sprint 3 needs incremental checks or lighter records for clubs the manager does not run.
+4. Fixed mid-season matchday-6 rules (sponsor offers and payment, a transfer's third installment); squads of twelve; fictional wages, arenas, presidents and sponsors; 14 clubs still without verified colours.
+
+## Speed and save size (step 2.8d, 14 November 2026)
+
+Measured with a full real Bundesliga season (18 clubs, 34 matchdays, every system on, Bayern, automatic contracts) before any change: about 2-2.5 seconds per matchday (the season in under two minutes); the offseason and the move into season two work; but the save grew to **14 MB by the season end**, saving and loading took about 6 seconds each, and the game refuses saves over **32 MB**, so a real career would have become unsaveable early in its third season. Two other safety limits would also have been reached after about four and eight seasons (3.2 million values in a save; 20,000 entries in one list: the finance ledger books about 2,500 a season).
+
+What made the save big: 68% of it was repeated field names (every box-score line, ledger entry and academy report spells out the same keys) and long repeated identifiers (real clubs' and players' ids). The youth academy's weekly reports (3.8 MB) and youth results (3.5 MB) for all 18 clubs were the largest parts, then senior box scores (2.3 MB).
+
+Changes:
+- **Compact save layout (format 40):** `src/storage/compact-json.ts` stores each distinct list of field names and each repeated long text once; loading rebuilds exactly the same career (key order included). Local saves, checkpoints and exported files use it (`serializeSeasonCompact`); the plain layout (`serializeSeason`) remains for tests and tools, and loading accepts both and every older format. The real season-end save is now **3.6 MB (25%)**; a 32 MB limit now lasts many seasons.
+- **Limits:** up to 16 million values per save and 200,000 entries per list (`season-limits.ts`), sized for real leagues; the 32 MB limit stays.
+- **Faster checks:** youth injury and fitness status (asked for every prospect and day) now uses a per-player index of youth appearances, built once per competition record, instead of scanning every youth fixture (the academy replay went from about 3.7 to 0.7 seconds in the profile); squad registrations per matchday are remembered per contract journal, academy and world, and frozen so no caller can change another's copy.
+- Loading the real season-end save now takes about 4.7 seconds (was about 6.3); writing it about 5.6 seconds, in the background worker. The remaining time is spread over the full replay of every system (recruitment, relationships, academy, facilities, finance about 0.5-0.9 seconds each) and grows with each season. **Open for sprint 3:** check saves incrementally (only what changed since the last trusted checkpoint) or keep lighter records for clubs the manager does not run, before careers span many seasons in several leagues.
+
+Before the format change, genuine format-39 saves were captured: the built-in league (`season39-board-*`) and an eight-club test world (`season39-world8-*`, no real data). Tests: `tests/compact-save.test.ts` (3: exact restoration including marker-like values, damaged compact data refused, a compact career save half the size that loads exactly and whose inner damage the ordinary checks still catch), `tests/season39-continuation.test.js` (4: format-39 saves of both kinds continue, roll over and round-trip through both format-40 layouts); the codec and checkpoint tests now check the compact layout.
+
+## Real-club careers (step 2.8c, 14 November 2026)
+
+**New career** now offers real clubs only (owner's decision). After the manager details, the Club step asks for the private data pack (the same file as real-club friendlies; it is read in the browser and never uploaded), lists the pack's domestic leagues with an even number of clubs (currently the Basketball Bundesliga, 18 clubs, 34 matchdays), and shows each club with its squad strength and a squad preview with overall ratings. **Start career** builds the league's world (`worldFromPack` in `src/world/real-world.ts`) and starts the career in it; the career stores the world, so the file is not needed again. The fictional league remains only for older saves, exhibitions and the automated tests.
+
+What a real world contains, and the rules for what the pack does not have (`REAL_WORLD_RULES`, reversible decisions taken under the owner's 14 November instruction to keep working):
+- **Squads:** every club starts with the game's full registration of twelve: its best-rated players with statistics, with a starting five covering the positions (the friendly's selection rule). Other squad members are not part of the career yet.
+- **Real data used:** club names, short names, verified colours (grey when unverified), arenas' names, player names, shirt numbers (repaired when missing or repeated), positions, ratings, estimated builds; players are drawn as neutral figures.
+- **Estimated:** birth dates from the age in the pack (1 January of the birth year; 26 when unknown).
+- **Fictional, labelled as estimates:** season wages (EUR 9,000 plus 220 per overall-rating point above 40, in EUR 500 steps within 5,000-30,000, so contracts and the EUR 240,000 salary budget keep working; real Bundesliga wage bills come out at EUR 140,000-182,000); arena size and usual crowd by squad strength within the league (3,000-6,500 seats; Bayern largest); club presidents (generated names, shown as "Fictional club president"); sponsors (the fictional sponsor market). No derbies are invented between real clubs.
+
+Checked with the owner's pack (privately, not in the repository): the Bundesliga world has 18 clubs and 216 players; a Bayern career starts with a 34-matchday season, two matchdays take about 2 seconds, and the 1.8 MB save writes and loads back exactly in about half a second. Tests: `tests/real-world.test.ts` (5, with a small invented pack: league choice, squads, birth dates and wages within the contract rules, arenas by strength, and a career that plays, saves and loads under the strict world check). Headless Edge with the real pack: the Club step offers no fictional clubs and asks for the pack; continuing without one and a changed pack file are refused with plain messages; loading lists the 18 clubs; Bayern's preview shows 12 players with ratings; Start career opens the Bayern career with "Real clubs" in the sidebar, all 18 clubs in the table and Matchday 1 of 34; Squad lists real Bayern players; no overflow at 1440 and 390 px.
+
+## Leagues of any size (step 2.8b, 14 November 2026)
+
+A league now has any even number of clubs from 4 to 40 and plays a double round robin of 2 x (clubs - 1) matchdays: 10 for the built-in six clubs, 14 for eight, 34 for the German league's 18 (2026-27: 5 September to 24 April). Everything that assumed ten matchdays now asks the career for its season length (`seasonRounds`): the schedule, the final matchday and season end, wage installments (one per matchday, so a season's wages are always paid exactly), training and medical weeks, academy weeks, board objectives and their deadline, the final board review and verdict, sponsorship bonuses at the season end, transfers and buyouts settled in the offseason, facility wear between matchdays, the offseason market's opening, and all the matching save checks and screens (match header, staff, training, medical and academy pages). Dates numbered as "season x 10 + matchday" were changed in two ways: numbers stored in saves or counted forward use `(season - 1) x matchdays + matchday` (`roundOrdinal`, unchanged values in the built-in league), and numbers only compared use `season x 100 + matchday` (`roundKey`). Staff and sponsor markets grow with the league: shared directories (`src/data/staff-directory.ts`, `SPONSOR_DIRECTORY`) hold the authored candidates first and generated fictional ones after (same skills and fees in turn, new names); a league meets as many per club as the built-in league offers its six clubs (`staffMarket`, `sponsorMarket`), so the built-in league's markets are unchanged.
+
+**Found and fixed on the way:** a strict test mode (`requireWorldContexts`) makes any rule that receives a context without the career's world fail instead of quietly using the built-in league. It found four places 2.8a had missed (weekly training and academy weeks, wage and staff-budget checks in saves); the most important: weekly training did not know a non-built-in career's players, so they would never have aged.
+
+**Checks:** `tests/league-size.test.ts` (9): schedules for 4, 8, 18 and 20 clubs; the built-in league's numbering unchanged; markets per league size; an 18-club career's first matchdays, saved and loaded; a full 8-club career (14 matchdays) with every system on, under the strict mode, through the offseason into season two, with every wage paid exactly once and saves loading back exactly. `tests/career-world.test.ts` now runs under the strict mode. The format-38 continuation fixtures replay exactly, so careers in the built-in league are unchanged. Verified: typecheck, build, full serial suite 135 files / 2,131 tests; headless Edge with an eight-club save: league table of 8 clubs, "Matchday 12 of 14", the progress bar's "Season 1 / Matchday 12 / 14" and position out of 8 (it showed "/ 6" before this step's fix), 32 available coaches (the eight-club market of 40 minus the 8 employed), no overflow at 1440 and 390 px.
+
+**Left as they are, for the owner to decide:** (1) amounts per matchday add up over a longer season: running costs (EUR 15,000 a matchday), facility upkeep and wear, weekly training gains and ticket income from home games happen 3.4 times as often in a 34-matchday season, while wages, sponsorship and staff fees are per season; (2) fixed mid-season matchdays stay: sponsor offers and the second sponsor payment on matchday 6, a transfer's third installment on matchday 6; (3) the automatic squad size of 10 players (real squads are 12-20; step 2.8c). Odd club counts (one club resting each matchday) are not supported yet.
 
 ## Careers carry their world (step 2.8a, 13 November 2026)
 

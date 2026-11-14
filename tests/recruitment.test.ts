@@ -75,9 +75,9 @@ describe('dated in-season free-agent recruitment', () => {
     expect(next.conditions[playerId]).toBe(opening.conditions[playerId]);
     expect(next.fixtures.filter(fixture => fixture.round === 1).every(fixture => !fixture.result!.stats[playerId])).toBe(true);
     expect(next.activeMatch[managedSide(next)].players.some(player => player.id === playerId)).toBe(true);
-    expect(getPlayerPayroll(next, playerId)).toMatchObject({ agreement: { startsRound: 2 }, charged: 0, futureCommitted: wage * .9, nextInstallment: payrollInstallment(wage, 2) });
+    expect(getPlayerPayroll(next, playerId)).toMatchObject({ agreement: { startsRound: 2 }, charged: 0, futureCommitted: wage * .9, nextInstallment: payrollInstallment(wage, 2, 10) });
     const played = play(next);
-    expect(getPlayerPayroll(played, playerId)).toMatchObject({ charged: payrollInstallment(wage, 2), futureCommitted: wage * .8 });
+    expect(getPlayerPayroll(played, playerId)).toMatchObject({ charged: payrollInstallment(wage, 2, 10), futureCommitted: wage * .8 });
     expect(played.training.lastWeek!.players[playerId]).toBeTruthy();
     expect(resolveInSeasonRecruitment(played)).toBe(played);
   });
@@ -150,10 +150,10 @@ describe('dated in-season free-agent recruitment', () => {
     let late = opening;
     while (late.round < 9) late = play(late);
     const joined = play(submitInSeasonOffer(late, playerId, wage));
-    expect(getPlayerPayroll(joined, playerId)?.futureCommitted).toBe(payrollInstallment(wage, 10));
+    expect(getPlayerPayroll(joined, playerId)?.futureCommitted).toBe(payrollInstallment(wage, 10, 10));
     expect(quoteInSeasonOffer(joined, getInSeasonCandidates(joined)[0]!.id, wage).reason).toMatch(/later matchday/i);
     const completed = play(joined);
-    expect(getPlayerPayroll(completed, playerId)?.charged).toBe(payrollInstallment(wage, 10));
+    expect(getPlayerPayroll(completed, playerId)?.charged).toBe(payrollInstallment(wage, 10, 10));
   }, 30_000);
 
   it('uses shared holds for assistant recruitment and AI injury repairs', () => {

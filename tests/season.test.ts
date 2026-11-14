@@ -67,8 +67,9 @@ describe('development league schedule and initialization', () => {
     expect(fixtureSeed(97, fixtures[0]!.id)).not.toBe(seeds[fixtures[0]!.id]);
     expect(() => createSeason(-1)).toThrow(/seed/);
     expect(() => createSeason(3, 'missing-club')).toThrow(/club/);
-    expect(() => createSchedule(DEVELOPMENT_CLUBS.slice(0, 5))).toThrow(/six/);
-    expect(() => dateForRound(11)).toThrow(/round/);
+    expect(() => createSchedule(DEVELOPMENT_CLUBS.slice(0, 5))).toThrow(/even number/);
+    expect(dateForRound(11)).toBe('2026-11-14');
+    expect(() => dateForRound(79)).toThrow(/matchday/);
   });
 });
 

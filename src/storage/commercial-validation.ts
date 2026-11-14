@@ -2,7 +2,7 @@ import type { CommercialAnchor, CommercialEvent, SeasonCommercial, SponsorshipAg
 import type { SeasonState } from '../domain/season';
 import type { CareerMove } from '../domain/career';
 import { managedClubAtLedger } from '../world/career';
-import { incumbentSponsorId, worldOf } from '../world/career-world';
+import { incumbentSponsorId, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
 import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, createCommercial, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_RENEWAL_ROUND } from '../world/commercial-policy';
 import { dateForRound, MAX_SEASON_NUMBER, seasonStartDate } from '../world/season';
 
@@ -10,7 +10,8 @@ const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'ledgerCount'] as const;
 const EVENT_KEYS: Record<CommercialEvent['type'], readonly string[]> = {
   offers: ['clubId', 'window', 'completedRounds', 'offerIds'], request: ['offerId'], accept: ['offerId', 'agreementId'], decline: ['offerId'], policy: ['clubId', 'delegated'], expire: ['offerIds'],
 };
-const ordinal = (seasonNumber: number, round: number) => (seasonNumber - 1) * 10 + round;
+/** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
+const ordinal = (seasonNumber: number, round: number, rounds: number) => roundOrdinal(seasonNumber, round, rounds);
 const dayBefore = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
 function record(value: unknown, path: string, keys: readonly string[]): Record<string, unknown> {
@@ -55,17 +56,17 @@ export function validateCommercial(state: SeasonState, version: number): void {
   const anchor = (raw: unknown, path: string): CommercialAnchor => {
     const value = record(raw, path, ANCHOR_KEYS);
     const seasonNumber = integer(value.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber);
-    const round = integer(value.round, `${path}.round`, 1, seasonNumber === state.seasonNumber ? state.round : 10);
+    const round = integer(value.round, `${path}.round`, 1, seasonNumber === state.seasonNumber ? state.round : seasonRounds(state));
     const ledgerCount = integer(value.ledgerCount, `${path}.ledgerCount`, 0, ledger.length);
     if (typeof value.date !== 'string' || value.date > state.date) fail(`${path}.date`, 'must be an actual career date');
     const matchday = dateForRound(round, seasonNumber);
     const latest = seasonNumber < MAX_SEASON_NUMBER ? dayBefore(seasonStartDate(seasonNumber + 1)) : '9999-12-31';
-    if (round < 10 ? value.date !== matchday : value.date < matchday || value.date > latest) fail(`${path}.date`, 'must fall on its matchday or within that season\'s offseason');
+    if (round < seasonRounds(state) ? value.date !== matchday : value.date < matchday || value.date > latest) fail(`${path}.date`, 'must fall on its matchday or within that season\'s offseason');
     return { seasonNumber, round, date: value.date, ledgerCount };
   };
   const activation = anchor(fields.enabledSince, 'commercial.enabledSince');
   if (activation.date !== dateForRound(activation.round, activation.seasonNumber)) fail('commercial.enabledSince.date', 'must identify an active matchday');
-  if (ordinal(state.finance.enabledSince.seasonNumber, state.finance.enabledSince.round) > ordinal(activation.seasonNumber, activation.round)) fail('commercial.enabledSince', 'cannot precede club finances');
+  if (ordinal(state.finance.enabledSince.seasonNumber, state.finance.enabledSince.round, seasonRounds(state)) > ordinal(activation.seasonNumber, activation.round, seasonRounds(state))) fail('commercial.enabledSince', 'cannot precede club finances');
 
   const plans = record(fields.plans, 'commercial.plans', state.clubs.map(club => club.id));
   for (const club of state.clubs) {
@@ -82,7 +83,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
   let index = 0, previous: CommercialAnchor = activation;
 
   const seasonFixtures = (seasonNumber: number) => seasonNumber === state.seasonNumber ? state.fixtures : state.history.find(archive => archive.seasonNumber === seasonNumber)?.fixtures ?? fail('commercial', 'requires the original fixtures of every negotiated season');
-  const completionStart = (seasonNumber: number) => { const first = ledger.findIndex(entry => entry.seasonNumber === seasonNumber && entry.round === 10 && entry.kind === 'tickets'); return first < 0 ? ledger.length : first; };
+  const completionStart = (seasonNumber: number) => { const first = ledger.findIndex(entry => entry.seasonNumber === seasonNumber && entry.round === seasonRounds(state) && entry.kind === 'tickets'); return first < 0 ? ledger.length : first; };
   const eventAt = (position: number): CommercialEvent => {
     const path = `commercial.events[${position}]`;
     const raw = events[position];
@@ -90,10 +91,10 @@ export function validateCommercial(state: SeasonState, version: number): void {
     const type = (raw as { type: CommercialEvent['type'] }).type;
     const value = record(raw, path, ['type', ...ANCHOR_KEYS, ...EVENT_KEYS[type]]);
     const at = anchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, value[key]])), path);
-    if (ordinal(at.seasonNumber, at.round) < ordinal(previous.seasonNumber, previous.round) || at.date < previous.date || at.ledgerCount < previous.ledgerCount) fail(path, 'must keep chronological calendar and ledger order');
+    if (ordinal(at.seasonNumber, at.round, seasonRounds(state)) < ordinal(previous.seasonNumber, previous.round, seasonRounds(state)) || at.date < previous.date || at.ledgerCount < previous.ledgerCount) fail(path, 'must keep chronological calendar and ledger order');
     return value as unknown as CommercialEvent;
   };
-  const keyOf = (event: CommercialEvent): [number, number] => [ordinal(event.seasonNumber, event.round), event.round === 10 && event.ledgerCount >= completionStart(event.seasonNumber) ? 2 : 0];
+  const keyOf = (event: CommercialEvent): [number, number] => [ordinal(event.seasonNumber, event.round, seasonRounds(state)), event.round === seasonRounds(state) && event.ledgerCount >= completionStart(event.seasonNumber) ? 2 : 0];
   const sameAnchor = (event: CommercialEvent, at: CommercialAnchor) => event.seasonNumber === at.seasonNumber && event.round === at.round && event.date === at.date && event.ledgerCount === at.ledgerCount;
   const anchorOfEvent = (event: CommercialEvent): CommercialAnchor => ({ seasonNumber: event.seasonNumber, round: event.round, date: event.date, ledgerCount: event.ledgerCount });
 
@@ -145,7 +146,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
   const consumeMove = (boundary: Extract<Boundary, { kind: 'move' }>) => {
     const { move } = boundary;
     replay = { ...replay, plans: { ...replay.plans, [move.fromClubId]: { delegated: true }, [move.toClubId]: { delegated: false } } };
-    consumeAutomation({ seasonNumber: move.seasonNumber, round: 10, date: move.date, ledgerCount: move.ledgerCount });
+    consumeAutomation({ seasonNumber: move.seasonNumber, round: seasonRounds(state), date: move.date, ledgerCount: move.ledgerCount });
   };
   const consumeExpiry = (boundary: Extract<Boundary, { kind: 'expire' }>) => {
     const expired = replay.offers.filter(offer => offer.status === 'open' && offer.forSeason <= boundary.seasonNumber).map(offer => offer.id);
@@ -184,12 +185,12 @@ export function validateCommercial(state: SeasonState, version: number): void {
 
   // Calendar boundaries since activation, ordered against events by matchday and the final-matchday ledger commit.
   const boundaries: Boundary[] = [];
-  if (activation.round >= SPONSORSHIP_RENEWAL_ROUND) boundaries.push({ kind: 'window', window: 'renewal', seasonNumber: activation.seasonNumber, round: activation.round, date: activation.date, completedRounds: activation.round - 1, activation: true, key: [ordinal(activation.seasonNumber, activation.round), -1] });
+  if (activation.round >= SPONSORSHIP_RENEWAL_ROUND) boundaries.push({ kind: 'window', window: 'renewal', seasonNumber: activation.seasonNumber, round: activation.round, date: activation.date, completedRounds: activation.round - 1, activation: true, key: [ordinal(activation.seasonNumber, activation.round, seasonRounds(state)), -1] });
   for (let season = activation.seasonNumber; season <= state.seasonNumber; season += 1) {
-    if (season > activation.seasonNumber) boundaries.push({ kind: 'expire', seasonNumber: season, date: dateForRound(1, season), key: [ordinal(season, 1), -1] });
-    if ((season > activation.seasonNumber || activation.round < SPONSORSHIP_RENEWAL_ROUND) && (season < state.seasonNumber || state.round >= SPONSORSHIP_RENEWAL_ROUND)) boundaries.push({ kind: 'window', window: 'renewal', seasonNumber: season, round: SPONSORSHIP_RENEWAL_ROUND, date: dateForRound(SPONSORSHIP_RENEWAL_ROUND, season), completedRounds: SPONSORSHIP_RENEWAL_ROUND - 1, activation: false, key: [ordinal(season, SPONSORSHIP_RENEWAL_ROUND), -1] });
-    for (const move of state.career?.moves ?? []) if (move.seasonNumber === season && move.ledgerCount >= activation.ledgerCount) boundaries.push({ kind: 'move', move, key: [ordinal(season, 10), 0.5] });
-    if (season < state.seasonNumber || state.status === 'complete') boundaries.push({ kind: 'window', window: 'second-round', seasonNumber: season, round: 10, date: dateForRound(10, season), completedRounds: 10, activation: false, key: [ordinal(season, 10), 1] });
+    if (season > activation.seasonNumber) boundaries.push({ kind: 'expire', seasonNumber: season, date: dateForRound(1, season), key: [ordinal(season, 1, seasonRounds(state)), -1] });
+    if ((season > activation.seasonNumber || activation.round < SPONSORSHIP_RENEWAL_ROUND) && (season < state.seasonNumber || state.round >= SPONSORSHIP_RENEWAL_ROUND)) boundaries.push({ kind: 'window', window: 'renewal', seasonNumber: season, round: SPONSORSHIP_RENEWAL_ROUND, date: dateForRound(SPONSORSHIP_RENEWAL_ROUND, season), completedRounds: SPONSORSHIP_RENEWAL_ROUND - 1, activation: false, key: [ordinal(season, SPONSORSHIP_RENEWAL_ROUND, seasonRounds(state)), -1] });
+    for (const move of state.career?.moves ?? []) if (move.seasonNumber === season && move.ledgerCount >= activation.ledgerCount) boundaries.push({ kind: 'move', move, key: [ordinal(season, seasonRounds(state), seasonRounds(state)), 0.5] });
+    if (season < state.seasonNumber || state.status === 'complete') boundaries.push({ kind: 'window', window: 'second-round', seasonNumber: season, round: seasonRounds(state), date: dateForRound(seasonRounds(state), season), completedRounds: seasonRounds(state), activation: false, key: [ordinal(season, seasonRounds(state), seasonRounds(state)), 1] });
   }
   for (const boundary of boundaries) {
     while (index < events.length && before(keyOf(eventAt(index)), boundary.key)) consumeManual();

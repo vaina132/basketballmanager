@@ -2,13 +2,14 @@ import type { AssistantContract, SeasonAssistant } from '../domain/assistant';
 import type { SeasonState } from '../domain/season';
 import { recordAssistantFee } from './finance';
 import { assistantEffects, availableAssistants, getClubAssistant, quoteAssistantHire } from './assistant-policy';
+import { seasonRounds } from './career-world';
 
 export function createAssistant(): SeasonAssistant { return { model: 'assistant-1', enabledSince: null, contracts: [] }; }
 
 export function enableAssistant(state: SeasonState): SeasonState {
   if (state.assistant.enabledSince) return state;
   if (!state.finance.enabledSince) throw new Error('Enable club finances before recruiting assistant coaches.');
-  if (state.status !== 'active' || state.round === 10 && state.activeMatch.status === 'finished') throw new Error('Enable assistant coaches before the final match finishes, or when the next season starts.');
+  if (state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch.status === 'finished') throw new Error('Enable assistant coaches before the final match finishes, or when the next season starts.');
   return recruitAiAssistants({ ...state, assistant: { ...state.assistant, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length } } });
 }
 
@@ -39,7 +40,7 @@ export function setAssistantRenewal(state: SeasonState, contractId: string, rene
 
 /** One assistant before additional training coaches, using the same budget/arrears guards. */
 export function recruitAiAssistants(state: SeasonState): SeasonState {
-  if (!state.assistant.enabledSince || state.status !== 'active' || state.round === 10 && state.activeMatch.status === 'finished') return state;
+  if (!state.assistant.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch.status === 'finished') return state;
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     if (getClubAssistant(next, club.id)) continue;

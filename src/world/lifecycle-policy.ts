@@ -4,7 +4,7 @@ import type { PlayerAttributes } from '../domain/types';
 import type { TrainingPoints } from '../domain/training';
 import type { WorldContext } from '../domain/world';
 import { playerAgeOnDate } from '../data/development-player-profiles';
-import { worldOf } from './career-world';
+import { roundKey, seasonRounds, worldOf } from './career-world';
 import { memoizePure } from './pure-cache';
 
 export type LifecycleContext = Partial<Pick<SeasonState, 'lifecycle' | 'academy' | 'seasonNumber' | 'round' | 'date'>> & WorldContext;
@@ -57,8 +57,8 @@ export function getPlayerRetirement(context: LifecycleContext, playerId: string,
   return { status: !notice ? 'active' : onDate >= notice.retiredOn ? 'retired' : 'announced', notice };
 }
 
-export function isPlayerRetired(context: LifecycleContext, playerId: string, seasonNumber = context.seasonNumber ?? 7974, round = context.round ?? 10): boolean {
-  return !!context.lifecycle?.enabledSince && context.lifecycle.notices.some(notice => notice.playerId === playerId && notice.announcedSeason * 10 + notice.announcedRound <= seasonNumber * 10 + round && notice.retirementSeason <= seasonNumber);
+export function isPlayerRetired(context: LifecycleContext, playerId: string, seasonNumber = context.seasonNumber ?? 7974, round = context.round ?? seasonRounds(context)): boolean {
+  return !!context.lifecycle?.enabledSince && context.lifecycle.notices.some(notice => notice.playerId === playerId && roundKey(notice.announcedSeason, notice.announcedRound) <= roundKey(seasonNumber, round) && notice.retirementSeason <= seasonNumber);
 }
 
 export function retirementContractReason(context: LifecycleContext, playerId: string, endsSeason: number): string | null {

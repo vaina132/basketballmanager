@@ -1,7 +1,7 @@
 import type { Rivalry, RivalryAnchor, SeasonRivalries } from '../domain/rivalries';
 import type { SeasonState } from '../domain/season';
-import type { CareerWorld } from '../domain/world';
-import { worldRivalryBetween, worldRivalryFor } from './career-world';
+import type { CareerWorld, WorldContext } from '../domain/world';
+import { ordinalRound, roundOrdinal, seasonRounds, worldRivalryBetween, worldRivalryFor, worldRounds } from './career-world';
 
 /** Derby crowds grow by this percentage per point of rivalry intensity (5% to 15%). */
 export const RIVALRY_CROWD_PERCENT = 5;
@@ -11,7 +11,8 @@ export const RIVALRY_BOARD_CAP = 6;
 /** A derby result counts this many times in the recent-results part of player morale (still capped there). */
 export const RIVALRY_MORALE_WEIGHT = 2;
 
-const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
+/** Matchdays as one sequence across seasons; stored in anchors and counted forward, so it uses the season length. */
+const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
 
 export function createRivalries(): SeasonRivalries { return { model: 'rivalries-1', enabledSince: null }; }
 
@@ -26,15 +27,15 @@ export function rivalryFor(clubId: string, world: CareerWorld): { rivalry: Rival
 /** The rivalry a fixture belongs to when rivalries govern that matchday; earlier matchdays never become derbies. */
 export function governingDerby(rivalries: SeasonRivalries | undefined, homeClubId: string, awayClubId: string, seasonNumber: number, round: number, world: CareerWorld): Rivalry | null {
   const from = rivalries?.enabledSince?.effectiveFrom;
-  if (!from || ordinal(seasonNumber, round) < ordinal(from.seasonNumber, from.round)) return null;
+  if (!from || ordinal(seasonNumber, round, worldRounds(world)) < ordinal(from.seasonNumber, from.round, worldRounds(world))) return null;
   return rivalryBetween(homeClubId, awayClubId, world);
 }
 
-export function rivalryEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'date' | 'fixtures'>, mode: 'career' | 'prospective'): RivalryAnchor {
+export function rivalryEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'date' | 'fixtures'> & WorldContext, mode: 'career' | 'prospective'): RivalryAnchor {
   const completed = state.fixtures.reduce((round, fixture) => fixture.result ? Math.max(round, fixture.round) : round, 0);
-  const next = ordinal(state.seasonNumber, state.round) + 1;
-  const effectiveFrom = mode === 'career' ? { seasonNumber: 1, round: 1 } : { seasonNumber: Math.floor((next - 1) / 10) + 1, round: (next - 1) % 10 + 1 };
-  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed), effectiveFrom };
+  const next = ordinal(state.seasonNumber, state.round, seasonRounds(state)) + 1;
+  const effectiveFrom = mode === 'career' ? { seasonNumber: 1, round: 1 } : ordinalRound(next, seasonRounds(state));
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), effectiveFrom };
 }
 
 /** New careers count derbies from the opening matchday; older careers from the next uncommitted matchday. */

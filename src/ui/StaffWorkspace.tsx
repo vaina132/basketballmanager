@@ -85,7 +85,7 @@ function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRe
   const spendable = getSpendableCash(season, club.id)
   const overdueTransfers = getTransferPaymentSummary(season, club.id).overdue
   const staffBudget = remainingStaffBudget(season, club.id)
-  const available = availableCoaches(season.coaching)
+  const available = availableCoaches(season.coaching, season)
   const candidates = available.filter(coach => coach.name.toLowerCase().includes(query.trim().toLowerCase())).sort((left, right) => {
     const value = sort.startsWith('rating') ? coachRating(left) - coachRating(right) : left.fee - right.fee
     return (sort.endsWith('desc') ? -value : value) || compareNames(left, right)

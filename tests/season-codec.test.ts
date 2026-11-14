@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { createWorkerSeasonCodec, directSeasonCodec, handleSeasonCodecRequest, type SeasonCodecReply, type SeasonCodecRequest, type SeasonCodecWorker } from '../src/storage/season-codec';
-import { parseSeason, serializeSeason } from '../src/storage/season-storage';
+// The game's codec writes the compact layout.
+import { parseSeason, serializeSeasonCompact as serializeSeason } from '../src/storage/season-storage';
 import { createSeason } from '../src/world/season';
 
 /** A message-passing stand-in for a module worker; replies are delivered asynchronously, optionally reversed. */

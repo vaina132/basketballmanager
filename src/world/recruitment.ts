@@ -15,9 +15,10 @@ import { getInSeasonCandidates, getInSeasonOffers, IN_SEASON_EVENT_LIMIT, isLive
 import { getInSeasonReleasedContractIds, getInSeasonTransferCandidates, quoteInSeasonSale, quoteInSeasonTransferOffer, requiredInSeasonTransferFee } from './midseason-transfer-policy';
 import { registerInSeasonArrivals } from './rosters';
 import { scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
-import { dateForRound, SEASON_ROUNDS } from './season';
+import { dateForRound } from './season';
 import { getTransferPaymentSchedule } from './transfer-payments';
 import { getApplicableReleaseClause, offerOptionsReason } from './release-clauses';
+import { seasonRounds } from './career-world';
 
 export function createInSeasonRecruitment(): SeasonRecruitment { return { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] }; }
 
@@ -112,8 +113,9 @@ export function applyInSeasonEvent(state: SeasonState, event: InSeasonEvent): Se
   }
   if (event.type !== 'resolve') throw new Error('Choose a supported in-season recruitment command.');
   const previous = boundary(state);
-  const expectedYear = previous.round === SEASON_ROUNDS ? previous.seasonNumber + 1 : previous.seasonNumber;
-  const expectedRound = previous.round === SEASON_ROUNDS ? 1 : previous.round + 1;
+  const rounds = seasonRounds(state);
+  const expectedYear = previous.round === rounds ? previous.seasonNumber + 1 : previous.seasonNumber;
+  const expectedRound = previous.round === rounds ? 1 : previous.round + 1;
   if (state.seasonNumber !== expectedYear || state.round !== expectedRound) throw new Error('Resolve in-season replies once at each next matchday.');
   if (state.recruitment.offers.some(offer => isLiveInSeasonOffer(offer) && (offer.seasonNumber < state.seasonNumber || offer.responseRound < state.round))) throw new Error('An earlier in-season reply cannot be skipped.');
   let next: SeasonState = { ...state, recruitment: { ...state.recruitment, events: [...state.recruitment.events, { ...event }], offers: state.recruitment.offers.map(offer => offer.status === 'club-review' && offer.responseRound <= state.round ? { ...offer, status: 'expired', respondedOn: state.date, closedOn: state.date, reason: 'The selling club did not approve the transfer before the next matchday.' } : { ...offer }) } };
@@ -211,7 +213,7 @@ export function resolveInSeasonRecruitment(state: SeasonState): SeasonState {
 
 /** AI repairs injury shortages; a delegated manager recruits toward a ten-player squad. */
 export function scheduleInSeasonRecruitment(state: SeasonState): SeasonState {
-  if (!state.recruitment?.enabledSince || state.status !== 'active' || state.round >= SEASON_ROUNDS) return state;
+  if (!state.recruitment?.enabledSince || state.status !== 'active' || state.round >= seasonRounds(state)) return state;
   requirePreparedBoundary(state);
   let next = reviewAutomaticTransfers(state);
   const responseOn = dateForRound(state.round + 1, state.seasonNumber);

@@ -88,7 +88,7 @@ describe('read-only current-season cash outlook', () => {
     const agreement = initial.payroll.agreements.find(item => item.clubId === club)!;
     let posted = entry(initial, -ROUND_OPERATING_COST, { sourceId: 'operations-s1-r1' });
     posted = entry(posted, 12345, { kind: 'tickets', sourceId: `tickets-${fixture.id}`, ticket: { fixtureId: fixture.id, price: 100, attendance: 123 } });
-    const gross = payrollInstallment(agreement.seasonWage, 1);
+    const gross = payrollInstallment(agreement.seasonWage, 1, 10);
     posted = entry(posted, -gross, { kind: 'payroll', sourceId: 'payroll-s1-r1', payroll: { type: 'installment', fromRound: 1, throughRound: 1, items: [{ agreementId: agreement.id, playerId: agreement.playerId, gross, discount: 0, amount: gross }] } });
     posted = entry(posted, -getFinanceBalance(posted.finance, club).cash - 87654);
     const outlook = getClubCashOutlook(posted), row = outlook.rows.find(item => item.kind === 'scheduled' && item.round === 1)!;
@@ -107,8 +107,8 @@ describe('read-only current-season cash outlook', () => {
     const unusual = { ...first, seasonWage: 1_234_567, startsRound: 3 };
     const sale = { ...transfer('departure', []), playerId: first.playerId, startsRound: 7, fromClubId: club, toClubId: other };
     const isolated = withTransfers({ ...initial, payroll: { ...initial.payroll, agreements: [unusual] } }, [sale]);
-    expect(getClubCashOutlook(isolated).rows.map(row => row.wages)).toEqual(Array.from({ length: 10 }, (_, index) => index + 1 >= 3 && index + 1 < 7 ? payrollInstallment(unusual.seasonWage, index + 1) : 0));
-    expect(totalWages(isolated)).toBe([3, 4, 5, 6].reduce((sum, round) => sum + payrollInstallment(unusual.seasonWage, round), 0));
+    expect(getClubCashOutlook(isolated).rows.map(row => row.wages)).toEqual(Array.from({ length: 10 }, (_, index) => index + 1 >= 3 && index + 1 < 7 ? payrollInstallment(unusual.seasonWage, index + 1, 10) : 0));
+    expect(totalWages(isolated)).toBe([3, 4, 5, 6].reduce((sum, round) => sum + payrollInstallment(unusual.seasonWage, round, 10), 0));
   });
 
   it('dates only outstanding installments, separates later obligations, and never dates overdue income', () => {

@@ -8,6 +8,8 @@ import { YouthCoachPortrait } from './YouthCoachPortrait'
 import { StaffStars } from './StaffRating'
 import { Icon } from './Icon'
 import './youth-staff.css'
+import { seasonRounds } from '../world/career-world'
+import { YOUTH_COACH_DIRECTORY } from '../data/staff-directory'
 
 export interface YouthCoachStaffProps {
   season: SeasonState
@@ -20,7 +22,7 @@ export interface YouthCoachStaffProps {
 }
 
 const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100)
-const coachById = (id: string) => DEVELOPMENT_YOUTH_COACHES.find(coach => coach.id === id)!
+const coachById = (id: string) => YOUTH_COACH_DIRECTORY.find(coach => coach.id === id)!
 
 function YouthSkills({ coach }: { coach: YouthCoach }) {
   return <dl className="staff-skill-list compact"><div><dt>Youth development</dt><dd><span className="staff-skill-bar" aria-hidden="true"><span style={{ width: `${coach.development * 10}%` }} /></span><span className="staff-skill-value" aria-label={`${coach.development / 2} out of 5 stars`}>{(coach.development / 2).toFixed(1)}</span></dd></div></dl>
@@ -43,7 +45,7 @@ export function YouthCoachStaff({ season, busy = false, onEnableYouth, onHireYou
   const releaseTrigger = useRef<HTMLButtonElement>(null)
   const club = season.clubs.find(item => item.id === season.managedClubId)!
   const enabled = season.youth.enabledSince !== null
-  const seasonFinished = season.status === 'complete' || season.round === 10
+  const seasonFinished = season.status === 'complete' || season.round === seasonRounds(season)
   const enableReason = !season.academy.enabledSince ? 'Enable the academy before recruiting a youth coach.' : !season.finance.enabledSince ? 'Enable club finances before recruiting a youth coach.' : seasonFinished ? 'No development weeks left; recruit next season.' : null
   const contract = getClubYouthCoach(season)
   const appointed = contract ? coachById(contract.coachId) : null

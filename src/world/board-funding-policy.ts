@@ -1,7 +1,7 @@
 import type { FacilityFundingDecision, FacilityType, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
 import type { DevelopmentPresident } from '../data/development-presidents';
-import { clubPresident, worldOf } from './career-world';
+import { clubPresident, roundOrdinal, seasonRounds, worldOf } from './career-world';
 import { FACILITY_AUTOMATION_BUFFER, FACILITY_FUNDS_REASON, quoteFacilityUpgrade } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
 import { ownerCapital } from './board-consequences';
@@ -11,7 +11,8 @@ export const BOARD_FUNDING_BASE_CONFIDENCE = 65;
 export const BOARD_FUNDING_GENEROSITY_STEP = 5;
 /** After a refusal, the board reconsiders once this many further matchdays have been reached. */
 export const BOARD_FUNDING_REFUSAL_COOLDOWN = 2;
-const ordinal = (seasonNumber: number, round: number) => (seasonNumber - 1) * 10 + round;
+/** Matchdays as one sequence across seasons; stored in anchors and counted forward, so it uses the season length. */
+const ordinal = (seasonNumber: number, round: number, rounds: number) => roundOrdinal(seasonNumber, round, rounds);
 const eurosFormat = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 const euros = (cents: number) => eurosFormat.format(cents / 100);
 
@@ -70,7 +71,7 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   const seasonCapital = ownerCapital(state, clubId);
   const capitalRemaining = Math.max(0, seasonCapital - boardCapitalGranted(state.facilities, clubId, state.seasonNumber));
   const refused = [...state.facilities.events].reverse().find(event => event.type === 'funding' && !event.approved && event.clubId === clubId);
-  const wait = refused ? ordinal(refused.seasonNumber, refused.round) + BOARD_FUNDING_REFUSAL_COOLDOWN - ordinal(state.seasonNumber, state.round) : 0;
+  const wait = refused ? ordinal(refused.seasonNumber, refused.round, seasonRounds(state)) + BOARD_FUNDING_REFUSAL_COOLDOWN - ordinal(state.seasonNumber, state.round, seasonRounds(state)) : 0;
   let reason: string | null = null;
   if (!state.facilities.fundingSince) reason = 'Enable board funding requests first.';
   else if (!state.board.enabledSince) reason = 'Enable board reviews before asking for capital.';

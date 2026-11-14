@@ -12,7 +12,7 @@ import { requiredNegotiationWage } from '../world/negotiations-policy'
 import { MAX_TRANSFER_FEE, MIN_TRANSFER_FEE, TRANSFER_FEE_STEP } from '../world/transfers-policy'
 import { TRANSFER_PAYMENT_PLANS } from '../world/transfer-payments'
 import { getPlayerKnowledge } from '../world/scouting-policy'
-import { dateForRound, MAX_SEASON_NUMBER, SEASON_ROUNDS, seasonLabel } from '../world/season'
+import { dateForRound, MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { knowledgeLabel, scoutingDate, ScoutingKnowledge } from './ScoutingKnowledge'
@@ -22,6 +22,7 @@ import { TransferPaymentTerms, transferMoney as money } from './TransferPaymentT
 import { getApplicableReleaseClause, releaseFeeReason } from '../world/release-clauses'
 import { ReleaseClauseFields, ReleaseClauseValue, TransferApproach } from './ReleaseClause'
 import './in-season-recruitment.css'
+import { seasonRounds } from '../world/career-world'
 
 export const inSeasonOfferStatus = (offer: InSeasonOffer) => {
   if (offer.status === 'club-review') return 'Awaiting club decision'
@@ -59,7 +60,7 @@ export function InSeasonRecruitmentPanel({ season, disabled, onEnable, onReview,
   return <section className="in-season-recruitment panel" aria-labelledby="in-season-recruitment-title">
     <header className="transfers-heading"><div><h2 id="in-season-recruitment-title">This season's recruitment</h2><span>{seasonLabel(season.seasonNumber)} &middot; {transfersEnabled ? 'Recruitment & sales' : 'Free agents'}</span></div>{active && enabled && <button id="browse-in-season-players" className="button small" onClick={onBrowse} disabled={disabled}>Available players<Icon name="search" size={14} /></button>}</header>
     {!enabled ? <div className="in-season-enable"><p>Offer free agents a contract until the end of this season. Replies arrive when the next matchday is prepared.</p>{enableReason && <p id="in-season-enable-reason">{enableReason}</p>}<button id="enable-in-season-recruitment" className="button primary" disabled={disabled || !!enableReason} onClick={onEnable} aria-describedby={enableReason ? 'in-season-enable-reason' : undefined}>Enable in-season recruitment</button></div> : <>
-      {active && <><div className="in-season-summary"><div><Icon name="people" size={21} /><span><small>Current squad</small><strong data-in-season-roster={budget.rosterSize}>{budget.rosterSize} / {MAX_ROSTER_SIZE}{budget.reservedRosterSize > 0 && <em> + {budget.reservedRosterSize} held</em>}</strong></span></div><div><Icon name="wallet" size={21} /><span><small>Salary budget left this season</small><strong data-in-season-salary-budget={budget.remainingBudget}>{money(budget.remainingBudget)}<em> / year</em></strong></span></div><div><Icon name="calendar" size={21} /><span><small>Next player reply</small><strong>{season.round < SEASON_ROUNDS ? scoutingDate(dateForRound(season.round + 1, season.seasonNumber)) : 'Window closed'}</strong></span></div></div>{season.round === SEASON_ROUNDS && <p className="transfers-note">No further registration date this season. Finish the matchday to open offseason recruitment.</p>}</>}
+      {active && <><div className="in-season-summary"><div><Icon name="people" size={21} /><span><small>Current squad</small><strong data-in-season-roster={budget.rosterSize}>{budget.rosterSize} / {MAX_ROSTER_SIZE}{budget.reservedRosterSize > 0 && <em> + {budget.reservedRosterSize} held</em>}</strong></span></div><div><Icon name="wallet" size={21} /><span><small>Salary budget left this season</small><strong data-in-season-salary-budget={budget.remainingBudget}>{money(budget.remainingBudget)}<em> / year</em></strong></span></div><div><Icon name="calendar" size={21} /><span><small>Next player reply</small><strong>{season.round < seasonRounds(season) ? scoutingDate(dateForRound(season.round + 1, season.seasonNumber)) : 'Window closed'}</strong></span></div></div>{season.round === seasonRounds(season) && <p className="transfers-note">No further registration date this season. Finish the matchday to open offseason recruitment.</p>}</>}
       {active && !transfersEnabled && <div className="in-season-transfers-enable"><span><strong>Club transfers</strong><small>Negotiate fees and contracts for players at other clubs.</small></span><button id="enable-in-season-transfers" className="button small" onClick={onEnableTransfers} disabled={disabled}>Enable midseason transfers<Icon name="swap" size={14} /></button></div>}
       {transfersEnabled && <InSeasonIncomingTransfers season={season} disabled={disabled} onDecision={onClubDecision} />}
       {pending.length > 0 && <><OfferRows onOpenAcademy={onOpenAcademy} season={season} offers={pending} disabled={disabled} onReview={onReview} onWithdraw={onWithdraw} /><div className="in-season-queue-footer"><span><Icon name="clock" size={15} />{money(budget.remainingWagesReserved + transferReserve)} reserved for salaries{transferReserve > 0 && ' and fees'}</span><button className="button small" onClick={onOpenMatch} disabled={disabled}>Match center<Icon name="chevron" size={14} /></button></div></>}
@@ -121,7 +122,7 @@ export function InSeasonOfferDialog({ season, player, disabled, onClose, onOffer
   const chosenClub = season.clubs.find(club => club.id === chosenOffer?.clubId)
   const clubApproved = current?.transfer?.clubStatus === 'accepted'
   const clubCounter = current?.status === 'countered' && current.transfer?.clubStatus === 'countered' ? current.transfer.counterFee : null
-  const canRegister = season.status === 'active' && season.round < SEASON_ROUNDS
+  const canRegister = season.status === 'active' && season.round < seasonRounds(season)
   const endsSeason = transferQuote?.endsSeason ?? season.seasonNumber
   const firstPayment = transferQuote?.installments[0]?.amount ?? 0
   const validYears = Number.isInteger(years) && years >= 1 && years <= MAX_CONTRACT_SEASONS

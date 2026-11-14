@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { ManagerProfile } from '../domain/manager'
 import type { InjuryMode } from '../domain/types'
-import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-league'
+import type { CareerWorld } from '../domain/world'
+import { DEVELOPMENT_START_DATE } from '../data/development-league'
+import { worldRounds } from '../world/career-world'
+import { MAX_DATA_PACK_BYTES, parseDataPack, type DataPack } from '../world/data-pack'
+import { overallRating } from '../world/overall-rating'
+import { careerCompetitions, worldFromPack } from '../world/real-world'
 import { managerAge, MAX_MANAGER_NAME_LENGTH, MAX_MANAGER_NATIONALITY_LENGTH, validateManagerProfile } from '../world/manager'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
@@ -12,6 +17,8 @@ import './career-start.css'
 
 export interface CareerSetup {
   manager: ManagerProfile
+  /** The real league built from the loaded data pack; careers use real clubs only. */
+  world: CareerWorld
   clubId: string
   injuryMode: InjuryMode
   seed: number
@@ -42,6 +49,9 @@ interface CareerStartProps {
   onExport?: () => void
   onStart: (setup: CareerSetup) => void
   onSaveProfile: (profile: ManagerProfile) => void
+  /** The private real-data pack loaded on this computer (shared with real-club friendlies). */
+  pack: DataPack | null
+  onPackLoaded: (pack: DataPack) => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -66,7 +76,7 @@ function SavedDetails({ career }: { career: CareerSummary }) {
 
 export function CareerStart(props: CareerStartProps) {
   return <div className="career-start">
-    <header className="career-start-header"><div className="career-start-brand"><Icon name="ball" size={30} /><div>COURTSIDE<small>Basketball Manager</small></div></div><span className="career-start-edition">Development version<br />Fictional league</span></header>
+    <header className="career-start-header"><div className="career-start-brand"><Icon name="ball" size={30} /><div>COURTSIDE<small>Basketball Manager</small></div></div><span className="career-start-edition">Real clubs<br />Private data pack</span></header>
     <main className="career-start-body">
       {props.view === 'menu' ? <CareerMenu {...props} /> : <CareerForm key={props.view} {...props} profileOnly={props.view === 'profile'} />}
     </main>
@@ -101,12 +111,33 @@ function CareerMenu(props: CareerStartProps) {
 function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
   const [manager, setManager] = useState<ManagerProfile>(() => ({ ...(props.initialManager ?? emptyManager) }))
   const [step, setStep] = useState(0)
-  const [clubId, setClubId] = useState(DEVELOPMENT_CLUBS[0]!.id)
+  const leagues = useMemo(() => props.pack ? careerCompetitions(props.pack) : [], [props.pack])
+  const [competitionId, setCompetitionId] = useState('')
+  const league = leagues.find(item => item.id === competitionId) ?? leagues[0] ?? null
+  const world = useMemo(() => { try { return props.pack && league ? worldFromPack(props.pack, league.id) : null } catch { return null } }, [props.pack, league])
+  const [clubId, setClubId] = useState('')
+  const [packError, setPackError] = useState<string | null>(null)
+  const [packLoading, setPackLoading] = useState(false)
+  const packInput = useRef<HTMLInputElement>(null)
   const [injuryMode, setInjuryMode] = useState<InjuryMode>('standard')
   const [replayCode, setReplayCode] = useState('')
   const [issue, setIssue] = useState<{ message: string; revision: number } | null>(null)
   const title = useRef<HTMLDivElement>(null)
-  const club = DEVELOPMENT_CLUBS.find(team => team.id === clubId)!
+  const club = world ? world.clubs.find(team => team.id === clubId) ?? world.clubs[0]! : null
+  const squadRating = (team: CareerWorld['clubs'][number]) => { const best = team.players.map(player => overallRating(player.attributes, player.position)).sort((a, b) => b - a).slice(0, 8); return Math.round(best.reduce((sum, value) => sum + value, 0) / best.length) }
+
+  async function loadPack(selected: File | undefined) {
+    if (!selected) return
+    setPackError(null)
+    if (selected.size > MAX_DATA_PACK_BYTES) { setPackError('This file is too large to be a data pack.'); return }
+    setPackLoading(true)
+    try {
+      const loaded = await parseDataPack(await selected.text())
+      if (!careerCompetitions(loaded).length) throw new Error('This data pack has no domestic league with an even number of clubs to play a career in.')
+      setCompetitionId(''); setClubId(''); setIssue(null); props.onPackLoaded(loaded)
+    } catch (error) { setPackError(error instanceof Error ? error.message : 'This file could not be read as a data pack.') }
+    finally { setPackLoading(false); if (packInput.current) packInput.current.value = '' }
+  }
   const age = ageAtStart(manager)
   const error = props.error ?? issue?.message ?? null
 
@@ -124,13 +155,13 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
       setManager(validManager)
       if (props.profileOnly) { setIssue(null); props.onSaveProfile(validManager); return }
       if (step === 0) { setIssue(null); setStep(1); return }
-      if (!DEVELOPMENT_CLUBS.some(team => team.id === clubId)) throw new Error('Choose a club from the development league.')
+      if (step === 1 && (!world || !club)) throw new Error('Load your real-data pack and choose a league and a club.')
       if (step === 1) { setIssue(null); setStep(2); return }
       const enteredCode = replayCode.trim()
       if (enteredCode && (!/^\d+$/.test(enteredCode) || Number(enteredCode) > 4294967295)) throw new Error('Enter a replay code from 0 to 4,294,967,295 in Advanced setup, or leave it blank for a new career.')
       const seedValue = enteredCode ? Number(enteredCode) : crypto.getRandomValues(new Uint32Array(1))[0]!
       setIssue(null)
-      props.onStart({ manager: validManager, clubId, injuryMode, seed: seedValue })
+      props.onStart({ manager: validManager, world: world!, clubId: club!.id, injuryMode, seed: seedValue })
     } catch (error) { reportError(error) }
   }
 
@@ -140,7 +171,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
   }
 
   return <>
-    <div ref={title} className="career-start-title" tabIndex={-1}><div><h1>{props.profileOnly ? 'Manager profile' : 'New career'}</h1><p>{props.profileOnly ? 'Set the identity used throughout your career.' : `Development League · ${formatDate(DEVELOPMENT_START_DATE)}`}</p></div></div>
+    <div ref={title} className="career-start-title" tabIndex={-1}><div><h1>{props.profileOnly ? 'Manager profile' : 'New career'}</h1><p>{props.profileOnly ? 'Set the identity used throughout your career.' : `${world?.name ?? 'Real clubs'} · ${formatDate(DEVELOPMENT_START_DATE)}`}</p></div></div>
     {!props.profileOnly && <ol className="career-steps" aria-label="New career setup">{steps.map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined} className={index < step ? 'career-step-complete' : undefined}><span className="career-step-number" aria-hidden="true">{index < step ? <Icon name="check" size={14} /> : index + 1}</span><span>{label}</span></li>)}</ol>}
     <EntryError message={error} revision={issue?.revision} />
     <form className="career-setup-form" onSubmit={submit} noValidate>
@@ -151,17 +182,34 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
             <div className="career-start-field"><label htmlFor="manager-birth-date">Date of birth</label><input id="manager-birth-date" name="manager-birth-date" type="date" autoComplete="bday" value={manager.dateOfBirth} onChange={event => changeManager('dateOfBirth', event.target.value)} aria-describedby="manager-age" required /><small id="manager-age" className="career-identity-age" aria-live="polite">{age === null ? 'Age 18–100 at career start.' : `${age} years old on ${formatDate(DEVELOPMENT_START_DATE)}.`}</small></div>
             <div className="career-start-field"><label htmlFor="manager-nationality">Nationality</label><input id="manager-nationality" name="manager-nationality" list="manager-nationality-options" autoComplete="off" placeholder="Type to find a nationality" value={manager.nationality} onChange={event => changeManager('nationality', event.target.value)} maxLength={MAX_MANAGER_NATIONALITY_LENGTH} aria-describedby="manager-nationality-help" required /><datalist id="manager-nationality-options">{NATIONALITY_SUGGESTIONS.map(item => <option key={item.nationality} value={item.nationality} label={item.place} />)}</datalist><small id="manager-nationality-help">Choose a suggestion or enter your own nationality. Multiple nationalities are welcome.</small></div>
           </div></section>
-          <section className="panel" aria-labelledby="career-world-title"><header className="career-start-panel-heading"><h2 id="career-world-title">{props.profileOnly ? 'Profile details' : 'Career start'}</h2></header>{props.profileOnly ? <p className="career-start-empty">Your name and nationality identify your manager. Age is calculated from your date of birth. Editing this profile preserves your club and career progress.</p> : <><dl className="career-start-details"><dt>Competition</dt><dd>Development League</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd><dt>Format</dt><dd>{DEVELOPMENT_CLUBS.length} clubs · 10 matchdays</dd><dt>Season</dt><dd>2026/27</dd></dl><p className="career-start-subnote">Fictional development clubs, players and financial estimates.</p></>}</section>
+          <section className="panel" aria-labelledby="career-world-title"><header className="career-start-panel-heading"><h2 id="career-world-title">{props.profileOnly ? 'Profile details' : 'Career start'}</h2></header>{props.profileOnly ? <p className="career-start-empty">Your name and nationality identify your manager. Age is calculated from your date of birth. Editing this profile preserves your club and career progress.</p> : <><dl className="career-start-details"><dt>Competition</dt><dd>{world?.name ?? 'Real clubs, chosen in the next step'}</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd>{world && <><dt>Format</dt><dd>{world.clubs.length} clubs · {worldRounds(world)} matchdays</dd></>}<dt>Season</dt><dd>2026/27</dd></dl><p className="career-start-subnote">Real clubs, players and ratings from your private data pack. Wages, budgets, arenas, presidents and sponsors are fictional estimates.</p></>}</section>
         </div>}
 
-        {!props.profileOnly && step === 1 && <div className="career-club-layout">
-          <section className="panel" aria-labelledby="career-club-title"><header className="career-start-panel-heading"><h2 id="career-club-title">Choose your club</h2><span>{DEVELOPMENT_CLUBS.length} clubs</span></header><div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{DEVELOPMENT_CLUBS.map(team => <label className={`career-club-option${clubId === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={clubId === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players</small></span></label>)}</div></section>
-          <section className="panel" aria-labelledby="career-roster-title"><header className="career-start-panel-heading"><h2 id="career-roster-title">{club.name}</h2><span>First team</span></header><div className="career-start-roster-scroll" tabIndex={0} role="region" aria-label={`${club.name} roster preview`}><table className="career-start-roster"><thead><tr><th scope="col">Player</th><th scope="col">Position</th><th scope="col">Height</th></tr></thead><tbody>{club.players.map(player => <tr key={player.id}><td><span className="career-start-player"><span aria-hidden="true"><Avatar player={player} color={club.color} size={30} /></span><span>{player.name}<small>#{player.number}</small></span></span></td><td>{player.position}</td><td>{player.heightCm} cm</td></tr>)}</tbody></table></div></section>
-        </div>}
+        {!props.profileOnly && step === 1 && (!props.pack || !world || !club ? <div className="career-pack-layout">
+          <section className="panel" aria-labelledby="career-pack-title"><header className="career-start-panel-heading"><h2 id="career-pack-title">Real club data</h2><Icon name="upload" size={17} /></header>
+            <div className="career-pack-body">
+              <p>Careers use real clubs and players from your private data pack, built on this computer with <code>npm.cmd run data:pack</code> (for example <code>real-2026.11-pilot-2.json</code>). The file is read here and stays on this computer.</p>
+              <input ref={packInput} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />
+              <button id="career-load-pack" type="button" className="button primary" disabled={packLoading} onClick={() => packInput.current?.click()}><Icon name="upload" size={16} />{packLoading ? 'Checking data pack…' : props.pack ? 'Load another data pack' : 'Load data pack'}</button>
+              {packError && <p id="career-pack-error" className="career-pack-error" role="alert">{packError}</p>}
+              {props.pack && !world && !packError && <p className="career-pack-error" role="alert">This data pack has no league a career can be played in.</p>}
+            </div>
+          </section>
+        </div> : <div className="career-club-layout">
+          <section className="panel" aria-labelledby="career-club-title"><header className="career-start-panel-heading"><h2 id="career-club-title">Choose your club</h2><span data-career-pack={props.pack.version}>Pack {props.pack.version}</span></header>
+            {leagues.length > 1 && <div className="career-start-field career-league-field"><label htmlFor="career-league">League</label><select id="career-league" value={league!.id} onChange={event => { setCompetitionId(event.target.value); setClubId('') }}>{leagues.map(item => <option key={item.id} value={item.id}>{item.name} · {item.clubIds.length} clubs</option>)}</select></div>}
+            <p className="career-league-summary"><strong>{world.name}</strong> · {world.clubs.length} clubs · {worldRounds(world)} matchdays</p>
+            <div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{world.clubs.map(team => <label className={`career-club-option${club.id === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={club.id === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players · squad {squadRating(team)}</small></span></label>)}</div>
+            <button type="button" className="text-button career-pack-change" onClick={() => packInput.current?.click()} disabled={packLoading}>Load another data pack</button>
+            <input ref={packInput} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />
+            {packError && <p className="career-pack-error" role="alert">{packError}</p>}
+          </section>
+          <section className="panel" aria-labelledby="career-roster-title"><header className="career-start-panel-heading"><h2 id="career-roster-title">{club.name}</h2><span>First team</span></header><div className="career-start-roster-scroll" tabIndex={0} role="region" aria-label={`${club.name} roster preview`}><table className="career-start-roster"><thead><tr><th scope="col">Player</th><th scope="col">Position</th><th scope="col">Overall</th><th scope="col">Height</th></tr></thead><tbody>{club.players.map(player => <tr key={player.id}><td><span className="career-start-player"><span aria-hidden="true"><Avatar player={player} color={club.color} size={30} /></span><span>{player.name}<small>#{player.number}</small></span></span></td><td>{player.position}</td><td>{overallRating(player.attributes, player.position)}</td><td>{player.heightCm} cm</td></tr>)}</tbody></table></div></section>
+        </div>)}
 
         {!props.profileOnly && step === 2 && <>
           <div className="career-review-layout">
-            <section className="panel" aria-labelledby="career-review-title"><header className="career-start-panel-heading"><h2 id="career-review-title">Career details</h2><Icon name="people" size={17} /></header><dl className="career-start-details"><dt>Manager</dt><dd>{manager.name}</dd><dt>Date of birth</dt><dd>{formatDate(manager.dateOfBirth)} · age {age}</dd><dt>Nationality</dt><dd>{manager.nationality}</dd><dt>Club</dt><dd>{club.name}</dd><dt>Competition</dt><dd>Development League · 2026/27</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd></dl><p className="career-start-subnote">Fictional development clubs, players and financial estimates.</p></section>
+            <section className="panel" aria-labelledby="career-review-title"><header className="career-start-panel-heading"><h2 id="career-review-title">Career details</h2><Icon name="people" size={17} /></header><dl className="career-start-details"><dt>Manager</dt><dd>{manager.name}</dd><dt>Date of birth</dt><dd>{formatDate(manager.dateOfBirth)} · age {age}</dd><dt>Nationality</dt><dd>{manager.nationality}</dd><dt>Club</dt><dd>{club?.name}</dd><dt>Competition</dt><dd>{world?.name}</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd></dl><p className="career-start-subnote">Real clubs and players from your private data pack; wages, budgets, arenas, presidents and sponsors are fictional estimates. The career keeps its own copy of the league, so it never needs the file again.</p></section>
             <section className="panel" aria-labelledby="career-options-title"><header className="career-start-panel-heading"><h2 id="career-options-title">Career options</h2><Icon name="settings" size={17} /></header><div className="career-review-options"><div className="career-start-field"><label htmlFor="career-injuries">Injury frequency</label><select id="career-injuries" value={injuryMode} onChange={event => setInjuryMode(event.target.value as InjuryMode)} aria-describedby="career-injuries-help"><option value="standard">Standard</option><option value="reduced">Reduced</option><option value="off">Off</option></select><small id="career-injuries-help">Applies equally to every club. Injuries carry between matches.</small></div><details className="career-advanced"><summary>Advanced setup</summary><div className="career-start-field"><label htmlFor="career-seed">Replay code <span className="career-field-optional">Optional</span></label><input id="career-seed" inputMode="numeric" autoComplete="off" placeholder="Automatic · a fresh career every time" value={replayCode} onChange={event => setReplayCode(event.target.value)} aria-describedby="career-seed-help" /><small id="career-seed-help">Leave blank for a fresh career. Enter the same code with the same starting options and choices to reproduce a career’s random events. This does not change difficulty. Codes are whole numbers from 0 to 4,294,967,295.</small></div></details></div></section>
           </div>
           <p className="career-start-storage-note">Starting a career makes it the current local save. Load saves opens the five latest checkpoints. Export a save file from the main menu to keep a separate career.</p>

@@ -40,7 +40,7 @@ describe('fitness appointments and shared staff spending', () => {
     expect(enableFitness(activated)).toBe(activated);
     expect(() => enableFitness(createSeason(53, club, 'off', false))).toThrow(/training/i);
     expect(() => createSeason(53, club, 'off', false, true, true, true, null, false, false, false, false, false, true)).toThrow(/training/i);
-    expect(() => enableFitness({ ...legacy, round: 10 })).toThrow(/one to nine/i);
+    expect(() => enableFitness({ ...legacy, round: 10 })).toThrow(/before the final matchday/i);
   });
 
   it('provides bounded named skills without stacking an overall star multiplier', () => {
@@ -173,7 +173,7 @@ describe('fitness effects in the authoritative weekly interval', () => {
     expect(baseline.training.lastWeek).not.toHaveProperty('fitness');
     expect(baseline.training.lastWeek!.players[player]).not.toHaveProperty('fitness');
     expect(() => processTrainingWeek({ ...original, training: { ...original.training, enabledSince: null } })).toThrow(/Enable training/);
-    expect(() => processTrainingWeek({ ...original, afterRound: 10 })).toThrow(/one and nine/);
+    expect(() => processTrainingWeek({ ...original, afterRound: 10 })).toThrow(/before the final one/);
     expect(getClubFitnessEffects({ ...staffed, training: { ...staffed.training, enabledSince: null } })).toBeNull();
   });
 });

@@ -82,7 +82,8 @@ export function sponsorshipPaymentsDue(commercial: SeasonCommercial, clubCount: 
       if (season < through.seasonNumber || through.round >= SPONSORSHIP_SECOND_INSTALLMENT_ROUND) payment(SPONSORSHIP_SECOND_INSTALLMENT_ROUND, 2, sponsorshipInstallment(agreement, 2));
       if (agreement.bonus > 0 && (season < through.seasonNumber || through.complete)) {
         const position = finalPosition(season, agreement.clubId);
-        if (position !== null && position <= clubCount / 2) payment(10, 'bonus', agreement.bonus);
+        // The bonus follows the final matchday: a double round robin has 2 x (clubs - 1) matchdays.
+        if (position !== null && position <= clubCount / 2) payment(2 * (clubCount - 1), 'bonus', agreement.bonus);
       }
     }
   }

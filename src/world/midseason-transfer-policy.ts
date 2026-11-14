@@ -8,11 +8,12 @@ import { contractForRound, effectiveContractsForRound, getClubContractSummary, M
 import { getFinanceBalance } from './finance';
 import { getPlayerPayroll } from './payroll';
 import { getInSeasonBudget, getInSeasonOffers, remainingSeasonWages } from './recruitment-policy';
-import { dateForRound, SEASON_ROUNDS } from './season';
+import { dateForRound } from './season';
 import { getTransferPaymentSchedule, getTransferPaymentSummary, TRANSFER_PAYMENT_PLANS } from './transfer-payments';
 import { MAX_TRANSFER_FEE, MIN_TRANSFER_FEE, TRANSFER_FEE_STEP } from './transfers-policy';
 import { retirementContractReason } from './lifecycle-policy';
 import { offerOptionsReason, releaseClauseTriggerReason } from './release-clauses';
+import { seasonRounds } from './career-world';
 
 /** Every current and future seller agreement is released together; third-party promises never are. */
 export function getInSeasonReleasedContractIds(state: SeasonState, playerId: string, sellerClubId: string): string[] {
@@ -33,7 +34,8 @@ function futureRightsReason(state: SeasonState, playerId: string, sellerClubId: 
 export function requiredInSeasonTransferFee(state: SeasonState, playerId: string): number {
   const current = contractForRound(state.employment, playerId, state.seasonNumber, state.round);
   if (!current) return 0;
-  let remaining = remainingSeasonWages(current.seasonWage, Math.min(SEASON_ROUNDS, state.round + 1));
+  const rounds = seasonRounds(state);
+  let remaining = remainingSeasonWages(current.seasonWage, Math.min(rounds, state.round + 1), rounds);
   const ids = getInSeasonReleasedContractIds(state, playerId, current.clubId);
   const through = Math.max(state.seasonNumber, ...state.employment.contracts.filter(contract => ids.includes(contract.id)).map(contract => contract.endsSeason));
   for (let year = state.seasonNumber + 1; year <= through; year += 1) remaining += effectiveContractsForRound(state.employment, year, 1).filter(contract => contract.playerId === playerId && contract.clubId === current.clubId).reduce((sum, contract) => sum + contract.seasonWage, 0);
@@ -75,17 +77,17 @@ export function quoteInSeasonTransferOffer(state: SeasonState, playerId: string,
   const current = contractForRound(state.employment, playerId, state.seasonNumber, state.round);
   const own = getInSeasonOffers(state, clubId, true).find(offer => offer.playerId === playerId);
   const resolving = !!resolvingOfferId && own?.id === resolvingOfferId && own.status === 'pending' && own.responseRound === state.round && own.responseOn === state.date;
-  const responseRound = resolving ? state.round : Math.min(SEASON_ROUNDS, state.round + 1), responseOn = dateForRound(responseRound, state.seasonNumber);
+  const rounds = seasonRounds(state), responseRound = resolving ? state.round : Math.min(rounds, state.round + 1), responseOn = dateForRound(responseRound, state.seasonNumber);
   const wageValid = Number.isSafeInteger(seasonWage) && seasonWage >= MIN_CONTRACT_WAGE && seasonWage <= MAX_CONTRACT_WAGE && seasonWage % WAGE_STEP === 0;
   const termsValid = Number.isInteger(seasons) && seasons >= 1 && seasons <= MAX_CONTRACT_SEASONS && state.seasonNumber + seasons - 1 <= 7974;
   const feeValid = Number.isSafeInteger(fee) && fee >= MIN_TRANSFER_FEE && fee <= MAX_TRANSFER_FEE && fee % TRANSFER_FEE_STEP === 0;
   const planValid = TRANSFER_PAYMENT_PLANS.includes(paymentPlan);
-  const remainingWages = wageValid ? remainingSeasonWages(seasonWage, responseRound) : 0;
+  const remainingWages = wageValid ? remainingSeasonWages(seasonWage, responseRound, rounds) : 0;
   const budget = getInSeasonBudget(state, clubId, own?.id), futureBudgets: InSeasonTransferQuote['futureBudgets'] = [];
   let reason: string | null = null;
   if (!state.recruitment?.enabledSince || !state.recruitment.transfersEnabledSince) reason = 'Enable in-season club transfers before approaching contracted players.';
   else if (state.status !== 'active') reason = 'Use the offseason market after the final matchday.';
-  else if (state.round >= SEASON_ROUNDS && !resolving) reason = 'There is no later matchday available to register a transfer this season.';
+  else if (state.round >= rounds && !resolving) reason = 'There is no later matchday available to register a transfer this season.';
   else if (!state.clubs.some(club => club.id === clubId) || !current || current.clubId === clubId) reason = 'Choose a player currently registered at another club.';
   else if (offerOptionsReason(state, options, true)) reason = offerOptionsReason(state, options, true);
   else if (state.employment.transfers.some(transfer => transfer.playerId === playerId && transfer.startsSeason === state.seasonNumber && transfer.startsRound > 1)) reason = 'This player has already moved in a paid transfer during this season.';
@@ -128,5 +130,5 @@ export function quoteInSeasonSale(state: SeasonState, offerId: string): InSeason
   if (!acceptReason && offer.responseRound <= state.round) acceptReason = 'This transfer review has expired.';
   const counterReason = acceptReason ?? (transfer.fee >= transfer.requiredFee ? 'This offer already meets the asking fee. Accept or reject it.' : null);
   const released = getInSeasonReleasedContractIds(state, offer.playerId, transfer.sellerClubId);
-  return { offerId, playerId: offer.playerId, sellerClubId: transfer.sellerClubId, buyerClubId: offer.clubId, fee: transfer.fee, paymentPlan: transfer.paymentPlan, requiredFee: transfer.requiredFee, rosterAfter, annualSalaryFreed: current?.clubId === transfer.sellerClubId ? current.seasonWage : 0, remainingWagesFreed: sellerPayroll && !sellerPayroll.prepaid ? Math.min(sellerPayroll.futureCommitted, remainingSeasonWages(sellerPayroll.seasonWages, offer.responseRound)) : 0, salaryAlreadyCharged: sellerPayroll?.charged ?? 0, nonRefundablePrepayment: sellerPayroll?.prepaid ? state.finance.ledger.flatMap(entry => entry.payroll?.type === 'prepayment' ? entry.payroll.items : []).filter(item => item.agreementId === sellerPayroll.agreement.id).reduce((sum, item) => sum + item.amount, 0) : 0, releasedThroughSeason: Math.max(state.seasonNumber, ...state.employment.contracts.filter(contract => released.includes(contract.id)).map(contract => contract.endsSeason)), decisionDeadline: offer.responseOn, responseRound: offer.responseRound, responseOn: offer.responseOn, canAccept: acceptReason === null, acceptReason, canCounter: counterReason === null, counterReason };
+  return { offerId, playerId: offer.playerId, sellerClubId: transfer.sellerClubId, buyerClubId: offer.clubId, fee: transfer.fee, paymentPlan: transfer.paymentPlan, requiredFee: transfer.requiredFee, rosterAfter, annualSalaryFreed: current?.clubId === transfer.sellerClubId ? current.seasonWage : 0, remainingWagesFreed: sellerPayroll && !sellerPayroll.prepaid ? Math.min(sellerPayroll.futureCommitted, remainingSeasonWages(sellerPayroll.seasonWages, offer.responseRound, seasonRounds(state))) : 0, salaryAlreadyCharged: sellerPayroll?.charged ?? 0, nonRefundablePrepayment: sellerPayroll?.prepaid ? state.finance.ledger.flatMap(entry => entry.payroll?.type === 'prepayment' ? entry.payroll.items : []).filter(item => item.agreementId === sellerPayroll.agreement.id).reduce((sum, item) => sum + item.amount, 0) : 0, releasedThroughSeason: Math.max(state.seasonNumber, ...state.employment.contracts.filter(contract => released.includes(contract.id)).map(contract => contract.endsSeason)), decisionDeadline: offer.responseOn, responseRound: offer.responseRound, responseOn: offer.responseOn, canAccept: acceptReason === null, acceptReason, canCounter: counterReason === null, counterReason };
 }

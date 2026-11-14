@@ -1,5 +1,5 @@
 import type { SeasonState } from '../domain/season';
-import { parseSeason, serializeSeason } from './season-storage';
+import { parseSeason, serializeSeasonCompact } from './season-storage';
 
 /**
  * Validated conversion between a career and its save text. The browser runs it in a worker so strict
@@ -15,7 +15,7 @@ export type SeasonCodecRequest = SeasonCodecJob & { requestId: number };
 export type SeasonCodecReply = { requestId: number; result: string | SeasonState } | { requestId: number; error: string };
 
 export const directSeasonCodec: SeasonCodec = {
-  serialize: async state => serializeSeason(state),
+  serialize: async state => serializeSeasonCompact(state),
   parse: async text => parseSeason(text),
 };
 
@@ -24,7 +24,7 @@ const runDirectly = (job: SeasonCodecJob): Promise<string | SeasonState> => job.
 /** The worker's entire behavior: identical validation and messages to the direct codec. */
 export function handleSeasonCodecRequest(request: SeasonCodecRequest): SeasonCodecReply {
   try {
-    if (request.kind === 'serialize') return { requestId: request.requestId, result: serializeSeason(request.state) };
+    if (request.kind === 'serialize') return { requestId: request.requestId, result: serializeSeasonCompact(request.state) };
     if (request.kind === 'parse') return { requestId: request.requestId, result: parseSeason(request.text) };
     throw new Error('Unsupported save operation.');
   } catch (error) {

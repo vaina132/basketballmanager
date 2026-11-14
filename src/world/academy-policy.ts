@@ -6,6 +6,7 @@ import type { InSeasonOffer, InSeasonOfferQuote } from '../domain/recruitment';
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { getInSeasonOffers, quoteInSeasonOffer } from './recruitment-policy';
 import { TRAINING_ATTRIBUTES } from './training';
+import { roundKey } from './career-world';
 
 export const ACADEMY_CAPACITY = 6;
 export const YOUTH_ACADEMY_CAPACITY = 8;
@@ -17,8 +18,8 @@ export function emptyAcademyPoints(): TrainingPoints { return Object.fromEntries
 
 export function getAcademyProspect(state: Pick<SeasonState, 'academy' | 'seasonNumber' | 'round'>, playerId: string): AcademyProspect | null {
   if (!state.academy.enabledSince) return null;
-  const at = state.seasonNumber * 10 + state.round;
-  return state.academy.prospects.find(prospect => prospect.player.id === playerId && prospect.intakeSeason * 10 + prospect.intakeRound <= at && !state.academy.graduates.some(graduate => graduate.prospectId === playerId && graduate.availableSince.seasonNumber * 10 + graduate.availableSince.round <= at)) ?? null;
+  const at = roundKey(state.seasonNumber, state.round);
+  return state.academy.prospects.find(prospect => prospect.player.id === playerId && roundKey(prospect.intakeSeason, prospect.intakeRound) <= at && !state.academy.graduates.some(graduate => graduate.prospectId === playerId && roundKey(graduate.availableSince.seasonNumber, graduate.availableSince.round) <= at)) ?? null;
 }
 export function developAcademyPlayer(prospect: AcademyProspect, points: TrainingPoints): Player {
   return { ...prospect.player, attributes: Object.fromEntries(TRAINING_ATTRIBUTES.map(key => {

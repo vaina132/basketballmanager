@@ -48,7 +48,7 @@ describe('physio recruitment and four-role staff allocation', () => {
     const noTraining = createSeason(53, club, 'off', false, false, true, false, null, false, false, false, false, false, false, true);
     expect(noTraining.physio.enabledSince).not.toBeNull();
     expect(() => enablePhysio(createSeason(53, club, 'off', false, false, false, false))).toThrow(/finances/i);
-    expect(() => enablePhysio({ ...legacy, round: 10 })).toThrow(/one to nine/i);
+    expect(() => enablePhysio({ ...legacy, round: 10 })).toThrow(/before the final matchday/i);
   });
 
   it('uses one meaningful bounded skill and hires each person for only one club', () => {

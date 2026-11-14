@@ -10,6 +10,7 @@ import { getScoutingDiscovery, scoutDiscoveryContribution, scoutDiscoveryGain } 
 import { ScoutPortrait } from './ScoutPortrait'
 import { StaffStars } from './StaffRating'
 import { Icon } from './Icon'
+import { SCOUT_DIRECTORY } from '../data/staff-directory'
 
 export interface ScoutStaffProps {
   season: SeasonState
@@ -22,7 +23,7 @@ export interface ScoutStaffProps {
 }
 
 const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100)
-const scoutById = (id: string) => DEVELOPMENT_SCOUTS.find(scout => scout.id === id)!
+const scoutById = (id: string) => SCOUT_DIRECTORY.find(scout => scout.id === id)!
 const skillLabels = { evaluation: 'Player assessment', reporting: 'Report clarity' }
 
 function ScoutSkills({ scout }: { scout: Scout }) {

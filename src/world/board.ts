@@ -7,20 +7,21 @@ import { dateForRound } from './season';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { BOARD_VERDICT_EFFECTS, verdictForConfidence } from './board-consequences';
 import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS } from './rivalries';
-import { worldOf } from './career-world';
+import { roundKey, roundOrdinal, seasonRounds, worldOf } from './career-world';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
 export const BOARD_WIN_TOLERANCE = 0.5;
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
-const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
+/** Matchdays as one sequence across seasons; stored in anchors and counted forward, so it uses the season length. */
+const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
 const rounded = (n: number) => Math.round(n * 1000) / 1000;
 
 export function createBoard(): SeasonBoard { return { model: 'board-1', enabledSince: null, mandates: [], reviews: [], consequencesSince: null }; }
 
 export function boardEventAnchor(state: SeasonState): BoardAnchor {
   const completed = state.fixtures.filter(fixture => fixture.result).reduce((round, fixture) => Math.max(round, fixture.round), 0);
-  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed), ledgerCount: state.finance.ledger.length, rosterCount: state.rosters.length };
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), ledgerCount: state.finance.ledger.length, rosterCount: state.rosters.length };
 }
 
 /** Restrict transfer evidence to receipts in this ledger prefix, including same-day decisions. */
@@ -33,14 +34,14 @@ export function boardUnpaidCosts(state: SeasonState, clubId: string): number | n
 
 /** The mandate uses immutable registration snapshots, never later skill growth or arrivals. */
 export function buildBoardMandate(state: SeasonState, startsRound: number): BoardMandate {
-  if (!Number.isInteger(startsRound) || startsRound < 1 || startsRound > 11) throw new Error('Choose an actual prospective board assessment window.');
+  if (!Number.isInteger(startsRound) || startsRound < 1 || startsRound > seasonRounds(state) + 1) throw new Error('Choose an actual prospective board assessment window.');
   const resources = state.clubs.map(club => {
     const roster = rosterForRound(state.rosters, club.id, state.round);
     const top = roster.players.map(player => Object.values(player.attributes).reduce((sum, value) => sum + value, 0) / 7).sort((a, b) => b - a).slice(0, 8);
     return { clubId: club.id, rosterId: roster.id, strength: top.reduce((sum, value) => sum + value, 0) / 8 };
   });
-  const games = Math.max(0, 11 - startsRound);
-  return { ...boardEventAnchor(state), id: `board-mandate-${state.board.mandates.length + 1}`, startsRound, deadlineDate: dateForRound(10, state.seasonNumber), clubs: Object.fromEntries(resources.map(resource => {
+  const games = Math.max(0, seasonRounds(state) + 1 - startsRound);
+  return { ...boardEventAnchor(state), id: `board-mandate-${state.board.mandates.length + 1}`, startsRound, deadlineDate: dateForRound(seasonRounds(state), state.seasonNumber), clubs: Object.fromEntries(resources.map(resource => {
     const resourceRank = 1 + resources.filter(other => other.strength > resource.strength).length;
     const rate = resourceRank <= Math.ceil(resources.length / 3) ? 0.6 : resourceRank <= Math.ceil(resources.length * 2 / 3) ? 0.5 : 0.4;
     return [resource.clubId, { rosterId: resource.rosterId, resourceRank, targetWins: Math.ceil(games * rate), games, startingUnpaid: boardUnpaidCosts(state, resource.clubId) }];
@@ -54,7 +55,7 @@ export function enableBoard(state: SeasonState, mode: 'career' | 'prospective' =
   if (mode === 'career' && (state.seasonNumber !== 1 || state.round !== 1 || state.status !== 'active' || state.history.length || state.fixtures.some(fixture => fixture.result) || state.activeMatch.status !== 'ready' || state.activeMatch.stepCount !== 0)) throw new Error('Initial board expectations must be set at the untouched first career opening.');
   const board: SeasonBoard = { ...createBoard(), enabledSince: { ...boardEventAnchor(state), includeCurrentRound: mode === 'career' } };
   const enabled = { ...state, board };
-  if (mode === 'prospective' && state.round === 10) return enabled;
+  if (mode === 'prospective' && state.round === seasonRounds(state)) return enabled;
   return { ...enabled, board: { ...board, mandates: [buildBoardMandate(enabled, mode === 'career' ? 1 : state.round + 1)] } };
 }
 
@@ -80,7 +81,7 @@ export function buildBoardReview(state: SeasonState, mandate: BoardMandate): Boa
   const clubs: Record<string, BoardClubReview> = {};
   // Derbies count only once rivalries govern this review's matchday, so earlier reviews rebuild unchanged.
   const from = state.rivalries?.enabledSince?.effectiveFrom;
-  const rivalriesCount = !!from && (state.seasonNumber - 1) * 10 + state.round >= (from.seasonNumber - 1) * 10 + from.round;
+  const rivalriesCount = !!from && roundKey(state.seasonNumber, state.round) >= roundKey(from.seasonNumber, from.round);
   for (const club of state.clubs) {
     const objective = mandate.clubs[club.id];
     if (!objective || !objective.games) throw new Error('Review a club with a communicated sporting objective.');

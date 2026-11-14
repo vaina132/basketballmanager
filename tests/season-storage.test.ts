@@ -132,7 +132,7 @@ describe('season persistence boundaries', () => {
     expect(() => parseSeason(' '.repeat(MAX_SEASON_SAVE_BYTES + 1))).toThrow(/too large/);
     expect(() => parseSeason('not json')).toThrow(/valid JSON/);
     expect(() => parseSeason(initialText.replace('"state":', '"__proto__":{},"state":'))).toThrow(/unsafe/);
-    expect(() => parseSeason(JSON.stringify(Array.from({ length: 20_001 }, () => 0)))).toThrow(/oversized collection/);
+    expect(() => parseSeason(JSON.stringify(Array.from({ length: 200_001 }, () => 0)))).toThrow(/oversized collection/);
     let deep: unknown = 0;
     for (let index = 0; index < 45; index += 1) deep = { nested: deep };
     expect(() => parseSeason(JSON.stringify(deep))).toThrow(/nested/);

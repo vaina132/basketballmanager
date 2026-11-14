@@ -9,9 +9,10 @@ import { getYouthPlayerStatus } from './youth-competition';
 import { contractForSeason, effectiveContractsForRound, EMPLOYMENT_BUDGET, MAX_CONTRACT_WAGE, MAX_ROSTER_SIZE, MIN_CONTRACT_WAGE, WAGE_STEP } from './employment-policy';
 import { getFinanceBalance } from './finance';
 import { getSpendableCash, payrollInstallment } from './payroll-policy';
-import { dateForRound, SEASON_ROUNDS } from './season';
+import { dateForRound } from './season';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { offerOptionsReason } from './release-clauses';
+import { seasonRounds } from './career-world';
 
 export const IN_SEASON_EVENT_LIMIT = 20_000;
 
@@ -29,8 +30,8 @@ export function getReservedInSeasonFees(state: Partial<Pick<SeasonState, 'recrui
   return getInSeasonOffers(state, clubId, true).filter(offer => offer.id !== excludeOfferId).reduce((sum, offer) => sum + (offer.transfer?.fee ?? 0), 0);
 }
 
-export function remainingSeasonWages(seasonWage: number, startsRound: number): number {
-  return Array.from({ length: SEASON_ROUNDS - startsRound + 1 }, (_, index) => payrollInstallment(seasonWage, startsRound + index)).reduce((sum, amount) => sum + amount, 0);
+export function remainingSeasonWages(seasonWage: number, startsRound: number, rounds: number): number {
+  return Array.from({ length: rounds - startsRound + 1 }, (_, index) => payrollInstallment(seasonWage, startsRound + index, rounds)).reduce((sum, amount) => sum + amount, 0);
 }
 
 export function getInSeasonBudget(state: SeasonState, clubId = state.managedClubId, excludeOfferId?: string): InSeasonBudget {
@@ -47,10 +48,10 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   const player = academyProspectId ? prospect?.player : getCareerPlayers(state).find(candidate => candidate.id === playerId);
   const own = getInSeasonOffers(state, clubId, true).find(offer => offer.playerId === playerId);
   const resolving = !!resolvingOfferId && own?.id === resolvingOfferId && own.responseRound === state.round && own.responseOn === state.date;
-  const responseRound = resolving ? state.round : Math.min(SEASON_ROUNDS, state.round + 1);
+  const rounds = seasonRounds(state), responseRound = resolving ? state.round : Math.min(rounds, state.round + 1);
   const responseOn = dateForRound(responseRound, state.seasonNumber);
   const validWage = Number.isSafeInteger(seasonWage) && seasonWage >= MIN_CONTRACT_WAGE && seasonWage <= MAX_CONTRACT_WAGE && seasonWage % WAGE_STEP === 0;
-  const remainingWages = validWage ? remainingSeasonWages(seasonWage, responseRound) : 0;
+  const remainingWages = validWage ? remainingSeasonWages(seasonWage, responseRound, rounds) : 0;
   const budget = getInSeasonBudget(state, clubId, own?.id);
   let reason: string | null = null;
   if (!state.recruitment?.enabledSince) reason = 'Enable in-season recruitment before approaching free agents.';
@@ -60,7 +61,7 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   else if (prospect && getYouthPlayerStatus(state, playerId).injury) reason = `This prospect is recovering until ${getYouthPlayerStatus(state, playerId).returnOn}; review promotion after recovery.`;
   else if (offerOptionsReason(state, options, false)) reason = offerOptionsReason(state, options, false);
   else if (state.status !== 'active') reason = 'Use the offseason market after the final matchday.';
-  else if (state.round >= SEASON_ROUNDS && !resolving) reason = 'There is no later matchday available to register a new player this season.';
+  else if (state.round >= rounds && !resolving) reason = 'There is no later matchday available to register a new player this season.';
   else if (!validWage) reason = 'Choose an annual salary from EUR 5,000 to EUR 50,000 in EUR 500 steps.';
   else if (retirementContractReason(state, playerId, state.seasonNumber)) reason = retirementContractReason(state, playerId, state.seasonNumber);
   else if (contractForSeason(state.employment, playerId, state.seasonNumber)) reason = 'Choose a free agent without an employer for this season.';

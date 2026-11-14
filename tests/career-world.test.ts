@@ -1,10 +1,10 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { CareerWorld } from '../src/domain/world';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_WORLD } from '../src/data/development-world';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
-import { parseSeason, serializeSeason } from '../src/storage/season-storage';
-import { clubFinanceDefinition, clubPresident, validateWorld, worldOf, worldRivalryFor } from '../src/world/career-world';
+import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
+import { clubFinanceDefinition, clubPresident, requireWorldContexts, validateWorld, worldOf, worldRivalryFor } from '../src/world/career-world';
 import { setEmploymentDelegation } from '../src/world/employment';
 import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
@@ -36,6 +36,8 @@ const world = renamedWorld();
 let opening: SeasonState, complete: SeasonState, nextSeason: SeasonState;
 
 beforeAll(() => {
+  // Any rule that lost the career's world fails instead of quietly using the built-in league.
+  requireWorldContexts(true);
   opening = createSeason({ seed: 227, managedClubId: 'w-rhine-falcons', injuryMode: 'standard', world, ...NEW_CAREER_SYSTEMS });
   let state = setEmploymentDelegation(opening, true);
   while (state.status === 'active') state = advance(state);
@@ -43,6 +45,7 @@ beforeAll(() => {
   complete = state;
   nextSeason = rolloverSeason(complete);
 }, 300_000);
+afterAll(() => requireWorldContexts(false));
 
 describe('careers in another world', () => {
   it('accept a complete world and refuse an inconsistent one', () => {
@@ -79,9 +82,10 @@ describe('careers in another world', () => {
   it('carry the world in the save and load it back exactly', () => {
     for (const state of [opening, complete, nextSeason]) {
       const file = JSON.parse(serializeSeason(state));
-      expect(file.formatVersion).toBe(39);
+      expect(file.formatVersion).toBe(40);
       expect(file.state.world.id).toBe('test-world-1');
       expect(roundTrip(state)).toEqual(state);
+      expect(parseSeason(serializeSeasonCompact(state))).toEqual(state);
     }
   }, 300_000);
 

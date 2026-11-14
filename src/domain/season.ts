@@ -78,8 +78,8 @@ export interface SeasonArchive {
 }
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
-/** Format 39: careers outside the built-in fictional league carry their world (`SeasonState.world`). */
-export const SEASON_SCHEMA_VERSION = 39;
+/** Format 39: careers outside the built-in fictional league carry their world (`SeasonState.world`). Format 40: saves use the compact layout (`storage/compact-json.ts`); the state is unchanged. */
+export const SEASON_SCHEMA_VERSION = 40;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

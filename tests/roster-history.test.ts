@@ -43,7 +43,7 @@ describe('immutable registration snapshots', () => {
     expect(rosterForRound(rosters, first.clubId, 4)).toBe(changed);
     expect(rosterForRound(rosters, first.clubId, 10)).toBe(changed);
     expect(() => rosterForRound(rosters, 'missing', 2)).toThrow(/no registered roster/);
-    expect(() => rosterForRound(rosters, first.clubId, 11)).toThrow(/round/);
+    expect(() => rosterForRound(rosters, first.clubId, 79)).toThrow(/matchday/);
     expect(() => rosterForRound([...rosters, { ...changed, id: 'duplicate-boundary' }], first.clubId, 4)).toThrow(/ambiguous/);
   });
 });

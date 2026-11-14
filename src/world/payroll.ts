@@ -6,6 +6,7 @@ import { getCareerWage } from './player-catalog';
 import { contractForSeason } from './employment-policy';
 import { getFinanceBalance, recordPayrollCharge } from './finance';
 import { agreementCommitted, agreementThroughRound, getPayrollReserve, getSpendableCash, isAgreementPrepaid, PAYROLL_AUTOMATION_CUSHION, PAYROLL_INSTALLMENTS, payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from './payroll-policy';
+import { seasonRounds } from './career-world';
 
 export { getSeasonWage } from '../data/development-wages';
 export { agreementCommitted, getPayrollReserve, getSpendableCash, isAgreementPrepaid, PAYROLL_AUTOMATION_CUSHION, PAYROLL_INSTALLMENTS, payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from './payroll-policy';
@@ -49,8 +50,8 @@ function agreementPayroll(state: SeasonState, agreement: PlayerWageAgreement): P
   return {
     agreement, prepaid, seasonWages: agreement.seasonWage,
     charged: items.reduce((sum, item) => sum + item.amount, 0), savings: items.reduce((sum, item) => sum + item.discount, 0),
-    futureCommitted: agreementCommitted(agreement, state.finance.ledger, agreementThroughRound(state, agreement)),
-    nextInstallment: !active || state.status === 'complete' || prepaid || installmentRecorded(state, agreement.clubId) ? 0 : payrollInstallment(agreement.seasonWage, state.round),
+    futureCommitted: agreementCommitted(agreement, state.finance.ledger, agreementThroughRound(state, agreement), seasonRounds(state)),
+    nextInstallment: !active || state.status === 'complete' || prepaid || installmentRecorded(state, agreement.clubId) ? 0 : payrollInstallment(agreement.seasonWage, state.round, seasonRounds(state)),
   };
 }
 
@@ -80,7 +81,7 @@ function prepaymentQuote(state: SeasonState, playerId: string, actingClubId: str
   else if (!gross || installmentRecorded(state, agreement.clubId)) reason = 'There are no remaining wages to settle on this matchday.';
   else if (balance.unpaid > 0) reason = 'Settle unpaid club costs before prepaying future wages.';
   else if (balance.cash < requiredCash) reason = 'Not enough cash to prepay while protecting other players’ remaining wage commitments.';
-  return { agreementId: agreement.id, playerId, clubId: agreement.clubId, fromRound: state.round, throughRound: PAYROLL_INSTALLMENTS, gross, discount, amount, otherCommitments, requiredCash, canPrepay: reason === null, reason };
+  return { agreementId: agreement.id, playerId, clubId: agreement.clubId, fromRound: state.round, throughRound: seasonRounds(state), gross, discount, amount, otherCommitments, requiredCash, canPrepay: reason === null, reason };
 }
 
 export function quoteWagePrepayment(state: SeasonState, playerId: string): WagePrepaymentQuote {
@@ -143,7 +144,7 @@ export function processPayrollRound(state: SeasonState): SeasonState {
       const agreement = state.payroll.agreements.find(agreement => agreement.playerId === player.id && agreement.clubId === club.id && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= state.round && agreementThroughRound(state, agreement) >= state.round);
       if (!agreement || agreement.startsRound > state.round) throw new Error('Every player needs a current wage agreement before payroll.');
       if (isAgreementPrepaid(agreement.id, state.finance.ledger)) return [];
-      const gross = payrollInstallment(agreement.seasonWage, state.round);
+      const gross = payrollInstallment(agreement.seasonWage, state.round, seasonRounds(state));
       return [{ agreementId: agreement.id, playerId: player.id, gross, discount: 0, amount: gross }];
     });
     next = recordPayrollCharge(next, club.id, { type: 'installment', fromRound: state.round, throughRound: state.round, items }, `payroll-s${state.seasonNumber}-r${state.round}`);
@@ -156,6 +157,6 @@ export function startPayrollSeason(state: SeasonState): SeasonState {
   if (!state.payroll.enabledSince) return state;
   if (state.status !== 'active' || state.round !== 1) throw new Error('Start the annual wage schedule on opening day.');
   if (state.payroll.agreements.some(agreement => agreement.seasonNumber === state.seasonNumber)) throw new Error('This season’s wage agreements already exist.');
-  if (state.payroll.agreements.some(agreement => agreement.seasonNumber < state.seasonNumber && agreementCommitted(agreement, state.finance.ledger, agreementThroughRound(state, agreement)) !== 0)) throw new Error('Record every previous season wage installment before opening the new schedule.');
+  if (state.payroll.agreements.some(agreement => agreement.seasonNumber < state.seasonNumber && agreementCommitted(agreement, state.finance.ledger, agreementThroughRound(state, agreement), seasonRounds(state)) !== 0)) throw new Error('Record every previous season wage installment before opening the new schedule.');
   return { ...state, payroll: { ...state.payroll, agreements: [...state.payroll.agreements, ...seasonAgreements(state, 1)] } };
 }

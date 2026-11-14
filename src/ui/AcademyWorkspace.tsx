@@ -18,6 +18,8 @@ import { StaminaMeter } from './StaminaMeter'
 import { FacilityPracticeContribution, FacilityPracticeEffect } from './FacilityPractice'
 import { scoutingDate } from './ScoutingKnowledge'
 import './academy-workspace.css'
+import { seasonRounds } from '../world/career-world'
+import { YOUTH_COACH_DIRECTORY } from '../data/staff-directory'
 
 export interface AcademyWorkspaceProps {
   season: SeasonState
@@ -34,7 +36,7 @@ export interface AcademyWorkspaceProps {
 const money = (amount: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount / 100)
 const total = (points: PlayerAttributes) => TRAINING_ATTRIBUTES.reduce((sum, key) => sum + points[key], 0)
 const gains = (row: AcademyPlayerView) => TRAINING_ATTRIBUTES.reduce((sum, key) => sum + Math.floor(row.points[key] / 100), 0)
-const coachName = (id: string) => DEVELOPMENT_YOUTH_COACHES.find(coach => coach.id === id)?.name ?? 'Youth coach'
+const coachName = (id: string) => YOUTH_COACH_DIRECTORY.find(coach => coach.id === id)?.name ?? 'Youth coach'
 
 function AcademyProgress({ row }: { row: AcademyPlayerView }) {
   const eligible = TRAINING_ATTRIBUTES.filter(key => row.points[key] < academyPointCap(row.prospect.player.attributes[key]))
@@ -65,7 +67,7 @@ function PromotionReview({ season, row, busy, onOffer, onWithdraw, onClose }: { 
   return <section className="academy-promotion panel" ref={region} tabIndex={-1} aria-labelledby="academy-promotion-title" onKeyDown={event => { if (event.key === 'Escape' && !busy) { event.preventDefault(); onClose() } }}>
     <header className="academy-heading"><div><h2 id="academy-promotion-title">Offer a senior contract</h2><span>{row.player.name} &middot; remainder of this season</span></div><button className="text-button" onClick={onClose} disabled={busy}><Icon name="close" size={14} />Close</button></header>
     <div className="academy-promotion-body"><div className="academy-promotion-terms"><label htmlFor="academy-promotion-wage">Annual salary <strong>{validWage ? money(amount) : 'Enter salary'}</strong></label><input id="academy-promotion-wage" type="range" min={MIN_CONTRACT_WAGE} max={MAX_CONTRACT_WAGE} step={WAGE_STEP} value={validWage ? amount : MIN_CONTRACT_WAGE} onChange={event => setWage(event.target.value)} disabled={busy} /><label className="academy-wage-input">Exact annual salary (€)<input id="academy-promotion-wage-number" type="number" min={MIN_CONTRACT_WAGE / 100} max={MAX_CONTRACT_WAGE / 100} step={WAGE_STEP / 100} value={wage === '' ? '' : amount / 100} onChange={event => setWage(event.target.value === '' ? '' : String(Number(event.target.value) * 100))} disabled={busy} /></label><small>Opening demand: {money(requiredNegotiationWage(row.player.id, 1, undefined, season))} / year</small></div>
-      <div className="academy-promotion-facts"><div><span>Reply &amp; joining date</span><strong>{season.status === 'active' && season.round < 10 ? scoutingDate(quote.responseOn) : 'Window closed'}</strong></div><div><span>Salary cost for remaining season</span><strong data-promotion-cost={quote.remainingWages}>{validWage ? money(quote.remainingWages) : '—'}</strong></div><div><span>Senior squad after signing</span><strong>{quote.rosterSize} / 12</strong></div><details><summary>Budget after this offer</summary><dl><div><dt>Remaining budget</dt><dd>{validWage ? money(quote.remainingBudgetAfter) : '—'}</dd></div><div><dt>Current salary budget remaining / year</dt><dd>{validWage ? money(quote.annualBudgetRemaining) : '—'}</dd></div></dl><p>Remaining salary costs and a senior squad place are held until the reply. The current match stays unchanged. No transfer fee.</p></details></div>
+      <div className="academy-promotion-facts"><div><span>Reply &amp; joining date</span><strong>{season.status === 'active' && season.round < seasonRounds(season) ? scoutingDate(quote.responseOn) : 'Window closed'}</strong></div><div><span>Salary cost for remaining season</span><strong data-promotion-cost={quote.remainingWages}>{validWage ? money(quote.remainingWages) : '—'}</strong></div><div><span>Senior squad after signing</span><strong>{quote.rosterSize} / 12</strong></div><details><summary>Budget after this offer</summary><dl><div><dt>Remaining budget</dt><dd>{validWage ? money(quote.remainingBudgetAfter) : '—'}</dd></div><div><dt>Current salary budget remaining / year</dt><dd>{validWage ? money(quote.annualBudgetRemaining) : '—'}</dd></div></dl><p>Remaining salary costs and a senior squad place are held until the reply. The current match stays unchanged. No transfer fee.</p></details></div>
     </div>
     {row.pendingOffer ? <div className="academy-promotion-status" role="status"><Icon name="clock" size={17} /><span>Awaiting reply on {scoutingDate(row.pendingOffer.responseOn)}. The player remains in the academy until he signs.</span><button id="academy-withdraw-promotion" className="text-button" onClick={() => onWithdraw(row.pendingOffer!.id)} disabled={busy}>Withdraw offer</button></div> : latest && latest.status !== 'accepted' && <p className="academy-promotion-status" role="status">{latest.status === 'countered' ? 'Player counteroffer' : latest.status === 'withdrawn' ? 'Offer withdrawn' : latest.status === 'cancelled' ? 'Offer cancelled' : 'Previous offer closed'}{latest.reason ? ` · ${latest.reason}` : ''}. Still in the academy.</p>}
     {season.youthCompetition.enabledSince && <div className="academy-promotion-youth"><strong>Academy after this promotion: {academyAfter.length} players</strong><span data-promotion-youth-available={availableAfter}>Currently available: {availableAfter} · excludes this player</span>{otherPending > 0 && <span data-promotion-youth-combined={academyAfterAll.length} data-promotion-youth-combined-available={availableAfterAll}>If this and the {otherPending} other pending {otherPending === 1 ? 'promotion are' : 'promotions are'} accepted: <strong>{academyAfterAll.length} players · {availableAfterAll} currently available</strong></span>}{availableAfterAll < 5 && <span className="youth-shortage" role="status"><Icon name="medical" size={15} />Fewer than five available. Your youth team may lose by default until enough players return or arrive.</span>}</div>}
@@ -80,11 +82,11 @@ export function AcademyWorkspace({ season, busy = false, onEnableAcademy, onEnab
   const club = season.clubs.find(team => team.id === season.managedClubId)!
   const enabled = season.academy.enabledSince !== null
   const competitionEnabled = season.youthCompetition.enabledSince !== null
-  const closed = season.status !== 'active' || season.round === 10
+  const closed = season.status !== 'active' || season.round === seasonRounds(season)
   const selected = rows.find(row => row.player.id === selectedId) ?? rows[0] ?? null
   const promotion = rows.find(row => row.player.id === promotionId) ?? null
   const coachContract = getClubYouthCoach(season)
-  const coach = coachContract ? DEVELOPMENT_YOUTH_COACHES.find(item => item.id === coachContract.coachId) : null
+  const coach = coachContract ? YOUTH_COACH_DIRECTORY.find(item => item.id === coachContract.coachId) : null
   const enableReason = !season.recruitment.enabledSince || !season.finance.enabledSince || !season.employment.enabledSince || !season.payroll.enabledSince || !season.negotiations.enabledSince ? 'Enable club finances, player contracts, payroll and in-season recruitment first.' : closed ? 'Start next season to enable the academy.' : null
   const latestWeek = [...season.academy.weeks].reverse().find(week => Object.values(week.players).some(player => player.clubId === club.id))
   const graduates = [...season.academy.graduates].reverse().filter(entry => entry.clubId === club.id)

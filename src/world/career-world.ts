@@ -10,13 +10,58 @@ import { DEVELOPMENT_WORLD } from '../data/development-world';
  * The world a career plays in. Careers in the built-in fictional league carry no world and use DEVELOPMENT_WORLD;
  * every other career carries its world, and its `dataPackId` must name it.
  */
+let strictContexts = false;
+/**
+ * Tests of careers outside the built-in league switch this on, so a context that lost its world (and would
+ * otherwise silently fall back to the built-in league) fails loudly instead.
+ */
+export function requireWorldContexts(on: boolean): void { strictContexts = on; }
+
 export function worldOf(context: WorldContext): CareerWorld {
+  if (strictContexts && !context.world && context.dataPackId === undefined) throw new Error('A world-dependent rule was given a context without its career world.');
   if (context.world) {
     if (context.dataPackId !== undefined && context.dataPackId !== context.world.id) throw new Error('This career names a different world than the one it carries.');
     return context.world;
   }
   if (context.dataPackId !== undefined && context.dataPackId !== DEVELOPMENT_WORLD.id) throw new Error('This career\'s world is missing.');
   return DEVELOPMENT_WORLD;
+}
+
+/** A world holds an even number of clubs (every club plays every matchday) from 4 to 40. */
+export const MIN_WORLD_CLUBS = 4;
+export const MAX_WORLD_CLUBS = 40;
+/** The longest possible season: a double round robin of the largest world. */
+export const MAX_SEASON_ROUNDS = 2 * (MAX_WORLD_CLUBS - 1);
+
+/** Matchdays in a season of this world: every club meets every other club home and away. */
+export function worldRounds(world: CareerWorld): number {
+  return 2 * (world.clubs.length - 1);
+}
+
+/** Matchdays in a season of the career's world (10 in the built-in six-club league). */
+export function seasonRounds(context: WorldContext): number {
+  return worldRounds(worldOf(context));
+}
+
+/**
+ * A matchday as one increasing number across seasons, `(season - 1) x matchdays + matchday`. The built-in league's
+ * ten matchdays give the numbers its saves have always stored.
+ */
+export function roundOrdinal(seasonNumber: number, round: number, rounds: number): number {
+  return (seasonNumber - 1) * rounds + round;
+}
+
+/**
+ * A sort key for a matchday that needs no season length: `season x 100 + matchday`. Only for comparing calendar
+ * positions (it orders like the old `season x 10 + matchday`); never stored and never counted across seasons.
+ */
+export function roundKey(seasonNumber: number, round: number): number {
+  return seasonNumber * 100 + round;
+}
+
+/** The season and matchday of an ordinal from `roundOrdinal`. */
+export function ordinalRound(ordinal: number, rounds: number): { seasonNumber: number; round: number } {
+  return { seasonNumber: Math.floor((ordinal - 1) / rounds) + 1, round: (ordinal - 1) % rounds + 1 };
 }
 
 /** Only careers outside the built-in league store their world. */
@@ -102,7 +147,7 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
   if (!isText(world.name)) fail('world.name', 'must be a nonempty, bounded text value');
   if (world.source !== 'fictional-development' && world.source !== 'real-data-pack') fail('world.source', 'has an unsupported value');
   if (world.startDate !== DEVELOPMENT_WORLD.startDate) fail('world.startDate', 'must use the shared career calendar');
-  if (!Array.isArray(world.clubs) || world.clubs.length < 2 || world.clubs.length > 40) fail('world.clubs', 'must list between 2 and 40 clubs');
+  if (!Array.isArray(world.clubs) || world.clubs.length < MIN_WORLD_CLUBS || world.clubs.length > MAX_WORLD_CLUBS || world.clubs.length % 2 !== 0) fail('world.clubs', `must list an even number of clubs from ${MIN_WORLD_CLUBS} to ${MAX_WORLD_CLUBS}`);
   if (!isObject(world.playerProfiles) || !isObject(world.wages)) fail('world', 'needs player profiles and wages');
   const clubIds = new Set<string>(), playerIds = new Set<string>();
   for (const [index, club] of world.clubs.entries()) {

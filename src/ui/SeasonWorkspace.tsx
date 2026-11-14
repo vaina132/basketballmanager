@@ -34,7 +34,7 @@ function ClubName({ club, yours = false }: { club: Team; yours?: boolean }) {
 
 export function SeasonWorkspace(props: SeasonWorkspaceProps) {
   if (!props.season) return <section className="panel season-intro" aria-label="Career required">
-    <div><h2>No active career</h2><p>Start a career to manage a club through the development league.</p></div>
+    <div><h2>No active career</h2><p>Start a career to manage a real club from your data pack.</p></div>
     <div className="season-setup-actions"><button className="button" onClick={props.onLoad} disabled={props.busy}>Load saved career</button><button className="button primary" onClick={props.onNewCareer} disabled={props.busy}>New career<Icon name="arrow" size={16} /></button></div>
   </section>
   const season = props.season

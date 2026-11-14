@@ -52,6 +52,15 @@
 .career-identity-age{font-variant-numeric:tabular-nums}
 .career-start-subnote{padding:10px 14px;border-top:1px solid var(--border);font-size:12px;line-height:1.6;color:var(--muted)}
 .career-club-layout{display:grid;grid-template-columns:310px minmax(0,1fr);gap:18px;align-items:start}
+.career-pack-layout{max-width:640px}
+.career-pack-body{display:flex;flex-direction:column;align-items:flex-start;gap:14px;padding:16px 14px;font-size:13px;line-height:1.6;color:var(--muted)}
+.career-pack-body code{color:var(--text);font-size:12px;overflow-wrap:anywhere}
+.career-pack-body .button{display:inline-flex;align-items:center;gap:8px}
+.career-pack-error{margin:0;padding:8px 14px;color:var(--accent);font-size:13px;line-height:1.5}
+.career-league-field{padding:12px 14px 0}
+.career-league-summary{padding:12px 14px 4px;font-size:12px;color:var(--muted)}
+.career-league-summary strong{color:var(--text);font-weight:600}
+.career-pack-change{margin:4px 14px 14px}
 .career-club-options{display:flex;flex-direction:column;padding:7px}
 .career-club-option{display:flex;align-items:center;gap:10px;position:relative;min-height:57px;padding:10px 9px;border:1px solid transparent;font-size:13px;cursor:pointer}
 .career-club-option+.career-club-option{border-top-color:var(--border)}

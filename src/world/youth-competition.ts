@@ -8,6 +8,7 @@ import { developAcademyPlayer, emptyAcademyPoints, getAcademyProspect } from './
 import { generateYouthSquadProspects } from './academy-generation';
 import { injuriesFromMatch, isRecovering } from './health';
 import { memoizePure } from './pure-cache';
+import { roundKey } from './career-world';
 
 export const YOUTH_SQUAD_SIZE = 8;
 const DAY_MS = 86_400_000;
@@ -30,18 +31,36 @@ export function getYouthFixtureTeams(fixture: YouthFixture): { home: Team; away:
   return fixture.home && fixture.away ? { home: fixture.home, away: fixture.away } : null;
 }
 
-function allFixtures(context: YouthContext, onDate: string, beforeFixtureId?: string): YouthFixture[] {
-  return context.youthCompetition?.seasons.flatMap(season => season.fixtures).filter(fixture => fixture.result && fixture.date <= onDate && (fixture.id !== beforeFixtureId) && (!beforeFixtureId || fixture.date < onDate)) ?? [];
+/**
+ * Each player's youth appearances and injury episodes in fixture order, built once per (immutable) competition
+ * record. Status checks run for every prospect and day during play and save validation; scanning every fixture
+ * each time made long leagues slow (step 2.8d). The answers are identical to scanning all fixtures.
+ */
+interface YouthPlayerIndex { appearances: Map<string, YouthFixture[]>; injuries: Map<string, { fixture: YouthFixture; episode: SeasonInjury }[]> }
+const playerIndexes = new WeakMap<SeasonYouthCompetition, YouthPlayerIndex>();
+function playerIndex(competition: SeasonYouthCompetition): YouthPlayerIndex {
+  let index = playerIndexes.get(competition);
+  if (index) return index;
+  index = { appearances: new Map(), injuries: new Map() };
+  for (const season of competition.seasons) for (const fixture of season.fixtures) {
+    if (!fixture.result) continue;
+    if (fixture.result.played) for (const playerId of Object.keys(fixture.result.stats)) { const list = index.appearances.get(playerId) ?? []; list.push(fixture); index.appearances.set(playerId, list); }
+    for (const episode of fixture.result.injuries) { const list = index.injuries.get(episode.playerId) ?? []; list.push({ fixture, episode }); index.injuries.set(episode.playerId, list); }
+  }
+  playerIndexes.set(competition, index);
+  return index;
 }
+/** The fixtures a status check may see: those with a result on or before the date, optionally before a given fixture. */
+const visibleFixture = (fixture: YouthFixture, onDate: string, beforeFixtureId?: string) => fixture.date <= onDate && fixture.id !== beforeFixtureId && (!beforeFixtureId || fixture.date < onDate);
 
 /** Dated diagnoses and actual workload remain separate from senior health and condition. */
 export function getYouthPlayerStatus(context: YouthContext, playerId: string, onDate = context.date ?? '', beforeFixtureId?: string): YouthPlayerStatus {
   const empty = { playerId, condition: 100, available: true, injury: null, returnOn: null };
   if (!context.youthCompetition?.enabledSince || onDate < context.youthCompetition.enabledSince.date) return empty;
-  const until = calendarNumber(onDate), fixtures = allFixtures(context, onDate, beforeFixtureId);
-  const injuries = fixtures.flatMap(fixture => fixture.result!.injuries).filter(injury => injury.playerId === playerId);
+  const until = calendarNumber(onDate), index = playerIndex(context.youthCompetition);
+  const injuries = (index.injuries.get(playerId) ?? []).filter(entry => visibleFixture(entry.fixture, onDate, beforeFixtureId)).map(entry => entry.episode);
   const current = [...injuries].reverse().find(episode => isRecovering(episode, onDate)) ?? null;
-  const last = [...fixtures].reverse().find(fixture => fixture.result!.played && Object.hasOwn(fixture.result!.stats, playerId));
+  const last = [...(index.appearances.get(playerId) ?? [])].reverse().find(fixture => visibleFixture(fixture, onDate, beforeFixtureId));
   let condition = last?.result!.stats[playerId]?.condition ?? 100;
   if (last) for (let date = calendarNumber(last.date) + DAY_MS; date <= until && condition < 100; date += DAY_MS) {
     const day = isoDay(date);
@@ -156,7 +175,7 @@ export function processYouthRound(state: SeasonState): SeasonState {
 
 /** Strip future results for historical practice, injury and promotion replay. */
 export function youthCompetitionAtBoundary(competition: SeasonYouthCompetition, seasonNumber: number, round: number, includeCurrentRound = false): SeasonYouthCompetition {
-  if (!competition.enabledSince || competition.enabledSince.seasonNumber * 10 + competition.enabledSince.round > seasonNumber * 10 + round) return createYouthCompetition();
+  if (!competition.enabledSince || roundKey(competition.enabledSince.seasonNumber, competition.enabledSince.round) > roundKey(seasonNumber, round)) return createYouthCompetition();
   return { ...competition, seasons: competition.seasons.filter(season => season.seasonNumber <= seasonNumber).map(season => ({ ...season, fixtures: season.fixtures.map(fixture => fixture.seasonNumber < seasonNumber || fixture.round < round || includeCurrentRound && fixture.round === round ? fixture : { ...fixture, home: null, away: null, startingConditions: null, result: null }) })) };
 }
 

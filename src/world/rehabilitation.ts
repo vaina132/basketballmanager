@@ -4,6 +4,8 @@ import { isRecovering } from './health';
 import { physioEffects } from './physio-policy';
 import { effectiveReturnOn, latestRehabilitation, rehabilitationCreditCap, REHABILITATION_CREDIT_PER_DAY_SAVED } from './rehabilitation-policy';
 import { rosterForRound } from './rosters';
+import { seasonRounds } from './career-world';
+import { PHYSIO_DIRECTORY } from '../data/staff-directory';
 
 const DAY_MS = 86_400_000;
 /** One dated review before training; care cannot change eligibility before this boundary. */
@@ -12,14 +14,14 @@ export function processRehabilitationWeek(input: RehabilitationWeekInput): Seaso
   const anchor = physio.enabledSince;
   if (!anchor || seasonNumber < anchor.seasonNumber || seasonNumber === anchor.seasonNumber && afterRound < anchor.round) return physio;
   const from = Date.parse(`${fromDate}T00:00:00Z`), to = Date.parse(`${toDate}T00:00:00Z`);
-  if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || !Number.isInteger(afterRound) || afterRound < 1 || afterRound > 9 || !Number.isFinite(from) || !Number.isFinite(to) || new Date(from).toISOString().slice(0, 10) !== fromDate || new Date(to).toISOString().slice(0, 10) !== toDate || to - from !== 7 * DAY_MS) throw new Error('Rehabilitation requires one supported seven-day interval between matchdays.');
+  if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || !Number.isInteger(afterRound) || afterRound < 1 || afterRound > seasonRounds(input) - 1 || !Number.isFinite(from) || !Number.isFinite(to) || new Date(from).toISOString().slice(0, 10) !== fromDate || new Date(to).toISOString().slice(0, 10) !== toDate || to - from !== 7 * DAY_MS) throw new Error('Rehabilitation requires one supported seven-day interval between matchdays.');
   if (physio.rehabilitation.some(record => record.seasonNumber > seasonNumber || record.seasonNumber === seasonNumber && record.afterRound >= afterRound)) throw new Error('This rehabilitation interval has already been processed.');
   const treatmentDates = Array.from({ length: 6 }, (_, index) => new Date(from + (index + 1) * DAY_MS).toISOString().slice(0, 10));
   const records: RehabilitationRecord[] = [];
   for (const club of input.clubs) {
     const contract = physio.contracts.find(contract => contract.clubId === club.id && contract.seasonNumber === seasonNumber && contract.startedRound <= afterRound && (contract.releasedRound === null || contract.releasedRound > afterRound));
     if (!contract) continue;
-    const staff = DEVELOPMENT_PHYSIOS.find(staff => staff.id === contract.physioId)!;
+    const staff = PHYSIO_DIRECTORY.find(staff => staff.id === contract.physioId)!;
     const roster = rosterForRound(input.rosters, club.id, afterRound);
     const registered = new Set(roster.players.map(player => player.id));
     if (club.players.length !== registered.size || club.players.some(player => !registered.has(player.id))) throw new Error('Treatment must use the registered squad for its completed interval.');

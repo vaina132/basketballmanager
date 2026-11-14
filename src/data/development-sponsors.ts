@@ -36,8 +36,31 @@ export const DEVELOPMENT_SPONSORS: readonly DevelopmentSponsor[] = Object.freeze
   { id: 'nimbrook-pharmacy', name: 'Nimbrook Pharmacy', sector: 'Health' },
 ].map(sponsor => Object.freeze(sponsor)));
 
+/**
+ * Every fictional sponsor a career can meet: the built-in league's authored partners first, then generated ones
+ * for larger leagues. None represents a real company. A league's market is the first part (`sponsorMarket`).
+ */
+const NAME_PARTS = ['Alder', 'Brightwater', 'Cobalt', 'Dunmore', 'Eastgate', 'Fairhaven', 'Granite', 'Hollowell', 'Ironvale', 'Juniper', 'Kingsmere', 'Larkspur', 'Millbrook', 'Northwind', 'Oakridge', 'Pinecrest', 'Quayside', 'Redfern', 'Stonebridge', 'Thornbury', 'Upland', 'Valemont', 'Westmoor', 'Yewdale'];
+const SECTORS: readonly (readonly [string, string])[] = [['Logistics', 'Freight'], ['Foods', 'Food'], ['Energy', 'Energy'], ['Insurance', 'Insurance'], ['Motors', 'Automotive'], ['Telecom', 'Telecommunications'], ['Outfitters', 'Retail']];
+const AUTHORED_SPONSORS = DEVELOPMENT_SPONSORS.length;
+/** The largest supported league (MAX_WORLD_CLUBS in world/career-world.ts) and the built-in league's six clubs. */
+const DIRECTORY_CLUBS = 40, BUILT_IN_CLUBS = 6;
+export const SPONSOR_DIRECTORY: readonly DevelopmentSponsor[] = Object.freeze([
+  ...DEVELOPMENT_SPONSORS,
+  ...Array.from({ length: Math.ceil(AUTHORED_SPONSORS * DIRECTORY_CLUBS / BUILT_IN_CLUBS) - AUTHORED_SPONSORS }, (_, index) => {
+    const [suffix, sector] = SECTORS[index % SECTORS.length]!, part = NAME_PARTS[Math.floor(index / SECTORS.length) % NAME_PARTS.length]!, round = Math.floor(index / (SECTORS.length * NAME_PARTS.length));
+    const name = `${part} ${suffix}${round ? ` ${round + 1}` : ''}`;
+    return Object.freeze({ id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name, sector });
+  }),
+]);
+
+/** The sponsors a league's clubs can meet: as many per club as the built-in league offers its six clubs. */
+export function sponsorMarket(clubs: number): readonly DevelopmentSponsor[] {
+  return SPONSOR_DIRECTORY.slice(0, Math.max(AUTHORED_SPONSORS, Math.ceil(AUTHORED_SPONSORS * clubs / BUILT_IN_CLUBS)));
+}
+
 export function getDevelopmentSponsor(sponsorId: string): DevelopmentSponsor {
-  const sponsor = DEVELOPMENT_SPONSORS.find(item => item.id === sponsorId);
+  const sponsor = SPONSOR_DIRECTORY.find(item => item.id === sponsorId);
   if (!sponsor) throw new Error('Choose a sponsor from the development catalog.');
   return sponsor;
 }

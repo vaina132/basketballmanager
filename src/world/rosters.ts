@@ -3,6 +3,7 @@ import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/seas
 import type { Team } from '../domain/types';
 import type { EmploymentContract } from '../domain/employment';
 import { getContractedClubsForRound } from './employment-policy';
+import { MAX_SEASON_ROUNDS } from './career-world';
 
 /** Capture identities once at registration; match development never rewrites them. */
 export function createRosterSnapshots(clubs: readonly Team[], seasonNumber: number): RosterSnapshot[] {
@@ -49,7 +50,7 @@ export function registerInSeasonArrivals(state: SeasonState, contracts: readonly
 
 /** Resolve the registration effective at this boundary, irrespective of array order. */
 export function rosterForRound(rosters: readonly RosterSnapshot[], clubId: string, round: number): RosterSnapshot {
-  if (!Number.isInteger(round) || round < 1 || round > 10) throw new Error('Choose a roster round between one and ten.');
+  if (!Number.isInteger(round) || round < 1 || round > MAX_SEASON_ROUNDS) throw new Error('Choose a supported roster matchday.');
   const eligible = rosters.filter(roster => roster.clubId === clubId && roster.fromRound <= round);
   if (!eligible.length) throw new Error('The club has no registered roster for this round.');
   const fromRound = Math.max(...eligible.map(roster => roster.fromRound));

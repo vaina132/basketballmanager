@@ -54,13 +54,13 @@ describe('authored season wages and payroll activation', () => {
 
   it('allocates every cent across ten installments without cumulative rounding drift', () => {
     for (const wage of [1, 7, 10, 11, 1234567, 1800000]) {
-      const installments = Array.from({ length: 10 }, (_, index) => payrollInstallment(wage, index + 1));
+      const installments = Array.from({ length: 10 }, (_, index) => payrollInstallment(wage, index + 1, 10));
       expect(installments.reduce((sum, amount) => sum + amount, 0)).toBe(wage);
       expect(Math.max(...installments) - Math.min(...installments)).toBeLessThanOrEqual(1);
     }
-    expect(() => payrollInstallment(120000, 0)).toThrow();
-    expect(() => payrollInstallment(120000, 11)).toThrow();
-    expect(() => payrollInstallment(123.5, 1)).toThrow();
+    expect(() => payrollInstallment(120000, 0, 10)).toThrow();
+    expect(() => payrollInstallment(120000, 11, 10)).toThrow();
+    expect(() => payrollInstallment(123.5, 1, 10)).toThrow();
   });
 
   it('keeps payroll disabled in opt-out games and rejects activation without finance', () => {
@@ -215,8 +215,8 @@ describe('atomic payroll calendar and retained agreements', () => {
     const charged = processPayrollRound(injured);
     expect(charged.finance).toEqual(processPayrollRound(funded).finance);
     const items = charged.finance.ledger.find(entry => entry.clubId === clubId && entry.payroll?.type === 'installment')!.payroll!.items;
-    expect(items.find(item => item.playerId === unused.id)!.amount).toBe(payrollInstallment(getSeasonWage(unused.id), 1));
-    expect(items.find(item => item.playerId === playerId)!.amount).toBe(payrollInstallment(getSeasonWage(playerId), 1));
+    expect(items.find(item => item.playerId === unused.id)!.amount).toBe(payrollInstallment(getSeasonWage(unused.id), 1, 10));
+    expect(items.find(item => item.playerId === playerId)!.amount).toBe(payrollInstallment(getSeasonWage(playerId), 1, 10));
   });
 
   it('records mandatory wages even without cash, showing charged obligations rather than pretending they were paid', () => {
@@ -254,7 +254,7 @@ describe('atomic payroll calendar and retained agreements', () => {
     expect(() => startPayrollSeason(next)).toThrow(/already exist/);
     expect(rolloverSeason(before)).toEqual(next);
     expect(before.payroll.agreements).toHaveLength(60);
-    expect(next.payroll.agreements.slice(0, 60).every(agreement => agreementCommitted(agreement, next.finance.ledger) === 0)).toBe(true);
+    expect(next.payroll.agreements.slice(0, 60).every(agreement => agreementCommitted(agreement, next.finance.ledger, 10, 10) === 0)).toBe(true);
   });
 
   it('supports final-round activation and never back-charges earlier rounds', () => {

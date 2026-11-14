@@ -2,12 +2,13 @@ import type { SeasonYouth, YouthCoachContract } from '../domain/youth';
 import type { SeasonState } from '../domain/season';
 import { recordYouthFee } from './finance';
 import { availableYouthCoaches, getClubYouthCoach, quoteYouthCoachHire, youthCoachEffects } from './youth-policy';
+import { seasonRounds } from './career-world';
 
 export function createYouth(): SeasonYouth { return { model: 'youth-1', enabledSince: null, contracts: [] }; }
 export function enableYouth(state: SeasonState): SeasonState {
   if (state.youth.enabledSince) return state;
   if (!state.academy.enabledSince || !state.finance.enabledSince) throw new Error('Enable the academy and club finances before recruiting a youth coach.');
-  if (state.status !== 'active' || state.round === 10) throw new Error('Recruit youth coaches while academy training weeks remain, from matchday one to nine.');
+  if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Recruit youth coaches while academy training weeks remain, before the final matchday.');
   return recruitAiYouthCoaches({ ...state, youth: { ...state.youth, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length } } });
 }
 function hireForClub(state: SeasonState, coachId: string, clubId: string): SeasonState {
@@ -32,7 +33,7 @@ export function setYouthCoachRenewal(state: SeasonState, contractId: string, ren
   return { ...state, youth: { ...state.youth, contracts: state.youth.contracts.map(item => item.id === contract.id ? { ...item, renew } : item) } };
 }
 export function recruitAiYouthCoaches(state: SeasonState): SeasonState {
-  if (!state.youth.enabledSince || state.status !== 'active' || state.round === 10) return state;
+  if (!state.youth.enabledSince || state.status !== 'active' || state.round === seasonRounds(state)) return state;
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     if (getClubYouthCoach(next, club.id)) continue;

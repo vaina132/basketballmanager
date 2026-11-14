@@ -11,6 +11,8 @@ import { coachingAssignments, coachingRatingForAttribute } from './coaching';
 import { createRosterSnapshots, rosterForRound } from './rosters';
 import { fitnessAssignments } from './fitness-policy';
 import { ageTrainingRate, applyAgingAttributes, type LifecycleContext } from './lifecycle-policy';
+import { seasonRounds } from './career-world';
+import type { CareerWorld } from '../domain/world';
 
 export const TRAINING_ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 export const TRAINING_FOCUSES = ['balanced', ...TRAINING_ATTRIBUTES] as const;
@@ -107,13 +109,16 @@ export interface TrainingWeekInput {
   lifecycle?: SeasonState['lifecycle'];
   academy?: SeasonState['academy'];
   facilities?: SeasonState['facilities'];
+  /** The career's world, for player ages (built-in league when omitted). */
+  world?: CareerWorld;
+  dataPackId?: string;
 }
 
 /** One authoritative weekly pass updates every club; it consumes no match RNG. */
 export function processTrainingWeek(input: TrainingWeekInput): { training: SeasonTraining; conditions: Record<string, number> } {
   const { training, clubs, conditions, injuries, seasonNumber, afterRound, fromDate, toDate } = input;
   if (!training.enabledSince) throw new Error('Enable training before resolving a training week.');
-  if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || !Number.isInteger(afterRound) || afterRound < 1 || afterRound > 9) throw new Error('Training requires a supported season and a round between one and nine.');
+  if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || !Number.isInteger(afterRound) || afterRound < 1 || afterRound > seasonRounds(input) - 1) throw new Error('Training requires a supported season and a matchday before the final one.');
   if (seasonNumber < training.enabledSince.seasonNumber || seasonNumber === training.enabledSince.seasonNumber && afterRound < training.enabledSince.round) throw new Error('Training cannot run before it was enabled.');
   if (training.lastWeek && (seasonNumber < training.lastWeek.seasonNumber || seasonNumber === training.lastWeek.seasonNumber && afterRound <= training.lastWeek.afterRound)) throw new Error('This training interval has already been processed.');
   const dates = trainingDates(fromDate, toDate);

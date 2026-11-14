@@ -11,7 +11,7 @@ import { remainingStaffBudget, STAFF_BUDGET, staffCommitted } from '../src/world
 import { playFirstSeason } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
 
-const verdictOf = (state: SeasonState, clubId: string) => seasonVerdict(state.board, clubId, 1)!.verdict;
+const verdictOf = (state: SeasonState, clubId: string) => seasonVerdict(state.board, clubId, 1, 10)!.verdict;
 let complete: SeasonState, opening: SeasonState, legacyComplete: SeasonState, legacyOpening: SeasonState;
 
 beforeAll(() => {

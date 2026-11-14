@@ -5,9 +5,11 @@ import { dateForRound } from '../world/season';
 import { rosterForRound } from '../world/rosters';
 import { managedClubFor } from '../world/career';
 import { openingSponsorshipClubs } from '../world/commercial-policy';
+import { roundOrdinal, seasonRounds } from '../world/career-world';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'ledgerCount', 'rosterCount'] as const;
-const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
+/** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
+const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
 function record(value: unknown, path: string, keys: readonly string[]): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(path, 'must be an object');
@@ -34,14 +36,14 @@ function seasonRecords(state: SeasonState, year: number) {
 /** Board assessments see only registrations, cash and results that existed at their recorded boundary. */
 function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard): SeasonState {
   const source = seasonRecords(state, anchor.seasonNumber), rosters = source.rosters.slice(0, anchor.rosterCount);
-  const completed = anchor.completedRounds - ordinal(anchor.seasonNumber, 0);
+  const completed = anchor.completedRounds - ordinal(anchor.seasonNumber, 0, seasonRounds(state));
   const fixtures = source.fixtures.map(fixture => ({ ...fixture, result: fixture.round <= completed ? fixture.result : null })) as SeasonFixture[];
   const history = state.history.filter(archive => archive.seasonNumber < anchor.seasonNumber);
   const committed = new Set([...history.flatMap(archive => archive.fixtures), ...fixtures].filter(fixture => fixture.result).map(fixture => fixture.id));
   const ledger = state.finance.ledger.slice(0, anchor.ledgerCount);
   return {
     ...state, managedClubId: managedClubFor(state, anchor.seasonNumber, false), seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
-    status: completed === 10 ? 'complete' : 'active', rosters, fixtures, history, board,
+    status: completed === seasonRounds(state) ? 'complete' : 'active', rosters, fixtures, history, board,
     clubs: state.clubs.map(club => ({ ...club, players: rosterForRound(rosters, club.id, anchor.round).players })),
     injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
     finance: { ...state.finance, ledger, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
@@ -74,23 +76,23 @@ export function validateBoard(state: SeasonState, version: number): void {
   const empty: SeasonBoard = consequences ? createBoard() : legacyEmpty;
   const fields = record(state.board, 'board', ['model', 'enabledSince', 'mandates', 'reviews', ...(consequences ? ['consequencesSince'] : [])]);
   if (fields.model !== 'board-1') fail('board.model', 'is unsupported');
-  if (!Array.isArray(fields.mandates) || fields.mandates.length > state.seasonNumber || !Array.isArray(fields.reviews) || fields.reviews.length > 10 * state.seasonNumber) fail('board', 'must retain bounded chronological objectives and reviews');
+  if (!Array.isArray(fields.mandates) || fields.mandates.length > state.seasonNumber || !Array.isArray(fields.reviews) || fields.reviews.length > seasonRounds(state) * state.seasonNumber) fail('board', 'must retain bounded chronological objectives and reviews');
   if (fields.enabledSince === null) {
     if (!equal(fields, empty)) fail('board', 'must remain empty while disabled');
     return;
   }
-  const completedNow = ordinal(state.seasonNumber, state.status === 'complete' ? state.round : state.round - 1);
+  const completedNow = ordinal(state.seasonNumber, state.status === 'complete' ? state.round : state.round - 1, seasonRounds(state));
   const checkAnchor = (raw: unknown, path: string, kind: 'activation' | 'mandate' | 'review'): BoardAnchor => {
     const anchor = record(raw, path, ANCHOR_KEYS);
     const year = integer(anchor.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber);
-    const round = integer(anchor.round, `${path}.round`, 1, year === state.seasonNumber ? state.round : 10);
-    const at = ordinal(year, round), completed = integer(anchor.completedRounds, `${path}.completedRounds`, 0, completedNow);
-    if (kind === 'review' ? completed !== at : completed !== at - 1 && !(round === 10 && completed === at)) fail(path, 'must identify the actual committed result boundary');
+    const round = integer(anchor.round, `${path}.round`, 1, year === state.seasonNumber ? state.round : seasonRounds(state));
+    const at = ordinal(year, round, seasonRounds(state)), completed = integer(anchor.completedRounds, `${path}.completedRounds`, 0, completedNow);
+    if (kind === 'review' ? completed !== at : completed !== at - 1 && !(round === seasonRounds(state) && completed === at)) fail(path, 'must identify the actual committed result boundary');
     const source = seasonRecords(state, year), requiredRosters = source.rosters.filter(roster => roster.fromRound <= round);
     const rosterCount = integer(anchor.rosterCount, `${path}.rosterCount`, 0, source.rosters.length);
     if (rosterCount !== requiredRosters.length || !equal(source.rosters.slice(0, rosterCount), requiredRosters)) fail(path, 'must retain the exact registrations already applied at this matchday');
     const dates = new Set([dateForRound(round, year)]);
-    if (kind !== 'review' && completed === at && round === 10) for (const event of state.market.windows.find(window => window.seasonNumber === year)?.events ?? []) if (event.type === 'advance') dates.add(event.date);
+    if (kind !== 'review' && completed === at && round === seasonRounds(state)) for (const event of state.market.windows.find(window => window.seasonNumber === year)?.events ?? []) if (event.type === 'advance') dates.add(event.date);
     if (typeof anchor.date !== 'string' || !dates.has(anchor.date) || anchor.date > state.date) fail(`${path}.date`, 'must identify an actual calendar boundary');
     const ledgerCount = integer(anchor.ledgerCount, `${path}.ledgerCount`, 0, state.finance.ledger.length);
     if (kind === 'review') {
@@ -102,7 +104,7 @@ export function validateBoard(state: SeasonState, version: number): void {
         if (funding.some(({ index }) => index >= ledgerCount)) fail(path, 'cannot split the atomic opening cash and sponsorship registration');
       }
       for (const [index, entry] of state.finance.ledger.entries()) {
-        const entryAt = ordinal(entry.seasonNumber, entry.round);
+        const entryAt = ordinal(entry.seasonNumber, entry.round, seasonRounds(state));
         if (index < ledgerCount ? entryAt > at || entryAt === at && completed < at && ['tickets', 'operations', 'facility-upkeep'].includes(entry.kind) : entryAt < at) fail(path, 'must retain the chronological finance prefix without future results or payments');
       }
     }
@@ -116,18 +118,18 @@ export function validateBoard(state: SeasonState, version: number): void {
   let board: SeasonBoard = { ...empty, enabledSince: source.enabledSince };
   let mandateIndex = 0, reviewIndex = 0, previous = enabled;
   const chronological = (anchor: BoardAnchor, path: string) => {
-    if (anchor.date < previous.date || anchor.completedRounds < previous.completedRounds || anchor.ledgerCount < previous.ledgerCount || ordinal(anchor.seasonNumber, anchor.round) < ordinal(previous.seasonNumber, previous.round)) fail(path, 'must preserve chronological results and cash evidence');
+    if (anchor.date < previous.date || anchor.completedRounds < previous.completedRounds || anchor.ledgerCount < previous.ledgerCount || ordinal(anchor.seasonNumber, anchor.round, seasonRounds(state)) < ordinal(previous.seasonNumber, previous.round, seasonRounds(state))) fail(path, 'must preserve chronological results and cash evidence');
     previous = anchor;
   };
   for (let year = enabled.seasonNumber; year <= state.seasonNumber; year += 1) {
     const first = year === enabled.seasonNumber;
     const startsRound = first ? enabled.round + Number(!activation.includeCurrentRound) : 1;
-    if (startsRound > 10) continue;
+    if (startsRound > seasonRounds(state)) continue;
     const path = `board.mandates[${mandateIndex}]`;
     const raw = record(source.mandates[mandateIndex], path, [...ANCHOR_KEYS, 'id', 'startsRound', 'deadlineDate', 'clubs']);
     const anchor = checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, raw[key]])), path, 'mandate');
-    if (first ? !equal(anchor, enabled) : anchor.seasonNumber !== year || anchor.round !== 1 || anchor.completedRounds !== ordinal(year, 0) || anchor.date !== dateForRound(1, year)) fail(path, 'must freeze the objective at activation or the next season opening');
-    if (!first && state.finance.enabledSince && ordinal(state.finance.enabledSince.seasonNumber, state.finance.enabledSince.round) < ordinal(year, 1)) {
+    if (first ? !equal(anchor, enabled) : anchor.seasonNumber !== year || anchor.round !== 1 || anchor.completedRounds !== ordinal(year, 0, seasonRounds(state)) || anchor.date !== dateForRound(1, year)) fail(path, 'must freeze the objective at activation or the next season opening');
+    if (!first && state.finance.enabledSince && ordinal(state.finance.enabledSince.seasonNumber, state.finance.enabledSince.round, seasonRounds(state)) < ordinal(year, 1, seasonRounds(state))) {
       // Opening sponsorship: every club under the fixed model, only covered clubs under negotiated agreements.
       const sponsorship = state.finance.ledger.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.seasonNumber === year && entry.kind === 'sponsor' && entry.round === 1);
       if (sponsorship.length !== openingSponsorshipClubs(state.commercial, state.clubs, year).length || sponsorship.some(({ index }) => index >= anchor.ledgerCount)) fail(path, 'must include the new-season funding before setting expectations');
@@ -137,7 +139,7 @@ export function validateBoard(state: SeasonState, version: number): void {
     try { expected = buildBoardMandate(contextAt(state, anchor, board), startsRound); } catch (error) { fail(path, `cannot rebuild objectives: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
     if (!equal(raw, expected)) fail(path, 'must retain the exact objective and resources frozen from its original registrations and payment prefix');
     board = { ...board, mandates: [...board.mandates, expected] }; mandateIndex += 1;
-    const through = year === state.seasonNumber ? state.status === 'complete' ? 10 : state.round - 1 : 10;
+    const through = year === state.seasonNumber ? state.status === 'complete' ? seasonRounds(state) : state.round - 1 : seasonRounds(state);
     for (let round = startsRound; round <= through; round += 1) {
       const reviewPath = `board.reviews[${reviewIndex}]`;
       const reviewRaw = record(source.reviews[reviewIndex], reviewPath, [...ANCHOR_KEYS, 'id', 'mandateId', 'clubs']);
@@ -152,7 +154,7 @@ export function validateBoard(state: SeasonState, version: number): void {
   }
   if (consequences && fields.consequencesSince !== null) {
     const since = checkAnchor(fields.consequencesSince, 'board.consequencesSince', 'activation');
-    if (since.date < enabled.date || since.completedRounds < enabled.completedRounds || since.ledgerCount < enabled.ledgerCount || ordinal(since.seasonNumber, since.round) < ordinal(enabled.seasonNumber, enabled.round)) fail('board.consequencesSince', 'cannot precede board reviews');
+    if (since.date < enabled.date || since.completedRounds < enabled.completedRounds || since.ledgerCount < enabled.ledgerCount || ordinal(since.seasonNumber, since.round, seasonRounds(state)) < ordinal(enabled.seasonNumber, enabled.round, seasonRounds(state))) fail('board.consequencesSince', 'cannot precede board reviews');
     board = { ...board, consequencesSince: since };
   }
   if (!equal(board, source)) fail('board', 'must retain exactly the complete objective and review history without added or missing records');

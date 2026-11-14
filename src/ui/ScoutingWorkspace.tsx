@@ -19,6 +19,7 @@ import { Icon } from './Icon'
 import { PlayerRating } from './PlayerRating'
 import { knowledgeLabel, scoutingDate, ScoutingKnowledge } from './ScoutingKnowledge'
 import './scouting-workspace.css'
+import { SCOUT_DIRECTORY } from '../data/staff-directory'
 
 interface ScoutingWorkspaceProps {
   season: SeasonState
@@ -38,10 +39,10 @@ type ScoutingView = 'shortlist' | 'discover' | 'reports'
 const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100)
 const positions: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
 
-const observerName = (observer?: ScoutingObserver) => observer?.scoutId ? DEVELOPMENT_SCOUTS.find(scout => scout.id === observer.scoutId)?.name ?? 'Scout' : 'Club observation'
+const observerName = (observer?: ScoutingObserver) => observer?.scoutId ? SCOUT_DIRECTORY.find(scout => scout.id === observer.scoutId)?.name ?? 'Scout' : 'Club observation'
 
 function ReportSource({ observer, date, evidence }: { observer?: ScoutingObserver; date: string; evidence: number }) {
-  const scout = observer?.scoutId ? DEVELOPMENT_SCOUTS.find(item => item.id === observer.scoutId) : undefined
+  const scout = observer?.scoutId ? SCOUT_DIRECTORY.find(item => item.id === observer.scoutId) : undefined
   return <section className="scouting-report-source" aria-label="Recorded report source" data-report-observer={observer?.scoutId ?? 'club'} data-report-evidence={evidence}><div>{scout ? <ScoutPortrait scout={scout} size={34} /> : <Icon name="search" size={25} />}<span><strong>{observerName(observer)}</strong><small>{evidence > 100 ? 'Enhanced report' : 'Club report'} &middot; <time dateTime={date}>{scoutingDate(date)}</time></small></span></div><details><summary>Report source &amp; quality</summary><p>This observation contributes {evidence / 100} times the evidence of a club report. Repeated observations improve knowledge; player skills remain estimates.</p><progress value={evidence} max={200} aria-label={`Report evidence: ${evidence} compared with 100 for a club observation`} /><p>The recorded observer and report quality stay the same after the scout leaves.</p></details></section>
 }
 

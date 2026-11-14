@@ -75,8 +75,8 @@ describe('midseason club transfers', () => {
     expect(current.agreement).toMatchObject({ id: `wage-s1-${sourcePlayer}-r2`, clubId: seller, startsRound: 2 });
     expect(next.finance.ledger.filter(entry => entry.sourceId === `prepay-${old.agreement.id}`)).toEqual(prepaid.finance.ledger.filter(entry => entry.sourceId === `prepay-${old.agreement.id}`));
     expect(agreementThroughRound(next, old.agreement)).toBe(1);
-    expect(agreementCommitted(old.agreement, next.finance.ledger, agreementThroughRound(next, old.agreement))).toBe(0);
-    expect(getClubPayrollSummary(next, buyer).charged).toBe(old.charged + initial.clubs.find(club => club.id === buyer)!.players.filter(player => player.id !== sourcePlayer).reduce((sum, player) => sum + payrollInstallment(getSeasonWage(player.id), 1), 0));
+    expect(agreementCommitted(old.agreement, next.finance.ledger, agreementThroughRound(next, old.agreement), 10)).toBe(0);
+    expect(getClubPayrollSummary(next, buyer).charged).toBe(old.charged + initial.clubs.find(club => club.id === buyer)!.players.filter(player => player.id !== sourcePlayer).reduce((sum, player) => sum + payrollInstallment(getSeasonWage(player.id), 1, 10), 0));
     const ordinary = submitInSeasonTransferOffer(initial, sourcePlayer, getSeasonWage(sourcePlayer), 1, requiredInSeasonTransferFee(initial, sourcePlayer), seller);
     expect(quoteInSeasonSale(ordinary, getInSeasonOffers(ordinary, seller, true)[0]!.id).remainingWagesFreed).toBe(getSeasonWage(sourcePlayer) * .9);
   });

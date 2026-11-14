@@ -4,6 +4,9 @@ import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { getFinanceBalance } from './finance';
 import { remainingStaffBudget, staffAllocation, staffCommitted } from './staff-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
+import { SCOUT_DIRECTORY, staffMarket } from '../data/staff-directory';
+import type { WorldContext } from '../domain/world';
+import { worldOf } from './career-world';
 
 export const MAX_SCOUTS = 3;
 export function scoutRating(scout: Scout): number { return Math.round((scout.skills.evaluation + scout.skills.reporting) / 2); }
@@ -11,12 +14,13 @@ export function scoutEvidence(scout: Scout): number { return 100 + 5 * (scout.sk
 export function getClubScouts(state: Pick<SeasonState, 'scouts' | 'seasonNumber' | 'managedClubId'>, clubId = state.managedClubId): ScoutContract[] {
   return state.scouts.contracts.filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null);
 }
-export function availableScouts(state: Pick<SeasonState, 'scouts' | 'seasonNumber'>): Scout[] {
+/** The league's market (sized to its clubs) without this season's employed staff. */
+export function availableScouts(state: Pick<SeasonState, 'scouts' | 'seasonNumber'> & WorldContext): Scout[] {
   const employed = new Set(state.scouts.contracts.filter(contract => contract.seasonNumber === state.seasonNumber && contract.releasedRound === null).map(contract => contract.scoutId));
-  return DEVELOPMENT_SCOUTS.filter(scout => !employed.has(scout.id));
+  return staffMarket(SCOUT_DIRECTORY, worldOf(state)).filter(scout => !employed.has(scout.id));
 }
 export function quoteScoutHire(state: SeasonState, scoutId: string, clubId = state.managedClubId): ScoutHireQuote {
-  const scout = DEVELOPMENT_SCOUTS.find(scout => scout.id === scoutId);
+  const scout = SCOUT_DIRECTORY.find(scout => scout.id === scoutId);
   const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;

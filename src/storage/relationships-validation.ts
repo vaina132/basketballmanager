@@ -4,9 +4,11 @@ import { applyRelationshipEvent, createRelationships, enableRelationships, getPr
 import { dateForRound } from '../world/season';
 import { rosterForRound } from '../world/rosters';
 import { managedClubFor } from '../world/career';
+import { roundOrdinal, seasonRounds } from '../world/career-world';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'contractCount', 'rosterCount'] as const;
-const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
+/** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
+const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
 function record(value: unknown, path: string, keys: readonly string[]): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(path, 'must be an object');
@@ -34,15 +36,15 @@ function seasonRecords(state: SeasonState, year: number) {
 function contextAt(state: SeasonState, anchor: RelationshipAnchor, relationships: SeasonRelationships): SeasonState {
   const source = seasonRecords(state, anchor.seasonNumber);
   const rosters = source.rosters.slice(0, anchor.rosterCount);
-  const localCompleted = anchor.completedRounds - ordinal(anchor.seasonNumber, 0);
+  const localCompleted = anchor.completedRounds - ordinal(anchor.seasonNumber, 0, seasonRounds(state));
   const fixtures = source.fixtures.map(fixture => ({ ...fixture, result: fixture.round <= localCompleted ? fixture.result : null })) as SeasonFixture[];
   const history = state.history.filter(archive => archive.seasonNumber < anchor.seasonNumber);
   const committed = new Set([...history.flatMap(archive => archive.fixtures), ...fixtures].filter(fixture => fixture.result).map(fixture => fixture.id));
   const clubs = state.clubs.map(club => ({ ...club, players: rosterForRound(rosters, club.id, anchor.round).players }));
   return {
     // A completed final matchday is that season's offseason, which a move at the season end hands to the new club.
-    ...state, managedClubId: managedClubFor(state, anchor.seasonNumber, localCompleted === 10), seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
-    status: localCompleted === 10 ? 'complete' : 'active', clubs, rosters, history, fixtures, relationships,
+    ...state, managedClubId: managedClubFor(state, anchor.seasonNumber, localCompleted === seasonRounds(state)), seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
+    status: localCompleted === seasonRounds(state) ? 'complete' : 'active', clubs, rosters, history, fixtures, relationships,
     activeFixtureId: fixtures.find(fixture => fixture.round === anchor.round && [fixture.homeClubId, fixture.awayClubId].includes(managedClubFor(state, anchor.seasonNumber, false)))!.id,
     injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
     employment: { ...state.employment, contracts: state.employment.contracts.slice(0, anchor.contractCount) },
@@ -63,14 +65,14 @@ export function validateRelationships(state: SeasonState, version: number): void
     if (Object.hasOwn(state.activeMatch, 'morale')) fail('activeMatch.morale', 'cannot be applied while relationships are disabled');
     return;
   }
-  const completedNow = ordinal(state.seasonNumber, state.status === 'complete' ? state.round : state.round - 1);
+  const completedNow = ordinal(state.seasonNumber, state.status === 'complete' ? state.round : state.round - 1, seasonRounds(state));
   const responsesByContract = new Map(state.negotiations.records.filter(item => item.contractId).map(item => [item.contractId, item]));
   const checkAnchor = (raw: unknown, path: string): RelationshipAnchor => {
     const anchor = record(raw, path, ANCHOR_KEYS);
     const year = integer(anchor.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber);
-    const round = integer(anchor.round, `${path}.round`, 1, year === state.seasonNumber ? state.round : 10);
-    const at = ordinal(year, round), completed = integer(anchor.completedRounds, `${path}.completedRounds`, 0, completedNow);
-    if (completed !== at - 1 && !(round === 10 && completed === at)) fail(path, 'must identify an actual pre-match or completed-season decision boundary');
+    const round = integer(anchor.round, `${path}.round`, 1, year === state.seasonNumber ? state.round : seasonRounds(state));
+    const at = ordinal(year, round, seasonRounds(state)), completed = integer(anchor.completedRounds, `${path}.completedRounds`, 0, completedNow);
+    if (completed !== at - 1 && !(round === seasonRounds(state) && completed === at)) fail(path, 'must identify an actual pre-match or completed-season decision boundary');
     const source = seasonRecords(state, year);
     const rosterCount = integer(anchor.rosterCount, `${path}.rosterCount`, 0, source.rosters.length);
     const requiredRosters = source.rosters.filter(roster => roster.fromRound <= round);
@@ -79,10 +81,10 @@ export function validateRelationships(state: SeasonState, version: number): void
     const initialContracts = state.employment.contracts.filter(contract => contract.kind === 'initial').length;
     if (contracts > 0 && contracts < initialContracts) fail(path, 'cannot split the atomic initial employment registration');
     const dates = new Set([dateForRound(round, year)]);
-    if (completed === at && round === 10) for (const event of state.market.windows.find(window => window.seasonNumber === year)?.events ?? []) if (event.type === 'advance') dates.add(event.date);
+    if (completed === at && round === seasonRounds(state)) for (const event of state.market.windows.find(window => window.seasonNumber === year)?.events ?? []) if (event.type === 'advance') dates.add(event.date);
     if (typeof anchor.date !== 'string' || !dates.has(anchor.date) || anchor.date > state.date) fail(`${path}.date`, 'must identify a calendar date actually visited at this result boundary');
     for (const [index, contract] of state.employment.contracts.entries()) {
-      const signed = ordinal(contract.signedSeason, contract.signedRound);
+      const signed = ordinal(contract.signedSeason, contract.signedRound, seasonRounds(state));
       const response = responsesByContract.get(contract.id);
       if (index < contracts ? signed > at || response && response.date > anchor.date : signed < at || response && response.date < anchor.date) fail(path, 'must retain the chronological signed-contract prefix');
     }
@@ -101,19 +103,19 @@ export function validateRelationships(state: SeasonState, version: number): void
     if (!extra) fail(path, 'must identify a supported player relationship command');
     const event = record(raw, path, [...ANCHOR_KEYS, 'id', 'type', ...extra]) as unknown as RelationshipEvent;
     const current = checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, event[key]])), path);
-    if (current.date < previous.date || current.completedRounds < previous.completedRounds || current.contractCount < previous.contractCount || ordinal(current.seasonNumber, current.round) < ordinal(previous.seasonNumber, previous.round) || current.seasonNumber === previous.seasonNumber && current.rosterCount < previous.rosterCount) fail(path, 'must preserve chronological result, registration and contract prefixes');
-    const boundary = ordinal(current.seasonNumber, current.round);
+    if (current.date < previous.date || current.completedRounds < previous.completedRounds || current.contractCount < previous.contractCount || ordinal(current.seasonNumber, current.round, seasonRounds(state)) < ordinal(previous.seasonNumber, previous.round, seasonRounds(state)) || current.seasonNumber === previous.seasonNumber && current.rosterCount < previous.rosterCount) fail(path, 'must preserve chronological result, registration and contract prefixes');
+    const boundary = ordinal(current.seasonNumber, current.round, seasonRounds(state));
     if (event.type === 'prepare') {
       if (prepared.has(boundary)) fail(path, 'cannot replace already frozen matchday morale');
       prepared.set(boundary, index);
-      if (source.events.slice(0, index).some(item => item.type !== 'prepare' && item.clubId === managedClubFor(state, item.seasonNumber, false) && ordinal(item.seasonNumber, item.round) === boundary)) fail(path, 'must freeze the prepared match before subsequent manager conversations');
+      if (source.events.slice(0, index).some(item => item.type !== 'prepare' && item.clubId === managedClubFor(state, item.seasonNumber, false) && ordinal(item.seasonNumber, item.round, seasonRounds(state)) === boundary)) fail(path, 'must freeze the prepared match before subsequent manager conversations');
     }
     replay = contextAt(state, current, replay.relationships);
     try { replay = applyRelationshipEvent(replay, event); } catch (error) { fail(path, `does not follow the relationship rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     previous = current;
   }
   if (!equal(replay.relationships, source)) fail('relationships', 'must exactly preserve the validated player command history');
-  for (let boundary = ordinal(anchor.seasonNumber, anchor.round) + 1; boundary <= ordinal(state.seasonNumber, state.round); boundary += 1) {
+  for (let boundary = ordinal(anchor.seasonNumber, anchor.round, seasonRounds(state)) + 1; boundary <= ordinal(state.seasonNumber, state.round, seasonRounds(state)); boundary += 1) {
     if (!prepared.has(boundary)) fail('relationships.events', 'must freeze player morale at every new prepared matchday after activation');
   }
   const snapshot = getPreparedRelationshipMorale(state);

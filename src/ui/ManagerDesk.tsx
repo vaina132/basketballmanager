@@ -29,7 +29,7 @@ import { Icon } from './Icon'
 import { StaminaMeter } from './StaminaMeter'
 import { TeamInstructions } from './TeamInstructions'
 import './manager-desk.css'
-import { worldOf } from '../world/career-world'
+import { seasonRounds, worldOf } from '../world/career-world'
 
 interface ManagerDeskProps {
   match: MatchState
@@ -97,7 +97,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   if (season?.board.enabledSince && onOpenBoard) {
     const board = getBoardSummary(season)
     // Once the final review has given the season verdict, it replaces the latest-review notice until the new season.
-    const verdict = season.board.consequencesSince && season.seasonNumber < MAX_SEASON_NUMBER ? seasonVerdict(season.board, season.managedClubId, season.seasonNumber) : null
+    const verdict = season.board.consequencesSince && season.seasonNumber < MAX_SEASON_NUMBER ? seasonVerdict(season.board, season.managedClubId, season.seasonNumber, seasonRounds(season)) : null
     if (verdict) {
       const budgets = verdictBudgets(season.managedClubId, verdict.verdict, worldOf(season))
       notices.push({ key: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `Final confidence ${verdict.confidence}/100. ${seasonLabel(season.seasonNumber + 1)}: ${money(budgets.staff)} staff budget and ${money(budgets.capital)} owner capital for facility upgrades.`, urgent: verdict.verdict === 'concerned' || verdict.verdict === 'pressure', action: 'Review board', open: onOpenBoard })

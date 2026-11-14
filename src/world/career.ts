@@ -3,8 +3,11 @@ import type { SeasonState } from '../domain/season';
 import type { SeasonAcademy } from '../domain/academy';
 import { applyFacilityEvent, facilityEventAnchor } from './facilities';
 import { automateSponsorship } from './commercial';
+import { roundOrdinal, seasonRounds } from './career-world';
+import type { WorldContext } from '../domain/world';
 
-const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
+/** Matchdays as one sequence across seasons; stored in anchors and counted forward, so it uses the season length. */
+const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
 
 export function createCareer(): SeasonCareer { return { model: 'career-1', enabledSince: null, moves: [] }; }
 
@@ -34,9 +37,9 @@ export function careerMovesGovern(career: SeasonCareer | undefined, seasonNumber
   return !!anchor && seasonNumber >= anchor.effectiveFrom;
 }
 
-export function careerEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'date' | 'fixtures'>, mode: 'career' | 'prospective'): CareerAnchor {
+export function careerEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'date' | 'fixtures'> & WorldContext, mode: 'career' | 'prospective'): CareerAnchor {
   const completed = state.fixtures.reduce((round, fixture) => fixture.result ? Math.max(round, fixture.round) : round, 0);
-  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed), effectiveFrom: mode === 'career' ? 1 : state.seasonNumber + 1 };
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), effectiveFrom: mode === 'career' ? 1 : state.seasonNumber + 1 };
 }
 
 /**
@@ -68,7 +71,7 @@ export function releaseAcademyFocus(academy: SeasonAcademy, clubId: string): Sea
 /** Why a move at the current season end is not possible, or null. Job offers and dismissal add their own rules. */
 export function careerMoveRefusal(state: SeasonState, toClubId: string): string | null {
   if (!careerMovesGovern(state.career, state.seasonNumber)) return 'Job changes are not active in this season.';
-  if (state.status !== 'complete' || state.round !== 10) return 'Clubs change managers only when a season ends.';
+  if (state.status !== 'complete' || state.round !== seasonRounds(state)) return 'Clubs change managers only when a season ends.';
   if (state.career.moves.some(move => move.seasonNumber === state.seasonNumber)) return 'You have already changed clubs this season.';
   if (toClubId === state.managedClubId) return 'You already manage this club.';
   if (!state.clubs.some(club => club.id === toClubId)) return 'Choose a club in this league.';

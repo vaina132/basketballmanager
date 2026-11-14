@@ -39,10 +39,10 @@ beforeAll(() => {
 
 describe('recruitable scouts in actual careers', () => {
   it('uses one staff allocation for both roles and keeps released fees committed', () => {
-    const expensive = availableCoaches(hired.coaching).find(coach => coach.fee > remainingStaffBudget(hired) && coach.fee <= STAFF_BUDGET - staffCommitted(initial, club))!;
+    const expensive = availableCoaches(hired.coaching, hired).find(coach => coach.fee > remainingStaffBudget(hired) && coach.fee <= STAFF_BUDGET - staffCommitted(initial, club))!;
     expect(expensive).toBeDefined();
     expect(() => hireCoach(hired, expensive.id)).toThrow(/staff|budget|allocation/i);
-    const affordable = availableCoaches(hired.coaching).filter(coach => coach.fee <= remainingStaffBudget(hired)).sort((a, b) => a.fee - b.fee)[0]!;
+    const affordable = availableCoaches(hired.coaching, hired).filter(coach => coach.fee <= remainingStaffBudget(hired)).sort((a, b) => a.fee - b.fee)[0]!;
     const mixed = hireCoach(hired, affordable.id);
     const scout = availableScouts(mixed).find(scout => scout.fee > remainingStaffBudget(mixed))!;
     expect(quoteScoutHire(mixed, scout.id).canHire).toBe(false);

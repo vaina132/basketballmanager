@@ -74,7 +74,7 @@ describe('facility effects on earned development', () => {
     const outlook = getClubCashOutlook(state);
     expect(outlook.startCash).toBe(getFinanceBalance(state.finance, clubId).cash);
     expect(outlook.rows.reduce((sum, row) => sum + row.operations, 0)).toBe(7 * (ROUND_OPERATING_COST + 30_000));
-    const input = { academy: state.academy, youth: state.youth, clubs: state.clubs, seasonNumber: 1, afterRound: 4, fromDate: state.date, toDate: dateForRound(5) };
+    const input = { rounds: 10, academy: state.academy, youth: state.youth, clubs: state.clubs, seasonNumber: 1, afterRound: 4, fromDate: state.date, toDate: dateForRound(5) };
     const baseline = processAcademyWeek(input);
     const next = advance(state), report = next.academy.weeks.at(-1)!.players[id]!;
     expect(report.facility!.earnedPoints).toBe(1);

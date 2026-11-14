@@ -16,6 +16,8 @@ import { LifecycleTrainingControl, PlayerCareerStatus, practiceAgeLabel } from '
 import { getPlayerAging } from '../world/lifecycle-policy'
 import { FacilityPracticeContribution, FacilityPracticeEffect } from './FacilityPractice'
 import './training-workspace.css'
+import { seasonRounds } from '../world/career-world'
+import { FITNESS_DIRECTORY } from '../data/staff-directory'
 
 interface TrainingWorkspaceProps {
   season: SeasonState
@@ -49,15 +51,15 @@ export function TrainingWorkspace({ season, onEnable, onEnableLifecycle, onOpenF
   const conditions = Object.fromEntries(club.players.map(player => [player.id, season.activeMatch.stats[player.id]?.condition ?? season.conditions[player.id]!]))
   const appliedPlan = resolveTrainingPlan(plan, club, conditions)
   const injuries = getSeasonInjuries(season)
-  const nextDate = season.round < 10 ? dateForRound(season.round + 1, season.seasonNumber) : null
+  const nextDate = season.round < seasonRounds(season) ? dateForRound(season.round + 1, season.seasonNumber) : null
   const fitness = getClubFitnessEffects(season)
-  const fitnessCoach = fitness ? DEVELOPMENT_FITNESS_COACHES.find(coach => coach.id === fitness.coachId)! : null
+  const fitnessCoach = fitness ? FITNESS_DIRECTORY.find(coach => coach.id === fitness.coachId)! : null
   const week = season.training.lastWeek
   const coaches = season.coaching.enabledSince === null ? [] : getClubCoaching(season.coaching, club.id)
 
   return <div className="training-workspace">
     <section className="training-context panel" aria-label="Training schedule">
-      <div><strong>{club.name}</strong><span>{season.round === 10 ? 'Resumes next season' : `Plan applies after Matchday ${season.round}`}</span></div>
+      <div><strong>{club.name}</strong><span>{season.round === seasonRounds(season) ? 'Resumes next season' : `Plan applies after Matchday ${season.round}`}</span></div>
       <time dateTime={season.date}>{formatDate(season.date)}</time>
     </section>
 
@@ -140,7 +142,7 @@ function TrainingReport({ season, club, week, onSelectPlayer, busy }: { season: 
   const previousClub = developClub(recordedBase, { ...season.training, points: previousPoints }, { ...season, date: week.fromDate })
   const appliedCoaches = week.coaching?.[club.id] ?? null
   const appliedFitness = week.fitness?.[club.id] ?? null
-  const reportCoach = appliedFitness ? DEVELOPMENT_FITNESS_COACHES.find(coach => coach.id === appliedFitness.coachId)! : null
+  const reportCoach = appliedFitness ? FITNESS_DIRECTORY.find(coach => coach.id === appliedFitness.coachId)! : null
   return <>
     {appliedCoaches !== null && <p className="training-coaching-report"><strong>Staff that week</strong> {appliedCoaches.length > 0 ? appliedCoaches.map(assignment => `${COACHES.find(coach => coach.id === assignment.coachId)!.name} (${TRAINING_FOCUS_LABELS[assignment.focus]})`).join(' · ') : 'No coaches assigned.'}</p>}
     {reportCoach && <div className="training-fitness-report" data-report-fitness={reportCoach.id}><FitnessPortrait coach={reportCoach} size={38} /><div><strong>Fitness support: {reportCoach.name}</strong><p>Each player's condition includes the benefit shown below. It can be zero when fully rested or medically unavailable.</p></div></div>}

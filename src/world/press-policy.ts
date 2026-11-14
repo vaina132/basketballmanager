@@ -1,6 +1,8 @@
 import type { PressAnswer, PressQuestion, PressTopic } from '../domain/relationships';
 import type { SeasonState } from '../domain/season';
 import { rosterForRound } from './rosters';
+import { roundOrdinal, seasonRounds } from './career-world';
+import type { WorldContext } from '../domain/world';
 
 /** A press question follows three consecutive wins or defeats; answers change morale a little and fade. */
 export const PRESS_RUN_LENGTH = 3;
@@ -28,14 +30,15 @@ export const PRESS_ANSWER_TEXT: Readonly<Record<PressAnswer, { label: string; qu
   routine: { label: 'Keep it routine', quote: 'We focus on the next game.' },
 });
 
-const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
+/** Matchdays as one sequence across seasons; stored in anchors and counted forward, so it uses the season length. */
+const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
 const compareText = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 
 /**
  * The open press question for the managed club, derived from committed results: it appears when the latest
  * matchday completes a run of exactly three wins or defeats, and stays open until the next result or season.
  */
-export function getPressQuestion(state: Pick<SeasonState, 'relationships' | 'fixtures' | 'rosters' | 'clubs' | 'managedClubId' | 'seasonNumber'>): PressQuestion | null {
+export function getPressQuestion(state: Pick<SeasonState, 'relationships' | 'fixtures' | 'rosters' | 'clubs' | 'managedClubId' | 'seasonNumber'> & WorldContext): PressQuestion | null {
   const enabled = state.relationships.enabledSince;
   if (!enabled) return null;
   const clubId = state.managedClubId;
@@ -43,7 +46,7 @@ export function getPressQuestion(state: Pick<SeasonState, 'relationships' | 'fix
   if (played.length < PRESS_RUN_LENGTH) return null;
   const latestRound = state.fixtures.reduce((round, fixture) => fixture.result ? Math.max(round, fixture.round) : round, 0);
   const last = played.at(-1)!;
-  if (last.round !== latestRound || ordinal(state.seasonNumber, last.round) <= enabled.completedRounds) return null;
+  if (last.round !== latestRound || ordinal(state.seasonNumber, last.round, seasonRounds(state)) <= enabled.completedRounds) return null;
   const won = (fixture: typeof last) => fixture.result!.winnerClubId === clubId;
   const run = played.slice(-PRESS_RUN_LENGTH);
   if (!run.every(fixture => won(fixture) === won(last))) return null;

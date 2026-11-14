@@ -1,7 +1,7 @@
 import type { SeasonBoard } from '../domain/board';
 import type { SeasonState } from '../domain/season';
 import type { CareerWorld, WorldContext } from '../domain/world';
-import { clubPresident, worldOf } from './career-world';
+import { clubPresident, seasonRounds, worldOf } from './career-world';
 import { STAFF_BUDGET } from './staff-constants';
 
 /** The board's end-of-season judgement, named after the confidence labels shown throughout the game. */
@@ -31,9 +31,9 @@ export interface SeasonVerdict {
   verdict: BoardVerdict;
 }
 
-/** The verdict recorded by a season's final (matchday-ten) review; null when the club had no final review that season. */
-export function seasonVerdict(board: Pick<SeasonBoard, 'reviews'>, clubId: string, seasonNumber: number): SeasonVerdict | null {
-  const review = board.reviews.filter(item => item.seasonNumber === seasonNumber && item.round === 10).at(-1);
+/** The verdict recorded by a season's final review (after its last matchday, `rounds`); null when the club had no final review that season. */
+export function seasonVerdict(board: Pick<SeasonBoard, 'reviews'>, clubId: string, seasonNumber: number, rounds: number): SeasonVerdict | null {
+  const review = board.reviews.filter(item => item.seasonNumber === seasonNumber && item.round === rounds).at(-1);
   const club = review?.clubs[clubId];
   if (!review || !club) return null;
   return { clubId, seasonNumber, reviewId: review.id, date: review.date, confidence: club.confidence, verdict: verdictForConfidence(club.confidence) };
@@ -46,9 +46,9 @@ export function boardConsequencesGovern(board: Partial<Pick<SeasonBoard, 'conseq
 }
 
 /** The previous season's verdict, when consequences govern this season. */
-export function governingVerdict(state: Partial<Pick<SeasonState, 'board'>>, clubId: string, seasonNumber: number): SeasonVerdict | null {
+export function governingVerdict(state: Partial<Pick<SeasonState, 'board'>> & WorldContext, clubId: string, seasonNumber: number): SeasonVerdict | null {
   if (!state.board || !boardConsequencesGovern(state.board, seasonNumber)) return null;
-  return seasonVerdict(state.board, clubId, seasonNumber - 1);
+  return seasonVerdict(state.board, clubId, seasonNumber - 1, seasonRounds(state));
 }
 
 const scaled = (amount: number, percent: number) => Math.round(amount * percent / 100);
@@ -60,7 +60,7 @@ export function verdictBudgets(clubId: string, verdict: BoardVerdict | null, wor
 }
 
 /** The shared annual staff allocation for a club and season, in euro cents. */
-export function staffAllocation(state: Partial<Pick<SeasonState, 'board'>> & Pick<SeasonState, 'seasonNumber'>, clubId: string, seasonNumber = state.seasonNumber): number {
+export function staffAllocation(state: Partial<Pick<SeasonState, 'board'>> & Pick<SeasonState, 'seasonNumber'> & WorldContext, clubId: string, seasonNumber = state.seasonNumber): number {
   const verdict = governingVerdict(state, clubId, seasonNumber);
   return verdict ? scaled(STAFF_BUDGET, BOARD_VERDICT_EFFECTS[verdict.verdict].staffPercent) : STAFF_BUDGET;
 }

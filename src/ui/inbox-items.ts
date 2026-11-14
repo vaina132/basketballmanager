@@ -15,7 +15,7 @@ import { careerMoveText } from './career-text'
 import { careerMovesGovern, managedClubFor } from '../world/career'
 import { seasonEndOutlook } from '../world/career-policy'
 import { medicalDate } from './SeasonMedicalReport'
-import { worldOf } from '../world/career-world'
+import { seasonRounds, worldOf } from '../world/career-world'
 
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
 export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad'
@@ -53,7 +53,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     if (summary.latest) items.push({ id: summary.latest.id, date: summary.latest.date, category: 'board', title: `Board review · ${summary.confidenceLabel}`, detail: `Confidence ${summary.latest.club.confidence}/100 after matchday ${summary.latest.round}.`, needsAction: false, target: 'board' })
     const since = season.board.consequencesSince
     if (since) for (let year = since.seasonNumber; year <= season.seasonNumber; year += 1) {
-      const judged = managedClubFor(season, year, false), verdict = seasonVerdict(season.board, judged, year)
+      const judged = managedClubFor(season, year, false), verdict = seasonVerdict(season.board, judged, year, seasonRounds(season))
       if (!verdict) continue
       if (judged !== clubId) { items.push({ id: `verdict-${year}`, date: verdict.date, category: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `${season.clubs.find(club => club.id === judged)!.name}'s board after ${seasonLabel(year)}.`, needsAction: false, target: 'board' }); continue }
       const budgets = verdictBudgets(clubId, verdict.verdict, worldOf(season))

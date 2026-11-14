@@ -2,12 +2,13 @@ import type { PhysioContract, SeasonPhysio } from '../domain/physio';
 import type { SeasonState } from '../domain/season';
 import { recordPhysioFee } from './finance';
 import { availablePhysios, getClubPhysio, physioEffects, quotePhysioHire } from './physio-policy';
+import { seasonRounds } from './career-world';
 
 export function createPhysio(): SeasonPhysio { return { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }; }
 export function enablePhysio(state: SeasonState): SeasonState {
   if (state.physio.enabledSince) return state;
   if (!state.finance.enabledSince) throw new Error('Enable club finances before recruiting physios.');
-  if (state.status !== 'active' || state.round === 10) throw new Error('Enable physios while weekly reviews are available, from matchday one to nine.');
+  if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Enable physios while weekly reviews are available, before the final matchday.');
   return recruitAiPhysios({ ...state, physio: { ...state.physio, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length } } });
 }
 function hireForClub(state: SeasonState, physioId: string, clubId: string): SeasonState {
@@ -32,7 +33,7 @@ export function setPhysioRenewal(state: SeasonState, contractId: string, renew: 
   return { ...state, physio: { ...state.physio, contracts: state.physio.contracts.map(item => item.id === contract.id ? { ...item, renew } : item) } };
 }
 export function recruitAiPhysios(state: SeasonState): SeasonState {
-  if (!state.physio.enabledSince || state.status !== 'active' || state.round === 10) return state;
+  if (!state.physio.enabledSince || state.status !== 'active' || state.round === seasonRounds(state)) return state;
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     if (getClubPhysio(next, club.id)) continue;

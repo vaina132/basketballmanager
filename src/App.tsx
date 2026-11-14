@@ -45,7 +45,7 @@ import { enableYouth, hireYouthCoach, releaseYouthCoach, setYouthCoachRenewal } 
 import { StaminaMeter } from './ui/StaminaMeter'
 import { ManagerDesk } from './ui/ManagerDesk'
 import type { SeasonState } from './domain/season'
-import { createSeason, getActiveFixture, getStandings, managedSide as seasonManagedSide, NEW_CAREER_SYSTEMS, SEASON_ROUNDS } from './world/season'
+import { createSeason, getActiveFixture, getStandings, managedSide as seasonManagedSide, NEW_CAREER_SYSTEMS } from './world/season'
 import { MAX_SEASON_SAVE_BYTES } from './storage/season-storage'
 import { readCareerSaves, readCurrentCareer, loadCareerCheckpoint, saveCareerCheckpoint } from './storage/career-saves'
 import type { CareerSaveList } from './storage/career-saves'
@@ -76,7 +76,8 @@ import type { TrainingPlan } from './domain/training'
 import { PlayerHealthSummary, SeasonMedicalReport } from './ui/SeasonMedicalReport'
 import type { SeasonReply } from './world/season.worker'
 import './ui/season-progress.css'
-import { worldOf } from './world/career-world'
+import { seasonRounds, worldOf } from './world/career-world'
+import { ASSISTANT_DIRECTORY } from './data/staff-directory'
 
 const MedicalWorkspace = lazy(() => import('./ui/MedicalWorkspace').then(module => ({ default: module.MedicalWorkspace })))
 const AcademyWorkspace = lazy(() => import('./ui/AcademyWorkspace').then(module => ({ default: module.AcademyWorkspace })))
@@ -237,7 +238,7 @@ export default function App() {
   } : resolvedStats
 
   const assistantContract = season ? getClubAssistant(season) : null
-  const assistantCoach = assistantContract ? DEVELOPMENT_ASSISTANTS.find(coach => coach.id === assistantContract.assistantId) : undefined
+  const assistantCoach = assistantContract ? ASSISTANT_DIRECTORY.find(coach => coach.id === assistantContract.assistantId) : undefined
 
   const selectedSquadPlayer = managedTeam.players.find(player => player.id === selectedPlayer) ?? managedTeam.players[0]
   const chosenPlayer = selectedSquadPlayer && season ? { ...selectedSquadPlayer, attributes: getPlayerKnowledge(season, selectedSquadPlayer.id).attributes ?? selectedSquadPlayer.attributes } : selectedSquadPlayer
@@ -498,10 +499,11 @@ export default function App() {
       navigate('match'); setNotice({ message: `Friendly ready: ${home.name} vs ${away.name} (data pack ${pack.version}).` })
     } catch (error) { setNotice({ message: messageOf(error), error: true }) }
   }
-  function startSeason({ seed, clubId, injuryMode, manager }: CareerSetup) {
+  function startSeason({ seed, world, clubId, injuryMode, manager }: CareerSetup) {
     if (seasonWorker.current || persistenceBusy.current) return
     try {
-      const created = createSeason({ seed, managedClubId: clubId, injuryMode, manager, ...NEW_CAREER_SYSTEMS })
+      // Careers use real clubs only (owner, 13 November 2026): the league comes from the loaded data pack.
+      const created = createSeason({ seed, world, managedClubId: clubId, injuryMode, manager, ...NEW_CAREER_SYSTEMS })
       install({ kind: 'season', season: created }); navigate('home')
       setNotice({ message: 'Season ready. Review your lineup before the opening match.' })
       void persistSeason(created, 'new-game')
@@ -564,7 +566,7 @@ export default function App() {
     if (seasonWorker.current || persistenceBusy.current || current.kind !== 'season') return
     if (action !== 'round' ? current.season.status !== 'complete' : current.season.status === 'complete') return
     if (current.season.activeMatch.status !== 'finished') { navigate('match'); return }
-    const preview = action === 'round' && !choice && current.season.round === SEASON_ROUNDS && careerMovesGovern(current.season.career, current.season.seasonNumber)
+    const preview = action === 'round' && !choice && current.season.round === seasonRounds(current.season) && careerMovesGovern(current.season.career, current.season.seasonNumber)
     replacementRequest.current += 1
     setPlaying(false); settlePlayback()
     try {
@@ -602,7 +604,7 @@ export default function App() {
     {saveHistoryOpen && <CareerSaveHistory entries={saveHistory?.entries ?? []} loading={historyLoading} error={historyError} busy={saving} onRefresh={() => { void refreshSaveHistory() }} onRestore={revision => { void restoreCheckpoint(revision) }} onClose={closeSaveHistory} />}
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
   </>
-  if (entryView) return <><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense>{overlays}</>
+  if (entryView) return <><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense>{overlays}</>
 
   return <div className={`app-shell game-shell ${page === 'match' ? 'match-screen' : ''}`}>
     <aside className="sidebar">
@@ -655,7 +657,7 @@ export default function App() {
           <section className="court-panel panel" aria-label="Courtside match view"><div className="court-top"><div className="court-title"><span className="live-dot" /><h2>Courtside</h2><span className="court-view-label">{textOnly ? 'MATCH COMMENTARY' : 'LIVE COURT'}</span></div><div className="viewer-options"><div className="segmented" aria-label="Match presentation"><button aria-pressed={!textOnly} className={!textOnly ? 'selected' : ''} onClick={() => setTextOnly(false)}>Court</button><button aria-pressed={textOnly} className={textOnly ? 'selected' : ''} onClick={() => setTextOnly(true)}>Text only</button></div><label className="motion-option"><input type="checkbox" checked={reducedMotion} onChange={event => setMotionOverride(event.target.checked)} />Reduced motion</label></div></div>{textOnly ? <div className="text-match-view" role="log" aria-label="Text match presentation"><span className="eyebrow">FROM THE FLOOR</span>{visibleEvents.slice(-5).map(event => <p key={event.id}><time>{periodLabel(event.period)} / {clock(event.clockSeconds)}</time>{event.text}</p>)}</div> : <Court match={match} event={presentedEvent} progress={presentedProgress} />}<div className="court-caption"><span className="event-chip">{(captionEvent?.scene?.kind ?? captionEvent?.type)?.replace('-', ' ').toUpperCase() ?? 'COURTSIDE'}</span><p>{playback.busy && presentedProgress < 1 && (presentedEvent?.shot || presentedEvent?.scene?.kind === 'free-throw') ? presentedEvent.scene?.kind === 'free-throw' ? 'Free throw in flight...' : 'Shot in flight...' : captionEvent?.text ?? 'Ready for tipoff.'}</p></div>
           <RequiredDecision match={match} managedSide={managedSide} apply={apply} />
           {match.result?.kind === 'default' && <p className="result-note" role="status">Game awarded by default: a team had fewer than two eligible players. The official result is shown above; the box score retains statistics earned on court.</p>}
-          <div className="playback"><div className="playback-main"><button className="button primary watch-button" onClick={() => setPlaying(value => !value)} disabled={complete && !playback.busy || needsReplacement}><Icon name={playing ? 'pause' : 'play'} size={18} />{playing ? 'Pause' : playback.busy ? 'Resume play' : match.stepCount === 0 ? 'Start match' : complete ? 'Full time' : 'Watch match'}</button><button className="icon-button" title="Next action" aria-label="Simulate next action" onClick={() => { setPlaying(false); apply(stepMatch, false, true) }} disabled={complete || needsReplacement}><Icon name="next" size={19} /></button><div className="speed-control" aria-label="Playback speed">{[1, 2, 4].map(value => <button key={value} aria-pressed={speed === value} className={speed === value ? 'selected' : ''} onClick={() => setSpeed(value)}>{value}×</button>)}</div></div><div className="playback-skip">{season && complete && !playback.busy && <button className="button primary season-continue" onClick={season.status === 'complete' ? reviewNextSeason : advance}>{season.status === 'complete' ? season.employment.enabledSince ? 'Review offseason' : 'Next season' : season.round === 10 ? 'Finalize season' : 'Continue'}<Icon name="next" size={15} /></button>}<button className="text-button" onClick={() => { setPlaying(false); apply(simulateToQuarterEnd, false, true) }} disabled={complete || needsReplacement}>Skip {match.period <= 4 ? 'quarter' : 'overtime'}<Icon name="next" size={15} /></button><button className="text-button" onClick={() => { setPlaying(false); apply(simulateToEnd, false, true) }} disabled={complete || needsReplacement}>Simulate rest<Icon name="skip" size={15} /></button></div></div><MatchLineup knowledgeForPlayer={season ? id => getMatchPlayerKnowledge(season, id) : undefined} match={match} displayMatch={statsSnapshot} managedSide={managedSide} disabled={advancing || saving} apply={apply} onInteractionStart={() => { setPlaying(false); settlePlayback(); setPresentationBase(null) }} />
+          <div className="playback"><div className="playback-main"><button className="button primary watch-button" onClick={() => setPlaying(value => !value)} disabled={complete && !playback.busy || needsReplacement}><Icon name={playing ? 'pause' : 'play'} size={18} />{playing ? 'Pause' : playback.busy ? 'Resume play' : match.stepCount === 0 ? 'Start match' : complete ? 'Full time' : 'Watch match'}</button><button className="icon-button" title="Next action" aria-label="Simulate next action" onClick={() => { setPlaying(false); apply(stepMatch, false, true) }} disabled={complete || needsReplacement}><Icon name="next" size={19} /></button><div className="speed-control" aria-label="Playback speed">{[1, 2, 4].map(value => <button key={value} aria-pressed={speed === value} className={speed === value ? 'selected' : ''} onClick={() => setSpeed(value)}>{value}×</button>)}</div></div><div className="playback-skip">{season && complete && !playback.busy && <button className="button primary season-continue" onClick={season.status === 'complete' ? reviewNextSeason : advance}>{season.status === 'complete' ? season.employment.enabledSince ? 'Review offseason' : 'Next season' : season.round === seasonRounds(season) ? 'Finalize season' : 'Continue'}<Icon name="next" size={15} /></button>}<button className="text-button" onClick={() => { setPlaying(false); apply(simulateToQuarterEnd, false, true) }} disabled={complete || needsReplacement}>Skip {match.period <= 4 ? 'quarter' : 'overtime'}<Icon name="next" size={15} /></button><button className="text-button" onClick={() => { setPlaying(false); apply(simulateToEnd, false, true) }} disabled={complete || needsReplacement}>Simulate rest<Icon name="skip" size={15} /></button></div></div><MatchLineup knowledgeForPlayer={season ? id => getMatchPlayerKnowledge(season, id) : undefined} match={match} displayMatch={statsSnapshot} managedSide={managedSide} disabled={advancing || saving} apply={apply} onInteractionStart={() => { setPlaying(false); settlePlayback(); setPresentationBase(null) }} />
           </section>
           {complete && !playback.busy && <MatchMvpCard mvp={getMatchMvp(match)} />}
           <MatchCoaching match={match} managedSide={managedSide} apply={apply} advice={assistantCoach ? <AssistantAdvice key={assistantContract!.id} coach={assistantCoach} match={match} side={managedSide} settled={!playing && !playback.busy} onPrepare={() => { setPlaying(false); settlePlayback(); setPresentationBase(null) }} apply={apply} /> : undefined} />
@@ -699,10 +701,10 @@ function SeasonProgress({ season, showRollover, showMatchAction, canContinue, on
   const standing = getStandings(season).find(row => row.clubId === season.managedClubId)!
   const date = new Date(`${season.date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
   return <section className="season-progress panel" aria-label="Season progress">
-    <div><time dateTime={season.date}>{date}</time><span>{season.status === 'complete' ? isMarketActive(season) ? 'Offseason recruitment' : `Season ${season.seasonNumber} complete` : `Season ${season.seasonNumber} / Matchday ${fixture.round} / 10`}</span></div>
-    <div className="season-record"><strong>{standing.played ? `${standing.position} / 6` : 'Unplayed'}</strong><span>{standing.wins} W / {standing.losses} L</span></div>
+    <div><time dateTime={season.date}>{date}</time><span>{season.status === 'complete' ? isMarketActive(season) ? 'Offseason recruitment' : `Season ${season.seasonNumber} complete` : `Season ${season.seasonNumber} / Matchday ${fixture.round} / ${seasonRounds(season)}`}</span></div>
+    <div className="season-record"><strong>{standing.played ? `${standing.position} / ${season.clubs.length}` : 'Unplayed'}</strong><span>{standing.wins} W / {standing.losses} L</span></div>
     <button className="text-button" onClick={onCompetition}>League table<Icon name="chevron" size={14} /></button>
     {season.status === 'complete' && showRollover && <button className="button primary season-continue" onClick={onRollover}>{season.employment.enabledSince ? 'Review offseason' : 'Next season'}<Icon name="next" size={15} /></button>}
-    {season.status !== 'complete' && (canContinue || showMatchAction) && <button className="button primary season-continue" onClick={canContinue ? onAdvance : onOpenMatch}>{canContinue ? season.round === 10 ? 'Finalize season' : 'Continue' : 'Go to match'}<Icon name="next" size={15} /></button>}
+    {season.status !== 'complete' && (canContinue || showMatchAction) && <button className="button primary season-continue" onClick={canContinue ? onAdvance : onOpenMatch}>{canContinue ? season.round === seasonRounds(season) ? 'Finalize season' : 'Continue' : 'Go to match'}<Icon name="next" size={15} /></button>}
   </section>
 }

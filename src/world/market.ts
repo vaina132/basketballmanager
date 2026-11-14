@@ -12,8 +12,9 @@ import { evaluateNegotiation } from './negotiations-policy';
 import { getApplicableReleaseClause, offerOptionsReason } from './release-clauses';
 import { processTransferPayments } from './transfer-payments';
 import { getTransferCandidates, MIN_TRANSFER_FEE, quoteTransferOffer, requiredTransferFee, sellerReplacementReason, TRANSFER_FEE_STEP } from './transfers-policy';
-import { DAILY_RECOVERY, dateForRound, MAX_SEASON_NUMBER, SEASON_ROUNDS } from './season';
+import { DAILY_RECOVERY, dateForRound, MAX_SEASON_NUMBER } from './season';
 import { addMarketDays, compareMarketOffers, getLiveMarketOffers, getMarketStartReason, getMarketWindow, getNextMarketDate, isCompetitiveMarket, isLiveMarketOffer, isMarketActive, MARKET_MAX_EVENTS, MARKET_OFFER_DAYS, MARKET_RESPONSE_DAYS, MARKET_WINDOW_DAYS } from './market-policy';
+import { seasonRounds } from './career-world';
 
 export function createMarket(): SeasonMarket { return { model: 'market-1', enabledSince: null, windows: [] }; }
 
@@ -40,8 +41,8 @@ export function enableMarket(state: SeasonState): SeasonState {
 export function prepareMarketWindow(state: SeasonState): SeasonState {
   if (!state.market.enabledSince || state.status !== 'complete' || state.seasonNumber >= MAX_SEASON_NUMBER) return state;
   if (getMarketWindow(state)) return state;
-  const openedOn = dateForRound(SEASON_ROUNDS, state.seasonNumber);
-  if (state.date !== openedOn || state.round !== SEASON_ROUNDS) throw new Error('Open recruitment after committing the final matchday.');
+  const rounds = seasonRounds(state), openedOn = dateForRound(rounds, state.seasonNumber);
+  if (state.date !== openedOn || state.round !== rounds) throw new Error('Open recruitment after committing the final matchday.');
   const window: MarketWindow = {
     seasonNumber: state.seasonNumber, openedOn, closesOn: addMarketDays(openedOn, MARKET_WINDOW_DAYS), date: openedOn,
     contractCountBefore: state.employment.contracts.length, negotiationCountBefore: state.negotiations.records.length,

@@ -1,6 +1,7 @@
 import type { SeasonInjury } from './season';
 import type { RosterSnapshot } from './roster';
 import type { Team } from './types';
+import type { CareerWorld } from './world';
 
 export interface Physio { id: string; name: string; rehabilitation: number; fee: number }
 export interface PhysioContract {
@@ -54,6 +55,9 @@ export interface PhysioHireQuote {
 }
 
 export interface RehabilitationWeekInput {
+  /** The career's world, for its season length (built-in league when omitted). */
+  world?: CareerWorld;
+  dataPackId?: string;
   physio: SeasonPhysio;
   clubs: readonly Team[];
   rosters: readonly RosterSnapshot[];

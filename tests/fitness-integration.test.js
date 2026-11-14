@@ -89,7 +89,7 @@ describe('fitness coaching across actual career boundaries', () => {
     expect(staffCommitted(replaced, club)).toBe(13_000_000);
     expect(remainingStaffBudget(replaced)).toBe(2_000_000);
     expect(quoteScoutHire(replaced, 'scout-13').canHire).toBe(false);
-    const coach = availableCoaches(replaced.coaching)[0];
+    const coach = availableCoaches(replaced.coaching, replaced)[0];
     expect(() => hireCoach(replaced, coach.id)).toThrow(/staff allocation/);
     expect(quoteFitnessHire(allocationBlocked, 'fitness-12').reason).toMatch(/shared staff allocation/);
     expect(quoteFitnessHire(roundTen, availableFitnessCoaches(roundTen)[0].id).reason).toMatch(/No weekly training/);

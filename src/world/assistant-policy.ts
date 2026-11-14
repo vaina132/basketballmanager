@@ -4,6 +4,9 @@ import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { getFinanceBalance } from './finance';
 import { remainingStaffBudget, staffAllocation, staffCommitted } from './staff-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
+import { seasonRounds, worldOf } from './career-world';
+import { ASSISTANT_DIRECTORY, staffMarket } from '../data/staff-directory';
+import type { WorldContext } from '../domain/world';
 
 export const MAX_ASSISTANTS = 1;
 export function assistantRating(coach: AssistantCoach): number { return coach.assessment; }
@@ -14,18 +17,19 @@ export function assistantEffects(coach: AssistantCoach): { skillStep: number } {
 export function getClubAssistant(state: Pick<SeasonState, 'assistant' | 'seasonNumber' | 'managedClubId'>, clubId = state.managedClubId): AssistantContract | null {
   return state.assistant.contracts.find(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null) ?? null;
 }
-export function availableAssistants(state: Pick<SeasonState, 'assistant' | 'seasonNumber'>): AssistantCoach[] {
+/** The league's market (sized to its clubs) without this season's employed staff. */
+export function availableAssistants(state: Pick<SeasonState, 'assistant' | 'seasonNumber'> & WorldContext): AssistantCoach[] {
   const employed = new Set(state.assistant.contracts.filter(contract => contract.seasonNumber === state.seasonNumber && contract.releasedRound === null).map(contract => contract.assistantId));
-  return DEVELOPMENT_ASSISTANTS.filter(coach => !employed.has(coach.id));
+  return staffMarket(ASSISTANT_DIRECTORY, worldOf(state)).filter(coach => !employed.has(coach.id));
 }
 export function quoteAssistantHire(state: SeasonState, assistantId: string, clubId = state.managedClubId): AssistantHireQuote {
-  const coach = DEVELOPMENT_ASSISTANTS.find(coach => coach.id === assistantId);
+  const coach = ASSISTANT_DIRECTORY.find(coach => coach.id === assistantId);
   const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.assistant.enabledSince) reason = 'Enable assistant-coach recruitment before hiring.';
   else if (!state.finance.enabledSince) reason = 'Assistant-coach recruitment requires club finances.';
-  else if (state.status !== 'active' || state.round === 10 && state.activeMatch.status === 'finished') reason = 'No match advice remains this season. Recruit an assistant when the next season starts.';
+  else if (state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch.status === 'finished') reason = 'No match advice remains this season. Recruit an assistant when the next season starts.';
   else if (!state.clubs.some(club => club.id === clubId) || !coach) reason = 'Choose an assistant coach and club from this career.';
   else if (getClubAssistant(state, clubId)) reason = 'The assistant-coach position is already occupied.';
   else if (!availableAssistants(state).some(available => available.id === assistantId)) reason = 'This assistant coach already has an active club contract.';

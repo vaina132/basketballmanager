@@ -9,6 +9,9 @@ import { getTransferPaymentSummary } from './transfer-payments';
 import { staffCommitted } from './staff-policy';
 import { STAFF_BUDGET } from './staff-constants';
 import { staffAllocation } from './board-consequences';
+import { MAX_SEASON_ROUNDS, seasonRounds } from './career-world';
+import { COACH_DIRECTORY, staffMarket } from '../data/staff-directory';
+import type { CareerWorld } from '../domain/world';
 
 export const COACHING_BUDGET = STAFF_BUDGET;
 export const MAX_COACHES = 3;
@@ -16,21 +19,22 @@ const ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense',
 const FOCUSES: readonly TrainingFocus[] = ['balanced', ...ATTRIBUTES];
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
 const coachById = (id: string): Coach => {
-  const coach = DEVELOPMENT_COACHES.find(coach => coach.id === id);
+  const coach = COACH_DIRECTORY.find(coach => coach.id === id);
   if (!coach) throw new Error('Choose a coach from the development staff pool.');
   return coach;
 };
 function validateFocus(focus: TrainingFocus): void { if (!FOCUSES.includes(focus)) throw new Error('Choose a supported coaching assignment.'); }
 function validateBoundary(seasonNumber: number, round: number): void {
-  if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || seasonNumber > 7974 || !Number.isInteger(round) || round < 1 || round > 10) throw new Error('Choose a valid season and matchday for the coaching contract.');
+  if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || seasonNumber > 7974 || !Number.isInteger(round) || round < 1 || round > MAX_SEASON_ROUNDS) throw new Error('Choose a valid season and matchday for the coaching contract.');
 }
 
 export function coachRating(coach: Coach): number { return Math.round(ATTRIBUTES.reduce((sum, attribute) => sum + coach.skills[attribute], 0) / ATTRIBUTES.length); }
 export function getClubCoaching(coaching: SeasonCoaching, clubId: string): CoachingContract[] { return coaching.contracts.filter(contract => contract.clubId === clubId && contract.releasedRound === null); }
 export function coachingCommitted(coaching: SeasonCoaching, clubId: string): number { return coaching.contracts.filter(contract => contract.clubId === clubId).reduce((sum, contract) => sum + coachById(contract.coachId).fee, 0); }
-export function availableCoaches(coaching: SeasonCoaching): Coach[] {
+/** The league's coaching market (sized to its clubs) without the coaches under contract. */
+export function availableCoaches(coaching: SeasonCoaching, world: Pick<CareerWorld, 'clubs'>): Coach[] {
   const active = new Set(coaching.contracts.filter(contract => contract.releasedRound === null).map(contract => contract.coachId));
-  return DEVELOPMENT_COACHES.filter(coach => !active.has(coach.id));
+  return staffMarket(COACH_DIRECTORY, world).filter(coach => !active.has(coach.id));
 }
 
 /** The same commitment, vacancy and availability checks serve human and AI clubs. */
@@ -40,7 +44,7 @@ function hireForClub(coaching: SeasonCoaching, clubs: readonly Team[], clubId: s
   if (!clubs.some(club => club.id === clubId)) throw new Error('The coaching contract needs a club in this league.');
   const coach = coachById(coachId);
   if (getClubCoaching(coaching, clubId).length >= MAX_COACHES) throw new Error('All three coaching positions are occupied.');
-  if (!availableCoaches(coaching).some(available => available.id === coachId)) throw new Error('This coach already has an active club contract.');
+  if (!availableCoaches(coaching, { clubs }).some(available => available.id === coachId)) throw new Error('This coach already has an active club contract.');
   if (coachingCommitted(coaching, clubId) + coach.fee > COACHING_BUDGET) throw new Error('This contract exceeds the remaining coaching budget. Released contracts remain committed for the season.');
   return { ...coaching, contracts: [...coaching.contracts, { id: `coach-s${seasonNumber}-c${coaching.contracts.length + 1}`, coachId, clubId, seasonNumber, startedRound: round, releasedRound: null, focus, renew: true }] };
 }
@@ -48,7 +52,7 @@ function hireForClub(coaching: SeasonCoaching, clubs: readonly Team[], clubId: s
 export function createCoaching(clubs: readonly Team[], seasonNumber = 1, round = 1, enabled = true): SeasonCoaching {
   validateBoundary(seasonNumber, round);
   let coaching: SeasonCoaching = { model: 'coaching-1', enabledSince: enabled ? { seasonNumber, round } : null, contracts: [] };
-  if (enabled) for (const [index, club] of clubs.entries()) coaching = hireForClub(coaching, clubs, club.id, seasonNumber, round, DEVELOPMENT_COACHES[index]!.id, 'balanced');
+  if (enabled) for (const [index, club] of clubs.entries()) coaching = hireForClub(coaching, clubs, club.id, seasonNumber, round, COACH_DIRECTORY[index]!.id, 'balanced');
   return coaching;
 }
 
@@ -57,7 +61,7 @@ export function enableCoaching(state: SeasonState): SeasonState {
   if (state.status === 'complete') throw new Error('Start the next season before enabling coaching staff.');
   let next: SeasonState = { ...state, coaching: { model: 'coaching-1', enabledSince: { seasonNumber: state.seasonNumber, round: state.round }, contracts: [] } };
   for (const [index, club] of state.clubs.entries()) {
-    const coach = DEVELOPMENT_COACHES[index]!;
+    const coach = COACH_DIRECTORY[index]!;
     if (canPayCoach(next, club.id, coach)) next = hireContractForClub(next, club.id, coach.id, 'balanced');
   }
   return next;
@@ -121,7 +125,7 @@ export function coachingRatingForAttribute(assignments: readonly CoachingWeekAss
 
 /** Recruit for marginal coverage of the club's training focuses, normalized by full-season fee. */
 export function recruitAiCoaches(state: SeasonState): SeasonState {
-  if (!state.coaching.enabledSince || state.status === 'complete' || state.round === 10) return state;
+  if (!state.coaching.enabledSince || state.status === 'complete' || state.round === seasonRounds(state)) return state;
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     const plan = state.training.plans[club.id]!;
@@ -135,7 +139,7 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
     while (getClubCoaching(next.coaching, club.id).length < MAX_COACHES) {
       const assignments = coachingAssignments(next.coaching, state.clubs, state.seasonNumber, state.round)![club.id]!;
       const remaining = staffAllocation(next, club.id) - staffCommitted(next, club.id);
-      const candidates = availableCoaches(next.coaching).filter(coach => coach.fee <= remaining && canPayCoach(next, club.id, coach)).flatMap(coach => FOCUSES.map(focus => ({ coach, focus, utility: ATTRIBUTES.reduce((sum, attribute) => {
+      const candidates = availableCoaches(next.coaching, next).filter(coach => coach.fee <= remaining && canPayCoach(next, club.id, coach)).flatMap(coach => FOCUSES.map(focus => ({ coach, focus, utility: ATTRIBUTES.reduce((sum, attribute) => {
         const current = coachingRatingForAttribute(assignments, attribute);
         const next = coachingRatingForAttribute([{ contractId: '', coachId: coach.id, focus }], attribute);
         return sum + demand[attribute] * Math.max(0, next - current);

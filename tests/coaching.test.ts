@@ -40,7 +40,7 @@ describe('fictional coaches and contract decisions', () => {
       expect(getClubCoaching(state.coaching, club.id)).toHaveLength(1);
       expect(coachingCommitted(state.coaching, club.id)).toBe(4_000_000);
     }
-    expect(availableCoaches(state.coaching)).toHaveLength(24);
+    expect(availableCoaches(state.coaching, state)).toHaveLength(24);
     expect(MAX_COACHES).toBe(3); expect(COACHING_BUDGET).toBe(15_000_000);
   });
 
@@ -66,7 +66,7 @@ describe('fictional coaches and contract decisions', () => {
     const released = releaseCoach(original, first.id);
     expect(getClubCoaching(released.coaching, clubId)).toEqual([]);
     expect(coachingCommitted(released.coaching, clubId)).toBe(4_000_000);
-    expect(availableCoaches(released.coaching).some(coach => coach.id === first.coachId)).toBe(true);
+    expect(availableCoaches(released.coaching, released).some(coach => coach.id === first.coachId)).toBe(true);
     const rehired = hireCoach(released, first.coachId, 'passing');
     expect(coachingCommitted(rehired.coaching, clubId)).toBe(8_000_000);
     expect(getClubCoaching(rehired.coaching, clubId)[0]).toMatchObject({ id: 'coach-s1-c7', startedRound: 1, focus: 'passing', renew: true });

@@ -1,6 +1,7 @@
 import type { AcademyProspect } from '../domain/academy';
 import type { PlayerAttributes, Position } from '../domain/types';
 import { DEVELOPMENT_START_DATE } from '../data/development-league';
+import { MAX_SEASON_ROUNDS } from './career-world';
 
 const firstNames = ['Arin', 'Lio', 'Emir', 'Noel', 'Ivo', 'Miro', 'Luca', 'Sami', 'Niko', 'Theo', 'Eren', 'Milo', 'Ruben', 'Deni', 'Elian', 'Leon'];
 const surnames = ['Varen', 'Talin', 'Berin', 'Soren', 'Meren', 'Dalin', 'Feran', 'Neris', 'Selan', 'Korin', 'Arven', 'Leris', 'Vellis', 'Rovan', 'Toren', 'Sarin'];
@@ -10,7 +11,7 @@ function hash(seed: number, key: string): number { let value = (2166136261 ^ see
 
 /** Fictional identities from a separate stable stream; generation never consumes match RNG. */
 export function generateAcademyProspects(seed: number, clubId: string, seasonNumber: number, round: number, initial: boolean, count: number): AcademyProspect[] {
-  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff || typeof clubId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(clubId) || !Number.isInteger(seasonNumber) || seasonNumber < 1 || seasonNumber > 7974 || !Number.isInteger(round) || round < 1 || round > 10 || !Number.isInteger(count) || count < 0 || count > (initial ? 3 : 2)) throw new Error('Choose a supported fictional academy intake.');
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff || typeof clubId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(clubId) || !Number.isInteger(seasonNumber) || seasonNumber < 1 || seasonNumber > 7974 || !Number.isInteger(round) || round < 1 || round > MAX_SEASON_ROUNDS || !Number.isInteger(count) || count < 0 || count > (initial ? 3 : 2)) throw new Error('Choose a supported fictional academy intake.');
   return Array.from({ length: count }, (_, index) => makeProspect(seed, clubId, seasonNumber, round, index, initial ? 16 + index : 16, `academy-${clubId}-s${seasonNumber}-p${index + 1}`));
 }
 

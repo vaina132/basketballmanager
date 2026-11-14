@@ -41,7 +41,7 @@ beforeAll(() => {
   legacyComplete = completeSeason(legacyLive);
   let fourth = nextYear;
   while (fourth.seasonNumber < 4) fourth = rolloverSeason(completeSeason(fourth));
-  const recruit = availableCoaches(fourth.coaching).filter(coach => coach.fee <= getSpendableCash(fourth, clubId)).sort((left, right) => right.fee - left.fee)[0]!;
+  const recruit = availableCoaches(fourth.coaching, fourth).filter(coach => coach.fee <= getSpendableCash(fourth, clubId)).sort((left, right) => right.fee - left.fee)[0]!;
   expect(recruit.fee).toBeGreaterThanOrEqual(5_000_000);
   constrained = hireCoach(fourth, recruit.id);
   belowReserve = constrained;
@@ -233,7 +233,7 @@ describe('strict payroll ledger reconciliation', () => {
 
   it('rejects a cash-affordable coach fee that consumes remaining player wage commitments', () => {
     const cash = getFinanceBalance(constrained.finance, clubId).cash, spendable = getSpendableCash(constrained, clubId);
-    const coach = availableCoaches(constrained.coaching).find(coach => coach.fee > spendable && coach.fee <= cash && coach.fee + coachingCommitted(constrained.coaching, clubId) <= 15_000_000)!;
+    const coach = availableCoaches(constrained.coaching, constrained).find(coach => coach.fee > spendable && coach.fee <= cash && coach.fee + coachingCommitted(constrained.coaching, clubId) <= 15_000_000)!;
     expect(coach).toBeDefined();
     reject(constrained, state => {
       const contract = { id: `coach-s${state.seasonNumber}-c${state.coaching.contracts.length + 1}`, coachId: coach.id, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, focus: 'balanced' as const, renew: true };

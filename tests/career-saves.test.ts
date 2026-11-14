@@ -6,7 +6,8 @@ import { setAutoSubstitutions, simulateToQuarterEnd, stepMatch } from '../src/en
 import { loadCareerCheckpoint, readCareerSaves, readCurrentCareer, saveCareerCheckpoint } from '../src/storage/career-saves';
 import { directSeasonCodec, type SeasonCodec } from '../src/storage/season-codec';
 import type { SeasonCheckpoint, SeasonJournal } from '../src/storage/season-indexed-db';
-import { loadLocalSeason, MAX_SEASON_SAVE_BYTES, parseSeason, saveLocalSeason, serializeSeason } from '../src/storage/season-storage';
+// Local saves and checkpoints use the compact layout.
+import { loadLocalSeason, MAX_SEASON_SAVE_BYTES, parseSeason, saveLocalSeason, serializeSeasonCompact as serializeSeason } from '../src/storage/season-storage';
 import { createSeason, managedSide } from '../src/world/season';
 import { setManagerProfile } from '../src/world/manager';
 
@@ -166,7 +167,7 @@ describe('checkpoint restore and append', () => {
     storage.writeSeasonCheckpoint.mockResolvedValue(saved);
     expect(await saveCareerCheckpoint(state, 1, 'manual')).toEqual(saved);
     const serialized = storage.writeSeasonCheckpoint.mock.calls[0]![0] as string;
-    expect(Object.keys(JSON.parse(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'state']);
+    expect(Object.keys(JSON.parse(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'encoding', 'strings', 'shapes', 'state']);
     expect(JSON.parse(serialized).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(parseSeason(serialized)).toEqual(state);
     expect(state).toEqual(before);

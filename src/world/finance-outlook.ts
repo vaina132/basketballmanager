@@ -6,6 +6,7 @@ import { getReservedTransferFees } from './market-policy';
 import { agreementThroughRound, getSpendableCash, payrollInstallment } from './payroll-policy';
 import { getReservedInSeasonFees, getReservedInSeasonWages } from './recruitment-policy';
 import { getTransferInstallmentRemaining, getTransferInstallments } from './transfer-payments';
+import { seasonRounds } from './career-world';
 
 export const CASH_OUTLOOK_ADVERSE_GATE_PERCENT = 75;
 
@@ -100,7 +101,7 @@ export function getClubCashOutlook(state: SeasonState, clubId = state.managedClu
       const fixture = state.fixtures.find(fixture => fixture.round === round && (fixture.homeClubId === clubId || fixture.awayClubId === clubId));
       if (!fixture) continue;
       const row = fixture.date < state.date ? dueNow : rowOn(fixture.date);
-      row.wages += payrollInstallment(agreement.seasonWage, round);
+      row.wages += payrollInstallment(agreement.seasonWage, round, seasonRounds(state));
       if (row.kind === 'scheduled') { row.round = round; if (!row.fixtureIds.includes(fixture.id)) row.fixtureIds.push(fixture.id); }
     }
   }

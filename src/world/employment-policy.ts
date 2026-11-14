@@ -2,7 +2,7 @@ import type { ClubContractSummary, ContractOfferOptions, EmploymentContract, Pla
 import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
-import { worldOf } from './career-world';
+import { MAX_SEASON_ROUNDS, seasonRounds, worldOf } from './career-world';
 import { getCareerPlayers, getActiveCareerPlayers, getCareerWage, type CareerPlayerContext } from './player-catalog';
 import { getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { transferOfferReason } from './transfers-policy';
@@ -24,8 +24,9 @@ export function contractForSeason(employment: SeasonEmployment, playerId: string
   return effectiveContractsForSeason(employment, seasonNumber).find(contract => contract.playerId === playerId) ?? null;
 }
 
+/** Contracts in force at the end of a season, whatever its length (no season has more than MAX_SEASON_ROUNDS matchdays). */
 export function effectiveContractsForSeason(employment: SeasonEmployment, seasonNumber: number): EmploymentContract[] {
-  return effectiveContractsForRound(employment, seasonNumber, 10);
+  return effectiveContractsForRound(employment, seasonNumber, MAX_SEASON_ROUNDS);
 }
 
 /** Registration at one matchday, without applying a later arrival to earlier fixtures. */
@@ -114,7 +115,7 @@ export function getContractedClubs(state: { employment: SeasonEmployment; clubs:
   return definitions.map(definition => {
     const club = state.clubs.find(club => club.id === definition.id) ?? definition;
     const numbers = new Set<number>();
-    const players = getCareerPlayers(state, seasonNumber, 10).filter(player => contractForSeason(state.employment, player.id, seasonNumber)?.clubId === club.id).map(player => {
+    const players = getCareerPlayers(state, seasonNumber, seasonRounds(state)).filter(player => contractForSeason(state.employment, player.id, seasonNumber)?.clubId === club.id).map(player => {
       let number = player.number;
       if (numbers.has(number)) { number = 1; while (numbers.has(number)) number += 1; }
       numbers.add(number);
@@ -125,9 +126,35 @@ export function getContractedClubs(state: { employment: SeasonEmployment; clubs:
 }
 
 /** Canonical opening jerseys plus chronological arrivals; incumbents keep their numbers. */
+/**
+ * Registrations depend only on the employment journal, the academy's graduates and the world, all immutable per
+ * career state; save validation asks for the same matchday many times, so results are remembered per those
+ * objects (step 2.8d). Remembered results are frozen, so a caller can never change another caller's copy.
+ */
+const contractedByEmployment = new WeakMap<SeasonEmployment, WeakMap<object, Map<string, readonly Team[]>>>();
+const NO_ACADEMY = {};
 export function getContractedClubsForRound(state: { employment: SeasonEmployment; clubs: readonly Team[] } & CareerPlayerContext, seasonNumber: number, round: number): readonly Team[] {
   const definitions = worldOf(state).clubs;
   if (!state.employment.enabledSince || seasonNumber < state.employment.enabledSince.seasonNumber) return definitions;
+  let byAcademy = contractedByEmployment.get(state.employment);
+  if (!byAcademy) { byAcademy = new WeakMap(); contractedByEmployment.set(state.employment, byAcademy); }
+  const academyKey = state.academy ?? NO_ACADEMY;
+  let byBoundary = byAcademy.get(academyKey);
+  if (!byBoundary) { byBoundary = new Map(); byAcademy.set(academyKey, byBoundary); }
+  const key = `${worldOf(state).id}|${seasonNumber}|${round}`;
+  const known = byBoundary.get(key);
+  if (known) return known;
+  const result = deepFreeze(contractedClubsForRound(state, definitions, seasonNumber, round));
+  byBoundary.set(key, result);
+  return result;
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.freeze(value); for (const child of Object.values(value)) deepFreeze(child); }
+  return value;
+}
+
+function contractedClubsForRound(state: { employment: SeasonEmployment; clubs: readonly Team[] } & CareerPlayerContext, definitions: readonly Team[], seasonNumber: number, round: number): readonly Team[] {
   const changeRounds = [...new Set([
     ...state.employment.contracts.filter(contract => contract.startsSeason === seasonNumber).map(contract => contract.startsRound ?? 1),
     ...state.employment.transfers.filter(transfer => transfer.startsSeason === seasonNumber).map(transfer => transfer.startsRound ?? 1),

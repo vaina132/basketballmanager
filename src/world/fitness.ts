@@ -2,13 +2,14 @@ import type { FitnessContract, SeasonFitness } from '../domain/fitness';
 import type { SeasonState } from '../domain/season';
 import { recordFitnessFee } from './finance';
 import { availableFitnessCoaches, getClubFitnessCoach, quoteFitnessHire } from './fitness-policy';
+import { seasonRounds } from './career-world';
 
 export function createFitness(): SeasonFitness { return { model: 'fitness-1', enabledSince: null, contracts: [] }; }
 
 export function enableFitness(state: SeasonState): SeasonState {
   if (state.fitness.enabledSince) return state;
   if (!state.finance.enabledSince || !state.training.enabledSince) throw new Error('Enable club finances and training before recruiting fitness coaches.');
-  if (state.status !== 'active' || state.round === 10) throw new Error('Enable fitness coaches when weekly training is available, from matchday one to nine.');
+  if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Enable fitness coaches when weekly training is available, before the final matchday.');
   return recruitAiFitnessCoaches({ ...state, fitness: { ...state.fitness, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: state.finance.ledger.length } } });
 }
 
@@ -40,7 +41,7 @@ export function setFitnessRenewal(state: SeasonState, contractId: string, renew:
 
 /** Fill one role after scouting coverage and before optional additional training coaches. */
 export function recruitAiFitnessCoaches(state: SeasonState): SeasonState {
-  if (!state.fitness.enabledSince || state.status !== 'active' || state.round === 10) return state;
+  if (!state.fitness.enabledSince || state.status !== 'active' || state.round === seasonRounds(state)) return state;
   let next = state;
   for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
     if (getClubFitnessCoach(next, club.id)) continue;

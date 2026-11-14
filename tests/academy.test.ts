@@ -26,7 +26,7 @@ const create = (academy = true, youth = true) => createSeason(227, club, 'off', 
 function freeze<T>(value: T): T { if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
 function nextRound(state: SeasonState): SeasonState { return advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) }); }
 const total = (values: Record<string, number>) => Object.values(values).reduce((sum, value) => sum + value, 0);
-function week(state: SeasonState, afterRound = state.round) { return { academy: state.academy, youth: state.youth, clubs: state.clubs, seasonNumber: state.seasonNumber, afterRound, fromDate: dateForRound(afterRound, state.seasonNumber), toDate: dateForRound(afterRound + 1, state.seasonNumber) }; }
+function week(state: SeasonState, afterRound = state.round) { return { rounds: 10, academy: state.academy, youth: state.youth, clubs: state.clubs, seasonNumber: state.seasonNumber, afterRound, fromDate: dateForRound(afterRound, state.seasonNumber), toDate: dateForRound(afterRound + 1, state.seasonNumber) }; }
 
 describe('persistent academy intake and development', () => {
   let initial: SeasonState;
@@ -45,7 +45,7 @@ describe('persistent academy intake and development', () => {
     expect(activated.academy.prospects.slice(0, 3)).toEqual(generateAcademyProspects(227, club, 1, 1, true, 3));
     expect(new Set(activated.academy.prospects.map(prospect => prospect.player.id)).size).toBe(18);
     expect(enableAcademy(activated)).toBe(activated);
-    expect(() => enableAcademy({ ...legacy, round: 10 })).toThrow(/one to nine/i);
+    expect(() => enableAcademy({ ...legacy, round: 10 })).toThrow(/before the final matchday/i);
     expect(() => enableAcademy(createSeason())).toThrow(/contracts|recruitment/i);
   });
 

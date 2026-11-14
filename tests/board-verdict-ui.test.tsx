@@ -35,12 +35,12 @@ describe('board page: season verdict and budgets', () => {
     expect(html).toContain('If the season ended today · 2027/28');
     expect(html).toContain('Steady · confidence 50');
     expect(html).toContain('data-board-next-staff="15000000"');
-    expect(html).toContain('The verdict is given by the final review after matchday 10.');
+    expect(html).toContain('The verdict is given by the final review after the last matchday.');
     expect(html).toContain('Season verdicts: when switched on');
   });
 
   it('shows the final verdict and the budgets it sets for next season', () => {
-    const verdict = seasonVerdict(complete.board, club, 1)!;
+    const verdict = seasonVerdict(complete.board, club, 1, 10)!;
     const budgets = verdictBudgets(club, verdict.verdict, DEVELOPMENT_WORLD);
     const html = board(complete);
     expect(html).toContain(`data-board-verdict="${verdict.verdict}"`);
@@ -52,7 +52,7 @@ describe('board page: season verdict and budgets', () => {
   });
 
   it('explains in the new season which verdict set the budgets, also in the budget details', () => {
-    const verdict = seasonVerdict(complete.board, club, 1)!;
+    const verdict = seasonVerdict(complete.board, club, 1, 10)!;
     const html = board(opening);
     expect(html).toContain(`data-board-verdict-current="${verdict.verdict}"`);
     expect(html).toContain(`Set by the 2026/27 verdict: ${BOARD_VERDICT_EFFECTS[verdict.verdict].label} (confidence ${verdict.confidence})`);

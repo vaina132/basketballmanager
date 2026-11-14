@@ -20,6 +20,7 @@ import { getDevelopmentSponsor } from '../data/development-sponsors'
 import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
 import './club-workspace.css'
 import { clubFinanceDefinition, worldOf } from '../world/career-world'
+import { ASSISTANT_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory'
 
 interface ClubWorkspaceProps extends FacilitiesActions, SponsorshipActions {
   season: SeasonState
@@ -88,11 +89,11 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
       const visitor = fixture ? season.clubs.find(team => team.id === fixture.awayClubId) : null
       return `${visitor ? `Home vs ${visitor.name} · ` : ''}${count(entry.ticket.attendance)} / ${count(entry.ticket.capacity ?? definition.capacity)} attendance · ${money(entry.ticket.price)} per ticket`
     }
-    if (entry.youth) return DEVELOPMENT_YOUTH_COACHES.find(coach => coach.id === entry.youth!.coachId)?.name ?? 'Youth coach fee'
-    if (entry.assistant) return DEVELOPMENT_ASSISTANTS.find(coach => coach.id === entry.assistant!.assistantId)?.name ?? 'Assistant coach fee'
-    if (entry.physio) return DEVELOPMENT_PHYSIOS.find(physio => physio.id === entry.physio!.physioId)?.name ?? 'Physio fee'
-    if (entry.fitness) return DEVELOPMENT_FITNESS_COACHES.find(coach => coach.id === entry.fitness!.coachId)?.name ?? 'Fitness coach fee'
-    if (entry.scout) return DEVELOPMENT_SCOUTS.find(scout => scout.id === entry.scout!.scoutId)?.name ?? 'Scout fee'
+    if (entry.youth) return YOUTH_COACH_DIRECTORY.find(coach => coach.id === entry.youth!.coachId)?.name ?? 'Youth coach fee'
+    if (entry.assistant) return ASSISTANT_DIRECTORY.find(coach => coach.id === entry.assistant!.assistantId)?.name ?? 'Assistant coach fee'
+    if (entry.physio) return PHYSIO_DIRECTORY.find(physio => physio.id === entry.physio!.physioId)?.name ?? 'Physio fee'
+    if (entry.fitness) return FITNESS_DIRECTORY.find(coach => coach.id === entry.fitness!.coachId)?.name ?? 'Fitness coach fee'
+    if (entry.scout) return SCOUT_DIRECTORY.find(scout => scout.id === entry.scout!.scoutId)?.name ?? 'Scout fee'
     if (entry.coach) return COACHES.find(coach => coach.id === entry.coach!.coachId)!.name
     if (entry.sponsorship) return `${getDevelopmentSponsor(entry.sponsorship.sponsorId).name} · ${seasonLabel(entry.seasonNumber)} · ${entry.sponsorship.installment === 'bonus' ? 'Top-half bonus' : entry.sponsorship.installment === 1 ? 'Opening installment' : 'Matchday 6 installment'}`
     if (entry.kind === 'sponsor') return `${definition.sponsor} · ${seasonLabel(entry.seasonNumber)}`

@@ -3,7 +3,7 @@ import type { BoardSummary } from '../domain/board'
 import type { FacilityEvent } from '../domain/facilities'
 import type { SeasonState } from '../domain/season'
 import type { DevelopmentPresident } from '../data/development-presidents'
-import { clubPresident, worldOf } from '../world/career-world'
+import { clubPresident, seasonRounds, worldOf } from '../world/career-world'
 import { getBoardSummary } from '../world/board'
 import { BOARD_FUNDING_REFUSAL_COOLDOWN, boardCapitalGranted, boardConfidenceNow, boardFundingRefusal, requiredBoardConfidence } from '../world/board-funding-policy'
 import { BOARD_VERDICT_EFFECTS, governingVerdict, ownerCapital, seasonVerdict, staffAllocation, verdictBudgets, verdictForConfidence, type BoardVerdict } from '../world/board-consequences'
@@ -63,7 +63,7 @@ function PresidentSection({ season, busy, onEnableFunding }: { season: SeasonSta
   return <>
     <h3 className="board-section-heading"><Icon name="people" size={16} />President &amp; owner capital</h3>
     <div className="board-president" data-board-president={president.clubId}>
-      <div className="board-president-identity"><strong>{president.name}</strong><span>Club president · {generosityLabels[president.generosity]}</span></div>
+      <div className="board-president-identity"><strong>{president.name}</strong><span>{worldOf(season).source === 'real-data-pack' ? 'Fictional club president' : 'Club president'} · {generosityLabels[president.generosity]}</span></div>
       <dl className="board-president-facts"><div><dt>Owner capital left · {seasonLabel(season.seasonNumber)}</dt><dd data-board-capital-left={left}>{money(left)}<small>of {money(capital)} for facility upgrades</small></dd></div><div><dt>Confidence needed for capital</dt><dd data-board-required={required}>{required} / 100<small>{confidence >= required ? 'Met' : 'Not met'} · current confidence {confidence}</small></dd></div></dl>
     </div>
     {!season.facilities.fundingSince ? <div className="board-enable board-funding-enable"><Icon name="wallet" size={24} /><div><strong>Ask the board for capital</strong><p>When a facility upgrade costs more than the club can spend, ask {president.name} to fund the difference. Rival clubs can ask their boards under the same rules once this is on.</p>{enableReason && <p id="board-funding-enable-reason">{enableReason}</p>}</div><button id="enable-board-funding" className="button" onClick={onEnableFunding} disabled={busy || !!enableReason} aria-describedby={enableReason ? 'board-funding-enable-reason' : undefined}>Enable funding requests</button></div>
@@ -123,7 +123,7 @@ function CareerSection({ season, busy, onEnableCareerMoves }: { season: SeasonSt
     : status === 'decided' ? (move ? `You joined ${name(move.toClubId)} at the end of this season.` : 'The board has decided: you stay for next season.')
     : `If the season ended today: ${BOARD_VERDICT_EFFECTS[outlook].label} (${confidence}/100) — ${status === 'at-risk' ? 'the board would dismiss you' : 'your job is safe'}.`
   const seasons = Array.from({ length: season.seasonNumber }, (_, index) => index + 1).map(year => {
-    const clubId = managedClubFor(season, year, false), final = seasonVerdict(season.board, clubId, year)
+    const clubId = managedClubFor(season, year, false), final = seasonVerdict(season.board, clubId, year, seasonRounds(season))
     const moved = career.moves.find(item => item.seasonNumber === year)
     return { year, clubId, final, moved }
   }).filter(row => row.final || row.year === season.seasonNumber).reverse()
@@ -144,7 +144,7 @@ function CareerSection({ season, busy, onEnableCareerMoves }: { season: SeasonSt
 function VerdictSection({ season, busy, onEnableConsequences }: { season: SeasonState; busy: boolean; onEnableConsequences: () => void }) {
   const clubId = season.managedClubId, next = season.seasonNumber + 1
   const current = governingVerdict(season, clubId, season.seasonNumber)
-  const final = seasonVerdict(season.board, clubId, season.seasonNumber)
+  const final = seasonVerdict(season.board, clubId, season.seasonNumber, seasonRounds(season))
   const confidence = final?.confidence ?? boardConfidenceNow(season, clubId)
   const outlook = final?.verdict ?? verdictForConfidence(confidence)
   const budgets = verdictBudgets(clubId, outlook, worldOf(season))
@@ -158,7 +158,7 @@ function VerdictSection({ season, busy, onEnableConsequences }: { season: Season
       <div className="board-verdict-season" data-board-verdict-current={current?.verdict ?? 'standard'}><span>This season · {seasonLabel(season.seasonNumber)}</span><strong>{money(staffAllocation(season, clubId))} staff budget</strong><small>{money(ownerCapital(season, clubId))} owner capital</small><small>{current ? `Set by the ${seasonLabel(current.seasonNumber)} verdict: ${BOARD_VERDICT_EFFECTS[current.verdict].label} (confidence ${current.confidence})` : 'Standard budgets'}</small></div>
       {next <= MAX_SEASON_NUMBER && <div className="board-verdict-season" data-board-next-staff={budgets.staff} data-board-next-capital={budgets.capital}><span>{final ? `Verdict for ${seasonLabel(next)}` : `If the season ended today · ${seasonLabel(next)}`}</span><strong>{money(budgets.staff)} staff budget</strong><small>{money(budgets.capital)} owner capital</small><span className="board-verdict-outcome"><ObjectiveStatus label={`${BOARD_VERDICT_EFFECTS[outlook].label} · confidence ${confidence}`} state={final ? verdictState(outlook) : 'waiting'} /><small>{effectText(outlook)}</small></span></div>}
     </div>
-    <p className="board-empty board-verdict-note">{final ? 'The verdict is final. ' : 'The verdict is given by the final review after matchday 10. '}Signed staff contracts are never cut; renewals on the opening day of the next season must fit its staff budget.</p>
+    <p className="board-empty board-verdict-note">{final ? 'The verdict is final. ' : 'The verdict is given by the final review after the last matchday. '}Signed staff contracts are never cut; renewals on the opening day of the next season must fit its staff budget.</p>
   </>
 }
 
@@ -173,7 +173,7 @@ export function BoardPanel({ season, busy = false, onEnable, onEnableFunding, on
   const sportingGood = summary.sportingStatus === 'on-track' || summary.sportingStatus === 'met'
   return <section className="board-panel panel" aria-labelledby="board-title">
     <header className="board-heading"><h2 id="board-title"><Icon name="shield" size={18} />Board</h2><span>{seasonLabel(season.seasonNumber)}</span></header>
-    {!summary.enabled ? <div className="board-enable"><Icon name="shield" size={28} /><div><strong>Set your board objectives</strong><p>Record a results target and financial expectations. {season.status === 'complete' || season.round === 10 ? 'Objectives start next season.' : 'Reviews begin after the current matchday.'}</p></div><button id="enable-board" className="button" onClick={onEnable} disabled={busy}>Enable board reviews</button></div> : <>
+    {!summary.enabled ? <div className="board-enable"><Icon name="shield" size={28} /><div><strong>Set your board objectives</strong><p>Record a results target and financial expectations. {season.status === 'complete' || season.round === seasonRounds(season) ? 'Objectives start next season.' : 'Reviews begin after the current matchday.'}</p></div><button id="enable-board" className="button" onClick={onEnable} disabled={busy}>Enable board reviews</button></div> : <>
       <div className="board-summary">
         <div className="board-confidence" data-board-confidence={summary.confidence}><div><strong>{summary.confidenceLabel}</strong><span>{summary.confidence}<small> / 100</small></span></div><meter min={0} max={100} value={summary.confidence} aria-label={`Board confidence: ${summary.confidence} out of 100, ${summary.confidenceLabel}`} /><small>Board confidence</small></div>
         <div className="board-summary-fact"><Icon name="calendar" size={19} /><div><span>Latest review</span><strong>{latest ? <time dateTime={latest.date}>{medicalDate(latest.date)}</time> : 'Awaiting first review'}</strong>{latest && <span>Matchday {latest.round} · {signed(latest.club.confidence - latest.club.previousConfidence)} confidence</span>}</div></div>

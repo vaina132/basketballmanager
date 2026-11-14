@@ -6,6 +6,7 @@ import { getActiveCareerPlayers } from './player-catalog';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { getClubScouts } from './scout-policy';
 import { abilityRating } from './performance-rating';
+import { SCOUT_DIRECTORY } from '../data/staff-directory';
 
 export const BASE_SCOUTING_DISCOVERY = 20;
 
@@ -40,7 +41,7 @@ export interface ScoutingDiscovery {
 export function getScoutingDiscovery(state: SeasonState, clubId = state.managedClubId): ScoutingDiscovery {
   const outsiders = outsiderIds(state, clubId);
   const scouts = state.scouts.enabledSince ? getClubScouts(state, clubId) : [];
-  const capacity = BASE_SCOUTING_DISCOVERY + scouts.reduce((sum, contract) => sum + scoutDiscoveryContribution(DEVELOPMENT_SCOUTS.find(scout => scout.id === contract.scoutId)!), 0);
+  const capacity = BASE_SCOUTING_DISCOVERY + scouts.reduce((sum, contract) => sum + scoutDiscoveryContribution(SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!), 0);
   const networkPlayerIds = outsiders.slice(0, capacity);
   const visible = new Set(networkPlayerIds);
   for (const player of state.clubs.find(club => club.id === clubId)?.players ?? []) visible.add(player.id);

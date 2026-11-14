@@ -6,7 +6,7 @@ import { rosterForRound } from './rosters';
 import { getPlayerRetirement } from './lifecycle-policy';
 import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, pressImpact } from './press-policy';
 import { governingDerby, RIVALRY_MORALE_WEIGHT } from './rivalries';
-import { worldOf } from './career-world';
+import { ordinalRound, roundOrdinal, seasonRounds, worldOf } from './career-world';
 
 export const SQUAD_ROLES: readonly SquadRole[] = ['development', 'rotation', 'starter'];
 export const SQUAD_ROLE_DEFINITIONS: Record<SquadRole, { label: string; minMinutes: number; maxMinutes: number }> = {
@@ -17,8 +17,9 @@ export const SQUAD_ROLE_DEFINITIONS: Record<SquadRole, { label: string; minMinut
 export const RELATIONSHIP_COOLDOWN_GAMES = 4;
 export const PROMISE_ELIGIBLE_GAMES = 3;
 export const PROMISE_DEADLINE_GAMES = 6;
-const ordinal = (year: number, round: number) => (year - 1) * 10 + round;
-const dateAt = (at: number) => dateForRound((at - 1) % 10 + 1, Math.floor((at - 1) / 10) + 1);
+/** Matchdays as one sequence across seasons; stored in anchors and counted forward, so it uses the season length. */
+const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
+const dateAt = (at: number, rounds: number) => { const { seasonNumber, round } = ordinalRound(at, rounds); return dateForRound(round, seasonNumber); };
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 const rounded = (n: number) => Math.round(n * 10) / 10;
 const compareText = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
@@ -27,7 +28,7 @@ const playerEvent = (event: RelationshipEvent): event is Extract<RelationshipEve
 export function createRelationships(): SeasonRelationships { return { model: 'relationships-1', enabledSince: null, events: [] }; }
 export function relationshipEventAnchor(state: SeasonState): RelationshipAnchor {
   const completed = state.fixtures.filter(fixture => fixture.result !== null).reduce((round, fixture) => Math.max(round, fixture.round), 0);
-  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed), contractCount: state.employment.contracts.length, rosterCount: state.rosters.length };
+  return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), contractCount: state.employment.contracts.length, rosterCount: state.rosters.length };
 }
 export function enableRelationships(state: SeasonState): SeasonState {
   if (state.relationships.enabledSince) return state;
@@ -54,9 +55,9 @@ function historicalPlayer(state: SeasonState, clubId: string, playerId: string):
 function stintStart(state: SeasonState, clubId: string, playerId: string, through = Infinity): number {
   let present = false, from = 1;
   for (const season of seasons(state)) for (const roster of season.rosters.filter(roster => roster.clubId === clubId).sort((a, b) => a.fromRound - b.fromRound)) {
-    if (ordinal(season.seasonNumber, roster.fromRound) > through) continue;
+    if (ordinal(season.seasonNumber, roster.fromRound, seasonRounds(state)) > through) continue;
     const next = roster.players.some(player => player.id === playerId);
-    if (next && !present) from = ordinal(season.seasonNumber, roster.fromRound);
+    if (next && !present) from = ordinal(season.seasonNumber, roster.fromRound, seasonRounds(state));
     present = next;
   }
   return from;
@@ -66,8 +67,8 @@ function eventsForPlayer(state: SeasonState, clubId: string, playerId: string) {
 }
 function roleAt(state: SeasonState, clubId: string, playerId: string, events: readonly RelationshipEvent[] = state.relationships.events): { role: SquadRole; after: number } {
   const start = stintStart(state, clubId, playerId);
-  const event = events.filter((event): event is Extract<RelationshipEvent, { type: 'role' }> => event.type === 'role' && event.clubId === clubId && event.playerId === playerId && ordinal(event.seasonNumber, event.round) >= start).at(-1);
-  return { role: event?.role ?? 'rotation', after: Math.max(state.relationships.enabledSince?.completedRounds ?? 0, start - 1, event ? ordinal(event.seasonNumber, event.round) : 0) };
+  const event = events.filter((event): event is Extract<RelationshipEvent, { type: 'role' }> => event.type === 'role' && event.clubId === clubId && event.playerId === playerId && ordinal(event.seasonNumber, event.round, seasonRounds(state)) >= start).at(-1);
+  return { role: event?.role ?? 'rotation', after: Math.max(state.relationships.enabledSince?.completedRounds ?? 0, start - 1, event ? ordinal(event.seasonNumber, event.round, seasonRounds(state)) : 0) };
 }
 interface EvidenceGame { at: number; id: string; date: string; eligible: boolean; minutes: number; won: boolean; derby: boolean }
 function gamesFor(state: SeasonState, clubId: string, playerId: string): EvidenceGame[] {
@@ -78,32 +79,32 @@ function gamesFor(state: SeasonState, clubId: string, playerId: string): Evidenc
     if (!roster.players.some(player => player.id === playerId)) continue;
     const stats = fixture.result.stats?.[playerId];
     const eligible = !!stats && fixture.result.kind === 'normal' && !fixture.result.injuries[playerId] && stats.fouls < 5;
-    games.push({ at: ordinal(season.seasonNumber, fixture.round), id: fixture.id, date: fixture.date, eligible, minutes: stats ? stats.secondsPlayed / 60 : 0, won: fixture.result.winnerClubId === clubId, derby: !!governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round, worldOf(state)) });
+    games.push({ at: ordinal(season.seasonNumber, fixture.round, seasonRounds(state)), id: fixture.id, date: fixture.date, eligible, minutes: stats ? stats.secondsPlayed / 60 : 0, won: fixture.result.winnerClubId === clubId, derby: !!governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round, worldOf(state)) });
   }
   return games.sort((a, b) => a.at - b.at || compareText(a.id, b.id));
 }
 function departureDate(state: SeasonState, event: Extract<RelationshipEvent, { type: 'talk' }>): string | null {
-  const start = ordinal(event.seasonNumber, event.round);
+  const start = ordinal(event.seasonNumber, event.round, seasonRounds(state));
   let date: string | null = null;
   for (const season of seasons(state)) for (const roster of season.rosters.filter(roster => roster.clubId === event.clubId).sort((a, b) => a.fromRound - b.fromRound)) {
-    const at = ordinal(season.seasonNumber, roster.fromRound);
-    if (at > start && !roster.players.some(player => player.id === event.playerId)) { const candidate = dateAt(at); if (!date || candidate < date) date = candidate; }
+    const at = ordinal(season.seasonNumber, roster.fromRound, seasonRounds(state));
+    if (at > start && !roster.players.some(player => player.id === event.playerId)) { const candidate = dateAt(at, seasonRounds(state)); if (!date || candidate < date) date = candidate; }
   }
   const retirement = getPlayerRetirement(state, event.playerId);
   if (retirement.status === 'retired' && retirement.notice && (!date || retirement.notice.retiredOn < date)) date = retirement.notice.retiredOn;
   return date;
 }
 function promiseFor(state: SeasonState, event: Extract<RelationshipEvent, { type: 'talk' }>, games: EvidenceGame[]): PlayingTimePromise {
-  const start = ordinal(event.seasonNumber, event.round), deadlineRound = start + PROMISE_DEADLINE_GAMES;
+  const start = ordinal(event.seasonNumber, event.round, seasonRounds(state)), deadlineRound = start + PROMISE_DEADLINE_GAMES;
   const prefix = state.relationships.events.slice(0, state.relationships.events.indexOf(event));
   const startOfStint = stintStart(state, event.clubId, event.playerId, start);
   // The agreed role at creation is frozen, even if the player later leaves or returns.
-  const previousRole = prefix.filter((item): item is Extract<RelationshipEvent, { type: 'role' }> => item.type === 'role' && item.clubId === event.clubId && item.playerId === event.playerId && ordinal(item.seasonNumber, item.round) >= startOfStint).at(-1);
+  const previousRole = prefix.filter((item): item is Extract<RelationshipEvent, { type: 'role' }> => item.type === 'role' && item.clubId === event.clubId && item.playerId === event.playerId && ordinal(item.seasonNumber, item.round, seasonRounds(state)) >= startOfStint).at(-1);
   const targetMinutes = SQUAD_ROLE_DEFINITIONS[previousRole?.role ?? 'rotation'].minMinutes;
   const departure = departureDate(state, event);
   const eligible = games.filter(game => game.at > start && game.at <= deadlineRound && game.eligible && (!departure || game.date < departure)).slice(0, PROMISE_ELIGIBLE_GAMES);
   const average = eligible.length ? eligible.reduce((sum, game) => sum + game.minutes, 0) / eligible.length : null;
-  const deadlineDate = dateAt(deadlineRound);
+  const deadlineDate = dateAt(deadlineRound, seasonRounds(state));
   const expired = relationshipEventAnchor(state).completedRounds >= deadlineRound;
   let status: PlayingTimePromise['status'] = 'active', outcomeDate: string | null = null;
   if (eligible.length === PROMISE_ELIGIBLE_GAMES) { status = average! + 1e-9 >= targetMinutes ? 'kept' : 'broken'; outcomeDate = eligible.at(-1)!.date; }
@@ -127,8 +128,8 @@ export function getPlayerRelationship(state: SeasonState, playerId: string, club
   for (const event of personal) {
     if (event.type === 'talk' && event.choice === 'explain') conversationImpact += decayed(2, event.date, state.date, 21);
     if (event.type === 'role') {
-      const startOfStint = stintStart(state, clubId, playerId, ordinal(event.seasonNumber, event.round));
-      const before = state.relationships.events.slice(0, state.relationships.events.indexOf(event)).filter((item): item is Extract<RelationshipEvent, { type: 'role' }> => item.type === 'role' && item.clubId === clubId && item.playerId === playerId && ordinal(item.seasonNumber, item.round) >= startOfStint).at(-1)?.role ?? 'rotation';
+      const startOfStint = stintStart(state, clubId, playerId, ordinal(event.seasonNumber, event.round, seasonRounds(state)));
+      const before = state.relationships.events.slice(0, state.relationships.events.indexOf(event)).filter((item): item is Extract<RelationshipEvent, { type: 'role' }> => item.type === 'role' && item.clubId === clubId && item.playerId === playerId && ordinal(item.seasonNumber, item.round, seasonRounds(state)) >= startOfStint).at(-1)?.role ?? 'rotation';
       if (SQUAD_ROLE_DEFINITIONS[event.role].minMinutes < SQUAD_ROLE_DEFINITIONS[before].minMinutes) conversationImpact += decayed(-4, event.date, state.date);
     }
   }
@@ -183,7 +184,7 @@ export function quoteSquadRole(state: SeasonState, playerId: string, role: Squad
   if (!reason && definition.minMinutes > current.minMinutes && current.concern) reason = 'Resolve the existing playing-time concern before making a larger commitment.';
   if (!reason && lower && !current.concern && currentMinimum <= 200) reason = 'A lower role can be discussed when actual playing time has created a concern or new arrivals leave the squad overcommitted.';
   if (!reason && lower && current.trust < 35) reason = 'The player does not currently trust another reduced commitment.';
-  return { role, roleLabel: definition.label, minMinutes: definition.minMinutes, maxMinutes: definition.maxMinutes, totalMinimum, trustChange: lower ? -4 : 0, effectiveFrom: dateAt(ordinal(state.seasonNumber, state.round) + 1), canAgree: reason === null, reason };
+  return { role, roleLabel: definition.label, minMinutes: definition.minMinutes, maxMinutes: definition.maxMinutes, totalMinimum, trustChange: lower ? -4 : 0, effectiveFrom: dateAt(ordinal(state.seasonNumber, state.round, seasonRounds(state)) + 1, seasonRounds(state)), canAgree: reason === null, reason };
 }
 export function quoteRelationshipTalk(state: SeasonState, playerId: string, choice: RelationshipTalk, clubId = state.managedClubId): RelationshipTalkQuote {
   if (!['explain', 'minutes-promise'].includes(choice)) throw new Error('Choose a supported player conversation.');
@@ -191,7 +192,7 @@ export function quoteRelationshipTalk(state: SeasonState, playerId: string, choi
   let reason = current.talkReason;
   if (!reason && !current.concern) reason = 'There is no unresolved playing-time concern to discuss.';
   const promise = choice === 'minutes-promise';
-  return { choice, title: promise ? 'Promise more playing time' : 'Explain competition for places', detail: promise ? `Average at least ${current.minMinutes} minutes over the next 3 eligible games after this matchday, within 6 club games. Injuries, disqualifications and default results do not count. Keeping the promise adds 10 trust; breaking it costs 15. Too few eligible games closes it without penalty.` : 'Acknowledge the concern and explain competition. This adds 2 trust, fading with time; the agreed role and playing-time concern remain.', trustChange: promise ? 0 : 2, targetMinutes: current.minMinutes, deadlineDate: dateAt(ordinal(state.seasonNumber, state.round) + PROMISE_DEADLINE_GAMES), canTalk: reason === null, reason };
+  return { choice, title: promise ? 'Promise more playing time' : 'Explain competition for places', detail: promise ? `Average at least ${current.minMinutes} minutes over the next 3 eligible games after this matchday, within 6 club games. Injuries, disqualifications and default results do not count. Keeping the promise adds 10 trust; breaking it costs 15. Too few eligible games closes it without penalty.` : 'Acknowledge the concern and explain competition. This adds 2 trust, fading with time; the agreed role and playing-time concern remain.', trustChange: promise ? 0 : 2, targetMinutes: current.minMinutes, deadlineDate: dateAt(ordinal(state.seasonNumber, state.round, seasonRounds(state)) + PROMISE_DEADLINE_GAMES, seasonRounds(state)), canTalk: reason === null, reason };
 }
 
 export function applyRelationshipEvent(state: SeasonState, event: RelationshipEvent): SeasonState {
@@ -213,7 +214,7 @@ export function applyRelationshipEvent(state: SeasonState, event: RelationshipEv
     const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((value, index) => value === b[index]);
     if (!same(event.playerIds, question.playerIds) || !same(event.coreIds, question.coreIds)) throw new Error('Record exactly the squad and regulars the press question addressed.');
   } else if (event.type === 'prepare') {
-    if (state.status !== 'active' || anchor.completedRounds !== ordinal(state.seasonNumber, state.round) - 1) throw new Error('Freeze morale only before a new uncommitted matchday.');
+    if (state.status !== 'active' || anchor.completedRounds !== ordinal(state.seasonNumber, state.round, seasonRounds(state)) - 1) throw new Error('Freeze morale only before a new uncommitted matchday.');
     if (state.relationships.events.some(item => item.type === 'prepare' && item.seasonNumber === state.seasonNumber && item.round === state.round)) throw new Error('This matchday already has frozen morale.');
     const expected = preparationValues(state);
     const sameMap = (a: Record<string, unknown>, b: Record<string, unknown>) => Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(key => Object.hasOwn(b, key) && a[key] === b[key]);

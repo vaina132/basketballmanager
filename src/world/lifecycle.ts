@@ -4,6 +4,7 @@ import { getCareerPlayerAge, getCareerPlayers } from './player-catalog';
 import { effectiveContractsForSeason } from './employment-policy';
 import { lifecycleDateOfBirth, MIN_LIFECYCLE_POPULATION, MAX_PENDING_CLUB_RETIREMENTS, retirementTargetAge } from './lifecycle-policy';
 import { seasonStartDate } from './season';
+import { roundKey } from './career-world';
 
 export function createLifecycle(): SeasonLifecycle { return { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }; }
 
@@ -77,8 +78,8 @@ export function prepareLifecycleSeason(state: SeasonState): SeasonState {
 
 /** Older offer replays must not see announcements made after their journal prefix. */
 export function lifecycleAtBoundary(lifecycle: SeasonLifecycle, seasonNumber: number, round: number, contractCount = Number.MAX_SAFE_INTEGER, recruitmentEventCount = Number.MAX_SAFE_INTEGER, marketEventCount = Number.MAX_SAFE_INTEGER, ledgerIndex = Number.MAX_SAFE_INTEGER, negotiationCount = Number.MAX_SAFE_INTEGER): SeasonLifecycle {
-  const at = seasonNumber * 10 + round;
-  const visible = (entry: LifecycleAnchor) => entry.seasonNumber * 10 + entry.round <= at && entry.contractCount <= contractCount && entry.recruitmentEventCount <= recruitmentEventCount && entry.marketEventCount <= marketEventCount && entry.ledgerIndex <= ledgerIndex && entry.negotiationCount <= negotiationCount;
+  const at = roundKey(seasonNumber, round);
+  const visible = (entry: LifecycleAnchor) => roundKey(entry.seasonNumber, entry.round) <= at && entry.contractCount <= contractCount && entry.recruitmentEventCount <= recruitmentEventCount && entry.marketEventCount <= marketEventCount && entry.ledgerIndex <= ledgerIndex && entry.negotiationCount <= negotiationCount;
   if (!lifecycle.enabledSince || !visible(lifecycle.enabledSince)) return createLifecycle();
   const reviews = lifecycle.reviews.filter(visible), ids = new Set(reviews.flatMap(review => review.noticeIds));
   return { ...lifecycle, reviews, notices: lifecycle.notices.filter(notice => ids.has(notice.id)) };

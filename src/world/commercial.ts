@@ -1,9 +1,10 @@
 import type { CommercialAnchor, CommercialEvent, SeasonCommercial, SponsorshipAgreement, SponsorshipOffer, SponsorshipWindow } from '../domain/commercial';
 import type { SeasonState } from '../domain/season';
-import { incumbentSponsorId, worldOf } from './career-world';
+import { incumbentSponsorId, seasonRounds, worldOf } from './career-world';
 import { recordSponsorshipPayment } from './finance';
 import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, commercialGovernsSeason, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorshipPaymentsDue, sponsorshipSourceId, sponsorshipInstallment, SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_RENEWAL_ROUND, SPONSORSHIP_SECOND_INSTALLMENT_ROUND, type DueSponsorshipPayment } from './commercial-policy';
 import { dateForRound, getStandings, MAX_SEASON_NUMBER } from './season';
+import type { WorldContext } from '../domain/world';
 
 export { createCommercial } from './commercial-policy';
 
@@ -12,8 +13,8 @@ export function commercialAnchor(state: Pick<SeasonState, 'seasonNumber' | 'roun
 }
 
 /** Committed matchdays in the current season; a played but uncommitted match does not count yet. */
-export function completedSeasonRounds(state: Pick<SeasonState, 'status' | 'fixtures'>): number {
-  return state.status === 'complete' ? 10 : state.fixtures.filter(fixture => fixture.result).reduce((round, fixture) => Math.max(round, fixture.round), 0);
+export function completedSeasonRounds(state: Pick<SeasonState, 'status' | 'fixtures'> & WorldContext): number {
+  return state.status === 'complete' ? seasonRounds(state) : state.fixtures.filter(fixture => fixture.result).reduce((round, fixture) => Math.max(round, fixture.round), 0);
 }
 
 function withEvent(state: SeasonState, commercial: SeasonCommercial, event: CommercialEvent): SeasonState {
@@ -198,7 +199,7 @@ export function getClubSponsorship(state: SeasonState, clubId = state.managedClu
     const received = (installment: 1 | 2 | 'bonus') => state.finance.ledger.some(entry => entry.kind === 'sponsor' && entry.clubId === clubId && entry.sourceId === sponsorshipSourceId(current, state.seasonNumber, installment));
     payments.push({ label: 'Opening installment', date: dateForRound(1, state.seasonNumber), amount: sponsorshipInstallment(current, 1), status: received(1) ? 'received' : 'scheduled' });
     payments.push({ label: 'Matchday 6 installment', date: dateForRound(SPONSORSHIP_SECOND_INSTALLMENT_ROUND, state.seasonNumber), amount: sponsorshipInstallment(current, 2), status: received(2) ? 'received' : 'scheduled' });
-    if (current.bonus > 0) payments.push({ label: 'Top-half bonus', date: dateForRound(10, state.seasonNumber), amount: current.bonus, status: received('bonus') ? 'received' : state.status === 'complete' ? 'not-earned' : 'conditional' });
+    if (current.bonus > 0) payments.push({ label: 'Top-half bonus', date: dateForRound(seasonRounds(state), state.seasonNumber), amount: current.bonus, status: received('bonus') ? 'received' : state.status === 'complete' ? 'not-earned' : 'conditional' });
   }
   const offers = commercial.offers.filter(offer => offer.clubId === clubId && offer.forSeason === state.seasonNumber + 1);
   return {

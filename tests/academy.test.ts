@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { fullAcademyReport } from './helpers/academy-report';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_YOUTH_COACHES } from '../src/data/development-youth';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
@@ -59,7 +60,7 @@ describe('persistent academy intake and development', () => {
     expect(advanced.weeks[0]!.coaches[club]).toMatchObject({ coachId: 'youth-12', bonusPercent: 50 });
     expect(advanced.weeks[0]!.players[id]).toMatchObject({ gains: { passing: 42 }, coachingGains: { passing: 14 } });
     const balanced = initial.academy.prospects[1]!.player.id;
-    expect(total(advanced.weeks[0]!.players[balanced]!.gains)).toBe(42);
+    expect(total(fullAcademyReport(advanced.weeks[0]!.players[balanced]).gains)).toBe(42);
     expect(initial.training.points[id]).toBeUndefined();
     expect(initial.conditions[id]).toBeUndefined();
     expect(coached.activeMatch).toBe(initial.activeMatch);
@@ -72,8 +73,9 @@ describe('persistent academy intake and development', () => {
     const points = { ...staffed.academy.points[id]!, passing: 298 };
     const capped = { ...setAcademyFocus(staffed, id, 'passing'), academy: { ...staffed.academy, focus: { ...staffed.academy.focus, [id]: 'passing' as const }, points: { ...staffed.academy.points, [id]: points } } };
     const trained = processAcademyWeek(week(capped));
-    expect(trained.weeks[0]!.players[id]!.gains.passing).toBe(2);
-    expect(trained.weeks[0]!.players[id]!.coachingGains.passing).toBe(0);
+    const report = fullAcademyReport(trained.weeks[0]!.players[id]);
+    expect(report.gains.passing).toBe(2);
+    expect(report.coachingGains.passing).toBe(0);
     expect(academyPointCap(19)).toBe(100);
     const later = releaseYouthCoach({ ...staffed, round: 2, date: dateForRound(2), academy: trained }, getClubYouthCoach(staffed)!.id);
     expect(later.academy).toBe(trained);

@@ -1,4 +1,5 @@
 import { createBoard, enableBoard, enableBoardConsequences, prepareBoardSeason, processBoardRound } from './board';
+import { summarizeAcademyHistory } from './academy-history';
 import { createRivalries, enableRivalries } from './rivalries';
 import { appointManager, createCareer, enableCareerMoves, matchClubFor } from './career';
 import { jobOfferRefusal, seasonEndOutlook, type SeasonEndOutlook } from './career-policy';
@@ -484,7 +485,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = automateRelationships(prepareRelationshipsRound(next));
   next = prepareBoardSeason(next);
   next.activeMatch = prepareMatch(next, first);
-  return next;
+  return summarizeAcademyHistory(next);
 }
 
 /** Fictional league rules: wins, overall point difference, points scored, club ID. */

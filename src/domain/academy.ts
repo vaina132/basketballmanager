@@ -23,7 +23,7 @@ export interface AcademyIntake {
   prospectIds: string[];
 }
 
-export interface AcademyWeekPlayer {
+export interface AcademyWeekFullPlayer {
   clubId: string;
   focus: TrainingFocus;
   pointsBefore: TrainingPoints;
@@ -33,6 +33,16 @@ export interface AcademyWeekPlayer {
   availability?: { availableDays: number; conditionBefore: number; conditionAfter: number };
   facility?: { earnedPoints: number; gains: TrainingPoints };
 }
+
+/** Historical rival development keeps its exact outcome; the save validator still regenerates the full report. */
+export interface AcademyWeekOutcome {
+  detail: 'outcome';
+  clubId: string;
+  focus: TrainingFocus;
+  pointsAfter: TrainingPoints;
+}
+
+export type AcademyWeekPlayer = AcademyWeekFullPlayer | AcademyWeekOutcome;
 
 export interface AcademyWeek {
   id: string;

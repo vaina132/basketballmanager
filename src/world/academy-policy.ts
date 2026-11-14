@@ -1,4 +1,5 @@
-import type { AcademyProspect, AcademyWeek, AcademyWeekPlayer } from '../domain/academy';
+import type { AcademyProspect, AcademyWeek, AcademyWeekFullPlayer } from '../domain/academy';
+import { isAcademyOutcome } from './academy-history';
 import type { SeasonState } from '../domain/season';
 import type { Player, PlayerAttributes } from '../domain/types';
 import type { TrainingFocus, TrainingPoints } from '../domain/training';
@@ -35,14 +36,16 @@ export interface AcademyPlayerView {
   age: number;
   focus: TrainingFocus;
   points: TrainingPoints;
-  lastWeek: { week: AcademyWeek; player: AcademyWeekPlayer } | null;
+  lastWeek: { week: AcademyWeek; player: AcademyWeekFullPlayer } | null;
   pendingOffer: InSeasonOffer | null;
 }
 export function getClubAcademy(state: SeasonState, clubId = state.managedClubId): AcademyPlayerView[] {
   return state.academy.prospects.filter(prospect => prospect.clubId === clubId && getAcademyProspect(state, prospect.player.id)).map(prospect => {
     const id = prospect.player.id, points = state.academy.points[id]!;
     const week = state.academy.weeks.filter(week => Object.hasOwn(week.players, id)).at(-1);
-    return { prospect, player: developAcademyPlayer(prospect, points), age: playerAgeOnDate(prospect.dateOfBirth, state.date)!, focus: state.academy.focus[id]!, points, lastWeek: week ? { week, player: week.players[id]! } : null, pendingOffer: getInSeasonOffers(state, clubId, true).find(offer => offer.academyProspectId === id) ?? null };
+    const report = week?.players[id];
+    const lastWeek = week && report && !isAcademyOutcome(report) ? { week, player: report } : null;
+    return { prospect, player: developAcademyPlayer(prospect, points), age: playerAgeOnDate(prospect.dateOfBirth, state.date)!, focus: state.academy.focus[id]!, points, lastWeek, pendingOffer: getInSeasonOffers(state, clubId, true).find(offer => offer.academyProspectId === id) ?? null };
   });
 }
 export function getAcademyPlayer(state: SeasonState, playerId: string): AcademyPlayerView | null {

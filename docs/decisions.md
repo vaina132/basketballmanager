@@ -273,6 +273,8 @@ Format 41 first reduces repeated data losslessly (`compact-2`) instead of immedi
 
 Step 3.2b reuses pure calculations only inside one synchronous validation; never retain validation verdicts or indexes by mutable object identity across calls. Keep malformed-order checks equivalent to exhaustive scanning. The archived-roster schema check is format 9, independent of league size; correcting this stricter check raises `SAVE_CHECKS_VERSION` to 3 while the save format stays 41. Existing version-2 local fingerprints require full validation. No histories are removed and memory/save growth remains unresolved. Portable summary imports cannot trust an externally supplied seal as proof of omitted history.
 
+14 November 2026, step 3.2c under the owner's instruction to continue: format 42 starts domain summaries with completed-season rival academy reports. Keep each instruction and exact accumulated point outcome; full detail remains for the current season, historically managed club and latest global/per-club report. Use `managedClubFor(state, year, false)` even after an offseason job change. Retain all weeks, coach assignments, youth match evidence and financial/journal anchors. Full eligible old reports remain valid. Validate legacy reports before reducing them, then independently regenerate and compare every outcome on strict loads/writes. This deliberately limits the first summary slice to derived academy report detail; youth fixtures, financial history and bounded replay are subsequent 3.2 work. Saved state representation changes, while sporting/development/financial outcomes must not.
+
 ## Evidence still required
 
 1. Which season pack can meet field-level roster and rules coverage across all thirteen competitions in the current scope?

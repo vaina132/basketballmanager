@@ -54,3 +54,12 @@ The six `season40-*` fixtures were already present in Claude's unfinished step 3
 | season40-board-opening | `93873d3b54ab54e3dc7c995b30a785209554f99d6e9a66d879767fab9a340c4b` |
 | season40-world8-career-next | `845e9bbfba071c775e3f21619f8157cd645772af691a282393eb7384c1e064ef` |
 | season40-world8-career | `1ee97b31b24f4a1e75bf5814800620f980da46243f63ee9d92032c3863776dae` |
+
+The four `season41-board-*` fixtures were captured with `npm.cmd run fixtures:capture` on 14 November 2026 from unchanged commit `11a02a9`, **before** format 42 added historical academy outcomes. They are genuine plain format-41 saves of the fictional test league: matchdays five/six, completed offseason and next-season opening. No schema numbers were rewritten. The current runtime must first validate all original report detail, then migrate eligible older rival reports; `tests/season41-continuation.test.js` and `tests/academy-history-storage.test.js` cover migration, independent next-matchday/rollover results and corrupt legacy detail rejection. Original gzip SHA-256 hashes:
+
+| Fixture | SHA-256 |
+| --- | --- |
+| season41-board-career-next | `197fde1a6dacd170f0bfbab47c39e9834f286fa2bd331dc34cc57ab6378bd658` |
+| season41-board-career | `870ab97aebfe2bdb181d12ef633cf17723e9b653aa365325d29b8046408e6763` |
+| season41-board-complete | `eee9d5930324845de22991bdb956e462256a8b729e9fd92689c46c7166a2c90e` |
+| season41-board-opening | `bb25eadc9a4147d8bf3799362a32652278500fcddb4485b4b1e5f97e7ffc7ad0` |

@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { fullAcademyReport } from './helpers/academy-report';
 import type { SeasonState } from '../src/domain/season';
 import { createFixtureMatch, simulateToEnd } from '../src/engine/match';
 import { createSeason, dateForRound } from '../src/world/season';
@@ -112,7 +113,7 @@ describe('real youth fixtures and explicit supplemental intake', () => {
     const fixture = getYouthFixtures(played)[0]!, id = fixture.home!.players[0]!.id;
     const injury = { id: `${fixture.id}:${id}`, playerId: id, clubId: fixture.homeClubId, kind: 'ankle' as const, fixtureId: fixture.id, occurredOn: fixture.date, returnOn: dateForRound(2) };
     const medical = { ...played, youthCompetition: { ...played.youthCompetition, seasons: played.youthCompetition.seasons.map(season => ({ ...season, fixtures: season.fixtures.map(entry => entry.id === fixture.id ? { ...entry, result: { ...entry.result!, injuries: [injury] } } : entry) })) } };
-    const trained = processAcademyWeek(week(medical)), report = trained.weeks[0]!.players[id]!;
+    const trained = processAcademyWeek(week(medical)), report = fullAcademyReport(trained.weeks[0]!.players[id]);
     expect(report.availability).toMatchObject({ availableDays: 1, conditionBefore: fixture.result!.stats[id]!.condition });
     expect(Object.values(report.gains).reduce((sum, gain) => sum + gain, 0)).toBe(4);
     expect(report.availability!.conditionAfter).toBe(Math.min(100, Math.round((fixture.result!.stats[id]!.condition + 19) * 1000) / 1000));
@@ -120,8 +121,9 @@ describe('real youth fixtures and explicit supplemental intake', () => {
     expect(getYouthPlayerStatus(medical, id, dateForRound(2)).injury).toBeNull();
     expect(medical.injuries).toBe(initial.injuries);
     const noYouth = processAcademyWeek({ ...week(medical), youthCompetition: createYouthCompetition() });
-    expect(noYouth.weeks[0]!.players[id]!.availability).toBeUndefined();
-    expect(Object.values(noYouth.weeks[0]!.players[id]!.gains).reduce((sum, gain) => sum + gain, 0)).toBe(28);
+    const noYouthReport = fullAcademyReport(noYouth.weeks[0]!.players[id]);
+    expect(noYouthReport.availability).toBeUndefined();
+    expect(Object.values(noYouthReport.gains).reduce((sum, gain) => sum + gain, 0)).toBe(28);
   });
 
   it('retains recorded identities and statistics after later training and rejects skipped matchdays', () => {

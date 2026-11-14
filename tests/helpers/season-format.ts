@@ -6,6 +6,7 @@ import { createFitness } from '../../src/world/fitness';
 import { createPhysio } from '../../src/world/physio';
 import { createAssistant } from '../../src/world/assistant';
 import { createAcademy } from '../../src/world/academy';
+import { summarizeAcademyHistory } from '../../src/world/academy-history';
 import { createYouth } from '../../src/world/youth';
 import { createLifecycle } from '../../src/world/lifecycle';
 import { createYouthCompetition } from '../../src/world/youth-competition';
@@ -46,13 +47,14 @@ const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: Leg
 
 /**
  * The state parseSeason should return for the raw state of a genuine save written in `fromFormat`.
- * Formats 19 and later changed only top-level systems; earlier formats also rewrite nested records.
+ * Formats 19-41 added top-level systems; format 42 also summarizes eligible historical rival academy reports.
  */
 export function expectedMigration<T extends LegacyIdentity>(raw: T, fromFormat: number) {
   if (!Number.isInteger(fromFormat) || fromFormat < 19 || fromFormat > SEASON_SCHEMA_VERSION) throw new Error('expectedMigration supports raw states from format 19 to the current format.');
   // Each row sees the systems added before it, so later formats can extend an earlier system's defaults.
   const added = ADDED_BY_FORMAT.filter(([format]) => format > fromFormat).reduce<Partial<SeasonState>>((systems, [, defaults]) => ({ ...systems, ...defaults({ ...raw, ...systems }) }), {});
-  return { ...raw, ...added, schemaVersion: SEASON_SCHEMA_VERSION };
+  const upgraded = { ...raw, ...added, schemaVersion: SEASON_SCHEMA_VERSION };
+  return fromFormat < 42 ? summarizeAcademyHistory(upgraded as unknown as SeasonState) as unknown as typeof upgraded : upgraded;
 }
 
 /** A current-format season file around any state, typically a deliberately damaged copy for rejection tests. */

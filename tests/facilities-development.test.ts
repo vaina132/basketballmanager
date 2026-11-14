@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { fullAcademyReport } from './helpers/academy-report';
 import type { SeasonState } from '../src/domain/season';
 import type { TrainingWeekInput } from '../src/world/training';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
@@ -68,7 +69,7 @@ describe('facility effects on earned development', () => {
     const id = getClubAcademy(state)[0]!.player.id;
     for (let round = 1; round <= 3; round += 1) {
       state = advance(state);
-      expect(state.academy.weeks.at(-1)!.players[id]!.facility!.earnedPoints).toBe(0);
+      expect(fullAcademyReport(state.academy.weeks.at(-1)!.players[id]).facility!.earnedPoints).toBe(0);
     }
     expect(state.facilities.projects.find(project => project.clubId === clubId)).toMatchObject({ completedOn: dateForRound(4) });
     const outlook = getClubCashOutlook(state);
@@ -76,11 +77,12 @@ describe('facility effects on earned development', () => {
     expect(outlook.rows.reduce((sum, row) => sum + row.operations, 0)).toBe(7 * (ROUND_OPERATING_COST + 30_000));
     const input = { rounds: 10, academy: state.academy, youth: state.youth, clubs: state.clubs, seasonNumber: 1, afterRound: 4, fromDate: state.date, toDate: dateForRound(5) };
     const baseline = processAcademyWeek(input);
-    const next = advance(state), report = next.academy.weeks.at(-1)!.players[id]!;
+    const next = advance(state), report = fullAcademyReport(next.academy.weeks.at(-1)!.players[id]);
+    const baselineReport = fullAcademyReport(baseline.weeks.at(-1)!.players[id]);
     expect(report.facility!.earnedPoints).toBe(1);
     expect(total(report.facility!.gains)).toBe(1);
-    expect(report.coachingGains).toEqual(baseline.weeks.at(-1)!.players[id]!.coachingGains);
-    expect(total(report.gains)).toBe(total(baseline.weeks.at(-1)!.players[id]!.gains) + 1);
+    expect(report.coachingGains).toEqual(baselineReport.coachingGains);
+    expect(total(report.gains)).toBe(total(baselineReport.gains) + 1);
     expect(next.finance.ledger.find(entry => entry.clubId === clubId && entry.kind === 'facility-upkeep')).toMatchObject({ seasonNumber: 1, round: 4, amount: -30_000 });
     expect(getClubCashOutlook(next).rows.reduce((sum, row) => sum + row.operations, 0)).toBe(6 * (ROUND_OPERATING_COST + 30_000));
   });

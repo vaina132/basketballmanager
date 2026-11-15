@@ -3,7 +3,8 @@ import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/seas
 import type { Team } from '../domain/types';
 import type { EmploymentContract } from '../domain/employment';
 import { getContractedClubsForRound } from './employment-policy';
-import { MAX_SEASON_ROUNDS } from './career-world';
+import { MAX_SEASON_ROUNDS, worldOf } from './career-world';
+import { backgroundSide } from './europe';
 import { reconcileMatchdayPlan, selectedTeam } from './matchday-selection';
 
 /** Capture identities once at registration; match development never rewrites them. */
@@ -78,7 +79,12 @@ export function getSeasonRosterData(season: SeasonState, seasonNumber = season.s
 export function getFixtureTeams(season: SeasonState, fixture: SeasonFixture | ArchivedFixture, seasonNumber = season.seasonNumber): { home: Team; away: Team } {
   const { rosters } = getSeasonRosterData(season, seasonNumber);
   function team(clubId: string, side: 'home' | 'away'): Team {
-    const club = season.clubs.find(candidate => candidate.id === clubId);
+    // Step 3.5b: a European game's club outside the full world that season plays its background squad.
+    if (fixture.competition && !rosters.some(roster => roster.clubId === clubId)) {
+      const squad = backgroundSide(season, clubId, seasonNumber);
+      return fixture.result?.selection ? { ...squad, players: fixture.result.selection[side].map(id => squad.players.find(player => player.id === id)!) } : squad;
+    }
+    const club = season.clubs.find(candidate => candidate.id === clubId) ?? worldOf(season).clubs.find(candidate => candidate.id === clubId);
     if (!club) throw new Error('A fixture refers to an unknown club.');
     const expected = rosterForRound(rosters, clubId, fixture.round);
     const snapshot = fixture.result ? rosters.find(candidate => candidate.id === fixture.result!.rosterIds[side]) : expected;

@@ -46,15 +46,21 @@ export function backgroundSquad(context: LifecycleContext, club: BackgroundClub,
  * by position-weighted overall rating on that date. Unavailable players are used only when fewer than five are fit.
  */
 export function backgroundMatchday(context: LifecycleContext, club: BackgroundClub, onDate: string, unavailable: ReadonlySet<string> = new Set()): Team {
-  const squad = backgroundSquad(context, club, onDate);
+  return selectBackgroundMatchday(backgroundSquad(context, club, onDate), unavailable);
+}
+
+/** The matchday rule of `backgroundMatchday` for a squad already aged to its date (European games, step 3.5b). */
+export function selectBackgroundMatchday(squad: Team, unavailable: ReadonlySet<string> = new Set()): Team {
   const rating = new Map(squad.players.map(player => [player.id, overallRating(player.attributes, player.position)]));
   const ranked = [...squad.players].sort((a, b) => Number(unavailable.has(a.id)) - Number(unavailable.has(b.id)) || rating.get(b.id)! - rating.get(a.id)! || squad.players.indexOf(a) - squad.players.indexOf(b));
   const fit = ranked.filter(player => !unavailable.has(player.id));
   const pool = fit.length >= 5 ? fit : ranked;
   const starters = (['PG', 'SG', 'SF', 'PF', 'C'] as const).flatMap(position => pool.find(player => player.position === position)?.id ?? []);
-  const chosen = new Set([...new Set([...starters, ...pool.map(player => player.id), ...ranked.map(player => player.id)])].slice(0, MAX_MATCHDAY_PLAYERS));
-  if (chosen.size < 5) throw new Error('A background club needs at least five players for a matchday.');
-  return { ...squad, players: squad.players.filter(player => chosen.has(player.id)) };
+  const chosen = [...new Set([...starters, ...pool.map(player => player.id), ...ranked.map(player => player.id)])].slice(0, MAX_MATCHDAY_PLAYERS);
+  if (chosen.length < 5) throw new Error('A background club needs at least five players for a matchday.');
+  // Squad order, starters first: the first five are the starting lineup.
+  const selected = new Set(chosen), order = [...starters, ...squad.players.map(player => player.id).filter(id => selected.has(id) && !starters.includes(id))];
+  return { ...squad, players: order.map(id => squad.players.find(player => player.id === id)!) };
 }
 
 const fail = (path: string, reason: string): never => { throw new Error(`Invalid season save: ${path} ${reason}.`); };

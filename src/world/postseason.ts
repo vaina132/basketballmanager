@@ -1,4 +1,5 @@
 import type { CompetitionStage } from '../domain/competition';
+import type { EuropeanFormatId } from '../domain/world';
 
 /**
  * Domestic postseasons (step 3.4b): each league's 2026-27 format as data, its reserved calendar slots, and the games
@@ -30,7 +31,8 @@ export interface PostseasonSeriesSpec {
   neutral?: true;
 }
 export interface PostseasonFormat {
-  id: PostseasonFormatId;
+  /** A domestic format's id, or a European competition format's id for its knockout stage (step 3.5b). */
+  id: PostseasonFormatId | EuropeanFormatId;
   label: string;
   /** False when the league's own rules were not found and a labelled default is used. */
   verified: boolean;
@@ -44,13 +46,13 @@ export interface PostseasonFormat {
   relegated: readonly ({ place: number; unlessWinsLowerFinal?: true } | { loser: string })[];
 }
 
-const playIn = (a: number, b: number, c: number, d: number): PostseasonSeriesSpec[] => [
+export const playIn = (a: number, b: number, c: number, d: number): PostseasonSeriesSpec[] => [
   { id: 'pi-a', stage: 'play-in', step: 'play-in-1', bestOf: 1, a: { place: a }, b: { place: b } },
   { id: 'pi-b', stage: 'play-in', step: 'play-in-1', bestOf: 1, a: { place: c }, b: { place: d } },
   { id: 'pi-c', stage: 'play-in', step: 'play-in-2', bestOf: 1, a: { loser: 'pi-a' }, b: { winner: 'pi-b' } },
 ];
 /** Quarter-finals 1-8, 2-7, 3-6, 4-5; semi-finals A-D and B-C; final. */
-const bracket = (seeds: readonly PostseasonRef[], [qf, sf, final]: readonly [1 | 3 | 5 | 7, 1 | 3 | 5 | 7, 1 | 3 | 5 | 7], options: { semis?: readonly [string, string][]; neutralFrom?: 'semi-final' } = {}): PostseasonSeriesSpec[] => {
+export const bracket = (seeds: readonly PostseasonRef[], [qf, sf, final]: readonly [1 | 3 | 5 | 7, 1 | 3 | 5 | 7, 1 | 3 | 5 | 7], options: { semis?: readonly [string, string][]; neutralFrom?: 'semi-final' } = {}): PostseasonSeriesSpec[] => {
   const ids = ['qf-a', 'qf-b', 'qf-c', 'qf-d'];
   const quarters: PostseasonSeriesSpec[] = [[0, 7], [1, 6], [2, 5], [3, 4]].map(([x, y], index) => ({ id: ids[index]!, stage: 'quarter-final', step: 'quarter', bestOf: qf, a: seeds[x!]!, b: seeds[y!]! }));
   const semis = options.semis ?? [['qf-a', 'qf-d'], ['qf-b', 'qf-c']];
@@ -61,7 +63,7 @@ const bracket = (seeds: readonly PostseasonRef[], [qf, sf, final]: readonly [1 |
     { id: 'final', stage: 'final', step: 'final', bestOf: final, a: { winner: 'sf-a' }, b: { winner: 'sf-b' }, ...neutral },
   ];
 };
-const places = (...values: number[]): PostseasonRef[] => values.map(place => ({ place }));
+export const places = (...values: number[]): PostseasonRef[] => values.map(place => ({ place }));
 const LNB = 'LNB 2026/27 competition regulations, articles 151-161: https://cdn.lnb.fr/uploads/content-library/39111ddae9f1edf9b1c739b6c69d3203ba0936c6d444634fa341d83db9fcc283.pdf';
 
 export const POSTSEASON_FORMATS: Readonly<Record<PostseasonFormatId, PostseasonFormat>> = Object.freeze({

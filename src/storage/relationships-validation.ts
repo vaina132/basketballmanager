@@ -124,7 +124,8 @@ export function validateRelationships(state: SeasonState, version: number): void
   if (!snapshot) {
     if (state.activeMatch && Object.hasOwn(state.activeMatch, 'morale')) fail('activeMatch.morale', 'must remain absent until the first prepared matchday after activation');
   } else {
-    const expected = { ...snapshot, values: Object.fromEntries([...state.activeMatch.home.players, ...state.activeMatch.away.players].map(player => [player.id, snapshot.values[player.id]])) };
+    // Background players (step 3.5b) have no relationships: a neutral assessment.
+    const expected = { ...snapshot, values: Object.fromEntries([...state.activeMatch.home.players, ...state.activeMatch.away.players].map(player => [player.id, Object.hasOwn(snapshot.values, player.id) ? snapshot.values[player.id] : 50])) };
     if (!equal(state.activeMatch.morale, expected)) fail('activeMatch.morale', 'must retain exactly the values frozen before this fixture, excluding later conversations');
   }
 }

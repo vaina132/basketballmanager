@@ -55,7 +55,8 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
   const locked = home?.round === season.round
   const forecastPrice = home ? locked ? season.finance.roundPrices[club.id]! : plan.delegated ? recommendTicketPrice(season, home) : plan.price : null
   const forecast = home && forecastPrice !== null ? forecastGate(season, home, forecastPrice) : null
-  const opponent = home ? season.clubs.find(team => team.id === home.awayClubId)! : null
+  // A European visitor may be a club outside the full world (step 3.5b): its identity is in the world.
+  const opponent = home ? season.clubs.find(team => team.id === home.awayClubId) ?? worldOf(season).clubs.find(team => team.id === home.awayClubId)! : null
   const derby = home ? governingDerby(season.rivalries, home.homeClubId, home.awayClubId, season.seasonNumber, home.round, worldOf(season)) : null
   const ledger = financeLedgerRows(season.finance, club.id).filter(entry => (kind === 'all' || entry.kind === kind) && (period === 'all' || entry.seasonNumber === season.seasonNumber))
 
@@ -86,7 +87,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
     if (entry.ticket) {
       const fixtures = entry.seasonNumber === season.seasonNumber ? season.fixtures : season.history.find(archive => archive.seasonNumber === entry.seasonNumber)?.fixtures
       const fixture = fixtures?.find(fixture => fixture.id === entry.ticket!.fixtureId)
-      const visitor = fixture ? season.clubs.find(team => team.id === fixture.awayClubId) : null
+      const visitor = fixture ? season.clubs.find(team => team.id === fixture.awayClubId) ?? worldOf(season).clubs.find(team => team.id === fixture.awayClubId) : null
       return `${visitor ? `Home vs ${visitor.name} · ` : ''}${count(entry.ticket.attendance)} / ${count(entry.ticket.capacity ?? definition.capacity)} attendance · ${money(entry.ticket.price)} per ticket`
     }
     if (entry.youth) return YOUTH_COACH_DIRECTORY.find(coach => coach.id === entry.youth!.coachId)?.name ?? 'Youth coach fee'

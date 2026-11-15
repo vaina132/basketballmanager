@@ -11,6 +11,7 @@ import { DEVELOPMENT_PLAYERS } from '../data/development-players';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { roundRobinRoundCount } from './competition-calendar';
 import { POSTSEASON_FORMATS, postseasonFormatAllowed, postseasonWeeks } from './postseason';
+import { EUROPEAN_FORMATS, europeanWeeks } from './european-formats';
 
 /**
  * The world a career plays in. Careers in the built-in fictional league carry no world and use DEVELOPMENT_WORLD;
@@ -42,7 +43,9 @@ export const MAX_SEASON_ROUNDS = 2 * (MAX_WORLD_CLUBS - 1);
 /** Matchdays in a season of this world: every club meets every other club home and away. */
 /** Weeks of the regular season: the longest league's double round robin (shorter leagues pause on spread weekends). */
 export function regularWorldRounds(world: CareerWorld): number {
-  if (world.domesticLeagues) return Math.max(...world.domesticLeagues.map(league => roundRobinRoundCount(league.clubIds.length)));
+  // Format 57: worlds that play European competitions keep their domestic regular season going until the last European
+  // week, so domestic postseasons never share a midweek day with a European game (step 3.5b).
+  if (world.domesticLeagues) return Math.max(europeanWeeks(world), ...world.domesticLeagues.map(league => roundRobinRoundCount(league.clubIds.length)));
   return 2 * (world.clubs.length - 1);
 }
 
@@ -80,6 +83,17 @@ export function roundKey(seasonNumber: number, round: number): number {
 /** The season and matchday of an ordinal from `roundOrdinal`. */
 export function ordinalRound(ordinal: number, rounds: number): { seasonNumber: number; round: number } {
   return { seasonNumber: Math.floor((ordinal - 1) / rounds) + 1, round: (ordinal - 1) % rounds + 1 };
+}
+
+/**
+ * The season's last committed week: the latest week with a result, and never less than the week before the current
+ * one. Weeks without any game (possible once European competitions stretch the calendar, format 57) count as committed
+ * once the calendar has moved past them; in every earlier calendar each week before the current one has results.
+ */
+export function lastCommittedWeek(state: { round: number; fixtures: readonly { round: number; result: unknown }[] }): number {
+  let completed = Math.max(0, state.round - 1);
+  for (const fixture of state.fixtures) if (fixture.result && fixture.round > completed) completed = fixture.round;
+  return completed;
 }
 
 /** Only careers outside the built-in league store their world. */
@@ -258,8 +272,16 @@ function checkEuropeanCompetitions(world: CareerWorld, clubIds: ReadonlySet<stri
   const kinds = new Set<string>(), ids = new Set<string>(), entrants = new Set<string>();
   for (const [index, entry] of lists.entries()) {
     const path = `world.europeanCompetitions[${index}]`;
-    if (!exactKeys(entry, ['id', 'name', 'kind', 'season', 'clubIds']) || !isText(entry.id, 80) || !ID.test(entry.id) || ids.has(entry.id) || !isText(entry.name) || !['euroleague', 'eurocup', 'bcl'].includes(entry.kind) || kinds.has(entry.kind) || !isText(entry.season, 20) || !Array.isArray(entry.clubIds) || entry.clubIds.length < 2 || entry.clubIds.length > 64) fail(path, 'must name one of the three competitions once, its season and its entrants');
+    if (!exactKeys(entry, ['id', 'name', 'kind', 'season', 'clubIds', ...(isObject(entry) && Object.hasOwn(entry, 'format') ? ['format'] : [])]) || !isText(entry.id, 80) || !ID.test(entry.id) || ids.has(entry.id) || !isText(entry.name) || !['euroleague', 'eurocup', 'bcl'].includes(entry.kind) || kinds.has(entry.kind) || !isText(entry.season, 20) || !Array.isArray(entry.clubIds) || entry.clubIds.length < 2 || entry.clubIds.length > 64) fail(path, 'must name one of the three competitions once, its season and its entrants');
     kinds.add(entry.kind); ids.add(entry.id);
+    if (world.domesticLeagues!.some(league => league.id === entry.id)) fail(`${path}.id`, 'must differ from every domestic league\'s id');
+    // Format 57: a played competition follows its real format, in a world whose clubs have full rosters.
+    if (Object.hasOwn(entry, 'format')) {
+      const format = Object.hasOwn(EUROPEAN_FORMATS, entry.format) ? EUROPEAN_FORMATS[entry.format as keyof typeof EUROPEAN_FORMATS] : undefined;
+      if (!format || format.kind !== entry.kind) fail(`${path}.format`, 'must be a format of this competition');
+      if (entry.clubIds.length < format!.clubs.min || entry.clubIds.length > format!.clubs.max) fail(`${path}.clubIds`, `must list ${format!.clubs.min} to ${format!.clubs.max} entrants for its format`);
+      if (world.rosterModel !== FULL_ROSTER_MODEL) fail(`${path}.format`, 'requires clubs with full rosters');
+    }
     for (const id of entry.clubIds as unknown[]) {
       if (typeof id !== 'string' || !clubIds.has(id) || entrants.has(id) || lowerDivisionClubIds(world).has(id)) fail(`${path}.clubIds`, 'must list clubs of this world, each in one competition and none of a next division');
       entrants.add(id as string);

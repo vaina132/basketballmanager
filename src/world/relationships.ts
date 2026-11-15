@@ -8,7 +8,7 @@ import { fixturePlayerEvidence } from './senior-history';
 import { getPlayerRetirement } from './lifecycle-policy';
 import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, pressImpact } from './press-policy';
 import { governingDerby, RIVALRY_MORALE_WEIGHT } from './rivalries';
-import { ordinalRound, roundOrdinal, seasonRounds, worldOf } from './career-world';
+import { ordinalRound, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
 
 export const SQUAD_ROLES: readonly SquadRole[] = ['development', 'rotation', 'starter'];
 export const SQUAD_ROLE_DEFINITIONS: Record<SquadRole, { label: string; minMinutes: number; maxMinutes: number }> = {
@@ -30,7 +30,7 @@ const playerEvent = (event: RelationshipEvent): event is PlayerEvent => event.ty
 
 export function createRelationships(): SeasonRelationships { return { model: 'relationships-1', enabledSince: null, events: [] }; }
 export function relationshipEventAnchor(state: SeasonState): RelationshipAnchor {
-  const completed = state.fixtures.filter(fixture => fixture.result !== null).reduce((round, fixture) => Math.max(round, fixture.round), 0);
+  const completed = lastCommittedWeek(state);
   return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), contractCount: state.employment.contracts.length, rosterCount: state.rosters.length };
 }
 export function enableRelationships(state: SeasonState): SeasonState {

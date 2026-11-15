@@ -1,7 +1,7 @@
 import type { Rivalry, RivalryAnchor, SeasonRivalries } from '../domain/rivalries';
 import type { SeasonState } from '../domain/season';
 import type { CareerWorld, WorldContext } from '../domain/world';
-import { ordinalRound, roundOrdinal, seasonRounds, worldRivalryBetween, worldRivalryFor, worldRounds } from './career-world';
+import { ordinalRound, roundOrdinal, seasonRounds, worldRivalryBetween, worldRivalryFor, worldRounds, lastCommittedWeek } from './career-world';
 
 /** Derby crowds grow by this percentage per point of rivalry intensity (5% to 15%). */
 export const RIVALRY_CROWD_PERCENT = 5;
@@ -32,7 +32,7 @@ export function governingDerby(rivalries: SeasonRivalries | undefined, homeClubI
 }
 
 export function rivalryEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'date' | 'fixtures'> & WorldContext, mode: 'career' | 'prospective'): RivalryAnchor {
-  const completed = state.fixtures.reduce((round, fixture) => fixture.result ? Math.max(round, fixture.round) : round, 0);
+  const completed = lastCommittedWeek(state);
   const next = ordinal(state.seasonNumber, state.round, seasonRounds(state)) + 1;
   const effectiveFrom = mode === 'career' ? { seasonNumber: 1, round: 1 } : ordinalRound(next, seasonRounds(state));
   return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), effectiveFrom };

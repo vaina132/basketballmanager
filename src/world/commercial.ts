@@ -2,7 +2,7 @@ import { financeLedgerCount, financeLedgerEntries, financeLedgerSlice } from './
 import type { FinanceEntry } from '../domain/finance';
 import type { CommercialAnchor, CommercialEvent, SeasonCommercial, SponsorshipAgreement, SponsorshipOffer, SponsorshipWindow } from '../domain/commercial';
 import type { SeasonState } from '../domain/season';
-import { incumbentSponsorId, seasonRounds, worldOf } from './career-world';
+import { incumbentSponsorId, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
 import { seasonLeagues } from './divisions';
 import { recordSponsorshipPayment } from './finance';
 import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, commercialGovernsSeason, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorshipPaymentsDue, sponsorshipSourceId, sponsorshipInstallment, SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_RENEWAL_ROUND, SPONSORSHIP_SECOND_INSTALLMENT_ROUND, type DueSponsorshipPayment } from './commercial-policy';
@@ -16,8 +16,8 @@ export function commercialAnchor(state: Pick<SeasonState, 'seasonNumber' | 'roun
 }
 
 /** Committed matchdays in the current season; a played but uncommitted match does not count yet. */
-export function completedSeasonRounds(state: Pick<SeasonState, 'status' | 'fixtures'> & WorldContext): number {
-  return state.status === 'complete' ? seasonRounds(state) : state.fixtures.filter(fixture => fixture.result).reduce((round, fixture) => Math.max(round, fixture.round), 0);
+export function completedSeasonRounds(state: Pick<SeasonState, 'status' | 'fixtures' | 'round'> & WorldContext): number {
+  return state.status === 'complete' ? seasonRounds(state) : lastCommittedWeek(state);
 }
 
 function withEvent(state: SeasonState, commercial: SeasonCommercial, event: CommercialEvent): SeasonState {

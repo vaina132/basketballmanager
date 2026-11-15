@@ -8,7 +8,7 @@ import { dateForRound, isRegularFixture } from './season';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { BOARD_VERDICT_EFFECTS, verdictForConfidence } from './board-consequences';
 import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS } from './rivalries';
-import { roundKey, roundOrdinal, seasonRounds, worldOf } from './career-world';
+import { roundKey, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
 import { seasonLeagues } from './divisions';
 
 export const BOARD_REVIEW_STEP = 8;
@@ -27,7 +27,7 @@ export type BoardCalculationContext = Pick<SeasonState, 'world' | 'dataPackId' |
 export function createBoard(): SeasonBoard { return { model: 'board-1', enabledSince: null, mandates: [], reviews: [], consequencesSince: null }; }
 
 export function boardEventAnchor(state: Pick<BoardCalculationContext, 'world' | 'dataPackId' | 'fixtures' | 'seasonNumber' | 'round' | 'date' | 'finance' | 'rosters'>): BoardAnchor {
-  const completed = state.fixtures.filter(fixture => fixture.result).reduce((round, fixture) => Math.max(round, fixture.round), 0);
+  const completed = lastCommittedWeek(state);
   return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), ledgerCount: financeLedgerCount(state.finance), rosterCount: state.rosters.length };
 }
 
@@ -124,7 +124,8 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     const confidence = previousConfidence + clamp(assessment - previousConfidence, -BOARD_REVIEW_STEP, BOARD_REVIEW_STEP);
     clubs[club.id] = { fixtureIds: games.map(fixture => fixture.id), played, wins, targetPace: rounded(targetPace), carriedAbsences, rosterPlaces, unpaid, resultsImpact, injuryRelief, financeImpact, ...(rivalriesCount ? { rivalryImpact } : {}), assessment, previousConfidence, confidence };
   }
-  return { ...boardEventAnchor(state), id: `board-review-${state.board.reviews.length + 1}`, mandateId: mandate.id, clubs };
+  // A review follows its week's commit, so that week counts as completed even when it had no game (format 57).
+  return { ...boardEventAnchor(state), completedRounds: roundOrdinal(state.seasonNumber, state.round, seasonRounds(state)), id: `board-review-${state.board.reviews.length + 1}`, mandateId: mandate.id, clubs };
 }
 
 /** One automatic dated review follows each eligible complete league matchday. */

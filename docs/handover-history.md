@@ -8,6 +8,21 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: steps 3.5b-c, European games and the EuroLeague (15 November 2026)
+
+- **Fixtures first:** `tests/fixtures/season56-europlay-legacy-*` (`capture-format-baseline.mjs europlay-legacy --fiba --lower --europe`, new `--europe` option) from unchanged commit `34631a3` (124 modules); `tests/season56-continuation.test.js` (4: provenance; listed but unplayed, ten-week calendar, exact next week; exact rollover; format guard).
+- **Format 57:** `EuropeanCompetition.format` (`euroleague-2026-1`) makes a competition play; `SeasonFixture.competition` marks European games. Guards: `format` needs format 57; `validateWorld` checks the format's kind and field size (10-20), full rosters and an id unlike any league's. 56 → 57 changes nothing else.
+- **Calendar and formats** (`src/world/european-formats.ts`): formats as data (regular weeks and days, knockout series with the postseason machinery, a date per knockout slot). `europeanWeeks`; `regularWorldRounds` lasts at least until the last European week (38 for the EuroLeague), so domestic postseasons start in week 39.
+- **Engine** (`src/world/europe.ts`): seeded draw (`europeanDrawOrder`), `europeanRoundDates` (double weeks evenly spread), `europeanRegularFixtures`, `europeanTable` (FIBA default), `getEuropeanCompetitions` (table, order, series, due knockout games, champion). `createSchedule` adds European regular games (`domesticSchedule` keeps the domestic calendar for the youth competition); `scheduledFixtures` adds due knockout games; in European worlds every season's games are in calendar order (`byCalendar`).
+- **Background sides:** `backgroundSide` (real squad or departure record minus retired players, aged at the season start), `backgroundMatchdayTeam` (`selectBackgroundMatchday`, starters first), `backgroundPlan`, `backgroundConditions`, roster reference `background-<club>-s<season>`. `prepareMatch`/`postMatch`, `getFixtureTeams`, the senior summary (`archivedSidePlayerIds`) and performance (skips background sides) handle them; gates only for full-world hosts.
+- **Empty weeks:** `lastCommittedWeek` (career-world) for the relationship, board, career, rivalry and commercial anchors; board reviews count their own week. Older calendars never had an empty week before the current one, so their anchors are unchanged.
+- **Save checks:** canonical fixtures take the seed; fixture keys include `competition`; `recordedTeams` checks a background side's roster reference and exact selection (from the injuries committed before the game); the active match checks a background opponent's squad and starting condition; background players' injuries are accepted (`validateRehabilitation`); ticket requirements only for full-world hosts; neutral morale for background players.
+- **Screens:** Competition's domestic lists exclude European games; Club's next home game, ticket rows and the rest-week screen name European opponents from the world; the rest-week screen says "No game today" when the club's European game is later that week.
+- **Real worlds:** `worldFromPack` gives the EuroLeague its format when the field fits; new IDs `real-europlay-`.
+- **Tests:** `tests/europe-play.test.js` (10: calendar and double weeks; knockout days and the stretched domestic calendar; seeded draw; world refusals; a full season with a ten-club EuroLeague: calendar order and rest days, background sides, no club records, gates, domestic tables, Play-In/playoff/Final Four by format, player statistics, strict saves through the rollover, tamper refusals).
+- **Verification:** full serial suite **2,602 tests / 194 files passed** (631 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.5d, the EuroCup format.
+
 ## Cloud continuation: step 3.5a, European entrants in the world (15 November 2026)
 
 - **Fixtures first:** `tests/fixtures/season55-europe-legacy-*` from unchanged commit `664d1c1` (124 modules); `tests/season55-continuation.test.js` (3).

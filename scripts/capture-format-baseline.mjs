@@ -5,6 +5,8 @@
 //   node scripts/capture-format-baseline.mjs <label> --force  (overwrites files of the same names; unchanged code only)
 //   node scripts/capture-format-baseline.mjs <label> --fiba   (both leagues use the FIBA default standings rule; format 51 on)
 //   node scripts/capture-format-baseline.mjs <label> --lower  (adds Testland's next division of four generated clubs; format 54 on)
+//   node scripts/capture-format-baseline.mjs <label> --europe (adds a EuroLeague of two league clubs and eight background clubs; format 56 on,
+//                                                             played in its real format from format 57)
 //
 // The world is the public test world of tests/division-changes.test.js: one country ("Testland") with a six-club
 // first division and a five-club second division, both with postseasons, and opening contracts of one to three
@@ -25,6 +27,7 @@ const label = process.argv[2];
 const force = process.argv.includes('--force');
 const fiba = process.argv.includes('--fiba');
 const lower = process.argv.includes('--lower');
+const europe = process.argv.includes('--europe');
 if (!label || label.startsWith('-') || !/^[a-z0-9-]+$/.test(label)) throw new Error('Usage: node scripts/capture-format-baseline.mjs <label> [--force]');
 const server = await createServer({
   configFile: false,
@@ -37,9 +40,9 @@ const server = await createServer({
 
 try {
   const load = path => server.ssrLoadModule(path);
-  const [season, engine, storage, employment, market, marketPolicy, fixtures, lowerDivision] = await Promise.all([
+  const [season, engine, storage, employment, market, marketPolicy, fixtures, ...extras] = await Promise.all([
     '/src/world/season.ts', '/src/engine/match.ts', '/src/storage/season-storage.ts', '/src/world/employment.ts',
-    '/src/world/market.ts', '/src/world/market-policy.ts', '/tests/world-fixtures.ts', ...(lower ? ['/src/world/lower-division.ts'] : []),
+    '/src/world/market.ts', '/src/world/market-policy.ts', '/tests/world-fixtures.ts', ...(lower ? ['/src/world/lower-division.ts'] : []), ...(europe ? ['/src/world/real-world.ts'] : []),
   ].map(load));
   const version = storage.SEASON_SCHEMA_VERSION;
   const prefix = `season${version}-${label}`;
@@ -53,7 +56,13 @@ try {
     { id: 'first', name: 'First division', country: 'Testland', tier: 1, clubIds: base.clubs.slice(0, 6).map(club => club.id), postseason: 'test-tier1-1' },
     { id: 'second', name: 'Second division', country: 'Testland', tier: 2, clubIds: base.clubs.slice(6).map(club => club.id), postseason: 'test-tier2-1' },
   ].map(league => fiba ? { ...league, standingsRule: 'fiba-2026-d' } : league) };
-  const world = lower ? lowerDivision.withLowerDivisions(twoDivisions, [{ country: 'Testland', tier: 3, name: 'Third division', clubs: [1, 2, 3, 4].map(index => ({ id: `third-${index}`, name: `Third Club ${index}`, shortName: `TC${index}`, color: '#336699' })) }]) : twoDivisions;
+  const lowerDivision = lower ? extras[0] : null, realWorld = europe ? extras[lower ? 1 : 0] : null;
+  const withLower = lower ? lowerDivision.withLowerDivisions(twoDivisions, [{ country: 'Testland', tier: 3, name: 'Third division', clubs: [1, 2, 3, 4].map(index => ({ id: `third-${index}`, name: `Third Club ${index}`, shortName: `TC${index}`, color: '#336699' })) }]) : twoDivisions;
+  // Eight background clubs from a second test world (their own identities), with two league clubs, in a EuroLeague.
+  const outside = europe ? fixtures.testWorld(20, 'europe-pool').clubs.slice(12).map(club => ({ ...club, id: `eu-${club.id}`, name: `Euro ${club.name}`, players: club.players.map(player => ({ ...player, id: `eu-${player.id}` })) })) : [];
+  const pool = europe ? fixtures.testWorld(20, 'europe-pool') : null;
+  const world = europe ? realWorld.withEuropeanCompetitions(withLower, [{ id: 'euroleague', name: 'Test EuroLeague', kind: 'euroleague', season: '2026-27', ...(version >= 57 ? { format: 'euroleague-2026-1' } : {}), clubIds: [withLower.clubs[0].id, withLower.clubs[1].id, ...outside.map(club => club.id)] }],
+    outside.map(team => ({ team, venue: null, profiles: Object.fromEntries(team.players.map(player => [player.id, pool.playerProfiles[player.id.slice(3)]])) }))) : withLower;
   const manager = { name: 'Fixture Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
   const play = state => season.advanceSeason(state.activeMatch ? { ...state, activeMatch: engine.simulateToEnd(engine.setAutoSubstitutions(state.activeMatch, season.managedSide(state), true)) } : state);
 
@@ -87,7 +96,7 @@ try {
     commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
     clean = execFileSync('git', ['status', '--porcelain', '--', 'src'], { encoding: 'utf8' }).trim() === '';
   } catch { /* Not a git checkout: the module hashes still identify the runtime. */ }
-  const manifest = { source: `commit ${commit}${clean ? ' (src unchanged)' : ' (src has uncommitted changes)'}`, schema: version, world: world.id, seed: 5150, standingsRule: fiba ? 'fiba-2026-d' : null, lowerDivision: lower, files, moduleCount: Object.keys(modules).length, modules };
+  const manifest = { source: `commit ${commit}${clean ? ' (src unchanged)' : ' (src has uncommitted changes)'}`, schema: version, world: world.id, seed: 5150, standingsRule: fiba ? 'fiba-2026-d' : null, lowerDivision: lower, europe, files, moduleCount: Object.keys(modules).length, modules };
   await writeFile(`tests/fixtures/${prefix}-manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(JSON.stringify({ prefix, files, moduleCount: manifest.moduleCount, source: manifest.source }, null, 2));
 } finally {

@@ -16,6 +16,8 @@ import type { BackgroundClub, ClubExchange, SeasonBackground } from '../domain/b
 import type { EmploymentDeparture } from '../domain/employment';
 import { computeExchanges, departureFor, joinedContracts, leavingRecord } from '../world/exchanges';
 import { createBackground, validateBackground } from '../world/background';
+import { backgroundConditions, backgroundRosterId, backgroundSide } from '../world/europe';
+import { selectBackgroundMatchday } from '../world/background';
 import type { FacilityAnchor, FacilityEvent, SeasonFacilities } from '../domain/facilities';
 import { createFacilities, applyFacilityEvent, facilitiesAtEventCount } from '../world/facilities';
 import { getArenaCapacity, getFacilityUpkeepBreakdown } from '../world/facilities-policy';
@@ -49,7 +51,7 @@ import { clubsEverInFullWorld, fullWorldClubs, fullWorldClubsIn, isMemberList, i
 import type { CareerWorld, WorldContext } from '../domain/world';
 import { getCareerPlayers, getCareerPlayer, getCareerWage, type CareerPlayerContext } from '../world/player-catalog';
 import { MAX_MATCH_PERIODS } from '../engine/match';
-import { applyExchanges, createSchedule, DAILY_RECOVERY, dateForRound, fixtureSeed, getPostseasons, seasonExchangesOf, getStandings, MAX_SEASON_NUMBER, recoverThroughGameDays, ROUND_INTERVAL_DAYS, scheduledFixtures, weekCloseCondition, weekLastGameDate } from '../world/season';
+import { applyExchanges, domesticSchedule, DAILY_RECOVERY, dateForRound, fixtureSeed, getPostseasons, seasonExchangesOf, getStandings, MAX_SEASON_NUMBER, recoverThroughGameDays, ROUND_INTERVAL_DAYS, scheduledFixtures, weekCloseCondition, weekLastGameDate } from '../world/season';
 import { divisionChanges, openingDivisions, seasonLeagues } from '../world/divisions';
 import { calendarDaysBetween } from '../world/competition-calendar';
 import { createSeasonInjury, isRecovering } from '../world/health';
@@ -107,7 +109,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -120,7 +122,7 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
 
 /** The canonical games of a season given its own results (regular calendar plus due postseason games, step 3.4b). */
-function canonicalFixtures(context: { clubs: readonly Team[]; fixtures: unknown; world: CareerWorld; divisions?: DomesticDivisions }, seasonNumber: number, path: string): SeasonFixture[] {
+function canonicalFixtures(context: { clubs: readonly Team[]; fixtures: unknown; world: CareerWorld; divisions?: DomesticDivisions; seed: number }, seasonNumber: number, path: string): SeasonFixture[] {
   if (!Array.isArray(context.fixtures)) fail(path, 'must be an array');
   try { return scheduledFixtures({ ...context, fixtures: context.fixtures as SeasonFixture[] }, seasonNumber); }
   catch { return fail(path, 'does not match the versioned schedule'); }
@@ -191,7 +193,7 @@ function validateBackgroundHistory(state: SeasonState, employment: SeasonEmploym
 const divisionsInSeason = (state: Pick<SeasonState, 'seasonNumber' | 'divisions' | 'history'>, year: number) => year === state.seasonNumber ? state.divisions : state.history.find(archive => archive.seasonNumber === year)?.divisions;
 
 /** A fixture's exact fields: postseason games also carry their stage, series, game number and venue flag. */
-const fixtureKeys = (expected: SeasonFixture): string[] => ['id', 'round', 'date', 'homeClubId', 'awayClubId', ...(expected.stage ? ['stage', 'seriesId', 'game', ...(expected.neutral ? ['neutral'] : [])] : []), 'result'];
+const fixtureKeys = (expected: SeasonFixture): string[] => ['id', 'round', 'date', 'homeClubId', 'awayClubId', ...(expected.stage ? ['stage', 'seriesId', 'game', ...(expected.neutral ? ['neutral'] : [])] : []), ...(expected.competition ? ['competition'] : []), 'result'];
 function record(value: unknown, path: string, keys: readonly string[]): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(path, 'must be an object');
   const fields = value as Record<string, unknown>;
@@ -333,7 +335,10 @@ function validateRosters(value: unknown, path: string, clubs: readonly Team[], s
   return value as RosterSnapshot[];
 }
 
-function recordedTeams(value: unknown, fixture: SeasonFixture, clubs: readonly Team[], rosters: readonly RosterSnapshot[], path: string, outcomes = false, selection = false): { home: Team; away: Team } {
+/** Step 3.5b: a background side's expected roster reference and matchday selection for a European game. */
+type BackgroundSelection = (clubId: string) => { rosterId: string; team: Team };
+
+function recordedTeams(value: unknown, fixture: SeasonFixture, clubs: readonly Team[], rosters: readonly RosterSnapshot[], path: string, outcomes = false, selection = false, background?: BackgroundSelection): { home: Team; away: Team } {
   const summarized = outcomes && value !== null && typeof value === 'object' && Object.hasOwn(value, 'appearances');
   const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'injuries', 'stats', 'rosterIds', ...(summarized ? ['appearances'] : []), ...(selection ? ['selection'] : [])]);
   const refs = record(fields.rosterIds, `${path}.rosterIds`, SIDES);
@@ -341,6 +346,13 @@ function recordedTeams(value: unknown, fixture: SeasonFixture, clubs: readonly T
   const restingIds: string[] = [];
   const teams = Object.fromEntries(SIDES.map(side => {
     const clubId = side === 'home' ? fixture.homeClubId : fixture.awayClubId;
+    if (fixture.competition && !clubs.some(club => club.id === clubId)) {
+      if (!background || !selected) fail(`${path}.rosterIds.${side}`, 'must identify a club of this season');
+      const expected = background!(clubId);
+      if (refs[side] !== expected.rosterId) fail(`${path}.rosterIds.${side}`, 'must identify the background club\'s squad for the season');
+      if (!sameData(selected![side], expected.team.players.map(player => player.id))) fail(`${path}.selection.${side}`, 'must be the background club\'s matchday selection of its best available players');
+      return [side, expected.team];
+    }
     const snapshot = rosterForRound(rosters, clubId, fixture.round);
     if (refs[side] !== snapshot.id) fail(`${path}.rosterIds.${side}`, 'must identify this club\'s registered roster at the fixture boundary');
     const registered = { ...clubs.find(club => club.id === clubId)!, players: snapshot.players };
@@ -816,7 +828,7 @@ function validateYouthCompetitionShape(value: unknown, state: SeasonState, versi
     const season = record(item, path, ['seasonNumber', 'fromRound', 'preparedOn', 'supplementalIntakeIds', 'fixtures']);
     if (season.seasonNumber !== year || season.fromRound !== fromRound || season.preparedOn !== dateForRound(fromRound, year)) fail(path, 'must retain the chronological competition preparation boundary');
     if (!Array.isArray(season.supplementalIntakeIds) || season.supplementalIntakeIds.length > state.clubs.length) fail(`${path}.supplementalIntakeIds`, 'must retain at most one supplemental intake per club');
-    const fixtures = array(season.fixtures, `${path}.fixtures`, createSchedule(state.clubs, year, { ...state, divisions: divisionsInSeason(state, year) }).filter(fixture => fixture.round >= fromRound).length);
+    const fixtures = array(season.fixtures, `${path}.fixtures`, domesticSchedule(state.clubs, year, { ...state, divisions: divisionsInSeason(state, year) }).filter(fixture => fixture.round >= fromRound).length);
     for (const [fixtureIndex, value] of fixtures.entries()) {
       const fixturePath = `${path}.fixtures[${fixtureIndex}]`;
       const outcome = version >= 43 && value !== null && typeof value === 'object' && 'detail' in value && value.detail === 'outcome';
@@ -1076,14 +1088,16 @@ function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employ
   if (!physio.enabledSince) return;
   if (!Array.isArray(physio.rehabilitation) || physio.rehabilitation.length > 600 * state.seasonNumber * (seasonRounds(state) - 1)) fail('physio.rehabilitation', 'must retain a bounded chronological treatment history');
   for (const [index, value] of physio.rehabilitation.entries()) record(value, `physio.rehabilitation[${index}]`, ['id', 'injuryId', 'playerId', 'clubId', 'seasonNumber', 'afterRound', 'fromDate', 'toDate', 'rosterId', 'contractId', 'physioId', 'eligibleDays', 'creditBefore', 'creditEarned', 'creditAfter', 'returnBefore', 'returnAfter']);
-  const schedules = new Map<string, SeasonFixture>();
+  const schedules = new Map<string, SeasonFixture>(), years = new Map<string, number>();
   // Each season's canonical games, including the postseason games its own results made due (step 3.4b).
-  for (let year = 1; year <= state.seasonNumber; year += 1) for (const fixture of canonicalFixtures({ clubs: state.clubs, fixtures: year === state.seasonNumber ? state.fixtures : state.history[year - 1]?.fixtures, world: worldOf(state), divisions: year === state.seasonNumber ? state.divisions : state.history[year - 1]?.divisions }, year, 'injuries')) schedules.set(fixture.id, fixture);
+  for (let year = 1; year <= state.seasonNumber; year += 1) for (const fixture of canonicalFixtures({ clubs: state.clubs, fixtures: year === state.seasonNumber ? state.fixtures : state.history[year - 1]?.fixtures, world: worldOf(state), divisions: year === state.seasonNumber ? state.divisions : state.history[year - 1]?.divisions, seed: state.seed }, year, 'injuries')) { schedules.set(fixture.id, fixture); years.set(fixture.id, year); }
   const players = new Set(getCareerPlayers(state).map(player => player.id));
+  // Step 3.5b: a background side's player injured in a European game.
+  const backgroundPlayer = (fixture: SeasonFixture, clubId: string, playerId: string) => !!fixture.competition && !fullWorldClubsIn(state, years.get(fixture.id)!).some(club => club.id === clubId) && backgroundSide(state, clubId, years.get(fixture.id)!).players.some(player => player.id === playerId);
   for (const [index, value] of state.injuries.entries()) {
     const path = `injuries[${index}]`, injury = record(value, path, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);
     const fixture = schedules.get(injury.fixtureId as string);
-    if (!fixture || !players.has(injury.playerId as string) || ![fixture.homeClubId, fixture.awayClubId].includes(injury.clubId as string) || !['ankle', 'muscle'].includes(injury.kind as string)) fail(path, 'must identify a supported diagnosis and originating fixture');
+    if (!fixture || !players.has(injury.playerId as string) && !backgroundPlayer(fixture, injury.clubId as string, injury.playerId as string) || ![fixture.homeClubId, fixture.awayClubId].includes(injury.clubId as string) || !['ankle', 'muscle'].includes(injury.kind as string)) fail(path, 'must identify a supported diagnosis and originating fixture');
     if (!sameData(injury, createSeasonInjury(state.seed, fixture, injury.clubId as string, injury.playerId as string, injury.kind as SeasonInjury['kind']))) fail(path, 'must retain the original diagnosis and recovery date');
   }
   let replayed: SeasonPhysio = { ...physio, rehabilitation: [] };
@@ -2099,7 +2113,9 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     const fromRound = year === firstYear ? firstRound : 1, throughRound = year === seasonNumber ? committedRound : seasonLength;
     if (!commercialGovernsSeason(commercial, year)) for (const club of clubsIn(year)) add({ clubId: club.id, seasonNumber: year, round: fromRound, kind: 'sponsor', sourceId: `sponsor-s${year}`, amount: year === firstYear ? Math.floor(ANNUAL_SPONSORSHIP * (seasonLength + 1 - firstRound) / seasonLength) : ANNUAL_SPONSORSHIP });
     for (let playedRound = fromRound; playedRound <= throughRound; playedRound += 1) for (const club of clubsIn(year)) add({ clubId: club.id, seasonNumber: year, round: playedRound, kind: 'operations', sourceId: `operations-s${year}-r${playedRound}`, amount: -ROUND_OPERATING_COST });
-    for (const fixture of schedules.get(year)!) if (fixture.result && fixture.round >= fromRound && fixture.round <= throughRound) add({ clubId: fixture.homeClubId, seasonNumber: year, round: fixture.round, kind: 'tickets', sourceId: `tickets-${fixture.id}`, fixture });
+    // Step 3.5b: a background side's home game earns the full world nothing.
+    const hosts = new Set(clubsIn(year).map(club => club.id));
+    for (const fixture of schedules.get(year)!) if (fixture.result && fixture.round >= fromRound && fixture.round <= throughRound && hosts.has(fixture.homeClubId)) add({ clubId: fixture.homeClubId, seasonNumber: year, round: fixture.round, kind: 'tickets', sourceId: `tickets-${fixture.id}`, fixture });
   }
   // Approved board capital funds exactly the upgrade that starts next (the facilities replay checks the decision).
   for (const [index, event] of facilities.events.entries()) {
@@ -2661,6 +2677,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 50 && Object.hasOwn(world, 'playerContracts')) fail('world.playerContracts', 'requires format 50 or later');
   if (version < 53 && Object.hasOwn(world, 'lowerDivisions')) fail('world.lowerDivisions', 'requires format 53 or later');
   if (version < 56 && Object.hasOwn(world, 'europeanCompetitions')) fail('world.europeanCompetitions', 'requires format 56 or later');
+  if (version < 57 && world.europeanCompetitions?.some(competition => Object.hasOwn(competition, 'format'))) fail('world.europeanCompetitions.format', 'requires format 57 or later');
   // Format 53 listed identities only; from format 54 the next-division clubs are in the world.
   if (world.lowerDivisions?.some(entry => isMemberList(entry) !== (version >= 54))) fail('world.lowerDivisions', version >= 54 ? 'must list clubs of the world from format 54' : 'requires format 54 to list clubs of the world');
   // Format 50: careers whose leagues have postseasons record each season's divisions.
@@ -2748,6 +2765,11 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       latestInjuries.set(id, injury);
     }
   }
+  // Step 3.5b: a background side's selection follows from its season's squad and the injuries committed before the game.
+  const backgroundSelection = (year: number, fixture: SeasonFixture): BackgroundSelection => clubId => {
+    const squad = backgroundSide(careerContext, clubId, year), ids = new Set(squad.players.map(player => player.id));
+    return { rosterId: backgroundRosterId(clubId, year), team: selectBackgroundMatchday(squad, new Set(history.filter(injury => injury.fixtureId !== fixture.id && ids.has(injury.playerId) && isRecovering(injury, fixture.date, physio)).map(injury => injury.playerId))) };
+  };
   if (career) {
     const archives = array(state.history, 'history', seasonNumber - 1);
     for (const [archiveIndex, value] of archives.entries()) {
@@ -2758,14 +2780,14 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       // That season's own full-world clubs (step 3.4d-2).
       const archiveClubs = clubsForEmploymentYear(employment, archiveIndex + 1, worldRounds(world), careerContext);
       const archivedRosters = version >= 9 ? validateRosters(archive.rosters, `${path}.rosters`, archiveClubs, archiveIndex + 1, employment, worldRounds(world), careerContext) : undefined;
-      const schedule = canonicalFixtures({ clubs: archiveClubs, fixtures: archive.fixtures, world, divisions: archiveDivisions }, archiveIndex + 1, `${path}.fixtures`);
+      const schedule = canonicalFixtures({ clubs: archiveClubs, fixtures: archive.fixtures, world, divisions: archiveDivisions, seed }, archiveIndex + 1, `${path}.fixtures`);
       const fixtures = array(archive.fixtures, `${path}.fixtures`, schedule.length);
       let hasPlayerStats: boolean | undefined;
       for (const [index, value] of fixtures.entries()) {
         const location = `${path}.fixtures[${index}]`, expected = schedule[index]!;
         const fixture = record(value, location, fixtureKeys(expected));
         for (const key of fixtureKeys(expected)) if (key !== 'result' && fixture[key] !== expected[key as keyof SeasonFixture]) fail(location, 'does not match the versioned schedule');
-        const { home, away } = archivedRosters ? recordedTeams(fixture.result, expected, archiveClubs, archivedRosters, `${location}.result`, version >= 45, fullRoster) : { home: archiveClubs.find(club => club.id === expected.homeClubId)!, away: archiveClubs.find(club => club.id === expected.awayClubId)! };
+        const { home, away } = archivedRosters ? recordedTeams(fixture.result, expected, archiveClubs, archivedRosters, `${location}.result`, version >= 45, fullRoster, backgroundSelection(archiveIndex + 1, expected)) : { home: archiveClubs.find(club => club.id === expected.homeClubId)!, away: archiveClubs.find(club => club.id === expected.awayClubId)! };
         const result = validateArchivedResult(fixture.result, `${location}.result`, home, away, version >= 9, version >= 45, fullRoster);
         if (version >= 9) {
           const available = result.stats !== null || result.appearances !== undefined;
@@ -2777,7 +2799,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       if (version >= 45) validateSeniorSummary(archive as unknown as SeasonState['history'][number], managedClubFor(state as unknown as SeasonState, archiveIndex + 1, false), path);
     }
   }
-  const schedule = canonicalFixtures({ clubs, fixtures: state.fixtures, world, divisions: seasonDivisions }, seasonNumber, 'fixtures'), fixtures = array(state.fixtures, 'fixtures', schedule.length);
+  const schedule = canonicalFixtures({ clubs, fixtures: state.fixtures, world, divisions: seasonDivisions, seed }, seasonNumber, 'fixtures'), fixtures = array(state.fixtures, 'fixtures', schedule.length);
   const committedRound = state.status === 'complete' ? round : round - 1;
   // Step 3.4a: the current week's game day is its earliest date with an unplayed game; earlier game days are committed.
   let pendingDay: string | null = null;
@@ -2804,7 +2826,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     for (const key of fixtureKeys(expected)) if (key !== 'result' && fixture[key] !== expected[key as keyof SeasonFixture]) fail(path, 'does not match the versioned schedule');
     if (expected.round <= committedRound || expected.round === round && pendingDay !== null && expected.date < pendingDay) {
       if (fixture.result === null) fail(`${path}.result`, 'is missing from a completed matchday');
-      const { home, away } = rosters ? recordedTeams(fixture.result, expected, clubs, rosters, `${path}.result`, false, fullRoster) : { home: clubs.find(club => club.id === expected.homeClubId)!, away: clubs.find(club => club.id === expected.awayClubId)! };
+      const { home, away } = rosters ? recordedTeams(fixture.result, expected, clubs, rosters, `${path}.result`, false, fullRoster, backgroundSelection(seasonNumber, expected)) : { home: clubs.find(club => club.id === expected.homeClubId)!, away: clubs.find(club => club.id === expected.awayClubId)! };
       const result = validateResult(fixture.result, `${path}.result`, home, away, legacy, version >= 9, fullRoster);
       if (!legacy) recordFixtureInjuries(result, expected, home, away, path, result.stats);
     } else if (fixture.result !== null) fail(`${path}.result`, 'cannot be committed before its matchday');
@@ -2862,12 +2884,20 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const match = state.activeMatch as SeasonState['activeMatch'];
   if (match && active) {
   if (match.engineVersion !== 'possession-3' || match.seed !== fixtureSeed(seed, active.id)) fail('activeMatch', 'has the wrong engine or fixture seed');
-  let home = clubs.find(club => club.id === active.homeClubId)!, away = clubs.find(club => club.id === active.awayClubId)!;
+  // Step 3.5b: a European opponent outside the full world plays its background selection, undeveloped.
+  const backgroundTeam = (clubId: string) => active.competition && !clubs.some(club => club.id === clubId) ? backgroundSelection(seasonNumber, active)(clubId).team : undefined;
+  const homeBackground = backgroundTeam(active.homeClubId), awayBackground = backgroundTeam(active.awayClubId);
+  let home = homeBackground ?? clubs.find(club => club.id === active.homeClubId)!, away = awayBackground ?? clubs.find(club => club.id === active.awayClubId)!;
   if (fullRoster) {
-    try { home = selectedTeam(home, match.home.players.map(player => player.id)); away = selectedTeam(away, match.away.players.map(player => player.id)); } catch { fail('activeMatch', 'must use legal matchday selections from the registered clubs'); }
-    for (const side of SIDES) { const plan = (plans[match[side].id] as unknown as ClubPlan); if (plan.matchday !== null && !sameData(plan.matchday, match[side].players.map(player => player.id))) fail('activeMatch', 'must retain the chosen matchday selection'); }
+    try { if (!homeBackground) home = selectedTeam(home, match.home.players.map(player => player.id)); if (!awayBackground) away = selectedTeam(away, match.away.players.map(player => player.id)); } catch { fail('activeMatch', 'must use legal matchday selections from the registered clubs'); }
+    for (const side of SIDES) { const plan = (plans[match[side].id] as unknown as ClubPlan | undefined); if (plan && plan.matchday !== null && !sameData(plan.matchday, match[side].players.map(player => player.id))) fail('activeMatch', 'must retain the chosen matchday selection'); }
   }
-  if (!sameData(match.home, development ? developClub(home, development.training, { ...careerContext, date: active.date }) : home) || !sameData(match.away, development ? developClub(away, development.training, { ...careerContext, date: active.date }) : away)) fail('activeMatch', 'must use the fixture home and away squads with their current development');
+  if (match.status === 'ready') for (const team of [homeBackground, awayBackground]) if (team) {
+    const expected = backgroundConditions(fixtures as SeasonFixture[], team, active.date);
+    if (team.players.some(player => match.stats[player.id]?.condition !== expected[player.id])) fail('activeMatch.stats', 'must start background players at their condition after earlier European games');
+  }
+  const developed = (team: Team, background: Team | undefined) => development && !background ? developClub(team, development.training, { ...careerContext, date: active.date }) : team;
+  if (!sameData(match.home, developed(home, homeBackground)) || !sameData(match.away, developed(away, awayBackground))) fail('activeMatch', 'must use the fixture home and away squads with their current development');
   const opposition: Side = active.homeClubId === matchClub ? 'away' : 'home';
   if (!match.autoSubstitutions[opposition]) fail('activeMatch.autoSubstitutions', 'must enable opponent substitutions');
   if (match.injuryMode !== injuryMode) fail('activeMatch.injuryMode', 'must match the season-wide injury setting');

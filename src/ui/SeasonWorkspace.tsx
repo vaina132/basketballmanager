@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/season'
 import type { Side, Team } from '../domain/types'
-import { currentGameDay, getPostseasons, getStandings, seasonLabel } from '../world/season'
+import { currentGameDay, getPostseasons, getStandings, isDomesticFixture, seasonLabel } from '../world/season'
 import { classificationPoints } from '../world/fiba-ranking'
 import { PostseasonPanel } from './PostseasonPanel'
 import { getFixtureTeams } from '../world/rosters'
@@ -85,7 +85,8 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const seasonSelector = useRef<HTMLSelectElement | null>(null)
   const archive = season.history.find(entry => entry.seasonNumber === selectedSeason)
   const archived = !!archive
-  const selectedFixtures = (archive?.fixtures ?? season.fixtures).filter(fixture => !league || league.clubIds.includes(fixture.homeClubId))
+  // European games (step 3.5b) are not part of a domestic league's calendar.
+  const selectedFixtures = (archive?.fixtures ?? season.fixtures).filter(fixture => isDomesticFixture(fixture) && (!league || league.clubIds.includes(fixture.homeClubId)))
   const selectedNumber = archive?.seasonNumber ?? season.seasonNumber
   // Step 3.4a: during a week with several game days, show the current game day.
   const selectedDate = archived ? selectedFixtures.at(-1)!.date : currentGameDay(season) ?? season.date

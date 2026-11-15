@@ -75,6 +75,8 @@ export interface SeasonFixture {
   seriesId?: string;
   game?: number;
   neutral?: true;
+  /** Format 57, European games only (step 3.5b): the European competition's id. Domestic games have none. */
+  competition?: string;
 }
 
 /** Older imports lack box scores; newly archived seasons retain complete results. */
@@ -116,7 +118,8 @@ export interface DomesticDivisions {
 /** Format 54 builds next-division clubs into the world (generated squads), outside the full world until promoted. */
 /** Format 55 records exchanges with next divisions (`background.changesFrom`, `background.exchanges`) and contract departures. */
 /** Format 56 adds the European competitions and their entrants to new worlds (step 3.5a). */
-export const SEASON_SCHEMA_VERSION = 56;
+/** Format 57 plays European competitions in their real formats on midweek game days (steps 3.5b-c). */
+export const SEASON_SCHEMA_VERSION = 57;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

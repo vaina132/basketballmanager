@@ -4,7 +4,7 @@ import type { SeasonState } from '../domain/season';
 import type { SeasonAcademy } from '../domain/academy';
 import { applyFacilityEvent, facilityEventAnchor } from './facilities';
 import { automateSponsorship } from './commercial';
-import { roundOrdinal, seasonRounds } from './career-world';
+import { roundOrdinal, seasonRounds, lastCommittedWeek } from './career-world';
 import type { WorldContext } from '../domain/world';
 
 /** Matchdays as one sequence across seasons; stored in anchors and counted forward, so it uses the season length. */
@@ -39,7 +39,7 @@ export function careerMovesGovern(career: SeasonCareer | undefined, seasonNumber
 }
 
 export function careerEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'date' | 'fixtures'> & WorldContext, mode: 'career' | 'prospective'): CareerAnchor {
-  const completed = state.fixtures.reduce((round, fixture) => fixture.result ? Math.max(round, fixture.round) : round, 0);
+  const completed = lastCommittedWeek(state);
   return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), effectiveFrom: mode === 'career' ? 1 : state.seasonNumber + 1 };
 }
 

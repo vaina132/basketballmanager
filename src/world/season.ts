@@ -11,6 +11,7 @@ import { addCalendarDays, domesticRoundDates, roundRobinGames, roundRobinRoundCo
 import { derivePostseason, POSTSEASON_FORMATS, POSTSEASON_SLOT_OFFSETS, postseasonOutcome } from './postseason';
 import { divisionChanges, openingDivisions, seasonLeagues } from './divisions';
 import { createBackground } from './background';
+import { backgroundConditions, backgroundMatchdayTeam, backgroundPlan, backgroundRosterId, backgroundSide, europeanRegularFixtures, getEuropeanCompetitions, playsEurope } from './europe';
 import type { ClubExchange } from '../domain/background';
 import { computeExchanges, departureFor, joinedContracts, leavingRecord } from './exchanges';
 import type { SeasonEndDecision } from '../domain/career';
@@ -108,9 +109,19 @@ export function dateForRound(round: number, seasonNumber = 1): string {
  * clubs gives 2 x (clubs - 1) matchdays; six clubs give the built-in league's ten, with unchanged fixtures.
  */
 /** The season-specific division memberships a schedule, table or postseason uses (step 3.4c). */
-type DivisionContext = WorldContext & { divisions?: DomesticDivisions | null };
+type DivisionContext = WorldContext & { divisions?: DomesticDivisions | null; seed?: number };
 
+/** Format 57: worlds with European games keep every game in calendar order (date, then id), so each club's games are in the order played. */
+const byCalendar = (a: Pick<SeasonFixture, 'date' | 'id'>, b: Pick<SeasonFixture, 'date' | 'id'>) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+
+/** The season's regular games: the domestic calendar and, in worlds that play them, the European regular seasons (step 3.5b). */
 export function createSchedule(clubs: readonly Team[] = DEVELOPMENT_CLUBS, seasonNumber = 1, context: DivisionContext = {}): SeasonFixture[] {
+  const domestic = domesticSchedule(clubs, seasonNumber, context);
+  return context.world && playsEurope(context.world) ? [...domestic, ...europeanRegularFixtures(context, seasonNumber)].sort(byCalendar) : domestic;
+}
+
+/** The domestic regular season only (the youth competition mirrors it). */
+export function domesticSchedule(clubs: readonly Team[] = DEVELOPMENT_CLUBS, seasonNumber = 1, context: DivisionContext = {}): SeasonFixture[] {
   const world = context.world;
   if (world?.domesticLeagues) {
     const start = seasonStartDate(seasonNumber), weeks = regularWorldRounds(world);
@@ -138,10 +149,12 @@ export function createSchedule(clubs: readonly Team[] = DEVELOPMENT_CLUBS, seaso
 }
 
 /** Independent fixture streams make results independent of UI and processing order. */
-/** Format 49 (step 3.4b): postseason games carry their stage. League tables, board targets and positions use regular-season games only. */
-export const isRegularFixture = (fixture: { stage?: unknown }) => !fixture.stage;
-/** A postseason game's own fields, copied into archives. */
-export const postseasonFields = (fixture: SeasonFixture | ArchivedFixture) => fixture.stage ? { stage: fixture.stage, seriesId: fixture.seriesId!, game: fixture.game!, ...(fixture.neutral ? { neutral: true as const } : {}) } : {};
+/** Format 49 (step 3.4b): postseason games carry their stage. League tables, board targets and positions use domestic regular-season games only (format 57: never European games). */
+export const isRegularFixture = (fixture: { stage?: unknown; competition?: unknown }) => !fixture.stage && !fixture.competition;
+/** A domestic game (regular season or postseason), as opposed to a European one (format 57). */
+export const isDomesticFixture = (fixture: { competition?: unknown }) => !fixture.competition;
+/** A postseason or European game's own fields, copied into archives. */
+export const postseasonFields = (fixture: SeasonFixture | ArchivedFixture) => ({ ...(fixture.stage ? { stage: fixture.stage, seriesId: fixture.seriesId!, game: fixture.game!, ...(fixture.neutral ? { neutral: true as const } : {}) } : {}), ...(fixture.competition ? { competition: fixture.competition } : {}) });
 
 type DomesticLeague = NonNullable<CareerWorld['domesticLeagues']>[number];
 /** A league's final regular-season order (first to last), or null while any of its regular games is unplayed. */
@@ -171,9 +184,11 @@ export function getPostseasons(context: { fixtures: readonly (SeasonFixture | Ar
 
 /** The season's canonical games so far: the regular calendar, then the postseason games that results have made due, in calendar order. */
 export function scheduledFixtures(context: { clubs: readonly Team[]; fixtures: readonly (SeasonFixture | ArchivedFixture)[] } & DivisionContext, seasonNumber: number): SeasonFixture[] {
-  const regular = createSchedule(context.clubs, seasonNumber, context);
-  if (!worldOf(context).domesticLeagues?.some(league => league.postseason)) return regular;
+  const regular = createSchedule(context.clubs, seasonNumber, context), world = worldOf(context), europe = playsEurope(world);
+  if (!world.domesticLeagues?.some(league => league.postseason) && !europe) return regular;
   const post: SeasonFixture[] = getPostseasons(context, seasonNumber).flatMap(entry => entry.fixtures).map(fixture => ({ ...fixture, result: null }));
+  // Format 57: European knockout games share the weeks of the domestic regular season, so the whole season is in calendar order.
+  if (europe) return [...regular, ...post, ...getEuropeanCompetitions(context, seasonNumber).flatMap(entry => entry.fixtures).map(fixture => ({ ...fixture, result: null }))].sort(byCalendar);
   return [...regular, ...post.sort((a, b) => a.round - b.round || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))];
 }
 
@@ -259,22 +274,29 @@ export function managedSide(season: SeasonState): Side {
   throw new Error('The active fixture must include the managed club.');
 }
 
-function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships'>> & WorldContext, fixture: SeasonFixture): MatchState {
+function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background'>> & WorldContext, fixture: SeasonFixture): MatchState {
   const homeClub = season.clubs.find(club => club.id === fixture.homeClubId);
   const awayClub = season.clubs.find(club => club.id === fixture.awayClubId);
-  if (!homeClub || !awayClub) throw new Error('A fixture refers to a missing club.');
-  const home = teamForMatchday(season, homeClub, fixture), away = teamForMatchday(season, awayClub, fixture);
-  const homePlan = season.plans[home.id]!, awayPlan = season.plans[away.id]!;
+  // Step 3.5b: a European game's club outside the full world plays as a background side.
+  const background = (clubId: string) => fixture.competition ? backgroundMatchdayTeam(season, clubId, fixture, season.seasonNumber ?? 1) : undefined;
+  const homeBackground = homeClub ? undefined : background(fixture.homeClubId), awayBackground = awayClub ? undefined : background(fixture.awayClubId);
+  if (!homeClub && !homeBackground || !awayClub && !awayBackground) throw new Error('A fixture refers to a missing club.');
+  const home = homeClub ? teamForMatchday(season, homeClub, fixture) : homeBackground!, away = awayClub ? teamForMatchday(season, awayClub, fixture) : awayBackground!;
+  const homePlan = homeClub ? season.plans[home.id]! : backgroundPlan(home), awayPlan = awayClub ? season.plans[away.id]! : backgroundPlan(away);
   const lineup = (club: Team, plan: ClubPlan) => [...new Set([...plan.lineup.filter(id => club.players.some(player => player.id === id)), ...club.players.map(player => player.id)])].slice(0, 5);
   const registeredPlayers = new Set([...home.players, ...away.players].map(player => player.id));
   const preparedMorale = season.relationships ? getPreparedRelationshipMorale(season as SeasonState, fixture.round, season.seasonNumber) : undefined;
-  const morale = preparedMorale ? { ...preparedMorale, values: Object.fromEntries([...home.players, ...away.players].map(player => [player.id, preparedMorale.values[player.id]!])) } : undefined;
-  let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), developClub(home, season.training, { ...season, date: fixture.date }), developClub(away, season.training, { ...season, date: fixture.date }), {
+  // Background players have no squad relationships: a neutral assessment.
+  const morale = preparedMorale ? { ...preparedMorale, values: Object.fromEntries([...home.players, ...away.players].map(player => [player.id, Object.hasOwn(preparedMorale.values, player.id) ? preparedMorale.values[player.id]! : 50])) } : undefined;
+  const backgroundCondition = (team: Team | undefined) => team ? backgroundConditions(season.fixtures ?? [], team, fixture.date) : {};
+  const conditions = { ...backgroundCondition(homeBackground), ...backgroundCondition(awayBackground), ...Object.fromEntries([homeClub ? home : null, awayClub ? away : null].flatMap(team => team ? team.players.map(player => [player.id, season.conditions[player.id]!]) : [])) };
+  const develop = (team: Team, full: boolean) => full ? developClub(team, season.training, { ...season, date: fixture.date }) : team;
+  let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), develop(home, !!homeClub), develop(away, !!awayClub), {
     ...(morale ? { morale } : {}),
     lineups: { home: lineup(home, homePlan), away: lineup(away, awayPlan) },
     tactics: { home: homePlan.tactics, away: awayPlan.tactics },
     autoSubstitutions: { home: home.id === season.managedClubId ? homePlan.autoSubstitutions : true, away: away.id === season.managedClubId ? awayPlan.autoSubstitutions : true },
-    conditions: Object.fromEntries([...home.players, ...away.players].map(player => [player.id, season.conditions[player.id]!])),
+    conditions,
     injuryMode: season.injuryMode,
     preExistingInjuries: Object.fromEntries(season.injuries.filter(injury => registeredPlayers.has(injury.playerId) && isRecovering(injury, fixture.date, season.physio)).map(injury => [injury.playerId, injury.kind])),
   });
@@ -369,7 +391,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   // Next-division clubs (format 54) start outside the full world.
   const clubs = fullWorldClubs(world);
   const divisions = openingDivisions(world);
-  const fixtures = createSchedule(clubs, 1, { world, divisions });
+  const fixtures = createSchedule(clubs, 1, { world, divisions, seed });
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId));
   const preparation = {
     ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled),
@@ -424,6 +446,13 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
   if (match.home.id !== fixture.homeClubId || match.away.id !== fixture.awayClubId || match.seed !== fixtureSeed(season.seed, fixture.id)) throw new Error('The match does not belong to its season fixture.');
   const rosterIds = {} as FixtureResult['rosterIds'];
   for (const side of SIDES) {
+    // Step 3.5b: a background side's selection comes from its squad for the season.
+    if (fixture.competition && !season.clubs.some(club => club.id === match[side].id)) {
+      const squad = new Set(backgroundSide(season, match[side].id, season.seasonNumber).players.map(player => player.id));
+      if (match[side].players.some(player => !squad.has(player.id))) throw new Error('The match squad does not match its background squad.');
+      rosterIds[side] = backgroundRosterId(match[side].id, season.seasonNumber);
+      continue;
+    }
     const snapshot = rosterForRound(season.rosters, match[side].id, fixture.round);
     const registeredIds = new Set(snapshot.players.map(player => player.id));
     const matchIds = match[side].players.map(player => player.id);
@@ -438,7 +467,8 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
     season.injuries.push(injury);
   }
   for (const side of SIDES) {
-    const club = match[side], previous = season.plans[club.id]!;
+    const club = match[side], previous = season.plans[club.id];
+    if (!previous) continue;
     // Fouls reset next game. Keep the final lineup, filling any excluded-player
     // vacancies from the previous starters and then the roster's stable order.
     const lineup = [...new Set([...match.lineups[side], ...previous.lineup, ...club.players.map(player => player.id)])].slice(0, 5);

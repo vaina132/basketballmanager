@@ -1,4 +1,5 @@
 import type { CareerWorld, EuropeanCompetition, EuropeanCompetitionKind } from '../domain/world';
+import { EUROPEAN_FORMATS } from './european-formats';
 import type { Team } from '../domain/types';
 import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPlayerProfile } from '../data/development-player-profiles';
@@ -46,9 +47,9 @@ export function careerCompetitions(pack: DataPack): DataPackCompetition[] {
   return pack.competitions.filter(item => item.kind === 'domestic' && item.clubIds.length >= MIN_WORLD_CLUBS && item.clubIds.length <= 20);
 }
 
-/** New worlds change prefix whenever they gain a rule: `real-tables-` (format 48), `real-playoffs-` (49), `real-tiebreak-` (51), `real-rules-` (52), `real-europe-` (56). */
+/** New worlds change prefix whenever they gain a rule: `real-tables-` (format 48), `real-playoffs-` (49), `real-tiebreak-` (51), `real-rules-` (52), `real-europe-` (56), `real-europlay-` (57). */
 export function realWorldId(pack: DataPack, competitionId: string): string {
-  return `real-europe-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
+  return `real-europlay-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
 }
 
 /** The fictional season wage for a player of this overall rating, in euro cents. */
@@ -123,7 +124,9 @@ export function worldFromPack(pack: DataPack, competitionId: string | readonly s
     kinds.add(kind);
     const entrantIds = [...new Set(item.clubIds)].filter(clubId => !seen.has(clubId) && (clubIds.includes(clubId) || (pack.clubs.find(club => club.id === clubId)?.playerIds.length ?? 0) >= 8));
     entrantIds.forEach(clubId => seen.add(clubId));
-    return entrantIds.length >= 2 ? [{ id: item.id, name: item.name, kind, season: item.season, clubIds: entrantIds }] : [];
+    // Step 3.5b (format 57): a competition is played in its real format when its field fits that format.
+    const format = Object.values(EUROPEAN_FORMATS).find(entry => entry.kind === kind && entrantIds.length >= entry.clubs.min && entrantIds.length <= entry.clubs.max);
+    return entrantIds.length >= 2 ? [{ id: item.id, name: item.name, kind, season: item.season, clubIds: entrantIds, ...(format ? { format: format.id } : {}) }] : [];
   });
   if (!european.length) return world;
   const entrants = [...seen].filter(clubId => !clubIds.includes(clubId)).map(clubId => {

@@ -4,7 +4,7 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Keeping this file short:** when a step is finished, update "Current state" and "Next steps" here, and add the step's detailed notes (what changed, tests, measurements) to the top of `docs/handover-history.md` under a dated heading. Keep this file under 20 KB, with exactly one current entry.
 
-## Current state (15 November 2026, after step 3.5a)
+## Current state (15 November 2026, after steps 3.5b-c)
 
 **Active level:** Sprint 3, the multi-league world ([docs/multi-league-world.md#steps](docs/multi-league-world.md#steps)).
 
@@ -15,11 +15,11 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 4. Release preparation
 5. Interface simplification (last)
 
-**Active step:** 3.4, domestic playoffs, titles, and promotion and relegation. The next step is 3.5b (3.4d-4 is local-only; see "Next steps").
+**Active step:** 3.5, European competitions. The next step is 3.5d, the EuroCup format (3.4d-4 is local-only; see "Next steps").
 
 **Code baseline:**
-- Step 3.5a commit on `main` (cloud session); save format **56** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
-- Last verification, on Linux (cloud): full serial suite **2,588 tests / 192 files passed** (630 s), and `npm run build` passed with the known chunk-size advisory.
+- Steps 3.5b-c commit on `main` (cloud session); save format **57** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
+- Last verification, on Linux (cloud): full serial suite **2,602 tests / 194 files passed** (631 s), and `npm run build` passed with the known chunk-size advisory.
 - Cloud sessions: Node 24.22.3 is installed in `/opt/node24` (put it first in `PATH`).
 
 **Done in sprint 3** (details in the history, search for the step number):
@@ -33,6 +33,7 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
   - **3.4c** promotion and relegation between a country's two divisions. Each season records its divisions (format 50).
   - **3.4e-1** FIBA Official Basketball Rules 2026, Appendix D, as the labelled default standings rule for new worlds' leagues without a verified rule of their own (format 51). Also fixed: strict checks refused any manager club change in a carried world.
   - **3.4e-2** verified league rules for new worlds (format 52): ACB article 7 (Spain's top division), BBL § 20 (Germany), FIP article 62 (both Italian divisions). Greece and Turkey keep the FIBA default (no readable official rule).
+  - **3.5b-c** European games on the shared calendar and the EuroLeague format (format 57; `src/world/europe.ts`, `src/world/european-formats.ts`): a competition with `format` plays; EuroLeague Thursdays of weeks 3-32 (Tuesdays too in eight double weeks), Play-In, best-of-five playoffs, Final Four 25 and 27 May without a third-place game; seeded draw; the domestic regular season lasts until week 38. Clubs outside the full world play as background sides (best available twelve, condition and injuries from their European games, no club records). New real worlds give the EuroLeague its format (IDs `real-europlay-`); the EuroCup and BCL stay listed only.
   - **3.5a** European competitions in new worlds (format 56): `world.europeanCompetitions` from the pack; entrants outside the chosen leagues are background clubs with their real squads (`withEuropeanCompetitions`, `europeanOnlyClubIds`). They do not play yet.
   - **3.4d-3** screens: the playoff panel lists clubs leaving to and joining from the next division (returning or with a generated squad); generated players carry a "Generated" label on Squad, the player profile and Scouting.
   - **3.4d-2** clubs leave and join the full world at season ends (formats 54-55), wherever the world lists a country's next division (`withLowerDivisions`; real names need 3.4d-4). Decisions (a) and (b) implemented.
@@ -43,9 +44,10 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
   - "Preparing your career…" panel; careers are now built in the worker.
   - Opening contracts of 1-3 seasons (`world.playerContracts`).
 
-**Unfinished in sprint 3:** 3.4d-4 (local-only), 3.5, the rest of 3.6, and 3.7 (local-only).
+**Unfinished in sprint 3:** 3.4d-4 (local-only), 3.5d-g, the rest of 3.6, and 3.7 (local-only).
 
 **Known open points:**
+- European games have no screen of their own until 3.5g: the manager's European games open on their match day and count in player statistics, but Competition lists domestic games only.
 - The Competition screen's player statistics combine regular-season and playoff games.
 - Primera FEB's one-venue final stage still gives the listed home club its home advantage.
 - The Turkish TBL postseason is a labelled default; its statute has not been found.
@@ -68,7 +70,7 @@ Each step below should fit one session. A step that needs private data, keys or 
    - Import the real names into a new private pack. API-Sports lists Turkey's TB2L, Spain's Segunda FEB, Germany's Pro A and Greece's A2. Then build them into new worlds with `withLowerDivisions` (in `worldFromPack`, for countries other than Italy and France).
    - Run a private real-data season across a season end.
    - Update the 3.4 rows in the plan tables.
-2. **3.5: European competitions.** The split below was checked and recorded on 15 November 2026 (`docs/multi-league-world.md#plan-for-step-35-checked-15-november-2026`); the open research is done (`docs/competition-rules-2026.md`: no EuroLeague third-place game; BCL 2026-27 regulations; licences and the EuroCup route). Next: 3.5a.
+2. **3.5: European competitions.** The split below was checked and recorded on 15 November 2026 (`docs/multi-league-world.md#plan-for-step-35-checked-15-november-2026`); the open research is done (`docs/competition-rules-2026.md`: no EuroLeague third-place game; BCL 2026-27 regulations; licences and the EuroCup route). **(a)-(c) are done** (formats 56-57). Next: 3.5d.
    - **(a)** The three competitions and their entrants in the world. Entrants from leagues that were not chosen, and from countries outside the six, become background clubs.
    - **(b)** Midweek European game days on the shared calendar, with draws at the season start:
      - EuroCup and BCL on Tuesdays and Wednesdays;
@@ -119,7 +121,7 @@ After sprint 3 (new levels, each needing the owner's approval):
   3. Add a row to `ADDED_BY_FORMAT` (`tests/helpers/season-format.ts`) and a strip step to `tests/helpers/legacy-season.ts`.
   4. Add migration and corruption-rejection tests.
   5. Bump `SAVE_CHECKS_VERSION` when stricter checks must invalidate earlier local certificates.
-- **Old careers keep their rules.** New behaviour applies to new worlds only, or from a dated activation point onwards. Older embedded worlds keep their original schedules, rankings, rosters, contracts and finances. Real-world IDs change prefix when new worlds gain a new rule (currently `real-playoffs-`).
+- **Old careers keep their rules.** New behaviour applies to new worlds only, or from a dated activation point onwards. Older embedded worlds keep their original schedules, rankings, rosters, contracts and finances. Real-world IDs change prefix when new worlds gain a new rule (currently `real-europlay-`).
 - **Validation:**
   - Portable imports always get the full strict check. `parseSealedSeason` is only for local saves with a valid fingerprint.
   - Never relax strict checks or drop history evidence to gain speed.
@@ -128,7 +130,8 @@ After sprint 3 (new levels, each needing the owner's approval):
 
 **Calendar and simulation**
 - `SeasonState.round` is a week and `state.date` is that week's Saturday. Wages, upkeep, staff, board and training run once a week, after the week's last game day. Gate income is per home game.
-- League tables, board targets, sponsor positions and job-offer positions count regular-season games only (`isRegularFixture`).
+- League tables, board targets, sponsor positions and job-offer positions count domestic regular-season games only (`isRegularFixture`; never European games).
+- Worlds that play Europe keep each season's games in calendar order; European games are midweek (Tuesday-Thursday) and end before the domestic postseasons.
 - Each season's league memberships come from `seasonLeagues(world, divisions)`. Never mutate the opening `world.domesticLeagues`.
 - Simulation randomness is seeded. Reading screens, advice or tables never uses match randomness. Dates are ISO dates with UTC arithmetic.
 - Money is whole euro cents. Human and AI clubs share the same rules and guards (`*-policy.ts`). New career systems go in `SeasonSystems` and `NEW_CAREER_SYSTEMS`.
@@ -172,7 +175,8 @@ Browser checks still to do locally (by the owner, or by a local Claude session w
    - In a German-only career, check that the playoff panel says relegated clubs stay because there is no lower division yet.
 2. **Table rules (3.4e):** start new careers and open Competition after a week. "Table rules" should say: Greek or Turkish league "FIBA default · Classification points" with a **Pts** column (2 for a win, 1 for a loss); German "BBL · Wertungspunkte" with **Pts** as 2:0 points; Italian "FIP · Points"; Spanish top division "ACB · Wins"; French "LNB · Win percentage".
 3. **Leaving and joining (3.4d-2, 3.4d-3), after 3.4d-4 adds real next-division names:** play a German or Spanish career through a season end. The playoff panel should list the clubs leaving and joining; season two should have the joining club, its players marked "Generated" on Squad, profile and Scouting.
-4. **Quick play-test of the feedback fixes:**
+4. **European games (3.5b-c), with a new real-data career whose world includes a EuroLeague club:** the first EuroLeague game is on Thursday 24 September; on a Saturday without a domestic game the screen says "No game today" when a European game follows that week; opponents from leagues not chosen play with their real squads; the EuroLeague club's ledger shows its European home gates.
+5. **Quick play-test of the feedback fixes:**
    - Start a new career and check the country-filtered league list, the speed meter and the "Preparing your career…" panel. These were checked automatically in Edge.
    - Then check in Transfers that only some players' contracts end after the first season.
 

@@ -20,6 +20,16 @@ export function fixturePlayerEvidence(fixture: Pick<SeasonFixture | ArchivedFixt
   return result?.stats?.[playerId] ?? (result && 'appearances' in result ? result.appearances?.[playerId] : undefined) ?? (result?.selection && Object.hasOwn(result.selection.rested, playerId) ? { secondsPlayed: 0, fouls: 0, appeared: false } : undefined);
 }
 
+/**
+ * The players of one side of an archived game whose evidence it keeps: the club's selected registered players, or a
+ * background side's selection in a European game (step 3.5b; background clubs have no registrations).
+ */
+export function archivedSidePlayerIds(archive: Pick<SeasonArchive, 'rosters'>, fixture: ArchivedFixture, side: 'home' | 'away'): string[] {
+  const clubId = side === 'home' ? fixture.homeClubId : fixture.awayClubId, selection = fixture.result.selection;
+  if (fixture.competition && selection && !archive.rosters.some(roster => roster.clubId === clubId)) return [...selection[side]];
+  return rosterForRound(archive.rosters, clubId, fixture.round).players.map(player => player.id).filter(id => !selection || selection[side].includes(id));
+}
+
 function summarizeArchive(archive: SeasonArchive, managedClubId: string): SeasonArchive {
   // Unknown legacy statistics cannot be turned into totals. Existing summaries are already an explicit format.
   if (archive.summary || archive.fixtures.some(fixture => fixture.result.stats === null)) return archive;
@@ -28,9 +38,10 @@ function summarizeArchive(archive: SeasonArchive, managedClubId: string): Season
   const fixtures = archive.fixtures.map(fixture => {
     if ([fixture.homeClubId, fixture.awayClubId].includes(managedClubId)) return fixture;
     const result = fixture.result, appearances: Record<string, ArchivedAppearance> = {};
-    for (const clubId of [fixture.homeClubId, fixture.awayClubId]) {
-      for (const player of rosterForRound(archive.rosters, clubId, fixture.round).players) {
-        if (result.selection && !result.selection[clubId === fixture.homeClubId ? 'home' : 'away'].includes(player.id)) continue;
+    for (const side of ['home', 'away'] as const) {
+      const clubId = side === 'home' ? fixture.homeClubId : fixture.awayClubId;
+      for (const playerId of archivedSidePlayerIds(archive, fixture, side)) {
+        const player = { id: playerId };
         const stats = result.stats![player.id];
         if (!stats) throw new Error('Cannot summarize a match without its registered player statistics.');
         const appeared = SENIOR_TOTAL_KEYS.some(key => stats[key] !== 0);

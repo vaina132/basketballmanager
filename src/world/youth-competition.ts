@@ -6,7 +6,7 @@ import type { SeasonInjury, SeasonState, Standing } from '../domain/season';
 import type { Team } from '../domain/types';
 import type { SeasonYouthCompetition, YouthCompetitionSeason, YouthFixture, YouthFixtureFull, YouthPlayerStatus } from '../domain/youth-competition';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
-import { createSchedule } from './season';
+import { domesticSchedule } from './season';
 import { developAcademyPlayer, emptyAcademyPoints, getAcademyProspect } from './academy-policy';
 import { academyAtBoundary } from './academy';
 import { isYouthOutcome } from './youth-history';
@@ -119,7 +119,7 @@ function supplement(state: SeasonState): { academy: SeasonAcademy; intakeIds: st
 
 function prepare(state: SeasonState, fromRound: number): SeasonState {
   const added = supplement(state);
-  const fixtures: YouthFixture[] = createSchedule(state.clubs, state.seasonNumber, state).filter(fixture => fixture.round >= fromRound).map(fixture => ({ ...fixture, id: `youth-s${state.seasonNumber}-r${fixture.round}-${worldOf(state).domesticLeagues ? fixture.id : fixture.id.slice(fixture.id.lastIndexOf('g'))}`, seasonNumber: state.seasonNumber, home: null, away: null, startingConditions: null, result: null }));
+  const fixtures: YouthFixture[] = domesticSchedule(state.clubs, state.seasonNumber, state).filter(fixture => fixture.round >= fromRound).map(fixture => ({ ...fixture, id: `youth-s${state.seasonNumber}-r${fixture.round}-${worldOf(state).domesticLeagues ? fixture.id : fixture.id.slice(fixture.id.lastIndexOf('g'))}`, seasonNumber: state.seasonNumber, home: null, away: null, startingConditions: null, result: null }));
   const season: YouthCompetitionSeason = { seasonNumber: state.seasonNumber, fromRound, preparedOn: state.date, supplementalIntakeIds: added.intakeIds, fixtures };
   return { ...state, academy: added.academy, youthCompetition: { ...state.youthCompetition, seasons: [...state.youthCompetition.seasons, season] } };
 }

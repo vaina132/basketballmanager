@@ -316,6 +316,8 @@ export function processFinanceRound(state: SeasonState): SeasonState {
   requireCalendarWeek(state, true);
   let next = state;
   for (const fixture of fixtures) {
+    // Step 3.5b: a background side's home European game earns the full world nothing.
+    if (!Object.hasOwn(state.finance.roundPrices, fixture.homeClubId)) continue;
     const gate = forecastGate(state, fixture, state.finance.roundPrices[fixture.homeClubId]!);
     next = book(next, fixture.homeClubId, 'tickets', gate.revenue, `tickets-${fixture.id}`, { fixtureId: fixture.id, price: gate.price, attendance: gate.attendance, ...(state.facilities?.enabledSince ? { capacity: gate.capacity } : {}) });
   }

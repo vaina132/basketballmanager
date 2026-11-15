@@ -69,6 +69,7 @@ export function getSeasonPerformance(season: SeasonState, seasonNumber = season.
       else records.set(key, { key, seasonNumber, player, club: { ...club, players: [...roster.players] }, clubGames: clubGames.get(club.id)!, games: 0, totals: emptyTotals(), log: [] });
     }
   }
+  const registered = new Set(data.rosters.map(roster => roster.clubId));
   // Sorting a copy makes totals/log order independent of the input fixture order.
   const fixtures = data.fixtures.filter(fixture => fixture.result !== null).sort((left, right) => compareText(right.date, left.date) || right.round - left.round || compareText(left.id, right.id));
   for (const fixture of fixtures) {
@@ -76,6 +77,8 @@ export function getSeasonPerformance(season: SeasonState, seasonNumber = season.
     if (result.stats === null) {
       if (!('appearances' in result) || !result.appearances || !data.summary) throw new Error('Player statistics were not retained for this season.');
       for (const clubId of [fixture.homeClubId, fixture.awayClubId]) {
+        // Background sides of European games (step 3.5b) have no registrations and no season records.
+        if (!registered.has(clubId)) continue;
         const team = getFixtureTeams(season, fixture, seasonNumber)[clubId === fixture.homeClubId ? 'home' : 'away'];
         for (const player of team.players) {
           const row = records.get(performanceRecordKey(seasonNumber, clubId, player.id))!;
@@ -88,6 +91,7 @@ export function getSeasonPerformance(season: SeasonState, seasonNumber = season.
     for (const home of [true, false]) {
       const clubId = home ? fixture.homeClubId : fixture.awayClubId;
       const side = home ? 'home' : 'away', opponent = home ? 'away' : 'home';
+      if (!registered.has(clubId)) continue;
       for (const player of teams[side].players) {
         const row = records.get(performanceRecordKey(seasonNumber, clubId, player.id));
         if (!row) throw new Error('A committed performance result refers to an unknown roster member.');
@@ -110,6 +114,7 @@ export function getSeasonPerformance(season: SeasonState, seasonNumber = season.
     }
   }
   for (const summary of data.summary?.players ?? []) {
+    if (!registered.has(summary.clubId)) continue;
     const row = records.get(performanceRecordKey(seasonNumber, summary.clubId, summary.playerId));
     if (!row) throw new Error('Season totals refer to an unknown registration.');
     row.games += summary.games;

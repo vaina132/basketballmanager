@@ -1,7 +1,6 @@
 import type { ArchivedAppearance, ArchivedFixture, SeasonArchive } from '../domain/season';
 import type { Team } from '../domain/types';
-import { compareSeniorTotals, emptySeniorTotals, SENIOR_TOTAL_KEYS, seniorTotalKey } from '../world/senior-history';
-import { rosterForRound } from '../world/rosters';
+import { archivedSidePlayerIds, compareSeniorTotals, emptySeniorTotals, SENIOR_TOTAL_KEYS, seniorTotalKey } from '../world/senior-history';
 
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
 function record(value: unknown, path: string, keys: readonly string[]): Record<string, unknown> {
@@ -46,8 +45,8 @@ export function validateSeniorSummary(archive: SeasonArchive, managedClubId: str
     for (const side of ['home', 'away'] as const) {
       const clubId = side === 'home' ? fixture.homeClubId : fixture.awayClubId;
       points.set(clubId, (points.get(clubId) ?? 0) + fixture.result.score[side]);
-      for (const player of rosterForRound(archive.rosters, clubId, fixture.round).players) {
-        if (fixture.result.selection && !fixture.result.selection[clubId === fixture.homeClubId ? 'home' : 'away'].includes(player.id)) continue;
+      for (const playerId of archivedSidePlayerIds(archive, fixture, side)) {
+        const player = { id: playerId };
         const key = seniorTotalKey(clubId, player.id), evidence = fixture.result.appearances![player.id] as ArchivedAppearance;
         const row = expected.get(key) ?? { clubId, playerId: player.id, games: 0, seconds: 0, fouls: 0, fixtures: 0 };
         row.games += Number(evidence.appeared); row.seconds += evidence.secondsPlayed; row.fouls += evidence.fouls; row.fixtures += 1;

@@ -18,8 +18,8 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 **Active step:** none in the cloud. Sprint 3's remaining steps are local-only (see "Sprint 3 summary").
 
 **Code baseline:**
-- Built-in real club data commit on `main` (cloud session); save format **60** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
-- Last verification, on Linux (cloud): full serial suite **2,634 tests / 202 files passed** (772 s), and `npm run build` passed with the known chunk-size advisory.
+- Online real club data (Supabase) commit on `main` (cloud session); save format **60** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
+- Last verification, on Linux (cloud): full serial suite **2,634 tests / 202 files passed** (790 s), and `npm run build` passed with the known chunk-size advisory.
 - Cloud sessions: Node 24.22.3 is installed in `/opt/node24` (put it first in `PATH`).
 
 **Done in sprint 3** (details in the history, search for the step number):
@@ -59,7 +59,7 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 
 ## Real clubs on every device (owner request, 15 November 2026)
 
-The game now reads real club data shipped with the website (`public/data/real-pack.json`), so a career starts with real clubs on phones without choosing a file. **The owner must add that file once** (it is only on the owner's computer): attach `.local-data/real-2026.11-world-3.json` in this chat for a session to commit, or upload it on GitHub into `public/data/` named `real-pack.json`. Until then the site falls back to "Load data pack" (the phone file picker now accepts JSON files however the phone labels them).
+The game reads real club data from the owner's Supabase project (public storage bucket `game-data`, `real-pack.json`; `src/world/built-in-pack.ts`), so careers start with real clubs on any device without choosing a file. **Live now:** a pack built in Supabase from the database (dataset 2026.11-world-1, 13 competitions, 223 clubs, 3,087 players) by the Edge Function `publish-starter-pack` (source in `supabase/functions/`; it never replaces an existing pack). **To publish the newer corrected pack** (world-3, only on the owner's computer): `npm.cmd run data:publish -- --file .local-data/real-2026.11-world-3.json` (uses `supabase-key.local`; checks the file with the game's parser first). Choosing a file stays possible. The owner asked for this Supabase work on 15 November 2026; the cloud rule against calling Supabase otherwise still stands.
 
 ## Sprint 3 summary (15 November 2026): cloud work complete, waiting for the owner
 
@@ -132,7 +132,7 @@ After sprint 3 (new levels, each needing the owner's approval):
 
 **Real data and secrets**
 - Careers use real clubs only. Unknown facts stay unknown, and estimates and generated players are labelled.
-- **Data rights granted (owner, 15 November 2026):** real clubs are the default way to play. The real pack is published with the game as `public/data/real-pack.json` (read automatically by `src/world/built-in-pack.ts`; choosing a file stays possible). Other private files (raw imports, API responses) stay in `.local-data/`.
+- **Data rights granted (owner, 15 November 2026):** real clubs are the default way to play. The real pack is published in Supabase storage (`game-data/real-pack.json`, read automatically by `src/world/built-in-pack.ts`; `public/data/real-pack.json` is a fallback; choosing a file stays possible). Other private files (raw imports, API responses) stay in `.local-data/`.
 - Keys live only in `*.local` files, which Git ignores. Never print, commit or bundle them. This repository is public, and every push to `main` goes live on Vercel.
 - Ask the owner before any paid option.
 

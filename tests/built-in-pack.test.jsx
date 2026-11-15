@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { BUILT_IN_PACK_URL, fetchBuiltInPack } from '../src/world/built-in-pack';
+import { BUILT_IN_PACK_URL, fetchBuiltInPack, ONLINE_PACK_URL } from '../src/world/built-in-pack';
 
 const positions = ['PG', 'SG', 'SF', 'PF', 'C'];
 const player = (club, index) => ({ id: `player-${club}-${index}`, name: `${club} Player ${index}`, clubId: `club-${club}`, number: index + 4, position: positions[index % 5], nationality: 'X', age: 25, heightCm: 200, weightKg: 97,
@@ -16,10 +16,17 @@ const text = (contents, checksum = createHash('sha256').update(JSON.stringify(co
 const response = (status, body, type = 'application/json') => async url => ({ ok: status >= 200 && status < 300, status, text: async () => body, headers: new Headers({ 'content-type': type }), url });
 
 describe('real-club data shipped with the game (owner decision, 15 November 2026)', () => {
-  it('reads and checks the shipped pack from the site', async () => {
-    let asked = null;
-    const result = await fetchBuiltInPack(async url => { asked = url; return response(200, text(pack))(url); });
-    expect(asked).toBe(BUILT_IN_PACK_URL);
+  it('reads and checks the pack from Supabase first, then from the site', async () => {
+    const asked = [];
+    const result = await fetchBuiltInPack(async url => { asked.push(url); return response(200, text(pack))(url); });
+    expect(asked).toEqual([ONLINE_PACK_URL]);
+    expect(ONLINE_PACK_URL).toMatch(/^https:\/\/kesxznybhotzduvcwiwm\.supabase\.co\/storage\/v1\/object\/public\/game-data\//);
+    const fallback = [];
+    const second = await fetchBuiltInPack(async url => { fallback.push(url); return url === ONLINE_PACK_URL ? response(400, '{"error":"not_found"}')(url) : response(200, text(pack))(url); });
+    expect(fallback).toEqual([ONLINE_PACK_URL, BUILT_IN_PACK_URL]);
+    expect(second.status).toBe('loaded');
+    const offlineFirst = await fetchBuiltInPack(async url => { if (url === ONLINE_PACK_URL) throw new Error('blocked'); return response(200, text(pack))(url); });
+    expect(offlineFirst.status).toBe('loaded');
     expect(result.status).toBe('loaded');
     expect(result.pack.version).toBe('built-in-1');
     expect(result.pack.clubs).toHaveLength(4);

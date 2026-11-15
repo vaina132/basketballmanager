@@ -8,6 +8,14 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: real club data in Supabase (owner request, 15 November 2026)
+
+- **Owner request:** the data pack must be online for every player, in the owner's Supabase project; the owner asked for this Supabase work directly.
+- **Supabase (project kesxznybhotzduvcwiwm):** public storage bucket `game-data` (migration `supabase/migrations/20261115180000_game_data_bucket.sql`, applied); Edge Function `publish-starter-pack` (source in `supabase/functions/publish-starter-pack/index.ts`) builds the pack from the database like `buildPack` for dataset 2026.11-world-1 and uploads `real-pack.json` only when none exists. Run once: 13 competitions, 223 clubs, 3,087 players, 1.5 MB, version `2026.11-world-1-online` (its rebuild does not reproduce the recorded world-1 checksum byte for byte).
+- **Game:** `fetchBuiltInPack` tries Supabase first (`ONLINE_PACK_URL`), then `/data/real-pack.json`; checked in Chromium with a Pixel 7 profile: New career loads the online pack and lists all six countries and three European competitions. A Spanish world from it builds with EuroLeague 20 (three one-year places matched by name), EuroCup 32, BCL 54 and five estimated leagues; season one is created in about 7 s.
+- **Owner's newer pack:** `npm.cmd run data:publish -- --file .local-data/real-2026.11-world-3.json` (`scripts/real-data-publish-pack.mjs`, uses `supabase-key.local`, checks with the game's parser, replaces the online pack).
+- **Verification:** full serial suite **2,634 tests / 202 files passed** (790 s, Linux); `npm run build` passed.
+
 ## Cloud continuation: real clubs on every device (owner request, 15 November 2026)
 
 - **Owner request:** the game could not be played on a phone (no data pack there). Real clubs must be the default; the owner granted the data rights (recorded in `docs/decisions.md` and the HANDOVER rules).

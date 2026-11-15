@@ -431,7 +431,7 @@ The owner decided both open questions on 15 November 2026:
 
 ## Real club data published with the game (owner decision, 15 November 2026)
 
-The owner could not play on a phone, which has no data pack. Decision: real clubs and players are the default way to play, and the owner has granted the data rights. The checksummed pack is published with the site as `public/data/real-pack.json`; the game reads and checks it when New career or a real-club friendly opens (`fetchBuiltInPack`), and keeps "choose a file" as an alternative (also when the site has no pack). No fictional clubs are offered.
+The owner could not play on a phone, which has no data pack. Decision: real clubs and players are the default way to play, and the owner has granted the data rights. At the owner's request the checksummed pack lives in the owner's Supabase project (public bucket `game-data`, `real-pack.json`), with `public/data/real-pack.json` as a fallback; the game reads and checks it when New career or a real-club friendly opens (`fetchBuiltInPack`), and keeps "choose a file" as an alternative. The first online pack was built in Supabase from the database (dataset 2026.11-world-1); the owner replaces it with the corrected local pack using `npm run data:publish`. No fictional clubs are offered.
 
 ## Owner feedback after playing, 15 November 2026
 

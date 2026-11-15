@@ -1,8 +1,5 @@
-# Built-in real club data
+# Real club data fallback
 
-Put the real club data pack here as `real-pack.json` (the same checksummed file the game loads with "Load data pack",
-for example `.local-data/real-2026.11-world-3.json` renamed). The deployed game then reads it automatically, so a new
-career starts with real clubs and players on any device, including phones, without choosing a file.
-
-The owner granted the data rights for publishing the real data with the game on 15 November 2026. Without this file
-the game falls back to choosing a pack file on the device. Keep the file under 20 MB.
+The game reads its real club data from the owner's Supabase project (public bucket `game-data`, file `real-pack.json`;
+see `src/world/built-in-pack.ts`). A copy placed here as `real-pack.json` is used only when Supabase has no pack or
+cannot be reached. Publish a new pack with `npm.cmd run data:publish -- --file <pack file>` on the owner's computer.

@@ -21,6 +21,7 @@
     "data:roster-snapshot": "node scripts/real-data-roster-snapshot.mjs",
     "data:refresh-pack": "node scripts/real-data-refresh-pack.mjs",
     "data:reconcile-pack": "node scripts/real-data-reconcile-pack.mjs",
+    "data:publish": "node scripts/real-data-publish-pack.mjs",
     "benchmark:match": "node scripts/benchmark-match.mjs",
     "benchmark:saves": "node scripts/benchmark-saves.mjs",
     "benchmark:career": "node scripts/benchmark-career.mjs",

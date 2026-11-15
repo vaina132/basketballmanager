@@ -6,12 +6,12 @@ This file holds only the current state, the next steps and the rules that must n
 
 ## Current state (15 November 2026, saved ideas level active)
 
-**Active level:** Saved ideas (owner, 15 November 2026: "Go ahead dont stop, i want you to implement according to the plan and dont stop just tell me where we are and i will tell you until where u need to implement"). Keep going level by level with short status reports; the owner says where to stop. Level order: sprint 3 (multi-league world; 3.7 browser acceptance local-only), sprint 4 (realism, done), **saved ideas (active)**, release preparation, interface simplification (last).
+**Active level:** Saved ideas (owner, 15 November 2026: "Go ahead dont stop, i want you to implement according to the plan and dont stop just tell me where we are and i will tell you until where u need to implement"). Then (15 November 2026): "Please go ahead and dont stop until you are done with what was planned only after that i will play and test and will provide you feedback." Finish the saved ideas level without stopping, then hand over for the owner to play. Level order: sprint 3 (multi-league world; 3.7 browser acceptance local-only), sprint 4 (realism, done), **saved ideas (active)**, release preparation, interface simplification (last).
 
 **Saved ideas plan** (defaults reversible, recorded in `docs/decisions.md` as each lands; new careers only, older careers keep their rules through model fields):
 - Round 1 (parallel agents, formats 63-66): (a) protected first season, fresh board confidence for a new coach, mid-season dismissals and resignations; (b) early sponsor exits and arena naming rights; (c) medical and scouting facilities and repair projects; (d) default squad roles by squad rank (fix for deep-bench concerns) and players asking about new contracts.
 - Round 2: more president personalities, board verdicts affecting the player salary budget, youth and culture objectives; richer press topics and media reputation; rivalries that grow from results; loans and leases.
-- Unemployed seasons: waiting for the owner's decision (the design documents disagree).
+- Unemployed seasons: **approved by the owner** (careers continue while unemployed); round 2, after the board and career work.
 - Also open: promoted and relegated clubs keep their opening money figures.
 
 **Development mode** applies (see "Rules and conventions"): build features first; full suite at sprint end.
@@ -60,7 +60,7 @@ The game reads real club data from the owner's Supabase project (public storage 
 ## Levels after sprint 4 (each needs the owner's approval)
 
 - **Saved ideas** (the owner calls them essential; place each into a level when planning it):
-  - unemployed seasons (confirm with the owner first: the design documents disagree);
+  - unemployed seasons (approved, in the saved ideas level);
   - a protected first season and fresh board confidence for a new coach;
   - mid-season dismissals and resignations;
   - more president personalities;
@@ -151,8 +151,7 @@ Browser checks still to do locally (by the owner, or by a local Claude session w
 
 ## Suggestions for the owner
 
-- **Please confirm the European places default (3.5f)** in `docs/decisions.md` ("Background tables and next season's European places"), or say what to change. It is reversible.
-- **Real contract ends for EuroLeague players (decision needed):** free trackers (BasketNews, Eurohoops sheets) list contract end years for about 83% of the 20 EuroLeague clubs' players (about 270 of 330); no free source covers the other leagues. Collecting them is a one-off script or 2-3 hours by hand, but the tables are compiled by those sites (possible database-rights question), and the online pack is public. Say whether to import them (and where to keep them) or keep the calibrated estimate.
+- Owner decisions of 15 November 2026 (unemployed seasons yes, contract estimates kept, European places confirmed, browser checks waived for now) are in `docs/decisions.md`, "Owner decisions for the saved ideas level".
 
 - Show regular-season and playoff player statistics separately on the Competition screen.
 - Play Primera FEB's one-venue final stage without home advantage.

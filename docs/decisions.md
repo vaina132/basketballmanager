@@ -416,7 +416,7 @@ Reversible defaults (format 59; `bcl-2026-1`), from the 2026-27 regulations wher
 
 ### Background tables and next season's European places (step 3.5f, 15 November 2026)
 
-The plan's reversible default, implemented for new worlds (format 60; `src/world/european-places.ts`). **For the owner to confirm.**
+The plan's reversible default, implemented for new worlds (format 60; `src/world/european-places.ts`). **Confirmed by the owner for now (15 November 2026: "confirm it for now").**
 - **Unchosen top divisions** of the countries with domestic data (the six) are built into new worlds outside the full world (`world.backgroundLeagues`, real squads, no games). At each season end their table is estimated from squad strength (best-eight position-weighted rating, squads aged to the season's start) plus a seeded random element of at most one rating point either way; second divisions are not estimated (their clubs cannot enter Europe).
 - **Countries without domestic data** (Žalgiris, Partizan, Maccabi and the like) keep their places; one leaving the EuroLeague returns to the EuroCup.
 - **EuroLeague:** clubs on long-term places (licences and multi-year wildcards) keep them. One-year places (2026-27: Paris, Beşiktaş and the EuroCup route's Hapoel Tel Aviv, matched by name in the pack) are kept by reaching the playoffs, at most twice (three seasons in a row). Open one-year places go to the EuroCup champion, the runner-up only when two are open, and then to the best domestic finishers not yet qualified (by final place across the countries' top divisions, then squad strength). Multi-year wildcards that end (Dubai, Valencia, Virtus Bologna) are kept for now.
@@ -439,6 +439,14 @@ Researched in the cloud from free sources; each value sits in one documented rul
 - **Money (format 62, `REAL_ECONOMY_RULES` in `src/world/economy.ts`):** budgets per band, typical (range): EuroLeague top group 48M (40-70M), other EuroLeague 25M (17-38M), top-division upper half and lower half per country, second divisions 0.4-6M; wage share of budget 55/45/40/38/35%; revenue mix per band with country adjustments; attendance and ticket yield per league (EuroLeague 10,589 at €30-40, ACB 6,633 at €22, BBL 4,676 at €24, LNB 4,139 at €25, LBA 4,105 at €15.5). Sources: LNB/DNCCG reports, the easyCredit BBL league report 2024-25, EuroLeague remuneration and attendance announcements, Eurohoops, BasketNews, Sportando, 2Playbook and club announcements. Published club budgets replace the strength estimate where known (follow-up).
 - **Contract lengths (`OPENING_CONTRACT_SHARES` in `src/world/real-world.ts`):** estimates calibrated on the BasketNews and Eurohoops EuroLeague trackers and the FIBA/CIES migration report 2025. Importing real EuroLeague contract ends is the owner's decision (HANDOVER, Suggestions).
 - **Hidden potential (`src/world/potential.ts`):** headroom by age at the career start (19 or younger 8 rating points down to 0 from 30) times a stable 25-100% share.
+
+## Owner decisions for the saved ideas level (15 November 2026)
+
+- **Unemployed seasons: yes.** A career may continue while the manager is unemployed (the design documents disagreed; the owner chose to build it). Built in round 2 of the saved ideas level.
+- **Contract lengths: keep the estimates** (`OPENING_CONTRACT_SHARES`); real EuroLeague contract ends are not imported.
+- **European places default (3.5f): confirmed for now.**
+- **Browser checks:** the owner waived the pending checks for now and will play and give feedback after the saved ideas level.
+- **Way of working:** "Please go ahead and dont stop until you are done with what was planned only after that i will play and test and will provide you feedback." The saved ideas level is built without stopping; then the owner plays.
 
 ## Owner feedback after playing, 15 November 2026
 

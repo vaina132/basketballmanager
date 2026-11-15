@@ -18,8 +18,8 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 **Active step:** none in the cloud. Sprint 3's remaining steps are local-only (see "Sprint 3 summary").
 
 **Code baseline:**
-- Steps 3.5g and 3.6 (screens) commit on `main` (cloud session); save format **60** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
-- Last verification, on Linux (cloud): full serial suite **2,631 tests / 201 files passed** (761 s), and `npm run build` passed with the known chunk-size advisory.
+- Built-in real club data commit on `main` (cloud session); save format **60** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
+- Last verification, on Linux (cloud): full serial suite **2,634 tests / 202 files passed** (772 s), and `npm run build` passed with the known chunk-size advisory.
 - Cloud sessions: Node 24.22.3 is installed in `/opt/node24` (put it first in `PATH`).
 
 **Done in sprint 3** (details in the history, search for the step number):
@@ -56,6 +56,10 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
   - the all-countries world (173 clubs) took about ten minutes to create and check.
 - Strict validation of long careers grows with career length. The academy and relationship replays are the main costs; a performance step is needed before release.
 - The private data still has unresolved records: 263 club assignments, 169 official identities, 17 extra provider IDs and 2,811 estimated precise positions. See `docs/player-data-quality.md`.
+
+## Real clubs on every device (owner request, 15 November 2026)
+
+The game now reads real club data shipped with the website (`public/data/real-pack.json`), so a career starts with real clubs on phones without choosing a file. **The owner must add that file once** (it is only on the owner's computer): attach `.local-data/real-2026.11-world-3.json` in this chat for a session to commit, or upload it on GitHub into `public/data/` named `real-pack.json`. Until then the site falls back to "Load data pack" (the phone file picker now accepts JSON files however the phone labels them).
 
 ## Sprint 3 summary (15 November 2026): cloud work complete, waiting for the owner
 
@@ -128,7 +132,7 @@ After sprint 3 (new levels, each needing the owner's approval):
 
 **Real data and secrets**
 - Careers use real clubs only. Unknown facts stay unknown, and estimates and generated players are labelled.
-- Real player data is never committed or deployed until data rights are cleared. Private packs stay in `.local-data/` and load only in the browser.
+- **Data rights granted (owner, 15 November 2026):** real clubs are the default way to play. The real pack is published with the game as `public/data/real-pack.json` (read automatically by `src/world/built-in-pack.ts`; choosing a file stays possible). Other private files (raw imports, API responses) stay in `.local-data/`.
 - Keys live only in `*.local` files, which Git ignores. Never print, commit or bundle them. This repository is public, and every push to `main` goes live on Vercel.
 - Ask the owner before any paid option.
 

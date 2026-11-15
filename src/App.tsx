@@ -62,6 +62,7 @@ import type { CheckpointReason } from './storage/season-indexed-db'
 import { CareerSaveHistory } from './ui/CareerSaveHistory'
 import { SeasonEndChoice } from './ui/SeasonEndChoice'
 const RealClubFriendly = lazy(() => import('./ui/RealClubFriendly').then(module => ({ default: module.RealClubFriendly })))
+import { fetchBuiltInPack } from './world/built-in-pack'
 import { SeasonCalendar } from './ui/SeasonCalendar'
 import { EuropeWorkspace } from './ui/EuropeWorkspace'
 import { playsEurope } from './world/europe'
@@ -139,6 +140,8 @@ export default function App() {
   const [seasonEnd, setSeasonEnd] = useState<SeasonEndOutlook | null>(null)
   // A private real-data pack loaded from this computer for friendlies; it stays in memory only.
   const [realPack, setRealPack] = useState<DataPack | null>(null)
+  // Owner decision (15 November 2026): real clubs are the default; the game reads the real-club data shipped with it.
+  const [builtInPack, setBuiltInPack] = useState<{ status: 'idle' | 'loading' | 'loaded' | 'missing' } | { status: 'failed'; message: string }>({ status: 'idle' })
   const [friendlyOpen, setFriendlyOpen] = useState(false)
   const [leavingSeason, setLeavingSeason] = useState(false)
   const seasonWorker = useRef<Worker | null>(null)
@@ -537,6 +540,15 @@ export default function App() {
     worker.onerror = () => { worker.terminate(); try { finished(createSeason(options)) } catch (error) { failed(error) } }
     worker.postMessage({ requestId: 1, action: 'create', options })
   }
+  useEffect(() => {
+    if (realPack || builtInPack.status !== 'idle' || entryView !== 'new-career' && !friendlyOpen) return
+    setBuiltInPack({ status: 'loading' })
+    void fetchBuiltInPack().then(result => {
+      if (result.status === 'loaded') { setRealPack(current => current ?? result.pack); setBuiltInPack({ status: 'loaded' }) }
+      else setBuiltInPack(result.status === 'missing' ? { status: 'missing' } : { status: 'failed', message: result.message })
+    })
+  }, [realPack, builtInPack.status, entryView, friendlyOpen])
+  const packSource = realPack ? undefined : builtInPack.status === 'loading' ? { status: 'loading' as const } : builtInPack.status === 'failed' ? { status: 'failed' as const, message: builtInPack.message, retry: () => setBuiltInPack({ status: 'idle' }) } : undefined
   async function openEntry(view: 'menu' | 'new-career') {
     if (seasonWorker.current || persistenceBusy.current) return
     const request = ++replacementRequest.current
@@ -625,13 +637,13 @@ export default function App() {
   const savedCareer = saveHistory?.current
   const careerSummary = (state: SeasonState) => ({ managerName: state.manager?.name ?? 'Manager profile not set', clubName: state.clubs.find(club => club.id === state.managedClubId)!.name, date: state.date })
   const overlays = <>
-    <input ref={importRef} type="file" accept=".json,application/json" onChange={importSave} className="visually-hidden" aria-label="Import game save" />
+    <input ref={importRef} type="file" accept=".json,application/json,text/plain,application/octet-stream" onChange={importSave} className="visually-hidden" aria-label="Import game save" />
     {friendlyOpen && !season && <Suspense fallback={null}><RealClubFriendly pack={realPack} busy={saving || advancing} onPackLoaded={setRealPack} onStart={startFriendly} onClose={() => setFriendlyOpen(false)} /></Suspense>}
     {seasonEnd && season && <SeasonEndChoice season={season} outlook={seasonEnd} busy={advancing || saving} onChoose={clubId => { setSeasonEnd(null); processSeason('round', { decision: clubId ? { moveTo: clubId } : undefined }) }} onClose={() => setSeasonEnd(null)} />}
     {saveHistoryOpen && <CareerSaveHistory entries={saveHistory?.entries ?? []} loading={historyLoading} error={historyError} busy={saving} onRefresh={() => { void refreshSaveHistory() }} onRestore={revision => { void restoreCheckpoint(revision) }} onClose={closeSaveHistory} />}
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
   </>
-  if (entryView) return <><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing || creatingCareer} starting={creatingCareer} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense>{overlays}</>
+  if (entryView) return <><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing || creatingCareer} starting={creatingCareer} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} packSource={packSource} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense>{overlays}</>
 
   return <div className={`app-shell game-shell ${page === 'match' ? 'match-screen' : ''}`}>
     <aside className="sidebar">

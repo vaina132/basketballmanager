@@ -429,6 +429,10 @@ The owner decided both open questions on 15 November 2026:
 - **(a) Manager's club relegated out of the full world:** treat it like a dismissal. The season-end choice offers jobs at full-world clubs, with at least one offer guaranteed.
 - **(b) Italy and France:** no relegation out of the full world for now, because API-Sports has no clubs for Italy's Serie B or France's NM1. Their 3.4c behaviour stays: clubs relegated from Serie A2 and Élite 2 remain in their division. Free official club lists for those divisions remain local-only work if relegation there is wanted later.
 
+## Real club data published with the game (owner decision, 15 November 2026)
+
+The owner could not play on a phone, which has no data pack. Decision: real clubs and players are the default way to play, and the owner has granted the data rights. The checksummed pack is published with the site as `public/data/real-pack.json`; the game reads and checks it when New career or a real-club friendly opens (`fetchBuiltInPack`), and keeps "choose a file" as an alternative (also when the site has no pack). No fictional clubs are offered.
+
 ## Owner feedback after playing, 15 November 2026
 
 The owner started a career and asked for these (verbatim points summarised), "Either do these or be sure that you put them into their respective places in the development plan":

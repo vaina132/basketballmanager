@@ -54,9 +54,9 @@ export function RealClubFriendly({ pack, busy = false, onPackLoaded, onStart, on
   return <dialog ref={dialog} id="real-club-friendly" className="real-friendly" aria-labelledby="real-friendly-title" aria-describedby="real-friendly-help" onCancel={event => { event.preventDefault(); onClose() }}>
     <header className="real-friendly-heading"><h2 id="real-friendly-title"><Icon name="court" size={17} />Real-club friendly</h2><button className="icon-button" aria-label="Close" onClick={onClose}><Icon name="close" size={16} /></button></header>
     <div className="real-friendly-body">
-      <p id="real-friendly-help">Play a friendly between two real clubs from a private data pack on this computer. The pack stays in this browser and is never uploaded.</p>
+      <p id="real-friendly-help">Play a friendly between two real clubs. The game uses its built-in real-club data; without it, choose a data pack file on this device.</p>
       <div className="real-friendly-load">
-        <input ref={fileInput} type="file" accept=".json,application/json" className="visually-hidden" aria-label="Choose a data pack file" onChange={event => { void load(event.target.files?.[0]) }} />
+        <input ref={fileInput} type="file" accept=".json,application/json,text/plain,application/octet-stream" className="visually-hidden" aria-label="Choose a data pack file" onChange={event => { void load(event.target.files?.[0]) }} />
         <button ref={firstControl} id="load-data-pack" className="button" onClick={() => fileInput.current?.click()} disabled={busy || loading}><Icon name="upload" size={15} />{pack ? 'Load another pack' : 'Load data pack…'}</button>
         {loading && <span role="status">Checking the pack…</span>}
         {pack && !loading && <span data-pack-version={pack.version}>Pack {pack.version} · {pack.season} · {pack.clubs.length} clubs · {pack.players.length} players</span>}

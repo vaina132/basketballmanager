@@ -8,6 +8,15 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: real clubs on every device (owner request, 15 November 2026)
+
+- **Owner request:** the game could not be played on a phone (no data pack there). Real clubs must be the default; the owner granted the data rights (recorded in `docs/decisions.md` and the HANDOVER rules).
+- `src/world/built-in-pack.ts`: `fetchBuiltInPack` reads `/data/real-pack.json` from the site and runs the full pack checks (a missing file or the site page in its place counts as missing; a damaged file, server error or no connection is reported). `App.tsx` loads it when New career or a real-club friendly opens; `CareerStart` shows "Loading real clubs and players…" or the failure with "Try again", and keeps choosing a file ("Use a data file instead").
+- File pickers (data pack, friendly, save import) accept JSON however a phone labels it.
+- `public/data/README.md` holds the folder; **the owner must add `public/data/real-pack.json`** (the private pack is not in the repository or the cloud session).
+- **Tests:** `tests/built-in-pack.test.jsx` (3). Browser check in Chromium with a Pixel 7 profile and a synthetic pack served at that address (not committed): New career opens on the club list and the career starts.
+- **Verification:** full serial suite **2,634 tests / 202 files passed** (772 s, Linux); `npm run build` passed (known chunk-size advisory).
+
 ## Cloud continuation: step 3.5g and the cloud part of 3.6, screens; sprint 3 summary (15 November 2026)
 
 - **Calendar page** (`src/ui/SeasonCalendar.tsx`, nav "Calendar"): every week of the season, each game day's competitions and game counts, the manager's game (opponent, home or away, competition, result) and the days still reserved for domestic playoffs and European knockouts (`reservedEuropeanDays` in `src/world/europe.ts`, `postseasonSlotDay`), with a "weeks with your games" filter and the current week marked.

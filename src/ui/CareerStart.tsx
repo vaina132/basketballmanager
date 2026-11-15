@@ -56,15 +56,19 @@ interface CareerStartProps {
   onExport?: () => void
   onStart: (setup: CareerSetup) => void
   onSaveProfile: (profile: ManagerProfile) => void
-  /** The private real-data pack loaded on this computer (shared with real-club friendlies). */
+  /** The real-club data pack: shipped with the game, or chosen on this device (shared with real-club friendlies). */
   pack: DataPack | null
   onPackLoaded: (pack: DataPack) => void
+  /** The shipped real-club data while it downloads, or why it could not be used (owner decision, 15 November 2026). */
+  packSource?: { status: 'loading' } | { status: 'failed'; message: string; retry: () => void }
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const emptyManager: ManagerProfile = { name: '', dateOfBirth: '', nationality: '' }
 const steps = ['Manager', 'Club', 'Review'] as const
+/** Phones label downloaded JSON files in different ways; the pack's own checks decide whether a file is usable. */
+const PACK_FILE_TYPES = '.json,application/json,text/plain,application/octet-stream'
 /** Step 3.6: the European competitions a new world plays (always included with the chosen leagues). */
 const europeanNames = (world: CareerWorld) => (world.europeanCompetitions ?? []).filter(item => item.format).map(item => item.name).join(', ')
 
@@ -197,9 +201,9 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
         {!props.profileOnly && step === 1 && (!props.pack || !world || !club ? <div className="career-pack-layout">
           <section className="panel" aria-labelledby="career-pack-title"><header className="career-start-panel-heading"><h2 id="career-pack-title">Real club data</h2><Icon name="upload" size={17} /></header>
             <div className="career-pack-body">
-              <p>Choose your club data file to load real clubs and players. The file stays on this computer.</p>
-              <input ref={packInput} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />
-              <button id="career-load-pack" type="button" className="button primary" disabled={packLoading} onClick={() => packInput.current?.click()}><Icon name="upload" size={16} />{packLoading ? 'Checking data pack…' : props.pack ? 'Load another data pack' : 'Load data pack'}</button>
+              {props.packSource?.status === 'loading' ? <p role="status">Loading real clubs and players…</p> : props.packSource?.status === 'failed' ? <><p className="career-pack-error" role="alert">{props.packSource.message}</p><button type="button" className="button" onClick={props.packSource.retry}>Try again</button></> : <p>Choose your club data file to load real clubs and players. The file stays on this device.</p>}
+              <input ref={packInput} type="file" accept={PACK_FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />
+              <button id="career-load-pack" type="button" className={props.packSource?.status === 'loading' ? 'button' : 'button primary'} disabled={packLoading || props.packSource?.status === 'loading'} onClick={() => packInput.current?.click()}><Icon name="upload" size={16} />{packLoading ? 'Checking data pack…' : props.pack ? 'Load another data pack' : props.packSource ? 'Use a data file instead' : 'Load data pack'}</button>
               {packError && <p id="career-pack-error" className="career-pack-error" role="alert">{packError}</p>}
               {props.pack && !world && !packError && <p className="career-pack-error" role="alert">{built.error ?? 'This data pack has no league a career can be played in.'}</p>}
             </div>
@@ -214,7 +218,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
             <div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{world.clubs.filter(team => league?.clubIds.includes(team.id)).map(team => <label className={`career-club-option${club.id === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={club.id === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players</small><SquadStrength value={squadRating(team)} clubName={team.name} /></span></label>)}</div>
             <button type="button" className="text-button career-pack-change" onClick={() => packInput.current?.click()} disabled={packLoading}>Load another data pack</button>
             <DataPackDetails pack={props.pack} />
-            <input ref={packInput} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />
+            <input ref={packInput} type="file" accept={PACK_FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />
             {packError && <p className="career-pack-error" role="alert">{packError}</p>}
           </section>
           <section className="panel" aria-labelledby="career-roster-title"><header className="career-start-panel-heading"><h2 id="career-roster-title">{club.name}</h2><span>First team</span></header><div className="career-start-roster-scroll" tabIndex={0} role="region" aria-label={`${club.name} roster preview`}><table className="career-start-roster"><thead><tr><th scope="col">Player</th><th scope="col">Position</th><th scope="col">Overall</th><th scope="col">Height</th></tr></thead><tbody>{club.players.map(player => <tr key={player.id}><td><span className="career-start-player"><span aria-hidden="true"><Avatar player={player} color={club.color} size={30} /></span><span>{player.name}<small>#{player.number}</small></span></span></td><td><PositionLabel position={player.position} profile={world.playerProfiles[player.id]} /></td><td>{overallRating(player.attributes, player.position)}</td><td>{player.heightCm} cm</td></tr>)}</tbody></table></div></section>

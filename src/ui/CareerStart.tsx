@@ -4,7 +4,7 @@ import type { ManagerProfile } from '../domain/manager'
 import type { InjuryMode } from '../domain/types'
 import type { CareerWorld } from '../domain/world'
 import { DEVELOPMENT_START_DATE } from '../data/development-league'
-import { worldRounds } from '../world/career-world'
+import { fullWorldClubs, worldRounds } from '../world/career-world'
 import { MAX_DATA_PACK_BYTES, parseDataPack, type DataPack } from '../world/data-pack'
 import { overallRating } from '../world/overall-rating'
 import { careerCompetitions, worldFromPack } from '../world/real-world'
@@ -207,8 +207,8 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
             <div className="career-country-options" role="group" aria-label="Choose country">{countries.map(country => <button key={country} type="button" aria-pressed={(league?.country ?? 'Other') === country} onClick={() => { setCompetitionId(leagues.find(item => (item.country ?? 'Other') === country)!.id); setClubId('') }}><CountryFlag country={country} decorative /><span>{country}</span></button>)}</div>
             {countryLeagues.length > 1 && <div className="career-start-field career-league-field"><label htmlFor="career-league">League</label><select id="career-league" value={league!.id} onChange={event => { setCompetitionId(event.target.value); setClubId('') }}>{countryLeagues.map(item => <option key={item.id} value={item.id}>{item.name} · Division {item.tier}</option>)}</select></div>}
             <fieldset className="career-country-options"><legend>Playable countries</legend>{countries.map(country => <label key={country}><input type="checkbox" checked={country === (league?.country ?? 'Other') || extraCountries.includes(country)} disabled={country === (league?.country ?? 'Other')} onChange={event => setExtraCountries(previous => event.target.checked ? [...previous, country] : previous.filter(item => item !== country))} /><CountryFlag country={country} decorative /><span>{country}</span></label>)}</fieldset>
-            <p className="career-league-summary">{world.domesticLeagues?.length ?? 1} leagues · {world.clubs.length} clubs · {worldRounds(world)} weeks. Each selected country includes its available divisions.</p>
-            <GameSpeed clubs={world.clubs.length} weeks={worldRounds(world)} />
+            <p className="career-league-summary">{world.domesticLeagues?.length ?? 1} leagues · {fullWorldClubs(world).length} clubs · {worldRounds(world)} weeks. Each selected country includes its available divisions.</p>
+            <GameSpeed clubs={fullWorldClubs(world).length} weeks={worldRounds(world)} />
             <div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{world.clubs.filter(team => league?.clubIds.includes(team.id)).map(team => <label className={`career-club-option${club.id === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={club.id === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players</small><SquadStrength value={squadRating(team)} clubName={team.name} /></span></label>)}</div>
             <button type="button" className="text-button career-pack-change" onClick={() => packInput.current?.click()} disabled={packLoading}>Load another data pack</button>
             <DataPackDetails pack={props.pack} />

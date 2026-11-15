@@ -370,6 +370,10 @@ Reversible defaults in `src/world/lower-division.ts` (pure functions, not yet us
 - **Who comes up:** as many clubs as the lowest full division relegates, from the top of that table; clubs relegated at the same season end are never candidates.
 - **Generated squads:** twelve fictional players (PG 2, SG 3, SF 2, PF 3, C 2), aged 19-33, rated so the best eight average 2 points below the weakest club of the division joined; identities `<club>-generated-s<season>-<n>` and profile source `generated`; wages and opening contracts estimated by the real-club world rules.
 
+### Next-division clubs in the world (step 3.4d-2a, 15 November 2026)
+
+Reversible design choice: every club of a country's real next division is built into the world when the career starts (`withLowerDivisions`, format 54), with its labelled generated squad (rated just below the weakest club of the division above at that moment) and estimated venue, sponsor, president, wages and contract lengths. The world then never grows during a career; promotion only moves a club into the full world. Until promoted, such a club is outside the full world: it is never scheduled, has no contracts, finances or staff, and its players are not in the player catalog, so they cannot be signed or scouted. Format 53's identity-only lists (never produced by the game) stay readable only in format-53 saves.
+
 ### Owner decisions for step 3.4d-2 (15 November 2026)
 
 The owner decided both open questions on 15 November 2026:

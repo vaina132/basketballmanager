@@ -4,6 +4,8 @@ import type { Rivalry } from '../domain/rivalries';
 import type { Player } from '../domain/types';
 import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { CareerWorld, WorldContext } from '../domain/world';
+import type { LowerDivision, LowerDivisionMembers } from '../domain/background';
+import type { Team } from '../domain/types';
 import { STANDINGS_RULE_FORMAT, standingsRuleAllowed } from '../domain/competition';
 import { DEVELOPMENT_PLAYERS } from '../data/development-players';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
@@ -85,14 +87,31 @@ export function storedWorld(world: CareerWorld): { world?: CareerWorld } {
   return world.id === DEVELOPMENT_WORLD.id ? {} : { world };
 }
 
+/** Format 54 next-division lists name clubs of the world itself; format 53 lists named identities outside it. */
+export const isMemberList = (entry: LowerDivision): entry is LowerDivisionMembers => Object.hasOwn(entry, 'clubIds');
+const lowerMemberSets = new WeakMap<CareerWorld, ReadonlySet<string>>();
+/** Clubs of the world that start outside the full world, in a next division (format 54). */
+export function lowerDivisionClubIds(world: CareerWorld): ReadonlySet<string> {
+  let ids = lowerMemberSets.get(world);
+  if (!ids) { ids = new Set((world.lowerDivisions ?? []).filter(isMemberList).flatMap(entry => entry.clubIds)); lowerMemberSets.set(world, ids); }
+  return ids;
+}
+const fullClubLists = new WeakMap<CareerWorld, readonly Team[]>();
+/** The clubs a career starts with: every club of the world except next-division clubs (the same array when there are none). */
+export function fullWorldClubs(world: CareerWorld): readonly Team[] {
+  let clubs = fullClubLists.get(world);
+  if (!clubs) { const lower = lowerDivisionClubIds(world); clubs = lower.size ? world.clubs.filter(club => !lower.has(club.id)) : world.clubs; fullClubLists.set(world, clubs); }
+  return clubs;
+}
+
 // The built-in league keeps its long-standing catalog array, so existing identity checks and caches still hold.
 const playerLists = new WeakMap<CareerWorld, readonly Player[]>([[DEVELOPMENT_WORLD, DEVELOPMENT_PLAYERS]]);
 const playerIndexes = new WeakMap<CareerWorld, ReadonlyMap<string, Player>>();
 
-/** Every original player of the world, in club order. */
+/** Every original player of the full world's clubs, in club order (next-division squads are not part of it). */
 export function worldPlayers(world: CareerWorld): readonly Player[] {
   let players = playerLists.get(world);
-  if (!players) { players = Object.freeze(world.clubs.flatMap(club => club.players)); playerLists.set(world, players); }
+  if (!players) { players = Object.freeze(fullWorldClubs(world).flatMap(club => club.players)); playerLists.set(world, players); }
   return players;
 }
 
@@ -107,7 +126,7 @@ export function worldClubIds(world: CareerWorld): string[] {
 }
 
 export function isWorldClub(world: CareerWorld, clubId: unknown): clubId is string {
-  return typeof clubId === 'string' && world.clubs.some(club => club.id === clubId);
+  return typeof clubId === 'string' && fullWorldClubs(world).some(club => club.id === clubId);
 }
 
 export function clubFinanceDefinition(world: CareerWorld, clubId: string): ClubFinanceDefinition {
@@ -182,11 +201,23 @@ function checkLowerDivisions(world: CareerWorld, clubIds: ReadonlySet<string>): 
   const countries = new Set<string>(), ids = new Set<string>();
   for (const [index, entry] of lists.entries()) {
     const path = `world.lowerDivisions[${index}]`;
-    if (!exactKeys(entry, ['country', 'tier', 'name', 'clubs']) || !isText(entry.country) || countries.has(entry.country) || !isText(entry.name) || !Array.isArray(entry.clubs) || entry.clubs.length < 1 || entry.clubs.length > 30) fail(path, 'must name a country once, its division and its clubs');
+    if (!isObject(entry) || !isText(entry.country) || countries.has(entry.country) || !isText(entry.name)) fail(path, 'must name a country once, its division and its clubs');
     countries.add(entry.country);
     const tiers = world.domesticLeagues?.filter(league => league.country === entry.country).map(league => league.tier) ?? [];
     if (!tiers.length || entry.tier !== Math.max(...tiers) + 1) fail(`${path}.tier`, 'must be the division below the lowest league of its country in this world');
     if (NO_LOWER_DIVISION_COUNTRIES.includes(entry.country)) fail(`${path}.country`, 'has no relegation out of the full world for now');
+    if (Object.hasOwn(entry, 'clubIds')) {
+      // Format 54: clubs of this world in no opening league, whose generated players are labelled as generated.
+      if (!exactKeys(entry, ['country', 'tier', 'name', 'clubIds']) || !Array.isArray(entry.clubIds) || entry.clubIds.length < 1 || entry.clubIds.length > 30) fail(path, 'must name a country once, its division and its clubs');
+      for (const id of entry.clubIds as unknown[]) {
+        const club = world.clubs.find(item => item.id === id);
+        if (typeof id !== 'string' || ids.has(id) || !club || world.domesticLeagues!.some(league => league.clubIds.includes(id))) fail(`${path}.clubIds`, 'must list unique clubs of this world outside every league');
+        ids.add(id as string);
+        if (club!.players.some(player => world.playerProfiles[player.id]?.source !== 'generated')) fail(`${path}.clubIds`, 'must hold generated squads');
+      }
+      continue;
+    }
+    if (!exactKeys(entry, ['country', 'tier', 'name', 'clubs']) || !Array.isArray(entry.clubs) || entry.clubs.length < 1 || entry.clubs.length > 30) fail(path, 'must name a country once, its division and its clubs');
     for (const club of entry.clubs as Record<string, any>[]) {
       if (!exactKeys(club, ['id', 'name', 'shortName', 'color']) || !isText(club.id, 80) || !ID.test(club.id) || ids.has(club.id) || clubIds.has(club.id) || !isText(club.name) || !isText(club.shortName, 12) || typeof club.color !== 'string' || !COLOUR.test(club.color)) fail(`${path}.clubs`, 'must hold unique clubs outside this world with a name, a short name and a colour');
       ids.add(club.id);
@@ -218,7 +249,9 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
         members.add(id);
       }
     }
-    if (members.size !== world.clubs.length) fail('world.domesticLeagues', 'must cover every club');
+    // Format 54: next-division clubs are in the world but in no opening league.
+    const lowerMembers = Array.isArray(world.lowerDivisions) ? world.lowerDivisions.filter(entry => isObject(entry) && Array.isArray((entry as unknown as LowerDivisionMembers).clubIds)).flatMap(entry => (entry as unknown as LowerDivisionMembers).clubIds) : [];
+    if (members.size + lowerMembers.length !== world.clubs.length || lowerMembers.some(id => members.has(id))) fail('world.domesticLeagues', 'must cover every club');
     // Worlds created since format 51 give every league a rule (its own or the FIBA default); older worlds rank only French leagues by a rule.
     if (world.domesticLeagues!.some(league => league.standingsRule && STANDINGS_RULE_FORMAT[league.standingsRule] >= STANDINGS_RULE_FORMAT['fiba-2026-d']) && world.domesticLeagues!.some(league => !Object.hasOwn(league, 'standingsRule'))) fail('world.domesticLeagues.standingsRule', 'must be given to every league of a world that uses the FIBA default or a later rule');
     // Postseasons are all or nothing, and a format seeding from the other division needs that division's postseason too.

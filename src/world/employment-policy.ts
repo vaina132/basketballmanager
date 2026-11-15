@@ -2,7 +2,7 @@ import type { ClubContractSummary, ContractOfferOptions, EmploymentContract, Pla
 import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
-import { MAX_SEASON_ROUNDS, seasonRounds, worldOf } from './career-world';
+import { fullWorldClubs, MAX_SEASON_ROUNDS, seasonRounds, worldOf } from './career-world';
 import { getCareerPlayers, getActiveCareerPlayers, getCareerWage, type CareerPlayerContext } from './player-catalog';
 import { getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { transferOfferReason } from './transfers-policy';
@@ -113,7 +113,7 @@ export function getAvailablePlayers(state: Pick<SeasonState, 'employment' | 'sea
 
 /** Stable catalog order and collision-free jerseys make registrations reproducible on import. */
 export function getContractedClubs(state: { employment: SeasonEmployment; clubs: readonly Team[] } & CareerPlayerContext, seasonNumber: number): readonly Team[] {
-  const definitions = worldOf(state).clubs;
+  const definitions = fullWorldClubs(worldOf(state));
   if (!state.employment.enabledSince || seasonNumber < state.employment.enabledSince.seasonNumber) return definitions;
   return definitions.map(definition => {
     const club = state.clubs.find(club => club.id === definition.id) ?? definition;
@@ -137,7 +137,7 @@ export function getContractedClubs(state: { employment: SeasonEmployment; clubs:
 const contractedByEmployment = new WeakMap<SeasonEmployment, WeakMap<object, Map<string, readonly Team[]>>>();
 const NO_ACADEMY = {};
 export function getContractedClubsForRound(state: { employment: SeasonEmployment; clubs: readonly Team[] } & CareerPlayerContext, seasonNumber: number, round: number): readonly Team[] {
-  const definitions = worldOf(state).clubs;
+  const definitions = fullWorldClubs(worldOf(state));
   if (!state.employment.enabledSince || seasonNumber < state.employment.enabledSince.seasonNumber) return definitions;
   let byAcademy = contractedByEmployment.get(state.employment);
   if (!byAcademy) { byAcademy = new WeakMap(); contractedByEmployment.set(state.employment, byAcademy); }

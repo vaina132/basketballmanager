@@ -8,6 +8,16 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.4d-2a, next-division clubs in the world (15 November 2026)
+
+- **Fixtures first:** `tests/fixtures/season53-lower-legacy-*` from unchanged commit `406e86e` (120 modules); `tests/season53-continuation.test.js` (3).
+- **Format 54:** `LowerDivision` is either format 53's identity list or a member list (`clubIds`) of clubs in the world; member lists require format 54, identity lists only format 53. `validateWorld`: leagues plus member lists cover every club; listed clubs are in no league and their players' profiles are `generated` (new profile source).
+- **World:** `withLowerDivisions(world, lists)` (`src/world/lower-division.ts`) adds the clubs with generated squads (target: weakest club of the division above minus 2), venue, sponsor, president, wages and contract lengths. `fullWorldClubs(world)` (the clubs a career starts with) replaces `world.clubs` where the career's clubs are meant: `createSeason`, contracted clubs, division coverage, facilities and commercial defaults, the employment catalog, `isWorldClub`, career setup counts. `worldPlayers` covers full-world clubs only, so next-division players are outside the catalog.
+- **Pure exchange** now takes member lists and a `strengthOf` callback; candidates exclude clubs already in the full world.
+- **Tests:** `tests/lower-division-world.test.js` (2: the built clubs and their refusals; a career through a season end and rollover in which they never appear in clubs, fixtures, the catalog, contracts or the ledger); updated `tests/background-clubs.test.js`, `tests/lower-division.test.js`.
+- **Verification:** full serial suite **2,577 tests / 189 files passed** (571 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.4d-2b, the exchange itself.
+
 ## Cloud continuation: step 3.4d-2 started (15 November 2026, work in progress)
 
 - `src/world/lower-division.ts` (pure, not yet wired into careers): `squadStrength`, `estimatedLowerDivisionOrder` (strength plus a seeded random element; the hash has a full avalanche finaliser, because plain FNV-1a gave nearly identical values to ids differing in their last character), `lowerDivisionExchanges` (per country: the lowest full division's relegated clubs leave; as many come up, returning or first time; Italy and France refused), `generateLowerDivisionSquad` (twelve fictional, labelled players around a target strength, with profiles, wages and contract lengths).

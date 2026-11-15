@@ -4,10 +4,10 @@ import { checkPlayerShape } from '../src/world/career-world';
 import { playerAgeOnDate } from '../src/data/development-player-profiles';
 import { DEVELOPMENT_WORLD } from '../src/data/development-world';
 
-const lower = (country, tier, count) => ({ country, tier, name: `${country} next division`, clubs: Array.from({ length: count }, (_, index) => ({ id: `${country.toLowerCase()}-n${index + 1}`, name: `N${index + 1}`, shortName: `N${index + 1}`, color: '#123456' })) });
+const lower = (country, tier, count) => ({ country, tier, name: `${country} next division`, clubIds: Array.from({ length: count }, (_, index) => `${country.toLowerCase()}-n${index + 1}`) });
 const league = (id, country, tier, clubIds) => ({ id, name: id, country, tier, clubIds });
 const background = (id, country, since = 2) => ({ id, name: id, shortName: id.slice(0, 3), color: '#654321', country, origin: 'relegated', since, players: DEVELOPMENT_WORLD.clubs[0].players });
-const exchange = overrides => lowerDivisionExchanges({ seed: 7, seasonNumber: 1, leagues: [], relegated: new Map(), lowerDivisions: [], background: [], returningStrength: club => squadStrength(club.players), generatedStrength: () => 40, ...overrides });
+const exchange = overrides => lowerDivisionExchanges({ seed: 7, seasonNumber: 1, leagues: [], relegated: new Map(), lowerDivisions: [], background: [], strengthOf: () => 40, ...overrides });
 
 describe('the estimated next-division table (step 3.4d-2, work in progress)', () => {
   it('ranks by squad strength plus a seeded random element, independent of input order and match randomness', () => {
@@ -32,17 +32,21 @@ describe('leaving and joining at a season end (step 3.4d-2, work in progress)', 
     expect(result.joining.every(entry => entry.clubId.startsWith('germany-n') && !entry.returning)).toBe(true);
   });
 
-  it('uses the lowest full division of a two-division country, lets clubs that left earlier return, and never brings back a club leaving now', () => {
+  it('uses the lowest full division of a two-division country, lets clubs that left earlier return, and never brings back a club leaving now or one already in the full world', () => {
     const leagues = [league('acb', 'Spain', 1, ['s1', 's2', 's3', 's4']), league('feb', 'Spain', 2, ['f1', 'f2', 'f3', 'f4'])];
     // A strong returning club beats generated first-time clubs (40) by more than the random element.
     const strong = background('old-club', 'Spain');
-    const [result] = exchange({ leagues, relegated: new Map([['acb', ['s4']], ['feb', ['f4']]]), lowerDivisions: [lower('Spain', 3, 3)], background: [strong, background('f3', 'Spain')], returningStrength: club => club.id === 'old-club' ? 70 : 10 });
+    const [result] = exchange({ leagues, relegated: new Map([['acb', ['s4']], ['feb', ['f4']]]), lowerDivisions: [lower('Spain', 3, 3)], background: [strong, background('f3', 'Spain')], strengthOf: clubId => clubId === 'old-club' ? 70 : clubId === 'f3' ? 10 : 40 });
     expect(result.leagueId).toBe('feb');
     expect(result.leaving).toEqual(['f4']);
     expect(result.joining).toEqual([{ clubId: 'old-club', returning: true }]);
     // A club relegated now is not a candidate, even if a record of it exists.
-    const [again] = exchange({ leagues, relegated: new Map([['feb', ['f4']]]), lowerDivisions: [lower('Spain', 3, 3)], background: [background('f4', 'Spain')], returningStrength: () => 99 });
+    const [again] = exchange({ leagues, relegated: new Map([['feb', ['f4']]]), lowerDivisions: [lower('Spain', 3, 3)], background: [background('f4', 'Spain')], strengthOf: clubId => clubId === 'f4' ? 99 : 40 });
     expect(again.joining.map(entry => entry.clubId)).not.toContain('f4');
+    // A listed club already promoted into the full world is not a candidate either.
+    const promoted = [league('acb', 'Spain', 1, ['s1', 's2', 's3', 's4']), league('feb', 'Spain', 2, ['f1', 'f2', 'f3', 'spain-n1'])];
+    const [third] = exchange({ leagues: promoted, relegated: new Map([['feb', ['f3']]]), lowerDivisions: [lower('Spain', 3, 2)], strengthOf: clubId => clubId === 'spain-n1' ? 99 : 40 });
+    expect(third.joining).toEqual([{ clubId: 'spain-n2', returning: false }]);
   });
 
   it('leaves countries without a list alone, refuses Italy and France, a misplaced division and too few candidates', () => {

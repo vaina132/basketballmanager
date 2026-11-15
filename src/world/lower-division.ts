@@ -1,6 +1,10 @@
-import type { BackgroundClub, LowerDivision } from '../domain/background';
-import type { Player, PlayerAttributes, Position } from '../domain/types';
-import { NO_LOWER_DIVISION_COUNTRIES } from './career-world';
+import type { BackgroundClub, LowerDivisionIdentities, LowerDivisionMembers } from '../domain/background';
+import type { Player, PlayerAttributes, Position, Team } from '../domain/types';
+import type { CareerWorld } from '../domain/world';
+import type { ClubFinanceDefinition } from '../data/development-finances';
+import type { DevelopmentPresident } from '../data/development-presidents';
+import type { DevelopmentPlayerProfile } from '../data/development-player-profiles';
+import { NO_LOWER_DIVISION_COUNTRIES, validateWorld } from './career-world';
 import type { DomesticLeague } from './divisions';
 import { overallRating } from './overall-rating';
 import { REAL_WORLD_RULES, realWorldWage } from './real-world';
@@ -60,14 +64,13 @@ export interface LowerDivisionExchange {
 
 /**
  * The exchanges at the end of `seasonNumber`. `relegated` gives each league's decided relegated clubs; only the lowest
- * full division of a country with a next-division list loses them. Candidates are the listed clubs and the clubs that
- * left earlier, minus those leaving now; returning clubs are rated by their squads (`returningStrength`), first-time
- * clubs at `generatedStrength` of the league they would join.
+ * full division of a country with a next-division list loses them. Candidates are the country's clubs outside the full
+ * world this season: listed next-division clubs that have never joined (their generated squads) and clubs that left
+ * earlier (their squads when they left), minus those leaving now. `strengthOf` rates each candidate's squad.
  */
 export function lowerDivisionExchanges(input: {
   seed: number; seasonNumber: number; leagues: readonly DomesticLeague[]; relegated: ReadonlyMap<string, readonly string[]>;
-  lowerDivisions: readonly LowerDivision[]; background: readonly BackgroundClub[];
-  returningStrength: (club: BackgroundClub) => number; generatedStrength: (leagueId: string) => number;
+  lowerDivisions: readonly LowerDivisionMembers[]; background: readonly BackgroundClub[]; strengthOf: (clubId: string) => number;
 }): LowerDivisionExchange[] {
   const exchanges: LowerDivisionExchange[] = [];
   for (const division of input.lowerDivisions) {
@@ -78,13 +81,10 @@ export function lowerDivisionExchanges(input: {
     const leaving = [...(input.relegated.get(lowest.id) ?? [])];
     if (!leaving.length) continue;
     if (leaving.some(clubId => !lowest.clubIds.includes(clubId)) || new Set(leaving).size !== leaving.length) throw new Error('Only the division\'s own clubs can be relegated out of it.');
-    const returning = input.background.filter(club => club.country === division.country && !leaving.includes(club.id));
-    const listed = division.clubs.filter(club => !returning.some(item => item.id === club.id));
-    const generated = input.generatedStrength(lowest.id);
-    const order = estimatedLowerDivisionOrder(input.seed, input.seasonNumber, division.country, [
-      ...returning.map(club => ({ clubId: club.id, strength: input.returningStrength(club) })),
-      ...listed.map(club => ({ clubId: club.id, strength: generated })),
-    ]);
+    const inFullWorld = new Set(input.leagues.flatMap(league => league.clubIds));
+    const returning = input.background.filter(club => club.country === division.country && !leaving.includes(club.id) && !inFullWorld.has(club.id));
+    const firstTime = division.clubIds.filter(clubId => !inFullWorld.has(clubId) && !input.background.some(club => club.id === clubId));
+    const order = estimatedLowerDivisionOrder(input.seed, input.seasonNumber, division.country, [...returning.map(club => club.id), ...firstTime].map(clubId => ({ clubId, strength: input.strengthOf(clubId) })));
     if (order.length < leaving.length) throw new Error(`${division.country}'s next division has too few clubs to replace those relegated.`);
     exchanges.push({ country: division.country, leagueId: lowest.id, leaving, joining: order.slice(0, leaving.length).map(entry => ({ clubId: entry.clubId, returning: returning.some(club => club.id === entry.clubId) })) });
   }
@@ -155,4 +155,42 @@ export function generateLowerDivisionSquad(seed: number, clubId: string, seasonN
     squad.contracts[id] = REAL_WORLD_RULES.contractYears(age, hash(seed, id));
   });
   return squad;
+}
+
+/**
+ * Format 54: a world with each country's real next division built in. The clubs keep their real identities; their
+ * squads are generated (labelled `generated`) and rated just below the weakest club of the division they would join, and
+ * their venue, sponsor, president, wages and contract lengths are estimated as for real-club worlds. They start outside
+ * the full world and join it only when promoted.
+ */
+export function withLowerDivisions(world: CareerWorld, lists: readonly LowerDivisionIdentities[]): CareerWorld {
+  if (world.lowerDivisions?.length) throw new Error('This world already has its next divisions.');
+  const seed = hash(0, `lower-divisions:${world.id}`);
+  const strengths = new Map(world.clubs.map(club => [club.id, squadStrength(club.players)]));
+  const capital = Math.min(...world.presidents.map(president => president.seasonCapital));
+  const { arena } = REAL_WORLD_RULES;
+  const clubs: Team[] = [], finances: ClubFinanceDefinition[] = [], presidents: DevelopmentPresident[] = [];
+  const profiles: Record<string, DevelopmentPlayerProfile> = {}, wages: Record<string, number> = {}, contracts: Record<string, number> = {};
+  const lowerDivisions = lists.map(list => {
+    const own = world.domesticLeagues?.filter(league => league.country === list.country) ?? [];
+    const lowest = own.find(league => league.tier === Math.max(...own.map(item => item.tier)));
+    if (!lowest || list.tier !== lowest.tier + 1) throw new Error('A next division must sit directly below the country\'s lowest league.');
+    const target = Math.min(...lowest.clubIds.map(clubId => strengths.get(clubId)!)) - LOWER_DIVISION_RULES.generatedBelow;
+    for (const identity of list.clubs) {
+      const squad = generateLowerDivisionSquad(seed, identity.id, 1, world.startDate, target);
+      clubs.push({ ...identity, players: squad.players });
+      Object.assign(profiles, squad.profiles); Object.assign(wages, squad.wages); Object.assign(contracts, squad.contracts);
+      const capacity = arena.smallest, h = hash(seed, `club:${identity.id}`);
+      finances.push({ clubId: identity.id, venue: `${identity.name} Arena`, sponsor: world.sponsors[h % world.sponsors.length]!.name, capacity, referenceDemand: Math.round(capacity * arena.fillFrom / arena.step) * arena.step });
+      presidents.push({ clubId: identity.id, name: `${FIRST[(h >>> 4) % FIRST.length]} ${LAST[(h >>> 12) % LAST.length]}`, generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital });
+    }
+    return { country: list.country, tier: list.tier, name: list.name, clubIds: list.clubs.map(club => club.id) };
+  });
+  const next: CareerWorld = {
+    ...world, clubs: [...world.clubs, ...clubs], playerProfiles: { ...world.playerProfiles, ...profiles }, wages: { ...world.wages, ...wages },
+    ...(world.playerContracts ? { playerContracts: { ...world.playerContracts, ...contracts } } : {}),
+    finances: [...world.finances, ...finances], presidents: [...world.presidents, ...presidents], lowerDivisions,
+  };
+  validateWorld(next);
+  return next;
 }

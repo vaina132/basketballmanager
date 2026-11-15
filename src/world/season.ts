@@ -23,7 +23,7 @@ import type { ManagerProfile } from '../domain/manager';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-league';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import type { CareerWorld } from '../domain/world';
-import { MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
+import { fullWorldClubs, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { injuriesFromMatch, isRecovering } from './health';
 import { createTraining, developClub, processTrainingWeek } from './training';
@@ -335,8 +335,8 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
 function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   validateWorld(world);
-  managedClubId ??= world.clubs[0]!.id;
-  if (!world.clubs.some(club => club.id === managedClubId)) throw new Error(world.id === DEVELOPMENT_WORLD.id ? 'Choose a club from the development league.' : 'Choose a club from this league.');
+  managedClubId ??= fullWorldClubs(world)[0]!.id;
+  if (!fullWorldClubs(world).some(club => club.id === managedClubId)) throw new Error(world.id === DEVELOPMENT_WORLD.id ? 'Choose a club from the development league.' : 'Choose a club from this league.');
   if (!['standard', 'reduced', 'off'].includes(injuryMode)) throw new Error('Choose a valid season injury setting.');
   if (typeof trainingEnabled !== 'boolean') throw new Error('Choose a valid training setting.');
   if (typeof coachingEnabled !== 'boolean') throw new Error('Choose a valid coaching setting.');
@@ -364,7 +364,8 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   if (typeof negotiationsEnabled !== 'boolean' || negotiationsEnabled && !employmentEnabled) throw new Error('Contract negotiations require enabled player contracts and a valid negotiation setting.');
   if (typeof marketEnabled !== 'boolean' || marketEnabled && !negotiationsEnabled) throw new Error('The offseason calendar requires enabled negotiations and a valid setting.');
   const managerProfile = manager === null ? null : validateManagerProfile(manager, DEVELOPMENT_START_DATE);
-  const clubs = world.clubs;
+  // Next-division clubs (format 54) start outside the full world.
+  const clubs = fullWorldClubs(world);
   const divisions = openingDivisions(world);
   const fixtures = createSchedule(clubs, 1, { world, divisions });
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId));

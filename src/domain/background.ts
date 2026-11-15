@@ -26,12 +26,21 @@ export interface SeasonBackground {
 }
 
 /**
- * A country's real next division below its lowest full division (identities only; squads are generated when a club
- * first joins the full world). Italy and France have none for now (owner decision, 15 November 2026).
+ * A country's real next division below its lowest full division. Italy and France have none for now (owner decision,
+ * 15 November 2026). Format 53 listed identities only (the game never produced such a list); from format 54 the clubs
+ * are in the world itself, with generated squads and estimated club data, outside every opening league, and join the
+ * full world only when promoted.
  */
-export interface LowerDivision {
+export interface LowerDivisionIdentities {
   country: string;
   tier: number;
   name: string;
   clubs: { id: string; name: string; shortName: string; color: string }[];
 }
+export interface LowerDivisionMembers {
+  country: string;
+  tier: number;
+  name: string;
+  clubIds: string[];
+}
+export type LowerDivision = LowerDivisionIdentities | LowerDivisionMembers;

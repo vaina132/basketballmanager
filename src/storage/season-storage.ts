@@ -42,7 +42,7 @@ import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
-import { isWorldClub, roundKey, roundOrdinal, seasonRounds, validateWorld, worldOf, worldPlayer, worldRounds } from '../world/career-world';
+import { fullWorldClubs, isMemberList, isWorldClub, roundKey, roundOrdinal, seasonRounds, validateWorld, worldOf, worldPlayer, worldRounds } from '../world/career-world';
 import type { CareerWorld, WorldContext } from '../domain/world';
 import { getCareerPlayers, getCareerPlayer, getCareerWage, type CareerPlayerContext } from '../world/player-catalog';
 import { MAX_MATCH_PERIODS } from '../engine/match';
@@ -104,7 +104,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -132,7 +132,7 @@ function validateDivisionShape(value: unknown, world: CareerWorld, path: string,
     if (league.id !== opening.id || !Array.isArray(league.clubIds) || league.clubIds.length !== opening.clubIds.length) fail(`${path}.leagues[${index}]`, 'must list the world\'s league at its opening size');
     for (const id of league.clubIds as unknown[]) { if (typeof id !== 'string' || seen.has(id) || !world.clubs.some(club => club.id === id)) fail(`${path}.leagues[${index}].clubIds`, 'must assign each club to exactly one league'); seen.add(id); }
   }
-  if (seen.size !== world.clubs.length) fail(`${path}.leagues`, 'must cover every club');
+  if (seen.size !== fullWorldClubs(world).length) fail(`${path}.leagues`, 'must cover every club of the full world');
   return divisions as unknown as DomesticDivisions;
 }
 
@@ -1071,7 +1071,7 @@ function validateTicketPrice(value: unknown, path: string): number {
 
 function clubsForEmploymentYear(employment: SeasonEmployment | undefined, seasonNumber: number, round?: number, context: CareerPlayerContext = {}): readonly Team[] {
   round ??= seasonRounds(context);
-  const definitions = worldOf(context).clubs;
+  const definitions = fullWorldClubs(worldOf(context));
   return employment ? getContractedClubsForRound({ ...context, employment, clubs: definitions }, seasonNumber, round) : definitions;
 }
 
@@ -1109,10 +1109,10 @@ function validateFacilitiesShape(value: unknown, state: SeasonState, version: nu
   const funding = version >= 32;
   const maintenance = version >= 36;
   const fields = record(value, 'facilities', ['model', 'enabledSince', 'delegated', 'projects', 'events', ...(funding ? ['fundingSince'] : []), ...(maintenance ? ['maintenanceSince'] : [])]);
-  const { fundingSince: _fundingDefault, maintenanceSince: _maintenanceDefault, ...legacyDefaults } = createFacilities(worldOf(state).clubs, state.managedClubId);
+  const { fundingSince: _fundingDefault, maintenanceSince: _maintenanceDefault, ...legacyDefaults } = createFacilities(fullWorldClubs(worldOf(state)), state.managedClubId);
   const defaults = { ...legacyDefaults, ...(funding ? { fundingSince: null } : {}), ...(maintenance ? { maintenanceSince: null } : {}) };
   if (fields.model !== 'facilities-1') fail('facilities.model', 'is unsupported');
-  const policies = record(fields.delegated, 'facilities.delegated', worldOf(state).clubs.map(club => club.id));
+  const policies = record(fields.delegated, 'facilities.delegated', fullWorldClubs(worldOf(state)).map(club => club.id));
   for (const [id, policy] of Object.entries(policies)) if (typeof policy !== 'boolean') fail(`facilities.delegated.${id}`, 'must be boolean');
   if (!Array.isArray(fields.projects) || !Array.isArray(fields.events) || fields.events.length > 20000 || fields.projects.length > fields.events.length) fail('facilities', 'must retain bounded project and command histories');
   if (fields.enabledSince === null) {
@@ -1281,7 +1281,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
   if (status === 'complete' && seasonNumber < MAX_SEASON_NUMBER) {
     if (!sameData(fields.market, { seasonNumber: seasonNumber + 1 })) fail('employment.market', 'must identify the next season after the final matchday');
   } else if (fields.market !== null) fail('employment.market', 'must be closed during the active season');
-  const worldClubs = worldOf(context).clubs, wages = worldOf(context).wages;
+  const worldClubs = fullWorldClubs(worldOf(context)), wages = worldOf(context).wages;
   const catalog = worldClubs.flatMap(club => club.players.map(player => ({ player, clubId: club.id })));
   const catalogById = new Map(getCareerPlayers(context, seasonNumber, round).map(player => [player.id, { player }]));
   const clubIds = worldClubs.map(club => club.id);
@@ -2585,6 +2585,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 49 && world.domesticLeagues?.some(league => Object.hasOwn(league, 'postseason'))) fail('world.domesticLeagues.postseason', 'requires format 49 or later');
   if (version < 50 && Object.hasOwn(world, 'playerContracts')) fail('world.playerContracts', 'requires format 50 or later');
   if (version < 53 && Object.hasOwn(world, 'lowerDivisions')) fail('world.lowerDivisions', 'requires format 53 or later');
+  // Format 53 listed identities only; from format 54 the next-division clubs are in the world.
+  if (world.lowerDivisions?.some(entry => isMemberList(entry) !== (version >= 54))) fail('world.lowerDivisions', version >= 54 ? 'must list clubs of the world from format 54' : 'requires format 54 to list clubs of the world');
   // Format 50: careers whose leagues have postseasons record each season's divisions.
   const usesDivisions = version >= 50 && !!world.domesticLeagues?.some(league => league.postseason);
   if (usesDivisions !== Object.hasOwn(state, 'divisions')) fail('divisions', usesDivisions ? 'must record this season\'s division memberships' : 'requires format 50 and leagues with postseasons');
@@ -2604,10 +2606,10 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const academy = version >= 25 ? validateAcademyShape(state.academy, state as unknown as SeasonState, version) : createAcademy();
   const lifecycle = version >= 26 ? validateLifecycleShape(state.lifecycle, state as unknown as SeasonState) : createLifecycle();
   const youthCompetition = version >= 27 ? validateYouthCompetitionShape(state.youthCompetition, state as unknown as SeasonState, version) : createYouthCompetition();
-  const facilities = version >= 28 ? validateFacilitiesShape(state.facilities, state as unknown as SeasonState, version) : createFacilities(world.clubs, state.managedClubId);
+  const facilities = version >= 28 ? validateFacilitiesShape(state.facilities, state as unknown as SeasonState, version) : createFacilities(fullWorldClubs(world), state.managedClubId);
   const relationships = version >= 29 ? state.relationships as unknown as SeasonRelationships : createRelationships();
   const board = version >= 30 ? state.board as unknown as SeasonBoard : createBoard();
-  const commercial = version >= 31 ? state.commercial as unknown as SeasonCommercial : createCommercial(world.clubs, state.managedClubId as string);
+  const commercial = version >= 31 ? state.commercial as unknown as SeasonCommercial : createCommercial(fullWorldClubs(world), state.managedClubId as string);
   if (version >= 35) validateRivalries(state.rivalries, state as unknown as SeasonState);
   const rivalries = version >= 35 ? state.rivalries as unknown as SeasonRivalries : createRivalries();
   const careerRecord = version >= 37 ? state.career as unknown as SeasonCareer : undefined;

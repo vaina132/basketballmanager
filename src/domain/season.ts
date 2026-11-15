@@ -113,7 +113,8 @@ export interface DomesticDivisions {
 /** Format 51 adds the FIBA Appendix D standings rule, the labelled default for new worlds' leagues without a sourced rule. */
 /** Format 52 adds the verified ACB, BBL and FIP standings rules for new worlds' Spanish, German and Italian leagues. */
 /** Format 53 adds the record of clubs outside the full world (`background`) and the world's lower-division lists. */
-export const SEASON_SCHEMA_VERSION = 53;
+/** Format 54 builds next-division clubs into the world (generated squads), outside the full world until promoted. */
+export const SEASON_SCHEMA_VERSION = 54;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

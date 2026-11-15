@@ -3,6 +3,7 @@ import { testWorld } from './world-fixtures';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { validateWorld } from '../src/world/career-world';
+import { withLowerDivisions } from '../src/world/lower-division';
 import { backgroundClubFrom, backgroundMatchday, backgroundSquad, createBackground, validateBackgroundClub } from '../src/world/background';
 import { currentSeasonFile } from './helpers/season-format';
 
@@ -18,12 +19,18 @@ const third = (clubs = 4) => ({ country: 'Testland', tier: 3, name: 'Third divis
 const roundTrip = state => parseSeason(serializeSeasonCompact(state));
 
 describe('the world\'s lower-division lists (step 3.4d-1)', () => {
-  it('accepts a country\'s real next division below its lowest league and keeps it in saves', () => {
+  it('accepts a format-53 identity list in the world, but saves carry the clubs themselves from format 54', () => {
     const world = divisionWorld([third()]);
     expect(() => validateWorld(world)).not.toThrow();
     const state = createSeason({ world, managedClubId: world.clubs[0].id });
-    expect(state.world.lowerDivisions).toEqual([third()]);
-    expect(roundTrip(state)).toEqual(state);
+    expect(() => serializeSeasonCompact(state)).toThrow(/must list clubs of the world from format 54/);
+    const built = withLowerDivisions(divisionWorld(), [third()]);
+    expect(built.lowerDivisions).toEqual([{ country: 'Testland', tier: 3, name: 'Third division', clubIds: third().clubs.map(club => club.id) }]);
+    const career = createSeason({ world: built, managedClubId: built.clubs[0].id });
+    expect(roundTrip(career)).toEqual(career);
+    const envelope = JSON.parse(serializeSeason(career));
+    envelope.formatVersion = 53; envelope.state.schemaVersion = 53;
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/requires format 54/);
   });
 
   it('refuses a wrong tier, a country outside the world, Italy and France, and clubs already in the world or listed twice', () => {
@@ -41,7 +48,7 @@ describe('the world\'s lower-division lists (step 3.4d-1)', () => {
   });
 
   it('refuses lower-division lists disguised as format 52', () => {
-    const envelope = JSON.parse(serializeSeason(createSeason({ world: divisionWorld([third()]) })));
+    const envelope = JSON.parse(serializeSeason(createSeason({ world: withLowerDivisions(divisionWorld(), [third()]) })));
     envelope.formatVersion = 52; envelope.state.schemaVersion = 52; delete envelope.state.background;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/requires format 53/);
   });

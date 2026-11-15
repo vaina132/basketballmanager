@@ -4,8 +4,9 @@ export interface DevelopmentPlayerProfile {
   /**
    * Authored fictional dates, a date estimated from a real player's age (1 January of the birth year), or the date of a
    * generated reserve who fills a real squad the data does not complete (sprint 3), or an official researched date.
+   * `generated`: a fictional player of a next-division club's generated squad (step 3.4d-2).
    */
-  readonly source: 'fictional-development' | 'estimated-from-age' | 'generated-reserve' | 'official-profile';
+  readonly source: 'fictional-development' | 'estimated-from-age' | 'generated-reserve' | 'official-profile' | 'generated';
   readonly positionSource?: 'estimated' | 'official' | 'provider' | 'unverified';
 }
 

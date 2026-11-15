@@ -147,7 +147,7 @@ describe('event-authored court scenes', () => {
   it('authors the new lineup immediately when a paused critical replacement is made', () => {
     const initial = setInjuryMode(createMatch(7), 'off');
     const outgoing = initial.lineups.home[0]!, incoming = initial.home.players[5]!.id;
-    initial.injuries[outgoing] = { kind: 'ankle', occurredAtSeconds: 0 };
+    initial.injuries[outgoing] = { kind: 'ankle-sprain', occurredAtSeconds: 0 };
     const paused = stepMatch(initial);
     expect(paused.requiredSubstitutions).toEqual([{ side: 'home', playerId: outgoing, reason: 'injured' }]);
     const replaced = substitutePlayer(paused, 'home', outgoing, incoming);

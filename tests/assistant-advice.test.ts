@@ -52,7 +52,7 @@ describe('assistant advice from owned squad state', () => {
     const fixture = skills(create(), 'home', { passing: 10, defense: 10, stamina: 10, twoPoint: 10, threePoint: 11 });
     expect(getAssistantAdvice(fixture, 'home', basic).tactics).not.toEqual(getAssistantAdvice(fixture, 'home', coach).tactics);
     const out = fixture.lineups.home[0]!;
-    fixture.injuries[out] = { kind: 'ankle', occurredAtSeconds: 0 };
+    fixture.injuries[out] = { kind: 'ankle-sprain', occurredAtSeconds: 0 };
     for (const adviser of [basic, coach]) {
       const advice = getAssistantAdvice(fixture, 'home', adviser);
       expect(advice.rotation).toMatchObject({ outId: out, priority: 'required' });
@@ -87,7 +87,7 @@ describe('assistant advice from owned squad state', () => {
     altered.home = { ...altered.home, players: altered.home.players.map(player => altered.lineups.home.includes(player.id) ? player : { ...player, attributes: { ...player.attributes, passing: 1, threePoint: 1, defense: 1 } }) };
     expect(getAssistantAdvice(altered, 'home', coach).tactics).toEqual(getAssistantAdvice(state, 'home', coach).tactics);
     const outId = altered.lineups.home[0]!;
-    altered.injuries[outId] = { kind: 'muscle', occurredAtSeconds: 0 };
+    altered.injuries[outId] = { kind: 'hamstring', occurredAtSeconds: 0 };
     const expected = getAssistantAdvice(altered, 'home', coach).tactics;
     altered.home = { ...altered.home, players: altered.home.players.map(player => player.id === outId ? { ...player, attributes: { ...player.attributes, passing: 1, threePoint: 1, defense: 1 } } : player) };
     expect(getAssistantAdvice(altered, 'home', coach).tactics).toEqual(expected);

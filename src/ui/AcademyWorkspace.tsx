@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { clubRosterLimit } from '../world/club-roster-policy'
 import type { SeasonState } from '../domain/season'
+import { injuryLabel } from '../domain/injuries'
 import type { AcademyWeekFullPlayer } from '../domain/academy'
 import type { TrainingFocus } from '../domain/training'
 import type { PlayerAttributes } from '../domain/types'
@@ -49,7 +50,7 @@ function AcademyProgress({ row }: { row: AcademyPlayerView }) {
 
 function AcademyReadiness({ season, row }: { season: SeasonState; row: AcademyPlayerView }) {
   const status = getYouthPlayerStatus(season, row.player.id)
-  return <div className="academy-readiness" data-youth-health={row.player.id}><StaminaMeter value={status.condition} label={`${row.player.name} current condition`} compact />{status.injury && !status.available && <span className="academy-injury-label"><Icon name="medical" size={12} /> {status.injury.kind === 'ankle' ? 'Ankle injury' : 'Muscle injury'}{status.returnOn && <><br />Back {scoutingDate(status.returnOn)}</>}</span>}</div>
+  return <div className="academy-readiness" data-youth-health={row.player.id}><StaminaMeter value={status.condition} label={`${row.player.name} current condition`} compact />{status.injury && !status.available && <span className="academy-injury-label"><Icon name="medical" size={12} /> {injuryLabel(status.injury.kind)}{status.returnOn && <><br />Back {scoutingDate(status.returnOn)}</>}</span>}</div>
 }
 
 function PromotionReview({ season, row, busy, onOffer, onWithdraw, onClose }: { season: SeasonState; row: AcademyPlayerView; busy: boolean; onOffer: AcademyWorkspaceProps['onPromoteAcademy']; onWithdraw: AcademyWorkspaceProps['onWithdrawPromotion']; onClose: () => void }) {

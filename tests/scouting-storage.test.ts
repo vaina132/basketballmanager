@@ -23,10 +23,10 @@ const firstPositive = (state: SeasonState): ScoutingReview => office(state).revi
 
 let initial: SeasonState, pending: SeasonState, second: SeasonState, third: SeasonState, fourth: SeasonState, completed: SeasonState, nextYear: SeasonState;
 beforeAll(() => {
-  initial = createSeason(9, clubId, 'standard', true, true, true, true, null, true, true);
-  pending = assignScouting(assignScouting(setShortlisted(initial, 'atl-10', true), 'atl-8'), 'atl-10');
+  initial = createSeason(325, clubId, 'standard', true, true, true, true, null, true, true);
+  pending = assignScouting(assignScouting(setShortlisted(initial, 'atl-10', true), 'atl-9'), 'atl-10');
   second = play(pending);
-  third = play(assignScouting(assignScouting(second, 'atl-8'), 'atl-10'));
+  third = play(assignScouting(assignScouting(second, 'atl-9'), 'atl-10'));
   fourth = play(assignScouting(third, 'atl-10'));
   completed = complete(fourth);
   const own = completed.clubs.find(club => club.id === clubId)!;
@@ -60,10 +60,10 @@ describe('scouting report persistence', () => {
   });
 
   it('retains a no-minutes review without inventing an observation or raising knowledge level', () => {
-    const reviews = office(third).reviews.filter(review => review.playerId === 'atl-8');
+    const reviews = office(third).reviews.filter(review => review.playerId === 'atl-9');
     expect(reviews.map(review => review.outcome)).toEqual(['observed', 'no-minutes']);
     expect(reviews[1]!.attributes).toBeNull();
-    const knowledge = getPlayerKnowledge(parseSeason(serializeSeason(third)), 'atl-8');
+    const knowledge = getPlayerKnowledge(parseSeason(serializeSeason(third)), 'atl-9');
     expect(knowledge.level).toBe(1);
     expect(knowledge.observations).toBe(1);
     expect(knowledge.observedOn).toBe(second.fixtures.find(fixture => fixture.round === 1)!.date);
@@ -155,9 +155,10 @@ describe('scouting save validation', () => {
 
   it('rejects current rosters replacing the recorded origin of moved-player observations', () => {
     const state = structuredClone(nextYear);
-    const review = Object.values(state.scouting.clubs).flatMap(club => club.reviews).find(review => state.clubs.find(club => club.players.some(player => player.id === review.playerId))?.id !== review.clubId)!;
-    const destination = state.clubs.find(club => club.players.some(player => player.id === review.playerId));
-    review.clubId = destination?.id ?? clubId;
+    const currentClub = (playerId: string) => state.clubs.find(club => club.players.some(player => player.id === playerId))?.id;
+    const review = Object.values(state.scouting.clubs).flatMap(club => club.reviews).find(review => currentClub(review.playerId) !== undefined && currentClub(review.playerId) !== review.clubId);
+    expect(review).toBeDefined();
+    review!.clubId = currentClub(review!.playerId)!;
     expect(() => validateSeasonState(state)).toThrow();
   });
 

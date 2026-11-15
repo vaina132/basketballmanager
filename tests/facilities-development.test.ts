@@ -43,7 +43,7 @@ describe('facility effects on earned development', () => {
 
   it('never awards practice for rehabilitation or recovery sessions and attributes skill caps honestly', () => {
     const input = practice(), player = input.clubs.find(club => club.id === clubId)!.players[0]!;
-    const injured = processTrainingWeek({ ...input, injuries: [{ id: 'injury-test', playerId: player.id, clubId, fixtureId: 'test', kind: 'ankle', occurredOn: input.fromDate, returnOn: dateForRound(6) }] });
+    const injured = processTrainingWeek({ ...input, injuries: [{ id: 'injury-test', playerId: player.id, clubId, fixtureId: 'test', kind: 'ankle-sprain', occurredOn: input.fromDate, returnOn: dateForRound(6) }] });
     expect(injured.training.lastWeek!.players[player.id]).toMatchObject({ availableDays: 0, facility: { earnedPoints: 0 } });
     expect(total(injured.training.lastWeek!.players[player.id]!.gains)).toBe(0);
     const recovery = processTrainingWeek({ ...input, training: { ...input.training, plans: { ...input.training.plans, [clubId]: { ...input.training.plans[clubId]!, intensity: 'recovery' } } } });

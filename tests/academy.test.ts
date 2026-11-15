@@ -171,7 +171,7 @@ describe('academy promotion through normal recruitment', () => {
 
   it('uses the same guarded academy offers when AI clubs repair injury shortages', () => {
     const team = initial.clubs.find(team => team.id !== club)!;
-    const injuries = team.players.slice(0, 3).map((player, index) => ({ id: `policy-injury-${index}`, playerId: player.id, clubId: team.id, kind: 'ankle' as const, fixtureId: 'policy', occurredOn: initial.date, returnOn: dateForRound(4) }));
+    const injuries = team.players.slice(0, 3).map((player, index) => ({ id: `policy-injury-${index}`, playerId: player.id, clubId: team.id, kind: 'ankle-sprain' as const, fixtureId: 'policy', occurredOn: initial.date, returnOn: dateForRound(4) }));
     const scheduled = scheduleInSeasonRecruitment({ ...initial, injuries });
     const offer = scheduled.recruitment.offers.find(offer => offer.clubId === team.id && offer.academyProspectId)!;
     expect(offer).toBeDefined();

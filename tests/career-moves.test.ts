@@ -21,8 +21,8 @@ import { currentSeasonFile } from './helpers/season-format';
 
 const FROM = 'rhine-falcons';
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
-// Seed 10: Rhine Falcons finish third and Adriatic Comets' season ends Under pressure, so Adriatic offers its job.
-const career = (careerMoves = true, seed = 10) => createSeason({ seed, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves });
+// Seed 6: Rhine Falcons keep their job and Adriatic Comets' season ends Under pressure, so Adriatic offers its job.
+const career = (careerMoves = true, seed = 6) => createSeason({ seed, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves });
 /** Take the best job offered at the end of the season being finished; the test fails if nobody offers one. */
 function takeBestOffer(finished: SeasonState): SeasonState {
   const offer = previewSeasonEnd(finished)?.offers[0];

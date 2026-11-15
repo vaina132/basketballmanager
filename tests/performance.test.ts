@@ -70,7 +70,7 @@ describe('committed current-season performance', () => {
     const state = commit(initial, 1, {
       [played!.id]: { secondsPlayed: 90, fieldGoalsMade: 1, fieldGoalsAttempted: 1 },
       [injured!.id]: { condition: 35 }, [dnp!.id]: { condition: 61 }, [foulOnly!.id]: { fouls: 1 },
-    }, { injuries: { [played!.id]: 'ankle', [injured!.id]: 'muscle' } });
+    }, { injuries: { [played!.id]: 'ankle-sprain', [injured!.id]: 'hamstring' } });
     expect(playerRow(state, played!.id)).toMatchObject({ games: 1, clubGames: 1, log: [{ participation: 'played' }] });
     expect(playerRow(state, injured!.id)).toMatchObject({ games: 0, clubGames: 1, log: [{ participation: 'injured' }] });
     expect(playerRow(state, dnp!.id)).toMatchObject({ games: 0, clubGames: 1, log: [{ participation: 'dnp' }] });

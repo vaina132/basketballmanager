@@ -7,7 +7,7 @@ import { parseSeason, serializeSeason, validateSeasonState } from '../src/storag
 import { advanceSeason, createSeason, managedSide } from '../src/world/season';
 import { createSeasonInjury, getPlayerHealth, getSeasonInjuries } from '../src/world/health';
 
-const clubId = 'atlantic-pilots', playerId = 'atl-8';
+const clubId = 'atlantic-pilots', playerId = 'atl-9';
 let live: SeasonState, firstFinished: SeasonState, second: SeasonState, third: SeasonState;
 const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: simulateToEnd(setAutoSubstitutions(season.activeMatch!, managedSide(season), true)) });
 const restore = (season: SeasonState) => parseSeason(serializeSeason(season));
@@ -21,7 +21,7 @@ function legacyText(season: SeasonState): string {
 }
 
 beforeAll(() => {
-  const season = createSeason(9, clubId, 'standard', false, false, false);
+  const season = createSeason(325, clubId, 'standard', false, false, false);
   let match = setAutoSubstitutions(season.activeMatch!, managedSide(season), true);
   for (let count = 0; count < 2000 && !match.injuries[playerId] && match.status !== 'finished'; count += 1) match = stepMatch(match);
   expect(match.injuries[playerId]).toBeDefined();
@@ -67,6 +67,8 @@ describe('health-aware season persistence', () => {
     expect(restored.activeMatch!.preExistingInjuries ?? []).not.toContain(playerId);
     expect(restored.injuries.filter(injury => injury.playerId === playerId)).toHaveLength(1);
     expect(restored.injuries.find(injury => injury.playerId === playerId)?.returnOn).toBe('2026-09-15');
+    expect(restored.activeMatch!.injuryRisk?.[playerId]).toEqual({ 'knee-minor': 2 });
+    expect(restored).toEqual(third);
   });
 
   it('round-trips a complete health-enabled season and its final result boundary', () => {
@@ -89,16 +91,16 @@ describe('strict health history and eligibility validation', () => {
     ['altered occurrence date', state => { state.injuries[0]!.occurredOn = '2026-09-04'; }],
     ['early clearance', state => { state.injuries[0]!.returnOn = '2026-09-12'; }],
     ['impossible clearance date', state => { state.injuries[0]!.returnOn = '2026-02-31'; }],
-    ['altered diagnosis', state => { state.injuries[0]!.kind = state.injuries[0]!.kind === 'muscle' ? 'ankle' : 'muscle'; }],
+    ['altered diagnosis', state => { state.injuries[0]!.kind = state.injuries[0]!.kind === 'hamstring' ? 'ankle-sprain' : 'hamstring'; }],
     ['unsupported episode field', state => { Object.assign(state.injuries[0]!, { rehabBonus: 10 }); }],
     ['invalid injury mode', state => { Object.assign(state, { injuryMode: 'rare' }); }],
     ['one-fixture mode override', state => { state.activeMatch!.injuryMode = 'off'; }],
-    ['foreign result diagnosis', state => { state.fixtures[0]!.result!.injuries.missing = 'ankle'; }],
+    ['foreign result diagnosis', state => { state.fixtures[0]!.result!.injuries.missing = 'ankle-sprain'; }],
     ['unsupported result diagnosis', state => { Object.assign(state.fixtures[0]!.result!.injuries, { [playerId]: 'unknown' }); }],
     ['erased result injury', state => { delete state.fixtures[0]!.result!.injuries[playerId]; }],
     ['removed inherited marker', state => { delete state.activeMatch!.preExistingInjuries; }],
     ['removed inherited injury', state => { delete state.activeMatch!.injuries[playerId]; }],
-    ['changed inherited diagnosis', state => { state.activeMatch!.injuries[playerId]!.kind = 'ankle'; }],
+    ['changed inherited diagnosis', state => { state.activeMatch!.injuries[playerId]!.kind = 'ankle-sprain'; }],
   ];
   it.each(mutations)('rejects %s without altering the original season', (_label, mutate) => {
     const damaged = structuredClone(second), original = structuredClone(second);
@@ -129,10 +131,10 @@ describe('strict health history and eligibility validation', () => {
     const winner = losingClub.id === fixture.homeClubId ? 'away' : 'home';
     const injured = losingClub.players.find(player => result.stats[player.id]!.secondsPlayed > 0)!;
     for (const player of losingClub.players) result.stats[player.id]!.fouls = player.id === injured.id ? 0 : 5;
-    result.injuries[injured.id] = 'ankle';
+    result.injuries[injured.id] = 'ankle-sprain';
     result.kind = 'default'; result.winnerClubId = winner === 'home' ? fixture.homeClubId : fixture.awayClubId;
     result.officialScore = result.score[winner] > result.score[winner === 'home' ? 'away' : 'home'] ? { ...result.score } : { home: winner === 'home' ? 2 : 0, away: winner === 'away' ? 2 : 0 };
-    season.injuries.push(createSeasonInjury(season.seed, fixture, losingClub.id, injured.id, 'ankle'));
+    season.injuries.push(createSeasonInjury(season.seed, fixture, losingClub.id, injured.id, 'ankle-sprain'));
     expect(restore(season)).toEqual(season);
   });
 

@@ -52,11 +52,11 @@ describe('scouting in the career calendar', () => {
   }, 30_000);
 
   it('records a zero-minute assignment without inventing a skill assessment', () => {
-    const injured = play(createSeason(9, 'aegean-waves', 'standard', true, true, true, true, null, true, true));
-    expect(injured.injuries.some(injury => injury.playerId === 'atl-8' && injury.returnOn > injured.date)).toBe(true);
-    const next = play(assignScouting(injured, 'atl-8'));
-    expect(next.scouting.clubs[next.managedClubId]!.reviews[0]).toMatchObject({ playerId: 'atl-8', outcome: 'no-minutes', attributes: null });
-    expect(getPlayerKnowledge(next, 'atl-8')).toMatchObject({ kind: 'unknown', observations: 0, ranges: null, attributes: null });
+    const injured = play(createSeason(325, 'aegean-waves', 'standard', true, true, true, true, null, true, true));
+    expect(injured.injuries.some(injury => injury.playerId === 'atl-9' && injury.returnOn > injured.date)).toBe(true);
+    const next = play(assignScouting(injured, 'atl-9'));
+    expect(next.scouting.clubs[next.managedClubId]!.reviews[0]).toMatchObject({ playerId: 'atl-9', outcome: 'no-minutes', attributes: null });
+    expect(getPlayerKnowledge(next, 'atl-9')).toMatchObject({ kind: 'unknown', observations: 0, ranges: null, attributes: null });
     expect(parseSeason(serializeSeason(next))).toEqual(next);
   });
 

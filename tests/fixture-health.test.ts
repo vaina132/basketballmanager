@@ -7,7 +7,7 @@ import { parseMatch, serializeMatch } from '../src/storage/match-storage';
 const home = FICTIONAL_HOME, away = FICTIONAL_AWAY;
 const automatic = { home: true, away: true };
 const injured = home.players[0]!.id;
-const carried = () => createFixtureMatch(47, home, away, { injuryMode: 'off', autoSubstitutions: automatic, preExistingInjuries: { [injured]: 'ankle', [away.players[1]!.id]: 'muscle' } });
+const carried = () => createFixtureMatch(47, home, away, { injuryMode: 'off', autoSubstitutions: automatic, preExistingInjuries: { [injured]: 'ankle-sprain', [away.players[1]!.id]: 'hamstring' } });
 const corrupt = (state: MatchState, edit: (state: MatchState) => void): string => {
   const envelope = JSON.parse(serializeMatch(state)) as { state: MatchState };
   edit(envelope.state);
@@ -31,7 +31,7 @@ describe('scheduled fixture carried injuries', () => {
     expect(state.lineups.away).not.toContain(away.players[1]!.id);
     expect(state.lineups.away).toHaveLength(5);
     expect(state.events.map(event => event.type)).toEqual(['tipoff']);
-    expect(state.injuries[injured]).toEqual({ kind: 'ankle', occurredAtSeconds: 0 });
+    expect(state.injuries[injured]).toEqual({ kind: 'ankle-sprain', occurredAtSeconds: 0 });
     expect(state.requiredSubstitutions).toEqual([]);
     expect(isPlayerEligible(state, injured)).toBe(false);
     expect(() => substitutePlayer(state, 'home', state.lineups.home[0]!, injured)).toThrow(/injured/);
@@ -65,7 +65,7 @@ describe('scheduled fixture carried injuries', () => {
   });
 
   it.each([2, 3, 4])('runs safely with %i healthy players under the development minimum', available => {
-    const health = Object.fromEntries(home.players.slice(available).map(player => [player.id, 'muscle' as const]));
+    const health = Object.fromEntries(home.players.slice(available).map(player => [player.id, 'hamstring' as const]));
     const state = createFixtureMatch(8, home, away, { injuryMode: 'off', autoSubstitutions: automatic, preExistingInjuries: health });
     expect(state.lineups.home).toHaveLength(available);
     expect(state.status).toBe('ready');
@@ -78,7 +78,7 @@ describe('scheduled fixture carried injuries', () => {
   it.each(['home', 'away'] as Side[])('awards an immediate %s shortage default without fake play or injury events', side => {
     const team = side === 'home' ? home : away;
     for (const available of [0, 1]) {
-      const health = Object.fromEntries(team.players.slice(available).map(player => [player.id, 'ankle' as const]));
+      const health = Object.fromEntries(team.players.slice(available).map(player => [player.id, 'ankle-sprain' as const]));
       const state = createFixtureMatch(8, home, away, { injuryMode: 'off', preExistingInjuries: health });
       expect(state.status).toBe('finished');
       expect(state.result).toEqual({ kind: 'default', winner: side === 'home' ? 'away' : 'home', officialScore: side === 'home' ? { home: 0, away: 2 } : { home: 2, away: 0 } });
@@ -93,8 +93,8 @@ describe('scheduled fixture carried injuries', () => {
   });
 
   it('rejects invalid factory health identities and kinds', () => {
-    expect(() => createFixtureMatch(1, home, away, { preExistingInjuries: { unknown: 'ankle' } })).toThrow(/known players/);
-    expect(() => createFixtureMatch(1, home, away, { preExistingInjuries: { [injured]: 'broken' as 'ankle' } })).toThrow(/injury kinds/);
+    expect(() => createFixtureMatch(1, home, away, { preExistingInjuries: { unknown: 'ankle-sprain' } })).toThrow(/known players/);
+    expect(() => createFixtureMatch(1, home, away, { preExistingInjuries: { [injured]: 'broken' as 'ankle-sprain' } })).toThrow(/injury kinds/);
   });
 
   it('rejects forged carried availability, exposure, actors and duplicate fresh injuries', () => {

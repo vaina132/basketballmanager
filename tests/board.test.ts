@@ -106,8 +106,8 @@ describe('communicated board mandates and evidence-based confidence', () => {
   it('credits actual carried absences, excludes new injuries and honors earlier rehabilitation clearance', () => {
     let state = committed(enableBoard(initial(), 'career'), 4);
     const player = state.clubs.find(club => club.id === clubId)!.players[0]!, first = state.fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(clubId))!;
-    const injury = { id: 'policy-injury', playerId: player.id, clubId, kind: 'ankle' as const, fixtureId: first.id, occurredOn: first.date, returnOn: dateForRound(5) };
-    state = { ...state, injuries: [injury], fixtures: state.fixtures.map(fixture => fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(clubId) ? { ...fixture, result: { ...fixture.result, injuries: { [player.id]: 'ankle' } } } : fixture) };
+    const injury = { id: 'policy-injury', playerId: player.id, clubId, kind: 'ankle-sprain' as const, fixtureId: first.id, occurredOn: first.date, returnOn: dateForRound(5) };
+    state = { ...state, injuries: [injury], fixtures: state.fixtures.map(fixture => fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(clubId) ? { ...fixture, result: { ...fixture.result, injuries: { [player.id]: 'ankle-sprain' } } } : fixture) };
     const review = buildBoardReview(state, state.board.mandates[0]!);
     expect(review.clubs[clubId]).toMatchObject({ carriedAbsences: 3, rosterPlaces: 40, injuryRelief: 2 });
     const rehab = { injuryId: injury.id, toDate: dateForRound(3), returnAfter: dateForRound(3) } as RehabilitationRecord;

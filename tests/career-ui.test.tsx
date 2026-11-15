@@ -23,8 +23,8 @@ function finalMatchday(seed: number): SeasonState {
 let sackedDay: SeasonState, offeredDay: SeasonState;
 
 beforeAll(() => {
-  sackedDay = finalMatchday(3); // Rhine Falcons dismissed; Aegean Waves offer their job.
-  offeredDay = finalMatchday(1); // Rhine Falcons safe; Danube Lynx offer their job.
+  sackedDay = finalMatchday(67); // Rhine Falcons dismissed; Atlantic Pilots offer their job.
+  offeredDay = finalMatchday(20); // Rhine Falcons safe; Danube Lynx offer their job.
 }, 240_000);
 
 describe('season-end choice', () => {
@@ -32,8 +32,8 @@ describe('season-end choice', () => {
     const html = choice(sackedDay, previewSeasonEnd(sackedDay)!);
     expect(html).toContain('data-dismissed="true"');
     expect(html).toContain('Dismissed by Rhine Falcons');
-    expect(html).toContain('data-reputation="29"');
-    expect(html).toMatch(/data-join-club="aegean-waves"[^>]*>Join Aegean Waves/);
+    expect(html).toContain('data-reputation="20"');
+    expect(html).toMatch(/data-join-club="atlantic-pilots"[^>]*>Join Atlantic Pilots/);
     expect(html).toContain('it offers you the job anyway after your dismissal');
     expect(html).not.toContain('id="season-end-stay"');
     expect(html).toContain('id="season-end-later"');
@@ -61,9 +61,9 @@ describe('your job on the Board page', () => {
     const sacked = advanceSeason(sackedDay);
     const html = board(sacked);
     expect(html).toContain('data-career-status="decided"');
-    expect(html).toContain('You joined Aegean Waves at the end of this season.');
-    expect(html).toContain('data-career-reputation="29"');
-    expect(html).toMatch(/data-career-season="1"><td>[^<]+<\/td><td>Rhine Falcons<\/td><td>29 · Under pressure<\/td><td>Dismissed · joined Aegean Waves/);
+    expect(html).toContain('You joined Atlantic Pilots at the end of this season.');
+    expect(html).toContain('data-career-reputation="20"');
+    expect(html).toMatch(/data-career-season="1"><td>[^<]+<\/td><td>Rhine Falcons<\/td><td>20 · Under pressure<\/td><td>Dismissed · joined Atlantic Pilots/);
   });
 
   it('lists a declined offer in the Inbox', () => {

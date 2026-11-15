@@ -92,7 +92,7 @@ describe('exhibition save files', () => {
     ['unreconciled team fouls', (e) => { e.state.teamFouls.home = 1; }],
     ['unreconciled integrated minutes', (e) => { e.state.courtSeconds.home = 1; }],
     ['non-boolean timeout request', (e) => { (e.state.timeoutRequested as unknown as Record<string, unknown>).home = 'yes'; }],
-    ['injury without a player record', (e) => { e.state.injuries.missing = { kind: 'ankle', occurredAtSeconds: 0 }; }],
+    ['injury without a player record', (e) => { e.state.injuries.missing = { kind: 'ankle-sprain', occurredAtSeconds: 0 }; }],
     ['result before match completion', (e) => { e.state.result = { winner: 'home', kind: 'default', officialScore: { home: 2, away: 0 } }; }],
     ['timeout opportunity before tipoff', (e) => { e.state.stoppage!.timeoutSides = ['home']; }],
     ['missing team from pregame substitution window', (e) => { e.state.stoppage!.substitutionSides = ['home']; }],

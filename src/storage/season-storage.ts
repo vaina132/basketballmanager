@@ -11,6 +11,7 @@ import type { SeasonRelationships } from '../domain/relationships';
 import { validateRelationships } from './relationships-validation';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonArchive, SeasonEurope, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
+import { isInjuryKind } from '../domain/injuries';
 import { STANDINGS_RULE_FORMAT } from '../domain/competition';
 import type { BackgroundClub, ClubExchange, SeasonBackground } from '../domain/background';
 import type { EmploymentDeparture } from '../domain/employment';
@@ -111,7 +112,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -405,7 +406,7 @@ function validateInjuryMap(value: unknown, path: string, playerIds: readonly str
   const fields = value as Record<string, unknown>;
   for (const [id, kind] of Object.entries(fields)) {
     if (!playerIds.includes(id)) fail(`${path}.${id}`, 'must identify a participating player');
-    if (kind !== 'ankle' && kind !== 'muscle') fail(`${path}.${id}`, 'must identify a supported injury');
+    if (!isInjuryKind(kind)) fail(`${path}.${id}`, 'must identify a supported injury');
   }
   return fields as Record<string, SeasonInjury['kind']>;
 }
@@ -914,7 +915,7 @@ function replayYouthRound(replay: SeasonState, original: SeasonState, historyCon
         const injuryPath = `${path}.result.injuries[${index}]`;
         const injury = record(value, injuryPath, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);
         const club = [prepared.home, prepared.away].find(team => team.players.some(player => player.id === injury.playerId));
-        if (!club || !['ankle', 'muscle'].includes(injury.kind as string) || diagnosed.has(injury.playerId as string) || Object.hasOwn(prepared.unavailable, injury.playerId as string) || replay.injuryMode === 'off') fail(injuryPath, 'must identify one new supported diagnosis for an available participant');
+        if (!club || !isInjuryKind(injury.kind) || diagnosed.has(injury.playerId as string) || Object.hasOwn(prepared.unavailable, injury.playerId as string) || replay.injuryMode === 'off') fail(injuryPath, 'must identify one new supported diagnosis for an available participant');
         const expected = createSeasonInjury(replay.seed, fixture, club.id, injury.playerId as string, injury.kind as SeasonInjury['kind']);
         if (!sameData(injury, expected)) fail(injuryPath, 'must preserve the original deterministic diagnosis and return date');
         diagnosed.add(injury.playerId as string);
@@ -1128,8 +1129,8 @@ function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employ
   for (const [index, value] of state.injuries.entries()) {
     const path = `injuries[${index}]`, injury = record(value, path, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);
     const fixture = schedules.get(injury.fixtureId as string);
-    if (!fixture || !players.has(injury.playerId as string) && !backgroundPlayer(fixture, injury.clubId as string, injury.playerId as string) || ![fixture.homeClubId, fixture.awayClubId].includes(injury.clubId as string) || !['ankle', 'muscle'].includes(injury.kind as string)) fail(path, 'must identify a supported diagnosis and originating fixture');
-    if (!sameData(injury, createSeasonInjury(state.seed, fixture, injury.clubId as string, injury.playerId as string, injury.kind as SeasonInjury['kind']))) fail(path, 'must retain the original diagnosis and recovery date');
+    if (!fixture || !players.has(injury.playerId as string) && !backgroundPlayer(fixture, injury.clubId as string, injury.playerId as string) || ![fixture.homeClubId, fixture.awayClubId].includes(injury.clubId as string) || !isInjuryKind(injury.kind)) fail(path, 'must identify a supported diagnosis and originating fixture');
+    if (!sameData(injury, createSeasonInjury(state.seed, fixture, injury.clubId as string, injury.playerId as string, injury.kind as SeasonInjury['kind'], state.injuries))) fail(path, 'must retain the original diagnosis and recovery date');
   }
   let replayed: SeasonPhysio = { ...physio, rehabilitation: [] };
   for (let year = physio.enabledSince.seasonNumber; year <= state.seasonNumber; year += 1) {
@@ -2799,7 +2800,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       const evidence = stats?.[id] ?? result.appearances?.[id];
       if (evidence && evidence.secondsPlayed === 0) fail(`${path}.result.injuries.${id}`, 'requires exposure in its originating fixture');
       const club = home.players.some(player => player.id === id) ? home : away;
-      const injury = createSeasonInjury(seed, expected, club.id, id, kind);
+      // Recurrences last longer: the player's earlier diagnoses are already in the chronological history.
+      const injury = createSeasonInjury(seed, expected, club.id, id, kind, history);
       history.push(injury);
       latestInjuries.set(id, injury);
     }

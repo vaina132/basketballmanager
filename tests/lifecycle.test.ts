@@ -73,7 +73,7 @@ describe('prospective senior aging and real practice', () => {
     expect(old.aging!.adjustedPracticePoints).toBeLessThan(28);
     expect(Object.values(young.gains).reduce((sum, gain) => sum + gain, 0)).toBe(young.aging!.adjustedPracticePoints);
     const id = 'rhf-1';
-    const injured = processTrainingWeek({ ...trainingInput(enabled), injuries: [{ id: 'test-injury', playerId: id, clubId: 'rhine-falcons', kind: 'ankle', fixtureId: 'test', occurredOn: base.date, returnOn: '2026-10-01' }] });
+    const injured = processTrainingWeek({ ...trainingInput(enabled), injuries: [{ id: 'test-injury', playerId: id, clubId: 'rhine-falcons', kind: 'ankle-sprain', fixtureId: 'test', occurredOn: base.date, returnOn: '2026-10-01' }] });
     expect(injured.training.lastWeek!.players[id]!.aging).toMatchObject({ ordinaryPracticePoints: 0, adjustedPracticePoints: 0 });
     expect(injured.training.lastWeek!.players[id]!.availableDays).toBe(0);
     const allCapped = { ...enabled.training, points: Object.fromEntries(Object.entries(enabled.training.points).map(([playerId, points]) => [playerId, Object.fromEntries(Object.keys(points).map(key => [key, 200]))])) } as typeof enabled.training;

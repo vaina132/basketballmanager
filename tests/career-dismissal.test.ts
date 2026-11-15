@@ -26,31 +26,31 @@ function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number)
 let sackedDay: SeasonState, sacked: SeasonState, changeDay: SeasonState, offeredDay: SeasonState;
 
 beforeAll(() => {
-  // Seed 3: Rhine Falcons finish last Under pressure (29); Aegean Waves are also Under pressure and need a coach.
-  sackedDay = finalMatchday(3);
+  // Seed 67: Rhine Falcons end Under pressure (20); Atlantic Pilots are also Under pressure and need a coach.
+  sackedDay = finalMatchday(67);
   sacked = advanceSeason(sackedDay);
-  // Seed 5: Rhine Falcons are dismissed (19) and no other season ended Under pressure.
-  changeDay = finalMatchday(5);
-  // Seed 1: Rhine Falcons finish third (56) while Danube Lynx's season ends Under pressure.
-  offeredDay = finalMatchday(1);
+  // Seed 35: Rhine Falcons are dismissed (29) and no other season ended Under pressure.
+  changeDay = finalMatchday(35);
+  // Seed 20: Rhine Falcons end steady (56) while Danube Lynx's season ends Under pressure.
+  offeredDay = finalMatchday(20);
 }, 240_000);
 
 describe('dismissal at a season end', () => {
   it('previews the verdict, the vacancy and the offer before the final matchday is committed', () => {
     const outlook = previewSeasonEnd(sackedDay)!;
-    expect(outlook).toMatchObject({ seasonNumber: 1, clubId: CLUB, dismissed: true, verdict: { verdict: 'pressure', confidence: 29 } });
-    expect(outlook.reputation).toEqual({ value: 29, seasons: [{ seasonNumber: 1, clubId: CLUB, confidence: 29, weight: 3 }] });
-    expect(outlook.vacancies).toEqual([{ clubId: 'aegean-waves', position: 5, requirement: 31, reason: 'pressure', confidence: 29 }]);
+    expect(outlook).toMatchObject({ seasonNumber: 1, clubId: CLUB, dismissed: true, verdict: { verdict: 'pressure', confidence: 20 } });
+    expect(outlook.reputation).toEqual({ value: 20, seasons: [{ seasonNumber: 1, clubId: CLUB, confidence: 20, weight: 3 }] });
+    expect(outlook.vacancies).toEqual([{ clubId: 'atlantic-pilots', position: 5, requirement: 31, reason: 'pressure', confidence: 29 }]);
     // Below the requirement, a dismissed manager still receives the job asking for the least.
-    expect(outlook.offers.map(offer => offer.clubId)).toEqual(['aegean-waves']);
+    expect(outlook.offers.map(offer => offer.clubId)).toEqual(['atlantic-pilots']);
   });
 
   it('moves a dismissed manager to the best offer when no choice was made, and saves it', () => {
-    expect(sacked.managedClubId).toBe('aegean-waves');
-    expect(sacked.career.moves).toEqual([expect.objectContaining({ seasonNumber: 1, fromClubId: CLUB, toClubId: 'aegean-waves', reason: 'dismissed' })]);
+    expect(sacked.managedClubId).toBe('atlantic-pilots');
+    expect(sacked.career.moves).toEqual([expect.objectContaining({ seasonNumber: 1, fromClubId: CLUB, toClubId: 'atlantic-pilots', reason: 'dismissed' })]);
     expect(parseSeason(serializeSeason(sacked))).toEqual(sacked);
     expect(() => advanceSeason(sackedDay, { moveTo: 'danube-lynx' })).toThrow(/offered you its job/);
-    expect(getInboxItems(sacked).find(item => item.id === 'career-move-1')).toMatchObject({ category: 'board', title: 'Dismissed by Rhine Falcons · now managing Aegean Waves', needsAction: false });
+    expect(getInboxItems(sacked).find(item => item.id === 'career-move-1')).toMatchObject({ category: 'board', title: 'Dismissed by Rhine Falcons · now managing Atlantic Pilots', needsAction: false });
   });
 
   it('opens a vacancy at the least confident board when no other season ended Under pressure', () => {
@@ -74,8 +74,8 @@ describe('dismissal at a season end', () => {
   });
 
   it('never dismisses while job changes are off, and only from the next season after an older career opts in', () => {
-    expect(previewSeasonEnd(finalMatchday(3, false))).toBeNull();
-    const optedIn = finalMatchday(3, false, 5);
+    expect(previewSeasonEnd(finalMatchday(67, false))).toBeNull();
+    const optedIn = finalMatchday(67, false, 5);
     expect(optedIn.career.enabledSince).toMatchObject({ seasonNumber: 1, effectiveFrom: 2 });
     expect(previewSeasonEnd(optedIn)).toBeNull();
     const stayed = advanceSeason(optedIn);

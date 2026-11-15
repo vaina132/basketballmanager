@@ -111,7 +111,7 @@ describe('real youth fixtures and explicit supplemental intake', () => {
 
   it('reduces practice for real dated unavailability and keeps its recovery separate from senior health', () => {
     const fixture = getYouthFixtures(played)[0]!, id = fixture.home!.players[0]!.id;
-    const injury = { id: `${fixture.id}:${id}`, playerId: id, clubId: fixture.homeClubId, kind: 'ankle' as const, fixtureId: fixture.id, occurredOn: fixture.date, returnOn: dateForRound(2) };
+    const injury = { id: `${fixture.id}:${id}`, playerId: id, clubId: fixture.homeClubId, kind: 'ankle-sprain' as const, fixtureId: fixture.id, occurredOn: fixture.date, returnOn: dateForRound(2) };
     const medical = { ...played, youthCompetition: { ...played.youthCompetition, seasons: played.youthCompetition.seasons.map(season => ({ ...season, fixtures: season.fixtures.map(entry => entry.id === fixture.id ? { ...entry, result: { ...entry.result!, injuries: [injury] } } : entry) })) } };
     const trained = processAcademyWeek(week(medical)), report = fullAcademyReport(trained.weeks[0]!.players[id]);
     expect(report.availability).toMatchObject({ availableDays: 1, conditionBefore: fixture.result!.stats[id]!.condition });

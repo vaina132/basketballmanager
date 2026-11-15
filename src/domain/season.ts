@@ -6,6 +6,7 @@ import type { SeasonCommercial } from './commercial';
 import type { SeasonRivalries } from './rivalries';
 import type { SeasonCareer } from './career';
 import type { SeasonRelationships } from './relationships';
+import type { InjuryKind } from './injuries';
 import type { InjuryMode, MatchResult, MatchState, PlayerStats, Side, Tactics, Team } from './types';
 import type { SeasonTraining } from './training';
 import type { SeasonCoaching } from './coaching';
@@ -51,12 +52,12 @@ export interface FixtureResult {
   selection?: { home: string[]; away: string[]; rested: Record<string, number> };
 }
 
-/** A deterministic development-model recovery episode, not a medical diagnosis. */
+/** A deterministic game recovery episode, not a medical diagnosis. Formats before 61 hold only 'ankle' or 'muscle'. */
 export interface SeasonInjury {
   id: string;
   playerId: string;
   clubId: string;
-  kind: 'ankle' | 'muscle';
+  kind: InjuryKind;
   fixtureId: string;
   occurredOn: string;
   /** First simulated calendar day on which the player is available again. */
@@ -127,7 +128,8 @@ export interface DomesticDivisions {
 /** Format 58 adds the EuroCup format: four groups and best-of-three playoffs (step 3.5d). */
 /** Format 59 adds the BCL format: qualification, a protected draw, play-ins, Round of 16 groups and a Final Four (step 3.5e). */
 /** Format 60 adds estimated tables for unchosen leagues and each season end's European places (`europe`, step 3.5f). */
-export const SEASON_SCHEMA_VERSION = 60;
+/** Format 61 records realistic injury kinds (sprint 4) and each career match's recurrence risk (`activeMatch.injuryRisk`). */
+export const SEASON_SCHEMA_VERSION = 61;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

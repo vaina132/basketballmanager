@@ -66,16 +66,19 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
     // Season one: the second division's last club leaves with its squad; a first-time club joins with its generated squad.
     expect(getActiveCareerPlayers(state).some(player => generated.has(player.id))).toBe(false);
     finishSeason();
-    expect(state.background.exchanges).toEqual([{ seasonNumber: 1, leagueId: 'second', leaving: ['w1-aegean-waves'], joining: ['third-1'] }]);
-    const leaving = state.clubs.find(club => club.id === 'w1-aegean-waves');
+    // The relegated club follows from the season's results.
+    const relegated = state.background.exchanges[0]?.leaving[0];
+    expect(state.background.exchanges).toEqual([{ seasonNumber: 1, leagueId: 'second', leaving: [relegated], joining: ['third-1'] }]);
+    expect(world.domesticLeagues[1].clubIds).toContain(relegated);
+    const leaving = state.clubs.find(club => club.id === relegated);
     state = rolloverSeason(state);
     expect(roundTrip(state)).toEqual(state);
     expect(state.divisions.leagues[1].clubIds).toContain('third-1');
     expect(state.clubs.map(club => club.id)).toContain('third-1');
-    expect(state.clubs.map(club => club.id)).not.toContain('w1-aegean-waves');
-    expect(state.background.clubs).toMatchObject([{ id: 'w1-aegean-waves', origin: 'relegated', since: 2, country: 'Testland' }]);
+    expect(state.clubs.map(club => club.id)).not.toContain(relegated);
+    expect(state.background.clubs).toMatchObject([{ id: relegated, origin: 'relegated', since: 2, country: 'Testland' }]);
     expect(state.background.clubs[0].players.every(player => leaving.players.some(item => item.id === player.id))).toBe(true);
-    expect(state.employment.departures).toMatchObject([{ clubId: 'w1-aegean-waves', seasonNumber: 1, startsSeason: 2 }]);
+    expect(state.employment.departures).toMatchObject([{ clubId: relegated, seasonNumber: 1, startsSeason: 2 }]);
     const joined = state.employment.contracts.filter(contract => contract.kind === 'joined');
     expect(joined.map(contract => contract.playerId)).toEqual(world.clubs.find(club => club.id === 'third-1').players.map(player => player.id));
     expect(joined.every(contract => contract.clubId === 'third-1' && contract.startsSeason === 2 && contract.seasonWage === world.wages[contract.playerId])).toBe(true);
@@ -87,7 +90,7 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
     // Screens (step 3.4d-3): the playoff panel names who left and who joined; generated players are labelled.
     const panel = (seasonNumber, leagueId = 'second') => renderToStaticMarkup(createElement(PostseasonPanel, { season: state, seasonNumber, leagueId, managedId: state.managedClubId }));
     const name = id => world.clubs.find(club => club.id === id).name;
-    expect(panel(1)).toContain(`<strong>Leaving</strong>${name('w1-aegean-waves')}`);
+    expect(panel(1)).toContain(`<strong>Leaving</strong>${name(relegated)}`);
     expect(panel(1)).toContain(`<strong>Joining</strong>${name('third-1')} (generated squad)`);
     expect(panel(1)).toContain('from Third division');
     expect(panel(1)).not.toContain('they stay');
@@ -98,19 +101,22 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
     expect(scouting).toMatch(/id="scouting-player-title">[^<]+<small class="generated-tag"/);
     // Season two: the club that left comes back with its squad.
     finishSeason();
-    expect(state.background.exchanges.at(-1)).toEqual({ seasonNumber: 2, leagueId: 'second', leaving: ['w1-rhine-falcons'], joining: ['w1-aegean-waves'] });
+    const second = state.background.exchanges.at(-1)?.leaving[0];
+    expect(state.background.exchanges.at(-1)).toEqual({ seasonNumber: 2, leagueId: 'second', leaving: [second], joining: [relegated] });
+    expect(second).not.toBe(relegated);
     state = rolloverSeason(state);
     expect(roundTrip(state)).toEqual(state);
-    expect(state.background.clubs.map(club => [club.id, club.since, club.until])).toEqual([['w1-aegean-waves', 2, 3], ['w1-rhine-falcons', 3, undefined]]);
-    expect(state.clubs.find(club => club.id === 'w1-aegean-waves').players.map(player => player.id).sort()).toEqual([...away].sort());
-    expect(state.finance.ledger.some(entry => entry.clubId === 'w1-aegean-waves' && entry.sourceId === 'opening-s3')).toBe(false);
-    expect(panel(2)).toContain(`${name('w1-aegean-waves')} (returning)`);
-    // Season three: the generated club goes back down and another first-time club comes up.
+    expect(state.background.clubs.map(club => [club.id, club.since, club.until])).toEqual([[relegated, 2, 3], [second, 3, undefined]]);
+    expect(state.clubs.find(club => club.id === relegated).players.map(player => player.id).sort()).toEqual([...away].sort());
+    expect(state.finance.ledger.some(entry => entry.clubId === relegated && entry.sourceId === 'opening-s3')).toBe(false);
+    expect(panel(2)).toContain(`${name(relegated)} (returning)`);
+    // Season three: the division's last club goes down and another first-time club comes up.
     finishSeason();
-    expect(state.background.exchanges.at(-1)).toEqual({ seasonNumber: 3, leagueId: 'second', leaving: ['third-1'], joining: ['third-3'] });
+    const third = state.background.exchanges.at(-1)?.leaving[0];
+    expect(state.background.exchanges.at(-1)).toEqual({ seasonNumber: 3, leagueId: 'second', leaving: [third], joining: ['third-3'] });
     state = rolloverSeason(state);
     expect(roundTrip(state)).toEqual(state);
-    expect(state.background.clubs.at(-1)).toMatchObject({ id: 'third-1', since: 4 });
+    expect(state.background.clubs.at(-1)).toMatchObject({ id: third, since: 4 });
     expect(state.divisions.leagues.map(league => league.clubIds.length)).toEqual([6, 6]);
     // Saves whose exchanges, records or released terms do not follow the career are refused.
     const tamper = change => { const copy = structuredClone(state); change(copy); expect(() => parseSeason(currentSeasonFile(copy))).toThrow(/Invalid season save/); };
@@ -124,7 +130,7 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
 
   it('treats a manager whose club leaves the full world as dismissed, with a job offer at a full-world club (owner decision a)', () => {
     const world = lowerWorld();
-    let state = setEmploymentDelegation(createSeason({ world, seed: 4, managedClubId: 'w1-rhine-falcons', ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ world, seed: 11, managedClubId: 'w1-rhine-falcons', ...NEW_CAREER_SYSTEMS }), true);
     while (state.status === 'active') state = play(state);
     expect(state.background.exchanges[0].leaving).toEqual(['w1-rhine-falcons']);
     expect(state.career.moves).toMatchObject([{ seasonNumber: 1, fromClubId: 'w1-rhine-falcons', reason: 'dismissed' }]);

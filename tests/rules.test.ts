@@ -161,7 +161,7 @@ describe('timeouts and match injury settings', () => {
     state.period=5;expect(remainingTimeouts(state,'home')).toBe(1);state.timeoutUsage.home.overtime=1;expect(remainingTimeouts(state,'home')).toBe(0);
   });
   it('holds a critical injury and assigns pending free throws to the mandatory replacement', () => {
-    const state=live(),out=state.lineups.home[0]!,incoming=state.home.players[5]!.id;state.injuries[out]={kind:'ankle',occurredAtSeconds:20};state.freeThrows={side:'home',shooterId:out,total:2,remaining:2};state.phase='free-throws';fullWindow(state);state.phase='free-throws';
+    const state=live(),out=state.lineups.home[0]!,incoming=state.home.players[5]!.id;state.injuries[out]={kind:'ankle-sprain',occurredAtSeconds:20};state.freeThrows={side:'home',shooterId:out,total:2,remaining:2};state.phase='free-throws';fullWindow(state);state.phase='free-throws';
     const stopped=stepMatch(state);expect(stopped.requiredSubstitutions[0]?.reason).toBe('injured');
     const changed=substitutePlayer(stopped,'home',out,incoming);expect(changed.freeThrows?.shooterId).toBe(incoming);expect(changed.substitutionLocks).toContain(incoming);
     const after=stepMatch(changed);expect(after.stats[out]!.freeThrowsAttempted).toBe(0);expect(after.stats[incoming]!.freeThrowsAttempted).toBe(1);

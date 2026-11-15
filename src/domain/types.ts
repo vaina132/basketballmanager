@@ -1,3 +1,4 @@
+import type { InjuryKind, InjuryRisk } from './injuries';
 export type Side = 'home' | 'away';
 export type EngineVersion = 'rules-2' | 'possession-3';
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
@@ -144,9 +145,11 @@ export interface MatchState {
   substitutionLocks: string[];
   autoSubstitutions: Record<Side, boolean>;
   injuryMode: InjuryMode;
-  injuries: Record<string, { kind: 'ankle' | 'muscle'; occurredAtSeconds: number }>;
+  injuries: Record<string, { kind: InjuryKind; occurredAtSeconds: number }>;
   /** Modern scheduled fixtures only: unavailable before tipoff, not new match injuries. */
   preExistingInjuries?: string[];
+  /** Format 61, career fixtures only: per-kind risk multipliers from each player's earlier injuries (recurrence). */
+  injuryRisk?: Record<string, InjuryRisk>;
   courtSeconds: Record<Side, number>;
   result: MatchResult | null;
   lineups: Record<Side, string[]>;

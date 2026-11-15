@@ -1,6 +1,7 @@
 import type { SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import type { MatchState } from '../domain/types';
 import type { PlayerMedicalSummary, SeasonPhysio } from '../domain/physio';
+import { injuryType, isMatchInjuryKind, MATCH_INJURY_TYPES, type InjuryRisk, type MatchInjuryKind } from '../domain/injuries';
 import { effectiveReturnOn, latestRehabilitation, rehabilitationCreditCap } from './rehabilitation-policy';
 
 const DAY_MS = 86_400_000;
@@ -14,26 +15,123 @@ export function isRecovering(injury: SeasonInjury, date: string, physio?: Season
   return injury.occurredOn <= date && date < effectiveReturnOn(physio, injury, date);
 }
 
+/** Recurrence (sprint 4): a same-kind injury after an earlier one, counted from the earlier return date. */
+export const RECURRENCE_DURATION_FACTOR = 1.3;
+export const CONCUSSION_LOWER_LIMB_DAYS = 90;
+export const CONCUSSION_LOWER_LIMB_FACTOR = 2;
+/** The upper end of a recovery range sits about two standard deviations above the median (log-normal). */
+const DURATION_SPREAD_DEVIATIONS = 2.05;
+
+/** Whole days from an earlier injury's original return date; zero while he is still out or back early. */
+function daysSinceReturn(injury: Pick<SeasonInjury, 'returnOn'>, date: string): number {
+  return Math.max(0, Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${injury.returnOn}T00:00:00Z`)) / DAY_MS));
+}
+
+/** The first 1 July after a date: the end of the season (September to June) in which that date falls. */
+function seasonEndAfter(date: string): string {
+  const year = Number(date.slice(0, 4)), month = Number(date.slice(5, 7));
+  return `${month >= 7 ? year + 1 : year}-07-01`;
+}
+
 /**
- * Provisional recovery durations: ankle 7–28 days, muscle 7–21 days.
- * The separate stable hash consumes no sporting RNG and is not a medical model.
+ * The risk multiplier one earlier injury gives a new injury of the same kind on `date`. Muscle strains: x4 in weeks
+ * 0-3 after return, x2.5 in weeks 4-8, x1.5 until 12 months. Ankle sprains: x2 for 6 weeks, then x1.4 until 12 months.
+ * Minor knee, back and tendon injuries: x2 for 8 weeks, then x1.3 until the season ends. Legacy kinds never recur.
  */
-export function createSeasonInjury(seed: number, fixture: Pick<SeasonFixture, 'id' | 'date'>, clubId: string, playerId: string, kind: SeasonInjury['kind']): SeasonInjury {
-  const key = `health:${fixture.id}:${playerId}:${kind}`;
+export function recurrenceFactor(earlier: Pick<SeasonInjury, 'kind' | 'occurredOn' | 'returnOn'>, kind: MatchInjuryKind, date: string): number {
+  if (earlier.kind !== kind || !(earlier.occurredOn < date)) return 1;
+  const days = daysSinceReturn(earlier, date), recurrence = injuryType(kind).recurrence;
+  if (recurrence === 'muscle') return days < 28 ? 4 : days < 63 ? 2.5 : days < 365 ? 1.5 : 1;
+  if (recurrence === 'ankle') return days < 42 ? 2 : days < 365 ? 1.4 : 1;
+  if (recurrence === 'overuse') return days < 56 ? 2 : date < seasonEndAfter(earlier.returnOn) ? 1.3 : 1;
+  return 1;
+}
+
+/** One player's earlier injuries (before `date`). */
+function earlierInjuries(injuries: readonly SeasonInjury[], playerId: string, date: string): SeasonInjury[] {
+  return injuries.filter(injury => injury.playerId === playerId && injury.occurredOn < date);
+}
+
+/** Whether a new injury of this kind on `date` repeats an earlier one inside its recurrence window. */
+export function isRecurrence(injuries: readonly SeasonInjury[], playerId: string, kind: MatchInjuryKind, date: string): boolean {
+  return earlierInjuries(injuries, playerId, date).some(injury => recurrenceFactor(injury, kind, date) > 1);
+}
+
+/**
+ * Per-kind risk multipliers for one player on `date` from his earlier injuries: the largest same-kind recurrence
+ * factor, times two for lower-limb kinds within 90 days of returning from a concussion. Normal-risk kinds are omitted.
+ */
+export function injuryRiskFor(injuries: readonly SeasonInjury[], playerId: string, date: string): InjuryRisk {
+  const own = earlierInjuries(injuries, playerId, date), risk: InjuryRisk = {};
+  if (!own.length) return risk;
+  const concussion = own.some(injury => injury.kind === 'concussion' && daysSinceReturn(injury, date) < CONCUSSION_LOWER_LIMB_DAYS);
+  for (const type of MATCH_INJURY_TYPES) {
+    let factor = 1;
+    for (const injury of own) factor = Math.max(factor, recurrenceFactor(injury, type.kind, date));
+    if (concussion && type.lowerLimb) factor *= CONCUSSION_LOWER_LIMB_FACTOR;
+    if (factor !== 1) risk[type.kind] = factor;
+  }
+  return risk;
+}
+
+/** Match option `injuryRisk` for a fixture's players: only players with a raised risk appear. */
+export function injuryRiskMap(injuries: readonly SeasonInjury[], playerIds: Iterable<string>, date: string): Record<string, InjuryRisk> {
+  const ids = new Set(playerIds), byPlayer = new Map<string, SeasonInjury[]>();
+  for (const injury of injuries) if (ids.has(injury.playerId) && injury.occurredOn < date) byPlayer.set(injury.playerId, [...(byPlayer.get(injury.playerId) ?? []), injury]);
+  const result: Record<string, InjuryRisk> = {};
+  for (const [playerId, own] of byPlayer) {
+    const risk = injuryRiskFor(own, playerId, date);
+    if (Object.keys(risk).length) result[playerId] = risk;
+  }
+  return result;
+}
+
+function stableHash(seed: number, key: string): number {
   let hash = (2166136261 ^ seed) >>> 0;
   for (let index = 0; index < key.length; index += 1) hash = Math.imul(hash ^ key.charCodeAt(index), 16777619) >>> 0;
-  const duration = 7 + hash % (kind === 'ankle' ? 22 : 15);
+  return hash;
+}
+
+/** MurmurHash3's finalizer: spreads every input bit over the 32-bit result. */
+function mix(value: number): number {
+  let hash = value >>> 0;
+  hash = Math.imul(hash ^ hash >>> 16, 0x85ebca6b) >>> 0;
+  hash = Math.imul(hash ^ hash >>> 13, 0xc2b2ae35) >>> 0;
+  return (hash ^ hash >>> 16) >>> 0;
+}
+
+/**
+ * Recovery days for a new injury: log-normal around the type's median, clamped to its range, from a stable hash
+ * (never match randomness). A recurrence lasts 1.3 times as long.
+ */
+export function injuryDays(kind: MatchInjuryKind, hash: number, recurrence = false): number {
+  const type = injuryType(kind);
+  const first = (mix(hash) + 0.5) / 4_294_967_296, second = (mix(hash ^ 0x9e3779b9) + 0.5) / 4_294_967_296;
+  const normal = Math.sqrt(-2 * Math.log(first)) * Math.cos(2 * Math.PI * second);
+  const spread = Math.log(type.maxDays / type.medianDays) / DURATION_SPREAD_DEVIATIONS;
+  const days = Math.min(type.maxDays, Math.max(type.minDays, Math.round(type.medianDays * Math.exp(spread * normal))));
+  return recurrence ? Math.round(days * RECURRENCE_DURATION_FACTOR) : days;
+}
+
+/**
+ * A diagnosed recovery episode. Realistic kinds (format 61) draw their duration with `injuryDays`, using the player's
+ * earlier injuries for recurrence; the legacy kinds keep their provisional durations (ankle 7-28 days, muscle 7-21)
+ * so older careers keep their diagnoses. The separate stable hash consumes no sporting RNG.
+ */
+export function createSeasonInjury(seed: number, fixture: Pick<SeasonFixture, 'id' | 'date'>, clubId: string, playerId: string, kind: SeasonInjury['kind'], earlier: readonly SeasonInjury[] = []): SeasonInjury {
+  const hash = stableHash(seed, `health:${fixture.id}:${playerId}:${kind}`);
+  const duration = isMatchInjuryKind(kind) ? injuryDays(kind, hash, isRecurrence(earlier, playerId, kind, fixture.date)) : 7 + hash % (kind === 'ankle' ? 22 : 15);
   const returnOn = new Date(Date.parse(`${fixture.date}T00:00:00Z`) + duration * DAY_MS).toISOString().slice(0, 10);
   return { id: `${fixture.id}:${playerId}`, playerId, clubId, kind, fixtureId: fixture.id, occurredOn: fixture.date, returnOn };
 }
 
-/** New incidents only. Carried absences do not restart their recovery clock. */
-export function injuriesFromMatch(seed: number, fixture: Pick<SeasonFixture, 'id' | 'date'>, match: MatchState): SeasonInjury[] {
+/** New incidents only. Carried absences do not restart their recovery clock. `earlier` holds the recorded history. */
+export function injuriesFromMatch(seed: number, fixture: Pick<SeasonFixture, 'id' | 'date'>, match: MatchState, earlier: readonly SeasonInjury[] = []): SeasonInjury[] {
   const carried = new Set(match.preExistingInjuries ?? []);
   return Object.entries(match.injuries).filter(([id]) => !carried.has(id)).map(([playerId, injury]) => {
     const club = [match.home, match.away].find(team => team.players.some(player => player.id === playerId));
     if (!club) throw new Error('A match injury refers to a player outside its squads.');
-    return createSeasonInjury(seed, fixture, club.id, playerId, injury.kind);
+    return createSeasonInjury(seed, fixture, club.id, playerId, injury.kind, earlier);
   });
 }
 
@@ -43,7 +141,7 @@ export function getSeasonInjuries(season: SeasonState): SeasonInjury[] {
   const fixture = season.fixtures.find(item => item.id === season.activeFixtureId);
   if (!fixture) throw new Error('The active season fixture is missing.');
   const injuries = new Map(season.injuries.map(injury => [injury.id, injury]));
-  for (const injury of injuriesFromMatch(season.seed, fixture, season.activeMatch)) if (!injuries.has(injury.id)) injuries.set(injury.id, injury);
+  for (const injury of injuriesFromMatch(season.seed, fixture, season.activeMatch, season.injuries)) if (!injuries.has(injury.id)) injuries.set(injury.id, injury);
   return [...injuries.values()];
 }
 

@@ -1,14 +1,23 @@
-﻿/** Deterministic FIBA-2024 rules subset. Probability, fatigue and injury parameters remain uncalibrated. */
+﻿/** Deterministic FIBA-2024 rules subset. Probability and fatigue parameters remain uncalibrated; injury rates follow research (sprint 4). */
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../data/fictional-teams';
 import type { CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, PossessionPlay, Side, Tactics, Team } from '../domain/types';
 import { nextRandom, normalizeSeed } from './random';
+import { injuryPhrase, injuryRiskTotal, isInjuryKind, isMatchInjuryKind, pickInjuryKind, type InjuryKind, type InjuryRisk } from '../domain/injuries';
 import { actionScene, freeThrowPosition, passScene, reboundScene, setupScene, shotScene, turnoverScene } from './court-events';
 import { basketPoint, courtDistance, createPossessionPlay, matchedDefender, moveForAction, positionOf, possessionFormation, shotContext } from './possession';
 export const MAX_MATCH_PERIODS = 24;
 const MAX_SIMULATION_STEPS = 20_000;
 const SIDES: readonly Side[] = ['home', 'away'];
 const DEFAULT_TACTICS: Tactics = { tempo: 0.5, outsideShare: 0.45, pressure: 0.5 };
-export const INJURY_HAZARD_PER_PLAYER_SECOND = 0.000006;
+/** Time-loss game injuries: about 0.00085 per minute played (2.5% for a 30-minute starter), sprint 4. */
+export const INJURY_RATE_PER_MINUTE = 0.00085;
+export const INJURY_HAZARD_PER_PLAYER_SECOND = INJURY_RATE_PER_MINUTE / 60;
+/** Minutes beyond 32 in one game carry 1.3 times the risk; the reduced setting keeps 0.3 times the standard rate. */
+export const INJURY_LATE_MINUTES_SECONDS = 32 * 60;
+export const INJURY_LATE_MINUTES_FACTOR = 1.3;
+export const REDUCED_INJURY_FACTOR = 0.3;
+/** Upper bound for one kind's recurrence multiplier (a muscle strain soon after return, times two after a concussion). */
+export const MAX_INJURY_RISK = 20;
 const other = (side: Side): Side => side === 'home' ? 'away' : 'home';
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 const elapsed = (state: MatchState): number => state.period <= 4 ? state.period * 600 - state.clockSeconds : 2400 + (state.period - 4) * 300 - state.clockSeconds;
@@ -36,6 +45,7 @@ function copy(state: MatchState): MatchState {
     substitutionLocks: [...state.substitutionLocks], autoSubstitutions: { ...state.autoSubstitutions },
     injuries: Object.fromEntries(Object.entries(state.injuries).map(([id, injury]) => [id, { ...injury }])),
     ...(state.preExistingInjuries ? { preExistingInjuries: [...state.preExistingInjuries] } : {}),
+    ...(state.injuryRisk ? { injuryRisk: Object.fromEntries(Object.entries(state.injuryRisk).map(([id, risk]) => [id, { ...risk }])) } : {}),
     ...(state.morale ? { morale: { ...state.morale, values: { ...state.morale.values } } } : {}),
     courtSeconds: { ...state.courtSeconds }, result: state.result ? { ...state.result, officialScore: { ...state.result.officialScore } } : null,
   };
@@ -212,16 +222,22 @@ function personalFoul(state: MatchState, side: Side, offender: Player, text: str
   emit(state, { type: 'foul', side, playerId: offender.id, text });
   if (state.stats[offender.id]!.fouls === 5) emit(state, { type: 'foul-out', side, playerId: offender.id, text: `${offender.name} is excluded after five personal fouls.` });
 }
+/** A player's injury hazard relative to the base rate: late-game minutes and his earlier injuries (recurrence). */
+function injuryExposure(state: MatchState, id: string): number {
+  return (state.stats[id]!.secondsPlayed > INJURY_LATE_MINUTES_SECONDS ? INJURY_LATE_MINUTES_FACTOR : 1) * injuryRiskTotal(state.injuryRisk?.[id]);
+}
 function sampleInjuries(state: MatchState, seconds: number): void {
   if (state.injuryMode === 'off' || seconds <= 0 || state.clockSeconds === 0 && !state.freeThrows) return;
-  const multiplier = state.injuryMode === 'reduced' ? 0.3 : 1;
+  const multiplier = state.injuryMode === 'reduced' ? REDUCED_INJURY_FACTOR : 1;
   for (const side of SIDES) {
     const exposed = activePlayers(state, side).filter(p => isPlayerEligible(state, p.id));
-    const chance = 1 - Math.exp(-INJURY_HAZARD_PER_PLAYER_SECOND * seconds * exposed.length * multiplier);
+    const exposure = exposed.reduce((sum, p) => sum + injuryExposure(state, p.id), 0);
+    const chance = 1 - Math.exp(-INJURY_HAZARD_PER_PLAYER_SECOND * seconds * exposure * multiplier);
     if (draw(state) >= chance || !exposed.length) continue;
-    const injured = choose(state, exposed, p => 1 + (100 - state.stats[p.id]!.condition) / 100), kind = draw(state) < 0.5 ? 'ankle' : 'muscle';
+    // Fatigue decides which exposed player is hurt; it does not change the team's rate.
+    const injured = choose(state, exposed, p => injuryExposure(state, p.id) * (1 + (100 - state.stats[p.id]!.condition) / 100)), kind = pickInjuryKind(draw(state), state.injuryRisk?.[injured.id]);
     state.injuries[injured.id] = { kind, occurredAtSeconds: elapsed(state) };
-    emit(state, { type: 'injury', side, playerId: injured.id, text: `${injured.name} leaves with a ${kind} problem and cannot return in this ${state.engineVersion === 'rules-2' ? 'exhibition' : 'match'}.` });
+    emit(state, { type: 'injury', side, playerId: injured.id, text: `${injured.name} leaves with ${injuryPhrase(kind)} and cannot return in this ${state.engineVersion === 'rules-2' ? 'exhibition' : 'match'}.` });
     if (!state.freeThrows && side !== state.possession) state.shotClockSeconds = defensiveFoulShotClock(state.shotClockSeconds, state.frontcourt);
     whistle(state, state.freeThrows ? 'free-throws' : 'whistle');
   }
@@ -534,7 +550,9 @@ export interface FixtureMatchOptions {
   conditions?: Readonly<Record<string, number>>;
   autoSubstitutions?: Partial<Record<Side, boolean>>;
   injuryMode?: InjuryMode;
-  preExistingInjuries?: Readonly<Record<string, 'ankle' | 'muscle'>>;
+  preExistingInjuries?: Readonly<Record<string, InjuryKind>>;
+  /** Career fixtures: per-kind risk multipliers from each player's earlier injuries. Omit for normal risk. */
+  injuryRisk?: Readonly<Record<string, InjuryRisk>>;
 }
 
 function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team, away: Team, options: FixtureMatchOptions = {}): MatchState {
@@ -557,6 +575,8 @@ function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team,
     for (const p of unavailable) state.injuries[p.id] = { kind: options.preExistingInjuries![p.id]!, occurredAtSeconds: 0 };
     for (const side of SIDES) state.lineups[side] = [...new Set([...state.lineups[side], ...state[side].players.map(p => p.id)])].filter(id => isPlayerEligible(state, id)).slice(0, 5);
   }
+  const risks = Object.entries(options.injuryRisk ?? {}).filter(([, risk]) => Object.keys(risk).length);
+  if (risks.length) state.injuryRisk = Object.fromEntries(risks.map(([id, risk]) => [id, { ...risk }]));
   state.possession = draw(state) < 0.5 ? 'home' : 'away'; state.possessionArrow = other(state.possession);
   // The development league retains the existing two-player default threshold.
   // No live action or fabricated court exposure precedes a pre-match default.
@@ -600,7 +620,13 @@ export function createFixtureMatch(seed: number, home: Team, away: Team, options
   if (options.preExistingInjuries !== undefined) {
     if (options.preExistingInjuries === null || typeof options.preExistingInjuries !== 'object' || Array.isArray(options.preExistingInjuries)) throw new Error('Fixture injuries must identify unavailable players.');
     for (const [id, kind] of Object.entries(options.preExistingInjuries)) {
-      if (!allIds.has(id) || !['ankle', 'muscle'].includes(kind)) throw new Error('Fixture injuries must identify known players and supported injury kinds.');
+      if (!allIds.has(id) || !isInjuryKind(kind)) throw new Error('Fixture injuries must identify known players and supported injury kinds.');
+    }
+  }
+  if (options.injuryRisk !== undefined) {
+    if (options.injuryRisk === null || typeof options.injuryRisk !== 'object' || Array.isArray(options.injuryRisk)) throw new Error('Fixture injury risk must identify players.');
+    for (const [id, risk] of Object.entries(options.injuryRisk)) {
+      if (!allIds.has(id) || risk === null || typeof risk !== 'object' || Array.isArray(risk) || Object.entries(risk).some(([kind, value]) => !isMatchInjuryKind(kind) || !Number.isFinite(value) || value <= 0 || value > MAX_INJURY_RISK)) throw new Error('Fixture injury risk must identify known players, supported injury kinds and multipliers above zero.');
     }
   }
   if (options.injuryMode !== undefined && !['standard', 'reduced', 'off'].includes(options.injuryMode)) throw new Error('Choose a valid fixture injury setting.');
@@ -667,5 +693,5 @@ export function setAutoSubstitutions(state: MatchState, side: Side, enabled: boo
 export function setInjuryMode(state: MatchState, mode: InjuryMode): MatchState {
   if (state.status !== 'ready' || state.stepCount !== 0) throw new Error('Choose the injury setting before tipoff.');
   if (!['standard', 'reduced', 'off'].includes(mode)) throw new Error('Choose a valid injury setting.');
-  const next = copy(state); next.injuryMode = mode; emit(next, { type: 'command', text: `Injury setting: ${mode}, applied equally to both teams. Incidence is provisional.` }); return next;
+  const next = copy(state); next.injuryMode = mode; emit(next, { type: 'command', text: `Injury setting: ${mode}, applied equally to both teams.` }); return next;
 }

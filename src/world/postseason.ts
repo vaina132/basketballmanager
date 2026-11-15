@@ -14,7 +14,7 @@ import type { CompetitionStage } from '../domain/competition';
  * Sources and the assumptions taken where a rule is not published are listed per format and in
  * docs/competition-rules-2026.md.
  */
-export type PostseasonFormatId = 'bbl-2026-1' | 'bsl-2026-1' | 'tbl-2026-1' | 'acb-2026-1' | 'primera-feb-2026-1' | 'lba-2026-1' | 'serie-a2-2026-1' | 'lnb-elite-2026-1' | 'lnb-elite2-2026-1' | 'gbl-2026-1' | 'top4-1' | 'test-tier1-1' | 'test-tier2-1';
+export type PostseasonFormatId = 'bbl-2026-1' | 'bsl-2026-1' | 'tbl-2026-1' | 'acb-2026-1' | 'primera-feb-2026-1' | 'lba-2026-1' | 'serie-a2-2026-1' | 'lnb-elite-2026-1' | 'lnb-elite2-2026-1' | 'gbl-2026-1' | 'top4-1' | 'test-tier1-1' | 'test-tier2-1' | 'test-tier2-2';
 
 /** A series participant: a regular-season place (of this league, or of the other division of the country; negative places count from the bottom, -1 being last), or the winner or loser of an earlier series. `rank` is the bracket seed used for home advantage; by default the place, or the earlier series' seed. */
 export type PostseasonRef = { place: number; rank?: number; otherTier?: true } | { winner: string; rank?: number } | { loser: string; rank?: number };
@@ -171,6 +171,16 @@ export const POSTSEASON_FORMATS: Readonly<Record<PostseasonFormatId, PostseasonF
     ],
     champion: { place: 1 }, promoted: [{ place: 1 }, { winner: 'final' }], relegated: [],
   },
+  'test-tier2-2': {
+    id: 'test-tier2-2', label: 'Promotion playoffs', verified: true,
+    source: 'Generic second-division format for fictional test leagues with a division below (step 3.4d-2): as test-tier2-1, and the last place relegated.',
+    series: [
+      { id: 'sf-a', stage: 'semi-final', step: 'semi', bestOf: 3, a: { place: 2 }, b: { place: 5 } },
+      { id: 'sf-b', stage: 'semi-final', step: 'semi', bestOf: 3, a: { place: 3 }, b: { place: 4 } },
+      { id: 'final', stage: 'final', step: 'final', bestOf: 3, a: { winner: 'sf-a' }, b: { winner: 'sf-b' } },
+    ],
+    champion: { place: 1 }, promoted: [{ place: 1 }, { winner: 'final' }], relegated: [{ place: -1 }],
+  },
 } satisfies Record<PostseasonFormatId, PostseasonFormat>);
 
 /** The highest regular-season place a format refers to in its own league (the league needs at least that many clubs). */
@@ -184,7 +194,7 @@ export function postseasonPlacesNeeded(format: PostseasonFormat): number {
 export function postseasonFormatAllowed(id: string, country: string, tier: number, clubs: number): id is PostseasonFormatId {
   if (!Object.hasOwn(POSTSEASON_FORMATS, id)) return false;
   const expected = postseasonFormatFor(country, tier);
-  return (expected ? id === expected : id === 'top4-1' || id === `test-tier${tier}-1`) && clubs >= postseasonPlacesNeeded(POSTSEASON_FORMATS[id as PostseasonFormatId]);
+  return (expected ? id === expected : id === 'top4-1' || id === `test-tier${tier}-1` || tier === 2 && id === 'test-tier2-2') && clubs >= postseasonPlacesNeeded(POSTSEASON_FORMATS[id as PostseasonFormatId]);
 }
 
 /** The format each league uses by country and tier (sprint 3 scope). */

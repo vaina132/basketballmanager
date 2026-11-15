@@ -1,3 +1,4 @@
+import { worldOf } from '../world/career-world'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { SeasonState } from '../domain/season'
 import type { Side, Team } from '../domain/types'
@@ -56,7 +57,8 @@ export function AcademyCompetition({ season, busy, onEnable, children }: { seaso
   const shownFixtures = fixtures.filter(fixture => !ownOnly || fixture.homeClubId === season.managedClubId || fixture.awayClubId === season.managedClubId)
   const standings = getYouthStandings(season, year)
   const review = fixtures.find(fixture => fixture.id === reviewId && fixture.result)
-  const club = (id: string) => season.clubs.find(team => team.id === id)!
+  // A club of an archived season may have left the full world since (step 3.4d-2): its identity is in the world.
+  const club = (id: string) => season.clubs.find(team => team.id === id) ?? worldOf(season).clubs.find(team => team.id === id)!
   const enableReason = !season.academy.enabledSince ? 'Enable the academy first.' : season.status !== 'active' ? 'Start next season to enable youth matches.' : null
   function openReview(fixture: YouthFixture, trigger: HTMLButtonElement) { setSelectedSeason(fixture.seasonNumber); setView('matches'); setReviewId(fixture.id); reviewTrigger.current = trigger }
   function closeReview() { setReviewId(null); requestAnimationFrame(() => { if (reviewTrigger.current?.isConnected) reviewTrigger.current.focus({ preventScroll: true }); else document.querySelector<HTMLButtonElement>('#academy-view-matches')?.focus() }) }

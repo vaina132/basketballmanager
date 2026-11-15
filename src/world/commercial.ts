@@ -32,7 +32,7 @@ function paymentsDueNow(state: SeasonState): DueSponsorshipPayment[] {
   const booked = new Set<string>();
   for (const entry of financeLedgerEntries(state.finance)) if (entry.kind === 'sponsor') booked.add(`${entry.clubId}/${entry.sourceId}`);
   // Only the current season's payments are booked here, so its divisions decide each club's league size (step 3.4c).
-  return sponsorshipPaymentsDue(state.commercial, id => (state.world ? seasonLeagues(state.world, state.divisions) : []).find(league => league.clubIds.includes(id))?.clubIds.length ?? state.clubs.length, { seasonNumber: state.seasonNumber, round: state.round, complete: state.status === 'complete' }, finalPosition(state), seasonRounds(state))
+  return sponsorshipPaymentsDue(state.commercial, id => (state.world ? seasonLeagues(state.world, state.divisions) : []).find(league => league.clubIds.includes(id))?.clubIds.length ?? state.clubs.length, { seasonNumber: state.seasonNumber, round: state.round, complete: state.status === 'complete' }, finalPosition(state), seasonRounds(state), id => state.clubs.some(club => club.id === id))
     .filter(payment => payment.seasonNumber === state.seasonNumber && payment.round === state.round && payment.sponsorship.installment !== 1 && !booked.has(`${payment.clubId}/${payment.sourceId}`));
 }
 

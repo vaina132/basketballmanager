@@ -129,6 +129,15 @@ export function fullWorldClubsIn(context: WorldContext & { background?: { exchan
   return clubs;
 }
 
+/** Every club that has been in the full world by `seasonNumber` (opening clubs and clubs that joined), in world order. */
+export function clubsEverInFullWorld(context: WorldContext & { background?: { exchanges?: readonly ClubExchange[] } }, seasonNumber: number): readonly Team[] {
+  const exchanges = context.background?.exchanges ?? NO_EXCHANGES, world = worldOf(context);
+  const joined = new Set(exchanges.filter(exchange => exchange.seasonNumber < seasonNumber).flatMap(exchange => exchange.joining));
+  if (!joined.size) return fullWorldClubs(world);
+  const opening = new Set(fullWorldClubs(world).map(club => club.id));
+  return world.clubs.filter(club => opening.has(club.id) || joined.has(club.id));
+}
+
 /** Players of next-division clubs that joined the full world by `seasonNumber` (they stay in the catalog afterwards). */
 export function joinedPlayers(context: WorldContext & { background?: { exchanges?: readonly ClubExchange[] } }, seasonNumber: number): readonly Player[] {
   const exchanges = context.background?.exchanges ?? NO_EXCHANGES;

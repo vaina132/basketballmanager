@@ -1,7 +1,7 @@
 import { facilityPracticeBonusPercent } from './facilities-policy';
 import type { SeasonInjury, SeasonState } from '../domain/season';
 import type { SeasonTraining, TrainingFocus, TrainingIntensity, TrainingPlan, TrainingPoints, TrainingWeekReport } from '../domain/training';
-import type { PlayerAttributes, Team } from '../domain/types';
+import type { Player, PlayerAttributes, Team } from '../domain/types';
 import { isRecovering } from './health';
 import type { SeasonCoaching } from '../domain/coaching';
 import type { RosterSnapshot } from '../domain/roster';
@@ -45,6 +45,12 @@ export function createTraining(clubs: readonly Team[], enabled = true): SeasonTr
     plans: Object.fromEntries(clubs.map(club => [club.id, { delegated: true, intensity: 'standard', focus: 'balanced', individual: Object.fromEntries(club.players.map(player => [player.id, 'team'])) }])),
     points: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, emptyPoints()]))), lastWeek: null,
   };
+}
+
+/** Empty progress for players new to the career (a club joining the full world, step 3.4d-2); existing progress is kept. */
+export function withTrainingPoints(training: SeasonTraining, players: readonly Pick<Player, 'id'>[]): SeasonTraining {
+  const missing = players.filter(player => !Object.hasOwn(training.points, player.id));
+  return missing.length ? { ...training, points: { ...training.points, ...Object.fromEntries(missing.map(player => [player.id, emptyPoints()])) } } : training;
 }
 
 /** Project training progress into a new match squad; authored identities stay immutable. */

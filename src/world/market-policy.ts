@@ -1,3 +1,4 @@
+import { leavingClubIds } from './background';
 import type { MarketOffer, MarketWindow } from '../domain/market';
 import type { SeasonState } from '../domain/season';
 import { contractForSeason, effectiveContractsForSeason, MIN_ROSTER_SIZE } from './employment-policy';
@@ -81,6 +82,7 @@ export function getMarketStartReason(state: SeasonState): string | null {
   if (getLiveMarketOffers(state).length) return 'Resolve or withdraw outstanding offers before starting next season.';
   const year = state.seasonNumber + 1;
   const effective = effectiveContractsForSeason(state.employment, year);
-  const incomplete = state.clubs.filter(club => effective.filter(contract => contract.clubId === club.id).length < MIN_ROSTER_SIZE);
+  const leaving = leavingClubIds(state);
+  const incomplete = state.clubs.filter(club => !leaving.has(club.id) && effective.filter(contract => contract.clubId === club.id).length < MIN_ROSTER_SIZE);
   return incomplete.length ? `${incomplete.some(club => club.id === state.managedClubId) ? 'Your squad needs' : 'Other clubs need'} at least eight signed players for next season. Continue recruitment.` : null;
 }

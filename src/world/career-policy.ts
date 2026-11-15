@@ -4,7 +4,7 @@ import type { Team } from '../domain/types';
 import { careerMovesGovern, managedClubFor } from './career';
 import { seasonVerdict, type SeasonVerdict } from './board-consequences';
 import { getStandings } from './season';
-import { seasonRounds } from './career-world';
+import { fullWorldClubsIn, seasonRounds } from './career-world';
 import { seasonLeagues } from './divisions';
 import type { WorldContext } from '../domain/world';
 
@@ -18,7 +18,7 @@ export const STARTING_REPUTATION = 45;
 export const VACANCY_BASE_REQUIREMENT = 25;
 export const VACANCY_STEP = 6;
 
-type CareerContext = Pick<SeasonState, 'managedClubId' | 'board' | 'clubs' | 'fixtures' | 'history' | 'seasonNumber'> & { career?: SeasonCareer; divisions?: SeasonState['divisions'] } & WorldContext;
+type CareerContext = Pick<SeasonState, 'managedClubId' | 'board' | 'clubs' | 'fixtures' | 'history' | 'seasonNumber'> & { career?: SeasonCareer; divisions?: SeasonState['divisions']; background?: SeasonState['background'] } & WorldContext;
 
 export interface ReputationSeason { seasonNumber: number; clubId: string; confidence: number; weight: number }
 export interface ManagerReputation { value: number; seasons: ReputationSeason[] }
@@ -76,15 +76,19 @@ export function seasonEndOutlook(state: CareerContext, seasonNumber = state.seas
   const verdict = seasonVerdict(state.board, clubId, seasonNumber, seasonRounds(state));
   const fixtures = seasonFixtures(state, seasonNumber);
   if (!verdict || !fixtures) return null;
-  const dismissed = verdict.verdict === DISMISSAL_VERDICT;
+  // Owner decision (a), 15 November 2026: a club leaving the full world at this season end counts as a dismissal, so the
+  // manager is offered at least one job at a full-world club. Leaving clubs offer no jobs.
+  const leaving = new Set((state.background?.exchanges ?? []).filter(exchange => exchange.seasonNumber === seasonNumber).flatMap(exchange => exchange.leaving));
+  const seasonClubs = state.world?.domesticLeagues ? fullWorldClubsIn(state, seasonNumber) : state.clubs;
+  const dismissed = verdict.verdict === DISMISSAL_VERDICT || leaving.has(clubId);
   // That season's own divisions (step 3.4c).
   const divisions = seasonNumber === state.seasonNumber ? state.divisions : state.history.find(archive => archive.seasonNumber === seasonNumber)?.divisions;
   const standings = getStandings({ ...state, fixtures, divisions });
   const vacancy = (id: string, reason: ClubVacancy['reason']): ClubVacancy => {
     const position = standings.find(row => row.clubId === id)!.position;
-    return { clubId: id, position, requirement: vacancyRequirement(position, state.clubs.filter(club => !state.world?.domesticLeagues || seasonLeagues(state.world, divisions).find(league => league.clubIds.includes(id))!.clubIds.includes(club.id))), reason, confidence: seasonVerdict(state.board, id, seasonNumber, seasonRounds(state))!.confidence };
+    return { clubId: id, position, requirement: vacancyRequirement(position, seasonClubs.filter(club => !state.world?.domesticLeagues || seasonLeagues(state.world, divisions).find(league => league.clubIds.includes(id))!.clubIds.includes(club.id))), reason, confidence: seasonVerdict(state.board, id, seasonNumber, seasonRounds(state))!.confidence };
   };
-  const others = state.clubs.filter(club => club.id !== clubId && seasonVerdict(state.board, club.id, seasonNumber, seasonRounds(state)));
+  const others = seasonClubs.filter(club => club.id !== clubId && !leaving.has(club.id) && seasonVerdict(state.board, club.id, seasonNumber, seasonRounds(state)));
   const vacancies = others.filter(club => seasonVerdict(state.board, club.id, seasonNumber, seasonRounds(state))!.verdict === DISMISSAL_VERDICT).map(club => vacancy(club.id, 'pressure'));
   // A dismissed manager is never left without a club: the least confident board then makes a change.
   if (dismissed && !vacancies.length && others.length) {
@@ -92,10 +96,10 @@ export function seasonEndOutlook(state: CareerContext, seasonNumber = state.seas
     vacancies.push(vacancy(least.id, 'change'));
   }
   const reputation = managerReputation(state, seasonNumber);
-  const order = (a: ClubVacancy, b: ClubVacancy) => b.requirement - a.requirement || state.clubs.findIndex(club => club.id === a.clubId) - state.clubs.findIndex(club => club.id === b.clubId);
+  const order = (a: ClubVacancy, b: ClubVacancy) => b.requirement - a.requirement || seasonClubs.findIndex(club => club.id === a.clubId) - seasonClubs.findIndex(club => club.id === b.clubId);
   let offers = vacancies.filter(item => item.requirement <= reputation.value).sort(order);
   // Below every requirement, a dismissed manager still gets the job asking for the least.
-  if (dismissed && !offers.length && vacancies.length) offers = [[...vacancies].sort((a, b) => a.requirement - b.requirement || state.clubs.findIndex(club => club.id === a.clubId) - state.clubs.findIndex(club => club.id === b.clubId))[0]!];
+  if (dismissed && !offers.length && vacancies.length) offers = [[...vacancies].sort((a, b) => a.requirement - b.requirement || seasonClubs.findIndex(club => club.id === a.clubId) - seasonClubs.findIndex(club => club.id === b.clubId))[0]!];
   return { seasonNumber, clubId, verdict, dismissed, reputation, vacancies: [...vacancies].sort(order), offers };
 }
 

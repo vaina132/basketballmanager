@@ -93,7 +93,8 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const lnbRanking = league?.standingsRule === 'lnb-2026-1'
   const fibaRanking = league?.standingsRule === 'fiba-2026-d'
   const leagueRule = league?.standingsRule && Object.hasOwn(LEAGUE_RULES, league.standingsRule) ? LEAGUE_RULES[league.standingsRule as keyof typeof LEAGUE_RULES] : null
-  const club = (id: string) => season.clubs.find(team => team.id === id)!
+  // A club of an archived season may have left the full world since (step 3.4d-2): its identity is in the world.
+  const club = (id: string) => season.clubs.find(team => team.id === id) ?? worldOf(season).clubs.find(team => team.id === id)!
   const active = season.fixtures.find(fixture => fixture.id === season.activeFixtureId)
   // The club the manager ran in the season shown; after a move, the new club appears from the next season.
   const managedId = managedClubFor(season, selectedNumber, false)

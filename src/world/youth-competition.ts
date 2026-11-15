@@ -1,3 +1,4 @@
+import type { WorldContext } from '../domain/world';
 import { worldOf } from './career-world';
 import { financeLedgerCount } from './finance-ledger';
 import type { SeasonAcademy } from '../domain/academy';
@@ -46,8 +47,9 @@ export function getYouthFixtureTeams(fixture: YouthFixture, state?: Pick<SeasonS
 }
 
 /** The same ordered prospect membership and shirt-number assignment serve live matches and historical reviews. */
-function buildYouthClubTeam(state: Pick<SeasonState, 'clubs' | 'academy' | 'seasonNumber' | 'round'>, clubId: string): Team {
-  const club = state.clubs.find(club => club.id === clubId);
+function buildYouthClubTeam(state: Pick<SeasonState, 'clubs' | 'academy' | 'seasonNumber' | 'round'> & WorldContext, clubId: string): Team {
+  // Historical games may involve a club that has since left the full world (step 3.4d-2): its identity is in the world.
+  const club = state.clubs.find(club => club.id === clubId) ?? (state.world ?? state.dataPackId !== undefined ? worldOf(state).clubs.find(club => club.id === clubId) : undefined);
   if (!club) throw new Error('A youth fixture must use clubs in this league.');
   const numbers = new Set<number>();
   const players = state.academy.prospects.filter(prospect => prospect.clubId === clubId && getAcademyProspect(state, prospect.player.id)).map(prospect => {

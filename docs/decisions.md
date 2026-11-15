@@ -374,6 +374,14 @@ Reversible defaults in `src/world/lower-division.ts` (pure functions, not yet us
 
 Reversible design choice: every club of a country's real next division is built into the world when the career starts (`withLowerDivisions`, format 54), with its labelled generated squad (rated just below the weakest club of the division above at that moment) and estimated venue, sponsor, president, wages and contract lengths. The world then never grows during a career; promotion only moves a club into the full world. Until promoted, such a club is outside the full world: it is never scheduled, has no contracts, finances or staff, and its players are not in the player catalog, so they cannot be signed or scouted. Format 53's identity-only lists (never produced by the game) stay readable only in format-53 saves.
 
+### Leaving and joining at the season end (step 3.4d-2b, 15 November 2026)
+
+Reversible defaults (format 55; `src/world/exchanges.ts`):
+- **When:** the exchange is decided when a season completes, from that season's divisions, postseason relegations and the squads outside the full world, and recorded in `background.exchanges`; it is applied at the rollover. Exchanges need season-end job changes (career moves), so the manager always has a club; careers without them keep their clubs.
+- **Leaving clubs** sit out that offseason's market (no signings, renewals or transfers either way). At the rollover their remaining terms end (`employment.departures`), and their record keeps their final registration minus players already holding another club's opening terms for next season. Their academy prospects wait, their staff are not renewed, sponsorship deals pay nothing while they are away, and their facilities and ledger are kept for their return. Training progress is kept but does not grow.
+- **Joining clubs** sign their squads at the rollover (contract kind `joined`): a first-time club's generated players on their estimated wages and lengths, plus the same opening funds every club had at the career's start (`opening-s<season>`); a returning club's players who have not retired on their career wages, with lengths estimated by age and never beyond an announced retirement. Their per-club settings start delegated. A returning club needs at least eight such players to come up.
+- **The manager's own club** leaving counts as a dismissal (owner decision (a) below); leaving clubs offer no jobs.
+
 ### Owner decisions for step 3.4d-2 (15 November 2026)
 
 The owner decided both open questions on 15 November 2026:

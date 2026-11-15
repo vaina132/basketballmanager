@@ -72,11 +72,12 @@ export interface DueSponsorshipPayment {
  * Every payment owed under negotiated agreements through a calendar boundary. Installments fall on the opening
  * matchday and matchday six; the bonus follows the final matchday only for a top-half finish.
  */
-export function sponsorshipPaymentsDue(commercial: SeasonCommercial, clubCount: number | ((clubId: string, seasonNumber: number) => number), through: { seasonNumber: number; round: number; complete: boolean }, finalPosition: (seasonNumber: number, clubId: string) => number | null, calendarRounds?: number): DueSponsorshipPayment[] {
+export function sponsorshipPaymentsDue(commercial: SeasonCommercial, clubCount: number | ((clubId: string, seasonNumber: number) => number), through: { seasonNumber: number; round: number; complete: boolean }, finalPosition: (seasonNumber: number, clubId: string) => number | null, calendarRounds?: number, inFullWorld: (clubId: string, seasonNumber: number) => boolean = () => true): DueSponsorshipPayment[] {
   const due: DueSponsorshipPayment[] = [];
   for (const agreement of commercial.agreements) {
     for (let season = agreement.startsSeason; season <= Math.min(agreement.endsSeason, through.seasonNumber); season += 1) {
-      if (!commercialGovernsSeason(commercial, season) || agreement.prepaidSeasons.includes(season)) continue;
+      // A club outside the full world that season receives nothing from its agreement (step 3.4d-2).
+      if (!commercialGovernsSeason(commercial, season) || agreement.prepaidSeasons.includes(season) || !inFullWorld(agreement.clubId, season)) continue;
       const payment = (round: number, installment: SponsorshipPayment['installment'], amount: number) => due.push({ clubId: agreement.clubId, seasonNumber: season, round, sourceId: sponsorshipSourceId(agreement, season, installment), amount, sponsorship: { agreementId: agreement.id, sponsorId: agreement.sponsorId, installment } });
       payment(1, 1, sponsorshipInstallment(agreement, 1));
       if (season < through.seasonNumber || through.round >= SPONSORSHIP_SECOND_INSTALLMENT_ROUND) payment(SPONSORSHIP_SECOND_INSTALLMENT_ROUND, 2, sponsorshipInstallment(agreement, 2));

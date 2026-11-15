@@ -1,3 +1,4 @@
+import { leavingClubIds } from './background';
 import { clubRosterTarget } from './club-roster-policy';
 import { processFacilityProjects, automateFacilities } from './facilities';
 import type { MarketEvent, MarketOffer, MarketWindow, SeasonMarket } from '../domain/market';
@@ -153,7 +154,8 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
   }
   const resolved = getMarketWindow(next)!;
   next = replaceWindow(next, { ...resolved, competitionFromEvent: window.competitionFromEvent, offers: resolved.offers.map(offer => isLiveMarketOffer(offer) && offer.expiresOn <= date ? { ...offer, status: 'expired', closedOn: date } : offer) });
-  const incomplete = next.clubs.filter(club => getClubContractSummary(next, club.id).rosterSize < MIN_ROSTER_SIZE);
+  const leaving = leavingClubIds(next);
+  const incomplete = next.clubs.filter(club => !leaving.has(club.id) && getClubContractSummary(next, club.id).rosterSize < MIN_ROSTER_SIZE);
   if (date === window.closesOn && incomplete.length) throw new Error(`Recruitment cannot close: ${incomplete.map(club => club.name).join(', ')} need eight signed players. The date and offers are unchanged. Improve or withdraw competing offers, or delegate recruitment before continuing.`);
   return processTransferPayments(next);
 }
@@ -211,8 +213,9 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
   // On the last proposal day, an automatic club must be able to recover from a
   // losing bid. Withdraw only its own unsafe holds and offer ordinary terms to
   // unopposed alternatives, rather than trapping the calendar in an AI tie.
+  const leaving = leavingClubIds(state);
   if (finalProposalDay) for (const club of state.clubs) {
-    if (club.id === state.managedClubId && !state.employment.delegated || getClubContractSummary(next, club.id).rosterSize >= MIN_ROSTER_SIZE) continue;
+    if (club.id === state.managedClubId && !state.employment.delegated || leaving.has(club.id) || getClubContractSummary(next, club.id).rosterSize >= MIN_ROSTER_SIZE) continue;
     for (const offer of getLiveMarketOffers(next).filter(item => item.clubId === club.id)) {
       const acceptable = offer.status === 'pending' && (!offer.transfer || offer.transfer.clubStatus === 'accepted') && evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, next).outcome === 'accepted';
       const better = getLiveMarketOffers(next).some(rival => rival.playerId === offer.playerId && rival.clubId !== club.id && rival.status === 'pending' && evaluateNegotiation(rival.playerId, rival.seasonWage, rival.seasons, rival.releaseFee, next).outcome === 'accepted' && compareMarketOffers(next, rival, offer) < 0);
@@ -220,7 +223,7 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
     }
   }
   for (const club of state.clubs) {
-    if (club.id === state.managedClubId && !state.employment.delegated) continue;
+    if (club.id === state.managedClubId && !state.employment.delegated || leaving.has(club.id)) continue;
     const target = clubRosterTarget(state, club.id, club.id === state.managedClubId ? 10 : MIN_ROSTER_SIZE);
     for (let count = 0; count < target; count += 1) {
       const summary = getClubContractSummary(next, club.id);

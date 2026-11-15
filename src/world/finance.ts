@@ -268,6 +268,21 @@ export function setTicketPlan(state: SeasonState, plan: FinancePlan): SeasonStat
   return { ...state, finance: { ...state.finance, plans: { ...state.finance.plans, [state.managedClubId]: { ...plan } } } };
 }
 
+/**
+ * A club joining the full world (step 3.4d-2) at a season's opening: a delegated default ticket plan and, the first
+ * time it joins, the same opening funds as every club at the career's start (`opening-s<season>`). A returning club
+ * keeps its earlier ledger.
+ */
+export function openClubFinances(state: SeasonState, clubIds: readonly string[], firstTime: ReadonlySet<string>): SeasonState {
+  if (!clubIds.length) return state;
+  const plans = { ...state.finance.plans }, roundPrices = { ...state.finance.roundPrices };
+  for (const clubId of clubIds) { plans[clubId] ??= { delegated: true, price: DEFAULT_TICKET_PRICE }; roundPrices[clubId] ??= DEFAULT_TICKET_PRICE; }
+  let next: SeasonState = { ...state, finance: { ...state.finance, plans, roundPrices } };
+  if (!state.finance.enabledSince) return next;
+  for (const clubId of clubIds) if (firstTime.has(clubId)) next = book(next, clubId, 'opening', OPENING_CASH, `opening-s${state.seasonNumber}`);
+  return next;
+}
+
 /** Calendar preparation only: UI edits update plans and cannot rewrite these locked prices. */
 export function prepareFinanceRound(state: SeasonState): SeasonState {
   if (!state.finance.enabledSince) return state;

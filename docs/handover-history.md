@@ -8,6 +8,16 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.4d-2b, clubs leaving and joining the full world (15 November 2026)
+
+- **Part 1 (format 55, commit "exchange record plumbing"):** `background.changesFrom`/`exchanges`, `BackgroundClub.until`, `employment.departures`, contract kind `joined`; `fullWorldClubsIn(context, season)` for contracted clubs; the catalog adds joined clubs' players (`joinedPlayers`) and hides players away with their club. Fixtures `season54-exchange-legacy-*` (`--lower`).
+- **Part 2, the exchange:** `src/world/exchanges.ts` (`computeExchanges`, `departureFor`, `joinedContracts`, `leavingRecord`). `advanceSeason` records the exchanges when a season completes, before the season-end decision; `rolloverSeason` writes departures and joined contracts before next season's registrations, the background records, divisions with the exchanges (`applyExchanges`), and opening records for joining clubs (plans, training plans and points, conditions, finance plans and opening funds `openClubFinances`, payroll and scouting settings, facilities and sponsorship plans). Leaving clubs sit out the offseason market (`leavingClubIds` in employment, market, transfers, contract quotes). Coaching renewals skip clubs that left; academy prospects of clubs away pause (`buildAcademyWeek`); sponsorship payments skip clubs away (`sponsorshipPaymentsDue` `inFullWorld`). Owner decision (a) in `seasonEndOutlook` (leaving counts as a dismissal; leaving clubs offer no jobs; offers use that season's clubs). Test-only format `test-tier2-2` (second division whose last place goes down).
+- **Save checks:** `validateBackgroundHistory` rebuilds exchanges and records; divisions history applies exchanges; employment checks departures and joined terms, per-season club membership for registrations and the window minimum; `joinedIn` added to every "contracts explained by responses" count; staff, negotiation, finance (per-season clubs, `opening-s<season>`, sponsorship), facilities and sponsorship plans (`clubsEverInFullWorld`), academy and youth replays, relationships, board mandates and archived fixtures use each season's own clubs.
+- **Screens:** archived seasons look up departed clubs' names in the world (Competition, academy competition).
+- **Tests:** `tests/lower-division-world.test.js` (3: the built clubs; three season ends with a club leaving, returning and a generated club joining and leaving again, strict saves throughout and refusal of tampered exchanges, records, departures and joined terms; a manager whose club leaves is dismissed and offered a job).
+- **Verification:** full serial suite **2,581 tests / 190 files passed** (662 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.4d-3, screens.
+
 ## Cloud continuation: step 3.4d-2a, next-division clubs in the world (15 November 2026)
 
 - **Fixtures first:** `tests/fixtures/season53-lower-legacy-*` from unchanged commit `406e86e` (120 modules); `tests/season53-continuation.test.js` (3).

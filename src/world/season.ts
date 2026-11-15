@@ -11,6 +11,8 @@ import { addCalendarDays, domesticRoundDates, roundRobinGames, roundRobinRoundCo
 import { derivePostseason, POSTSEASON_FORMATS, POSTSEASON_SLOT_OFFSETS, postseasonOutcome } from './postseason';
 import { divisionChanges, openingDivisions, seasonLeagues } from './divisions';
 import { createBackground } from './background';
+import type { ClubExchange } from '../domain/background';
+import { computeExchanges, departureFor, joinedContracts, leavingRecord } from './exchanges';
 import type { SeasonEndDecision } from '../domain/career';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
 import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
@@ -26,9 +28,9 @@ import type { CareerWorld } from '../domain/world';
 import { fullWorldClubs, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { injuriesFromMatch, isRecovering } from './health';
-import { createTraining, developClub, processTrainingWeek } from './training';
+import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
-import { createFinance, enableFinance, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
+import { createFinance, DEFAULT_TICKET_PRICE, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
 import { createInSeasonRecruitment, enableInSeasonRecruitment, enableInSeasonTransfers, resolveInSeasonRecruitment, scheduleInSeasonRecruitment } from './recruitment';
 import { createPayroll, enablePayroll, preparePayrollRound, processPayrollRound, startPayrollSeason } from './payroll';
@@ -463,6 +465,9 @@ export function advanceSeason(state: SeasonState, decision?: SeasonEndDecision):
   }
   if (next.round === rounds) {
     next.status = 'complete';
+    // Step 3.4d-2: clubs leaving and joining the full world are decided now, before the manager's season-end decision.
+    const exchanges = computeExchanges(next, getPostseasons(next, next.seasonNumber), dateForRound(1, next.seasonNumber + 1));
+    if (exchanges.length) next = { ...next, background: { ...next.background!, exchanges: [...next.background!.exchanges!, ...exchanges] } };
     const outlook = seasonEndOutlook(next);
     if (decision) { const refusal = jobOfferRefusal(outlook, decision.moveTo); if (refusal) throw new Error(refusal); }
     const moveTo = decision?.moveTo ?? (outlook?.dismissed ? outlook.offers[0]?.clubId : undefined);
@@ -580,15 +585,28 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState): Season
   return prepareGameDay(next);
 }
 
+/** The exchanges recorded at the end of `seasonNumber` (step 3.4d-2). */
+export function seasonExchangesOf(background: SeasonState['background'], seasonNumber: number): ClubExchange[] {
+  return (background?.exchanges ?? []).filter(exchange => exchange.seasonNumber === seasonNumber);
+}
+
+/** Divisions after a season end's exchanges: each lowest division loses its leaving clubs and gains the joining ones. */
+export function applyExchanges(leagues: readonly { id: string; clubIds: string[] }[], exchanges: readonly ClubExchange[]): { id: string; clubIds: string[] }[] {
+  return leagues.map(league => {
+    const exchange = exchanges.find(item => item.leagueId === league.id);
+    return exchange ? { id: league.id, clubIds: [...league.clubIds.filter(id => !exchange.leaving.includes(id)), ...exchange.joining] } : { id: league.id, clubIds: [...league.clubIds] };
+  });
+}
+
 /**
  * The next season's divisions (step 3.4c): from the season in which changes began, the completed season's promotions
  * and relegations move clubs between each country's divisions. Worlds without recorded divisions keep their leagues.
  */
-export function nextSeasonDivisions(state: Pick<SeasonState, 'divisions' | 'seasonNumber' | 'fixtures' | 'clubs'> & WorldContext): DomesticDivisions | undefined {
+export function nextSeasonDivisions(state: Pick<SeasonState, 'divisions' | 'seasonNumber' | 'fixtures' | 'clubs'> & Partial<Pick<SeasonState, 'background'>> & WorldContext): DomesticDivisions | undefined {
   if (!state.divisions) return undefined;
   if (state.seasonNumber < state.divisions.changesFrom) return state.divisions;
   const changed = divisionChanges(seasonLeagues(worldOf(state), state.divisions), getPostseasons(state, state.seasonNumber));
-  return { changesFrom: state.divisions.changesFrom, leagues: changed.leagues };
+  return { changesFrom: state.divisions.changesFrom, leagues: applyExchanges(changed.leagues, seasonExchangesOf(state.background, state.seasonNumber)) };
 }
 
 /** Archive the completed competition and prepare the same club's next opening day. */
@@ -635,13 +653,30 @@ export function rolloverSeason(state: SeasonState): SeasonState {
       };
     }),
   };
+  // Step 3.4d-2: leaving clubs' terms end and joining clubs' squads sign before next season's registrations are final.
+  const exchanges = seasonExchangesOf(state.background, state.seasonNumber);
+  let exchanged = state;
+  if (exchanges.length && state.employment.enabledSince) {
+    const departures = exchanges.flatMap(exchange => exchange.leaving.map(clubId => departureFor(state.employment, clubId, state.seasonNumber)));
+    let contracts = state.employment.contracts;
+    for (const exchange of exchanges) contracts = [...contracts, ...joinedContracts(state, exchange, contracts.length + 1, dateForRound(1, seasonNumber))];
+    exchanged = { ...state, employment: { ...state.employment, contracts, departures: [...(state.employment.departures ?? []), ...departures] } };
+  }
   // Finish recruitment before publishing the new roster, payroll and match together.
   // The archive above still refers to the completed season's registrations.
-  const recruited = finalizeEmploymentMarket(state);
+  const recruited = finalizeEmploymentMarket(exchanged);
+  const background = exchanges.length ? {
+    ...state.background!,
+    clubs: [
+      ...state.background!.clubs.map(club => club.until === undefined && exchanges.some(exchange => exchange.joining.includes(club.id)) ? { ...club, until: seasonNumber } : club),
+      ...exchanges.flatMap(exchange => exchange.leaving.map(clubId => leavingRecord(state, state.clubs.find(club => club.id === clubId)!, seasonLeagues(worldOf(state), state.divisions).find(league => league.id === exchange.leagueId)!.country, seasonNumber, recruited.employment.enabledSince ? recruited.employment : null))),
+    ],
+  } : state.background;
   let next: SeasonState = {
-    ...recruited, seasonNumber, history: [...state.history, archive], rosters: createRosterSnapshots(recruited.clubs, seasonNumber), fixtures, ...(state.restWeeks ? { restWeeks: [] } : {}), ...(divisions ? { divisions } : {}), round: 1, date: dateForRound(1, seasonNumber), status: 'active', activeFixtureId: first?.id ?? null, activeMatch: null,
+    ...recruited, seasonNumber, history: [...state.history, archive], rosters: createRosterSnapshots(recruited.clubs, seasonNumber), fixtures, ...(state.restWeeks ? { restWeeks: [] } : {}), ...(divisions ? { divisions } : {}), ...(background ? { background } : {}), round: 1, date: dateForRound(1, seasonNumber), status: 'active', activeFixtureId: first?.id ?? null, activeMatch: null,
     plans: Object.fromEntries(recruited.clubs.map(club => {
-      const plan = state.plans[club.id]!;
+      // A club joining the full world starts from the default plan (step 3.4d-2).
+      const plan = state.plans[club.id] ?? { ...defaultPlan(club, true), ...(usesFullClubRoster(state) ? { matchday: null } : {}) };
       const registered = new Set(club.players.map(player => player.id));
       const lineup = [...new Set([...plan.lineup.filter(id => registered.has(id)), ...club.players.map(player => player.id)])].slice(0, 5);
       return [club.id, reconcileMatchdayPlan({ ...plan, tactics: { ...plan.tactics }, lineup }, club)];
@@ -649,16 +684,34 @@ export function rolloverSeason(state: SeasonState): SeasonState {
     conditions: Object.fromEntries(Object.entries(state.conditions).map(([id, condition]) => [id, Math.min(100, Math.round((condition + DAILY_RECOVERY * recoveryDays) * 1000) / 1000)])),
     injuries: state.injuries.map(injury => ({ ...injury })),
     training: { ...state.training, lastWeek: null, plans: Object.fromEntries(recruited.clubs.map(club => {
-      const plan = state.training.plans[club.id]!;
+      const plan = state.training.plans[club.id] ?? { delegated: true, intensity: 'standard' as const, focus: 'balanced' as const, individual: {} };
       return [club.id, { ...plan, individual: Object.fromEntries(club.players.map(player => [player.id, plan.individual[player.id] ?? 'team'])) }];
     })) },
     coaching: { ...state.coaching, contracts: [] },
   };
+  // Step 3.4d-2: clubs joining the full world get each system's opening records.
+  const joining = exchanges.flatMap(exchange => exchange.joining);
+  if (joining.length) {
+    next = { ...next, conditions: { ...Object.fromEntries(next.clubs.filter(club => joining.includes(club.id)).flatMap(club => club.players.map(player => [player.id, 100]))), ...next.conditions } };
+    next = { ...next, training: withTrainingPoints(next.training, next.clubs.filter(club => joining.includes(club.id)).flatMap(club => club.players)) };
+  }
+  if (exchanges.length) {
+    // Per-club settings follow the full world's clubs: leaving clubs' settings go, joining clubs start delegated.
+    // Facilities and sponsorship plans stay with every club that has been in the full world; a joining club starts delegated.
+    next = { ...next, facilities: { ...next.facilities, delegated: { ...next.facilities.delegated, ...Object.fromEntries(next.clubs.filter(club => !Object.hasOwn(next.facilities.delegated, club.id)).map(club => [club.id, true])) } },
+      commercial: { ...next.commercial, plans: { ...next.commercial.plans, ...Object.fromEntries(next.clubs.filter(club => !Object.hasOwn(next.commercial.plans, club.id)).map(club => [club.id, { delegated: true }])) } } };
+    const keep = <T>(record: Record<string, T>, fallback: T) => Object.fromEntries(next.clubs.map(club => [club.id, Object.hasOwn(record, club.id) ? record[club.id]! : fallback]));
+    const offices = createScouting(next.clubs, next.managedClubId).clubs;
+    next = { ...next, payroll: { ...next.payroll, delegated: keep(next.payroll.delegated, true) }, finance: { ...next.finance, plans: keep(next.finance.plans, { delegated: true, price: DEFAULT_TICKET_PRICE }), roundPrices: keep(next.finance.roundPrices, DEFAULT_TICKET_PRICE) },
+      scouting: { ...next.scouting, clubs: Object.fromEntries(next.clubs.map(club => [club.id, next.scouting.clubs[club.id] ?? offices[club.id]!])) } };
+  }
   next = archiveFinancialHistory(next);
   next = processFacilityProjects(next);
   next = prepareAcademySeason(next);
   next = prepareYouthSeason(next);
   next = prepareLifecycleSeason(next);
+  // Joining clubs' opening funds come after the calendar's construction step and before the new season's sponsorship.
+  if (joining.length) next = openClubFinances(next, joining, new Set(joining.filter(clubId => !state.background!.clubs.some(club => club.id === clubId))));
   next = startCommercialSeason(next);
   next = startFinanceSeason(next);
   next = startPayrollSeason(next);

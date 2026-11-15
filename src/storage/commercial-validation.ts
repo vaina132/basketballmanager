@@ -2,7 +2,7 @@ import type { CommercialAnchor, CommercialEvent, SeasonCommercial, SponsorshipAg
 import type { SeasonState } from '../domain/season';
 import type { CareerMove } from '../domain/career';
 import { managedClubAtLedger } from '../world/career';
-import { incumbentSponsorId, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
+import { clubsEverInFullWorld, fullWorldClubsIn, incumbentSponsorId, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
 import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, createCommercial, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_RENEWAL_ROUND } from '../world/commercial-policy';
 import { dateForRound, MAX_SEASON_NUMBER, seasonStartDate } from '../world/season';
 import { financeLedgerCount } from '../world/finance-ledger';
@@ -69,17 +69,19 @@ export function validateCommercial(state: SeasonState, version: number): void {
   if (activation.date !== dateForRound(activation.round, activation.seasonNumber)) fail('commercial.enabledSince.date', 'must identify an active matchday');
   if (ordinal(state.finance.enabledSince.seasonNumber, state.finance.enabledSince.round, seasonRounds(state)) > ordinal(activation.seasonNumber, activation.round, seasonRounds(state))) fail('commercial.enabledSince', 'cannot precede club finances');
 
-  const plans = record(fields.plans, 'commercial.plans', state.clubs.map(club => club.id));
-  for (const club of state.clubs) {
+  // Plans stay with every club that has been in the full world (step 3.4d-2).
+  const planClubs = clubsEverInFullWorld(state, state.seasonNumber);
+  const plans = record(fields.plans, 'commercial.plans', planClubs.map(club => club.id));
+  for (const club of planClubs) {
     const plan = record(plans[club.id], `commercial.plans.${club.id}`, ['delegated']);
     if (typeof plan.delegated !== 'boolean' || club.id !== state.managedClubId && !plan.delegated) fail(`commercial.plans.${club.id}.delegated`, 'must be boolean; rival clubs always manage sponsorship automatically');
   }
 
-  const inherited: SponsorshipAgreement[] = state.clubs.map((club, index) => ({
+  const inherited: SponsorshipAgreement[] = fullWorldClubsIn(state, activation.seasonNumber).map((club, index) => ({
     id: `sponsorship-agreement-${index + 1}`, clubId: club.id, sponsorId: incumbentSponsorId(worldOf(state), club.id), source: 'inherited', offerId: null,
     startsSeason: activation.seasonNumber, endsSeason: activation.seasonNumber, annualFee: SPONSORSHIP_REFERENCE_FEE, bonus: 0, signedOn: activation.date, automatic: false, prepaidSeasons: [activation.seasonNumber],
   }));
-  let replay: SeasonCommercial = { ...defaults, plans: createCommercial(state.clubs, managedClubAtLedger(state, activation.ledgerCount)).plans, enabledSince: activation, agreements: inherited };
+  let replay: SeasonCommercial = { ...defaults, plans: createCommercial([...planClubs], managedClubAtLedger(state, activation.ledgerCount)).plans, enabledSince: activation, agreements: inherited };
   const events = fields.events as unknown[];
   let index = 0, previous: CommercialAnchor = activation;
 
@@ -108,7 +110,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
   };
   /** Automatic control leaves no acceptable offer waiting for a delegated club. */
   const consumeAutomation = (at: CommercialAnchor) => {
-    for (const club of state.clubs) {
+    for (const club of fullWorldClubsIn(state, at.seasonNumber)) {
       if (!replay.plans[club.id]!.delegated) continue;
       const best = bestSponsorshipOffer(replay.offers.filter(offer => offer.clubId === club.id && acceptable(offer, at.date)));
       if (!best) continue;
@@ -122,9 +124,10 @@ export function validateCommercial(state: SeasonState, version: number): void {
   };
   const consumeWindow = (boundary: Extract<Boundary, { kind: 'window' }>) => {
     let at: CommercialAnchor | null = boundary.activation ? activation : null;
-    for (const club of state.clubs) {
+    const seasonClubs = fullWorldClubsIn(state, boundary.seasonNumber);
+    for (const club of seasonClubs) {
       if (!needsSponsorshipOffers(replay, club.id, boundary.seasonNumber) || boundary.seasonNumber >= MAX_SEASON_NUMBER) continue;
-      const appeal = sponsorAppeal({ world: worldOf(state), clubs: state.clubs, fixtures: seasonFixtures(boundary.seasonNumber), ledger, seasonNumber: boundary.seasonNumber, completedRounds: boundary.completedRounds }, club.id).appeal;
+      const appeal = sponsorAppeal({ world: worldOf(state), clubs: seasonClubs, fixtures: seasonFixtures(boundary.seasonNumber), ledger, seasonNumber: boundary.seasonNumber, completedRounds: boundary.completedRounds }, club.id).appeal;
       // Availability, not the boundary's ledger position, decides whether any offer exists; no offer means no event.
       if (!buildSponsorshipOffers({ world: worldOf(state), seed: state.seed, commercial: replay, clubId: club.id, window: boundary.window, anchor: at ?? { seasonNumber: boundary.seasonNumber, round: boundary.round, date: boundary.date, ledgerCount: 0 }, appeal }).length) continue;
       if (!at) {

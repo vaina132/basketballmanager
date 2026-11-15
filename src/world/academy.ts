@@ -111,7 +111,11 @@ export function buildAcademyWeek(input: AcademyWeekCalculation): AcademyWeek {
   for (const prospect of academy.prospects) {
     const id = prospect.player.id;
     if (roundKey(prospect.intakeSeason, prospect.intakeRound) > at || academy.graduates.some(graduate => graduate.prospectId === id && roundKey(graduate.availableSince.seasonNumber, graduate.availableSince.round) <= at)) continue;
-    if (!clubs.some(club => club.id === prospect.clubId)) throw new Error('Academy development requires each prospect\'s registered academy club.');
+    if (!clubs.some(club => club.id === prospect.clubId)) {
+      // A club outside the full world this season runs no academy (step 3.4d-2): its prospects wait for its return.
+      if (input.world?.clubs.some(club => club.id === prospect.clubId)) continue;
+      throw new Error('Academy development requires each prospect\'s registered academy club.');
+    }
     const focus = academy.focus[id]!;
     if (!TRAINING_FOCUSES.includes(focus)) throw new Error('Every prospect needs a supported development focus.');
     const before = academy.points[id]!, gains = emptyAcademyPoints(), coachingGains = emptyAcademyPoints(), after = emptyAcademyPoints();

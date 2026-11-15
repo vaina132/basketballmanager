@@ -93,13 +93,27 @@ export function validateBackground(value: unknown, state: Pick<SeasonState, 'sea
   if (version >= 55) {
     const { changesFrom, exchanges } = value as unknown as Required<SeasonBackground>;
     if (!Number.isInteger(changesFrom) || changesFrom < 1 || changesFrom > state.seasonNumber + 1) fail('background.changesFrom', 'must be a season of this career');
-    if (!Array.isArray(exchanges) || exchanges.length) fail('background.exchanges', 'cannot list exchanges before clubs leave the full world (step 3.4d-2)');
+    if (!Array.isArray(exchanges) || exchanges.length > 4 * state.seasonNumber) fail('background.exchanges', 'must be a bounded list');
+    for (const [index, exchange] of exchanges.entries()) {
+      if (!exactKeys(exchange, ['seasonNumber', 'leagueId', 'leaving', 'joining']) || !Array.isArray(exchange.leaving) || !Array.isArray(exchange.joining) || exchange.leaving.length !== exchange.joining.length) fail(`background.exchanges[${index}]`, 'must name a season, a league and balanced clubs leaving and joining');
+    }
   }
-  const clubs = (value as { clubs: unknown[] }).clubs, ids = new Set<string>(), playerIds = new Set<string>();
+  const clubs = (value as { clubs: unknown[] }).clubs;
+  // Each record's shape; that the records and exchanges follow from the career is checked by `validateBackgroundHistory`.
   for (const [index, club] of clubs.entries()) {
-    validateBackgroundClub(club, `background.clubs[${index}]`, state, playerIds);
-    if (ids.has(club.id)) fail(`background.clubs[${index}].id`, 'must list each club once');
-    ids.add(club.id);
+    const open = isObject(club) && club.until === undefined;
+    if (!exactKeys(club, ['id', 'name', 'shortName', 'color', 'country', 'origin', 'since', 'players', ...(isObject(club) && Object.hasOwn(club, 'until') ? ['until'] : [])]) || !open && (version < 55 || !Number.isInteger((club as Record<string, unknown>).until))) fail(`background.clubs[${index}]`, 'must be a background club');
   }
-  if (clubs.length) fail('background.clubs', 'cannot list clubs before clubs leave the full world (step 3.4d-2)');
+  if (version < 55 && clubs.length) fail('background.clubs', 'cannot list clubs before clubs leave the full world (step 3.4d-2)');
+}
+
+/** Clubs leaving the full world at the end of the current, completed season (step 3.4d-2); they sit out its offseason market. */
+export function leavingClubIds(state: { seasonNumber: number; status: string; background?: SeasonBackground }): ReadonlySet<string> {
+  if (state.status !== 'complete') return new Set();
+  return new Set((state.background?.exchanges ?? []).filter(exchange => exchange.seasonNumber === state.seasonNumber).flatMap(exchange => exchange.leaving));
+}
+
+/** The background records of clubs outside the full world in a season (left by then, not yet back). */
+export function backgroundClubsIn(background: SeasonBackground | undefined, seasonNumber: number): BackgroundClub[] {
+  return (background?.clubs ?? []).filter(club => club.since <= seasonNumber && (club.until === undefined || seasonNumber < club.until));
 }

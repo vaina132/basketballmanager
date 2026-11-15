@@ -4,7 +4,7 @@ import { applyRelationshipEvent, createRelationships, enableRelationships, getPr
 import { dateForRound } from '../world/season';
 import { rosterForRound } from '../world/rosters';
 import { managedClubFor } from '../world/career';
-import { roundOrdinal, seasonRounds } from '../world/career-world';
+import { fullWorldClubsIn, roundOrdinal, seasonRounds } from '../world/career-world';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'contractCount', 'rosterCount'] as const;
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
@@ -40,7 +40,8 @@ function contextAt(state: SeasonState, anchor: RelationshipAnchor, relationships
   const fixtures = source.fixtures.map(fixture => ({ ...fixture, result: fixture.round <= localCompleted ? fixture.result : null })) as SeasonFixture[];
   const history = state.history.filter(archive => archive.seasonNumber < anchor.seasonNumber);
   const committed = new Set([...history.flatMap(archive => archive.fixtures), ...fixtures].filter(fixture => fixture.result).map(fixture => fixture.id));
-  const clubs = state.clubs.map(club => ({ ...club, players: rosterForRound(rosters, club.id, anchor.round).players }));
+  // That season's own full-world clubs (step 3.4d-2).
+  const clubs = fullWorldClubsIn(state, anchor.seasonNumber).map(club => ({ ...club, players: rosterForRound(rosters, club.id, anchor.round).players }));
   return {
     // A completed final matchday is that season's offseason, which a move at the season end hands to the new club.
     ...state, managedClubId: managedClubFor(state, anchor.seasonNumber, localCompleted === seasonRounds(state)), seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,

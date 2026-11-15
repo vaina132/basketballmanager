@@ -4,7 +4,7 @@ import { buildBoardMandate, buildBoardReview, createBoard, type BoardCalculation
 import { validationReplayCache } from './replay-cache';
 import { dateForRound } from '../world/season';
 import { openingSponsorshipClubs } from '../world/commercial-policy';
-import { roundOrdinal, seasonRounds } from '../world/career-world';
+import { fullWorldClubsIn, roundOrdinal, seasonRounds } from '../world/career-world';
 import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'ledgerCount', 'rosterCount'] as const;
@@ -46,7 +46,8 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard):
     // That season's own divisions (step 3.4c).
     ...({ divisions: anchor.seasonNumber === state.seasonNumber ? state.divisions : state.history.find(archive => archive.seasonNumber === anchor.seasonNumber)?.divisions } as object),
     rosters, fixtures, board, employment: { transfers: state.employment.transfers }, physio: state.physio, rivalries: state.rivalries,
-    clubs: state.clubs.map(({ id }) => ({ id })),
+    // That season's own full-world clubs (step 3.4d-2).
+    clubs: fullWorldClubsIn(state, anchor.seasonNumber).map(({ id }) => ({ id })),
     injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
     finance: { ...finance, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
   };
@@ -100,9 +101,10 @@ export function validateBoard(state: SeasonState, version: number): void {
     if (kind === 'review') {
       if (ledgerCount !== reviewLedgerCount(state, year, round)) fail(path, 'must review the complete mandatory payment boundary before later hiring and offseason choices');
     } else {
-      const openings = state.finance.ledger.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.kind === 'opening');
+      // The career's opening funds (a club joining the full world later books `opening-s<season>`, step 3.4d-2).
+      const openings = state.finance.ledger.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.kind === 'opening' && entry.sourceId === 'opening');
       if (openings.some(({ index }) => index < ledgerCount)) {
-        const funding = state.finance.ledger.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.kind === 'opening' || entry.kind === 'sponsor' && entry.seasonNumber === openings[0]!.entry.seasonNumber);
+        const funding = state.finance.ledger.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.kind === 'opening' && entry.sourceId === 'opening' || entry.kind === 'sponsor' && entry.seasonNumber === openings[0]!.entry.seasonNumber);
         if (funding.some(({ index }) => index >= ledgerCount)) fail(path, 'cannot split the atomic opening cash and sponsorship registration');
       }
       for (const [index, entry] of state.finance.ledger.entries()) {
@@ -134,7 +136,7 @@ export function validateBoard(state: SeasonState, version: number): void {
     if (!first && state.finance.enabledSince && ordinal(state.finance.enabledSince.seasonNumber, state.finance.enabledSince.round, seasonRounds(state)) < ordinal(year, 1, seasonRounds(state))) {
       // Opening sponsorship: every club under the fixed model, only covered clubs under negotiated agreements.
       const sponsorship = state.finance.ledger.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.seasonNumber === year && entry.kind === 'sponsor' && entry.round === 1);
-      if (sponsorship.length !== openingSponsorshipClubs(state.commercial, state.clubs, year).length || sponsorship.some(({ index }) => index >= anchor.ledgerCount)) fail(path, 'must include the new-season funding before setting expectations');
+      if (sponsorship.length !== openingSponsorshipClubs(state.commercial, fullWorldClubsIn(state, year), year).length || sponsorship.some(({ index }) => index >= anchor.ledgerCount)) fail(path, 'must include the new-season funding before setting expectations');
     }
     chronological(anchor, path);
     let expected: BoardMandate;

@@ -1,3 +1,4 @@
+import { leavingClubIds } from './background';
 import { worldOf } from './career-world';
 import { clubRosterLimitText, clubRosterLimit, clubRosterTarget } from './club-roster-policy';
 import type { ContractOfferOptions, EmploymentContract, EmploymentTransfer, SeasonEmployment } from '../domain/employment';
@@ -129,7 +130,9 @@ export function prepareEmploymentMarket(state: SeasonState): SeasonState {
     return state;
   }
   let next: SeasonState = { ...state, employment: { ...state.employment, market: { seasonNumber: state.seasonNumber + 1 } } };
-  for (const club of next.clubs) if (club.id !== next.managedClubId) next = retainPlayers(next, club.id, MIN_ROSTER_SIZE);
+  // Clubs leaving the full world sit out the offseason market (step 3.4d-2).
+  const leaving = leavingClubIds(next);
+  for (const club of next.clubs) if (club.id !== next.managedClubId && !leaving.has(club.id)) next = retainPlayers(next, club.id, MIN_ROSTER_SIZE);
   if (next.employment.delegated) {
     next = retainPlayers(next, next.managedClubId, clubRosterTarget(next, next.managedClubId));
     next = recruitPlayers(next, next.managedClubId, clubRosterTarget(next, next.managedClubId));
@@ -167,8 +170,9 @@ export function finalizeEmploymentMarket(state: SeasonState): SeasonState {
   if (next.employment.delegated) next = recruitPlayers(next, next.managedClubId, MIN_ROSTER_SIZE);
   if (getClubContractSummary(next, next.managedClubId).rosterSize < MIN_ROSTER_SIZE) throw new Error('Contract at least eight players for next season or delegate recruitment before starting the new season.');
   // Every club reaches its minimum before any club receives optional extra players.
-  for (const club of next.clubs) if (club.id !== next.managedClubId) next = recruitPlayers(next, club.id, MIN_ROSTER_SIZE);
-  for (const club of next.clubs) if (club.id !== next.managedClubId || next.employment.delegated) next = recruitPlayers(next, club.id, clubRosterTarget(next, club.id));
+  const leaving = leavingClubIds(next);
+  for (const club of next.clubs) if (club.id !== next.managedClubId && !leaving.has(club.id)) next = recruitPlayers(next, club.id, MIN_ROSTER_SIZE);
+  for (const club of next.clubs) if ((club.id !== next.managedClubId || next.employment.delegated) && !leaving.has(club.id)) next = recruitPlayers(next, club.id, clubRosterTarget(next, club.id));
   const clubs = getContractedClubs(next, next.seasonNumber + 1);
   if (clubs.some(club => club.players.length < MIN_ROSTER_SIZE || club.players.length > clubRosterLimit(state))) throw new Error(`Every club needs eight to ${clubRosterLimitText(state)} registered players before the new season can begin.`);
   return { ...next, clubs, employment: { ...next.employment, market: null } };

@@ -159,7 +159,8 @@ export function renewSeasonCoaching(state: SeasonState, previous: SeasonCoaching
   if (state.status !== 'active' || state.round !== 1) throw new Error('Renew staff on the new season opening day.');
   let next: SeasonState = { ...state, coaching: { ...previous, contracts: [] } };
   if (!previous.enabledSince) return next;
-  for (const contract of previous.contracts.filter(contract => contract.releasedRound === null && contract.renew)) {
+  // A club that has left the full world renews no one (step 3.4d-2).
+  for (const contract of previous.contracts.filter(contract => contract.releasedRound === null && contract.renew && next.clubs.some(club => club.id === contract.clubId))) {
     const coach = coachById(contract.coachId);
     if (getClubCoaching(next.coaching, contract.clubId).length < MAX_COACHES && staffCommitted(next, contract.clubId) + coach.fee <= staffAllocation(next, contract.clubId) && canPayCoach(next, contract.clubId, coach)) {
       next = hireContractForClub(next, contract.clubId, contract.coachId, contract.focus);

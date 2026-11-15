@@ -71,6 +71,8 @@ export interface LowerDivisionExchange {
 export function lowerDivisionExchanges(input: {
   seed: number; seasonNumber: number; leagues: readonly DomesticLeague[]; relegated: ReadonlyMap<string, readonly string[]>;
   lowerDivisions: readonly LowerDivisionMembers[]; background: readonly BackgroundClub[]; strengthOf: (clubId: string) => number;
+  /** Clubs that cannot come up this time (a returning squad too small to play). */
+  eligible?: (clubId: string) => boolean;
 }): LowerDivisionExchange[] {
   const exchanges: LowerDivisionExchange[] = [];
   for (const division of input.lowerDivisions) {
@@ -84,7 +86,7 @@ export function lowerDivisionExchanges(input: {
     const inFullWorld = new Set(input.leagues.flatMap(league => league.clubIds));
     const returning = input.background.filter(club => club.country === division.country && !leaving.includes(club.id) && !inFullWorld.has(club.id));
     const firstTime = division.clubIds.filter(clubId => !inFullWorld.has(clubId) && !input.background.some(club => club.id === clubId));
-    const order = estimatedLowerDivisionOrder(input.seed, input.seasonNumber, division.country, [...returning.map(club => club.id), ...firstTime].map(clubId => ({ clubId, strength: input.strengthOf(clubId) })));
+    const order = estimatedLowerDivisionOrder(input.seed, input.seasonNumber, division.country, [...returning.map(club => club.id), ...firstTime].filter(clubId => input.eligible?.(clubId) ?? true).map(clubId => ({ clubId, strength: input.strengthOf(clubId) })));
     if (order.length < leaving.length) throw new Error(`${division.country}'s next division has too few clubs to replace those relegated.`);
     exchanges.push({ country: division.country, leagueId: lowest.id, leaving, joining: order.slice(0, leaving.length).map(entry => ({ clubId: entry.clubId, returning: returning.some(club => club.id === entry.clubId) })) });
   }

@@ -1,3 +1,4 @@
+import { leavingClubIds } from './background';
 import type { ClubContractSummary, ContractOfferOptions, EmploymentContract, PlayerContractQuote, SeasonEmployment } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
@@ -79,6 +80,7 @@ export function quotePlayerContract(state: SeasonState, playerId: string, season
   if (!state.employment.enabledSince) reason = 'Enable player contracts before negotiating.';
   else if (!state.finance.enabledSince || !state.payroll.enabledSince) reason = 'Enable finances and player payroll before negotiating contracts.';
   else if (!player || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a development player and a club in this league.';
+  else if (leavingClubIds(state).has(clubId)) reason = 'This club is leaving the game\'s leagues and signs no one for next season.';
   else if (offerOptionsReason(state, options, paidTransfer)) reason = offerOptionsReason(state, options, paidTransfer);
   else if (!Number.isInteger(seasons) || seasons < 1 || seasons > MAX_CONTRACT_SEASONS || endsSeason > 7974) reason = 'Choose a contract lasting one to three supported seasons.';
   else if (retirementContractReason(state, playerId, endsSeason)) reason = retirementContractReason(state, playerId, endsSeason);

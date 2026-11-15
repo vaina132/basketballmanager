@@ -45,12 +45,13 @@ describe('season injury policy and deterministic recovery', () => {
   });
 
   it('shows a genuine uncommitted away-club incident without changing state or restarting recovery', () => {
-    const initial = createSeason(325, 'atlantic-pilots');
+    // Seed 1311 (match calibration, sprint 4): atl-2 leaves the first match with a minor knee injury, misses round 2 and is back for round 3.
+    const initial = createSeason(1311, 'atlantic-pilots');
     const state = finish(initial);
-    expect(state.activeMatch!.injuries['atl-9']).toEqual({ kind: 'knee-minor', occurredAtSeconds: 1678 });
+    expect(state.activeMatch!.injuries['atl-2']).toEqual({ kind: 'knee-minor', occurredAtSeconds: 129 });
     const before = structuredClone(state);
-    const episode = getPlayerHealth(state, 'atl-9')!;
-    expect(episode).toMatchObject({ playerId: 'atl-9', clubId: 'atlantic-pilots', fixtureId: 'dev-r1-g1', occurredOn: '2026-09-05', returnOn: '2026-09-15' });
+    const episode = getPlayerHealth(state, 'atl-2')!;
+    expect(episode).toMatchObject({ playerId: 'atl-2', clubId: 'atlantic-pilots', fixtureId: 'dev-r1-g1', occurredOn: '2026-09-05', returnOn: '2026-09-15' });
     expect(state.injuries).toEqual([]);
     expect(getSeasonInjuries(state)).toContainEqual(episode);
     expect(getSeasonInjuries(state)).toEqual(getSeasonInjuries(state));
@@ -61,64 +62,64 @@ describe('season injury policy and deterministic recovery', () => {
     expect(carried.date).toBe('2026-09-12');
     expect(carried.injuries).toContainEqual(episode);
     expect(getSeasonInjuries(carried).filter(injury => injury.id === episode.id)).toHaveLength(1);
-    expect(getPlayerHealth(carried, 'atl-9')).toEqual(episode);
+    expect(getPlayerHealth(carried, 'atl-2')).toEqual(episode);
     expect(daysUntilReturn(carried.date, episode.returnOn)).toBe(3);
-    expect(carried.activeMatch!.preExistingInjuries).toContain('atl-9');
-    expect(carried.activeMatch!.lineups[managedSide(carried)]).not.toContain('atl-9');
-    expect(carried.activeMatch!.stats['atl-9']!.secondsPlayed).toBe(0);
-    expect(carried.activeMatch!.events.some(event => event.type === 'injury' && event.playerId === 'atl-9')).toBe(false);
+    expect(carried.activeMatch!.preExistingInjuries).toContain('atl-2');
+    expect(carried.activeMatch!.lineups[managedSide(carried)]).not.toContain('atl-2');
+    expect(carried.activeMatch!.stats['atl-2']!.secondsPlayed).toBe(0);
+    expect(carried.activeMatch!.events.some(event => event.type === 'injury' && event.playerId === 'atl-2')).toBe(false);
     const nextFinished = finish(carried);
-    expect(nextFinished.activeMatch!.stats['atl-9']!.secondsPlayed).toBe(0);
-    expect(nextFinished.activeMatch!.stats['atl-9']!.points).toBe(0);
+    expect(nextFinished.activeMatch!.stats['atl-2']!.secondsPlayed).toBe(0);
+    expect(nextFinished.activeMatch!.stats['atl-2']!.points).toBe(0);
     const cleared = advanceSeason(nextFinished);
     expect(cleared.date).toBe('2026-09-19');
-    expect(getPlayerHealth(cleared, 'atl-9')).toBeNull();
-    expect(cleared.activeMatch!.injuries['atl-9']).toBeUndefined();
-    expect(cleared.activeMatch!.preExistingInjuries ?? []).not.toContain('atl-9');
+    expect(getPlayerHealth(cleared, 'atl-2')).toBeNull();
+    expect(cleared.activeMatch!.injuries['atl-2']).toBeUndefined();
+    expect(cleared.activeMatch!.preExistingInjuries ?? []).not.toContain('atl-2');
     // Back for four days: a minor knee injury carries twice the risk of recurring for eight weeks.
-    expect(cleared.activeMatch!.injuryRisk?.['atl-9']).toEqual({ 'knee-minor': 2 });
-    expect(cleared.injuries.filter(injury => injury.playerId === 'atl-9')).toEqual([episode]);
+    expect(cleared.activeMatch!.injuryRisk?.['atl-2']).toEqual({ 'knee-minor': 2 });
+    expect(cleared.injuries.filter(injury => injury.playerId === 'atl-2')).toEqual([episode]);
     expect(advanceSeason(state)).toEqual(carried);
   });
 
   it('preserves a mandatory injury pause until replaced and projects recovery immediately', () => {
-    let state = createSeason(325, 'atlantic-pilots');
+    let state = createSeason(1311, 'atlantic-pilots');
     let current = setAutoSubstitutions(state.activeMatch!, managedSide(state), true);
     for (let count = 0; count < 5000 && current.status !== 'finished'; count += 1) {
       const next = stepMatch(current);
-      if (next.injuries['atl-9']) {
+      if (next.injuries['atl-2']) {
         state = { ...state, activeMatch: stepMatch(setAutoSubstitutions(current, managedSide(state), false)) };
         break;
       }
       current = next;
     }
-    expect(state.activeMatch!.requiredSubstitutions).toContainEqual({ side: 'away', playerId: 'atl-9', reason: 'injured' });
-    expect(getPlayerHealth(state, 'atl-9')?.returnOn).toBe('2026-09-15');
+    expect(state.activeMatch!.requiredSubstitutions).toContainEqual({ side: 'away', playerId: 'atl-2', reason: 'injured' });
+    expect(getPlayerHealth(state, 'atl-2')?.returnOn).toBe('2026-09-15');
     expect(() => advanceSeason(state)).toThrow(/Finish/);
-    expect(advanceSeason(finish(state)).injuries.some(injury => injury.playerId === 'atl-9')).toBe(true);
+    expect(advanceSeason(finish(state)).injuries.some(injury => injury.playerId === 'atl-2')).toBe(true);
   });
 
   it('applies the same recovery to AI clubs and records their injuries in compact results', () => {
     // The same fixture is a background AI game when managing Aegean Waves.
-    let state = advanceSeason(finish(createSeason(325, 'aegean-waves')));
-    const episode = state.injuries.find(injury => injury.playerId === 'atl-9')!;
+    let state = advanceSeason(finish(createSeason(1311, 'aegean-waves')));
+    const episode = state.injuries.find(injury => injury.playerId === 'atl-2')!;
     expect(episode).toMatchObject({ clubId: 'atlantic-pilots', returnOn: '2026-09-15' });
-    expect(state.fixtures.find(fixture => fixture.id === 'dev-r1-g1')!.result!.injuries['atl-9']).toBe('knee-minor');
+    expect(state.fixtures.find(fixture => fixture.id === 'dev-r1-g1')!.result!.injuries['atl-2']).toBe('knee-minor');
     state = advanceSeason(finish(state));
     const second = state.fixtures.find(fixture => fixture.round === 2 && [fixture.homeClubId, fixture.awayClubId].includes('atlantic-pilots'))!;
-    expect(second.result!.injuries['atl-9']).toBe('knee-minor');
-    expect(second.result!.stats['atl-9']!.secondsPlayed).toBe(0);
-    expect(state.injuries.filter(injury => injury.playerId === 'atl-9')).toEqual([episode]);
+    expect(second.result!.injuries['atl-2']).toBe('knee-minor');
+    expect(second.result!.stats['atl-2']!.secondsPlayed).toBe(0);
+    expect(state.injuries.filter(injury => injury.playerId === 'atl-2')).toEqual([episode]);
     state = advanceSeason(finish(state));
     const third = state.fixtures.find(fixture => fixture.round === 3 && [fixture.homeClubId, fixture.awayClubId].includes('atlantic-pilots'))!;
-    expect(third.result!.injuries['atl-9']).toBeUndefined();
-    expect(getPlayerHealth(state, 'atl-9')).toBeNull();
+    expect(third.result!.injuries['atl-2']).toBeUndefined();
+    expect(getPlayerHealth(state, 'atl-2')).toBeNull();
   });
 
   it('rejects mismatched policy and overlapping incidents atomically', () => {
-    const completed = finish(createSeason(325, 'atlantic-pilots'));
+    const completed = finish(createSeason(1311, 'atlantic-pilots'));
     expect(() => advanceSeason({ ...completed, injuryMode: 'off' })).toThrow(/same season injury/);
-    const injury = createSeasonInjury(completed.seed, getActiveFixture(completed), 'atlantic-pilots', 'atl-9', 'knee-minor');
+    const injury = createSeasonInjury(completed.seed, getActiveFixture(completed), 'atlantic-pilots', 'atl-2', 'knee-minor');
     const malformed = { ...completed, injuries: [injury] };
     const before = structuredClone(malformed);
     expect(() => advanceSeason(malformed)).toThrow(/duplicate injury/);

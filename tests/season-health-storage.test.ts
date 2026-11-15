@@ -7,7 +7,7 @@ import { parseSeason, serializeSeason, validateSeasonState } from '../src/storag
 import { advanceSeason, createSeason, managedSide } from '../src/world/season';
 import { createSeasonInjury, getPlayerHealth, getSeasonInjuries } from '../src/world/health';
 
-const clubId = 'atlantic-pilots', playerId = 'atl-9';
+const clubId = 'atlantic-pilots', playerId = 'atl-2';
 let live: SeasonState, firstFinished: SeasonState, second: SeasonState, third: SeasonState;
 const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: simulateToEnd(setAutoSubstitutions(season.activeMatch!, managedSide(season), true)) });
 const restore = (season: SeasonState) => parseSeason(serializeSeason(season));
@@ -21,7 +21,7 @@ function legacyText(season: SeasonState): string {
 }
 
 beforeAll(() => {
-  const season = createSeason(325, clubId, 'standard', false, false, false);
+  const season = createSeason(1311, clubId, 'standard', false, false, false);
   let match = setAutoSubstitutions(season.activeMatch!, managedSide(season), true);
   for (let count = 0; count < 2000 && !match.injuries[playerId] && match.status !== 'finished'; count += 1) match = stepMatch(match);
   expect(match.injuries[playerId]).toBeDefined();

@@ -94,7 +94,11 @@ describe('injury rate in simulated games', () => {
     const normal = sample(120), recurring = sample(120, { injuryRisk });
     expect(recurring.rate).toBeGreaterThan(normal.rate * 1.15);
     const muscle = (result: typeof normal) => ((result.kinds.get('hamstring') ?? 0) + (result.kinds.get('calf') ?? 0)) / result.injuries;
-    expect(muscle(recurring)).toBeGreaterThan(muscle(normal) * 2);
+    // About 40 normal injuries are too few to measure the 12 per cent research share reliably, so the doubling is checked
+    // against the table share (expected about 35 per cent with a fourfold risk) and the sample only gives the direction.
+    const normalShare = MATCH_INJURY_TYPES.filter(type => type.kind === 'hamstring' || type.kind === 'calf').reduce((sum, type) => sum + type.share, 0) / 100;
+    expect(muscle(recurring)).toBeGreaterThan(normalShare * 2);
+    expect(muscle(recurring)).toBeGreaterThan(muscle(normal));
     // The risk travels with a saved match and is checked on load.
     const match = createFixtureMatch(5, FICTIONAL_HOME, FICTIONAL_AWAY, { injuryRisk: { [everyone[0]!]: { hamstring: 4 } } });
     expect(match.injuryRisk).toEqual({ [everyone[0]!]: { hamstring: 4 } });

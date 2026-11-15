@@ -23,10 +23,10 @@ const firstPositive = (state: SeasonState): ScoutingReview => office(state).revi
 
 let initial: SeasonState, pending: SeasonState, second: SeasonState, third: SeasonState, fourth: SeasonState, completed: SeasonState, nextYear: SeasonState;
 beforeAll(() => {
-  initial = createSeason(325, clubId, 'standard', true, true, true, true, null, true, true);
-  pending = assignScouting(assignScouting(setShortlisted(initial, 'atl-10', true), 'atl-9'), 'atl-10');
+  initial = createSeason(1311, clubId, 'standard', true, true, true, true, null, true, true);
+  pending = assignScouting(assignScouting(setShortlisted(initial, 'atl-10', true), 'atl-2'), 'atl-10');
   second = play(pending);
-  third = play(assignScouting(assignScouting(second, 'atl-9'), 'atl-10'));
+  third = play(assignScouting(assignScouting(second, 'atl-2'), 'atl-10'));
   fourth = play(assignScouting(third, 'atl-10'));
   completed = complete(fourth);
   const own = completed.clubs.find(club => club.id === clubId)!;
@@ -60,10 +60,10 @@ describe('scouting report persistence', () => {
   });
 
   it('retains a no-minutes review without inventing an observation or raising knowledge level', () => {
-    const reviews = office(third).reviews.filter(review => review.playerId === 'atl-9');
+    const reviews = office(third).reviews.filter(review => review.playerId === 'atl-2');
     expect(reviews.map(review => review.outcome)).toEqual(['observed', 'no-minutes']);
     expect(reviews[1]!.attributes).toBeNull();
-    const knowledge = getPlayerKnowledge(parseSeason(serializeSeason(third)), 'atl-9');
+    const knowledge = getPlayerKnowledge(parseSeason(serializeSeason(third)), 'atl-2');
     expect(knowledge.level).toBe(1);
     expect(knowledge.observations).toBe(1);
     expect(knowledge.observedOn).toBe(second.fixtures.find(fixture => fixture.round === 1)!.date);

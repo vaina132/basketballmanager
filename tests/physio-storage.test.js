@@ -16,16 +16,18 @@ import { advanceSeason, createSeason, managedSide } from '../src/world/season';
 import { expectedMigration } from './helpers/season-format';
 
 const club = 'rhine-falcons';
+// Seed 172 (match calibration, sprint 4): rhf-4 strains a calf in the first match and is out until 25 September.
+const injuredId = 'rhf-4';
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
 const play = state => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 const restore = state => parseSeason(serializeSeason(state));
 const changed = (state, mutate) => { const envelope = JSON.parse(serializeSeason(state)); mutate(envelope.state); return JSON.stringify(envelope); };
-const treatment = state => state.physio.rehabilitation.find(record => record.playerId === 'rhf-1');
+const treatment = state => state.physio.rehabilitation.find(record => record.playerId === injuredId);
 let original, migrated, hired, report, released, replaced, next, replacementId;
 beforeAll(() => {
   original = JSON.parse(fixture('season22-injury-fitness-scouts'));
   migrated = parseSeason(JSON.stringify(original));
-  let state = hireScout(createSeason(27, club, 'standard', true, true, true, true, null, true, true, true, true, true, true, true), 'scout-06');
+  let state = hireScout(createSeason(172, club, 'standard', true, true, true, true, null, true, true, true, true, true, true, true), 'scout-06');
   state = hireFitnessCoach(state, availableFitnessCoaches(state).find(coach => coach.fee === 2_000_000).id);
   hired = hirePhysio(state, 'physio-12');
   report = play(hired);
@@ -57,7 +59,7 @@ describe('physio save provenance and historical recovery', () => {
   });
 
   it('preserves original diagnosis dates and previously earned recovery through a later release and replacement', () => {
-    const injury = report.injuries.find(injury => injury.playerId === 'rhf-1');
+    const injury = report.injuries.find(injury => injury.playerId === injuredId);
     expect(treatment(report)).toMatchObject({ physioId: 'physio-12', eligibleDays: 6, creditBefore: 0, creditEarned: 180, creditAfter: 180, returnBefore: injury.returnOn });
     expect(treatment(report).returnAfter < injury.returnOn).toBe(true);
     expect(effectiveReturnOn(report.physio, injury, '2026-09-11')).toBe(injury.returnOn);
@@ -71,7 +73,7 @@ describe('physio save provenance and historical recovery', () => {
   });
 
   it('carries earned rehabilitation across an actual paid transfer and records the new club physio next week', () => {
-    const playerId = 'rhf-1', seasons = 2;
+    const playerId = injuredId, seasons = 2;
     const wage = requiredNegotiationWage(playerId, seasons), fee = requiredInSeasonTransferFee(report, playerId);
     const buyer = report.clubs.find(team => team.id !== club && getClubPhysio(report, team.id) && quoteInSeasonTransferOffer(report, playerId, wage, seasons, fee, team.id, 'three-payments').canOffer);
     expect(buyer).toBeDefined();
@@ -108,7 +110,7 @@ describe('physio save provenance and historical recovery', () => {
   });
 
   it.each([
-    ['rewritten original diagnosis date', state => { state.injuries.find(injury => injury.playerId === 'rhf-1').returnOn = '2026-09-24'; }],
+    ['rewritten original diagnosis date', state => { state.injuries.find(injury => injury.playerId === injuredId).returnOn = '2026-09-24'; }],
     ['missing treatment record', state => { state.physio.rehabilitation.shift(); }],
     ['repeated treatment record', state => { state.physio.rehabilitation.push({ ...treatment(state) }); }],
     ['wrong injury identity', state => { treatment(state).injuryId = 'not-an-injury'; }],
@@ -123,7 +125,7 @@ describe('physio save provenance and historical recovery', () => {
     ['inflated treatment credit', state => { treatment(state).creditEarned += 100; treatment(state).creditAfter += 100; }],
     ['recovery before completed review', state => { treatment(state).returnAfter = '2026-09-11'; }],
     ['changed previous recovery projection', state => { treatment(state).returnBefore = '2026-09-24'; }],
-    ['training days rewritten by later treatment', state => { state.training.lastWeek.players['rhf-1'].availableDays = 1; }],
+    ['training days rewritten by later treatment', state => { state.training.lastWeek.players[injuredId].availableDays = 1; }],
     ['backdated release removing earned treatment', state => { state.physio.contracts.find(contract => contract.physioId === 'physio-12').releasedRound = 1; }],
   ])('rejects %s', (_name, mutate) => {
     expect(() => parseSeason(changed(replaced, mutate))).toThrow();

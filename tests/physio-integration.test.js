@@ -8,7 +8,7 @@ import { hirePhysio, setPhysioRenewal } from '../src/world/physio';
 import { availablePhysios, getClubPhysio, quotePhysioHire } from '../src/world/physio-policy';
 import { effectiveReturnOn, rehabilitationCreditCap } from '../src/world/rehabilitation-policy';
 import { remainingStaffBudget, STAFF_BUDGET, staffCommitmentsByRole, staffCommitted } from '../src/world/staff-policy';
-import { advancePhysioCareer, createPhysioCareers, createPhysioEligibilityCareers, finishPhysioMatch } from './helpers/physio-careers';
+import { advancePhysioCareer, createPhysioCareers, createPhysioEligibilityCareers, finishPhysioMatch, PHYSIO_CAREER_INJURED as injured, PHYSIO_ELIGIBILITY_INJURED as eligible } from './helpers/physio-careers';
 
 const restore = state => parseSeason(serializeSeason(state));
 const club = 'rhine-falcons';
@@ -36,7 +36,7 @@ describe('physiotherapy across actual career boundaries', () => {
 
   it('settles only prospective recovery and retains the original episode and identical completed fixture', () => {
     const { initial, treated, withoutPhysio } = careers;
-    const injury = initial.injuries.find(injury => injury.playerId === 'rhf-1');
+    const injury = initial.injuries.find(injury => injury.playerId === injured);
     expect(injury.returnOn).toBe('2026-09-25');
     expect(treated.fixtures).toEqual(withoutPhysio.fixtures);
     expect(treated.injuries).toEqual(withoutPhysio.injuries);
@@ -45,17 +45,17 @@ describe('physiotherapy across actual career boundaries', () => {
     expect(effectiveReturnOn(treated.physio, injury, '2026-09-18')).toBe(injury.returnOn);
     expect(effectiveReturnOn(treated.physio, injury, '2026-09-19')).toBe('2026-09-24');
     expect(getInjuryMedicalSummary(treated, injury)).toMatchObject({ daysSaved: 1, daysRemaining: 5, originalReturnOn: '2026-09-25', effectiveReturnOn: '2026-09-24' });
-    expect(treated.training.lastWeek.players['rhf-1'].availableDays).toBe(0);
+    expect(treated.training.lastWeek.players[injured].availableDays).toBe(0);
   });
 
   it('lets ordinary training use earned availability without retroactively changing last week', () => {
     const { treated, continuedCare, baselineReturn } = careers;
-    expect(continuedCare.training.lastWeek.players['rhf-1'].availableDays).toBe(3);
-    expect(baselineReturn.training.lastWeek.players['rhf-1'].availableDays).toBe(2);
-    expect(treated.training.lastWeek.players['rhf-1'].availableDays).toBe(0);
+    expect(continuedCare.training.lastWeek.players[injured].availableDays).toBe(3);
+    expect(baselineReturn.training.lastWeek.players[injured].availableDays).toBe(2);
+    expect(treated.training.lastWeek.players[injured].availableDays).toBe(0);
     expect(continuedCare.injuries).toEqual(baselineReturn.injuries);
-    expect(getPlayerHealth(continuedCare, 'rhf-1')).toBeNull();
-    const history = getPlayerMedicalSummary(continuedCare, 'rhf-1');
+    expect(getPlayerHealth(continuedCare, injured)).toBeNull();
+    const history = getPlayerMedicalSummary(continuedCare, injured);
     expect(history).toMatchObject({ daysSaved: 1, daysRemaining: 0, progress: 100 });
     expect(history.lastReview.creditAfter).toBeGreaterThanOrEqual(200);
     // Credit earned after clearance cannot be misreported as an additional saved day.
@@ -68,9 +68,9 @@ describe('physiotherapy across actual career boundaries', () => {
     expect(released.physio.rehabilitation).toEqual(treated.physio.rehabilitation);
     expect(replaced.physio.rehabilitation).toEqual(treated.physio.rehabilitation);
     expect(replaced.training).toEqual(treated.training);
-    const old = treated.physio.rehabilitation.find(record => record.playerId === 'rhf-1');
+    const old = treated.physio.rehabilitation.find(record => record.playerId === injured);
     expect(replacementWeek.physio.rehabilitation.find(record => record.id === old.id)).toEqual(old);
-    const next = replacementWeek.physio.rehabilitation.find(record => record.playerId === 'rhf-1' && record.afterRound === 3);
+    const next = replacementWeek.physio.rehabilitation.find(record => record.playerId === injured && record.afterRound === 3);
     expect(next.physioId).toBe(getClubPhysio(replaced).physioId);
     expect(next.physioId).not.toBe(old.physioId);
     expect(next.creditBefore).toBe(old.creditAfter);
@@ -93,27 +93,27 @@ describe('physiotherapy across actual career boundaries', () => {
     const { hired, fulltime } = eligibility;
     expect(fulltime.injuries).toEqual(hired.injuries);
     expect(fulltime.physio.rehabilitation).toEqual(hired.physio.rehabilitation);
-    const summary = getPlayerMedicalSummary(fulltime, 'aeg-7');
+    const summary = getPlayerMedicalSummary(fulltime, eligible);
     expect(summary).toMatchObject({ pending: true, originalReturnOn: '2026-09-28', effectiveReturnOn: '2026-09-28', daysSaved: 0, lastReview: null });
-    expect(getClubMedicalCases(fulltime).some(item => item.injury.playerId === 'aeg-7')).toBe(true);
+    expect(getClubMedicalCases(fulltime).some(item => item.injury.playerId === eligible)).toBe(true);
   });
 
   it('can clear a player for an earlier fixture with training disabled, using the same injury rules', () => {
     const { treated, returned, stillUnavailable } = eligibility;
     expect(returned.training.enabledSince).toBeNull();
-    const injury = returned.injuries.find(injury => injury.playerId === 'aeg-7');
+    const injury = returned.injuries.find(injury => injury.playerId === eligible);
     expect(injury.returnOn).toBe('2026-09-28');
     expect(returned.injuries).toEqual(stillUnavailable.injuries);
     expect(returned.fixtures).toEqual(stillUnavailable.fixtures);
     expect(returned.date).toBe('2026-09-26');
-    expect(getPlayerHealth(returned, 'aeg-7')).toBeNull();
-    expect(getPlayerHealth(stillUnavailable, 'aeg-7')).toEqual(injury);
-    expect(returned.activeMatch.preExistingInjuries ?? []).not.toContain('aeg-7');
-    expect(stillUnavailable.activeMatch.preExistingInjuries).toContain('aeg-7');
-    expect(getPlayerMedicalSummary(returned, 'aeg-7')).toMatchObject({ effectiveReturnOn: '2026-09-26', daysSaved: 2 });
-    expect(getPlayerMedicalSummary(treated, 'aeg-7')).toMatchObject({ effectiveReturnOn: '2026-09-27', daysSaved: 1 });
-    expect(finishPhysioMatch(returned).activeMatch.stats['aeg-7'].secondsPlayed).toBeGreaterThan(0);
-    expect(finishPhysioMatch(stillUnavailable).activeMatch.stats['aeg-7'].secondsPlayed).toBe(0);
+    expect(getPlayerHealth(returned, eligible)).toBeNull();
+    expect(getPlayerHealth(stillUnavailable, eligible)).toEqual(injury);
+    expect(returned.activeMatch.preExistingInjuries ?? []).not.toContain(eligible);
+    expect(stillUnavailable.activeMatch.preExistingInjuries).toContain(eligible);
+    expect(getPlayerMedicalSummary(returned, eligible)).toMatchObject({ effectiveReturnOn: '2026-09-26', daysSaved: 2 });
+    expect(getPlayerMedicalSummary(treated, eligible)).toMatchObject({ effectiveReturnOn: '2026-09-27', daysSaved: 1 });
+    expect(finishPhysioMatch(returned).activeMatch.stats[eligible].secondsPlayed).toBeGreaterThan(0);
+    expect(finishPhysioMatch(stillUnavailable).activeMatch.stats[eligible].secondsPlayed).toBe(0);
   });
 
   it('renews against the next annual allocation without inventing offseason treatment', () => {

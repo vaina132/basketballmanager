@@ -16,9 +16,14 @@ export const finishPhysioMatch = (state: SeasonState): SeasonState => ({
 /** Exercise the same committed world transition used by the browser worker. */
 export const advancePhysioCareer = (state: SeasonState): SeasonState => advanceSeason(finishPhysioMatch(state));
 
+/** Seed 172 (match calibration, sprint 4): rhf-4 strains a calf in the first match and is out until 25 September. */
+export const PHYSIO_CAREER_INJURED = 'rhf-4';
+/** Seed 225 (match calibration, sprint 4): aeg-5 strains a calf in the round-2 match and is out until 28 September. */
+export const PHYSIO_ELIGIBILITY_INJURED = 'aeg-5';
+
 /** Genuine first-match injury, paired care, retained history and two complete seasons. */
 export function createPhysioCareers() {
-  let opening = hireScout(createSeason(27, 'rhine-falcons', 'standard', true, true, true, true, null, false, true, false, false, true, true), 'scout-06');
+  let opening = hireScout(createSeason(172, 'rhine-falcons', 'standard', true, true, true, true, null, false, true, false, false, true, true), 'scout-06');
   opening = hireFitnessCoach(opening, availableFitnessCoaches(opening).find(coach => coach.fee === 2_000_000)!.id);
   opening = setTrainingPlan(opening, { ...opening.training.plans[opening.managedClubId]!, delegated: false, intensity: 'heavy' });
   const initial = enablePhysio(advancePhysioCareer(opening));
@@ -45,7 +50,7 @@ export function createPhysioCareers() {
 
 /** This seed produces a naturally occurring injury that can cross a fixture boundary. */
 export function createPhysioEligibilityCareers() {
-  const opening = createSeason(1448, 'aegean-waves', 'standard', false, false, true, true);
+  const opening = createSeason(225, 'aegean-waves', 'standard', false, false, true, true);
   const initial = enablePhysio(advancePhysioCareer(opening));
   const hired = hirePhysio(initial, 'physio-12');
   const fulltime = finishPhysioMatch(hired);

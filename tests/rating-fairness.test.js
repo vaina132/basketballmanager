@@ -24,3 +24,19 @@ describe('rating fairness (sprint 4)', () => {
     expect(withFairRatings(original)).toBe(original);
   });
 });
+
+describe('rating fairness on each player\'s own position scale (match-calibration review)', () => {
+  it('keeps a low-minute player\'s skill profile and lands him near the club\'s level overall', async () => {
+    const { overallRating } = await import('../src/world/overall-rating');
+    const centre = (id, base, extra = {}) => ({ ...player(id, base, extra), position: 'C', attributes: { twoPoint: base + 2, threePoint: base - 6, freeThrow: base - 3, passing: base - 4, defense: base + 2, rebounding: base + 4, stamina: base } });
+    const guard = (id, base, extra = {}) => ({ ...player(id, base, extra), position: 'PG', attributes: { twoPoint: base, threePoint: base + 2, freeThrow: base + 2, passing: base + 4, defense: base, rebounding: base - 6, stamina: base } });
+    const fair = withFairRatings(pack([centre('big', 15, { ratingMinutes: 1500 }), guard('pg', 15, { ratingMinutes: 1500 }), guard('new', 10, { ratingMinutes: 0 })]));
+    const rated = id => fair.players.find(item => item.id === id);
+    const regular = overallRating(rated('pg').attributes, 'PG'), newcomer = overallRating(rated('new').attributes, 'PG');
+    // One step (8 overall points) below the regulars, not the mixed-position average far below them.
+    expect(regular - newcomer).toBeGreaterThanOrEqual(6);
+    expect(regular - newcomer).toBeLessThanOrEqual(10);
+    // A guard keeps a guard's profile: passing above rebounding.
+    expect(rated('new').attributes.passing - rated('new').attributes.rebounding).toBe(10);
+  });
+});

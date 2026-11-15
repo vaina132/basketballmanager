@@ -7,6 +7,8 @@ import { seasonLabel } from '../world/season'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import './payroll-workspace.css'
+import { formatEuros } from './money-format'
+import { automationCushion } from '../world/economy'
 
 interface PayrollWorkspaceProps {
   season: SeasonState
@@ -19,7 +21,7 @@ interface PayrollWorkspaceProps {
 }
 
 const moneyFormatter = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 })
-const money = (cents: number) => moneyFormatter.format(cents / 100)
+const money = (cents: number) => Math.abs(cents) >= 100_000_000 ? formatEuros(cents) : moneyFormatter.format(cents / 100)
 
 export function PayrollWorkspace({ season, busy = false, onEnable, onDelegationChange, onPrepay, onOpenClub, onSelectPlayer }: PayrollWorkspaceProps) {
   const [query, setQuery] = useState('')
@@ -43,7 +45,7 @@ export function PayrollWorkspace({ season, busy = false, onEnable, onDelegationC
     </section>
 
     {!enabled ? <section className="payroll-enable panel" aria-labelledby="payroll-enable-title"><header className="payroll-heading"><h2 id="payroll-enable-title">Player payroll</h2><span>Not enabled</span></header><div><p>Start wage installments from the current matchday, with no charges for earlier matchdays. Existing squad terms continue annually. Remaining season wages can be settled early for a {PREPAYMENT_DISCOUNT_PERCENT}% discount.</p>{enableReason && <p id="payroll-enable-reason">{enableReason}</p>}<button id="enable-payroll" className="button primary" onClick={onEnable} disabled={busy || !!enableReason} aria-describedby={enableReason ? 'payroll-enable-reason' : undefined}>Enable player payroll<Icon name="people" size={16} /></button></div></section> : <>
-      <section className="payroll-policy panel" aria-labelledby="payroll-policy-title"><header className="payroll-heading"><h2 id="payroll-policy-title">Payment control</h2><span>{delegated ? 'Automatic' : 'Manual'}</span></header><div className="payroll-policy-control"><label htmlFor="payroll-control">Early settlement policy</label><input id="payroll-control" type="range" min={0} max={1} step={1} value={delegated ? 1 : 0} aria-valuetext={delegated ? 'Automatic' : 'Manual'} aria-describedby="payroll-policy-help" onChange={event => onDelegationChange(event.target.value === '1')} disabled={busy} /><div><span>Manual</span><span>Automatic</span></div></div><p className="payroll-note" id="payroll-policy-help">{season.status === 'complete' ? 'This policy applies from next season. Automatic reviews settlements at each prepared matchday.' : 'Switching to Automatic reviews settlements immediately and again at each prepared matchday.'} It protects all other future wages plus a {money(PAYROLL_AUTOMATION_CUSHION)} cash buffer. Manual settlements protect other future wages.</p></section>
+      <section className="payroll-policy panel" aria-labelledby="payroll-policy-title"><header className="payroll-heading"><h2 id="payroll-policy-title">Payment control</h2><span>{delegated ? 'Automatic' : 'Manual'}</span></header><div className="payroll-policy-control"><label htmlFor="payroll-control">Early settlement policy</label><input id="payroll-control" type="range" min={0} max={1} step={1} value={delegated ? 1 : 0} aria-valuetext={delegated ? 'Automatic' : 'Manual'} aria-describedby="payroll-policy-help" onChange={event => onDelegationChange(event.target.value === '1')} disabled={busy} /><div><span>Manual</span><span>Automatic</span></div></div><p className="payroll-note" id="payroll-policy-help">{season.status === 'complete' ? 'This policy applies from next season. Automatic reviews settlements at each prepared matchday.' : 'Switching to Automatic reviews settlements immediately and again at each prepared matchday.'} It protects all other future wages plus a {money(automationCushion(season, club.id, PAYROLL_AUTOMATION_CUSHION))} cash buffer. Manual settlements protect other future wages.</p></section>
 
       {balance.unpaid > 0 && <p className="payroll-unpaid panel">Club costs of {money(balance.unpaid)} are unpaid. Early wage settlements are unavailable until those costs are cleared. <button className="text-button" onClick={onOpenClub} disabled={busy}>View club activity<Icon name="chevron" size={13} /></button></p>}
 
@@ -62,7 +64,7 @@ export function PayrollWorkspace({ season, busy = false, onEnable, onDelegationC
         {startedThisSeason !== null && startedThisSeason > 1 && <p className="payroll-note">Payroll started on Matchday {startedThisSeason}. Annual salaries show the annual rate; no charges were created for earlier matchdays.</p>}
         <p className="payroll-note">Charged includes recorded obligations for current and former players, including unpaid costs. Prepaid salaries are not refunded after a transfer. Club shows the unpaid balance. Wages follow {PAYROLL_INSTALLMENTS} matchday installments per season. Midseason arrivals are charged from their registration matchday only. Injuries and missed games do not reduce wages.</p>
       </section>
-      <p className="payroll-model-note">{season.employment.enabledSince ? 'Player wages follow signed employment contracts. Renewals and recruitment are managed in Transfers.' : 'Fictional wage estimates; fixed squad terms continue annually.'} Save season keeps changes before the next automatic checkpoint.</p>
+      <p className="payroll-model-note">{season.employment.enabledSince ? 'Player wages follow signed employment contracts. Renewals and recruitment are managed in Transfers.' : (season.world?.economy ? 'Wages estimated from published 2025-27 salary reports; fixed squad terms continue annually.' : 'Fictional wage estimates; fixed squad terms continue annually.')} Save season keeps changes before the next automatic checkpoint.</p>
     </>}
     {selected && quote && <WageSettlement name={selected.name} quote={quote} cash={balance.cash} busy={busy} onClose={() => setReviewId(null)} onConfirm={() => { onPrepay(selected.id); setReviewId(null) }} />}
   </div>

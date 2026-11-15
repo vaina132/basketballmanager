@@ -65,7 +65,8 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 - **3.6 done:** the setup screen's game-speed panel now uses real-data measurements with Europe (18 clubs: 92 s a season, 4.6 MiB; 36: 247 s, 7.5 MiB; 54: 10.6 MiB), scaled by 1.5 for a typical laptop, and shows the first-season save size. The review step counted European-only clubs as weekly clubs; fixed.
 - **Contract lengths (sprint 4):** new real-club worlds use `openingContractYears` (`src/world/real-world.ts`), calibrated on published figures (EuroLeague trackers, FIBA/CIES migration report 2025): with the real pack, Spain and Turkey give one-season opening contracts to 37% of EuroLeague players (real: 45%; their squads include many young players), 66% of other top-division and 76% of second-division players; US imports outside the EuroLeague mostly one season. Generated next-division squads and joining clubs keep the old rule so saved careers replay unchanged. Real contract ends need the owner's decision (Suggestions).
 - **Hidden potential (sprint 4):** `src/world/potential.ts`. New careers record training model `'training-2'`: each player's headroom is the most for his age at the career start (19 or younger 8, 20-21 6, 22-23 4, 24-26 2, 27-29 1, 30+ 0 rating points) times a stable 25-100% share, capped at 20 per skill; practice stops there (100 points per rating point). Older careers (`'training-1'`) keep the two-point limit. Scouting reports and the player profile show a potential star range (unknown until scouted; narrow for the own squad). Players 30 or older no longer improve through practice in new careers. Owner check: the Potential rows in the browser, below 850 px too.
-- **Next:** sprint 4 with parallel agents: match calibration, realistic injuries, finances (agents running).
+- **Realistic finances (sprint 4, format 62):** `src/world/economy.ts` (`withRealEconomy`, `REAL_ECONOMY_RULES`, last step of `worldFromPack`; world id prefix `real-economy-`). Real-data worlds record `world.economy = 'real-2026-1'` and per-club figures on `world.finances[].economy` (band, budget, sponsorship, season funding, opening cash, ticket price, yearly operating cost, scale for staff fees and facility costs) from the 2025-27 budget research (`docs/decisions.md` to follow); wages are the club's gross cost; league/European/public/owner money is one "Season funding" receipt each season. The development and test worlds keep the old constants. Sums of €1M or more read as millions. A follow-up is running: a flatter wage curve (stars took up to the €15M cap) and published budgets by club name (Fenerbahçe 44M above Beşiktaş 20M, Bayern 48M).
+- **Next:** sprint 4 with parallel agents: match calibration, realistic injuries (agents running), the economy follow-up.
 
 ## Real clubs on every device (owner request, 15 November 2026)
 
@@ -143,6 +144,7 @@ After sprint 3 (new levels, each needing the owner's approval):
 - Old-save support: capture fixtures, continuation and migration tests for the formats released to players.
 - Full save replay checks for features added in development mode.
 - Removed continuation tests: none yet.
+- Economy gaps (format 62): promoted and relegated clubs keep their opening money figures (per-season figures need save and validator work); consistently weak clubs end seasons with little cash (2-4% of budget) and may drift into unpaid costs in long careers; the empty-roster wage reserve, academy prospects' wages and added arena seats are not rescaled; staff fees and facility costs follow one per-club scale.
 - Paused tests (`it.skip`, development mode): `tests/save-seal.test.js` (checkpoints validated before writing, no unchecked shortcut, strict saving without crypto) and `tests/career-saves.test.ts` (malformed state refused before writing). Checkpoints skip the full career check (`serializeSeasonCompact(state, { check: false })`), which took 17 s a matchday in a 36-club world with Europe.
 
 ## Local-only work
@@ -174,6 +176,7 @@ Browser checks still to do locally (by the owner, or by a local Claude session w
    - Start a new career and check the country-filtered league list, the speed meter and the "Preparing your career…" panel. These were checked automatically in Edge.
    - Then check in Transfers that only some players' contracts end after the first season.
 7. **Hidden potential (sprint 4):** in a new career, a scouted player's report and your own players' profiles show a "Potential" star range; unscouted players show none. Check the layout below 850 px wide.
+8. **Real economy (sprint 4):** in a new real-data career, check Club, Payroll, Staff and Sponsorship: the millions format, scaled staff fees, the "Season funding" ledger row and the setup screen's budget note.
 
 ## Suggestions for the owner
 

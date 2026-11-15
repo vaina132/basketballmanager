@@ -7,6 +7,7 @@ import { getTransferPaymentSummary } from './transfer-payments';
 import { seasonRounds, worldOf } from './career-world';
 import { ASSISTANT_DIRECTORY, staffMarket } from '../data/staff-directory';
 import type { WorldContext } from '../domain/world';
+import { staffFee } from './economy';
 
 export const MAX_ASSISTANTS = 1;
 export function assistantRating(coach: AssistantCoach): number { return coach.assessment; }
@@ -35,7 +36,7 @@ export function quoteAssistantHire(state: SeasonState, assistantId: string, club
   else if (!availableAssistants(state).some(available => available.id === assistantId)) reason = 'This assistant coach already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring an assistant coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring an assistant coach.';
-  else if (coach.fee > remainingAllocation) reason = 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
-  else if (coach.fee > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
-  return { assistantId, clubId, fee: coach?.fee ?? 0, remainingAllocation, remainingBudget, canHire: reason === null, reason };
+  else if (staffFee(state, clubId, coach.fee) > remainingAllocation) reason = 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
+  else if (staffFee(state, clubId, coach.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
+  return { assistantId, clubId, fee: staffFee(state, clubId, coach?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

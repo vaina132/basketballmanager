@@ -1,6 +1,7 @@
 import type { NegotiationDecision, NegotiationTerms } from '../domain/negotiations';
 import { getCareerWage, type CareerPlayerContext } from './player-catalog';
 import { releaseFeeReason } from './release-clauses';
+import { maxContractWage, MIN_CONTRACT_WAGE } from './employment-policy';
 
 const WAGE_STEP = 50_000;
 export const NEGOTIATION_TERM_PREMIUMS = [0, 5, 10] as const;
@@ -10,7 +11,7 @@ export const RELEASE_CLAUSE_PREMIUM_CAP = 5;
 export function requiredNegotiationWage(playerId: string, seasons: number, releaseFee?: number, context: CareerPlayerContext = {}): number {
   if (!Number.isInteger(seasons) || seasons < 1 || seasons > 3) throw new Error('Choose a contract lasting one to three seasons.');
   const base = getCareerWage(context, playerId);
-  const clauseReason = releaseFeeReason(releaseFee);
+  const clauseReason = releaseFeeReason(releaseFee, context);
   if (clauseReason) throw new Error(clauseReason);
   const premium = releaseFee === undefined ? NEGOTIATION_TERM_PREMIUMS[seasons - 1]! : Math.min(RELEASE_CLAUSE_PREMIUM_CAP, NEGOTIATION_TERM_PREMIUMS[seasons - 1]!);
   return Math.ceil(base * (100 + premium) / (100 * WAGE_STEP)) * WAGE_STEP;
@@ -22,7 +23,7 @@ export function getNegotiationDemands(playerId: string, releaseFee?: number, con
 
 export function evaluateNegotiation(playerId: string, seasonWage: number, seasons: number, releaseFee?: number, context: CareerPlayerContext = {}): NegotiationDecision {
   const base = getCareerWage(context, playerId), requiredWage = requiredNegotiationWage(playerId, seasons, releaseFee, context);
-  if (!Number.isInteger(seasonWage) || seasonWage < 500_000 || seasonWage > 5_000_000 || seasonWage % WAGE_STEP !== 0) throw new Error('Choose a valid annual wage in €500 steps.');
+  if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > maxContractWage(context) || seasonWage % WAGE_STEP !== 0) throw new Error('Choose a valid annual wage in €500 steps.');
   if (seasonWage >= requiredWage) return { outcome: 'accepted', reason: 'terms-met', requiredWage, counterOffer: null, alternativeOffer: null };
   if (seasonWage * 4 < base * 3) return { outcome: 'rejected', reason: 'far-below-demand', requiredWage, counterOffer: null, alternativeOffer: null };
   let alternativeOffer: NegotiationTerms | null = null;

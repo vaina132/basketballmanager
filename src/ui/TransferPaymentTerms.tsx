@@ -2,8 +2,9 @@ import type { TransferInstallment, TransferPaymentPlan } from '../domain/transfe
 import { getTransferPaymentSchedule, paymentPlanLabel } from '../world/transfer-payments'
 import { scoutingDate } from './ScoutingKnowledge'
 import './transfer-payments.css'
+import { formatEuros } from './money-format'
 
-export const transferMoney = (amount: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(amount / 100)
+export const transferMoney = (amount: number) => formatEuros(amount, true)
 
 /** Proposals do not promise a completion date. Only the later calendar dates are fixed. */
 export function TransferPaymentTerms({ fee, plan, startsSeason, startsRound = 1, installments, earliestSigning, incoming = false }: { fee: number; plan: TransferPaymentPlan; startsSeason: number; startsRound?: number; installments?: readonly TransferInstallment[]; earliestSigning?: string; incoming?: boolean }) {

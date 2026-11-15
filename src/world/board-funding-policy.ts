@@ -3,7 +3,7 @@ import type { FacilityFundingDecision, FacilityType, SeasonFacilities } from '..
 import type { SeasonState } from '../domain/season';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import { clubPresident, roundOrdinal, seasonRounds, worldOf } from './career-world';
-import { FACILITY_AUTOMATION_BUFFER, FACILITY_FUNDS_REASON, quoteFacilityUpgrade } from './facilities-policy';
+import { facilityAutomationBuffer, FACILITY_FUNDS_REASON, quoteFacilityUpgrade } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
 import { ownerCapital } from './board-consequences';
 
@@ -66,7 +66,7 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   const upgrade = quoteFacilityUpgrade(state, type, clubId);
   // A negative position means wages and fees already exceed cash; capital is never a back door for those.
   const position = getSpendablePosition(state, clubId), available = Math.max(0, position);
-  const amount = Math.max(0, upgrade.cost + (mode === 'automatic' ? FACILITY_AUTOMATION_BUFFER : 0) - available);
+  const amount = Math.max(0, upgrade.cost + (mode === 'automatic' ? facilityAutomationBuffer(state, clubId) : 0) - available);
   const confidence = boardConfidenceNow(state, clubId), requiredConfidence = requiredBoardConfidence(president);
   // The previous season's board verdict can raise, halve or withhold the owner's capital (see board-consequences).
   const seasonCapital = ownerCapital(state, clubId);

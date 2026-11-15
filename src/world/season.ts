@@ -32,7 +32,7 @@ import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { injuriesFromMatch, isRecovering } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
-import { createFinance, DEFAULT_TICKET_PRICE, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
+import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
 import { createInSeasonRecruitment, enableInSeasonRecruitment, enableInSeasonTransfers, resolveInSeasonRecruitment, scheduleInSeasonRecruitment } from './recruitment';
 import { createPayroll, enablePayroll, preparePayrollRound, processPayrollRound, startPayrollSeason } from './payroll';
@@ -403,7 +403,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), facilities: createFacilities(clubs, managedClubId), relationships: createRelationships(), board: createBoard(), rivalries: createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
+    schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId, { world }), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), facilities: createFacilities(clubs, managedClubId), relationships: createRelationships(), board: createBoard(), rivalries: createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
     ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), ...(europe ? { europe } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
     activeFixtureId: first?.id ?? null, activeMatch: first ? prepareMatch({ ...preparation, dataPackId: world.id }, first) : null,
   };
@@ -757,7 +757,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
       commercial: { ...next.commercial, plans: { ...next.commercial.plans, ...Object.fromEntries(next.clubs.filter(club => !Object.hasOwn(next.commercial.plans, club.id)).map(club => [club.id, { delegated: true }])) } } };
     const keep = <T>(record: Record<string, T>, fallback: T) => Object.fromEntries(next.clubs.map(club => [club.id, Object.hasOwn(record, club.id) ? record[club.id]! : fallback]));
     const offices = createScouting(next.clubs, next.managedClubId).clubs;
-    next = { ...next, payroll: { ...next.payroll, delegated: keep(next.payroll.delegated, true) }, finance: { ...next.finance, plans: keep(next.finance.plans, { delegated: true, price: DEFAULT_TICKET_PRICE }), roundPrices: keep(next.finance.roundPrices, DEFAULT_TICKET_PRICE) },
+    next = { ...next, payroll: { ...next.payroll, delegated: keep(next.payroll.delegated, true) }, finance: { ...next.finance, plans: Object.fromEntries(next.clubs.map(club => [club.id, next.finance.plans[club.id] ?? { delegated: true, price: defaultTicketPriceFor(next, club.id) }])), roundPrices: Object.fromEntries(next.clubs.map(club => [club.id, next.finance.roundPrices[club.id] ?? defaultTicketPriceFor(next, club.id)])) },
       scouting: { ...next.scouting, clubs: Object.fromEntries(next.clubs.map(club => [club.id, next.scouting.clubs[club.id] ?? offices[club.id]!])) } };
   }
   next = archiveFinancialHistory(next);

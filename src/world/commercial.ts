@@ -5,7 +5,7 @@ import type { SeasonState } from '../domain/season';
 import { incumbentSponsorId, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
 import { seasonLeagues } from './divisions';
 import { recordSponsorshipPayment } from './finance';
-import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, commercialGovernsSeason, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorshipPaymentsDue, sponsorshipSourceId, sponsorshipInstallment, SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_RENEWAL_ROUND, SPONSORSHIP_SECOND_INSTALLMENT_ROUND, type DueSponsorshipPayment } from './commercial-policy';
+import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, commercialGovernsSeason, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorshipPaymentsDue, sponsorshipSourceId, sponsorshipInstallment, sponsorshipReferenceFee, SPONSORSHIP_RENEWAL_ROUND, SPONSORSHIP_SECOND_INSTALLMENT_ROUND, type DueSponsorshipPayment } from './commercial-policy';
 import { dateForRound, getStandings, MAX_SEASON_NUMBER } from './season';
 import type { WorldContext } from '../domain/world';
 
@@ -47,7 +47,7 @@ export function enableCommercial(state: SeasonState): SeasonState {
   const world = worldOf(state);
   const agreements: SponsorshipAgreement[] = state.clubs.map((club, index) => ({
     id: `sponsorship-agreement-${index + 1}`, clubId: club.id, sponsorId: incumbentSponsorId(world, club.id), source: 'inherited', offerId: null,
-    startsSeason: state.seasonNumber, endsSeason: state.seasonNumber, annualFee: SPONSORSHIP_REFERENCE_FEE, bonus: 0, signedOn: state.date, automatic: false, prepaidSeasons: [state.seasonNumber],
+    startsSeason: state.seasonNumber, endsSeason: state.seasonNumber, annualFee: sponsorshipReferenceFee(world, club.id), bonus: 0, signedOn: state.date, automatic: false, prepaidSeasons: [state.seasonNumber],
   }));
   const enabled: SeasonState = { ...state, commercial: { ...state.commercial, enabledSince: commercialAnchor(state), agreements } };
   return automateSponsorship(state.round >= SPONSORSHIP_RENEWAL_ROUND ? openSponsorshipWindows(enabled, 'renewal') : enabled);

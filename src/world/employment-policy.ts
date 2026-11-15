@@ -12,6 +12,7 @@ import { offerOptionsReason } from './release-clauses';
 import { retirementContractReason } from './lifecycle-policy';
 import type { WorldContext } from '../domain/world';
 import { clubRosterLimitText, clubRosterLimit, clubSalaryBudget } from './club-roster-policy';
+import { REAL_ECONOMY_RULES, worldEconomy } from './economy';
 
 export const EMPLOYMENT_BUDGET = 24_000_000;
 export const MIN_ROSTER_SIZE = 8;
@@ -23,6 +24,13 @@ export const WAGE_STEP = 50_000;
 export const MAX_CONTRACT_SEASONS = 3;
 /** Retain room for eight players even if every remaining signing asks the catalog maximum. */
 export const MIN_ROSTER_WAGE_RESERVE = 1_800_000;
+/**
+ * The largest annual wage a contract may carry: EUR 50,000 in the development economy; with a researched economy
+ * (format 62) EUR 15 million, above any real salary. Wages are the club's gross cost.
+ */
+export const maxContractWage = (context?: WorldContext): number => worldEconomy(context) ? REAL_ECONOMY_RULES.limits.maxContractWage * 100 : MAX_CONTRACT_WAGE;
+/** The wage rule's wording for a context (the development text is kept for historical replies). */
+export const contractWageRuleText = (context?: WorldContext): string => worldEconomy(context) ? `Choose an annual wage from €5,000 to €${(maxContractWage(context) / 100).toLocaleString('en-GB')} in €500 steps.` : 'Choose an annual wage from €5,000 to €50,000 in €500 steps.';
 
 export function contractForSeason(employment: SeasonEmployment, playerId: string, seasonNumber: number): EmploymentContract | null {
   return effectiveContractsForSeason(employment, seasonNumber).find(contract => contract.playerId === playerId) ?? null;
@@ -84,7 +92,7 @@ export function quotePlayerContract(state: SeasonState, playerId: string, season
   else if (offerOptionsReason(state, options, paidTransfer)) reason = offerOptionsReason(state, options, paidTransfer);
   else if (!Number.isInteger(seasons) || seasons < 1 || seasons > MAX_CONTRACT_SEASONS || endsSeason > 7974) reason = 'Choose a contract lasting one to three supported seasons.';
   else if (retirementContractReason(state, playerId, endsSeason)) reason = retirementContractReason(state, playerId, endsSeason);
-  else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > MAX_CONTRACT_WAGE || seasonWage % WAGE_STEP !== 0) reason = 'Choose an annual wage from €5,000 to €50,000 in €500 steps.';
+  else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > maxContractWage(state) || seasonWage % WAGE_STEP !== 0) reason = contractWageRuleText(state);
   else if (seasonWage < askingWage && !state.negotiations.enabledSince) reason = 'The player will not accept less than his asking wage.';
   else if ((state.employment.buyouts ?? []).some(buyout => buyout.playerId === playerId && buyout.clubId === clubId && buyout.seasonNumber === state.seasonNumber)) reason = 'A player you buy out cannot rejoin your club during the same offseason.';
   else if (state.status === 'active' && getInSeasonOffers(state, undefined, true).some(offer => offer.playerId === playerId && offer.transfer?.sellerClubId === clubId)) reason = 'Resolve the current transfer proposals before renewing this player.';

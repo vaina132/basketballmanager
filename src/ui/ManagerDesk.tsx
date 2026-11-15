@@ -30,6 +30,7 @@ import { StaminaMeter } from './StaminaMeter'
 import { TeamInstructions } from './TeamInstructions'
 import './manager-desk.css'
 import { seasonRounds, worldOf } from '../world/career-world'
+import { formatEuros } from './money-format'
 
 interface ManagerDeskProps {
   match: MatchState
@@ -55,7 +56,7 @@ interface ManagerDeskProps {
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
-const money = (cents: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100)
+const money = (cents: number) => formatEuros(cents)
 
 export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenScouting, onOpenRelationships, onOpenBoard, onOpenInbox }: ManagerDeskProps) {
   const team = match[managedSide]

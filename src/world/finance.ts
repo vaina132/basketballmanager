@@ -30,16 +30,39 @@ import { governingDerby, RIVALRY_CROWD_PERCENT } from './rivalries';
 import { agreementFor, commercialGovernsSeason, openingSponsorshipClubs, sponsorshipInstallment, sponsorshipSourceId, type DueSponsorshipPayment } from './commercial-policy';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
 import { appendFinanceLedgerEntry, financeLedgerCount, financeLedgerEntries, financeLedgerTicket } from './finance-ledger';
+import { clubEconomy, REAL_ECONOMY_RULES, staffFee } from './economy';
 import { ledgerClubBalance } from './finance-ledger-index';
 
 export { clubFinanceDefinition } from './career-world';
 export type { FinanceBalance, FinanceLedgerRow, GateForecast } from '../domain/finance';
+/** Development economy (every world without `economy`); worlds with an economy read each club's figures instead. */
 export const OPENING_CASH = 50_000_000;
 export const ANNUAL_SPONSORSHIP = 20_000_000;
 export const ROUND_OPERATING_COST = 1_500_000;
 export const DEFAULT_TICKET_PRICE = 1800;
 export const MAX_TICKET_PRICE = 6000;
 export const TICKET_PRICE_STEP = 100;
+
+/** Opening cash for a club (format 62: its researched figure). */
+export const openingCashFor = (context: WorldContext, clubId: string): number => clubEconomy(context, clubId)?.openingCash ?? OPENING_CASH;
+/** The fixed annual sponsorship (format 62: the club's main sponsorship). */
+export const annualSponsorshipFor = (context: WorldContext, clubId: string): number => clubEconomy(context, clubId)?.sponsorship ?? ANNUAL_SPONSORSHIP;
+/** Format 62: the club's season funding (league, European and public money and the owner's contribution); none in the development economy. */
+export const annualFundingFor = (context: WorldContext, clubId: string): number => clubEconomy(context, clubId)?.funding ?? 0;
+/** The season-funding receipt's source (booked as sponsorship-kind income at the season opening, after the sponsors). */
+export const fundingSourceId = (seasonNumber: number): string => `funding-s${seasonNumber}`;
+/** A week's operating cost: the club's annual figure in equal weekly parts (format 62), otherwise the development constant. */
+export function roundOperatingCostFor(context: WorldContext, clubId: string): number {
+  const economy = clubEconomy(context, clubId);
+  return economy ? Math.round(economy.operatingCost / seasonRounds(context)) : ROUND_OPERATING_COST;
+}
+/** The club's default ticket price (format 62: its league's yield placed by strength). */
+export const defaultTicketPriceFor = (context: WorldContext, clubId: string): number => clubEconomy(context, clubId)?.ticketPrice ?? DEFAULT_TICKET_PRICE;
+/** The highest ticket price the club may set: three times its default (format 62), otherwise sixty euros. */
+export function maxTicketPriceFor(context: WorldContext, clubId: string): number {
+  const economy = clubEconomy(context, clubId);
+  return economy ? economy.ticketPrice * REAL_ECONOMY_RULES.maxPriceMultiple : MAX_TICKET_PRICE;
+}
 
 export interface FinanceFixture {
   id: string;
@@ -50,14 +73,15 @@ export interface FinanceFixture {
 }
 export interface FinanceContext extends WorldContext { fixtures: readonly FinanceFixture[]; facilities?: SeasonFacilities; finance?: SeasonFinance; date?: string; round?: number; seasonNumber?: number; rivalries?: SeasonRivalries }
 
-function validatePrice(price: number): void {
-  if (!Number.isInteger(price) || price < 0 || price > MAX_TICKET_PRICE || price % TICKET_PRICE_STEP !== 0) throw new Error('Choose a ticket price from zero to sixty euros in one-euro steps.');
+function validatePrice(price: number, maximum = MAX_TICKET_PRICE): void {
+  if (!Number.isInteger(price) || price < 0 || price > maximum || price % TICKET_PRICE_STEP !== 0) throw new Error(maximum === MAX_TICKET_PRICE ? 'Choose a ticket price from zero to sixty euros in one-euro steps.' : `Choose a ticket price from zero to ${maximum / 100} euros in one-euro steps.`);
 }
 
-export function createFinance(clubs: readonly Team[], managedClubId: string): SeasonFinance {
+/** Each club starts at its default price; `context` names the world (format 62 prices differ per club). */
+export function createFinance(clubs: readonly Team[], managedClubId: string, context: WorldContext = {}): SeasonFinance {
   return { model: 'finance-1', enabledSince: null,
-    plans: Object.fromEntries(clubs.map(club => [club.id, { delegated: club.id !== managedClubId, price: DEFAULT_TICKET_PRICE }])),
-    roundPrices: Object.fromEntries(clubs.map(club => [club.id, DEFAULT_TICKET_PRICE])), ledger: [],
+    plans: Object.fromEntries(clubs.map(club => [club.id, { delegated: club.id !== managedClubId, price: defaultTicketPriceFor(context, club.id) }])),
+    roundPrices: Object.fromEntries(clubs.map(club => [club.id, defaultTicketPriceFor(context, club.id)])), ledger: [],
   };
 }
 
@@ -160,17 +184,18 @@ export function recordTransferPayment(state: SeasonState, transfer: EmploymentTr
   return book(charged, transfer.fromClubId, 'transfer', payment.amount, payment.id);
 }
 
-function coachFee(contract: CoachingContract): number {
+/** The coach's catalog fee at the club's money level (format 62). */
+function coachFee(context: WorldContext, contract: CoachingContract): number {
   const coach = COACH_DIRECTORY.find(coach => coach.id === contract.coachId);
   if (!coach) throw new Error('The coaching fee needs a coach from the development catalog.');
-  return coach.fee;
+  return staffFee(context, contract.clubId, coach.fee);
 }
 
 /** New contracts may use cash only; mandatory existing obligations are booked during activation. */
 export function recordCoachFee(state: SeasonState, contract: CoachingContract): SeasonState {
   if (!state.finance.enabledSince) return state;
   if (contract.seasonNumber !== state.seasonNumber || !state.coaching.contracts.some(current => current.id === contract.id && current.clubId === contract.clubId && current.coachId === contract.coachId)) throw new Error('The coaching payment must belong to a current club contract.');
-  const fee = coachFee(contract), balance = getFinanceBalance(state.finance, contract.clubId);
+  const fee = coachFee(state, contract), balance = getFinanceBalance(state.finance, contract.clubId);
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
   if (getTransferPaymentSummary(state, contract.clubId).overdue > 0) throw new Error('Settle overdue transfer payments before hiring a coach.');
   if (balance.unpaid > 0 || balance.cash < fee) throw new Error('This club must settle unpaid costs and have enough cash before hiring a coach.');
@@ -185,8 +210,8 @@ export function recordScoutFee(state: SeasonState, contract: ScoutContract): Sea
   if (!state.finance.enabledSince || !state.scouts.enabledSince || !state.scouting.enabledSince || state.status !== 'active' || !scout || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `scout-contract-${state.scouts.contracts.length}`) throw new Error('Pay only the exact newly appointed scout contract.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a scout.');
-  if (getSpendableCash(state, contract.clubId) < scout.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a scout.');
-  return append(state, { clubId: contract.clubId, kind: 'scouting', amount: -scout.fee, sourceId: `scouting-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, scout: { contractId: contract.id, scoutId: contract.scoutId } });
+  if (getSpendableCash(state, contract.clubId) < staffFee(state, contract.clubId, scout.fee)) throw new Error('Protect remaining wages and transfer commitments before hiring a scout.');
+  return append(state, { clubId: contract.clubId, kind: 'scouting', amount: -staffFee(state, contract.clubId, scout.fee), sourceId: `scouting-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, scout: { contractId: contract.id, scoutId: contract.scoutId } });
 }
 
 export function recordFitnessFee(state: SeasonState, contract: FitnessContract): SeasonState {
@@ -195,8 +220,8 @@ export function recordFitnessFee(state: SeasonState, contract: FitnessContract):
   if (!state.finance.enabledSince || !state.fitness.enabledSince || !state.training.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `fitness-contract-${state.fitness.contracts.length}`) throw new Error('Pay only the exact newly appointed fitness coach contract.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a fitness coach.');
-  if (getSpendableCash(state, contract.clubId) < coach.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a fitness coach.');
-  return append(state, { clubId: contract.clubId, kind: 'fitness', amount: -coach.fee, sourceId: `fitness-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, fitness: { contractId: contract.id, coachId: contract.coachId } });
+  if (getSpendableCash(state, contract.clubId) < staffFee(state, contract.clubId, coach.fee)) throw new Error('Protect remaining wages and transfer commitments before hiring a fitness coach.');
+  return append(state, { clubId: contract.clubId, kind: 'fitness', amount: -staffFee(state, contract.clubId, coach.fee), sourceId: `fitness-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, fitness: { contractId: contract.id, coachId: contract.coachId } });
 }
 
 export function recordPhysioFee(state: SeasonState, contract: PhysioContract): SeasonState {
@@ -205,8 +230,8 @@ export function recordPhysioFee(state: SeasonState, contract: PhysioContract): S
   if (!state.finance.enabledSince || !state.physio.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !staff || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `physio-contract-${state.physio.contracts.length}`) throw new Error('Pay only the exact newly appointed physio contract.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a physio.');
-  if (getSpendableCash(state, contract.clubId) < staff.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a physio.');
-  return append(state, { clubId: contract.clubId, kind: 'physio', amount: -staff.fee, sourceId: `physio-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, physio: { contractId: contract.id, physioId: contract.physioId } });
+  if (getSpendableCash(state, contract.clubId) < staffFee(state, contract.clubId, staff.fee)) throw new Error('Protect remaining wages and transfer commitments before hiring a physio.');
+  return append(state, { clubId: contract.clubId, kind: 'physio', amount: -staffFee(state, contract.clubId, staff.fee), sourceId: `physio-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, physio: { contractId: contract.id, physioId: contract.physioId } });
 }
 
 /** A full-season assistant appointment is charged once and never refunded on release. */
@@ -218,8 +243,8 @@ export function recordAssistantFee(state: SeasonState, contract: AssistantContra
   if (!state.clubs.some(club => club.id === contract.clubId) || active.filter(item => item.clubId === contract.clubId).length !== 1 || active.filter(item => item.assistantId === contract.assistantId).length !== 1) throw new Error('Only one active assistant coach is allowed per club and per person.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring an assistant coach.');
-  if (getSpendableCash(state, contract.clubId) < coach.fee) throw new Error('Protect remaining wages and transfer commitments before hiring an assistant coach.');
-  return append(state, { clubId: contract.clubId, kind: 'assistant', amount: -coach.fee, sourceId: `assistant-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, assistant: { contractId: contract.id, assistantId: contract.assistantId } });
+  if (getSpendableCash(state, contract.clubId) < staffFee(state, contract.clubId, coach.fee)) throw new Error('Protect remaining wages and transfer commitments before hiring an assistant coach.');
+  return append(state, { clubId: contract.clubId, kind: 'assistant', amount: -staffFee(state, contract.clubId, coach.fee), sourceId: `assistant-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, assistant: { contractId: contract.id, assistantId: contract.assistantId } });
 }
 
 export function recordYouthFee(state: SeasonState, contract: YouthCoachContract): SeasonState {
@@ -229,8 +254,8 @@ export function recordYouthFee(state: SeasonState, contract: YouthCoachContract)
   if (!state.clubs.some(club => club.id === contract.clubId) || active.filter(item => item.clubId === contract.clubId).length !== 1 || active.filter(item => item.coachId === contract.coachId).length !== 1) throw new Error('Only one active youth coach is allowed per club and person.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
   if (getFinanceBalance(state.finance, contract.clubId).unpaid || getTransferPaymentSummary(state, contract.clubId).overdue) throw new Error('Settle unpaid costs and overdue transfer payments before hiring a youth coach.');
-  if (getSpendableCash(state, contract.clubId) < coach.fee) throw new Error('Protect remaining wages and transfer commitments before hiring a youth coach.');
-  return append(state, { clubId: contract.clubId, kind: 'youth', amount: -coach.fee, sourceId: `youth-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, youth: { contractId: contract.id, coachId: contract.coachId } });
+  if (getSpendableCash(state, contract.clubId) < staffFee(state, contract.clubId, coach.fee)) throw new Error('Protect remaining wages and transfer commitments before hiring a youth coach.');
+  return append(state, { clubId: contract.clubId, kind: 'youth', amount: -staffFee(state, contract.clubId, coach.fee), sourceId: `youth-${contract.id}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, youth: { contractId: contract.id, coachId: contract.coachId } });
 }
 
 function winShare(state: FinanceContext, clubId: string, beforeRound: number): number | null {
@@ -240,7 +265,7 @@ function winShare(state: FinanceContext, clubId: string, beforeRound: number): n
 
 /** Attendance is a deterministic development estimate from prior results and the chosen price. */
 export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'> & { date?: string }, price: number): GateForecast {
-  validatePrice(price);
+  validatePrice(price, maxTicketPriceFor(state, fixture.homeClubId));
   const venue = clubFinanceDefinition(worldOf(state), fixture.homeClubId);
   const recorded = state.finance ? financeLedgerTicket(state.finance, fixture.id)?.capacity : undefined;
   // The week's locked capacity applies to games on its Saturday; a midweek game day (step 3.4a) uses that day's capacity.
@@ -248,13 +273,14 @@ export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture
   const own = winShare(state, fixture.homeClubId, fixture.round), opponent = winShare(state, fixture.awayClubId, fixture.round);
   const derby = state.seasonNumber === undefined ? null : governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round, worldOf(state));
   const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent) * (derby ? 1 + RIVALRY_CROWD_PERCENT * derby.intensity / 100 : 1);
-  const attendance = price === 0 ? capacity : Math.min(capacity, Math.floor(demand * (DEFAULT_TICKET_PRICE / price) ** 1.4));
+  const attendance = price === 0 ? capacity : Math.min(capacity, Math.floor(demand * (defaultTicketPriceFor(state, fixture.homeClubId) / price) ** 1.4));
   return { fixtureId: fixture.id, clubId: fixture.homeClubId, opponentClubId: fixture.awayClubId, price, attendance, capacity, revenue: attendance * price };
 }
 
 export function recommendTicketPrice(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'>): number {
   let price = 0, bestRevenue = 0;
-  for (let candidate = TICKET_PRICE_STEP; candidate <= MAX_TICKET_PRICE; candidate += TICKET_PRICE_STEP) {
+  const maximum = maxTicketPriceFor(state, fixture.homeClubId);
+  for (let candidate = TICKET_PRICE_STEP; candidate <= maximum; candidate += TICKET_PRICE_STEP) {
     const revenue = forecastGate(state, fixture, candidate).revenue;
     if (revenue > bestRevenue) { price = candidate; bestRevenue = revenue; }
   }
@@ -264,7 +290,7 @@ export function recommendTicketPrice(state: FinanceContext, fixture: Pick<Financ
 export function setTicketPlan(state: SeasonState, plan: FinancePlan): SeasonState {
   if (!state.finance.enabledSince) throw new Error('Enable club finances before changing ticket policy.');
   if (!plan || typeof plan !== 'object' || Array.isArray(plan) || Object.keys(plan).length !== 2 || typeof plan.delegated !== 'boolean') throw new Error('Choose a valid ticket policy.');
-  validatePrice(plan.price);
+  validatePrice(plan.price, maxTicketPriceFor(state, state.managedClubId));
   return { ...state, finance: { ...state.finance, plans: { ...state.finance.plans, [state.managedClubId]: { ...plan } } } };
 }
 
@@ -276,10 +302,10 @@ export function setTicketPlan(state: SeasonState, plan: FinancePlan): SeasonStat
 export function openClubFinances(state: SeasonState, clubIds: readonly string[], firstTime: ReadonlySet<string>): SeasonState {
   if (!clubIds.length) return state;
   const plans = { ...state.finance.plans }, roundPrices = { ...state.finance.roundPrices };
-  for (const clubId of clubIds) { plans[clubId] ??= { delegated: true, price: DEFAULT_TICKET_PRICE }; roundPrices[clubId] ??= DEFAULT_TICKET_PRICE; }
+  for (const clubId of clubIds) { plans[clubId] ??= { delegated: true, price: defaultTicketPriceFor(state, clubId) }; roundPrices[clubId] ??= defaultTicketPriceFor(state, clubId); }
   let next: SeasonState = { ...state, finance: { ...state.finance, plans, roundPrices } };
   if (!state.finance.enabledSince) return next;
-  for (const clubId of clubIds) if (firstTime.has(clubId)) next = book(next, clubId, 'opening', OPENING_CASH, `opening-s${state.seasonNumber}`);
+  for (const clubId of clubIds) if (firstTime.has(clubId)) next = book(next, clubId, 'opening', openingCashFor(state, clubId), `opening-s${state.seasonNumber}`);
   return next;
 }
 
@@ -290,7 +316,7 @@ export function prepareFinanceRound(state: SeasonState): SeasonState {
   const prepared = roundCapacities ? { ...state, finance: { ...state.finance, roundCapacities } } : state;
   const roundPrices = Object.fromEntries(state.clubs.map(club => {
     const plan = state.finance.plans[club.id]!;
-    validatePrice(plan.price);
+    validatePrice(plan.price, maxTicketPriceFor(state, club.id));
     const fixture = state.fixtures.find(fixture => fixture.round === state.round && fixture.homeClubId === club.id);
     return [club.id, plan.delegated && fixture ? recommendTicketPrice(prepared, fixture) : plan.price];
   }));
@@ -301,10 +327,11 @@ export function enableFinance(state: SeasonState): SeasonState {
   if (state.finance.enabledSince) return state;
   if (state.status === 'complete') throw new Error('Start the next season before enabling club finances.');
   let next: SeasonState = { ...state, finance: { ...state.finance, enabledSince: { seasonNumber: state.seasonNumber, round: state.round } } };
-  for (const club of state.clubs) next = book(next, club.id, 'opening', OPENING_CASH, 'opening');
+  for (const club of state.clubs) next = book(next, club.id, 'opening', openingCashFor(state, club.id), 'opening');
   const rounds = seasonRounds(state);
-  for (const club of state.clubs) next = book(next, club.id, 'sponsor', Math.floor(ANNUAL_SPONSORSHIP * (rounds + 1 - state.round) / rounds), `sponsor-s${state.seasonNumber}`);
-  for (const contract of state.coaching.contracts) next = book(next, contract.clubId, 'coaching', -coachFee(contract), `coaching-${contract.id}`, null, { contractId: contract.id, coachId: contract.coachId });
+  for (const club of state.clubs) next = book(next, club.id, 'sponsor', Math.floor(annualSponsorshipFor(state, club.id) * (rounds + 1 - state.round) / rounds), `sponsor-s${state.seasonNumber}`);
+  next = bookSeasonFunding(next, (rounds + 1 - state.round) / rounds);
+  for (const contract of state.coaching.contracts) next = book(next, contract.clubId, 'coaching', -coachFee(state, contract), `coaching-${contract.id}`, null, { contractId: contract.id, coachId: contract.coachId });
   return prepareFinanceRound(next);
 }
 
@@ -321,7 +348,7 @@ export function processFinanceRound(state: SeasonState): SeasonState {
     const gate = forecastGate(state, fixture, state.finance.roundPrices[fixture.homeClubId]!);
     next = book(next, fixture.homeClubId, 'tickets', gate.revenue, `tickets-${fixture.id}`, { fixtureId: fixture.id, price: gate.price, attendance: gate.attendance, ...(state.facilities?.enabledSince ? { capacity: gate.capacity } : {}) });
   }
-  for (const club of state.clubs) next = book(next, club.id, 'operations', -ROUND_OPERATING_COST, `operations-s${state.seasonNumber}-r${state.round}`);
+  for (const club of state.clubs) next = book(next, club.id, 'operations', -roundOperatingCostFor(state, club.id), `operations-s${state.seasonNumber}-r${state.round}`);
   if (state.facilities?.enabledSince) for (const club of state.clubs) {
     const { total, ...facilityUpkeep } = getFacilityUpkeepBreakdown(state, club.id);
     if (total) next = append(next, { clubId: club.id, kind: 'facility-upkeep', amount: -total, sourceId: `facility-upkeep-s${state.seasonNumber}-r${state.round}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, facilityUpkeep });
@@ -342,9 +369,26 @@ export function startFinanceSeason(state: SeasonState): SeasonState {
       const agreement = agreementFor(state.commercial, clubId, state.seasonNumber)!;
       next = append(next, { clubId, kind: 'sponsor', amount: sponsorshipInstallment(agreement, 1), sourceId: sponsorshipSourceId(agreement, state.seasonNumber, 1), seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, sponsorship: { agreementId: agreement.id, sponsorId: agreement.sponsorId, installment: 1 } });
     }
-  } else for (const club of state.clubs) next = book(next, club.id, 'sponsor', ANNUAL_SPONSORSHIP, `sponsor-s${state.seasonNumber}`);
-  return prepareFinanceRound(next);
+  } else for (const club of state.clubs) next = book(next, club.id, 'sponsor', annualSponsorshipFor(state, club.id), `sponsor-s${state.seasonNumber}`);
+  return prepareFinanceRound(bookSeasonFunding(next, 1));
 }
+
+/**
+ * Format 62: each club's season funding (league and European distributions, public money and the owner's
+ * contribution), booked after the sponsors at the season opening; `share` pro-rates a mid-season activation. Clubs
+ * without funding (every world without an economy) book nothing.
+ */
+function bookSeasonFunding(state: SeasonState, share: number): SeasonState {
+  let next = state;
+  for (const club of state.clubs) {
+    const funding = annualFundingFor(state, club.id);
+    if (funding > 0) next = book(next, club.id, 'sponsor', share === 1 ? funding : seasonFundingShare(funding, seasonRounds(state), state.round), fundingSourceId(state.seasonNumber));
+  }
+  return next;
+}
+
+/** The season funding for an activation at `round` (whole season at round one), as for the fixed sponsorship. */
+export const seasonFundingShare = (funding: number, rounds: number, round: number): number => Math.floor(funding * (rounds + 1 - round) / rounds);
 
 /** Books a later agreement payment (matchday-six installment or earned bonus) exactly once, on its due boundary. */
 export function recordSponsorshipPayment(state: SeasonState, payment: DueSponsorshipPayment): SeasonState {

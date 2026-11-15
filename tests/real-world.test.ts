@@ -4,7 +4,7 @@ import { NEUTRAL_APPEARANCE, NEUTRAL_CLUB_COLOR } from '../src/world/data-pack';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { requireWorldContexts, seasonRounds, validateWorld } from '../src/world/career-world';
-import { MAX_CONTRACT_WAGE, MIN_CONTRACT_WAGE, WAGE_STEP } from '../src/world/employment-policy';
+import { maxContractWage, MIN_CONTRACT_WAGE, WAGE_STEP } from '../src/world/employment-policy';
 import { overallRating } from '../src/world/overall-rating';
 import { careerCompetitions, type ContractLevel, isGeneratedReserve, openingContractYears, REAL_WORLD_RULES, realWorldWage, worldFromPack } from '../src/world/real-world';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
@@ -44,7 +44,7 @@ describe('a career world from a real-data pack', () => {
   it('builds the league\'s real clubs with complete imported squads, neutral figures and the pack\'s identities', () => {
     const world = worldFromPack(pack, 'competition-league');
     expect(() => validateWorld(world)).not.toThrow();
-    expect(world).toMatchObject({ id: 'real-places-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
+    expect(world).toMatchObject({ id: 'real-economy-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
     expect(world.clubs.map(club => club.players.length)).toEqual([14, 14, 14, 14]);
     // Missing statistics must not silently discard a real identity.
     expect(world.clubs.every(club => club.players.some(item => item.id.endsWith('-13')))).toBe(true);
@@ -107,19 +107,22 @@ describe('a career world from a real-data pack', () => {
     expect(() => validateWorld({ ...world, playerContracts: { ...world.playerContracts, [ids[0]!]: 4 } })).toThrow(/one to three seasons/);
   });
 
-  it('estimates birth dates from ages and gives fictional wages within the contract rules', () => {
+  it('estimates birth dates from ages and gives researched-scale wages within the contract rules (format 62)', () => {
     const world = worldFromPack(pack, 'competition-league');
     expect(world.playerProfiles['player-a-1']).toEqual({ dateOfBirth: '2005-01-01', source: 'estimated-from-age', positionSource: 'unverified' });
     expect(world.playerProfiles['player-a-0']!.dateOfBirth).toBe(`${2026 - REAL_WORLD_RULES.defaultAge}-01-01`);
     for (const club of world.clubs) {
       for (const item of club.players) {
         const wage = world.wages[item.id]!;
-        expect(wage).toBe(realWorldWage(overallRating(item.attributes, item.position)));
         expect(wage).toBeGreaterThanOrEqual(MIN_CONTRACT_WAGE);
-        expect(wage).toBeLessThanOrEqual(MAX_CONTRACT_WAGE);
+        expect(wage).toBeLessThanOrEqual(maxContractWage({ world }));
         expect(wage % WAGE_STEP).toBe(0);
       }
+      // Within a squad, a better overall rating never earns less.
+      const ranked = [...club.players].sort((a, b) => overallRating(b.attributes, b.position) - overallRating(a.attributes, a.position));
+      for (let index = 1; index < ranked.length; index += 1) expect(world.wages[ranked[index]!.id]!).toBeLessThanOrEqual(world.wages[ranked[index - 1]!.id]!);
     }
+    expect(world.economy).toBe('real-2026-1');
     expect(realWorldWage(90)).toBeGreaterThan(realWorldWage(60));
   });
 
@@ -137,11 +140,12 @@ describe('a career world from a real-data pack', () => {
     expect(parseSeason(oldSaved).world!.playerProfiles).toEqual(oldWorld.playerProfiles);
   });
 
-  it('gives stronger squads bigger arenas and labels the board, sponsors and budgets as fictional estimates', () => {
+  it('gives stronger squads bigger arenas and budgets, with fictional presidents and sponsors', () => {
     const world = worldFromPack(pack, 'competition-league');
     const capacity = (id: string) => world.finances.find(item => item.clubId === id)!.capacity;
-    expect(capacity('club-d')).toBe(REAL_WORLD_RULES.arena.largest);
-    expect(capacity('club-a')).toBe(REAL_WORLD_RULES.arena.smallest);
+    const budget = (id: string) => world.finances.find(item => item.clubId === id)!.economy!.budget;
+    expect(capacity('club-d')).toBeGreaterThan(capacity('club-a'));
+    expect(budget('club-d')).toBeGreaterThan(budget('club-a'));
     expect(world.finances.every(item => item.referenceDemand < item.capacity)).toBe(true);
     expect(world.presidents.every(item => item.name.split(' ').length === 2)).toBe(true);
     expect(world.sponsors.length).toBeGreaterThanOrEqual(world.clubs.length);

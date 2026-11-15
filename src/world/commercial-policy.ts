@@ -4,10 +4,13 @@ import type { ArchivedFixture, SeasonFixture } from '../domain/season';
 import type { Team } from '../domain/types';
 import type { CareerWorld } from '../domain/world';
 import { clubFinanceDefinition } from './career-world';
+import { clubEconomy } from './economy';
 import { seasonStartDate } from './season';
 
 /** The fixed sponsorship that negotiations replace: EUR 200,000 a season, in euro cents. */
 export const SPONSORSHIP_REFERENCE_FEE = 20_000_000;
+/** A club's sponsorship benchmark: its researched main sponsorship in worlds with an economy (format 62), otherwise EUR 200,000. */
+export const sponsorshipReferenceFee = (world: CareerWorld, clubId: string): number => clubEconomy({ world }, clubId)?.sponsorship ?? SPONSORSHIP_REFERENCE_FEE;
 export const SPONSORSHIP_MIN_APPEAL = 0.75;
 export const SPONSORSHIP_MAX_APPEAL = 1.25;
 export const SPONSORSHIP_OFFERS_PER_WINDOW = 3;
@@ -100,13 +103,16 @@ export interface SponsorAppeal { reach: number; winShare: number; fill: number; 
  */
 export function sponsorAppeal(context: { clubs: readonly Pick<Team, 'id'>[]; fixtures: readonly (SeasonFixture | ArchivedFixture)[]; ledger: readonly FinanceEntry[]; seasonNumber: number; completedRounds: number; world: CareerWorld }, clubId: string): SponsorAppeal {
   const definition = (id: string) => clubFinanceDefinition(context.world, id);
-  const reach = definition(clubId).referenceDemand / (context.clubs.reduce((sum, club) => sum + definition(club.id).referenceDemand, 0) / context.clubs.length);
+  // Format 62: a club's own benchmark already reflects its size, so its reach is neutral.
+  const reach = definition(clubId).economy ? 1 : definition(clubId).referenceDemand / (context.clubs.reduce((sum, club) => sum + definition(club.id).referenceDemand, 0) / context.clubs.length);
   const played = context.fixtures.filter(fixture => fixture.round <= context.completedRounds && fixture.result && (fixture.homeClubId === clubId || fixture.awayClubId === clubId));
   const winShare = played.length ? played.filter(fixture => fixture.result!.winnerClubId === clubId).length / played.length : 0.5;
   const gates = context.ledger.filter(entry => entry.kind === 'tickets' && entry.clubId === clubId && entry.seasonNumber === context.seasonNumber && entry.round <= context.completedRounds && entry.ticket);
   const fill = gates.length ? gates.reduce((sum, entry) => sum + entry.ticket!.attendance / (entry.ticket!.capacity ?? definition(clubId).capacity), 0) / gates.length : SPONSORSHIP_NEUTRAL_FILL;
   // Each factor is neutral for an average club: league-average demand, half the games won, a typical 80% full arena.
-  const appeal = clamp(Math.round(reach * (0.8 + 0.4 * winShare) * (1 + 0.2 * (fill - SPONSORSHIP_NEUTRAL_FILL)) * 1000) / 1000, SPONSORSHIP_MIN_APPEAL, SPONSORSHIP_MAX_APPEAL);
+  const raw = reach * (0.8 + 0.4 * winShare) * (1 + 0.2 * (fill - SPONSORSHIP_NEUTRAL_FILL));
+  // Format 62: sponsorship is a large share of a real club's budget, so results move it half as much.
+  const appeal = clamp(Math.round((definition(clubId).economy ? 1 + (raw - 1) / 2 : raw) * 1000) / 1000, SPONSORSHIP_MIN_APPEAL, SPONSORSHIP_MAX_APPEAL);
   return { reach, winShare, fill, appeal };
 }
 
@@ -138,7 +144,7 @@ export function buildSponsorshipOffers(input: { seed: number; commercial: Season
     const h = hash(seed, `sponsor-offer|${clubId}|${forSeason}|${window}|${sponsorId}`);
     const seasons = sponsorId === incumbent ? 2 : 1 + h % 3;
     const variation = 0.95 + Math.floor(h / 3) % 11 / 100;
-    const annualFee = roundFee(SPONSORSHIP_REFERENCE_FEE * appeal * variation * (1 - SPONSORSHIP_TERM_DISCOUNT * (seasons - 1)));
+    const annualFee = roundFee(sponsorshipReferenceFee(world, clubId) * appeal * variation * (1 - SPONSORSHIP_TERM_DISCOUNT * (seasons - 1)));
     const bonus = Math.floor(h / 33) % 2 === 0 ? roundFee(annualFee * SPONSORSHIP_BONUS_PERCENT / 100) : 0;
     return { id: `sponsorship-offer-${commercial.offers.length + index + 1}`, clubId, sponsorId, window, madeAt: { ...anchor }, appeal, forSeason, seasons, initialAnnualFee: annualFee, annualFee, bonus, expiresOn, status: 'open' as const, closedOn: null, request: null };
   });

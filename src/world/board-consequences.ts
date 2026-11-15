@@ -3,6 +3,7 @@ import type { SeasonState } from '../domain/season';
 import type { CareerWorld, WorldContext } from '../domain/world';
 import { clubPresident, seasonRounds, worldOf } from './career-world';
 import { STAFF_BUDGET } from './staff-constants';
+import { scaledMoney } from './economy';
 
 /** The board's end-of-season judgement, named after the confidence labels shown throughout the game. */
 export type BoardVerdict = 'confident' | 'steady' | 'concerned' | 'pressure';
@@ -56,13 +57,15 @@ const scaled = (amount: number, percent: number) => Math.round(amount * percent 
 /** The budgets a verdict gives a club; standard budgets without one. Also used to preview an unfinished season. */
 export function verdictBudgets(clubId: string, verdict: BoardVerdict | null, world: CareerWorld): { staff: number; capital: number } {
   const effect = BOARD_VERDICT_EFFECTS[verdict ?? 'steady'];
-  return { staff: scaled(STAFF_BUDGET, effect.staffPercent), capital: scaled(clubPresident(world, clubId).seasonCapital, effect.capitalPercent) };
+  return { staff: scaled(scaledMoney({ world }, clubId, STAFF_BUDGET), effect.staffPercent), capital: scaled(clubPresident(world, clubId).seasonCapital, effect.capitalPercent) };
 }
 
 /** The shared annual staff allocation for a club and season, in euro cents. */
 export function staffAllocation(state: Partial<Pick<SeasonState, 'board'>> & Pick<SeasonState, 'seasonNumber'> & WorldContext, clubId: string, seasonNumber = state.seasonNumber): number {
   const verdict = governingVerdict(state, clubId, seasonNumber);
-  return verdict ? scaled(STAFF_BUDGET, BOARD_VERDICT_EFFECTS[verdict.verdict].staffPercent) : STAFF_BUDGET;
+  // Format 62: the standard allocation sits at the club's money level.
+  const standard = scaledMoney(state, clubId, STAFF_BUDGET);
+  return verdict ? scaled(standard, BOARD_VERDICT_EFFECTS[verdict.verdict].staffPercent) : standard;
 }
 
 /** The owner's capital for facility projects in a season, in euro cents. */

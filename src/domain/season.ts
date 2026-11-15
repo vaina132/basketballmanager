@@ -127,7 +127,8 @@ export interface DomesticDivisions {
 /** Format 58 adds the EuroCup format: four groups and best-of-three playoffs (step 3.5d). */
 /** Format 59 adds the BCL format: qualification, a protected draw, play-ins, Round of 16 groups and a Final Four (step 3.5e). */
 /** Format 60 adds estimated tables for unchosen leagues and each season end's European places (`europe`, step 3.5f). */
-export const SEASON_SCHEMA_VERSION = 60;
+/** Format 62 (sprint 4) gives real-club worlds researched money: `world.economy` and each club's `finances[].economy` (`src/world/economy.ts`). Format 61 is reserved for the parallel injuries work. */
+export const SEASON_SCHEMA_VERSION = 62;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

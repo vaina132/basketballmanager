@@ -433,6 +433,13 @@ The owner decided both open questions on 15 November 2026:
 
 The owner could not play on a phone, which has no data pack. Decision: real clubs and players are the default way to play, and the owner has granted the data rights. At the owner's request the checksummed pack lives in the owner's Supabase project (public bucket `game-data`, `real-pack.json`), with `public/data/real-pack.json` as a fallback; the game reads and checks it when New career or a real-club friendly opens (`fetchBuiltInPack`), and keeps "choose a file" as an alternative. The first online pack was built in Supabase from the database (dataset 2026.11-world-1); the owner replaces it with the corrected local pack using `npm run data:publish`. No fictional clubs are offered.
 
+## Sprint 4 realism defaults (15 November 2026, reversible)
+
+Researched in the cloud from free sources; each value sits in one documented rules object so the owner can change it.
+- **Money (format 62, `REAL_ECONOMY_RULES` in `src/world/economy.ts`):** budgets per band, typical (range): EuroLeague top group 48M (40-70M), other EuroLeague 25M (17-38M), top-division upper half and lower half per country, second divisions 0.4-6M; wage share of budget 55/45/40/38/35%; revenue mix per band with country adjustments; attendance and ticket yield per league (EuroLeague 10,589 at €30-40, ACB 6,633 at €22, BBL 4,676 at €24, LNB 4,139 at €25, LBA 4,105 at €15.5). Sources: LNB/DNCCG reports, the easyCredit BBL league report 2024-25, EuroLeague remuneration and attendance announcements, Eurohoops, BasketNews, Sportando, 2Playbook and club announcements. Published club budgets replace the strength estimate where known (follow-up).
+- **Contract lengths (`OPENING_CONTRACT_SHARES` in `src/world/real-world.ts`):** estimates calibrated on the BasketNews and Eurohoops EuroLeague trackers and the FIBA/CIES migration report 2025. Importing real EuroLeague contract ends is the owner's decision (HANDOVER, Suggestions).
+- **Hidden potential (`src/world/potential.ts`):** headroom by age at the career start (19 or younger 8 rating points down to 0 from 30) times a stable 25-100% share.
+
 ## Owner feedback after playing, 15 November 2026
 
 The owner started a career and asked for these (verbatim points summarised), "Either do these or be sure that you put them into their respective places in the development plan":

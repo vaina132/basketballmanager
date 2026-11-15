@@ -1,9 +1,13 @@
+import type { ClubEconomy } from '../domain/world';
+
 export interface ClubFinanceDefinition {
   clubId: string;
   venue: string;
   sponsor: string;
   capacity: number;
   referenceDemand: number;
+  /** Format 62: the club's researched money figures, present exactly when its world has an economy. */
+  economy?: ClubEconomy;
 }
 
 /** Fictional development venues, sponsors and demand assumptions, not researched finances. */

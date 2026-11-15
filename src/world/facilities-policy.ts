@@ -7,10 +7,16 @@ import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { dateForRound, MAX_SEASON_NUMBER } from './season';
 import { memoizePure } from './pure-cache';
+import { automationCushion, scaledMoney } from './economy';
 
 export const FACILITY_TYPES: readonly FacilityType[] = ['arena', 'training', 'youth'];
 export const FACILITY_MAX_LEVEL = 4;
 export const FACILITY_AUTOMATION_BUFFER = 15_000_000;
+/** The cash automatic control keeps after an upgrade, at the club's money level (format 62). */
+export const facilityAutomationBuffer = (context: WorldContext, clubId: string): number => automationCushion(context, clubId, FACILITY_AUTOMATION_BUFFER);
+/** An upgrade's construction cost and a level's weekly upkeep at the club's money level (format 62; unchanged otherwise). */
+const facilityCost = (context: WorldContext, clubId: string, type: FacilityType, level: number): number => scaledMoney(context, clubId, COSTS[type][level - 1]!);
+const facilityUpkeep = (context: WorldContext, clubId: string, type: FacilityType, level: number): number => scaledMoney(context, clubId, UPKEEP[type][level - 1]!, 100);
 export const FACILITY_CONSTRUCTION_CAPACITY_PERCENT = 90;
 /** The only upgrade blocker that board capital can resolve. */
 export const FACILITY_FUNDS_REASON = 'The upgrade exceeds the remaining budget after salary and transfer commitments.';
@@ -106,7 +112,7 @@ export function facilityPracticeBonusPercent(state: FacilitiesContext, type: 'tr
 
 export function getFacilityUpkeepBreakdown(state: FacilitiesContext, clubId: string, onDate = state.date): { arena: number; training: number; youth: number; total: number } {
   const percent = state.facilities?.maintenanceSince && state.facilities.maintenanceSince.date < (onDate ?? '9999-12-31') && maintenancePlanOn(state.facilities, clubId, onDate) === 'reduced' ? FACILITY_REDUCED_UPKEEP_PERCENT : 100;
-  const cost = (type: FacilityType) => Math.round(UPKEEP[type][getFacilityLevel(state, type, clubId, onDate) - 1]! * percent / 100);
+  const cost = (type: FacilityType) => Math.round(facilityUpkeep(state, clubId, type, getFacilityLevel(state, type, clubId, onDate)) * percent / 100);
   const arena = cost('arena'), training = cost('training'), youth = cost('youth');
   return { arena, training, youth, total: arena + training + youth };
 }
@@ -129,9 +135,9 @@ export function quoteFacilityUpgrade(state: SeasonState, type: FacilityType, clu
   if (!FACILITY_TYPES.includes(type)) throw new Error('Choose an arena, training or youth facility.');
   if (!state.clubs.some(club => club.id === clubId)) throw new Error('Choose a club in this career.');
   const fromLevel = getFacilityLevel(state, type, clubId), toLevel = Math.min(FACILITY_MAX_LEVEL, fromLevel + 1);
-  const cost = fromLevel === FACILITY_MAX_LEVEL ? 0 : COSTS[type][toLevel - 1]!;
+  const cost = fromLevel === FACILITY_MAX_LEVEL ? 0 : facilityCost(state, clubId, type, toLevel);
   const durationDays = fromLevel === FACILITY_MAX_LEVEL ? 0 : BUILD_DAYS[toLevel - 1]!;
-  const available = getSpendableCash(state, clubId), currentUpkeep = getFacilityUpkeep(state, clubId), upkeepAfter = UPKEEP[type][toLevel - 1]!;
+  const available = getSpendableCash(state, clubId), currentUpkeep = getFacilityUpkeep(state, clubId), upkeepAfter = facilityUpkeep(state, clubId, type, toLevel);
   let reason: string | null = null;
   if (!state.facilities?.enabledSince) reason = 'Enable club facilities before commissioning an upgrade.';
   else if (!state.finance.enabledSince) reason = 'Enable club finances before funding construction.';
@@ -142,7 +148,7 @@ export function quoteFacilityUpgrade(state: SeasonState, type: FacilityType, clu
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before funding construction.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before funding construction.';
   else if (available < cost) reason = FACILITY_FUNDS_REASON;
-  return { clubId, type, fromLevel, toLevel, cost, durationDays, dueOn: facilityCompletionDate(state.date, durationDays), remainingBudgetAfter: Math.max(0, available - cost), upkeepAfter, totalUpkeepAfter: currentUpkeep - UPKEEP[type][fromLevel - 1]! + upkeepAfter, bonusAfter: type === 'arena' ? 0 : BONUS_PERCENT[toLevel - 1]!, capacityAfter: type === 'arena' ? clubFinanceDefinition(worldOf(state), clubId).capacity + ADDED_SEATS[toLevel - 1]! : 0, canStart: reason === null, reason };
+  return { clubId, type, fromLevel, toLevel, cost, durationDays, dueOn: facilityCompletionDate(state.date, durationDays), remainingBudgetAfter: Math.max(0, available - cost), upkeepAfter, totalUpkeepAfter: currentUpkeep - facilityUpkeep(state, clubId, type, fromLevel) + upkeepAfter, bonusAfter: type === 'arena' ? 0 : BONUS_PERCENT[toLevel - 1]!, capacityAfter: type === 'arena' ? clubFinanceDefinition(worldOf(state), clubId).capacity + ADDED_SEATS[toLevel - 1]! : 0, canStart: reason === null, reason };
 }
 
 export function getClubFacilities(state: SeasonState, clubId = state.managedClubId): ClubFacilities {

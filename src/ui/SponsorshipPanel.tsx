@@ -3,13 +3,15 @@ import type { SponsorshipAgreement, SponsorshipOffer } from '../domain/commercia
 import type { SeasonState } from '../domain/season'
 import { getDevelopmentSponsor } from '../data/development-sponsors'
 import { getClubSponsorship, quoteSponsorshipOffer, type SponsorshipPaymentRow } from '../world/commercial'
-import { SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_REQUEST_PERCENT } from '../world/commercial-policy'
+import { sponsorshipReferenceFee, SPONSORSHIP_REQUEST_PERCENT } from '../world/commercial-policy'
 import { dateForRound, seasonLabel } from '../world/season'
 import { focusWhenReady } from './focus-when-ready'
 import { Icon } from './Icon'
 import { scoutingDate } from './ScoutingKnowledge'
 import './facilities-panel.css'
 import './sponsorship-panel.css'
+import { formatEuros } from './money-format'
+import { worldOf } from '../world/career-world'
 
 export interface SponsorshipActions {
   onEnableSponsorship: () => void
@@ -19,7 +21,7 @@ export interface SponsorshipActions {
   onSponsorshipDelegation: (delegated: boolean) => void
 }
 
-const money = (amount: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount / 100)
+const money = (amount: number) => formatEuros(amount)
 const seasons = (from: number, count: number) => count === 1 ? seasonLabel(from) : `${seasonLabel(from)} – ${seasonLabel(from + count - 1)}`
 const covered = (agreement: SponsorshipAgreement) => seasons(agreement.startsSeason, agreement.endsSeason - agreement.startsSeason + 1)
 const sponsorName = (sponsorId: string) => getDevelopmentSponsor(sponsorId).name
@@ -65,7 +67,7 @@ export function SponsorshipPanel({ season, busy = false, onEnableSponsorship, on
 
   return <section className="sponsorship-panel panel" aria-labelledby="sponsorship-title" data-sponsorship-enabled={sponsorship.enabled}>
     <header className="club-heading"><h2 id="sponsorship-title"><Icon name="wallet" size={18} />Main sponsor</h2>{sponsorship.enabled && <div className="facility-delegation"><label htmlFor="sponsor-control">Control</label><input id="sponsor-control" type="range" min={0} max={1} step={1} value={sponsorship.delegated ? 1 : 0} aria-valuetext={sponsorship.delegated ? 'Automatic' : 'Manual'} aria-describedby="sponsor-automatic-help" onChange={event => onSponsorshipDelegation(event.target.value === '1')} disabled={busy} /><output htmlFor="sponsor-control">{sponsorship.delegated ? 'Automatic' : 'Manual'}</output></div>}</header>
-    {!sponsorship.enabled ? <div className="facility-enable"><Icon name="wallet" size={26} /><div><strong>Negotiate your main sponsor</strong><p>Your current sponsor pays a fixed {money(SPONSORSHIP_REFERENCE_FEE)} a season. Enable negotiations to receive dated offers for future seasons, with two payments each season and optional bonuses. This season stays as it is.</p>{enableReason && <p id="sponsor-enable-reason">{enableReason}</p>}</div><button id="enable-sponsorship" className="button" onClick={onEnableSponsorship} disabled={busy || !!enableReason} aria-describedby={enableReason ? 'sponsor-enable-reason' : undefined}>Enable negotiations</button></div> : <>
+    {!sponsorship.enabled ? <div className="facility-enable"><Icon name="wallet" size={26} /><div><strong>Negotiate your main sponsor</strong><p>Your current sponsor pays a fixed {money(sponsorshipReferenceFee(worldOf(season), season.managedClubId))} a season. Enable negotiations to receive dated offers for future seasons, with two payments each season and optional bonuses. This season stays as it is.</p>{enableReason && <p id="sponsor-enable-reason">{enableReason}</p>}</div><button id="enable-sponsorship" className="button" onClick={onEnableSponsorship} disabled={busy || !!enableReason} aria-describedby={enableReason ? 'sponsor-enable-reason' : undefined}>Enable negotiations</button></div> : <>
       <p className="facility-automatic-note" id="sponsor-automatic-help">Automatic signs the offer with the largest guaranteed total as soon as offers arrive.</p>
       <div className="sponsor-current" data-sponsor-current={current?.id ?? 'none'} tabIndex={-1}>{current ? <><div className="sponsor-identity"><strong>{sponsorName(current.sponsorId)}</strong><span>{getDevelopmentSponsor(current.sponsorId).sector} · {covered(current)}</span></div><dl><div><dt>This season</dt><dd>{sponsorship.fixedThisSeason ? `${money(current.annualFee)} · fixed` : money(current.annualFee)}</dd></div>{current.bonus > 0 && <div><dt>Top-half bonus</dt><dd>{money(current.bonus)}</dd></div>}</dl></> : <div className="sponsor-identity"><strong>No main sponsor this season</strong><span>No sponsorship income until a new agreement starts.</span></div>}</div>
       {sponsorship.payments.length > 0 && <ul className="sponsor-payments" aria-label={`Sponsorship payments ${seasonLabel(season.seasonNumber)}`}>{sponsorship.payments.map(payment => <li key={payment.label} data-sponsor-payment={payment.status}><span><strong>{payment.label}</strong><small><time dateTime={payment.date}>{scoutingDate(payment.date)}</time></small></span><span>{money(payment.amount)}</span><span className={`sponsor-pill sponsor-pill--${payment.status}`}>{paymentStatus[payment.status]}</span></li>)}</ul>}

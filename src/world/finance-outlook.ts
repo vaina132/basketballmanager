@@ -3,7 +3,7 @@ import type { FinanceEntry } from '../domain/finance';
 import { financeLedgerEntries } from './finance-ledger';
 import type { CashOutlookInstallment, CashOutlookRow, CashOutlookScenario, ClubCashOutlook } from '../domain/finance-outlook';
 import type { SeasonState } from '../domain/season';
-import { forecastGate, getFinanceBalance, recommendTicketPrice, ROUND_OPERATING_COST } from './finance';
+import { forecastGate, getFinanceBalance, recommendTicketPrice, roundOperatingCostFor } from './finance';
 import { getReservedTransferFees } from './market-policy';
 import { agreementThroughRound, getSpendableCash, payrollInstallment } from './payroll-policy';
 import { getReservedInSeasonFees, getReservedInSeasonWages } from './recruitment-policy';
@@ -86,7 +86,7 @@ export function getClubCashOutlook(state: SeasonState, clubId = state.managedClu
     const row = rowOn(fixture.date);
     row.round = fixture.round;
     row.fixtureIds.push(fixture.id);
-    if (!operationPosted) row.operations += ROUND_OPERATING_COST;
+    if (!operationPosted) row.operations += roundOperatingCostFor(state, clubId);
     if (!upkeepPosted) row.operations += upkeep;
     if (gatePending) {
       const plan = state.finance.plans[clubId]!;

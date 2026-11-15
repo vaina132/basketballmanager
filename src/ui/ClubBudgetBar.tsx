@@ -10,6 +10,7 @@ import { getPayrollReserve, getSpendableCash } from '../world/payroll'
 import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { Icon } from './Icon'
 import './club-budget-bar.css'
+import { formatEuros } from './money-format'
 
 interface ClubBudgetBarProps {
   season: SeasonState
@@ -18,7 +19,7 @@ interface ClubBudgetBarProps {
   onOpenStaff: () => void
   onOpenTransfers: () => void
 }
-const money = (value: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value / 100)
+const money = (value: number) => formatEuros(value, true)
 
 /** One consistent view of the existing cash and annual allowances; never adds unlike budgets. */
 export function ClubBudgetBar({ season, disabled, onOpenClub, onOpenStaff, onOpenTransfers }: ClubBudgetBarProps) {

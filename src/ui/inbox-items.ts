@@ -16,6 +16,7 @@ import { careerMovesGovern, managedClubFor } from '../world/career'
 import { seasonEndOutlook } from '../world/career-policy'
 import { medicalDate } from './SeasonMedicalReport'
 import { seasonRounds, worldOf } from '../world/career-world'
+import { formatEuros } from './money-format'
 
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
 export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad'
@@ -31,7 +32,7 @@ export interface InboxItem {
   playerId?: string
 }
 
-const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100)
+const money = (cents: number) => formatEuros(cents)
 const FACILITIES: Record<string, string> = { arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure' }
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
 

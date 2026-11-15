@@ -1,4 +1,6 @@
 import { leavingClubIds } from './background';
+import type { WorldContext } from '../domain/world';
+import { REAL_ECONOMY_RULES, worldEconomy } from './economy';
 import type { MarketOffer } from '../domain/market';
 import type { ContractOfferOptions, PlayerContractQuote } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
@@ -15,13 +17,17 @@ import { releaseClauseTriggerReason } from './release-clauses';
 export const MIN_TRANSFER_FEE = 100_000;
 export const MAX_TRANSFER_FEE = 50_000_000;
 export const TRANSFER_FEE_STEP = 100_000;
+/** The largest transfer fee: EUR 500,000 in the development economy, EUR 50 million with a researched economy (format 62). */
+export const maxTransferFee = (context?: WorldContext): number => worldEconomy(context) ? REAL_ECONOMY_RULES.limits.maxTransferFee * 100 : MAX_TRANSFER_FEE;
+/** The fee rule's wording for a context (the development text is kept for historical replies). */
+export const transferFeeRuleText = (context?: WorldContext, prefix = '€'): string => `Choose a transfer fee from ${prefix}1,000 to ${prefix}${(maxTransferFee(context) / 100).toLocaleString('en-GB')} in ${prefix}1,000 steps.`;
 
 /** Fictional asking price based on remaining contracted salary, never hidden ability. */
-export function requiredTransferFee(state: Pick<SeasonState, 'employment' | 'seasonNumber'>, playerId: string): number {
+export function requiredTransferFee(state: Pick<SeasonState, 'employment' | 'seasonNumber'> & WorldContext, playerId: string): number {
   const contract = contractForSeason(state.employment, playerId, state.seasonNumber + 1);
   if (!contract) return 0;
   const remainingSalary = contract.seasonWage * (contract.endsSeason - Math.max(contract.startsSeason, state.seasonNumber + 1) + 1);
-  return Math.min(MAX_TRANSFER_FEE, Math.max(MIN_TRANSFER_FEE, Math.ceil(remainingSalary / TRANSFER_FEE_STEP) * TRANSFER_FEE_STEP));
+  return Math.min(maxTransferFee(state), Math.max(MIN_TRANSFER_FEE, Math.ceil(remainingSalary / TRANSFER_FEE_STEP) * TRANSFER_FEE_STEP));
 }
 
 export function getTransferCandidates(state: SeasonState, clubId = state.managedClubId): readonly Player[] {
@@ -43,7 +49,7 @@ export function transferOfferReason(state: SeasonState, playerId: string, fee: n
   if (leavingClubIds(state).has(contract.clubId) || leavingClubIds(state).has(buyerId)) return 'Clubs leaving the game\'s leagues take no part in transfers this offseason.';
   if ((state.employment.transfers ?? []).some(transfer => transfer.playerId === playerId && transfer.startsSeason === state.seasonNumber + 1)) return 'This player has already changed clubs this offseason.';
   if (!TRANSFER_PAYMENT_PLANS.includes(paymentPlan)) return 'Choose a supported transfer payment plan.';
-  if (!Number.isSafeInteger(fee) || fee < MIN_TRANSFER_FEE || fee > MAX_TRANSFER_FEE || fee % TRANSFER_FEE_STEP !== 0) return 'Choose a transfer fee from €1,000 to €500,000 in €1,000 steps.';
+  if (!Number.isSafeInteger(fee) || fee < MIN_TRANSFER_FEE || fee > maxTransferFee(state) || fee % TRANSFER_FEE_STEP !== 0) return transferFeeRuleText(state);
   if (options.transferMode === 'release-clause') { const reason = releaseClauseTriggerReason(state, playerId, fee, paymentPlan); if (reason) return reason; }
   if (resolving) {
     if (!own?.transfer || own.transfer.clubStatus !== 'accepted' || own.transfer.contractId !== contract.id || own.transfer.sellerClubId !== contract.clubId || own.transfer.fee !== fee || (own.transfer.paymentPlan ?? 'upfront') !== paymentPlan || (own.transfer.mode ?? 'negotiated') !== (options.transferMode ?? 'negotiated')) return 'The selling club must approve these transfer terms before the player can sign.';

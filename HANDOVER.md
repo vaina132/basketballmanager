@@ -63,7 +63,8 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 - **Rating fairness (sprint 4):** `src/world/rating-fairness.ts`, applied in `worldFromPack`: ratings resting on fewer than 600 minutes move towards the club's minutes-weighted level (one step lower) in proportion to the minutes missing; players without statistics take that level. The online pack now carries `ratingMinutes` (version `2026.11-world-1-online-2`). Example: Anadolu Efes' 30 and 32 become 61 and 60; their regulars keep their ratings.
 - **3.4d-4 done (cloud, researched online):** real next divisions in new worlds: Turkey TB2L (22), Spain Segunda FEB (28), Germany ProA (18), Greece Elite League (16) (`src/data/lower-divisions-2026.ts`, sources in `competition-rules-2026.md`). Worlds may now hold up to 400 clubs (all six countries: 306).
 - **3.6 done:** the setup screen's game-speed panel now uses real-data measurements with Europe (18 clubs: 92 s a season, 4.6 MiB; 36: 247 s, 7.5 MiB; 54: 10.6 MiB), scaled by 1.5 for a typical laptop, and shows the first-season save size. The review step counted European-only clubs as weekly clubs; fixed.
-- **Next:** sprint 4 with parallel agents: match calibration, realistic injuries, hidden potential, finances (agents running), contract-data research.
+- **Contract lengths (sprint 4):** new real-club worlds use `openingContractYears` (`src/world/real-world.ts`), calibrated on published figures (EuroLeague trackers, FIBA/CIES migration report 2025): with the real pack, Spain and Turkey give one-season opening contracts to 37% of EuroLeague players (real: 45%; their squads include many young players), 66% of other top-division and 76% of second-division players; US imports outside the EuroLeague mostly one season. Generated next-division squads and joining clubs keep the old rule so saved careers replay unchanged. Real contract ends need the owner's decision (Suggestions).
+- **Next:** sprint 4 with parallel agents: match calibration, realistic injuries, hidden potential, finances (agents running).
 
 ## Real clubs on every device (owner request, 15 November 2026)
 
@@ -175,6 +176,7 @@ Browser checks still to do locally (by the owner, or by a local Claude session w
 ## Suggestions for the owner
 
 - **Please confirm the European places default (3.5f)** in `docs/decisions.md` ("Background tables and next season's European places"), or say what to change. It is reversible.
+- **Real contract ends for EuroLeague players (decision needed):** free trackers (BasketNews, Eurohoops sheets) list contract end years for about 83% of the 20 EuroLeague clubs' players (about 270 of 330); no free source covers the other leagues. Collecting them is a one-off script or 2-3 hours by hand, but the tables are compiled by those sites (possible database-rights question), and the online pack is public. Say whether to import them (and where to keep them) or keep the calibrated estimate.
 
 - Show regular-season and playoff player statistics separately on the Competition screen.
 - Play Primera FEB's one-venue final stage without home advantage.

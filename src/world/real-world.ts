@@ -40,6 +40,34 @@ export const REAL_WORLD_RULES = Object.freeze({
     return choices[stable % choices.length]!;
   },
 });
+
+export type ContractLevel = 'euroleague' | 'top' | 'second';
+/**
+ * Opening contract lengths of new real-club worlds (sprint 4, 15 November 2026), replacing `contractYears` there.
+ * Free sources list real contract ends only for EuroLeague clubs (BasketNews and Eurohoops trackers; importing them is
+ * the owner's decision), so lengths stay estimates calibrated on published figures:
+ * - EuroLeague contracts running in November 2026 end after 1 season for 45%, 2 for 39%, 3 or more for 16%
+ *   (BasketNews tracker, 272 players); among new 2026 deals, two-thirds of players aged 33 or older signed for one
+ *   season and players aged 22 or younger for about three (Eurohoops index, 160 deals);
+ * - domestic top divisions keep only 27-42% of their players a year later (FIBA/CIES migration report 2025), so most
+ *   deals there are short, and second divisions shorter still (estimate);
+ * - US imports outside the EuroLeague mostly sign for one season (lowest retention in the same report).
+ * Shares are percentages of one, two and three seasons in 5% steps, chosen by a stable per-player value; four-year
+ * deals count as three, the game's limit. `contractYears` stays for generated next-division squads and joining clubs,
+ * so careers already saved replay unchanged.
+ */
+export const OPENING_CONTRACT_SHARES: Readonly<Record<ContractLevel, readonly (readonly [maxAge: number, shares: readonly [number, number, number]])[]>> = Object.freeze({
+  euroleague: [[22, [15, 35, 50]], [29, [45, 40, 15]], [32, [50, 35, 15]], [Infinity, [65, 35, 0]]],
+  top: [[22, [35, 40, 25]], [29, [60, 30, 10]], [32, [65, 30, 5]], [Infinity, [80, 20, 0]]],
+  second: [[22, [55, 35, 10]], [29, [75, 20, 5]], [Infinity, [85, 15, 0]]],
+});
+const US_IMPORT_SHARES = [80, 20, 0] as const;
+
+export function openingContractYears(age: number, stable: number, level: ContractLevel, nationality?: string | null): number {
+  const shares = level !== 'euroleague' && nationality === 'USA' && age > 22 ? US_IMPORT_SHARES : OPENING_CONTRACT_SHARES[level].find(([maxAge]) => age <= maxAge)![1];
+  const slot = (stable % 20) * 5;
+  return slot < shares[0] ? 1 : slot < shares[0] + shares[1] ? 2 : 3;
+}
 const PRESIDENT_FIRST = ['Anna', 'Bernd', 'Clara', 'Dieter', 'Elena', 'Frank', 'Greta', 'Holger', 'Ines', 'Jürgen', 'Karin', 'Lukas', 'Monika', 'Norbert', 'Olga', 'Peter', 'Rita', 'Stefan', 'Tanja', 'Uwe'];
 const PRESIDENT_LAST = ['Albrecht', 'Brandt', 'Conrad', 'Dorn', 'Engel', 'Falk', 'Gerber', 'Hahn', 'Imhof', 'Jansen', 'Kessler', 'Lorenz', 'Mertens', 'Nagel', 'Ostrow', 'Pohl', 'Quandt', 'Rieger', 'Seidel', 'Thiel'];
 
@@ -102,7 +130,11 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   // Opening contracts (owner feedback, 15 November 2026): no source has real contract data, so lengths are estimated.
   // Young players tend to have longer deals and veterans shorter ones; a stable per-player choice spreads the expiries.
   const ageOf = (playerId: string) => byId.get(playerId)?.age ?? REAL_WORLD_RULES.defaultAge;
-  const playerContracts = Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, REAL_WORLD_RULES.contractYears(ageOf(player.id), hash(player.id))])));
+  // Sprint 4: lengths by level (EuroLeague, top or second division), age and US import status.
+  const euroleagueClubs = new Set(pack.competitions.filter(item => item.kind === 'european' && item.season === competition.season && europeanKind(item.name) === 'euroleague').flatMap(item => item.clubIds));
+  const tierOf = new Map(competitions.flatMap(item => item.clubIds.map(clubId => [clubId, item.tier] as const)));
+  const levelOf = (clubId: string): ContractLevel => euroleagueClubs.has(clubId) ? 'euroleague' : (tierOf.get(clubId) ?? 1) >= 2 ? 'second' : 'top';
+  const playerContracts = Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, openingContractYears(ageOf(player.id), hash(player.id), levelOf(team.id), byId.get(player.id)?.nationality)])));
   const profileOf = (playerId: string): DevelopmentPlayerProfile => ({ dateOfBirth: byId.get(playerId)?.birthDate ?? `${2026 - (byId.get(playerId)?.age ?? REAL_WORLD_RULES.defaultAge)}-01-01`, source: byId.get(playerId)?.birthDate ? 'official-profile' as const : 'estimated-from-age' as const,
     positionSource: byId.get(playerId)?.profileEvidence?.positionSource ?? (byId.get(playerId)?.estimated.includes('game_position') ? 'estimated' as const : 'unverified' as const) });
   const domesticWorld: CareerWorld = {
@@ -213,6 +245,7 @@ export function withEuropeanCompetitions(world: CareerWorld, competitions: reado
   const capital = Math.min(...world.presidents.map(president => president.seasonCapital));
   const finances: ClubFinanceDefinition[] = [], presidents: DevelopmentPresident[] = [];
   const profiles: Record<string, DevelopmentPlayerProfile> = {}, wages: Record<string, number> = {}, contracts: Record<string, number> = {};
+  const euroleague = new Set(competitions.filter(item => item.kind === 'euroleague').flatMap(item => item.clubIds));
   for (const { team, profiles: own, venue } of added) {
     const t = strongest > weakest ? Math.max(0, Math.min(1, (bestEightStrength(team.players) - weakest) / (strongest - weakest))) : 0.5;
     const capacity = Math.round((arena.smallest + t * (arena.largest - arena.smallest)) / arena.step) * arena.step, h = hash(team.id);
@@ -221,7 +254,7 @@ export function withEuropeanCompetitions(world: CareerWorld, competitions: reado
     for (const player of team.players) {
       profiles[player.id] = own[player.id]!;
       wages[player.id] = realWorldWage(overallRating(player.attributes, player.position));
-      contracts[player.id] = REAL_WORLD_RULES.contractYears(playerAgeOnDate(own[player.id]!.dateOfBirth, world.startDate) ?? REAL_WORLD_RULES.defaultAge, hash(player.id));
+      contracts[player.id] = openingContractYears(playerAgeOnDate(own[player.id]!.dateOfBirth, world.startDate) ?? REAL_WORLD_RULES.defaultAge, hash(player.id), euroleague.has(team.id) ? 'euroleague' : 'top');
     }
   }
   const next: CareerWorld = {

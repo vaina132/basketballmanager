@@ -6,7 +6,7 @@ import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { requireWorldContexts, seasonRounds, validateWorld } from '../src/world/career-world';
 import { MAX_CONTRACT_WAGE, MIN_CONTRACT_WAGE, WAGE_STEP } from '../src/world/employment-policy';
 import { overallRating } from '../src/world/overall-rating';
-import { careerCompetitions, isGeneratedReserve, REAL_WORLD_RULES, realWorldWage, worldFromPack } from '../src/world/real-world';
+import { careerCompetitions, type ContractLevel, isGeneratedReserve, openingContractYears, REAL_WORLD_RULES, realWorldWage, worldFromPack } from '../src/world/real-world';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
 
 const positions = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
@@ -85,14 +85,24 @@ describe('a career world from a real-data pack', () => {
     const ids = world.clubs.flatMap(club => club.players.map(item => item.id));
     expect(Object.keys(world.playerContracts!).sort()).toEqual([...ids].sort());
     for (const id of ids) expect([1, 2, 3]).toContain(world.playerContracts![id]);
-    // Ages 21-33 in this pack: the youngest get two or three seasons, the 33-year-olds one.
-    expect(ids.filter(id => id.endsWith('-1')).every(id => world.playerContracts![id]! >= 2)).toBe(true);
-    expect(ids.filter(id => id.endsWith('-13')).every(id => world.playerContracts![id] === 1)).toBe(true);
+    // Sprint 4 calibration: shares of one, two and three seasons by level and age, in 5% slots of a stable value.
+    const shares = (age: number, level: ContractLevel, nationality?: string) => [1, 2, 3].map(years => Array.from({ length: 20 }, (_, slot) => openingContractYears(age, slot, level, nationality)).filter(value => value === years).length * 5);
+    expect(shares(26, 'euroleague')).toEqual([45, 40, 15]);
+    expect(shares(20, 'euroleague')).toEqual([15, 35, 50]);
+    expect(shares(26, 'top')).toEqual([60, 30, 10]);
+    expect(shares(34, 'top')).toEqual([80, 20, 0]);
+    expect(shares(26, 'second')).toEqual([75, 20, 5]);
+    expect(shares(26, 'top', 'USA')).toEqual([80, 20, 0]);
+    expect(shares(26, 'euroleague', 'USA')).toEqual([45, 40, 15]);
+    // Older players sign shorter deals on average.
+    const mean = (age: number) => Array.from({ length: 20 }, (_, slot) => openingContractYears(age, slot, 'top')).reduce((sum, value) => sum + value, 0) / 20;
+    expect(mean(21)).toBeGreaterThan(mean(27));
+    expect(mean(27)).toBeGreaterThan(mean(34));
     const state = createSeason({ seed: 3, world, managedClubId: 'club-c', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS });
     for (const contract of state.employment.contracts) expect(contract.endsSeason - contract.startsSeason + 1).toBe(world.playerContracts![contract.playerId]);
     const ending = state.employment.contracts.filter(contract => contract.endsSeason === 1).length;
-    expect(ending).toBeGreaterThan(0);
-    expect(ending).toBeLessThan(state.employment.contracts.length * 0.7);
+    expect(ending).toBeGreaterThan(state.employment.contracts.length * 0.35);
+    expect(ending).toBeLessThan(state.employment.contracts.length * 0.9);
     expect(parseSeason(serializeSeason(state))).toEqual(state);
     expect(() => validateWorld({ ...world, playerContracts: { ...world.playerContracts, [ids[0]!]: 4 } })).toThrow(/one to three seasons/);
   });

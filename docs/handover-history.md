@@ -10,6 +10,7 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 ## Sprint 4 start: rating fairness, fast autosaves, real-data measurements (15 November 2026)
 
+- Contract lengths (15 November 2026): `openingContractYears` and `OPENING_CONTRACT_SHARES` in `src/world/real-world.ts` (EuroLeague / top / second division by age, US imports mostly one season), from the contract-data research (BasketNews and Eurohoops EuroLeague trackers, FIBA/CIES IBMR 2025). Only `worldFromPack` and European entrants use it; `contractYears` stays for generated and joining squads. Test: `tests/real-world.test.ts`.
 - 3.6 measured estimates (15 November 2026): real-data seasons with Europe measured in the cloud (Germany 18 clubs 92 s / 4.6 MiB; Spain 36 clubs 247 s / 7.5 MiB; Spain+Germany 54 clubs 10.6 MiB, time not used: busy machine). `src/ui/GameSpeed.tsx` uses 2.26 × clubs^1.42 s (×1.5 laptop scaling) and 1.6 + 0.165 × clubs MiB; the review step now counts only weekly clubs. Vitest skips `.claude/` worktrees.
 - `src/world/rating-fairness.ts` (`withFairRatings`, in `worldFromPack`), pack field `ratingMinutes` (Edge Function v2 republished the online pack). Tests: `tests/rating-fairness.test.js` (2).
 - Checkpoints use `serializeSeasonCompact(state, { check: false })` (development mode); exports and imports stay strict. Ten checkpoint-policy tests paused with `it.skip` (listed under "Before release").

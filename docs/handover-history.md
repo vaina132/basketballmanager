@@ -8,6 +8,65 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Sprint 3 detailed list (archived from HANDOVER.md "Current state", 15 November 2026)
+
+**Done in sprint 3** (details in the history, search for the step number):
+- **3.1 data:** all 13 competitions imported and rated. The private pack `real-2026.11-world-3.json` (local only) covers 223 clubs and about 3,087 players.
+- **3.2 save scaling** for a single league. Combined-world acceptance waits for 3.7.
+- **3.3 domestic calendar:** one shared weekly calendar for all chosen leagues, with real byes for odd fields, a table per league, weekly settlement and gate income per home game (format 47).
+- **3.4 so far:**
+  - French LNB regular-season ranking rule (`lnb-2026-1`, format 48).
+  - **3.4a** game days inside a week. Saturday stays the decision day; extra game days fall on Tuesday and Thursday.
+  - **3.4b** every league's sourced 2026-27 postseason (format 49).
+  - **3.4c** promotion and relegation between a country's two divisions. Each season records its divisions (format 50).
+  - **3.4e-1** FIBA Official Basketball Rules 2026, Appendix D, as the labelled default standings rule for new worlds' leagues without a verified rule of their own (format 51). Also fixed: strict checks refused any manager club change in a carried world.
+  - **3.4e-2** verified league rules for new worlds (format 52): ACB article 7 (Spain's top division), BBL § 20 (Germany), FIP article 62 (both Italian divisions). Greece and Turkey keep the FIBA default (no readable official rule).
+  - **3.4d-1 to 3.4d-3** clubs leave and join the full world at season ends wherever the world lists a country's next division (formats 53-55; `withLowerDivisions`, `src/world/background.ts`, `src/world/exchanges.ts`; never Italy or France; real names need 3.4d-4), with the playoff panel's Leaving/Joining lists and "Generated" player labels. Owner decisions (a) and (b) implemented.
+- **3.5 so far** (formats 56-60; `src/world/europe.ts`, `european-formats.ts`, `european-places.ts`): the three competitions and their entrants in new worlds (3.5a); midweek game days, seeded draws and background sides for clubs outside the full world (3.5b); the EuroLeague (3.5c), EuroCup (3.5d) and BCL (3.5e) in their real formats, ending before the domestic postseasons (week 38); estimated tables for unchosen top divisions and each season end's European places, a reversible default **for the owner to confirm** (3.5f); the Calendar and Europe pages (3.5g). Real-world IDs `real-places-`.
+- **3.6 so far:** country flags, multi-country selection, a league list filtered by country, roster counts, a squad-strength bar, a game-speed meter, and the European competitions and estimated leagues listed in the club step and review.
+- **Owner feedback round (15 November 2026)**, placements in `docs/decisions.md#owner-feedback-after-playing-15-november-2026`:
+  - Setup screen fixed, and the injury and replay options removed.
+  - "Preparing your career…" panel; careers are now built in the worker.
+  - Opening contracts of 1-3 seasons (`world.playerContracts`).
+
+**Unfinished in sprint 3:** the 3.7 browser acceptance (3.6's measured speed and save-size estimates are done).
+
+
+
+## Sprint 3 summary (archived from HANDOVER.md on 15 November 2026 after sprint 4 started) (15 November 2026): cloud work complete, waiting for the owner
+
+**Done in the cloud:** every sprint-3 step that needs no private data, keys or Edge.
+- One shared calendar for several countries' leagues, with each league's real 2026-27 playoffs, promotion and relegation, tie-break rules and clubs moving to and from the division below.
+- The EuroLeague, EuroCup and Basketball Champions League in their real formats on midweek dates. Clubs from leagues not chosen play with their real squads. Leagues not chosen get an estimated table each season. Next season's European places follow a reversible default **for the owner to confirm** (`docs/decisions.md`, "Background tables and next season's European places").
+- A Calendar page for the whole season and a Europe page, and the setup screen lists the European competitions included.
+
+**Left for the owner's machine (local-only):**
+1. **3.4d-4: real lower-division names.** Import API-Sports' TB2L (Turkey), Segunda FEB (Spain), Pro A (Germany) and A2 (Greece) into a new private pack, then build them into new worlds with `withLowerDivisions` in `worldFromPack` (never Italy or France). Run a private season across a season end.
+2. **A new private pack check for Europe:** build a world with the real pack and check that the EuroLeague (20), EuroCup (32, trimmed if listed longer) and BCL (30 direct plus qualification) get their formats, that the one-year EuroLeague places match Paris, Beşiktaş and Hapoel Tel Aviv by name, and that the unchosen top divisions appear.
+3. **3.6:** measured speed and save-size estimates on the setup screen, using the real pack.
+4. **3.7:** a multi-league season with Europe in the browser, save and load, rollover into season two, and five-season speed and size measurements (target: loads in about 5 s; well inside the 32 MiB save limit). A cloud session may prepare a public synthetic five-season test first, if the owner asks.
+
+**Next:** the owner reviews sprint 3 and approves Sprint 4 (or more sprint-3 work). Never start Sprint 4 without that approval.
+
+After sprint 3 (new levels, each needing the owner's approval):
+- **Sprint 4, realism:** match calibration against real statistics; realistic injuries; hidden potential and fair ratings for low-minute players at strong clubs; realistic finances (wages, budgets, sponsorship and ticket income); real contract data.
+- **Saved ideas** (the owner calls them essential; place each into a level when planning it):
+  - unemployed seasons (confirm with the owner first: the design documents disagree);
+  - a protected first season and fresh board confidence for a new coach;
+  - mid-season dismissals and resignations;
+  - more president personalities;
+  - verdicts affecting the player salary budget;
+  - youth and culture objectives;
+  - players asking about new contracts;
+  - richer press topics and media reputation;
+  - rivalries that grow from results;
+  - loans and leases;
+  - medical and scouting facilities and repair projects;
+  - early sponsor exits and naming rights.
+- **Release preparation:** free first season, then a EUR 15 unlock, later Steam; data-rights review.
+- **Interface simplification,** after the owner has played with real data.
+
+
 ## Sprint 4 start: rating fairness, fast autosaves, real-data measurements (15 November 2026)
 
 - Realistic injuries (15 November 2026, worktree agent, format 61; merged with format 62): `src/domain/injuries.ts`, `health.ts` (`createSeasonInjury(..., earlier)`, `injuriesFromMatch(..., earlier)`, `injuryDays`, `recurrenceFactor`, `injuryRiskFor`, `injuryRiskMap`, `isRecurrence`), `match.ts` (`sampleInjuries`, `injuryExposure`, `INJURY_RATE_PER_MINUTE`, `injuryRisk` option), `validate-match.ts`. Tests: `tests/injuries.test.ts`; scenario tests re-seeded (season-health 325/atl-9, physio 27/rhf-1 and 1448/aeg-7, dismissals 67/35/20, career-moves 6, lower-division-world 11); 12 continuation files deleted (HANDOVER, Before release).

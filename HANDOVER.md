@@ -4,44 +4,18 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Keeping this file short:** after each push, update "Current state" here and add two or three lines to the top of `docs/handover-history.md`. Record decisions only when a rule or default is decided. Keep this file under 20 KB.
 
-## Current state (15 November 2026, sprint 3 cloud work complete)
+## Current state (15 November 2026, sprint 4 in progress)
 
-**Active level:** Sprint 3, the multi-league world ([docs/multi-league-world.md#steps](docs/multi-league-world.md#steps)).
+**Active level:** Sprint 4, realism (owner said "go" on 15 November 2026). Sprint 3's only open step is the 3.7 browser acceptance (local-only). Level order: sprint 3 (multi-league world), **sprint 4 (realism, active)**, saved ideas, release preparation, interface simplification (last).
 
-Since Level 7 was accepted, the levels are the owner's sprints, in this order:
-1. Sprint 3: multi-league world (active)
-2. Sprint 4: realism
-3. Saved ideas
-4. Release preparation
-5. Interface simplification (last)
-
-**Active step:** none in the cloud. Sprint 3's remaining steps are local-only (see "Sprint 3 summary").
+**Development mode** applies (see "Rules and conventions"): build features first; full suite at sprint end.
 
 **Code baseline:**
-- Online real club data (Supabase) commit on `main` (cloud session); save format **60** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
-- Last verification, on Linux (cloud): full serial suite **2,634 tests / 202 files passed** (790 s), and `npm run build` passed with the known chunk-size advisory.
-- Cloud sessions: Node 24.22.3 is installed in `/opt/node24` (put it first in `PATH`).
+- Save format **62** (`SEASON_SCHEMA_VERSION`; 61 injuries, 62 real economy), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
+- Last verification (cloud, Linux): `npm run test:quick` 2,407 passed / 10 skipped after the injuries merge; `npm run build` passes with the known chunk-size advisory. Last full suite: 2,634 tests before sprint 4 (790 s serial).
+- Cloud sessions: Node 24.22.3 in `/opt/node24` (put it first in `PATH`).
 
-**Done in sprint 3** (details in the history, search for the step number):
-- **3.1 data:** all 13 competitions imported and rated. The private pack `real-2026.11-world-3.json` (local only) covers 223 clubs and about 3,087 players.
-- **3.2 save scaling** for a single league. Combined-world acceptance waits for 3.7.
-- **3.3 domestic calendar:** one shared weekly calendar for all chosen leagues, with real byes for odd fields, a table per league, weekly settlement and gate income per home game (format 47).
-- **3.4 so far:**
-  - French LNB regular-season ranking rule (`lnb-2026-1`, format 48).
-  - **3.4a** game days inside a week. Saturday stays the decision day; extra game days fall on Tuesday and Thursday.
-  - **3.4b** every league's sourced 2026-27 postseason (format 49).
-  - **3.4c** promotion and relegation between a country's two divisions. Each season records its divisions (format 50).
-  - **3.4e-1** FIBA Official Basketball Rules 2026, Appendix D, as the labelled default standings rule for new worlds' leagues without a verified rule of their own (format 51). Also fixed: strict checks refused any manager club change in a carried world.
-  - **3.4e-2** verified league rules for new worlds (format 52): ACB article 7 (Spain's top division), BBL § 20 (Germany), FIP article 62 (both Italian divisions). Greece and Turkey keep the FIBA default (no readable official rule).
-  - **3.4d-1 to 3.4d-3** clubs leave and join the full world at season ends wherever the world lists a country's next division (formats 53-55; `withLowerDivisions`, `src/world/background.ts`, `src/world/exchanges.ts`; never Italy or France; real names need 3.4d-4), with the playoff panel's Leaving/Joining lists and "Generated" player labels. Owner decisions (a) and (b) implemented.
-- **3.5 so far** (formats 56-60; `src/world/europe.ts`, `european-formats.ts`, `european-places.ts`): the three competitions and their entrants in new worlds (3.5a); midweek game days, seeded draws and background sides for clubs outside the full world (3.5b); the EuroLeague (3.5c), EuroCup (3.5d) and BCL (3.5e) in their real formats, ending before the domestic postseasons (week 38); estimated tables for unchosen top divisions and each season end's European places, a reversible default **for the owner to confirm** (3.5f); the Calendar and Europe pages (3.5g). Real-world IDs `real-places-`.
-- **3.6 so far:** country flags, multi-country selection, a league list filtered by country, roster counts, a squad-strength bar, a game-speed meter, and the European competitions and estimated leagues listed in the club step and review.
-- **Owner feedback round (15 November 2026)**, placements in `docs/decisions.md#owner-feedback-after-playing-15-november-2026`:
-  - Setup screen fixed, and the injury and replay options removed.
-  - "Preparing your career…" panel; careers are now built in the worker.
-  - Opening contracts of 1-3 seasons (`world.playerContracts`).
-
-**Unfinished in sprint 3:** the 3.7 browser acceptance (3.6's measured speed and save-size estimates are done).
+**Sprint 3 in short** (details in `docs/handover-history.md`, search the step number): all 13 competitions imported and rated (3.1); save scaling (3.2); one shared calendar with byes and gates (3.3); each league's ranking rule, postseason, promotion and relegation, next divisions with real names (3.4); the EuroLeague, EuroCup and BCL in their real formats with background sides, estimated tables and European places (3.5); setup screen with flags, strength, Europe lists and measured speed and save size (3.6).
 
 **Known open points:**
 - Player statistics combine domestic and European games; the Competition page lists domestic games and the Europe page European ones.
@@ -73,23 +47,8 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 
 The game reads real club data from the owner's Supabase project (public storage bucket `game-data`, `real-pack.json`; `src/world/built-in-pack.ts`), so careers start with real clubs on any device without choosing a file. **Live now:** a pack built in Supabase from the database (dataset 2026.11-world-1, 13 competitions, 223 clubs, 3,087 players) by the Edge Function `publish-starter-pack` (source in `supabase/functions/`; it never replaces an existing pack). **To publish the newer corrected pack** (world-3, only on the owner's computer): `npm.cmd run data:publish -- --file .local-data/real-2026.11-world-3.json` (uses `supabase-key.local`; checks the file with the game's parser first). Choosing a file stays possible. The owner asked for this Supabase work on 15 November 2026; the cloud rule against calling Supabase otherwise still stands.
 
-## Sprint 3 summary (15 November 2026): cloud work complete, waiting for the owner
+## Levels after sprint 4 (each needs the owner's approval)
 
-**Done in the cloud:** every sprint-3 step that needs no private data, keys or Edge.
-- One shared calendar for several countries' leagues, with each league's real 2026-27 playoffs, promotion and relegation, tie-break rules and clubs moving to and from the division below.
-- The EuroLeague, EuroCup and Basketball Champions League in their real formats on midweek dates. Clubs from leagues not chosen play with their real squads. Leagues not chosen get an estimated table each season. Next season's European places follow a reversible default **for the owner to confirm** (`docs/decisions.md`, "Background tables and next season's European places").
-- A Calendar page for the whole season and a Europe page, and the setup screen lists the European competitions included.
-
-**Left for the owner's machine (local-only):**
-1. **3.4d-4: real lower-division names.** Import API-Sports' TB2L (Turkey), Segunda FEB (Spain), Pro A (Germany) and A2 (Greece) into a new private pack, then build them into new worlds with `withLowerDivisions` in `worldFromPack` (never Italy or France). Run a private season across a season end.
-2. **A new private pack check for Europe:** build a world with the real pack and check that the EuroLeague (20), EuroCup (32, trimmed if listed longer) and BCL (30 direct plus qualification) get their formats, that the one-year EuroLeague places match Paris, Beşiktaş and Hapoel Tel Aviv by name, and that the unchosen top divisions appear.
-3. **3.6:** measured speed and save-size estimates on the setup screen, using the real pack.
-4. **3.7:** a multi-league season with Europe in the browser, save and load, rollover into season two, and five-season speed and size measurements (target: loads in about 5 s; well inside the 32 MiB save limit). A cloud session may prepare a public synthetic five-season test first, if the owner asks.
-
-**Next:** the owner reviews sprint 3 and approves Sprint 4 (or more sprint-3 work). Never start Sprint 4 without that approval.
-
-After sprint 3 (new levels, each needing the owner's approval):
-- **Sprint 4, realism:** match calibration against real statistics; realistic injuries; hidden potential and fair ratings for low-minute players at strong clubs; realistic finances (wages, budgets, sponsorship and ticket income); real contract data.
 - **Saved ideas** (the owner calls them essential; place each into a level when planning it):
   - unemployed seasons (confirm with the owner first: the design documents disagree);
   - a protected first season and fresh board confidence for a new coach;
@@ -151,12 +110,11 @@ After sprint 3 (new levels, each needing the owner's approval):
 ## Local-only work
 
 These need the owner's Windows machine: the private pack, API-Sports or Supabase keys, or headless Edge.
-- **3.4d-4:** real lower-division club names from API-Sports into a new private pack, then a private season across a season end.
-- **Europe with the real pack (3.5):** check the formats, trimmed fields, one-year EuroLeague places and unchosen top divisions of a world built from the real pack, then play a season with every system and time it.
+- **Europe with the newer private pack (3.5):** the online pack (world-1) builds and plays Europe in the cloud; with the corrected world-3 pack, check the one-year EuroLeague places (Paris, Beşiktaş, Hapoel Tel Aviv) and trimmed fields.
 - **Free official club lists** for Italy's Serie B and France's NM1, if the owner wants relegation out of the full world there.
 - **Turkish and Greek tie-break rules (3.4e follow-up):** tbf.org.tr blocks automated downloads. Open "BSL 2026-2027 Sezonu Statüsü ve Lig Sıralaması" (and the TBL statute, if published) in a browser and save the PDFs locally; Greece's rule is in ESAKE's unpublished season notice. A session can then add those rules (a new format).
 - **Private real-data checks** after each finished step: for example a full season of one country with every system, strict reload, and the timings. Earlier examples are in the history (search "Private real data").
-- **3.6** measurements and **3.7** acceptance, using the real pack and Edge.
+- **3.7** acceptance (a multi-league season with Europe in the browser, save and load, rollover, five-season speed and size), using the real pack and Edge.
 - **Membership reconciliation** (3.1 follow-up): needs provider and official observations; see `docs/player-data-quality.md`.
 - **Club colours:** the owner's check of club identities (pilot step 2.3); 189 clubs still lack verified colours.
 - **Any Supabase change:** nothing is pending, and nothing may change without the owner's approval.

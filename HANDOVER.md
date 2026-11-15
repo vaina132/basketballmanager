@@ -4,9 +4,15 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Keeping this file short:** after each push, update "Current state" here and add two or three lines to the top of `docs/handover-history.md`. Record decisions only when a rule or default is decided. Keep this file under 20 KB.
 
-## Current state (15 November 2026, sprint 4 complete, waiting for the owner)
+## Current state (15 November 2026, saved ideas level active)
 
-**Active level:** none. Sprint 4 (realism) is complete in the cloud and waits for the owner's review; never start the next level (saved ideas) without approval. Sprint 3's only open step is the 3.7 browser acceptance (local-only). Level order: sprint 3 (multi-league world), sprint 4 (realism), saved ideas, release preparation, interface simplification (last).
+**Active level:** Saved ideas (owner, 15 November 2026: "Go ahead dont stop, i want you to implement according to the plan and dont stop just tell me where we are and i will tell you until where u need to implement"). Keep going level by level with short status reports; the owner says where to stop. Level order: sprint 3 (multi-league world; 3.7 browser acceptance local-only), sprint 4 (realism, done), **saved ideas (active)**, release preparation, interface simplification (last).
+
+**Saved ideas plan** (defaults reversible, recorded in `docs/decisions.md` as each lands; new careers only, older careers keep their rules through model fields):
+- Round 1 (parallel agents, formats 63-66): (a) protected first season, fresh board confidence for a new coach, mid-season dismissals and resignations; (b) early sponsor exits and arena naming rights; (c) medical and scouting facilities and repair projects; (d) default squad roles by squad rank (fix for deep-bench concerns) and players asking about new contracts.
+- Round 2: more president personalities, board verdicts affecting the player salary budget, youth and culture objectives; richer press topics and media reputation; rivalries that grow from results; loans and leases.
+- Unemployed seasons: waiting for the owner's decision (the design documents disagree).
+- Also open: promoted and relegated clubs keep their opening money figures.
 
 **Development mode** applies (see "Rules and conventions"): build features first; full suite at sprint end.
 

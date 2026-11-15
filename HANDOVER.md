@@ -67,7 +67,7 @@ Each step below should fit one session. A step that needs private data, keys or 
    - Import the real names into a new private pack. API-Sports lists Turkey's TB2L, Spain's Segunda FEB, Germany's Pro A and Greece's A2. Then build them into new worlds with `withLowerDivisions` (in `worldFromPack`, for countries other than Italy and France).
    - Run a private real-data season across a season end.
    - Update the 3.4 rows in the plan tables.
-2. **3.5: European competitions.** Proposed split; the first 3.5 session checks it against the plan and records it in `docs/multi-league-world.md`.
+2. **3.5: European competitions.** The split below was checked and recorded on 15 November 2026 (`docs/multi-league-world.md#plan-for-step-35-checked-15-november-2026`); the open research is done (`docs/competition-rules-2026.md`: no EuroLeague third-place game; BCL 2026-27 regulations; licences and the EuroCup route). Next: 3.5a.
    - **(a)** The three competitions and their entrants in the world. Entrants from leagues that were not chosen, and from countries outside the six, become background clubs.
    - **(b)** Midweek European game days on the shared calendar, with draws at the season start:
      - EuroCup and BCL on Tuesdays and Wednesdays;
@@ -77,7 +77,6 @@ Each step below should fit one session. A step that needs private data, keys or 
    - **(e)** BCL format.
    - **(f)** Estimated background tables for unchosen leagues and European places for next season (the reversible default in the plan).
    - **(g)** A Calendar view of the whole season (owner feedback point 8) and the European Competition screens.
-   - Open research before (c)-(e), from free sources: the EuroLeague third-place game, the 2026-27 BCL rules and EuroLeague licences (`docs/competition-rules-2026.md`, "Still to verify").
 3. **3.6: measured speed and save-size estimates, with Europe in setup.**
    - The screen work can be done in the cloud.
    - Measuring with the real pack is local-only.

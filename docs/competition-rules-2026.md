@@ -80,6 +80,15 @@ Not changed (the FIBA default stays, labelled):
 - **Turkey BSL and TBL:** tbf.org.tr refuses automated access (a browser check), so the 2026-27 statute "BSL 2026-2027 Sezonu Statüsü ve Lig Sıralaması" (in force from 28 August 2026) could not be read. Secondary sources list points, games between the clubs, overall difference and points scored. Local-only: the owner can open the TBF PDF in a browser.
 - **Spain Primera FEB** was not among the candidates; it keeps the default.
 
+## European competitions: research for step 3.5 (15 November 2026)
+
+Checked from free sources by Claude; euroleaguebasketball.net refused direct downloads (HTTP 429), so its pages were read through search results and press reports of them.
+
+- **EuroLeague Final Four: no third-place game.** The by-laws approved at the ECA meeting of 19 June 2025 removed it "starting with the 2025–26 Final Four" ([Eurohoops, 19 June 2025](https://www.eurohoops.net/en/euroleague/1839488/euroleague-to-introduce-new-penalties-including-win-deduction-for-actions-of-team-officials)). The 2027 Final Four (Abu Dhabi, 28 and 30 May 2027) is two semi-finals and the final.
+- **EuroLeague places, 2026-27:** 20 clubs. Long-term licences: Anadolu Efes, ASVEL, Barcelona, Baskonia, Bayern, Fenerbahçe, Maccabi, Olimpia Milano, Olympiacos, Panathinaikos, Real Madrid, Žalgiris (CSKA suspended); wildcards: Dubai (five years), Crvena Zvezda, Partizan, Valencia, Virtus Bologna (three years to 2027-28), Paris and Beşiktaş (one year); EuroCup route: Hapoel Tel Aviv. **EuroCup route** (press accounts of the by-laws: Eurohoops, 14 March 2025 and 29 April 2026): the EuroCup champion takes a one-year EuroLeague licence, the runner-up only when two places are open, and a holder renews it by reaching the EuroLeague playoffs, at most twice. Domestic results do not decide EuroLeague entry. A reform to 24 clubs from 2027-28 is reported but not decided.
+- **EuroCup 2026-27:** 32 clubs (21 five-year licences, 11 one-year places chosen by domestic rankings) in four groups of eight; groups as drawn on 8 July 2026; top four of each group to best-of-three eighth-finals, quarter-finals, semi-finals and finals.
+- **Basketball Champions League, Season 11:** [Competition Regulations 2026-27](https://assets.fiba.basketball/image/upload/basketball-champions-league-209123-competition-regulations.pdf) (linked from the site menu; the competition page still links the 2025-26 edition). Qualification: two single-game tournaments, 14-20 September 2026 (QRT1: eight clubs from the quarter-finals; QRT2: sixteen from the round of 16), whose two winners join 30 direct entrants. Regular season: eight groups of four, home and away, with country protection at the draw. Play-ins: best of three, second-placed club at home in games 1 and 3 (A2-B3, B2-A3 and so on). Round of 16: four groups of four fixed by the draw pattern (I: A1, E1, C2/D3, G2/H3; J: B1, F1, D2/C3, H2/G3; K: C1, G1, B2/A3, E2/F3; L: D1, H1, A2/B3, F2/E3), top two through. Quarter-finals best of three, group winner at home in games 1 and 3. **The BCL Final Four keeps a third-place game** (article 19.3). Draw and line-up: [8 July 2026](https://www.championsleague.basketball/en/news/basketball-champions-league-season-11-draw-completed).
+
 ## Registration evidence and limits
 
 BBL permits up to twelve on a match sheet, with at least ten fit players. Its domestic-player minima are four for ten selected, five for eleven, six for twelve, with additional U23 exceptions. Its registered list and late additions have exceptions too. The simple nationality field in the pack **does not prove legal German status or an exception**. Source: BBL regulations above, section 3.
@@ -91,9 +100,9 @@ Primera FEB separates season registration, formation status and non-EU eligibili
 ## Still to verify before publishing real formats
 
 - Current TBL statute, Greek top-division playoffs/relegation, complete ACB and Serie A playoff/registration rules. Retrieved ACB/LBA calendar announcements establish dates, but do not establish all rules.
-- BCL's current qualifying draw/seedings and all 54 entrants' direct/qualifying status. Its competition page currently links a PDF whose body says **2025–26**; that PDF cannot certify the 2026–27 registration rules.
-- EuroLeague Final Four third-place game: the current format page lists semi-finals and final only. The earlier plan assumed a third-place game; do not implement it without current evidence.
-- EuroLeague long-term licences and allocation of future one-year places. The plan's provisional Paris/Beşiktaş assumption still needs confirmation.
+- ~~BCL qualifying and entrants~~: resolved 15 November 2026, see "European competitions: research for step 3.5" below.
+- ~~EuroLeague Final Four third-place game~~: resolved 15 November 2026: there is none (below).
+- ~~EuroLeague licences and future one-year places~~: resolved 15 November 2026 from press accounts of the by-laws (below); no official 2026-27 text was found.
 - Full registration windows, passport/formation evidence and exceptions for every league; real lower-tier identities for external promotion/relegation.
 
 The approved game calendar uses generated Saturday domestic fixtures and midweek European fixtures, rather than importing actual fixture dates. A fixed 38-Saturday regular-season window ends 22 May in season one. The calendar helper rejects overlap and insufficient rest, and keeps weekly accounting boundaries separate from fixture counts. Postseason dates must also preserve the offseason and the following September opening; the helper is not yet wired into career finance/training/save validation.

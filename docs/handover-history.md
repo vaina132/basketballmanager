@@ -8,6 +8,13 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.5 plan and research (15 November 2026)
+
+- Checked the proposed 3.5 split against the plan and recorded it as steps 3.5a-3.5g (`docs/multi-league-world.md#plan-for-step-35-checked-15-november-2026`).
+- Research from free sources (`docs/competition-rules-2026.md`, "European competitions: research for step 3.5"): the EuroLeague Final Four has had no third-place game since 2025-26 (the plan text is corrected); the BCL 2026-27 regulations (Season 11) and its format, draw pattern and third-place game; EuroLeague licences for 2026-27 and the EuroCup route; the EuroCup field.
+- Documentation only; the code is unchanged since step 3.4d-3.
+- **Next:** 3.5a.
+
 ## Cloud continuation: step 3.4d-3, screens for leaving and joining (15 November 2026)
 
 - `src/ui/PostseasonPanel.tsx`: the lowest division of a country with a next-division list shows **Leaving** (to the next division, outside the game's leagues) and **Joining** (from it, marked returning or generated squad) once the season has decided them, and "they leave for ... when the season ends" before that; without a list the note now reads "they stay: the division below is not in this game".

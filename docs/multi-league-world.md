@@ -27,7 +27,7 @@ Clubs from countries outside the six (for example Žalgiris, Partizan or Maccabi
 
 **European competitions, 2026-27 (real formats):**
 
-- **EuroLeague:** 20 clubs, home and away, 38 rounds (24 September 2026 to 16 April 2027). Places 1-6 reach the playoffs; 7-10 play the Play-In (7 v 8: winner is seed 7; 9 v 10: loser is out; the loser of 7 v 8 meets the winner of 9 v 10 for seed 8; single games at the higher seed). Playoffs best of five (1 v 8, 2 v 7, 3 v 6, 4 v 5; games 1, 2 and 5 at the higher seed). Final Four: single-game semi-finals, third-place game and final at one venue. Sources: [EuroLeague format](https://www.euroleaguebasketball.net/euroleague/news/format-el), [EuroLeague 2026-27 schedule](https://eurohoops.net/en/euroleague/1994855/euroleague-releases-full-schedule-for-the-2026-27-season), [20-team field confirmed](https://www.eurohoops.net/en/euroleague/1984894/euroleague-confirms-20-team-field-expansion-plans-and-franchise-roadmap/).
+- **EuroLeague:** 20 clubs, home and away, 38 rounds (24 September 2026 to 16 April 2027). Places 1-6 reach the playoffs; 7-10 play the Play-In (7 v 8: winner is seed 7; 9 v 10: loser is out; the loser of 7 v 8 meets the winner of 9 v 10 for seed 8; single games at the higher seed). Playoffs best of five (1 v 8, 2 v 7, 3 v 6, 4 v 5; games 1, 2 and 5 at the higher seed). Final Four: single-game semi-finals and final at one venue; there has been no third-place game since 2025-26 (research of 15 November 2026 in `competition-rules-2026.md`). Sources: [EuroLeague format](https://www.euroleaguebasketball.net/euroleague/news/format-el), [EuroLeague 2026-27 schedule](https://eurohoops.net/en/euroleague/1994855/euroleague-releases-full-schedule-for-the-2026-27-season), [20-team field confirmed](https://www.eurohoops.net/en/euroleague/1984894/euroleague-confirms-20-team-field-expansion-plans-and-franchise-roadmap/).
 - **EuroCup:** expanded to 32 clubs in four groups of eight, home and away within the group (14 rounds from 29 September 2026). The top four of each group reach the eighth-finals; eighth-finals, quarter-finals, semi-finals and finals are all best of three. Sources: [32-team field](https://www.eurohoops.net/en/eurocup/1984959/eurocup-confirms-32-team-field-for-2026-27-season-two-rome-clubs-among-participants/), [2026-27 schedule](https://eurohoops.net/en/eurocup/1994861/bkt-eurocup-announces-the-2026-27-schedule).
 - **Basketball Champions League:** two single-game qualification tournaments (14-20 September 2026) send two winners to a regular season of 32 clubs in eight groups of four, home and away (six rounds from 6 October 2026); clubs from one country are never drawn together. Group winners reach the Round of 16; second and third play best-of-three Play-Ins (home advantage to the second-placed club); the Round of 16 is four groups of four, home and away; the top two reach best-of-three quarter-finals; Final Four in May 2027. Sources: [BCL competition system](https://www.championsleague.basketball/23-24/competition-system), [2026-27 draw](https://www.eurohoops.net/en/fiba-champions-league/1988559/all-you-need-to-know-ahead-of-2026-27-season-draw-basketball-champions-league/).
 
@@ -74,6 +74,20 @@ These are targets, not completed behavior. A local checkpoint fingerprint may sk
 | 3.7 | Final check: a multi-league season with Europe in the browser, save and load, rollover into season two, measurements | Planned |
 
 Order as approved on 14 November 2026. Each step is tested and recorded in `HANDOVER.md`; the owner commits.
+
+### Plan for step 3.5 (checked 15 November 2026)
+
+The proposed split was checked against "Levels of detail", "Competition formats" and "One calendar" above; it covers them in dependency order. Research of the open questions is in `competition-rules-2026.md` ("European competitions: research for step 3.5").
+
+| Step | What |
+| --- | --- |
+| 3.5a | The three competitions and their 2026-27 entrants in the world. Entrants from leagues that were not chosen, and from countries outside the six, become background clubs with their real pack squads, colours and arena (like next-division clubs, built into the world outside the full world). New format. |
+| 3.5b | Midweek European game days on the shared calendar (EuroCup and BCL Tuesday and Wednesday; EuroLeague Thursday, and Tuesday in double-round weeks), draws at the season start (BCL country protection), and conflict checks with domestic postseason slots. Background clubs play with the match engine (legal matchday selection, box scores, injuries, fitness). |
+| 3.5c | EuroLeague: 38 rounds, play-in 7-10, best-of-five playoffs (2-2-1), Final Four without a third-place game. |
+| 3.5d | EuroCup: four groups of eight, best-of-three eighth-finals to finals. |
+| 3.5e | BCL: two single-game qualification tournaments, eight groups of four, best-of-three play-ins, Round of 16 groups by the draw pattern, best-of-three quarter-finals, Final Four with a third-place game. |
+| 3.5f | Estimated background tables for unchosen leagues and next season's European places. Reversible default to confirm then: the EuroCup champion takes a one-year EuroLeague place (the runner-up only if two are open) and keeps it by reaching the playoffs, at most twice; discretionary one-year wildcards (Paris and Beşiktaş in 2026-27) go to the best domestic finisher of the six countries not yet qualified, as the plan's default. |
+| 3.5g | A Calendar view of the whole season and the European Competition screens. |
 
 ### Plan for the rest of 3.4 (15 November 2026, Claude continuing after Codex)
 

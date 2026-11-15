@@ -96,12 +96,13 @@ After sprint 3 (new levels, each needing the owner's approval):
 
 ## Rules and conventions that must not be broken
 
-**Development mode until release (owner, 15 November 2026: build features first, test later)**
+**Development mode until release (owner, 15 November 2026: build features first, test later; the owner chose all three speed-ups: pause old-save support, lighter save checks, parallel agents)**
 - No fixture capture, continuation tests, migration tests or corruption-rejection tests for new work. When the save shape changes, bump `SEASON_SCHEMA_VERSION` and add a version guard; older saves may be refused with a clear "start a new career" message instead of being migrated.
 - If a change makes an old-save continuation test fail, delete that test and list it under "Before release" below. Existing fixtures stay in the repository for that later work.
 - New features get basic save checks only (shape and key totals). The full replay checks and old-save support come back in the release preparation.
 - Old careers keep their rules only where that costs nothing; otherwise new rules may apply to every career.
 - Save limit: 32 MiB. Portable imports still get the checks that exist.
+- Parallel agents may build independent features at the same time; the main session combines their work and runs the checks before each push.
 
 **Calendar and simulation**
 - `SeasonState.round` is a week and `state.date` is that week's Saturday. Wages, upkeep, staff, board and training run once a week, after the week's last game day. Gate income is per home game.

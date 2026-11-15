@@ -13,8 +13,9 @@ import { overallRating } from './overall-rating';
  * (step 3.4d-2); this module already gives the pieces that step and the European competitions need: a background club
  * made from a full-world club, its squad aged to a date, a legal matchday selection and the save checks.
  */
-export function createBackground(): SeasonBackground {
-  return { model: 'background-1', clubs: [] };
+/** Format 55: exchanges with a next division can happen from the end of season `changesFrom` (1 for a new career). */
+export function createBackground(changesFrom = 1): SeasonBackground {
+  return { model: 'background-1', clubs: [], changesFrom, exchanges: [] };
 }
 
 /** The country a world club plays in: its opening league's country (clubs never change country). */
@@ -87,8 +88,13 @@ export function validateBackgroundClub(value: unknown, path: string, state: Pick
  * Format 53: the record's shape, then what the career's history allows. No club leaves the full world before step
  * 3.4d-2, so every club listed is refused for now.
  */
-export function validateBackground(value: unknown, state: Pick<SeasonState, 'seasonNumber' | 'clubs'> & WorldContext & { divisions?: DomesticDivisions | null }): asserts value is SeasonBackground {
-  if (!exactKeys(value, ['model', 'clubs']) || (value as Record<string, unknown>).model !== 'background-1' || !Array.isArray((value as Record<string, unknown>).clubs)) fail('background', 'must be a background-1 record');
+export function validateBackground(value: unknown, state: Pick<SeasonState, 'seasonNumber' | 'clubs'> & WorldContext & { divisions?: DomesticDivisions | null }, version = 55): asserts value is SeasonBackground {
+  if (!exactKeys(value, ['model', 'clubs', ...(version >= 55 ? ['changesFrom', 'exchanges'] : [])]) || (value as Record<string, unknown>).model !== 'background-1' || !Array.isArray((value as Record<string, unknown>).clubs)) fail('background', 'must be a background-1 record');
+  if (version >= 55) {
+    const { changesFrom, exchanges } = value as unknown as Required<SeasonBackground>;
+    if (!Number.isInteger(changesFrom) || changesFrom < 1 || changesFrom > state.seasonNumber + 1) fail('background.changesFrom', 'must be a season of this career');
+    if (!Array.isArray(exchanges) || exchanges.length) fail('background.exchanges', 'cannot list exchanges before clubs leave the full world (step 3.4d-2)');
+  }
   const clubs = (value as { clubs: unknown[] }).clubs, ids = new Set<string>(), playerIds = new Set<string>();
   for (const [index, club] of clubs.entries()) {
     validateBackgroundClub(club, `background.clubs[${index}]`, state, playerIds);

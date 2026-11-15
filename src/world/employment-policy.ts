@@ -2,7 +2,7 @@ import type { ClubContractSummary, ContractOfferOptions, EmploymentContract, Pla
 import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
-import { fullWorldClubs, MAX_SEASON_ROUNDS, seasonRounds, worldOf } from './career-world';
+import { fullWorldClubsIn, MAX_SEASON_ROUNDS, seasonRounds, worldOf } from './career-world';
 import { getCareerPlayers, getActiveCareerPlayers, getCareerWage, type CareerPlayerContext } from './player-catalog';
 import { getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { transferOfferReason } from './transfers-policy';
@@ -34,7 +34,7 @@ export function effectiveContractsForSeason(employment: SeasonEmployment, season
 
 /** Registration at one matchday, without applying a later arrival to earlier fixtures. */
 export function effectiveContractsForRound(employment: SeasonEmployment, seasonNumber: number, round: number): EmploymentContract[] {
-  const released = new Set([...(employment.transfers ?? []).filter(release => release.startsSeason < seasonNumber || release.startsSeason === seasonNumber && (release.startsRound ?? 1) <= round), ...(employment.buyouts ?? []).filter(release => release.startsSeason <= seasonNumber)].flatMap(release => release.releasedContractIds));
+  const released = new Set([...(employment.transfers ?? []).filter(release => release.startsSeason < seasonNumber || release.startsSeason === seasonNumber && (release.startsRound ?? 1) <= round), ...(employment.buyouts ?? []).filter(release => release.startsSeason <= seasonNumber), ...(employment.departures ?? []).filter(release => release.startsSeason <= seasonNumber)].flatMap(release => release.releasedContractIds));
   return employment.contracts.filter(contract => contract.startsSeason <= seasonNumber && contract.endsSeason >= seasonNumber && (contract.startsSeason < seasonNumber || (contract.startsRound ?? 1) <= round) && !released.has(contract.id));
 }
 
@@ -113,7 +113,7 @@ export function getAvailablePlayers(state: Pick<SeasonState, 'employment' | 'sea
 
 /** Stable catalog order and collision-free jerseys make registrations reproducible on import. */
 export function getContractedClubs(state: { employment: SeasonEmployment; clubs: readonly Team[] } & CareerPlayerContext, seasonNumber: number): readonly Team[] {
-  const definitions = fullWorldClubs(worldOf(state));
+  const definitions = fullWorldClubsIn(state, seasonNumber);
   if (!state.employment.enabledSince || seasonNumber < state.employment.enabledSince.seasonNumber) return definitions;
   return definitions.map(definition => {
     const club = state.clubs.find(club => club.id === definition.id) ?? definition;
@@ -137,14 +137,14 @@ export function getContractedClubs(state: { employment: SeasonEmployment; clubs:
 const contractedByEmployment = new WeakMap<SeasonEmployment, WeakMap<object, Map<string, readonly Team[]>>>();
 const NO_ACADEMY = {};
 export function getContractedClubsForRound(state: { employment: SeasonEmployment; clubs: readonly Team[] } & CareerPlayerContext, seasonNumber: number, round: number): readonly Team[] {
-  const definitions = fullWorldClubs(worldOf(state));
+  const definitions = fullWorldClubsIn(state, seasonNumber);
   if (!state.employment.enabledSince || seasonNumber < state.employment.enabledSince.seasonNumber) return definitions;
   let byAcademy = contractedByEmployment.get(state.employment);
   if (!byAcademy) { byAcademy = new WeakMap(); contractedByEmployment.set(state.employment, byAcademy); }
   const academyKey = state.academy ?? NO_ACADEMY;
   let byBoundary = byAcademy.get(academyKey);
   if (!byBoundary) { byBoundary = new Map(); byAcademy.set(academyKey, byBoundary); }
-  const key = `${worldOf(state).id}|${seasonNumber}|${round}`;
+  const key = `${worldOf(state).id}|${seasonNumber}|${round}|${state.background?.exchanges?.length ?? 0}`;
   const known = byBoundary.get(key);
   if (known) return known;
   const result = deepFreeze(contractedClubsForRound(state, definitions, seasonNumber, round));

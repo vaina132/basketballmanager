@@ -43,8 +43,9 @@ describe('original format-53 two-division baseline (captured before format 54, s
     }
     expect(roundTrip(state)).toEqual(state);
     const next = play(state);
-    expect(next.background).toEqual({ model: 'background-1', clubs: [] });
-    expect(next).toEqual({ ...fixture('mid-next').raw, schemaVersion: next.schemaVersion });
+    // Format 55 lets exchanges with a next division begin after the next season.
+    expect(next.background).toEqual({ model: 'background-1', clubs: [], changesFrom: 2, exchanges: [] });
+    expect(next).toEqual({ ...fixture('mid-next').raw, schemaVersion: next.schemaVersion, background: next.background });
   }, 300_000);
 
   it('keeps the divisions a format-50 save records and rolls over exactly as captured', () => {
@@ -55,11 +56,12 @@ describe('original format-53 two-division baseline (captured before format 54, s
     expect(roundTrip(complete)).toEqual(complete);
     const opening = rolloverSeason(complete);
     const captured = fixture('opening');
-    expect(opening).toEqual({ ...captured.raw, schemaVersion: opening.schemaVersion });
+    expect(opening).toEqual({ ...captured.raw, schemaVersion: opening.schemaVersion, background: { model: 'background-1', clubs: [], changesFrom: 2, exchanges: [] } });
     // Season two's recorded divisions differ from the opening leagues; loading must not reset them.
     const loaded = parseSeason(captured.text);
     expect(loaded.divisions).toEqual(captured.raw.divisions);
     expect(loaded.divisions.leagues.map(league => league.clubIds)).not.toEqual(loaded.world.domesticLeagues.map(league => league.clubIds));
-    expect(loaded).toEqual(opening);
+    expect(loaded.background.changesFrom).toBe(3);
+    expect({ ...loaded, background: opening.background }).toEqual(opening);
   }, 300_000);
 });

@@ -20,7 +20,8 @@ export interface EmploymentContract {
   releaseFee?: number;
   signedSeason: number;
   signedRound: number;
-  kind: 'initial' | 'renewal' | 'free-agent' | 'transfer' | 'midseason' | 'midseason-transfer';
+  /** `joined`: an opening term for a player of a club joining the full world (format 55). */
+  kind: 'initial' | 'renewal' | 'free-agent' | 'transfer' | 'midseason' | 'midseason-transfer' | 'joined';
 }
 
 /** Completed club sale; old agreements remain intact for historical registration and payroll. */
@@ -57,6 +58,15 @@ export interface EmploymentBuyout {
   negotiationCountBefore: number;
 }
 
+/** Format 55: a club leaving the full world ends its players' terms from its first season outside (step 3.4d-2). */
+export interface EmploymentDeparture {
+  clubId: string;
+  /** The season whose end the club leaves after. */
+  seasonNumber: number;
+  startsSeason: number;
+  releasedContractIds: string[];
+}
+
 export interface SeasonEmployment {
   model: 'employment-1';
   enabledSince: { seasonNumber: number; round: number } | null;
@@ -64,6 +74,8 @@ export interface SeasonEmployment {
   contracts: EmploymentContract[];
   transfers: EmploymentTransfer[];
   buyouts: EmploymentBuyout[];
+  /** Format 55: terms ended because their club left the full world. */
+  departures?: EmploymentDeparture[];
   /** Completed-season rosters remain unchanged while next year's terms are agreed. */
   market: { seasonNumber: number } | null;
 }

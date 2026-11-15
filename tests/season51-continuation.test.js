@@ -44,7 +44,8 @@ describe('original format-51 FIBA-ruled two-division baseline (captured before f
     expect(roundTrip(state)).toEqual(state);
     const next = play(state);
     // Format 53 adds an empty record of clubs outside the full world; everything else continues exactly.
-    expect(next.background).toEqual({ model: 'background-1', clubs: [] });
+    // Format 53 adds an empty record of clubs outside the full world; format 55 lets exchanges begin after the next season.
+    expect(next.background).toEqual({ model: 'background-1', clubs: [], changesFrom: 2, exchanges: [] });
     expect(next).toEqual({ ...fixture('mid-next').raw, schemaVersion: next.schemaVersion, background: next.background });
   }, 300_000);
 
@@ -56,11 +57,13 @@ describe('original format-51 FIBA-ruled two-division baseline (captured before f
     expect(roundTrip(complete)).toEqual(complete);
     const opening = rolloverSeason(complete);
     const captured = fixture('opening');
-    expect(opening).toEqual({ ...captured.raw, schemaVersion: opening.schemaVersion, background: { model: 'background-1', clubs: [] } });
+    expect(opening).toEqual({ ...captured.raw, schemaVersion: opening.schemaVersion, background: { model: 'background-1', clubs: [], changesFrom: 2, exchanges: [] } });
     // Season two's recorded divisions differ from the opening leagues; loading must not reset them.
     const loaded = parseSeason(captured.text);
     expect(loaded.divisions).toEqual(captured.raw.divisions);
     expect(loaded.divisions.leagues.map(league => league.clubIds)).not.toEqual(loaded.world.domesticLeagues.map(league => league.clubIds));
-    expect(loaded).toEqual(opening);
+    // Loaded in season two, the career's exchanges begin a season later; everything else is the same.
+    expect(loaded.background.changesFrom).toBe(3);
+    expect({ ...loaded, background: opening.background }).toEqual(opening);
   }, 300_000);
 });

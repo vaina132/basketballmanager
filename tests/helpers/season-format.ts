@@ -48,7 +48,8 @@ const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: Leg
   [37, () => ({ career: createCareer() })],
   [38, state => ({ career: deferCareerDecisions(state.career!, state as SeasonState) })],
   // Format 53: careers that record divisions (format 50 on) gain an empty record of clubs outside the full world.
-  [53, state => state.divisions ? { background: createBackground() } : {}],
+  // Format 55: such careers exchange clubs with a next division from the end of their next season.
+  [53, state => state.divisions ? { background: createBackground(state.seasonNumber! + 1) } : {}],
 ];
 
 /**

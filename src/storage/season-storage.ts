@@ -12,6 +12,7 @@ import { validateRelationships } from './relationships-validation';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonArchive, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import { STANDINGS_RULE_FORMAT } from '../domain/competition';
+import type { SeasonBackground } from '../domain/background';
 import { createBackground, validateBackground } from '../world/background';
 import type { FacilityAnchor, FacilityEvent, SeasonFacilities } from '../domain/facilities';
 import { createFacilities, applyFacilityEvent, facilitiesAtEventCount } from '../world/facilities';
@@ -42,7 +43,7 @@ import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
-import { fullWorldClubs, isMemberList, isWorldClub, roundKey, roundOrdinal, seasonRounds, validateWorld, worldOf, worldPlayer, worldRounds } from '../world/career-world';
+import { fullWorldClubs, fullWorldClubsIn, isMemberList, isWorldClub, roundKey, roundOrdinal, seasonRounds, validateWorld, worldOf, worldPlayer, worldRounds } from '../world/career-world';
 import type { CareerWorld, WorldContext } from '../domain/world';
 import { getCareerPlayers, getCareerPlayer, getCareerWage, type CareerPlayerContext } from '../world/player-catalog';
 import { MAX_MATCH_PERIODS } from '../engine/match';
@@ -104,7 +105,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -1071,7 +1072,7 @@ function validateTicketPrice(value: unknown, path: string): number {
 
 function clubsForEmploymentYear(employment: SeasonEmployment | undefined, seasonNumber: number, round?: number, context: CareerPlayerContext = {}): readonly Team[] {
   round ??= seasonRounds(context);
-  const definitions = fullWorldClubs(worldOf(context));
+  const definitions = fullWorldClubsIn(context, seasonNumber);
   return employment ? getContractedClubsForRound({ ...context, employment, clubs: definitions }, seasonNumber, round) : definitions;
 }
 
@@ -2613,11 +2614,11 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version >= 35) validateRivalries(state.rivalries, state as unknown as SeasonState);
   const rivalries = version >= 35 ? state.rivalries as unknown as SeasonRivalries : createRivalries();
   const careerRecord = version >= 37 ? state.career as unknown as SeasonCareer : undefined;
-  const careerContext: CareerPlayerContext = { world, academy, lifecycle, seasonNumber, round, date: state.date as string };
+  const careerContext: CareerPlayerContext = { world, academy, lifecycle, seasonNumber, round, date: state.date as string, ...(Object.hasOwn(state, 'background') ? { background: state.background as SeasonBackground } : {}) };
   const marketEnabled = version >= 13 && record(state.market, 'market', ['model', 'enabledSince', 'windows']).enabledSince !== null;
   // Every later replay attributes decisions through the validated moves.
   if (version >= 37) validateCareer(state.career, state as unknown as SeasonState, version);
-  if (Object.hasOwn(state, 'background')) validateBackground(state.background, { ...(state as unknown as SeasonState), divisions: seasonDivisions });
+  if (Object.hasOwn(state, 'background')) validateBackground(state.background, { ...(state as unknown as SeasonState), divisions: seasonDivisions }, version);
   const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId, marketEnabled, version, careerContext) : undefined;
   if (!sameData(state.clubs, clubsForEmploymentYear(employment, seasonNumber, round, careerContext))) fail('clubs', 'must match the versioned player catalog and effective employment registrations');
   const clubs = state.clubs as readonly Team[], clubIds = clubs.map(club => club.id);
@@ -2964,7 +2965,9 @@ export function parseSeason(text: string): SeasonState {
   const divisions = version < 50 ? openingDivisions(worldOf(archived), archived.seasonNumber) : undefined;
   const withDivisions = divisions ? { ...archived, divisions } : archived;
   // Format 53: careers that record divisions start an empty record of clubs outside the full world.
-  const withBackground = version < 53 && withDivisions.divisions ? { ...withDivisions, background: createBackground() } : withDivisions;
+  // Format 55: careers saved earlier exchange clubs with a next division from the end of their next season.
+  const withBackground = version < 53 && withDivisions.divisions ? { ...withDivisions, background: createBackground(withDivisions.seasonNumber + 1) }
+    : version < 55 && withDivisions.background ? { ...withDivisions, background: { ...withDivisions.background, changesFrom: withDivisions.seasonNumber + 1, exchanges: [] } } : withDivisions;
   validateSeasonState(withBackground);
   return withBackground;
 }

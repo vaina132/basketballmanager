@@ -4,7 +4,7 @@ import type { Rivalry } from '../domain/rivalries';
 import type { Player } from '../domain/types';
 import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { CareerWorld, WorldContext } from '../domain/world';
-import type { LowerDivision, LowerDivisionMembers } from '../domain/background';
+import type { ClubExchange, LowerDivision, LowerDivisionMembers } from '../domain/background';
 import type { Team } from '../domain/types';
 import { STANDINGS_RULE_FORMAT, standingsRuleAllowed } from '../domain/competition';
 import { DEVELOPMENT_PLAYERS } from '../data/development-players';
@@ -102,6 +102,39 @@ export function fullWorldClubs(world: CareerWorld): readonly Team[] {
   let clubs = fullClubLists.get(world);
   if (!clubs) { const lower = lowerDivisionClubIds(world); clubs = lower.size ? world.clubs.filter(club => !lower.has(club.id)) : world.clubs; fullClubLists.set(world, clubs); }
   return clubs;
+}
+
+const membershipCache = new WeakMap<CareerWorld, WeakMap<object, Map<number, readonly Team[]>>>();
+const NO_EXCHANGES: readonly ClubExchange[] = Object.freeze([]);
+/**
+ * The full world's clubs in a season (format 55): the opening clubs, changed by every earlier season end's exchanges
+ * with a next division, in world order. Without exchanges it is `fullWorldClubs(world)` itself.
+ */
+export function fullWorldClubsIn(context: WorldContext & { background?: { exchanges?: readonly ClubExchange[] } }, seasonNumber: number): readonly Team[] {
+  const world = worldOf(context), exchanges = context.background?.exchanges ?? NO_EXCHANGES;
+  if (!exchanges.some(exchange => exchange.seasonNumber < seasonNumber)) return fullWorldClubs(world);
+  let byExchanges = membershipCache.get(world);
+  if (!byExchanges) { byExchanges = new WeakMap(); membershipCache.set(world, byExchanges); }
+  let bySeason = byExchanges.get(exchanges);
+  if (!bySeason) { bySeason = new Map(); byExchanges.set(exchanges, bySeason); }
+  const known = bySeason.get(seasonNumber);
+  if (known) return known;
+  const members = new Set(fullWorldClubs(world).map(club => club.id));
+  for (const exchange of exchanges) if (exchange.seasonNumber < seasonNumber) {
+    for (const id of exchange.leaving) members.delete(id);
+    for (const id of exchange.joining) members.add(id);
+  }
+  const clubs = Object.freeze(world.clubs.filter(club => members.has(club.id)));
+  bySeason.set(seasonNumber, clubs);
+  return clubs;
+}
+
+/** Players of next-division clubs that joined the full world by `seasonNumber` (they stay in the catalog afterwards). */
+export function joinedPlayers(context: WorldContext & { background?: { exchanges?: readonly ClubExchange[] } }, seasonNumber: number): readonly Player[] {
+  const exchanges = context.background?.exchanges ?? NO_EXCHANGES;
+  const world = worldOf(context), lower = lowerDivisionClubIds(world);
+  const joined = new Set(exchanges.filter(exchange => exchange.seasonNumber < seasonNumber).flatMap(exchange => exchange.joining).filter(id => lower.has(id)));
+  return joined.size ? world.clubs.filter(club => joined.has(club.id)).flatMap(club => club.players) : [];
 }
 
 // The built-in league keeps its long-standing catalog array, so existing identity checks and caches still hold.

@@ -15,14 +15,28 @@ export interface BackgroundClub {
   origin: 'relegated';
   /** The first season the club spends outside the full world. */
   since: number;
+  /** Format 55: the first season back in the full world, once the club has returned. */
+  until?: number;
   /** Its squad when it left, as developed until then. */
   players: Player[];
+}
+
+/** Clubs leaving and joining a country's lowest full division at the end of `seasonNumber` (step 3.4d-2). */
+export interface ClubExchange {
+  seasonNumber: number;
+  leagueId: string;
+  leaving: string[];
+  joining: string[];
 }
 
 /** Format 53: present in careers that record divisions; empty until clubs can leave the full world (step 3.4d-2). */
 export interface SeasonBackground {
   model: 'background-1';
   clubs: BackgroundClub[];
+  /** Format 55: the first season whose end can exchange clubs with a next division. */
+  changesFrom?: number;
+  /** Format 55: every exchange so far, in order. */
+  exchanges?: ClubExchange[];
 }
 
 /**

@@ -2,7 +2,7 @@
 
 This file holds only the current state, the next steps and the rules that must not be broken. Finished steps, verification logs and earlier notes are in [docs/handover-history.md](docs/handover-history.md). Search that file; never read it in full.
 
-**Keeping this file short:** when a step is finished, update "Current state" and "Next steps" here, and add a short entry (a few lines: what changed, tests, verification) to the top of `docs/handover-history.md`. Record decisions and plan-table changes only when a rule or default is decided. Keep this file under 20 KB, with exactly one current entry.
+**Keeping this file short:** after each push, update "Current state" here and add two or three lines to the top of `docs/handover-history.md`. Record decisions only when a rule or default is decided. Keep this file under 20 KB.
 
 ## Current state (15 November 2026, sprint 3 cloud work complete)
 
@@ -96,25 +96,12 @@ After sprint 3 (new levels, each needing the owner's approval):
 
 ## Rules and conventions that must not be broken
 
-**Saves and fixtures**
-- **Fixtures first.** Before any save-format change, capture genuine current-format saves from the unchanged code, with a manifest of SHA-256 hashes, and describe them in `tests/fixtures/README.md`.
-  - `scripts/capture-season-fixtures.mjs` captures the board career.
-  - `scripts/capture-format-baseline.mjs <label>` captures a public two-division domestic career (mid-season week and its next week; completed season and its rollover) with a manifest of file and module hashes. Use it before each format change from format 51 on.
-  - The capture scripts for formats 46-49 were in the ignored `.artifacts` folder and are not in the repository.
-  - Never regenerate, edit or replace an existing fixture. Never fake an old fixture by changing a version number.
-  - Every `tests/season*-continuation.test.js` must keep passing.
-- **Format change checklist:**
-  1. Bump `SEASON_SCHEMA_VERSION` (`src/domain/season.ts`) and extend `SeasonFormatVersion`.
-  2. Migrate in `parseSeason` (`src/storage/season-storage.ts`), including the version guards that reject new fields in older formats.
-  3. Add a row to `ADDED_BY_FORMAT` (`tests/helpers/season-format.ts`) and a strip step to `tests/helpers/legacy-season.ts`.
-  4. Add migration and corruption-rejection tests.
-  5. Bump `SAVE_CHECKS_VERSION` when stricter checks must invalidate earlier local certificates.
-- **Old careers keep their rules.** New behaviour applies to new worlds only, or from a dated activation point onwards. Older embedded worlds keep their original schedules, rankings, rosters, contracts and finances. Real-world IDs change prefix when new worlds gain a new rule (currently `real-places-`).
-- **Validation:**
-  - Portable imports always get the full strict check. `parseSealedSeason` is only for local saves with a valid fingerprint.
-  - Never relax strict checks or drop history evidence to gain speed.
-  - Save limit: 32 MiB.
-  - The checks rebuild each season from its own divisions, results and fixtures.
+**Development mode until release (owner, 15 November 2026: build features first, test later)**
+- No fixture capture, continuation tests, migration tests or corruption-rejection tests for new work. When the save shape changes, bump `SEASON_SCHEMA_VERSION` and add a version guard; older saves may be refused with a clear "start a new career" message instead of being migrated.
+- If a change makes an old-save continuation test fail, delete that test and list it under "Before release" below. Existing fixtures stay in the repository for that later work.
+- New features get basic save checks only (shape and key totals). The full replay checks and old-save support come back in the release preparation.
+- Old careers keep their rules only where that costs nothing; otherwise new rules may apply to every career.
+- Save limit: 32 MiB. Portable imports still get the checks that exist.
 
 **Calendar and simulation**
 - `SeasonState.round` is a week and `state.date` is that week's Saturday. Wages, upkeep, staff, board and training run once a week, after the week's last game day. Gate income is per home game.
@@ -137,9 +124,14 @@ After sprint 3 (new levels, each needing the owner's approval):
 - Ask the owner before any paid option.
 
 **Tests**
-- Cloud: `npm run test:quick` (about 2.5 minutes) while working; the full suite with four workers (about 5 minutes) before every push. Long tests carry their own time limits. (Owner request, 15 November 2026: faster development.)
-- Never weaken assertions or raise time limits to hide a failure.
-- Temporary private checks (`tests/zz-*`) are local-only and deleted before the build and before any commit.
+- Per push: `npm run build` and the focused tests of what changed. Run `npm run test:quick` only when saves, the calendar or the match engine changed. The full suite runs at the end of each sprint and before release.
+- Add a test only where it protects something fragile; no exhaustive test files per feature.
+- Temporary checks (`tests/zz-*`) are deleted before any commit.
+
+**Before release** (deferred work to bring back)
+- Old-save support: capture fixtures, continuation and migration tests for the formats released to players.
+- Full save replay checks for features added in development mode.
+- Removed continuation tests: none yet.
 
 ## Local-only work
 

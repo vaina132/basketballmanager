@@ -36,18 +36,15 @@ Running vitest from Git Bash fails every test file before any test runs, because
 
 ## Running checks on Linux (cloud sessions)
 
-The project needs Node 24.14 or newer. If `node --version` shows an older default, put `/opt/node24/bin` first in `PATH` for every node and npm command (shell state may not carry over between commands, so prefix each one):
+Node 24.14 or newer is needed; if the default is older, prefix each node and npm command with `PATH=/opt/node24/bin:$PATH`.
 
 ```bash
 PATH=/opt/node24/bin:$PATH npm ci
-PATH=/opt/node24/bin:$PATH npm test -- tests/postseason.test.ts --maxWorkers=4 --testTimeout=120000   # focused tests
-PATH=/opt/node24/bin:$PATH npm run test:quick -- --maxWorkers=4 --testTimeout=120000                   # quick check while working, about 2.5 minutes (skips the long simulations)
-PATH=/opt/node24/bin:$PATH npm test -- --maxWorkers=4 --testTimeout=120000 > full-suite.log 2>&1        # full suite before every push, about 5 minutes: run it in the background
-PATH=/opt/node24/bin:$PATH npm run build
-git diff --check
+PATH=/opt/node24/bin:$PATH npm run build                                            # every push
+PATH=/opt/node24/bin:$PATH npm test -- tests/<changed>.test.ts --maxWorkers=4         # focused tests of what changed
+PATH=/opt/node24/bin:$PATH npm run test:quick -- --maxWorkers=4                     # only when saves, calendar or match engine changed (about 2.5 minutes)
+PATH=/opt/node24/bin:$PATH npm test -- --maxWorkers=4 > full-suite.log 2>&1           # full suite: end of sprint and before release only (about 5 minutes)
 ```
-
-The full suite passes when the end of `full-suite.log` shows every test file and every test passed. Delete the log before committing. Long tests set their own time limits; never raise limits or weaken assertions to make a run pass.
 
 ## Where to read
 
@@ -69,27 +66,11 @@ Read only what the current step needs. To read one section of a long file, list 
 
 ## Cloud sessions
 
-These rules apply when you run in a Claude Code cloud session (a temporary Linux machine). They replace the local rules about approval and commits.
+These rules apply in a Claude Code cloud session (a temporary Linux machine) and replace the local rules about approval and commits.
 
-### Start
-- Run git pull. Read CLAUDE.md, AGENTS.md and HANDOVER.md. Read other docs only in the sections the current step needs. Never read docs/implementation-status.md, docs/architecture.md or docs/handover-history.md in full.
-- Check node --version. The project needs Node 24.14 or newer. If the default is older, put /opt/node24/bin first in PATH for every node and npm command.
-- Run npm ci.
-
-### Work
-- Work directly on main. Never create branches or pull requests.
-- Take the next step from HANDOVER.md in plan order. The plan order is my approval for the next step inside the current level. Never start a new level: stop and write a level summary in HANDOVER.md instead.
-- Do not add features or change the design beyond the plan. Put ideas under "Suggestions for the owner" in HANDOVER.md.
-- Never call API-Sports or Supabase. Never spend money. Tasks that need my private data pack, keys or Edge are local-only: list them in HANDOVER.md and continue with the next step that does not need them.
-- Never write secret values into any file. This repository is public.
-
-### Finish a step
-- Add or update tests. Run the focused tests and `npm run test:quick` while working; before each push run the full suite (npm test -- --maxWorkers=4 --testTimeout=120000, about 5 minutes, in the background) plus npm run build. Group related steps into one push (owner request, 15 November 2026: faster development).
-- Every push to main goes live on Vercel. Push only when the full suite and the build pass.
-- Update HANDOVER.md, then commit code and notes together with a clear message (for example "feat: LNB playoff fixtures (step 3.4b)") and push to main.
-- List any browser checks you could not run under "Owner checks" in HANDOVER.md.
-
-### If you have to stop early
-- Anything not pushed is lost when the session ends.
-- If tests and build pass, commit and push the partial work as "wip: <step> partial" with notes in HANDOVER.md about what is done and what is left.
-- If they do not pass, do not push code. Push only the HANDOVER.md notes.
+- **Start:** git pull; read CLAUDE.md, AGENTS.md and HANDOVER.md, other docs only where the step needs them; npm ci.
+- **Work:** directly on main, no branches or pull requests. Take the next step from HANDOVER.md in plan order; never start a new level without my approval. Ideas go under "Suggestions for the owner".
+- **Development mode (15 November 2026):** build features first, test later. Before each push: `npm run build` plus focused tests of what changed (the quick tier only for saves, calendar or match engine). The full suite runs at the end of each sprint and before release. Group work into few, larger pushes. Details in HANDOVER.md, "Development mode until release".
+- **Limits:** never call API-Sports or Supabase unless I ask for it in the session; never spend money; never write secret values into any file (this repository is public).
+- **Finish:** every push to main goes live on Vercel, so push only when the build and the focused tests pass. Update HANDOVER.md briefly, commit code and notes together with a clear message, push to main. List browser checks you could not run under "Owner checks".
+- **Stopping early:** anything not pushed is lost. Push working partial code as "wip: <step> partial" with a note; if it does not build, push only the HANDOVER.md note.

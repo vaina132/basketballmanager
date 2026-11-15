@@ -4,15 +4,15 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Keeping this file short:** after each push, update "Current state" here and add two or three lines to the top of `docs/handover-history.md`. Record decisions only when a rule or default is decided. Keep this file under 20 KB.
 
-## Current state (15 November 2026, sprint 4 in progress)
+## Current state (15 November 2026, sprint 4 complete, waiting for the owner)
 
-**Active level:** Sprint 4, realism (owner said "go" on 15 November 2026). Sprint 3's only open step is the 3.7 browser acceptance (local-only). Level order: sprint 3 (multi-league world), **sprint 4 (realism, active)**, saved ideas, release preparation, interface simplification (last).
+**Active level:** none. Sprint 4 (realism) is complete in the cloud and waits for the owner's review; never start the next level (saved ideas) without approval. Sprint 3's only open step is the 3.7 browser acceptance (local-only). Level order: sprint 3 (multi-league world), sprint 4 (realism), saved ideas, release preparation, interface simplification (last).
 
 **Development mode** applies (see "Rules and conventions"): build features first; full suite at sprint end.
 
 **Code baseline:**
 - Save format **62** (`SEASON_SCHEMA_VERSION`; 61 injuries, 62 real economy), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
-- Last verification (cloud, Linux): `npm run test:quick` 2,407 passed / 10 skipped after the injuries merge; `npm run build` passes with the known chunk-size advisory. Last full suite: 2,634 tests before sprint 4 (790 s serial).
+- Last verification (cloud, Linux, end of sprint 4): full suite **2,604 passed / 30 skipped, 195 files** (302 s, `--maxWorkers=4`); `npm run build` passes with the known chunk-size advisory. The 30 skipped tests are listed under "Before release".
 - Cloud sessions: Node 24.22.3 in `/opt/node24` (put it first in `PATH`).
 
 **Sprint 3 in short** (details in `docs/handover-history.md`, search the step number): all 13 competitions imported and rated (3.1); save scaling (3.2); one shared calendar with byes and gates (3.3); each league's ranking rule, postseason, promotion and relegation, next divisions with real names (3.4); the EuroLeague, EuroCup and BCL in their real formats with background sides, estimated tables and European places (3.5); setup screen with flags, strength, Europe lists and measured speed and save size (3.6).
@@ -31,7 +31,7 @@ This file holds only the current state, the next steps and the rules that must n
 - Strict validation of long careers grows with career length. The academy and relationship replays are the main costs; a performance step is needed before release.
 - The private data still has unresolved records: 263 club assignments, 169 official identities, 17 extra provider IDs and 2,811 estimated precise positions. See `docs/player-data-quality.md`.
 
-## Sprint 3 finish and sprint 4 in progress (15 November 2026, owner said "go")
+## Sprint 4 summary (15 November 2026): realism complete in the cloud
 
 - **Real-data measurements** (online pack, Spain's two divisions plus the three European competitions, 166 world clubs, 1,300 opening fixtures): world built in 0.3 s, career created in 6.4 s, a full season (43 weeks) simulated in 247 s, save 7.5 MiB. The full career check took 17 s per save and 13 s per strict load; matchday autosaves now skip it (development mode), so saving costs only the encoding.
 - **Rating fairness (sprint 4):** `src/world/rating-fairness.ts`, applied in `worldFromPack`: ratings resting on fewer than 600 minutes move towards the club's minutes-weighted level (one step lower) in proportion to the minutes missing; players without statistics take that level. The online pack now carries `ratingMinutes` (version `2026.11-world-1-online-2`). Example: Anadolu Efes' 30 and 32 become 61 and 60; their regulars keep their ratings.
@@ -44,7 +44,8 @@ This file holds only the current state, the next steps and the rules that must n
 - **Match calibration (sprint 4):** `src/engine/calibration.ts` holds every tuned constant with its target (2025-26 regular season, plain mean of nine competitions). Measured on six real top divisions with Europe (about 6,840 games), per team per game: points 85.0 (target 85.2), possessions 75.8 (75.7), 112 points per 100 possessions (112.5), FG 45.7% (46.3), 3P 34.5% on 43.9% of shots (34.8 / 41.9), FT 16.8-22.1 (16.4-21.8), assists 19.1 (18.5), turnovers 13.5 (13.2), steals 6.8, blocks 2.7, fouls 22.6, team rebounds 1.8/2.2; average margin 11.7 (12.0), home wins 60.8% (59.4), overtime 3.0% (4.8); starters 23.8 minutes and 59% of minutes, 5.5 bench players used. Fixed on the way: point guards committed most fouls (help defenders now do), AI clubs kept garbage-time lineups as next game's starters. The old rules-2 engine keeps its rotation.
 - **Rating fairness on each position's scale:** `withFairRatings` now compares levels on the player's own position weights and shifts his own profile (the first version averaged skills across positions, about 8 overall points too low). Beşiktaş/Fenerbahçe audit: the raw statistics already rate Beşiktaş's best eight 75.5 and Fenerbahçe's 75.1 (Zizic 87 on 1,035 minutes; Fenerbahçe deeper at places six to eight); in simulation the two are level (head to head 54% Fenerbahçe). A data-side improvement needs minutes from other leagues or last season for new signings (local-only).
 - **Known side effect:** with the realistic rotation, players 10-12 default to the Rotation role (12+ minutes) and raise playing-time concerns; AI clubs settle them, and the manager can agree Reserve roles. A default role by squad rank needs a relationships model change (replay), so it is left for later.
-- **Next:** the scenario tests changed by the merged results are being re-seeded (two agents); then the sprint-end full suite and summary.
+- **Scenario tests re-seeded** after the merged results (new seeds reproduce the same scenarios and dates; none skipped).
+- **Next:** the owner reviews sprint 4 (browser checks 7-9 under "Owner checks", the two decisions under "Suggestions") and approves the next level.
 
 ## Real clubs on every device (owner request, 15 November 2026)
 

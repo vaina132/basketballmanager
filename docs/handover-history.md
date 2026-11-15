@@ -11,6 +11,7 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 ## Sprint 3 detailed list (archived from HANDOVER.md "Current state", 15 November 2026)
 
 **Done in sprint 3** (details in the history, search for the step number):
+- Sprint 4 end (15 November 2026): scenario tests re-seeded by two agents (injury/physio 1311/atl-2, 172/rhf-4, 225/aeg-5; dismissals 154/4/102, FIBA standings 3, board funding 20, career moves 8, relegated managed club 33). Full suite 2,604 passed / 30 skipped (302 s).
 - Match calibration (15 November 2026, worktree agent): `src/engine/calibration.ts` (`ACTION_SECONDS`, `SHOT_SELECTION`, `TURNOVERS`, `DEFENSIVE_FOULS`, `SHOOTING_FOULS`, `DEFENDER_ROLES`, `SHOT_MAKING`, `HOME_COURT_MAKE_BONUS`, `SCORE_EFFECT`, `LATE_GAME`, `ROTATION`), `match.ts`, `possession.ts`, AI starting five kept in `season.ts`, pass-then-drive assists accepted in `validate-match.ts`. Tests: `tests/match-calibration.test.ts` (264 games), `tests/helpers/match-calibration.ts`; measurement harness kept in the session scratchpad only. Rating fairness rewritten on position scales (`tests/rating-fairness.test.js` +1).
 - **3.1 data:** all 13 competitions imported and rated. The private pack `real-2026.11-world-3.json` (local only) covers 223 clubs and about 3,087 players.
 - **3.2 save scaling** for a single league. Combined-world acceptance waits for 3.7.

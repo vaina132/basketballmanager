@@ -272,7 +272,7 @@ function checkEuropeanCompetitions(world: CareerWorld, clubIds: ReadonlySet<stri
   const kinds = new Set<string>(), ids = new Set<string>(), entrants = new Set<string>();
   for (const [index, entry] of lists.entries()) {
     const path = `world.europeanCompetitions[${index}]`;
-    if (!exactKeys(entry, ['id', 'name', 'kind', 'season', 'clubIds', ...(isObject(entry) && Object.hasOwn(entry, 'format') ? ['format'] : [])]) || !isText(entry.id, 80) || !ID.test(entry.id) || ids.has(entry.id) || !isText(entry.name) || !['euroleague', 'eurocup', 'bcl'].includes(entry.kind) || kinds.has(entry.kind) || !isText(entry.season, 20) || !Array.isArray(entry.clubIds) || entry.clubIds.length < 2 || entry.clubIds.length > 64) fail(path, 'must name one of the three competitions once, its season and its entrants');
+    if (!exactKeys(entry, ['id', 'name', 'kind', 'season', 'clubIds', ...(isObject(entry) && Object.hasOwn(entry, 'format') ? ['format'] : []), ...(isObject(entry) && Object.hasOwn(entry, 'countries') ? ['countries'] : [])]) || !isText(entry.id, 80) || !ID.test(entry.id) || ids.has(entry.id) || !isText(entry.name) || !['euroleague', 'eurocup', 'bcl'].includes(entry.kind) || kinds.has(entry.kind) || !isText(entry.season, 20) || !Array.isArray(entry.clubIds) || entry.clubIds.length < 2 || entry.clubIds.length > 64) fail(path, 'must name one of the three competitions once, its season and its entrants');
     kinds.add(entry.kind); ids.add(entry.id);
     if (world.domesticLeagues!.some(league => league.id === entry.id)) fail(`${path}.id`, 'must differ from every domestic league\'s id');
     // Format 57: a played competition follows its real format, in a world whose clubs have full rosters.
@@ -281,6 +281,17 @@ function checkEuropeanCompetitions(world: CareerWorld, clubIds: ReadonlySet<stri
       if (!format || format.kind !== entry.kind) fail(`${path}.format`, 'must be a format of this competition');
       if (!fieldFits(format!, entry.clubIds.length)) fail(`${path}.clubIds`, `must list ${format!.clubs.min} to ${format!.clubs.max} entrants for its format${format!.regular.groups ? `, in ${format!.regular.groups.length} equal groups of at least four` : ''}`);
       if (world.rosterModel !== FULL_ROSTER_MODEL) fail(`${path}.format`, 'requires clubs with full rosters');
+    }
+    // Format 59: the BCL's draw keeps clubs of one country apart, so its entrants carry their countries.
+    const protectedDraw = Object.hasOwn(entry, 'format') && !!EUROPEAN_FORMATS[entry.format as keyof typeof EUROPEAN_FORMATS]?.staged;
+    if (protectedDraw !== Object.hasOwn(entry, 'countries')) fail(`${path}.countries`, protectedDraw ? 'must give every entrant\'s country for the draw' : 'belong only to the BCL format');
+    if (protectedDraw) {
+      const countries = entry.countries as Record<string, unknown>;
+      if (!exactKeys(countries, entry.clubIds) || (entry.clubIds as string[]).some(id => !isText(countries[id], 60))) fail(`${path}.countries`, 'must give every entrant\'s country for the draw');
+      for (const id of entry.clubIds as string[]) { const league = world.domesticLeagues!.find(item => item.clubIds.includes(id)); if (league && countries[id] !== league.country) fail(`${path}.countries`, 'must match the country of each league club'); }
+      const counts = new Map<string, number>();
+      for (const id of entry.clubIds as string[]) counts.set(countries[id] as string, (counts.get(countries[id] as string) ?? 0) + 1);
+      if (Math.max(...counts.values()) > 8) fail(`${path}.countries`, 'can list at most eight clubs of one country (one a group)');
     }
     for (const id of entry.clubIds as unknown[]) {
       if (typeof id !== 'string' || !clubIds.has(id) || entrants.has(id) || lowerDivisionClubIds(world).has(id)) fail(`${path}.clubIds`, 'must list clubs of this world, each in one competition and none of a next division');

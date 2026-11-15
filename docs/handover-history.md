@@ -8,6 +8,17 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.5e, the Basketball Champions League (15 November 2026)
+
+- **Fixtures first:** `tests/fixtures/season58-bcl-legacy-*` from unchanged commit `5feca33` (126 modules); `tests/season58-continuation.test.js` (3).
+- **Format 59:** `bcl-2026-1` with `EuropeanFormat.fields` (32, or 30 plus two qualification tournaments: `qualificationSplit`) and `staged` (qualification days, play-in slots, Round of 16 weeks, groups and members); `EuropeanCompetition.countries` (required with the BCL format, league clubs' countries must match, at most eight of one country).
+- **Engine** (`src/world/europe.ts`): `clubStrength`, `bclField` (direct and qualification places by squad strength), `bclDraw` (pots of eight, one per pot, country protection by seeded backtracking; cached), `deriveStaged` (qualification trees in one knockout format ending together; groups once their clubs are known; play-ins A2-B3 ... with explicit ranks; Round of 16 round robins as `round-of-16` games with `seriesId` `r16-<group>`; quarter-finals and Final Four with a third-place game). `createSeason` and the rollover now start from `scheduledFixtures` (the opening games already due).
+- **Real worlds:** the BCL format and countries (league country, else the pack's) when the field fits; IDs `real-bcl-`.
+- **Dates and assumptions** in `docs/decisions.md` and `competition-rules-2026.md` (published: the 6 October start on Tuesdays and Wednesdays, play-ins in January, the end by 16 May; research by a fetch of the BCL draw news and games page).
+- **Tests:** `tests/europe-bcl.test.js` (6: field split by strength; protected pot draw, also with four countries of eight; country and field refusals, format guard; a season through qualification, groups, play-ins with home advantage, the Round of 16 pattern, quarter-finals and the Final Four with third place; rest days and strict saves through the rollover).
+- **Verification:** full serial suite **2,620 tests / 198 files passed** (756 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.5f, estimated background tables and next season's European places.
+
 ## Cloud continuation: step 3.5d, the EuroCup (15 November 2026)
 
 - **Fixtures first:** `tests/fixtures/season57-eurocup-legacy-*` (the EuroLeague playing under format 57) from unchanged commit `232e0a4` (126 modules); `tests/season57-continuation.test.js` (3).

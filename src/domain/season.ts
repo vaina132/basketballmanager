@@ -120,7 +120,8 @@ export interface DomesticDivisions {
 /** Format 56 adds the European competitions and their entrants to new worlds (step 3.5a). */
 /** Format 57 plays European competitions in their real formats on midweek game days (steps 3.5b-c). */
 /** Format 58 adds the EuroCup format: four groups and best-of-three playoffs (step 3.5d). */
-export const SEASON_SCHEMA_VERSION = 58;
+/** Format 59 adds the BCL format: qualification, a protected draw, play-ins, Round of 16 groups and a Final Four (step 3.5e). */
+export const SEASON_SCHEMA_VERSION = 59;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

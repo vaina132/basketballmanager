@@ -47,9 +47,9 @@ export function careerCompetitions(pack: DataPack): DataPackCompetition[] {
   return pack.competitions.filter(item => item.kind === 'domestic' && item.clubIds.length >= MIN_WORLD_CLUBS && item.clubIds.length <= 20);
 }
 
-/** New worlds change prefix whenever they gain a rule: `real-tables-` (format 48), `real-playoffs-` (49), `real-tiebreak-` (51), `real-rules-` (52), `real-europe-` (56), `real-europlay-` (57). */
+/** New worlds change prefix whenever they gain a rule: `real-tables-` (format 48), `real-playoffs-` (49), `real-tiebreak-` (51), `real-rules-` (52), `real-europe-` (56), `real-europlay-` (57), `real-bcl-` (59). */
 export function realWorldId(pack: DataPack, competitionId: string): string {
-  return `real-europlay-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
+  return `real-bcl-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
 }
 
 /** The fictional season wage for a player of this overall rating, in euro cents. */
@@ -131,7 +131,9 @@ export function worldFromPack(pack: DataPack, competitionId: string | readonly s
     const kept = size === undefined ? listed : new Set([...listed].sort((a, b) => strength(b) - strength(a) || listed.indexOf(a) - listed.indexOf(b)).slice(0, size));
     const entrantIds = size === undefined ? listed : listed.filter(clubId => (kept as Set<string>).has(clubId));
     entrantIds.forEach(clubId => seen.add(clubId));
-    return entrantIds.length >= 2 ? [{ id: item.id, name: item.name, kind, season: item.season, clubIds: entrantIds, ...(size !== undefined ? { format: format!.id } : {}) }] : [];
+    // Format 59: the BCL's protected draw needs each entrant's country (a league club's league country; the pack's otherwise, or the club itself when unknown).
+    const countries = size !== undefined && format!.staged ? { countries: Object.fromEntries(entrantIds.map(clubId => [clubId, world.domesticLeagues!.find(league => league.clubIds.includes(clubId))?.country ?? pack.clubs.find(club => club.id === clubId)?.country ?? `unknown-${clubId}`])) } : {};
+    return entrantIds.length >= 2 ? [{ id: item.id, name: item.name, kind, season: item.season, clubIds: entrantIds, ...(size !== undefined ? { format: format!.id } : {}), ...countries }] : [];
   });
   if (!european.length) return world;
   const entrants = [...seen].filter(clubId => !clubIds.includes(clubId)).map(clubId => {

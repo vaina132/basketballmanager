@@ -391,7 +391,8 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   // Next-division clubs (format 54) start outside the full world.
   const clubs = fullWorldClubs(world);
   const divisions = openingDivisions(world);
-  const fixtures = createSchedule(clubs, 1, { world, divisions, seed });
+  // Step 3.5e: the season's opening games include those already due (the BCL's qualification and drawn groups).
+  const fixtures = scheduledFixtures({ clubs, fixtures: [], world, divisions, seed }, 1);
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId));
   const preparation = {
     ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled),
@@ -667,7 +668,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   }
   const seasonNumber = state.seasonNumber + 1;
   const divisions = nextSeasonDivisions(state);
-  const fixtures = createSchedule(state.clubs, seasonNumber, { ...state, divisions });
+  const fixtures = scheduledFixtures({ ...state, divisions, fixtures: [] }, seasonNumber);
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(state.managedClubId));
   const recoveryDays = (Date.parse(`${dateForRound(1, seasonNumber)}T00:00:00.000Z`) - Date.parse(`${state.date}T00:00:00.000Z`)) / DAY_MS;
   const archive = {

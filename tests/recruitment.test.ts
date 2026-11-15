@@ -163,7 +163,7 @@ describe('dated in-season free-agent recruitment', () => {
     const joined = play(delegated);
     expect(effectiveContractsForRound(joined.employment, 2, 2).filter(contract => contract.clubId === clubId)).toHaveLength(10);
     const rival = opening.clubs.find(club => club.id !== clubId)!;
-    const injured = { ...opening, injuries: [{ id: 'injury-policy-fixture', playerId: rival.players[0]!.id, clubId: rival.id, kind: 'ankle' as const, fixtureId: opening.fixtures[0]!.id, occurredOn: opening.date, returnOn: dateForRound(4, 2) }] };
+    const injured = { ...opening, injuries: [{ id: 'injury-policy-fixture', playerId: rival.players[0]!.id, clubId: rival.id, kind: 'ankle-sprain' as const, fixtureId: opening.fixtures[0]!.id, occurredOn: opening.date, returnOn: dateForRound(4, 2) }] };
     const repaired = scheduleInSeasonRecruitment(injured);
     expect(getInSeasonOffers(repaired, rival.id, true)).toHaveLength(1);
     expect(getInSeasonOffers(repaired, clubId, true)).toHaveLength(0);

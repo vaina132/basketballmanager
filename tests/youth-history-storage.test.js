@@ -52,7 +52,7 @@ describe('strict historical youth fixture outcomes', () => {
     ['changed score', fixture => { fixture.result.score.home += 1; }],
     ['changed player scoring', fixture => { fixture.result.stats[fixture.playerIds.home[0]].points += 1; }],
     ['invalid retained condition', fixture => { fixture.result.stats[fixture.playerIds.home[0]].condition = -1; }],
-    ['invented injury source', fixture => { fixture.result.injuries.push({ id: 'invented', playerId: fixture.playerIds.home[0], clubId: fixture.homeClubId, kind: 'ankle', fixtureId: 'wrong-fixture', occurredOn: fixture.date, returnOn: '2099-01-01' }); }],
+    ['invented injury source', fixture => { fixture.result.injuries.push({ id: 'invented', playerId: fixture.playerIds.home[0], clubId: fixture.homeClubId, kind: 'ankle-sprain', fixtureId: 'wrong-fixture', occurredOn: fixture.date, returnOn: '2099-01-01' }); }],
   ])('rejects %s even after the same object previously validated', (_label, damage) => {
     const changed = structuredClone(opening);
     validateSeasonState(changed);

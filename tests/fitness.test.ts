@@ -145,7 +145,7 @@ describe('fitness effects in the authoritative weekly interval', () => {
 
   it('uses only medically available days and never changes injury dates or unavailable-day recovery', () => {
     const original = input(staffed, 'heavy', 55);
-    const injury: SeasonInjury = { id: 'fitness-health-policy', playerId: player, clubId: club, kind: 'ankle', fixtureId: 'dev-r1-g1', occurredOn: dateForRound(1), returnOn: '2026-09-09' };
+    const injury: SeasonInjury = { id: 'fitness-health-policy', playerId: player, clubId: club, kind: 'ankle-sprain', fixtureId: 'dev-r1-g1', occurredOn: dateForRound(1), returnOn: '2026-09-09' };
     const partial = processTrainingWeek({ ...original, injuries: [freeze(injury)] });
     expect(partial.training.lastWeek!.players[player]).toMatchObject({ availableDays: 4, conditionAfter: 68, fitness: { conditionWithoutCoach: 60, conditionBenefit: 8 } });
     const unavailable = { ...injury, returnOn: '2026-09-13' };

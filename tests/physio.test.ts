@@ -22,7 +22,7 @@ const club = 'rhine-falcons', other = 'aegean-waves', player = 'rhf-1';
 const create = (physio = true) => createSeason(53, club, 'off', true, true, true, true, null, true, true, true, true, true, true, physio);
 function freeze<T>(value: T): T { if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
 function injury(duration = 18, occurredOn = dateForRound(1)): SeasonInjury {
-  return { id: `policy-${duration}-${occurredOn}`, playerId: player, clubId: club, kind: 'ankle', fixtureId: 'dev-r1-g1', occurredOn, returnOn: new Date(Date.parse(`${occurredOn}T00:00:00Z`) + duration * 86400000).toISOString().slice(0, 10) };
+  return { id: `policy-${duration}-${occurredOn}`, playerId: player, clubId: club, kind: 'ankle-sprain', fixtureId: 'dev-r1-g1', occurredOn, returnOn: new Date(Date.parse(`${occurredOn}T00:00:00Z`) + duration * 86400000).toISOString().slice(0, 10) };
 }
 function input(state: SeasonState, episode: SeasonInjury, afterRound = 1, physio = state.physio): RehabilitationWeekInput {
   return { physio, clubs: state.clubs, rosters: state.rosters, injuries: [episode], seasonNumber: state.seasonNumber, afterRound, fromDate: dateForRound(afterRound), toDate: dateForRound(afterRound + 1) };

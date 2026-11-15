@@ -145,7 +145,7 @@ describe('negotiated release clauses', () => {
   it('lets automated buyers use an existing valid clause through the same offer guards', () => {
     const club = opening.clubs.find(club => club.id === buyer)!;
     const unavailable = [...getInSeasonCandidates(opening), ...club.players.slice(0, 1), ...opening.clubs.find(team => team.id === seller)!.players.filter(player => player.id !== target)];
-    const noFree: SeasonState = { ...opening, injuries: unavailable.map((player, index) => ({ id: `policy-injury-${index}`, playerId: player.id, clubId: buyer, kind: 'ankle', fixtureId: opening.fixtures[0]!.id, occurredOn: opening.date, returnOn: dateForRound(4, 2) })) };
+    const noFree: SeasonState = { ...opening, injuries: unavailable.map((player, index) => ({ id: `policy-injury-${index}`, playerId: player.id, clubId: buyer, kind: 'ankle-sprain', fixtureId: opening.fixtures[0]!.id, occurredOn: opening.date, returnOn: dateForRound(4, 2) })) };
     const scheduled = scheduleInSeasonRecruitment(noFree);
     const offers = getInSeasonOffers(scheduled, buyer, true);
     expect(offers).toHaveLength(1);

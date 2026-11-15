@@ -1,6 +1,7 @@
 import { getCareerPlayer } from '../world/player-catalog'
 import { useState } from 'react'
 import type { SeasonState } from '../domain/season'
+import { injuryLabel } from '../domain/injuries'
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios'
 import { daysUntilReturn, getClubMedicalCases, getInjuryMedicalSummary, getPlayerMedicalSummary, getSeasonInjuries } from '../world/health'
 import { getClubPhysio } from '../world/physio-policy'
@@ -16,7 +17,6 @@ import { PHYSIO_DIRECTORY } from '../data/staff-directory'
 type MedicalCase = NonNullable<ReturnType<typeof getPlayerMedicalSummary>>
 type MedicalView = 'recovering' | 'cleared' | 'history'
 interface MedicalWorkspaceProps { season: SeasonState; busy?: boolean; onSelectPlayer: (id: string) => void; onOpenPhysio: () => void; onOpenTraining: () => void }
-const injuryName = (kind: 'ankle' | 'muscle') => kind === 'ankle' ? 'Ankle injury' : 'Muscle injury'
 
 export function MedicalWorkspace({ season, busy = false, onSelectPlayer, onOpenPhysio, onOpenTraining }: MedicalWorkspaceProps) {
   const [view, setView] = useState<MedicalView>('recovering')
@@ -52,7 +52,7 @@ function MedicalCaseRow({ season, summary, busy, onSelectPlayer }: { season: Sea
   const physio = summary.lastReview ? PHYSIO_DIRECTORY.find(item => item.id === summary.lastReview?.physioId) : null
   const reviews = season.physio.rehabilitation.filter(record => record.injuryId === injury.id && record.toDate <= season.date).slice().sort((left, right) => right.toDate.localeCompare(left.toDate))
   return <article className={`medical-case${recovering ? ' is-recovering' : ''}`} data-medical-injury={injury.id} data-medical-player={player.id}>
-    <div className="medical-case-main"><div className="medical-case-identity"><Avatar player={player} color={currentClub?.color ?? originalClub.color} size={48} /><div>{inSquad ? <button className="text-button" onClick={() => onSelectPlayer(player.id)} disabled={busy}><strong>{player.name}</strong><Icon name="chevron" size={13} /></button> : <strong>{player.name}</strong>}<span>{player.position} &middot; {injuryName(injury.kind)}</span><small className={recovering ? 'medical-unavailable' : 'medical-cleared'}>{recovering ? 'Unavailable' : 'Cleared'}{!inSquad && ` / ${currentClub?.name ?? 'Free agent'}`}</small></div></div>
+    <div className="medical-case-main"><div className="medical-case-identity"><Avatar player={player} color={currentClub?.color ?? originalClub.color} size={48} /><div>{inSquad ? <button className="text-button" onClick={() => onSelectPlayer(player.id)} disabled={busy}><strong>{player.name}</strong><Icon name="chevron" size={13} /></button> : <strong>{player.name}</strong>}<span>{player.position} &middot; {injuryLabel(injury.kind)}</span><small className={recovering ? 'medical-unavailable' : 'medical-cleared'}>{recovering ? 'Unavailable' : 'Cleared'}{!inSquad && ` / ${currentClub?.name ?? 'Free agent'}`}</small></div></div>
       <div className="medical-case-recovery"><div><span>{recovering ? 'Expected return' : 'Cleared on'}</span><strong data-medical-return={summary.effectiveReturnOn}><time dateTime={summary.effectiveReturnOn}>{medicalDate(summary.effectiveReturnOn)}</time></strong></div><progress value={summary.progress} max={100} aria-label={`${player.name} recovery period ${Math.round(summary.progress)} percent elapsed`} /><div><small>Recovery period</small><span>{recovering ? `${summary.daysRemaining} ${summary.daysRemaining === 1 ? 'day' : 'days'} left` : 'Complete'}</span></div></div>
       <div className="medical-case-condition"><span>Current condition</span>{condition === null || condition === undefined ? <small>No longer in squad</small> : <StaminaMeter value={condition} label={`${player.name} current condition`} compact />}</div>
     </div>

@@ -70,7 +70,7 @@ describe('weekly training workload and development', () => {
 
   it('excludes full and partial injury absences by calendar day without changing recovery dates', () => {
     const original = input();
-    const injury: SeasonInjury = { id: 'episode', playerId: player.id, clubId: club.id, kind: 'ankle', fixtureId: 'dev-r1-g1', occurredOn: '2026-09-05', returnOn: '2026-09-09' };
+    const injury: SeasonInjury = { id: 'episode', playerId: player.id, clubId: club.id, kind: 'ankle-sprain', fixtureId: 'dev-r1-g1', occurredOn: '2026-09-05', returnOn: '2026-09-09' };
     const partial = processTrainingWeek({ ...original, injuries: [injury] });
     expect(trainingAvailableDays([injury], player.id, original.fromDate, original.toDate)).toBe(4);
     expect(partial.training.lastWeek!.players[player.id]).toMatchObject({ availableDays: 4, conditionBefore: 80, conditionAfter: 93 });

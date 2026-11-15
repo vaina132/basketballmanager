@@ -33,14 +33,14 @@ function formatFour(season: SeasonState): string {
 }
 
 beforeAll(() => {
-  initial = createSeason(9, clubId, 'standard', true, true, false);
+  initial = createSeason(325, clubId, 'standard', true, true, false);
   starterId = getClubCoaching(initial.coaching, clubId)[0]!.id;
   initial = setCoachAssignment(initial, starterId, 'freeThrow');
   initial = hireCoach(initial, 'coach-09', 'freeThrow');
   specialistId = getClubCoaching(initial.coaching, clubId).find(contract => contract.coachId === 'coach-09')!.id;
   initial = setTrainingPlan(initial, { ...initial.training.plans[clubId]!, delegated: false, intensity: 'heavy', focus: 'freeThrow' });
   second = advanceSeason(finish(initial));
-  expect(second.training.lastWeek!.players['atl-8']!.availableDays).toBe(0);
+  expect(second.training.lastWeek!.players['atl-9']!.availableDays).toBe(0);
   expect(Object.values(second.training.lastWeek!.players).some(player => Object.values(player.coachingGains).some(gain => gain > 0))).toBe(true);
   edited = setCoachAssignment(second, specialistId, 'passing');
   edited = setCoachRenewal(edited, specialistId, false);
@@ -68,7 +68,7 @@ describe('coaching-aware season persistence', () => {
     expect(restored).toEqual(second);
     expect(Object.keys(report.coaching!)).toEqual(second.clubs.map(club => club.id));
     expect(report.coaching![clubId]).toContainEqual({ contractId: specialistId, coachId: 'coach-09', focus: 'freeThrow' });
-    expect(Object.values(report.players['atl-8']!.coachingGains).every(gain => gain === 0)).toBe(true);
+    expect(Object.values(report.players['atl-9']!.coachingGains).every(gain => gain === 0)).toBe(true);
     for (const player of Object.values(report.players)) for (const attribute of TRAINING_ATTRIBUTES) expect(player.coachingGains[attribute]).toBeLessThanOrEqual(player.gains[attribute]);
   });
 
@@ -165,8 +165,8 @@ describe('format 4 migration without coaching side effects', () => {
     const envelope = JSON.parse(formatFour(legacyLive));
     if (change === 'extra staff field') envelope.state.coaching = initial.coaching;
     if (change === 'extra report staff field') envelope.state.training.lastWeek.coaching = null;
-    if (change === 'extra bonus field') envelope.state.training.lastWeek.players['atl-9'].coachingGains = {};
-    if (change === 'invalid original gain') envelope.state.training.lastWeek.players['atl-9'].gains.passing += 1;
+    if (change === 'extra bonus field') envelope.state.training.lastWeek.players['atl-8'].coachingGains = {};
+    if (change === 'invalid original gain') envelope.state.training.lastWeek.players['atl-8'].gains.passing += 1;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow();
   });
 
@@ -206,14 +206,14 @@ describe('strict coaching contract and training provenance validation', () => {
     ['wrong snapshot contract', season => { season.training.lastWeek!.coaching![clubId]![0]!.contractId = 'coach-s2-c1'; }],
     ['unknown snapshot focus', season => { Object.assign(season.training.lastWeek!.coaching![clubId]![0]!, { focus: 'dunking' }); }],
     ['altered frozen assignment', season => { season.training.lastWeek!.coaching![clubId]!.find(item => item.contractId === specialistId)!.focus = 'passing'; }],
-    ['missing bonus map', season => { delete (season.training.lastWeek!.players['atl-9'] as unknown as Record<string, unknown>).coachingGains; }],
-    ['foreign bonus attribute', season => { Object.assign(season.training.lastWeek!.players['atl-9']!.coachingGains, { dunking: 1 }); }],
-    ['negative bonus', season => { season.training.lastWeek!.players['atl-9']!.coachingGains.freeThrow = -1; }],
-    ['fractional bonus', season => { season.training.lastWeek!.players['atl-9']!.coachingGains.freeThrow = 1.5; }],
-    ['bonus above weekly limit', season => { season.training.lastWeek!.players['atl-9']!.coachingGains.freeThrow = 9; }],
-    ['altered bonus attribution', season => { season.training.lastWeek!.players['atl-9']!.coachingGains.freeThrow = 0; }],
-    ['bonus despite full injury absence', season => { season.training.lastWeek!.players['atl-8']!.coachingGains.freeThrow = 1; }],
-    ['unreconciled total practice', season => { season.training.points['atl-9']!.freeThrow += 1; }],
+    ['missing bonus map', season => { delete (season.training.lastWeek!.players['atl-8'] as unknown as Record<string, unknown>).coachingGains; }],
+    ['foreign bonus attribute', season => { Object.assign(season.training.lastWeek!.players['atl-8']!.coachingGains, { dunking: 1 }); }],
+    ['negative bonus', season => { season.training.lastWeek!.players['atl-8']!.coachingGains.freeThrow = -1; }],
+    ['fractional bonus', season => { season.training.lastWeek!.players['atl-8']!.coachingGains.freeThrow = 1.5; }],
+    ['bonus above weekly limit', season => { season.training.lastWeek!.players['atl-8']!.coachingGains.freeThrow = 9; }],
+    ['altered bonus attribution', season => { season.training.lastWeek!.players['atl-8']!.coachingGains.freeThrow = 0; }],
+    ['bonus despite full injury absence', season => { season.training.lastWeek!.players['atl-9']!.coachingGains.freeThrow = 1; }],
+    ['unreconciled total practice', season => { season.training.points['atl-8']!.freeThrow += 1; }],
   ];
   it.each(mutations)('rejects %s without modifying the valid save', (_name, mutate) => {
     const damaged = structuredClone(second), before = structuredClone(second);
@@ -244,7 +244,7 @@ describe('strict coaching contract and training provenance validation', () => {
 
   it('requires zero coaching attribution when an old training save has coaching disabled', () => {
     const damaged = parseSeason(formatFour(legacyLive));
-    damaged.training.lastWeek!.players['atl-9']!.coachingGains.passing = 1;
+    damaged.training.lastWeek!.players['atl-8']!.coachingGains.passing = 1;
     expect(() => validateSeasonState(damaged)).toThrow(/reconcile/);
   });
 });

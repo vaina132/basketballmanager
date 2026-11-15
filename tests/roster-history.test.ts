@@ -141,11 +141,11 @@ describe('fixture, training and archive ownership', () => {
     const opponentPair = new Set([state.activeMatch!.home.id, state.activeMatch!.away.id]);
     const destination = state.clubs.find(club => !opponentPair.has(club.id))!, player = destination.players[0]!;
     const originClubId = state.managedClubId;
-    const injury = { id: `previous-registration:${player.id}`, playerId: player.id, clubId: originClubId, fixtureId: 'previous-registration', kind: 'ankle' as const, occurredOn: '2026-09-04', returnOn: '2026-09-20' };
+    const injury = { id: `previous-registration:${player.id}`, playerId: player.id, clubId: originClubId, fixtureId: 'previous-registration', kind: 'ankle-sprain' as const, occurredOn: '2026-09-04', returnOn: '2026-09-20' };
     const prepared = { ...finish(state), injuries: [injury] }, before = structuredClone(prepared);
     const next = advanceSeason(prepared);
     const result = next.fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(destination.id))!.result!;
-    expect(result.injuries[player.id]).toBe('ankle');
+    expect(result.injuries[player.id]).toBe('ankle-sprain');
     expect(result.stats[player.id]).toMatchObject({ secondsPlayed: 0, points: 0, fouls: 0 });
     expect(next.injuries.find(record => record.id === injury.id)).toEqual(injury);
     expect(prepared).toEqual(before);

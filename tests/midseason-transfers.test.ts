@@ -143,7 +143,7 @@ describe('midseason club transfers', () => {
   it('uses paid AI recruitment only for a genuine shortage when no free agent is available', () => {
     expect(scheduleInSeasonRecruitment(initial)).toEqual(initial);
     const club = initial.clubs.find(club => club.id === seller)!;
-    const shortage: SeasonState = { ...initial, injuries: club.players.slice(0, 3).map((player, index) => ({ id: `policy-injury-${index}`, playerId: player.id, clubId: seller, kind: 'ankle', fixtureId: initial.fixtures[0]!.id, occurredOn: initial.date, returnOn: dateForRound(4) })) };
+    const shortage: SeasonState = { ...initial, injuries: club.players.slice(0, 3).map((player, index) => ({ id: `policy-injury-${index}`, playerId: player.id, clubId: seller, kind: 'ankle-sprain', fixtureId: initial.fixtures[0]!.id, occurredOn: initial.date, returnOn: dateForRound(4) })) };
     const repaired = scheduleInSeasonRecruitment(shortage);
     const offers = getInSeasonOffers(repaired, seller, true);
     expect(offers).toHaveLength(1);

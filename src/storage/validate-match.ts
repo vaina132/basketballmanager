@@ -1,5 +1,6 @@
 import type { CourtScene, MatchEvent, MatchState, Side } from '../domain/types';
-import { MAX_MATCH_PERIODS } from '../engine/match';
+import { INJURY_KINDS, MATCH_INJURY_KINDS } from '../domain/injuries';
+import { MAX_INJURY_RISK, MAX_MATCH_PERIODS } from '../engine/match';
 
 const SIDES = ['home', 'away'] as const;
 const ATTRIBUTE_KEYS = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
@@ -243,7 +244,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     'pendingSubstitutions', 'requiredSubstitutions', 'freeThrows', 'stoppage', 'substitutionLocks',
     'autoSubstitutions', 'injuryMode', 'injuries', 'courtSeconds', 'result',
     ...(modern ? ['possessionPlay'] : []),
-  ], modern ? ['preExistingInjuries', 'morale'] : []);
+  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk'] : []);
   if (state.schemaVersion !== 2 || !['rules-2', 'possession-3'].includes(state.engineVersion as string)) fail('state', 'uses an unsupported schema or engine version');
   number(state.seed, 'seed', 0, 0xffff_ffff);
   number(state.rngState, 'rngState', 1, 0xffff_ffff);
@@ -343,10 +344,23 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
   for (const [playerId, value] of Object.entries(injuries)) {
     if (!allIds.has(playerId)) fail('injuries', 'references an unknown player');
     const injury = record(value, `injuries.${playerId}`, ['kind', 'occurredAtSeconds']);
-    choice(injury.kind, ['ankle', 'muscle'], `injuries.${playerId}.kind`);
+    choice(injury.kind, INJURY_KINDS, `injuries.${playerId}.kind`);
     number(injury.occurredAtSeconds, `injuries.${playerId}.occurredAtSeconds`, 0, played);
     if (preExisting.has(playerId) && injury.occurredAtSeconds !== 0) fail(`injuries.${playerId}`, 'must record carried unavailability at zero elapsed match time');
     if (state.status === 'ready' && !preExisting.has(playerId)) fail('injuries', 'cannot introduce a new injury before play begins');
+  }
+  if (Object.hasOwn(state, 'injuryRisk')) {
+    const risks = record(state.injuryRisk, 'injuryRisk');
+    if (!Object.keys(risks).length) fail('injuryRisk', 'must identify at least one player');
+    for (const [playerId, value] of Object.entries(risks)) {
+      if (!allIds.has(playerId)) fail('injuryRisk', 'references an unknown player');
+      const risk = record(value, `injuryRisk.${playerId}`);
+      if (!Object.keys(risk).length) fail(`injuryRisk.${playerId}`, 'must name at least one injury kind');
+      for (const [kind, multiplier] of Object.entries(risk)) {
+        choice(kind, MATCH_INJURY_KINDS, `injuryRisk.${playerId}`);
+        number(multiplier, `injuryRisk.${playerId}.${kind}`, Number.MIN_VALUE, MAX_INJURY_RISK, false);
+      }
+    }
   }
   const courtSeconds = record(state.courtSeconds, 'courtSeconds', SIDES);
   const teamFouls = record(state.teamFouls, 'teamFouls', SIDES);

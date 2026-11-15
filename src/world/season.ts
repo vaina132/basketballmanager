@@ -29,7 +29,7 @@ import { DEVELOPMENT_WORLD } from '../data/development-world';
 import type { CareerWorld } from '../domain/world';
 import { fullWorldClubs, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
-import { injuriesFromMatch, isRecovering } from './health';
+import { injuriesFromMatch, injuryRiskMap, isRecovering } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
 import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
@@ -292,6 +292,8 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   const backgroundCondition = (team: Team | undefined) => team ? backgroundConditions(season.fixtures ?? [], team, fixture.date) : {};
   const conditions = { ...backgroundCondition(homeBackground), ...backgroundCondition(awayBackground), ...Object.fromEntries([homeClub ? home : null, awayClub ? away : null].flatMap(team => team ? team.players.map(player => [player.id, season.conditions[player.id]!]) : [])) };
   const develop = (team: Team, full: boolean) => full ? developClub(team, season.training, { ...season, date: fixture.date }) : team;
+  // Sprint 4: earlier injuries raise the risk of the same kind again (recurrence), for every club alike.
+  const injuryRisk = season.injuryMode === 'off' ? {} : injuryRiskMap(season.injuries, registeredPlayers, fixture.date);
   let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), develop(home, !!homeClub), develop(away, !!awayClub), {
     ...(morale ? { morale } : {}),
     lineups: { home: lineup(home, homePlan), away: lineup(away, awayPlan) },
@@ -300,6 +302,7 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
     conditions,
     injuryMode: season.injuryMode,
     preExistingInjuries: Object.fromEntries(season.injuries.filter(injury => registeredPlayers.has(injury.playerId) && isRecovering(injury, fixture.date, season.physio)).map(injury => [injury.playerId, injury.kind])),
+    ...(Object.keys(injuryRisk).length ? { injuryRisk } : {}),
   });
   if (season.assistant?.enabledSince) for (const side of SIDES) {
     if (match[side].id === season.managedClubId) continue;
@@ -466,7 +469,7 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
   }
   fixture.result = compactResult(match, rosterIds);
   if (usesFullClubRoster(season)) fixture.result.selection = captureMatchdaySelection(season.clubs, match.home, match.away, season.conditions);
-  for (const injury of injuriesFromMatch(season.seed, fixture, match)) {
+  for (const injury of injuriesFromMatch(season.seed, fixture, match, season.injuries)) {
     if (season.injuries.some(existing => existing.id === injury.id || existing.playerId === injury.playerId && isRecovering(existing, fixture.date, season.physio))) throw new Error('An unavailable player cannot receive a duplicate injury episode.');
     season.injuries.push(injury);
   }

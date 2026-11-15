@@ -33,10 +33,10 @@ function previousFormat(season: SeasonState, version: 1 | 2): string {
 }
 
 beforeAll(() => {
-  const first = createSeason(9, clubId, 'standard', false, false, false);
+  const first = createSeason(325, clubId, 'standard', false, false, false);
   let match = setAutoSubstitutions(first.activeMatch!, managedSide(first), true);
-  while (!match.injuries['atl-8'] && match.status !== 'finished') match = stepMatch(match);
-  expect(match.injuries['atl-8']).toBeDefined();
+  while (!match.injuries['atl-9'] && match.status !== 'finished') match = stepMatch(match);
+  expect(match.injuries['atl-9']).toBeDefined();
   firstLive = { ...first, activeMatch: match };
   firstSecondRound = advanceSeason(finish(firstLive));
   firstComplete = completeSeason(firstSecondRound);
@@ -78,8 +78,8 @@ describe('career save boundaries', () => {
     const restored = restore(secondStart);
     expect(restored.injuries).toEqual(firstComplete.injuries);
     expect(restored.injuries.length).toBeGreaterThan(0);
-    expect(restored.injuries.some(injury => injury.playerId === 'atl-8')).toBe(true);
-    expect(getPlayerHealth(restored, 'atl-8')).toBeNull();
+    expect(restored.injuries.some(injury => injury.playerId === 'atl-9')).toBe(true);
+    expect(getPlayerHealth(restored, 'atl-9')).toBeNull();
     expect(restored.activeMatch!.preExistingInjuries ?? []).toEqual([]);
     expect(Object.values(restored.conditions).every(condition => condition === 100)).toBe(true);
     expect(thirdStart.injuries.some(injury => injury.fixtureId.startsWith('dev-s2-'))).toBe(true);
@@ -173,14 +173,14 @@ describe('career history validation', () => {
     ['inconsistent normal award', season => { season.history[0]!.fixtures[0]!.result.officialScore.home += 1; }],
     ['inconsistent default award', season => { const result = season.history[0]!.fixtures[0]!.result; result.kind = 'default'; result.officialScore.home += 10; }],
     ['incomplete regulation period', season => { season.history[0]!.fixtures[0]!.result.periods = 3; }],
-    ['unknown historical diagnosis', season => { Object.assign(season.history[0]!.fixtures[0]!.result.injuries, { 'atl-8': 'fracture' }); }],
-    ['foreign historical injured player', season => { season.history[0]!.fixtures[0]!.result.injuries.missing = 'ankle'; }],
+    ['unknown historical diagnosis', season => { Object.assign(season.history[0]!.fixtures[0]!.result.injuries, { 'atl-9': 'broken-leg' }); }],
+    ['foreign historical injured player', season => { season.history[0]!.fixtures[0]!.result.injuries.missing = 'ankle-sprain'; }],
     ['deleted historical episode', season => { season.injuries.shift(); }],
     ['duplicate historical episode', season => { season.injuries.push({ ...season.injuries[0]! }); }],
     ['changed historical recovery date', season => { season.injuries[0]!.returnOn = '2030-01-01'; }],
     ['reused prior-year injury source', season => { const injury = season.injuries.find(injury => injury.fixtureId.startsWith('dev-s2-'))!; injury.fixtureId = injury.fixtureId.replace('dev-s2-', 'dev-'); }],
-    ['omitted inherited historical absence', season => { delete season.history[0]!.fixtures.find(fixture => fixture.round === 2 && [fixture.homeClubId, fixture.awayClubId].includes(clubId))!.result.injuries['atl-8']; }],
-    ['unrecovered new-season condition', season => { season.conditions['atl-8'] = 90; }],
+    ['omitted inherited historical absence', season => { delete season.history[0]!.fixtures.find(fixture => fixture.round === 2 && [fixture.homeClubId, fixture.awayClubId].includes(clubId))!.result.injuries['atl-9']; }],
+    ['unrecovered new-season condition', season => { season.conditions['atl-9'] = 90; }],
     ['injuries disabled after injuring seasons', season => { season.injuryMode = 'off'; season.activeMatch!.injuryMode = 'off'; }],
   ];
   it.each(mutations)('rejects %s without changing the loaded career', (_name, mutate) => {

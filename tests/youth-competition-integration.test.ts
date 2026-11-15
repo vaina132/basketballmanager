@@ -68,11 +68,11 @@ describe('youth matches in the actual career calendar', () => {
   });
 
   it('rechecks a pending promotion after a genuine youth injury and releases the offer instead of erasing the injury', () => {
-    // This genuine seed has a home academy injury on youth matchday eight.
-    let initial = create(227, 'standard');
-    for (let round = 1; round < 8; round += 1) initial = advance(initial);
-    const injured = advance(initial);
-    const casualty = getClubAcademy(injured).find(row => getYouthPlayerStatus(injured, row.player.id).injury);
+    // The first youth matchday of this genuine seed with a new home academy injury.
+    const newlyInjured = (before: typeof initial, after: typeof initial) => getClubAcademy(after).find(row => getYouthPlayerStatus(after, row.player.id).injury && getYouthPlayerStatus(before, row.player.id).available);
+    let initial = create(227, 'standard'), injured = advance(initial);
+    while (!newlyInjured(initial, injured) && injured.round < 10) { initial = injured; injured = advance(initial); }
+    const casualty = newlyInjured(initial, injured);
     expect(casualty).toBeDefined();
     const id = casualty!.player.id;
     const row = getClubAcademy(initial).find(row => row.player.id === id)!;

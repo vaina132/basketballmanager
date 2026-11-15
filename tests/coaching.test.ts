@@ -145,7 +145,7 @@ describe('coaching contribution to authoritative training', () => {
     resting.training.plans[clubId]!.intensity = 'recovery';
     const rest = processTrainingWeek(resting).training.lastWeek!.players[player.id]!;
     expect(total(rest.gains)).toBe(0); expect(total(rest.coachingGains)).toBe(0);
-    const injured = processTrainingWeek({ ...input, injuries: [{ id: 'test', playerId: player.id, clubId, kind: 'ankle', fixtureId: 'dev-r1-g1', occurredOn: input.fromDate, returnOn: '2026-09-20' }] }).training.lastWeek!.players[player.id]!;
+    const injured = processTrainingWeek({ ...input, injuries: [{ id: 'test', playerId: player.id, clubId, kind: 'ankle-sprain', fixtureId: 'dev-r1-g1', occurredOn: input.fromDate, returnOn: '2026-09-20' }] }).training.lastWeek!.players[player.id]!;
     expect(total(injured.gains)).toBe(0); expect(total(injured.coachingGains)).toBe(0);
     const uncoached = processTrainingWeek({ ...trainingWeek(), coaching: undefined }).training.lastWeek!;
     expect(uncoached.coaching).toBeNull();

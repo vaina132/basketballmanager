@@ -18,7 +18,7 @@ export const advancePhysioCareer = (state: SeasonState): SeasonState => advanceS
 
 /** Genuine first-match injury, paired care, retained history and two complete seasons. */
 export function createPhysioCareers() {
-  let opening = hireScout(createSeason(227, 'rhine-falcons', 'standard', true, true, true, true, null, false, true, false, false, true, true), 'scout-06');
+  let opening = hireScout(createSeason(27, 'rhine-falcons', 'standard', true, true, true, true, null, false, true, false, false, true, true), 'scout-06');
   opening = hireFitnessCoach(opening, availableFitnessCoaches(opening).find(coach => coach.fee === 2_000_000)!.id);
   opening = setTrainingPlan(opening, { ...opening.training.plans[opening.managedClubId]!, delegated: false, intensity: 'heavy' });
   const initial = enablePhysio(advancePhysioCareer(opening));
@@ -45,7 +45,7 @@ export function createPhysioCareers() {
 
 /** This seed produces a naturally occurring injury that can cross a fixture boundary. */
 export function createPhysioEligibilityCareers() {
-  const opening = createSeason(9, 'aegean-waves', 'standard', false, false, true, true);
+  const opening = createSeason(1448, 'aegean-waves', 'standard', false, false, true, true);
   const initial = enablePhysio(advancePhysioCareer(opening));
   const hired = hirePhysio(initial, 'physio-12');
   const fulltime = finishPhysioMatch(hired);

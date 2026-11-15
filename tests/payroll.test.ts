@@ -212,7 +212,7 @@ describe('atomic payroll calendar and retained agreements', () => {
     const stats = fixture.result!.stats[unused.id]!;
     for (const key of Object.keys(stats) as (keyof typeof stats)[]) if (key !== 'condition') stats[key] = 0;
     const funded = processFinanceRound(clean);
-    const injured = { ...funded, injuries: [{ id: 'test-injury', playerId, clubId, kind: 'ankle' as const, fixtureId: starting.activeFixtureId!, occurredOn: starting.date, returnOn: '2027-01-01' }] };
+    const injured = { ...funded, injuries: [{ id: 'test-injury', playerId, clubId, kind: 'ankle-sprain' as const, fixtureId: starting.activeFixtureId!, occurredOn: starting.date, returnOn: '2027-01-01' }] };
     const charged = processPayrollRound(injured);
     expect(charged.finance).toEqual(processPayrollRound(funded).finance);
     const items = charged.finance.ledger.find(entry => entry.clubId === clubId && entry.payroll?.type === 'installment')!.payroll!.items;

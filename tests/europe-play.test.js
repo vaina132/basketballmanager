@@ -173,7 +173,8 @@ describe('a season with a EuroLeague (steps 3.5b-c)', () => {
   }, 120_000);
 
   it('counts European games in the manager\'s player statistics', () => {
-    const rows = getSeasonPerformance(complete).filter(row => row.club.id === complete.managedClubId);
+    // The club managed during the season (a season-end move can hand the offseason to another club).
+    const rows = getSeasonPerformance(complete).filter(row => row.club.id === opening.managedClubId);
     expect(rows.some(row => row.log.some(game => complete.fixtures.find(fixture => fixture.id === game.fixtureId).competition))).toBe(true);
   }, 120_000);
 

@@ -1,4 +1,5 @@
 import type { SeasonState } from '../domain/season'
+import { injuryLabel } from '../domain/injuries'
 import { getClubMedicalCases, getPlayerMedicalSummary } from '../world/health'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
@@ -6,13 +7,12 @@ import './season-medical.css'
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 export const medicalDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
-const injuryName = (kind: 'ankle' | 'muscle') => kind === 'ankle' ? 'Ankle injury' : 'Muscle injury'
 
 export function PlayerHealthSummary({ season, playerId, onOpenMedical }: { season: SeasonState; playerId: string; onOpenMedical?: () => void }) {
   const summary = getPlayerMedicalSummary(season, playerId)
   if (!summary || summary.daysRemaining === 0) return null
   return <section className="profile-health" aria-label="Player recovery">
-    <strong>{injuryName(summary.injury.kind)}</strong>
+    <strong>{injuryLabel(summary.injury.kind)}</strong>
     <span>Unavailable / {summary.daysRemaining} {summary.daysRemaining === 1 ? 'day' : 'days'} remaining</span>
     <dl><div><dt>Expected return</dt><dd data-profile-medical-return={summary.effectiveReturnOn}>{medicalDate(summary.effectiveReturnOn)}</dd></div>{summary.daysSaved > 0 && <div><dt>Recovery shortened</dt><dd>{summary.daysSaved} {summary.daysSaved === 1 ? 'day' : 'days'}</dd></div>}</dl>
     <details><summary>Injury record</summary><dl><div><dt>Injured</dt><dd>{medicalDate(summary.injury.occurredOn)}</dd></div><div><dt>Original expected return</dt><dd>{medicalDate(summary.originalReturnOn)}</dd></div></dl></details>

@@ -23,10 +23,10 @@ function oldFormat(season: SeasonState, version: 1 | 2 | 3): string {
 }
 
 beforeAll(() => {
-  let season = createSeason(9, clubId, 'standard', true, false, false);
+  let season = createSeason(325, clubId, 'standard', true, false, false);
   season = setTrainingPlan(season, { ...season.training.plans[clubId]!, delegated: false, intensity: 'heavy', focus: 'freeThrow' });
   second = advanceSeason(finish(season));
-  expect(second.training.lastWeek!.players['atl-8']!.availableDays).toBe(0);
+  expect(second.training.lastWeek!.players['atl-9']!.availableDays).toBe(0);
   season = second;
   while (season.status !== 'complete') season = restore(advanceSeason(finish(season)));
   complete = season; nextYear = rolloverSeason(complete);
@@ -49,9 +49,9 @@ describe('training-aware season saves', () => {
     const restored = restore(second), report = restored.training.lastWeek!;
     expect(restored).toEqual(second);
     expect(report).toMatchObject({ seasonNumber: 1, afterRound: 1, fromDate: '2026-09-05', toDate: '2026-09-12' });
-    expect(report.players['atl-8']!.availableDays).toBe(0);
-    expect(Object.values(report.players['atl-8']!.gains).every(points => points === 0)).toBe(true);
-    expect(restored.activeMatch!.preExistingInjuries).toContain('atl-8');
+    expect(report.players['atl-9']!.availableDays).toBe(0);
+    expect(Object.values(report.players['atl-9']!.gains).every(points => points === 0)).toBe(true);
+    expect(restored.activeMatch!.preExistingInjuries).toContain('atl-9');
     for (const [id, result] of Object.entries(report.players)) expect(restored.conditions[id]).toBe(result.conditionAfter);
   });
 
@@ -62,12 +62,12 @@ describe('training-aware season saves', () => {
     expect(projected.players.some((player, index) => player.attributes.freeThrow > club.players[index]!.attributes.freeThrow)).toBe(true);
     expect(restored.activeMatch![managedSide(restored)]).toEqual(projected);
     expect(restored.training.lastWeek!.afterRound).toBe(9);
-    expect(restored.training.lastWeek!.players['atl-9']!.conditionAfter).not.toBe(restored.conditions['atl-9']);
+    expect(restored.training.lastWeek!.players['atl-8']!.conditionAfter).not.toBe(restored.conditions['atl-8']);
   });
 
   it('allows editing the upcoming plan without rewriting the applied weekly report', () => {
     const report = structuredClone(second.training.lastWeek);
-    const changed = setTrainingPlan(second, { ...second.training.plans[clubId]!, intensity: 'light', focus: 'defense', individual: { ...second.training.plans[clubId]!.individual, 'atl-9': 'passing' } });
+    const changed = setTrainingPlan(second, { ...second.training.plans[clubId]!, intensity: 'light', focus: 'defense', individual: { ...second.training.plans[clubId]!.individual, 'atl-8': 'passing' } });
     expect(restore(changed)).toEqual(changed);
     expect(changed.training.lastWeek).toEqual(report);
     expect(changed.training.lastWeek!.plans[clubId]!.intensity).toBe('heavy');
@@ -142,12 +142,12 @@ describe('training state and report tampering', () => {
     ['unknown focus', season => { Object.assign(season.training.plans[clubId]!, { focus: 'dunking' }); }],
     ['unknown intensity', season => { Object.assign(season.training.plans[clubId]!, { intensity: 'extreme' }); }],
     ['non-boolean delegation', season => { Object.assign(season.training.plans[clubId]!, { delegated: 1 }); }],
-    ['missing progress player', season => { delete season.training.points['atl-8']; }],
-    ['unknown progress attribute', season => { Object.assign(season.training.points['atl-9']!, { dunking: 3 }); }],
-    ['fractional progress', season => { season.training.points['atl-9']!.freeThrow = 1.5; }],
-    ['excessive progress', season => { season.training.points['atl-9']!.freeThrow = 201; }],
-    ['negative progress', season => { season.training.points['atl-9']!.freeThrow = -1; }],
-    ['development before first enabled week', season => { season.training.points['atl-8']!.passing = 1; }],
+    ['missing progress player', season => { delete season.training.points['atl-9']; }],
+    ['unknown progress attribute', season => { Object.assign(season.training.points['atl-8']!, { dunking: 3 }); }],
+    ['fractional progress', season => { season.training.points['atl-8']!.freeThrow = 1.5; }],
+    ['excessive progress', season => { season.training.points['atl-8']!.freeThrow = 201; }],
+    ['negative progress', season => { season.training.points['atl-8']!.freeThrow = -1; }],
+    ['development before first enabled week', season => { season.training.points['atl-9']!.passing = 1; }],
     ['future activation year', season => { season.training.enabledSince!.seasonNumber = 2; }],
     ['future activation round', season => { season.training.enabledSince!.round = 3; }],
     ['disabled training with retained progress', season => { season.training.enabledSince = null; }],
@@ -156,14 +156,14 @@ describe('training state and report tampering', () => {
     ['wrong report interval', season => { season.training.lastWeek!.afterRound = 2; }],
     ['wrong report starting date', season => { season.training.lastWeek!.fromDate = '2026-09-04'; }],
     ['wrong report ending date', season => { season.training.lastWeek!.toDate = '2026-09-13'; }],
-    ['missing report player', season => { delete season.training.lastWeek!.players['atl-8']; }],
-    ['altered injury eligibility', season => { season.training.lastWeek!.players['atl-8']!.availableDays = 7; }],
-    ['altered report gain', season => { season.training.lastWeek!.players['atl-9']!.gains.freeThrow -= 1; }],
-    ['altered applied focus', season => { season.training.lastWeek!.players['atl-9']!.focus = 'passing'; }],
+    ['missing report player', season => { delete season.training.lastWeek!.players['atl-9']; }],
+    ['altered injury eligibility', season => { season.training.lastWeek!.players['atl-9']!.availableDays = 7; }],
+    ['altered report gain', season => { season.training.lastWeek!.players['atl-8']!.gains.freeThrow -= 1; }],
+    ['altered applied focus', season => { season.training.lastWeek!.players['atl-8']!.focus = 'passing'; }],
     ['altered applied plan', season => { season.training.lastWeek!.plans[clubId]!.intensity = 'recovery'; }],
-    ['invented pre-training condition', season => { season.training.lastWeek!.players['atl-9']!.conditionBefore -= 1; }],
-    ['invented post-training condition', season => { season.training.lastWeek!.players['atl-9']!.conditionAfter -= 1; }],
-    ['incorrect world condition', season => { season.conditions['atl-9']! -= 1; }],
+    ['invented pre-training condition', season => { season.training.lastWeek!.players['atl-8']!.conditionBefore -= 1; }],
+    ['invented post-training condition', season => { season.training.lastWeek!.players['atl-8']!.conditionAfter -= 1; }],
+    ['incorrect world condition', season => { season.conditions['atl-8']! -= 1; }],
     ['altered projected match attribute', season => { const player = season.activeMatch![managedSide(season)].players[0]!; Object.assign(player.attributes, { freeThrow: player.attributes.freeThrow + 1 }); }],
     ['altered canonical club attribute', season => { const player = season.clubs[0]!.players[0]!; Object.assign(player.attributes, { freeThrow: player.attributes.freeThrow + 1 }); }],
   ];
@@ -182,7 +182,7 @@ describe('training state and report tampering', () => {
 
   it('rejects progression while training is disabled even with no report', () => {
     const disabled = createSeason(7, clubId, 'off', false, false, false);
-    disabled.training.points['atl-9']!.passing = 1;
+    disabled.training.points['atl-8']!.passing = 1;
     expect(() => validateSeasonState(disabled)).toThrow(/training weeks/);
   });
 

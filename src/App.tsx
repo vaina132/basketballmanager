@@ -82,7 +82,8 @@ import type { TrainingPlan } from './domain/training'
 import { PlayerHealthSummary, SeasonMedicalReport } from './ui/SeasonMedicalReport'
 import type { SeasonReply } from './world/season.worker'
 import './ui/season-progress.css'
-import { seasonRounds, worldOf } from './world/career-world'
+import { regularWorldRounds, seasonRounds, worldOf } from './world/career-world'
+import { seasonLeagues } from './world/divisions'
 import { ASSISTANT_DIRECTORY } from './data/staff-directory'
 
 const MedicalWorkspace = lazy(() => import('./ui/MedicalWorkspace').then(module => ({ default: module.MedicalWorkspace })))
@@ -129,6 +130,7 @@ export default function App() {
   const managedTeam = season && match[managedSide].id !== season.managedClubId ? season.clubs.find(club => club.id === season.managedClubId)! : match[managedSide]
   const [advancing, setAdvancing] = useState(false)
   const [seasonOperation, setSeasonOperation] = useState<'round' | 'rollover' | 'market' | 'preview'>('round')
+  const [creatingCareer, setCreatingCareer] = useState(false)
   // The board's season-end decision and job offers, shown before the final matchday is committed.
   const [seasonEnd, setSeasonEnd] = useState<SeasonEndOutlook | null>(null)
   // A private real-data pack loaded from this computer for friendlies; it stays in memory only.
@@ -512,15 +514,24 @@ export default function App() {
     } catch (error) { setNotice({ message: messageOf(error), error: true }) }
   }
   function startSeason({ seed, world, clubId, injuryMode, manager }: CareerSetup) {
-    if (seasonWorker.current || persistenceBusy.current) return
-    try {
-      // Careers use real clubs only (owner, 13 November 2026): the league comes from the loaded data pack.
-      const created = createSeason({ seed, world, managedClubId: clubId, injuryMode, manager, ...NEW_CAREER_SYSTEMS })
+    if (seasonWorker.current || persistenceBusy.current || creatingCareer) return
+    // Careers use real clubs only (owner, 13 November 2026): the league comes from the loaded data pack.
+    const options = { seed, world, managedClubId: clubId, injuryMode, manager, ...NEW_CAREER_SYSTEMS }
+    const finished = (created: SeasonState) => {
+      setCreatingCareer(false)
       install({ kind: 'season', season: created }); navigate('home')
       setNotice({ message: 'Season ready. Review your lineup before the opening match.' })
       void persistSeason(created, 'new-game')
     }
-    catch (error) { setEntryError(messageOf(error)) }
+    const failed = (error: unknown) => { setCreatingCareer(false); setEntryError(messageOf(error)) }
+    setEntryError(null); setCreatingCareer(true)
+    // Built in the background worker (owner request, 15 November 2026): large worlds take a while, and the setup
+    // screen shows that progress instead of freezing. Without workers, it is built here after the screen updates.
+    if (typeof Worker === 'undefined') { setTimeout(() => { try { finished(createSeason(options)) } catch (error) { failed(error) } }, 50); return }
+    const worker = new Worker(new URL('./world/season.worker.ts', import.meta.url), { type: 'module' })
+    worker.onmessage = ({ data }: MessageEvent<SeasonReply>) => { worker.terminate(); if ('error' in data) failed(new Error(data.error)); else if ('state' in data) finished(data.state) }
+    worker.onerror = () => { worker.terminate(); try { finished(createSeason(options)) } catch (error) { failed(error) } }
+    worker.postMessage({ requestId: 1, action: 'create', options })
   }
   async function openEntry(view: 'menu' | 'new-career') {
     if (seasonWorker.current || persistenceBusy.current) return
@@ -616,7 +627,7 @@ export default function App() {
     {saveHistoryOpen && <CareerSaveHistory entries={saveHistory?.entries ?? []} loading={historyLoading} error={historyError} busy={saving} onRefresh={() => { void refreshSaveHistory() }} onRestore={revision => { void restoreCheckpoint(revision) }} onClose={closeSaveHistory} />}
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
   </>
-  if (entryView) return <><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense>{overlays}</>
+  if (entryView) return <><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing || creatingCareer} starting={creatingCareer} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense>{overlays}</>
 
   return <div className={`app-shell game-shell ${page === 'match' ? 'match-screen' : ''}`}>
     <aside className="sidebar">
@@ -630,7 +641,7 @@ export default function App() {
     </aside>
 
     <div className="main-shell">
-      <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{restWeek ? season?.status === 'complete' ? 'Season complete' : 'Rest week' : season && isMarketActive(season) ? 'Recruitment' : complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span><button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save season' : 'Save match'}</button></div></header>
+      <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{restWeek ? season?.status === 'complete' ? 'Season complete' : season && season.round > regularWorldRounds(worldOf(season)) ? 'No game today' : 'Rest week' : season && isMarketActive(season) ? 'Recruitment' : complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span><button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save season' : 'Save match'}</button></div></header>
       {advancing && <div className="season-processing" role="status"><span>{seasonOperation === 'market' ? 'Processing player replies...' : seasonOperation === 'rollover' ? 'Preparing next season...' : seasonOperation === 'preview' ? 'The board is reviewing your season...' : 'Processing matchday results...'}</span><button className="text-button" onClick={cancelAdvance}>Cancel</button></div>}
       {checkpointIssue && <div className="career-save-issue" role="alert"><span>{checkpointIssue}</span><button className="text-button" onClick={openSaveHistory} disabled={saving || advancing}>Save history</button><button className="text-button" onClick={exportSave} disabled={saving || advancing}>Export current</button></div>}
       <main id="main" tabIndex={-1} inert={advancing || leavingSeason || saving}>
@@ -717,7 +728,7 @@ function SeasonProgress({ season, showRollover, showMatchAction, canContinue, on
   const date = new Date(`${season.date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
   return <section className="season-progress panel" aria-label="Season progress">
     <div><time dateTime={season.date}>{date}</time><span>{season.status === 'complete' ? isMarketActive(season) ? 'Offseason recruitment' : `Season ${season.seasonNumber} complete` : `Season ${season.seasonNumber} / Matchday ${fixture?.round ?? season.round} / ${seasonRounds(season)}`}</span></div>
-    <div className="season-record"><strong>{standing.played ? `${standing.position} / ${season.world?.domesticLeagues?.find(league => league.clubIds.includes(season.managedClubId))?.clubIds.length ?? season.clubs.length}` : 'Unplayed'}</strong><span>{standing.wins} W / {standing.losses} L</span></div>
+    <div className="season-record"><strong>{standing.played ? `${standing.position} / ${(season.world ? seasonLeagues(season.world, season.divisions) : []).find(league => league.clubIds.includes(season.managedClubId))?.clubIds.length ?? season.clubs.length}` : 'Unplayed'}</strong><span>{standing.wins} W / {standing.losses} L</span></div>
     <button className="text-button" onClick={onCompetition}>League table<Icon name="chevron" size={14} /></button>
     {season.status === 'complete' && showRollover && <button className="button primary season-continue" onClick={onRollover}>{season.employment.enabledSince ? 'Review offseason' : 'Next season'}<Icon name="next" size={15} /></button>}
     {season.status !== 'complete' && (!season.activeMatch || canContinue || showMatchAction) && <button className="button primary season-continue" onClick={!season.activeMatch || canContinue ? onAdvance : onOpenMatch}>{!season.activeMatch || canContinue ? season.round === seasonRounds(season) ? 'Finalize season' : 'Continue' : 'Go to match'}<Icon name="next" size={15} /></button>}

@@ -4,11 +4,12 @@ import type { SeasonState } from '../domain/season';
 import { getFinanceBalance } from './finance';
 import { isRecovering } from './health';
 import { rosterForRound } from './rosters';
-import { dateForRound } from './season';
+import { dateForRound, isRegularFixture } from './season';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { BOARD_VERDICT_EFFECTS, verdictForConfidence } from './board-consequences';
 import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS } from './rivalries';
 import { roundKey, roundOrdinal, seasonRounds, worldOf } from './career-world';
+import { seasonLeagues } from './divisions';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
@@ -53,9 +54,9 @@ export function buildBoardMandate<T extends BoardCalculationContext>(state: T, s
   });
   const legacyGames = Math.max(0, seasonRounds(state) + 1 - startsRound);
   return { ...boardEventAnchor(state), id: `board-mandate-${state.board.mandates.length + 1}`, startsRound, deadlineDate: dateForRound(seasonRounds(state), state.seasonNumber), clubs: Object.fromEntries(resources.map(resource => {
-    const league = worldOf(state).domesticLeagues?.find(league => league.clubIds.includes(resource.clubId));
+    const league = worldOf(state).domesticLeagues ? seasonLeagues(worldOf(state), (state as { divisions?: SeasonState['divisions'] }).divisions).find(league => league.clubIds.includes(resource.clubId)) : undefined;
     const rivals = league ? resources.filter(other => league.clubIds.includes(other.clubId)) : resources;
-    const games = league ? state.fixtures.filter(fixture => fixture.round >= startsRound && [fixture.homeClubId, fixture.awayClubId].includes(resource.clubId)).length : legacyGames;
+    const games = league ? state.fixtures.filter(fixture => isRegularFixture(fixture) && fixture.round >= startsRound && [fixture.homeClubId, fixture.awayClubId].includes(resource.clubId)).length : legacyGames;
     const resourceRank = 1 + rivals.filter(other => other.strength > resource.strength).length;
     const rate = resourceRank <= Math.ceil(rivals.length / 3) ? 0.6 : resourceRank <= Math.ceil(rivals.length * 2 / 3) ? 0.5 : 0.4;
     return [resource.clubId, { rosterId: resource.rosterId, resourceRank, targetWins: Math.ceil(games * rate), games, startingUnpaid: boardUnpaidCosts(state, resource.clubId) }];
@@ -90,7 +91,8 @@ export function prepareBoardSeason(state: SeasonState): SeasonState {
 /** Pure review builder: only committed results, original registrations and booked costs count. */
 export function buildBoardReview<T extends BoardCalculationContext>(state: T, mandate: BoardMandate): BoardReview {
   if (mandate.seasonNumber !== state.seasonNumber || state.round < mandate.startsRound || state.date !== dateForRound(state.round, state.seasonNumber)) throw new Error('Review only an eligible committed matchday of this mandate.');
-  const fixtures = state.fixtures.filter(fixture => fixture.round >= mandate.startsRound && fixture.round <= state.round);
+  // Board targets are regular-season results: postseason games (step 3.4b) are not counted.
+  const fixtures = state.fixtures.filter(fixture => isRegularFixture(fixture) && fixture.round >= mandate.startsRound && fixture.round <= state.round);
   if (!fixtures.length || fixtures.some(fixture => !fixture.result)) throw new Error('Commit every fixture in the board review window first.');
   const clubs: Record<string, BoardClubReview> = {};
   // Derbies count only once rivalries govern this review's matchday, so earlier reviews rebuild unchanged.

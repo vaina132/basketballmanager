@@ -1,3 +1,4 @@
+import type { CompetitionStage } from './competition';
 import type { CareerWorld } from './world';
 import type { SeasonBoard } from './board';
 import type { SeasonCommercial } from './commercial';
@@ -68,6 +69,11 @@ export interface SeasonFixture {
   homeClubId: string;
   awayClubId: string;
   result: FixtureResult | null;
+  /** Format 49, postseason games only (step 3.4b): stage, series, game number and a single-venue flag. */
+  stage?: Exclude<CompetitionStage, 'regular'>;
+  seriesId?: string;
+  game?: number;
+  neutral?: true;
 }
 
 /** Older imports lack box scores; newly archived seasons retain complete results. */
@@ -86,12 +92,24 @@ export interface SeasonArchive {
   fixtures: ArchivedFixture[];
   /** Totals for the fixtures with appearances instead of full box scores, never counted twice. */
   summary?: SeniorSeasonSummary;
+  /** Format 50: the season's division memberships (absent for seasons before division changes began). */
+  divisions?: DomesticDivisions;
+}
+
+/**
+ * Format 50 (step 3.4c): every division's clubs this season. `changesFrom` is the first season whose end moves clubs
+ * between divisions; seasons before it (played before format 50) kept the opening memberships.
+ */
+export interface DomesticDivisions {
+  changesFrom: number;
+  leagues: { id: string; clubIds: string[] }[];
 }
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
 /** Format 39 carries the world; 40 compacts strings/shapes; 41 shares subtrees; 42 summarizes rival academy reports; 43 summarizes rival youth fixtures. */
 /** Format 48 adds opt-in sourced domestic standings rules; existing worlds keep their original ranking. */
-export const SEASON_SCHEMA_VERSION = 48;
+/** Format 49 adds domestic postseasons and game days inside a week; format 50 moves clubs between divisions. */
+export const SEASON_SCHEMA_VERSION = 50;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -142,6 +160,8 @@ export interface SeasonState {
   fixtures: SeasonFixture[];
   /** End-of-week condition evidence for clubs with no senior fixture. New calendars only. */
   restWeeks?: { round: number; clubId: string; conditions: Record<string, number> }[];
+  /** Format 50: this season's division memberships, in worlds whose leagues have postseasons. */
+  divisions?: DomesticDivisions;
   activeFixtureId: string | null;
   activeMatch: MatchState | null;
 }

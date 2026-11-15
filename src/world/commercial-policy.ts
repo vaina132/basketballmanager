@@ -72,7 +72,7 @@ export interface DueSponsorshipPayment {
  * Every payment owed under negotiated agreements through a calendar boundary. Installments fall on the opening
  * matchday and matchday six; the bonus follows the final matchday only for a top-half finish.
  */
-export function sponsorshipPaymentsDue(commercial: SeasonCommercial, clubCount: number | ((clubId: string) => number), through: { seasonNumber: number; round: number; complete: boolean }, finalPosition: (seasonNumber: number, clubId: string) => number | null, calendarRounds?: number): DueSponsorshipPayment[] {
+export function sponsorshipPaymentsDue(commercial: SeasonCommercial, clubCount: number | ((clubId: string, seasonNumber: number) => number), through: { seasonNumber: number; round: number; complete: boolean }, finalPosition: (seasonNumber: number, clubId: string) => number | null, calendarRounds?: number): DueSponsorshipPayment[] {
   const due: DueSponsorshipPayment[] = [];
   for (const agreement of commercial.agreements) {
     for (let season = agreement.startsSeason; season <= Math.min(agreement.endsSeason, through.seasonNumber); season += 1) {
@@ -83,7 +83,7 @@ export function sponsorshipPaymentsDue(commercial: SeasonCommercial, clubCount: 
       if (agreement.bonus > 0 && (season < through.seasonNumber || through.complete)) {
         const position = finalPosition(season, agreement.clubId);
         // The bonus follows the final matchday: a double round robin has 2 x (clubs - 1) matchdays.
-        const size = typeof clubCount === 'number' ? clubCount : clubCount(agreement.clubId);
+        const size = typeof clubCount === 'number' ? clubCount : clubCount(agreement.clubId, season);
         if (position !== null && position <= size / 2) payment(calendarRounds ?? 2 * (size - 1), 'bonus', agreement.bonus);
       }
     }

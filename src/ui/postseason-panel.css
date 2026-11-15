@@ -1,0 +1,15 @@
+.postseason-outcome{display:flex;flex-wrap:wrap;gap:8px 20px;list-style:none;margin:0 0 12px;padding:0}
+.postseason-outcome li{display:flex;gap:8px;align-items:baseline}
+.postseason-outcome strong{color:var(--muted);font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+.postseason-stage{margin-top:10px}
+.postseason-stage h3{font-size:.9rem;margin:0 0 6px;color:var(--muted);font-weight:600}
+.postseason-stage ul{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;list-style:none;margin:0;padding:0}
+.postseason-series{border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:grid;gap:4px;min-width:0}
+.postseason-managed{border-color:var(--accent)}
+.postseason-teams{display:grid;gap:2px}
+.postseason-teams>span{display:grid;grid-template-columns:24px 1fr auto;gap:6px;align-items:center;min-width:0}
+.postseason-teams>span>small{color:var(--muted);font-variant-numeric:tabular-nums}
+.postseason-teams>span>b{font-variant-numeric:tabular-nums}
+.postseason-winner{font-weight:650}
+.postseason-loser{color:var(--muted)}
+.postseason-status,.postseason-waiting{color:var(--muted);font-size:.82rem}

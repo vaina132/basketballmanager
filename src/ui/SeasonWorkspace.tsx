@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/season'
 import type { Side, Team } from '../domain/types'
-import { getStandings, seasonLabel } from '../world/season'
+import { currentGameDay, getPostseasons, getStandings, seasonLabel } from '../world/season'
+import { PostseasonPanel } from './PostseasonPanel'
 import { getFixtureTeams } from '../world/rosters'
 import { managedClubFor } from '../world/career'
 import { Icon } from './Icon'
@@ -11,7 +12,8 @@ import { MatchMvpCard } from './MatchMvpCard'
 import { MatchRating } from './PlayerRating'
 import { PIR_HELP } from './MatchBoxScore'
 import './season-workspace.css'
-import { worldOf } from '../world/career-world'
+import { regularWorldRounds, seasonRounds, worldOf } from '../world/career-world'
+import { seasonLeagues } from '../world/divisions'
 
 interface SeasonWorkspaceProps {
   season: SeasonState | null
@@ -25,6 +27,7 @@ interface SeasonWorkspaceProps {
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
+const STAGE_NAMES: Record<NonNullable<SeasonFixture['stage']>, string> = { qualifying: 'Qualifying', 'play-in': 'Play-in', 'round-of-16': 'Round of 16', 'quarter-final': 'Quarter-final', 'semi-final': 'Semi-final', 'third-place': 'Third place', final: 'Final', 'play-out': 'Play-out' }
 const difference = (value: number) => value > 0 ? `+${value}` : String(value)
 const minutes = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 
@@ -43,7 +46,9 @@ export function SeasonWorkspace(props: SeasonWorkspaceProps) {
 
 function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, busy = false }: SeasonWorkspaceProps & { season: SeasonState; onNewGame: () => void }) {
   const [selectedSeason, setSelectedSeason] = useState(season.seasonNumber)
-  const leagues = worldOf(season).domesticLeagues
+  // Step 3.4c: the selected season's own divisions (clubs move between divisions from season to season).
+  const shownDivisions = selectedSeason === season.seasonNumber ? season.divisions : season.history.find(entry => entry.seasonNumber === selectedSeason)?.divisions
+  const leagues = worldOf(season).domesticLeagues ? seasonLeagues(worldOf(season), shownDivisions) : undefined
   const [leagueId, setLeagueId] = useState(() => leagues?.find(league => league.clubIds.includes(season.managedClubId))?.id ?? '')
   const league = leagues?.find(league => league.id === leagueId)
   const leagueName = league?.name ?? (worldOf(season).source === 'fictional-development' ? 'the development league' : worldOf(season).name)
@@ -56,8 +61,9 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const archived = !!archive
   const selectedFixtures = (archive?.fixtures ?? season.fixtures).filter(fixture => !league || league.clubIds.includes(fixture.homeClubId))
   const selectedNumber = archive?.seasonNumber ?? season.seasonNumber
-  const selectedDate = archived ? selectedFixtures.at(-1)!.date : season.date
-  const standings = getStandings({ ...season, fixtures: archive?.fixtures ?? season.fixtures }).filter(row => !league || league.clubIds.includes(row.clubId))
+  // Step 3.4a: during a week with several game days, show the current game day.
+  const selectedDate = archived ? selectedFixtures.at(-1)!.date : currentGameDay(season) ?? season.date
+  const standings = getStandings({ ...season, fixtures: archive?.fixtures ?? season.fixtures, divisions: shownDivisions }).filter(row => !league || league.clubIds.includes(row.clubId))
   const lnbRanking = league?.standingsRule === 'lnb-2026-1'
   const club = (id: string) => season.clubs.find(team => team.id === id)!
   const active = season.fixtures.find(fixture => fixture.id === season.activeFixtureId)
@@ -66,11 +72,16 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const managed = club(managedId)
   const complete = archived || season.status === 'complete'
   const matchFinished = !season.activeMatch || season.activeMatch.status === 'finished'
+  // With playoffs (step 3.4b) the champion is the postseason's; the regular season's first place is shown separately.
+  const postseason = league?.postseason ? getPostseasons({ ...season, fixtures: archive?.fixtures ?? season.fixtures, divisions: shownDivisions }, selectedNumber).find(entry => entry.league.id === league.id) : undefined
+  const playoffChampion = complete && postseason?.outcome.champion ? club(postseason.outcome.champion) : null
   const champion = complete ? club(standings[0]!.clubId) : null
   const fixtures = selectedFixtures.filter(fixture => (round === 'all' || fixture.round === Number(round)) && (!ownFixtures || fixture.homeClubId === managedId || fixture.awayClubId === managedId))
   const review = selectedFixtures.find(fixture => fixture.id === reviewId && fixture.result?.stats)
   const reviewTeams = review ? getFixtureTeams(season, review, selectedNumber) : null
-  const totalRounds = Math.max(...selectedFixtures.map(fixture => fixture.round))
+  const totalRounds = archived ? Math.max(...selectedFixtures.map(fixture => fixture.round)) : seasonRounds(season)
+  const regularRounds = regularWorldRounds(worldOf(season))
+  const stageLabel = (fixture: SeasonFixture | ArchivedFixture) => fixture.stage ? `${STAGE_NAMES[fixture.stage]}${fixture.game && postseason?.series.find(series => series.id === fixture.seriesId)?.bestOf !== 1 ? ` · Game ${fixture.game}` : ''}` : `Matchday ${fixture.round}`
 
   function selectSeason(number: number) {
     setSelectedSeason(number)
@@ -97,10 +108,10 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
           <option value={season.seasonNumber}>{seasonLabel(season.seasonNumber)} · Current</option>
           {[...season.history].reverse().map(entry => <option key={entry.seasonNumber} value={entry.seasonNumber}>{seasonLabel(entry.seasonNumber)} · Archived</option>)}
         </select></div>
-        <span>{archived ? 'Archived season' : complete ? 'Season complete' : `Matchday ${season.round} of ${totalRounds}`}<time dateTime={selectedDate}>{formatDate(selectedDate)}</time></span>
+        <span>{archived ? 'Archived season' : complete ? 'Season complete' : season.round > regularRounds ? `Playoffs · week ${season.round - regularRounds} of ${totalRounds - regularRounds}` : `Matchday ${season.round} of ${totalRounds}`}<time dateTime={selectedDate}>{formatDate(selectedDate)}</time></span>
       </div>
       <div className="season-matchday-action">
-        <p>{complete ? <><strong>{champion!.name}</strong> finish first in {leagueName}.</> : !active ? 'Rest week. Continue to play the other games and complete this week.' : matchFinished ? 'Match finished. Continue to complete this matchday and update the table.' : <>{club(active.homeClubId).name} <span>vs</span> {club(active.awayClubId).name}</>}</p>
+        <p>{complete ? playoffChampion ? <><strong>{playoffChampion.name}</strong> win the {leagueName} playoffs; {champion!.name} finished first in the regular season.</> : <><strong>{champion!.name}</strong> finish first in {leagueName}.</> : !active ? season.round > regularRounds ? 'Your club has no game on this playoff day. Continue to play the other games.' : 'Rest week. Continue to play the other games and complete this week.' : matchFinished ? 'Match finished. Continue to complete this matchday and update the table.' : <>{club(active.homeClubId).name} <span>vs</span> {club(active.awayClubId).name}</>}</p>
         <div className="season-result-actions">{archived ? <button className="button" onClick={() => { selectSeason(season.seasonNumber); seasonSelector.current?.focus() }} disabled={busy}>Current season<Icon name="chevron" size={16} /></button> : complete ? <>
           <button className="button primary" onClick={onRollover} disabled={busy}>{busy ? 'Preparing next season…' : season.employment.enabledSince ? 'Review offseason' : 'Next season'}<Icon name="next" size={16} /></button>
           <button className="button" onClick={onOpenMatch} disabled={busy || !active}>View last match<Icon name="court" size={16} /></button>
@@ -120,6 +131,8 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
       </> : <p>Ranked by wins, overall point difference, points scored, then club ID. This career retains its original ranking rules.</p>}</details>
     </section>
 
+    {league?.postseason && <PostseasonPanel key={`${selectedNumber}:${leagueId}`} season={season} seasonNumber={selectedNumber} leagueId={league.id} managedId={managedId} />}
+
     <SeasonLeaders key={`${selectedNumber}:${leagueId}`} season={season} seasonNumber={selectedNumber} clubIds={league?.clubIds} busy={busy} onReviewFixture={openFixtureReview} />
 
     <section className="season-fixtures panel" aria-labelledby="season-fixtures-title">
@@ -129,7 +142,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
         const isActive = !archived && fixture.id === season.activeFixtureId
         const score = fixture.result?.officialScore ?? (isActive && season.activeMatch?.status !== 'ready' ? season.activeMatch?.result?.officialScore ?? season.activeMatch?.score : null)
         return <tr key={fixture.id} data-fixture-id={fixture.id} className={fixture.homeClubId === managedId || fixture.awayClubId === managedId ? 'season-managed-row' : ''}>
-          <td><time dateTime={fixture.date}>{formatDate(fixture.date)}</time><small>Matchday {fixture.round}</small></td><td><ClubName club={club(fixture.homeClubId)} /></td><td className="season-fixture-score">{score ? `${score.home} : ${score.away}` : '—'}</td><td><ClubName club={club(fixture.awayClubId)} /></td>
+          <td><time dateTime={fixture.date}>{formatDate(fixture.date)}</time><small>{stageLabel(fixture)}</small></td><td><ClubName club={club(fixture.homeClubId)} /></td><td className="season-fixture-score">{score ? `${score.home} : ${score.away}` : '—'}</td><td><ClubName club={club(fixture.awayClubId)} /></td>
           <td>{fixture.result ? fixture.result.stats ? <button className="text-button" aria-label={`Review ${club(fixture.homeClubId).shortName} vs ${club(fixture.awayClubId).shortName}`} onClick={event => openFixtureReview(fixture.id, event.currentTarget)} aria-expanded={reviewId === fixture.id} aria-controls="season-result-review" disabled={busy}>Review<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">{fixture.result.kind === 'default' ? 'Awarded by default' : fixture.result.periods > 4 ? `Full time · ${fixture.result.periods - 4} OT` : 'Full time'} · {'appearances' in fixture.result ? 'Season totals retained' : 'Box score unavailable'}</span> : isActive ? <button className="text-button" onClick={onOpenMatch} disabled={busy}>{matchFinished ? 'Played · pending' : season.activeMatch?.status === 'ready' ? 'Pre-match' : 'In progress'}<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">Scheduled</span>}{mvp && <small className="season-fixture-mvp" data-fixture-mvp={mvp.playerId}>MVP {mvp.player.name} &middot; {mvp.pir} PIR</small>}</td>
         </tr>
       })}</tbody></table></div>

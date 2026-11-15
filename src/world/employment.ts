@@ -1,3 +1,4 @@
+import { worldOf } from './career-world';
 import { clubRosterLimitText, clubRosterLimit, clubRosterTarget } from './club-roster-policy';
 import type { ContractOfferOptions, EmploymentContract, EmploymentTransfer, SeasonEmployment } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
@@ -25,7 +26,8 @@ export function enableEmployment(state: SeasonState): SeasonState {
   const contracts: EmploymentContract[] = state.clubs.flatMap(club => club.players.map(player => {
     const agreement = state.payroll.agreements.find(agreement => agreement.playerId === player.id && agreement.clubId === club.id && agreement.seasonNumber === state.seasonNumber);
     if (!agreement) throw new Error('Every current player needs an agreed seasonal wage before enabling contracts.');
-    return { id: '', playerId: player.id, clubId: club.id, startsSeason: state.seasonNumber, startsRound: 1, endsSeason: state.seasonNumber, seasonWage: agreement.seasonWage, signedSeason: state.seasonNumber, signedRound: state.round, kind: 'initial' as const };
+    // Owner feedback (15 November 2026): real-club worlds give opening contracts estimated lengths, so a career does not begin with renewing everyone.
+    return { id: '', playerId: player.id, clubId: club.id, startsSeason: state.seasonNumber, startsRound: 1, endsSeason: state.seasonNumber + (worldOf(state).playerContracts?.[player.id] ?? 1) - 1, seasonWage: agreement.seasonWage, signedSeason: state.seasonNumber, signedRound: state.round, kind: 'initial' as const };
   })).map((contract, index) => ({ ...contract, id: `employment-contract-${index + 1}` }));
   const next: SeasonState = { ...state, employment: { model: 'employment-1', enabledSince: { seasonNumber: state.seasonNumber, round: state.round }, delegated: false, contracts, transfers: [], buyouts: [], market: null } };
   return state.status === 'complete' ? prepareEmploymentMarket(next) : next;

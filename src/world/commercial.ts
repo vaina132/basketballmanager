@@ -3,6 +3,7 @@ import type { FinanceEntry } from '../domain/finance';
 import type { CommercialAnchor, CommercialEvent, SeasonCommercial, SponsorshipAgreement, SponsorshipOffer, SponsorshipWindow } from '../domain/commercial';
 import type { SeasonState } from '../domain/season';
 import { incumbentSponsorId, seasonRounds, worldOf } from './career-world';
+import { seasonLeagues } from './divisions';
 import { recordSponsorshipPayment } from './finance';
 import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, commercialGovernsSeason, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorshipPaymentsDue, sponsorshipSourceId, sponsorshipInstallment, SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_RENEWAL_ROUND, SPONSORSHIP_SECOND_INSTALLMENT_ROUND, type DueSponsorshipPayment } from './commercial-policy';
 import { dateForRound, getStandings, MAX_SEASON_NUMBER } from './season';
@@ -30,7 +31,8 @@ function finalPosition(state: Pick<SeasonState, 'clubs' | 'fixtures' | 'seasonNu
 function paymentsDueNow(state: SeasonState): DueSponsorshipPayment[] {
   const booked = new Set<string>();
   for (const entry of financeLedgerEntries(state.finance)) if (entry.kind === 'sponsor') booked.add(`${entry.clubId}/${entry.sourceId}`);
-  return sponsorshipPaymentsDue(state.commercial, id => state.world?.domesticLeagues?.find(league => league.clubIds.includes(id))?.clubIds.length ?? state.clubs.length, { seasonNumber: state.seasonNumber, round: state.round, complete: state.status === 'complete' }, finalPosition(state), seasonRounds(state))
+  // Only the current season's payments are booked here, so its divisions decide each club's league size (step 3.4c).
+  return sponsorshipPaymentsDue(state.commercial, id => (state.world ? seasonLeagues(state.world, state.divisions) : []).find(league => league.clubIds.includes(id))?.clubIds.length ?? state.clubs.length, { seasonNumber: state.seasonNumber, round: state.round, complete: state.status === 'complete' }, finalPosition(state), seasonRounds(state))
     .filter(payment => payment.seasonNumber === state.seasonNumber && payment.round === state.round && payment.sponsorship.installment !== 1 && !booked.has(`${payment.clubId}/${payment.sourceId}`));
 }
 

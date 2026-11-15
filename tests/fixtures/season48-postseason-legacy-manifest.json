@@ -1,0 +1,8 @@
+{
+  "sourceCommit": "7db0d89",
+  "schema": 48,
+  "inputSha256": "311e2eaf811420b350e28fc1c02cebdc7bcaafea1b836dd8a35c45f2255b979e",
+  "nextSha256": "7fefd6e6362085c940ced29049cf25b39acd9c4dea9cc4261bdd931d3bbb3426",
+  "verifiedModuleCount": 115,
+  "note": "Original public all-system 5+4 club domestic career (one LNB-ranked league) without a postseason; its regular-season calendar, weekly settlement and season length must survive the postseason models. Every loaded production/test module compared to the commit before capture."
+}

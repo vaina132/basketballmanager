@@ -7,6 +7,7 @@ import type { CareerWorld, WorldContext } from '../domain/world';
 import { DEVELOPMENT_PLAYERS } from '../data/development-players';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { roundRobinRoundCount } from './competition-calendar';
+import { POSTSEASON_FORMATS, postseasonFormatAllowed, postseasonWeeks } from './postseason';
 
 /**
  * The world a career plays in. Careers in the built-in fictional league carry no world and use DEVELOPMENT_WORLD;
@@ -36,8 +37,19 @@ export const MAX_WORLD_CLUBS = 40;
 export const MAX_SEASON_ROUNDS = 2 * (MAX_WORLD_CLUBS - 1);
 
 /** Matchdays in a season of this world: every club meets every other club home and away. */
-export function worldRounds(world: CareerWorld): number {
+/** Weeks of the regular season: the longest league's double round robin (shorter leagues pause on spread weekends). */
+export function regularWorldRounds(world: CareerWorld): number {
   if (world.domesticLeagues) return Math.max(...world.domesticLeagues.map(league => roundRobinRoundCount(league.clubIds.length)));
+  return 2 * (world.clubs.length - 1);
+}
+
+/** Weeks of the regular season plus the longest league's reserved postseason (step 3.4b; worlds without postseasons keep their regular season). */
+export function postseasonWorldWeeks(world: CareerWorld): number {
+  return Math.max(0, ...(world.domesticLeagues ?? []).map(league => league.postseason ? postseasonWeeks(POSTSEASON_FORMATS[league.postseason]) : 0));
+}
+
+export function worldRounds(world: CareerWorld): number {
+  if (world.domesticLeagues) return regularWorldRounds(world) + postseasonWorldWeeks(world);
   return 2 * (world.clubs.length - 1);
 }
 
@@ -144,7 +156,7 @@ const exactKeys = (value: unknown, keys: readonly string[]) => isObject(value) &
 export function validateWorld(value: unknown): asserts value is CareerWorld {
   if (isObject(value) && !Object.hasOwn(value, 'domesticLeagues') && validated.has(value)) return;
   const fail = (path: string, reason: string): never => { throw new Error(`Invalid career world: ${path} ${reason}.`); };
-  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : [])])) fail('world', 'must contain exactly the world fields');
+  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : [])])) fail('world', 'must contain exactly the world fields');
   const world = value as unknown as CareerWorld;
   if (Object.hasOwn(world, 'rosterModel') && world.rosterModel !== FULL_ROSTER_MODEL) fail('world.rosterModel', 'has an unsupported value');
   if (!isText(world.id, 80) || !ID.test(world.id)) fail('world.id', 'must be a supported identifier');
@@ -156,8 +168,9 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
     if (world.rosterModel !== FULL_ROSTER_MODEL || !Array.isArray(world.domesticLeagues) || world.domesticLeagues.length < 1 || world.domesticLeagues.length > 10) fail('world.domesticLeagues', 'requires full rosters and one to ten leagues');
     const ids = new Set<string>(), members = new Set<string>();
     for (const league of world.domesticLeagues!) {
-      if (!exactKeys(league, ['id', 'name', 'country', 'tier', 'clubIds', ...(isObject(league) && Object.hasOwn(league, 'standingsRule') ? ['standingsRule'] : [])]) || !isText(league.id, 80) || !ID.test(league.id) || ids.has(league.id) || !isText(league.name) || !isText(league.country) || !isWhole(league.tier, 1, 2) || !Array.isArray(league.clubIds) || league.clubIds.length < 4 || league.clubIds.length > 20) fail('world.domesticLeagues', 'contains an invalid league');
+      if (!exactKeys(league, ['id', 'name', 'country', 'tier', 'clubIds', ...(['standingsRule', 'postseason'] as const).filter(key => isObject(league) && Object.hasOwn(league, key))]) || !isText(league.id, 80) || !ID.test(league.id) || ids.has(league.id) || !isText(league.name) || !isText(league.country) || !isWhole(league.tier, 1, 2) || !Array.isArray(league.clubIds) || league.clubIds.length < 4 || league.clubIds.length > 20) fail('world.domesticLeagues', 'contains an invalid league');
       if (Object.hasOwn(league, 'standingsRule') && (league.standingsRule !== 'lnb-2026-1' || league.country !== 'France')) fail('world.domesticLeagues.standingsRule', 'must name a supported rule for this country');
+      if (Object.hasOwn(league, 'postseason') && !postseasonFormatAllowed(String(league.postseason), league.country, league.tier, league.clubIds.length)) fail('world.domesticLeagues.postseason', 'must name this country and division\'s format, for a league with enough clubs');
       ids.add(league.id);
       for (const id of league.clubIds) {
         if (members.has(id) || !world.clubs.some(club => club.id === id)) fail('world.domesticLeagues', 'must assign each club to exactly one league');
@@ -165,6 +178,10 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
       }
     }
     if (members.size !== world.clubs.length) fail('world.domesticLeagues', 'must cover every club');
+    // Postseasons are all or nothing, and a format seeding from the other division needs that division's postseason too.
+    const withPostseason = world.domesticLeagues!.filter(league => league.postseason);
+    if (withPostseason.length && withPostseason.length !== world.domesticLeagues!.length) fail('world.domesticLeagues.postseason', 'must be given to every league or none');
+    for (const league of withPostseason) if (POSTSEASON_FORMATS[league.postseason!].series.some(spec => [spec.a, spec.b].some(ref => 'otherTier' in ref && ref.otherTier)) && !world.domesticLeagues!.some(other => other.country === league.country && other.tier !== league.tier)) fail('world.domesticLeagues.postseason', 'needs the country\'s other division');
   }
   if (!isObject(world.playerProfiles) || !isObject(world.wages)) fail('world', 'needs player profiles and wages');
   const clubIds = new Set<string>(), playerIds = new Set<string>();
@@ -191,6 +208,7 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
       if (!Object.hasOwn(world.wages, player.id) || !isWhole(world.wages[player.id], 0, 1_000_000_000)) fail(`world.wages.${player.id}`, 'must give a season wage');
     }
   }
+  if (Object.hasOwn(world, 'playerContracts') && (!isObject(world.playerContracts) || Object.keys(world.playerContracts!).length !== playerIds.size || [...playerIds].some(id => !Object.hasOwn(world.playerContracts!, id) || !isWhole(world.playerContracts![id], 1, 3)))) fail('world.playerContracts', 'must give every player an opening contract of one to three seasons');
   if (Object.keys(world.playerProfiles).length !== playerIds.size || Object.keys(world.wages).length !== playerIds.size) fail('world', 'must give profiles and wages for exactly its players');
   if (!Array.isArray(world.sponsors)) fail('world.sponsors', 'must be a list');
   const sponsorNames = new Set<string>(), sponsorIds = new Set<string>();

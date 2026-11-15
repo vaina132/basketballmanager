@@ -7,12 +7,14 @@ import { summarizeSeniorHistory } from './senior-history';
 import { createRivalries, enableRivalries } from './rivalries';
 import { appointManager, createCareer, enableCareerMoves, matchClubFor } from './career';
 import { jobOfferRefusal, seasonEndOutlook, type SeasonEndOutlook } from './career-policy';
-import { domesticRoundDates, roundRobinGames, roundRobinRoundCount, calendarDaysBetween } from './competition-calendar';
+import { addCalendarDays, domesticRoundDates, roundRobinGames, roundRobinRoundCount, calendarDaysBetween } from './competition-calendar';
+import { derivePostseason, POSTSEASON_FORMATS, POSTSEASON_SLOT_OFFSETS, postseasonOutcome } from './postseason';
+import { divisionChanges, openingDivisions, seasonLeagues } from './divisions';
 import type { SeasonEndDecision } from '../domain/career';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
 import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
 import { createFacilities, enableBoardFunding, enableFacilities, enableFacilityMaintenance, processFacilityProjects, automateFacilities } from './facilities';
-import type { ArchivedFixture, ClubPlan, FixtureResult, SeasonFixture, SeasonState, Standing } from '../domain/season';
+import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonFixture, SeasonState, Standing } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import { archiveFinancialHistory } from './finance-archives';
 import type { InjuryMode, MatchState, Side, Team } from '../domain/types';
@@ -20,7 +22,7 @@ import type { ManagerProfile } from '../domain/manager';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-league';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import type { CareerWorld } from '../domain/world';
-import { MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
+import { MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { injuriesFromMatch, isRecovering } from './health';
 import { createTraining, developClub, processTrainingWeek } from './training';
@@ -102,11 +104,14 @@ export function dateForRound(round: number, seasonNumber = 1): string {
  * Circle scheduling: each club plays once per round and meets every opponent at home and away. Any even number of
  * clubs gives 2 x (clubs - 1) matchdays; six clubs give the built-in league's ten, with unchanged fixtures.
  */
-export function createSchedule(clubs: readonly Team[] = DEVELOPMENT_CLUBS, seasonNumber = 1, context: WorldContext = {}): SeasonFixture[] {
+/** The season-specific division memberships a schedule, table or postseason uses (step 3.4c). */
+type DivisionContext = WorldContext & { divisions?: DomesticDivisions | null };
+
+export function createSchedule(clubs: readonly Team[] = DEVELOPMENT_CLUBS, seasonNumber = 1, context: DivisionContext = {}): SeasonFixture[] {
   const world = context.world;
   if (world?.domesticLeagues) {
-    const start = seasonStartDate(seasonNumber), weeks = seasonRounds(context);
-    return world.domesticLeagues.flatMap(league => roundRobinGames({ competitionId: league.id, clubIds: league.clubIds, dates: domesticRoundDates(start, roundRobinRoundCount(league.clubIds.length), weeks), season: seasonNumber }).map(game => ({ id: game.id, round: calendarDaysBetween(start, game.date) / 7 + 1, date: game.date, homeClubId: game.homeClubId, awayClubId: game.awayClubId, result: null }))).sort((a, b) => a.round - b.round || a.id.localeCompare(b.id));
+    const start = seasonStartDate(seasonNumber), weeks = regularWorldRounds(world);
+    return seasonLeagues(world, context.divisions).flatMap(league => roundRobinGames({ competitionId: league.id, clubIds: league.clubIds, dates: domesticRoundDates(start, roundRobinRoundCount(league.clubIds.length), weeks), season: seasonNumber }).map(game => ({ id: game.id, round: calendarDaysBetween(start, game.date) / 7 + 1, date: game.date, homeClubId: game.homeClubId, awayClubId: game.awayClubId, result: null }))).sort((a, b) => a.round - b.round || a.id.localeCompare(b.id));
   }
   const count = clubs.length;
   if (count < MIN_WORLD_CLUBS || count > MAX_WORLD_CLUBS || count % 2 !== 0 || new Set(clubs.map(club => club.id)).size !== count) throw new Error('A league needs an even number of distinct clubs.');
@@ -130,6 +135,98 @@ export function createSchedule(clubs: readonly Team[] = DEVELOPMENT_CLUBS, seaso
 }
 
 /** Independent fixture streams make results independent of UI and processing order. */
+/** Format 49 (step 3.4b): postseason games carry their stage. League tables, board targets and positions use regular-season games only. */
+export const isRegularFixture = (fixture: { stage?: unknown }) => !fixture.stage;
+/** A postseason game's own fields, copied into archives. */
+export const postseasonFields = (fixture: SeasonFixture | ArchivedFixture) => fixture.stage ? { stage: fixture.stage, seriesId: fixture.seriesId!, game: fixture.game!, ...(fixture.neutral ? { neutral: true as const } : {}) } : {};
+
+type DomesticLeague = NonNullable<CareerWorld['domesticLeagues']>[number];
+/** A league's final regular-season order (first to last), or null while any of its regular games is unplayed. */
+function regularOrder(world: CareerWorld, league: DomesticLeague, fixtures: readonly (SeasonFixture | ArchivedFixture)[]): string[] | null {
+  const games = fixtures.filter(fixture => isRegularFixture(fixture) && league.clubIds.includes(fixture.homeClubId));
+  if (games.length !== league.clubIds.length * (league.clubIds.length - 1) || games.some(fixture => !fixture.result)) return null;
+  return getStandings({ clubs: world.clubs, fixtures: games, world: { ...world, domesticLeagues: [league] } }).map(row => row.clubId);
+}
+
+/** The league calendar's week and date of a postseason slot: three a week (Saturday, Tuesday, Thursday) after the regular season. */
+export function postseasonSlotDay(world: CareerWorld, seasonNumber: number, slot: number): { round: number; date: string } {
+  const perWeek = POSTSEASON_SLOT_OFFSETS.length, round = regularWorldRounds(world) + Math.floor((slot - 1) / perWeek) + 1;
+  return { round, date: addCalendarDays(dateForRound(round, seasonNumber), POSTSEASON_SLOT_OFFSETS[(slot - 1) % perWeek]!) };
+}
+
+/** Each league's postseason as far as results decide it: its series, the games that should exist and the outcome so far. */
+export function getPostseasons(context: { fixtures: readonly (SeasonFixture | ArchivedFixture)[] } & DivisionContext, seasonNumber: number) {
+  const world = worldOf(context), leagues = seasonLeagues(world, context.divisions).filter(league => league.postseason);
+  const orders = new Map(leagues.map(league => [league.id, regularOrder(world, league, context.fixtures)]));
+  return leagues.map(league => {
+    const other = leagues.find(item => item.country === league.country && item.tier !== league.tier);
+    const format = POSTSEASON_FORMATS[league.postseason!], order = orders.get(league.id)!;
+    const derived = derivePostseason({ leagueId: league.id, format, seasonNumber, order, otherOrder: other ? orders.get(other.id)! : null, slotDay: slot => postseasonSlotDay(world, seasonNumber, slot), fixtures: context.fixtures });
+    return { league, format, order, ...derived, outcome: postseasonOutcome(format, order, derived.series) };
+  });
+}
+
+/** The season's canonical games so far: the regular calendar, then the postseason games that results have made due, in calendar order. */
+export function scheduledFixtures(context: { clubs: readonly Team[]; fixtures: readonly (SeasonFixture | ArchivedFixture)[] } & DivisionContext, seasonNumber: number): SeasonFixture[] {
+  const regular = createSchedule(context.clubs, seasonNumber, context);
+  if (!worldOf(context).domesticLeagues?.some(league => league.postseason)) return regular;
+  const post: SeasonFixture[] = getPostseasons(context, seasonNumber).flatMap(entry => entry.fixtures).map(fixture => ({ ...fixture, result: null }));
+  return [...regular, ...post.sort((a, b) => a.round - b.round || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))];
+}
+
+/** Adds the postseason games that results have made due; existing games (and their results) are kept as they are. */
+function withDueFixtures(state: SeasonState): SeasonState {
+  const expected = scheduledFixtures(state, state.seasonNumber);
+  if (expected.length === state.fixtures.length) return state;
+  const existing = new Map(state.fixtures.map(fixture => [fixture.id, fixture]));
+  return { ...state, fixtures: expected.map(fixture => existing.get(fixture.id) ?? fixture) };
+}
+
+/** Step 3.4a: the week's current game day, the earliest date with an unplayed game; null once the week's games are played. */
+export function currentGameDay(state: Pick<SeasonState, 'fixtures' | 'round'>): string | null {
+  let day: string | null = null;
+  for (const fixture of state.fixtures) if (fixture.round === state.round && !fixture.result && (day === null || fixture.date < day)) day = fixture.date;
+  return day;
+}
+
+/** The week's last game date (its own Saturday when it has no games): weekly training and recovery start from there. */
+export function weekLastGameDate(fixtures: readonly (SeasonFixture | ArchivedFixture)[], round: number, seasonNumber: number): string {
+  let last = dateForRound(round, seasonNumber);
+  for (const fixture of fixtures) if (fixture.round === round && fixture.date > last) last = fixture.date;
+  return last;
+}
+
+/** Rest between game days of one week: ordinary daily recovery, no practice. */
+export function recoverConditions(conditions: Record<string, number>, days: number): void {
+  for (const id of Object.keys(conditions)) conditions[id] = recoveredCondition(conditions[id]!, days);
+}
+const recoveredCondition = (condition: number, days: number) => Math.min(100, Math.round((condition + DAILY_RECOVERY * days) * 1000) / 1000);
+
+type GameRecord = Pick<SeasonFixture, 'round' | 'date' | 'homeClubId' | 'awayClubId'> & { result: { stats: Record<string, { condition: number }> | null; selection?: { rested: Record<string, number> } } | null };
+/**
+ * A condition carried from `from` to `to` inside one week the way the game does it: one recovery step at each game day
+ * of the week after `from`, up to and including `to` (a game day, or the week's Saturday).
+ */
+export function recoverThroughGameDays(condition: number, fixtures: readonly GameRecord[], round: number, from: string, to: string): number {
+  const days = [...new Set(fixtures.filter(fixture => fixture.round === round && fixture.date > from && fixture.date <= to).map(fixture => fixture.date))].sort();
+  if (days.at(-1) !== to && to > from) days.push(to);
+  let value = condition, previous = from;
+  for (const day of days) { value = recoveredCondition(value, calendarDaysBetween(previous, day)); previous = day; }
+  return value;
+}
+
+/**
+ * A player's condition as of the week's last game day: after the club's last game that week (played or rested) and the
+ * rest after it, or the week's rest record when the club had no game. Undefined when neither exists.
+ */
+export function weekCloseCondition(context: { fixtures: readonly GameRecord[]; restWeeks?: SeasonState['restWeeks']; seasonNumber: number }, round: number, clubId: string, playerId: string): number | undefined {
+  let last: GameRecord | undefined;
+  for (const fixture of context.fixtures) if (fixture.round === round && fixture.result && (fixture.homeClubId === clubId || fixture.awayClubId === clubId) && (!last || fixture.date > last.date)) last = fixture;
+  if (!last) return context.restWeeks?.find(row => row.round === round && row.clubId === clubId)?.conditions[playerId];
+  const base = last.result!.stats?.[playerId]?.condition ?? last.result!.selection?.rested[playerId];
+  return base === undefined ? undefined : recoverThroughGameDays(base, context.fixtures, round, last.date, weekLastGameDate(context.fixtures as readonly SeasonFixture[], round, context.seasonNumber));
+}
+
 export function fixtureSeed(seed: number, fixtureId: string): number {
   let hash = (2166136261 ^ seed) >>> 0;
   for (let index = 0; index < fixtureId.length; index += 1) hash = Math.imul(hash ^ fixtureId.charCodeAt(index), 16777619) >>> 0;
@@ -146,7 +243,7 @@ export function getActiveFixture(season: SeasonState): SeasonFixture {
 export function careerPresentationMatch(season: SeasonState): MatchState {
   if (season.activeMatch) return season.activeMatch;
   const own = season.fixtures.filter(fixture => [fixture.homeClubId, fixture.awayClubId].includes(season.managedClubId));
-  const fixture = own.find(fixture => fixture.round > season.round) ?? own.at(-1);
+  const fixture = own.find(fixture => !fixture.result) ?? own.at(-1);
   if (!fixture) throw new Error('The managed club has no fixtures in its calendar.');
   return prepareMatch(season, { ...fixture, round: season.round, date: season.date });
 }
@@ -267,7 +364,8 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   if (typeof marketEnabled !== 'boolean' || marketEnabled && !negotiationsEnabled) throw new Error('The offseason calendar requires enabled negotiations and a valid setting.');
   const managerProfile = manager === null ? null : validateManagerProfile(manager, DEVELOPMENT_START_DATE);
   const clubs = world.clubs;
-  const fixtures = createSchedule(clubs, 1, { world });
+  const divisions = openingDivisions(world);
+  const fixtures = createSchedule(clubs, 1, { world, divisions });
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId));
   const preparation = {
     ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled),
@@ -276,7 +374,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   };
   const state: SeasonState = {
     schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), facilities: createFacilities(clubs, managedClubId), relationships: createRelationships(), board: createBoard(), rivalries: createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
-    ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
+    ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
     activeFixtureId: first?.id ?? null, activeMatch: first ? prepareMatch(preparation, first) : null,
   };
   const funded = financeEnabled ? enableFinance(state) : state;
@@ -354,7 +452,13 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
 export function advanceSeason(state: SeasonState, decision?: SeasonEndDecision): SeasonState {
   const rounds = seasonRounds(state);
   if (decision !== undefined && (state.round !== rounds || !decision || typeof decision !== 'object' || typeof decision.moveTo !== 'string' || Object.keys(decision).length !== 1)) throw new Error('A club change can only be decided when the final matchday is committed.');
-  let next = commitMatchday(state);
+  const committed = commitMatchday(state);
+  let next = committed.next;
+  // Step 3.4a: more games this week (a postseason game day), so the week's management waits for its last game day.
+  if (!committed.weekDone) {
+    if (decision !== undefined) throw new Error('A club change can only be decided when the final matchday is committed.');
+    return prepareGameDay(next);
+  }
   if (next.round === rounds) {
     next.status = 'complete';
     const outlook = seasonEndOutlook(next);
@@ -374,24 +478,36 @@ export function advanceSeason(state: SeasonState, decision?: SeasonEndDecision):
  */
 export function previewSeasonEnd(state: SeasonState): SeasonEndOutlook | null {
   if (state.status !== 'active' || state.round !== seasonRounds(state)) return null;
-  return seasonEndOutlook(commitMatchday(state));
+  const committed = commitMatchday(state);
+  return committed.weekDone ? seasonEndOutlook(committed.next) : null;
 }
 
-/** Play the round's other fixtures and commit its results, accounts and board review. */
-function commitMatchday(state: SeasonState): SeasonState {
+/** The prepared match of the week's next game day, when the managed club plays on it (step 3.4a). */
+function prepareGameDay(state: SeasonState): SeasonState {
+  const day = currentGameDay(state)!;
+  const fixture = state.fixtures.find(fixture => fixture.round === state.round && fixture.date === day && !fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(state.managedClubId));
+  return { ...state, activeFixtureId: fixture?.id ?? null, activeMatch: fixture ? prepareMatch(state, fixture) : null };
+}
+
+/**
+ * Play the current game day: the managed match and the day's other games. After the week's last game day, commit the
+ * week's results, accounts and board review (`weekDone`); before it, players recover until the next game day.
+ */
+function commitMatchday(state: SeasonState): { next: SeasonState; weekDone: boolean } {
   if (state.status === 'complete') throw new Error('This season is complete.');
   requireCalendarWeek(state, false);
   if (state.engineVersion !== 'possession-3') throw new Error('The season must use the supported possession engine.');
   if (state.date !== dateForRound(state.round, state.seasonNumber)) throw new Error('The current round is not awaiting results on this date.');
   if (worldOf(state).domesticLeagues && !Array.isArray(state.restWeeks)) throw new Error('The domestic calendar requires its rest-week evidence.');
-  const current = state.fixtures.find(fixture => fixture.round === state.round && [fixture.homeClubId, fixture.awayClubId].includes(state.managedClubId));
+  const day = currentGameDay(state);
+  const current = day ? state.fixtures.find(fixture => fixture.round === state.round && fixture.date === day && !fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(state.managedClubId)) : undefined;
   if (!!current !== !!state.activeMatch || (current?.id ?? null) !== state.activeFixtureId) throw new Error('The calendar and managed match disagree.');
   if (state.activeMatch) {
     if (state.activeMatch.engineVersion !== state.engineVersion) throw new Error('The season and its match must use the supported possession engine.');
     if (state.activeMatch.status !== 'finished' || state.activeMatch.requiredSubstitutions.length) throw new Error('Finish the current match and resolve required decisions before continuing.');
     if (state.activeMatch.injuryMode !== state.injuryMode || state.injuryMode === 'off' && (state.injuries.length || Object.keys(state.activeMatch.injuries).length)) throw new Error('Every club must use the same season injury setting.');
     managedSide(state);
-    if (current!.round !== state.round || current!.date !== state.date || current!.result) throw new Error('The current round is not awaiting this match result.');
+    if (current!.round !== state.round || current!.date !== day || current!.result) throw new Error('The current round is not awaiting this match result.');
   }
   let next: SeasonState = {
     ...state,
@@ -400,9 +516,16 @@ function commitMatchday(state: SeasonState): SeasonState {
     conditions: { ...state.conditions },
     injuries: state.injuries.map(injury => ({ ...injury })),
   };
-  for (const fixture of next.fixtures.filter(fixture => fixture.round === next.round)) {
+  for (const fixture of next.fixtures.filter(fixture => fixture.round === next.round && fixture.date === day)) {
     const match = fixture.id === next.activeFixtureId ? next.activeMatch! : simulateToEnd(prepareMatch(next, fixture));
     postMatch(next, fixture, match);
+  }
+  // Results can make postseason games due, some of them later this same week.
+  next = withDueFixtures(next);
+  const following = currentGameDay(next);
+  if (day && following) {
+    recoverConditions(next.conditions, calendarDaysBetween(day, following));
+    return { next, weekDone: false };
   }
   if (next.restWeeks) {
     const playing = new Set(next.fixtures.filter(fixture => fixture.round === next.round).flatMap(fixture => [fixture.homeClubId, fixture.awayClubId]));
@@ -413,11 +536,13 @@ function commitMatchday(state: SeasonState): SeasonState {
   next = processPayrollRound(next);
   next = processTransferPayments(next);
   next = processScoutingRound(next);
-  return processBoardRound(next);
+  return { next: processBoardRound(next), weekDone: true };
 }
 
 /** After an ordinary matchday: staff hiring, the calendar step and the next prepared match. */
 function prepareNextMatchday(state: SeasonState, committed: SeasonState): SeasonState {
+  // Training and recovery start from the week's last game day (step 3.4a), read before the week moves on.
+  const trainedFrom = weekLastGameDate(committed.fixtures, committed.round, committed.seasonNumber);
   let next = recruitAiScouts(committed);
   next = recruitAiFitnessCoaches(next);
   next = recruitAiPhysios(next);
@@ -429,10 +554,10 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState): Season
   next = processFacilityProjects(next);
   next.physio = processRehabilitationWeek({ ...storedWorld(worldOf(next)), physio: next.physio, clubs: next.clubs, rosters: next.rosters, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
   if (next.training.enabledSince) {
-    const trained = processTrainingWeek({ ...storedWorld(worldOf(next)), facilities: next.facilities, training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, lifecycle: next.lifecycle, academy: next.academy, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
+    const trained = processTrainingWeek({ ...storedWorld(worldOf(next)), facilities: next.facilities, training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, lifecycle: next.lifecycle, academy: next.academy, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: trainedFrom, toDate: next.date });
     next.training = trained.training; next.conditions = trained.conditions;
   } else {
-    for (const id of Object.keys(next.conditions)) next.conditions[id] = Math.min(100, Math.round((next.conditions[id]! + DAILY_RECOVERY * ROUND_INTERVAL_DAYS) * 1000) / 1000);
+    recoverConditions(next.conditions, calendarDaysBetween(trainedFrom, next.date));
   }
   next.academy = processAcademyWeek({ rounds: seasonRounds(next), ...storedWorld(worldOf(next)), facilities: next.facilities, academy: next.academy, youth: next.youth, youthCompetition: next.youthCompetition, clubs: next.clubs, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
   const registeredBefore = next.rosters.length;
@@ -446,10 +571,22 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState): Season
   next = scheduleInSeasonRecruitment(next);
   next = automateFacilities(next);
   next = automateRelationships(prepareRelationshipsRound(next));
-  const fixture = next.fixtures.find(fixture => fixture.round === next.round && [fixture.homeClubId, fixture.awayClubId].includes(next.managedClubId));
-  next.activeFixtureId = fixture?.id ?? null;
-  next.activeMatch = fixture ? prepareMatch(next, fixture) : null;
-  return next;
+  // Step 3.4a: a week whose first game day falls after its Saturday rests until then; the manager's match is that day's.
+  const firstDay = currentGameDay(next);
+  if (!firstDay) return { ...next, activeFixtureId: null, activeMatch: null };
+  if (firstDay > next.date) recoverConditions(next.conditions, calendarDaysBetween(next.date, firstDay));
+  return prepareGameDay(next);
+}
+
+/**
+ * The next season's divisions (step 3.4c): from the season in which changes began, the completed season's promotions
+ * and relegations move clubs between each country's divisions. Worlds without recorded divisions keep their leagues.
+ */
+export function nextSeasonDivisions(state: Pick<SeasonState, 'divisions' | 'seasonNumber' | 'fixtures' | 'clubs'> & WorldContext): DomesticDivisions | undefined {
+  if (!state.divisions) return undefined;
+  if (state.seasonNumber < state.divisions.changesFrom) return state.divisions;
+  const changed = divisionChanges(seasonLeagues(worldOf(state), state.divisions), getPostseasons(state, state.seasonNumber));
+  return { changesFrom: state.divisions.changesFrom, leagues: changed.leagues };
 }
 
 /** Archive the completed competition and prepare the same club's next opening day. */
@@ -462,12 +599,14 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   if (state.activeMatch && (state.activeMatch.status !== 'finished' || !state.activeMatch.result || state.activeMatch.requiredSubstitutions.length)) throw new Error('Finish the current match and resolve required decisions before continuing.');
   if (state.activeMatch && (state.activeMatch.injuryMode !== state.injuryMode || state.injuryMode === 'off' && (state.injuries.length || Object.keys(state.activeMatch.injuries).length))) throw new Error('Every club must use the same season injury setting.');
   if (state.history.length !== state.seasonNumber - 1 || state.history.some((archive, index) => archive.seasonNumber !== index + 1)) throw new Error('Career history must contain each previous season exactly once.');
-  const canonical = createSchedule(state.clubs, state.seasonNumber, state);
+  const canonical = scheduledFixtures(state, state.seasonNumber);
   if (state.fixtures.length !== canonical.length || state.fixtures.some((fixture, index) => {
     const expected = canonical[index]!;
     return !fixture.result || fixture.id !== expected.id || fixture.round !== expected.round || fixture.date !== expected.date || fixture.homeClubId !== expected.homeClubId || fixture.awayClubId !== expected.awayClubId;
   })) throw new Error('Every scheduled fixture must have a committed result before rollover.');
-  const expectedFinal = state.fixtures.find(fixture => fixture.round === rounds && [fixture.homeClubId, fixture.awayClubId].includes(matchClubFor(state)));
+  // The final match is the managed club's game on the season's last game day, if it plays then (step 3.4a).
+  const finalDay = weekLastGameDate(state.fixtures, rounds, state.seasonNumber);
+  const expectedFinal = state.fixtures.find(fixture => fixture.round === rounds && fixture.date === finalDay && [fixture.homeClubId, fixture.awayClubId].includes(matchClubFor(state)));
   if ((expectedFinal?.id ?? null) !== state.activeFixtureId || !!expectedFinal !== !!state.activeMatch) throw new Error('The final match must agree with the completed calendar.');
   if (state.activeMatch) {
     const current = getActiveFixture(state);
@@ -477,17 +616,19 @@ export function rolloverSeason(state: SeasonState): SeasonState {
     if (result.winnerClubId !== state.activeMatch[state.activeMatch.result!.winner].id || result.kind !== state.activeMatch.result!.kind || result.periods !== state.activeMatch.period || SIDES.some(side => result.score[side] !== state.activeMatch!.score[side] || result.officialScore[side] !== state.activeMatch!.result!.officialScore[side])) throw new Error('The final score must match its committed fixture result.');
   }
   const seasonNumber = state.seasonNumber + 1;
-  const fixtures = createSchedule(state.clubs, seasonNumber, state);
+  const divisions = nextSeasonDivisions(state);
+  const fixtures = createSchedule(state.clubs, seasonNumber, { ...state, divisions });
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(state.managedClubId));
   const recoveryDays = (Date.parse(`${dateForRound(1, seasonNumber)}T00:00:00.000Z`) - Date.parse(`${state.date}T00:00:00.000Z`)) / DAY_MS;
   const archive = {
     seasonNumber: state.seasonNumber,
+    ...(state.divisions ? { divisions: state.divisions } : {}),
     rosters: state.rosters.map(roster => ({ ...roster, players: roster.players.map(player => ({ ...player, attributes: { ...player.attributes } })) })),
     fixtures: state.fixtures.map((fixture): ArchivedFixture => {
       const result = fixture.result!;
       getFixtureTeams(state, fixture);
       return {
-        id: fixture.id, round: fixture.round, date: fixture.date, homeClubId: fixture.homeClubId, awayClubId: fixture.awayClubId,
+        id: fixture.id, round: fixture.round, date: fixture.date, homeClubId: fixture.homeClubId, awayClubId: fixture.awayClubId, ...postseasonFields(fixture),
         result: { score: { ...result.score }, officialScore: { ...result.officialScore }, winnerClubId: result.winnerClubId, kind: result.kind, periods: result.periods, injuries: { ...result.injuries }, rosterIds: { ...result.rosterIds }, stats: Object.fromEntries(Object.entries(result.stats).map(([id, stats]) => [id, { ...stats }])), ...(result.selection ? { selection: { home: [...result.selection.home], away: [...result.selection.away], rested: { ...result.selection.rested } } } : {}) },
       };
     }),
@@ -496,7 +637,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   // The archive above still refers to the completed season's registrations.
   const recruited = finalizeEmploymentMarket(state);
   let next: SeasonState = {
-    ...recruited, seasonNumber, history: [...state.history, archive], rosters: createRosterSnapshots(recruited.clubs, seasonNumber), fixtures, ...(state.restWeeks ? { restWeeks: [] } : {}), round: 1, date: dateForRound(1, seasonNumber), status: 'active', activeFixtureId: first?.id ?? null, activeMatch: null,
+    ...recruited, seasonNumber, history: [...state.history, archive], rosters: createRosterSnapshots(recruited.clubs, seasonNumber), fixtures, ...(state.restWeeks ? { restWeeks: [] } : {}), ...(divisions ? { divisions } : {}), round: 1, date: dateForRound(1, seasonNumber), status: 'active', activeFixtureId: first?.id ?? null, activeMatch: null,
     plans: Object.fromEntries(recruited.clubs.map(club => {
       const plan = state.plans[club.id]!;
       const registered = new Set(club.players.map(player => player.id));
@@ -545,9 +686,9 @@ export function rolloverSeason(state: SeasonState): SeasonState {
 }
 
 /** Each domestic league uses its saved rule; legacy worlds retain their original ordering. */
-export function getStandings(season: { clubs: readonly Team[]; fixtures: readonly (SeasonFixture | ArchivedFixture)[] } & WorldContext): Standing[] {
-  if (season.world?.domesticLeagues) return season.world.domesticLeagues.flatMap(league => {
-    const fixtures = season.fixtures.filter(fixture => league.clubIds.includes(fixture.homeClubId));
+export function getStandings(season: { clubs: readonly Team[]; fixtures: readonly (SeasonFixture | ArchivedFixture)[] } & DivisionContext): Standing[] {
+  if (season.world?.domesticLeagues) return seasonLeagues(season.world, season.divisions).flatMap(league => {
+    const fixtures = season.fixtures.filter(fixture => isRegularFixture(fixture) && league.clubIds.includes(fixture.homeClubId));
     if (league.standingsRule) return competitionTable({
       competitionId: league.id, clubIds: league.clubIds, rule: league.standingsRule,
       games: fixtures.map(fixture => ({ ...fixture, competitionId: league.id, stage: 'regular' as const, stageRound: fixture.round, groupId: null, seriesId: null, neutral: false })),
@@ -557,7 +698,7 @@ export function getStandings(season: { clubs: readonly Team[]; fixtures: readonl
   });
   const rows = new Map(season.clubs.map(club => [club.id, { position: 0, clubId: club.id, played: 0, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, difference: 0 }]));
   for (const fixture of season.fixtures) {
-    if (!fixture.result) continue;
+    if (!fixture.result || !isRegularFixture(fixture)) continue;
     for (const side of SIDES) {
       const id = side === 'home' ? fixture.homeClubId : fixture.awayClubId;
       const row = rows.get(id);

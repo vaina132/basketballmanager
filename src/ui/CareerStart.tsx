@@ -13,6 +13,7 @@ import { Avatar } from './Avatar'
 import { PositionLabel } from './PositionLabel'
 import { DataPackDetails } from './DataPackDetails'
 import { CountryFlag } from './CountryFlag'
+import { GameSpeed } from './GameSpeed'
 import { SquadStrength } from './SquadStrength'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
@@ -37,6 +38,8 @@ interface CareerSummary {
 interface CareerStartProps {
   view: 'menu' | 'new-career' | 'profile'
   busy: boolean
+  /** The career is being created in the background (owner request: show progress while it starts). */
+  starting?: boolean
   error: string | null
   hasSession: boolean
   currentCareer: CareerSummary | null
@@ -120,14 +123,13 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
   const [extraCountries, setExtraCountries] = useState<string[]>([])
   const league = leagues.find(item => item.id === competitionId) ?? leagues[0] ?? null
   const countries = [...new Set(leagues.map(item => item.country ?? 'Other'))].sort()
+  const countryLeagues = leagues.filter(item => (item.country ?? 'Other') === (league?.country ?? 'Other')).sort((a, b) => a.tier - b.tier)
   const built = useMemo(() => { try { return { world: props.pack && league ? worldFromPack(props.pack, leagues.filter(item => item.country === league.country || extraCountries.includes(item.country ?? 'Other')).map(item => item.id)) : null, error: null } } catch (error) { return { world: null, error: error instanceof Error ? error.message : 'The selected leagues could not be loaded.' } } }, [props.pack, league, leagues, extraCountries])
   const world = built.world
   const [clubId, setClubId] = useState('')
   const [packError, setPackError] = useState<string | null>(null)
   const [packLoading, setPackLoading] = useState(false)
   const packInput = useRef<HTMLInputElement>(null)
-  const [injuryMode, setInjuryMode] = useState<InjuryMode>('standard')
-  const [replayCode, setReplayCode] = useState('')
   const [issue, setIssue] = useState<{ message: string; revision: number } | null>(null)
   const title = useRef<HTMLDivElement>(null)
   const club = world ? world.clubs.find(team => team.id === clubId && league?.clubIds.includes(team.id)) ?? world.clubs.find(team => league?.clubIds.includes(team.id))! : null
@@ -164,11 +166,9 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
       if (step === 0) { setIssue(null); setStep(1); return }
       if (step === 1 && (!world || !club)) throw new Error('Load your real-data pack and choose a league and a club.')
       if (step === 1) { setIssue(null); setStep(2); return }
-      const enteredCode = replayCode.trim()
-      if (enteredCode && (!/^\d+$/.test(enteredCode) || Number(enteredCode) > 4294967295)) throw new Error('Enter a replay code from 0 to 4,294,967,295 in Advanced setup, or leave it blank for a new career.')
-      const seedValue = enteredCode ? Number(enteredCode) : crypto.getRandomValues(new Uint32Array(1))[0]!
+      // Owner (15 November 2026): every career uses the realistic injury model and a fresh random career; no setup options.
       setIssue(null)
-      props.onStart({ manager: validManager, world: world!, clubId: club!.id, injuryMode, seed: seedValue })
+      props.onStart({ manager: validManager, world: world!, clubId: club!.id, injuryMode: 'standard', seed: crypto.getRandomValues(new Uint32Array(1))[0]! })
     } catch (error) { reportError(error) }
   }
 
@@ -189,7 +189,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
             <div className="career-start-field"><label htmlFor="manager-birth-date">Date of birth</label><input id="manager-birth-date" name="manager-birth-date" type="date" autoComplete="bday" value={manager.dateOfBirth} onChange={event => changeManager('dateOfBirth', event.target.value)} aria-describedby="manager-age" required /><small id="manager-age" className="career-identity-age" aria-live="polite">{age === null ? 'Age 18–100 at career start.' : `${age} years old on ${formatDate(DEVELOPMENT_START_DATE)}.`}</small></div>
             <div className="career-start-field"><label htmlFor="manager-nationality">Nationality</label><input id="manager-nationality" name="manager-nationality" list="manager-nationality-options" autoComplete="off" placeholder="Type to find a nationality" value={manager.nationality} onChange={event => changeManager('nationality', event.target.value)} maxLength={MAX_MANAGER_NATIONALITY_LENGTH} aria-describedby="manager-nationality-help" required /><datalist id="manager-nationality-options">{NATIONALITY_SUGGESTIONS.map(item => <option key={item.nationality} value={item.nationality} label={item.place} />)}</datalist><small id="manager-nationality-help">Choose a suggestion or enter your own nationality. Multiple nationalities are welcome.</small></div>
           </div></section>
-          <section className="panel" aria-labelledby="career-world-title"><header className="career-start-panel-heading"><h2 id="career-world-title">{props.profileOnly ? 'Profile details' : 'Career start'}</h2></header>{props.profileOnly ? <p className="career-start-empty">Your name and nationality identify your manager. Age is calculated from your date of birth. Editing this profile preserves your club and career progress.</p> : <><dl className="career-start-details"><dt>Competition</dt><dd>{world?.name ?? 'Real clubs, chosen in the next step'}</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd>{world && <><dt>Format</dt><dd>{world.clubs.length} clubs · {worldRounds(world)} matchdays</dd></>}<dt>Season</dt><dd>2026/27</dd></dl><p className="career-start-subnote">Real clubs, players and ratings from your private data pack. Wages, budgets, arenas, presidents and sponsors are fictional estimates.</p></>}</section>
+          <section className="panel" aria-labelledby="career-world-title"><header className="career-start-panel-heading"><h2 id="career-world-title">{props.profileOnly ? 'Profile details' : 'Career start'}</h2></header>{props.profileOnly ? <p className="career-start-empty">Your name and nationality identify your manager. Age is calculated from your date of birth. Editing this profile preserves your club and career progress.</p> : <><dl className="career-start-details"><dt>Competition</dt><dd>{world?.name ?? 'Real clubs, chosen in the next step'}</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd>{world && <><dt>Format</dt><dd>{world.clubs.length} clubs · {worldRounds(world)} matchdays</dd></>}<dt>Season</dt><dd>2026/27</dd></dl><p className="career-start-subnote">Real clubs, players and ratings from your private data pack. Wages, contract lengths, budgets, arenas, presidents and sponsors are fictional estimates.</p></>}</section>
         </div>}
 
         {!props.profileOnly && step === 1 && (!props.pack || !world || !club ? <div className="career-pack-layout">
@@ -205,9 +205,10 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
         </div> : <div className="career-club-layout">
           <section className="panel" aria-labelledby="career-club-title"><header className="career-start-panel-heading"><h2 id="career-club-title">Choose your club</h2><span data-career-pack={props.pack.version}>Pack {props.pack.version}</span></header>
             <div className="career-country-options" role="group" aria-label="Choose country">{countries.map(country => <button key={country} type="button" aria-pressed={(league?.country ?? 'Other') === country} onClick={() => { setCompetitionId(leagues.find(item => (item.country ?? 'Other') === country)!.id); setClubId('') }}><CountryFlag country={country} decorative /><span>{country}</span></button>)}</div>
-            {leagues.length > 1 && <div className="career-start-field career-league-field"><label htmlFor="career-league">League</label><select id="career-league" value={league!.id} onChange={event => { setCompetitionId(event.target.value); setClubId('') }}>{leagues.map(item => <option key={item.id} value={item.id}>{item.country ?? 'Other'} · {item.name} · Division {item.tier}</option>)}</select></div>}
+            {countryLeagues.length > 1 && <div className="career-start-field career-league-field"><label htmlFor="career-league">League</label><select id="career-league" value={league!.id} onChange={event => { setCompetitionId(event.target.value); setClubId('') }}>{countryLeagues.map(item => <option key={item.id} value={item.id}>{item.name} · Division {item.tier}</option>)}</select></div>}
             <fieldset className="career-country-options"><legend>Playable countries</legend>{countries.map(country => <label key={country}><input type="checkbox" checked={country === (league?.country ?? 'Other') || extraCountries.includes(country)} disabled={country === (league?.country ?? 'Other')} onChange={event => setExtraCountries(previous => event.target.checked ? [...previous, country] : previous.filter(item => item !== country))} /><CountryFlag country={country} decorative /><span>{country}</span></label>)}</fieldset>
             <p className="career-league-summary">{world.domesticLeagues?.length ?? 1} leagues · {world.clubs.length} clubs · {worldRounds(world)} weeks. Each selected country includes its available divisions.</p>
+            <GameSpeed clubs={world.clubs.length} weeks={worldRounds(world)} />
             <div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{world.clubs.filter(team => league?.clubIds.includes(team.id)).map(team => <label className={`career-club-option${club.id === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={club.id === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players</small><SquadStrength value={squadRating(team)} clubName={team.name} /></span></label>)}</div>
             <button type="button" className="text-button career-pack-change" onClick={() => packInput.current?.click()} disabled={packLoading}>Load another data pack</button>
             <DataPackDetails pack={props.pack} />
@@ -219,13 +220,14 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
 
         {!props.profileOnly && step === 2 && <>
           <div className="career-review-layout">
-            <section className="panel" aria-labelledby="career-review-title"><header className="career-start-panel-heading"><h2 id="career-review-title">Career details</h2><Icon name="people" size={17} /></header><dl className="career-start-details"><dt>Manager</dt><dd>{manager.name}</dd><dt>Date of birth</dt><dd>{formatDate(manager.dateOfBirth)} · age {age}</dd><dt>Nationality</dt><dd>{manager.nationality}</dd><dt>Club</dt><dd>{club?.name}</dd><dt>Competition</dt><dd>{world?.name}</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd></dl><p className="career-start-subnote">Real clubs and players from your private data pack; wages, budgets, arenas, presidents and sponsors are fictional estimates. The career keeps its own copy of the league, so it never needs the file again.</p></section>
-            <section className="panel" aria-labelledby="career-options-title"><header className="career-start-panel-heading"><h2 id="career-options-title">Career options</h2><Icon name="settings" size={17} /></header><div className="career-review-options"><div className="career-start-field"><label htmlFor="career-injuries">Injury frequency</label><select id="career-injuries" value={injuryMode} onChange={event => setInjuryMode(event.target.value as InjuryMode)} aria-describedby="career-injuries-help"><option value="standard">Standard</option><option value="reduced">Reduced</option><option value="off">Off</option></select><small id="career-injuries-help">Applies equally to every club. Injuries carry between matches.</small></div><details className="career-advanced"><summary>Advanced setup</summary><div className="career-start-field"><label htmlFor="career-seed">Replay code <span className="career-field-optional">Optional</span></label><input id="career-seed" inputMode="numeric" autoComplete="off" placeholder="Automatic · a fresh career every time" value={replayCode} onChange={event => setReplayCode(event.target.value)} aria-describedby="career-seed-help" /><small id="career-seed-help">Leave blank for a fresh career. Enter the same code with the same starting options and choices to reproduce a career’s random events. This does not change difficulty. Codes are whole numbers from 0 to 4,294,967,295.</small></div></details></div></section>
+            <section className="panel" aria-labelledby="career-review-title"><header className="career-start-panel-heading"><h2 id="career-review-title">Career details</h2><Icon name="people" size={17} /></header><dl className="career-start-details"><dt>Manager</dt><dd>{manager.name}</dd><dt>Date of birth</dt><dd>{formatDate(manager.dateOfBirth)} · age {age}</dd><dt>Nationality</dt><dd>{manager.nationality}</dd><dt>Club</dt><dd>{club?.name}</dd><dt>Competition</dt><dd>{world?.name}</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd></dl><p className="career-start-subnote">Real clubs and players from your private data pack; wages, contract lengths, budgets, arenas, presidents and sponsors are fictional estimates. The career keeps its own copy of the league, so it never needs the file again.</p></section>
+            <section className="panel" aria-labelledby="career-options-title"><header className="career-start-panel-heading"><h2 id="career-options-title">Leagues in your career</h2><Icon name="settings" size={17} /></header><div className="career-review-options"><ul className="career-review-leagues">{world?.domesticLeagues?.map(item => <li key={item.id}><CountryFlag country={item.country} decorative /><span>{item.name}</span><small>{item.clubIds.length} clubs</small></li>)}</ul>{world && <GameSpeed clubs={world.clubs.length} weeks={worldRounds(world)} />}</div></section>
           </div>
+          {props.starting && <div className="career-starting" role="status" aria-live="polite"><span className="career-starting-spinner" aria-hidden="true" /><div><strong>Preparing your career…</strong><span>Building squads, schedules, finances and staff for {world?.clubs.length ?? 'all'} clubs. With several countries this can take up to a minute.</span></div></div>}
           <p className="career-start-storage-note">Starting a career makes it the current local save. Load saves opens the five latest checkpoints. Export a save file from the main menu to keep a separate career.</p>
         </>}
 
-        <footer className="career-setup-footer"><div>{!props.profileOnly && step > 0 && <button id="career-back" type="button" className="button" onClick={() => { setIssue(null); setStep(previous => previous - 1) }}>Back</button>}<button id="career-cancel" type="button" className="text-button" onClick={props.onCancel}>{props.profileOnly ? 'Cancel' : 'Main menu'}</button></div><button id={props.profileOnly ? 'career-save-profile' : step === 2 ? 'career-start' : 'career-next'} type="submit" className="button primary">{props.busy ? 'Please wait…' : props.profileOnly ? 'Save profile' : step === 2 ? 'Start career' : `Continue to ${steps[step + 1]!.toLowerCase()}`}<Icon name={props.profileOnly ? 'save' : 'arrow'} size={16} /></button></footer>
+        <footer className="career-setup-footer"><div>{!props.profileOnly && step > 0 && <button id="career-back" type="button" className="button" onClick={() => { setIssue(null); setStep(previous => previous - 1) }}>Back</button>}<button id="career-cancel" type="button" className="text-button" onClick={props.onCancel}>{props.profileOnly ? 'Cancel' : 'Main menu'}</button></div><button id={props.profileOnly ? 'career-save-profile' : step === 2 ? 'career-start' : 'career-next'} type="submit" className="button primary">{props.starting ? 'Preparing career…' : props.busy ? 'Please wait…' : props.profileOnly ? 'Save profile' : step === 2 ? 'Start career' : `Continue to ${steps[step + 1]!.toLowerCase()}`}<Icon name={props.profileOnly ? 'save' : 'arrow'} size={16} /></button></footer>
       </fieldset>
     </form>
   </>

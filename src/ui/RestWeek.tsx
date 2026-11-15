@@ -5,6 +5,8 @@ import { Avatar } from './Avatar';
 import './rest-week.css';
 import { getPlayerHealth } from '../world/health';
 import { PositionLabel } from './PositionLabel';
+import { regularWorldRounds, worldOf } from '../world/career-world';
+import { currentGameDay } from '../world/season';
 
 /** A real calendar gap, with no match score, appearance or simulated opponent. */
 export function RestWeek({ season, busy, onContinue, onTraining }: { season: SeasonState; busy: boolean; onContinue: () => void; onTraining: () => void }) {
@@ -12,8 +14,10 @@ export function RestWeek({ season, busy, onContinue, onTraining }: { season: Sea
   const next = season.fixtures.find(fixture => fixture.round > season.round && [fixture.homeClubId, fixture.awayClubId].includes(club.id));
   const opponent = next && season.clubs.find(team => team.id === (next.homeClubId === club.id ? next.awayClubId : next.homeClubId));
   const games = season.fixtures.filter(fixture => fixture.round === season.round).length;
-  return <section className="panel rest-week" aria-label="Rest week">
-    <header className="section-heading"><h2><Icon name="calendar" /> {season.status === 'complete' ? 'Season complete' : 'Rest week'}</h2><time dateTime={season.date}>{season.date}</time></header>
+  // A playoff day without the club's game (step 3.4b) is not a rest week: other clubs still play.
+  const playoffDay = season.status !== 'complete' && season.round > regularWorldRounds(worldOf(season)), day = currentGameDay(season) ?? season.date;
+  return <section className="panel rest-week" aria-label={playoffDay ? 'No game today' : 'Rest week'}>
+    <header className="section-heading"><h2><Icon name="calendar" /> {season.status === 'complete' ? 'Season complete' : playoffDay ? 'No game today' : 'Rest week'}</h2><time dateTime={day}>{day}</time></header>
     <p>{season.status === 'complete' ? 'Review the final table and prepare for next season.' : `No match for ${club.name} this week. ${games} other games are scheduled.`}</p>
     {opponent && next && <p>Next match: <strong>{opponent.name}</strong> · <time dateTime={next.date}>{next.date}</time> · {next.homeClubId === club.id ? 'Home' : 'Away'}</p>}
     {season.status === 'active' && <div className="season-result-actions"><button className="button primary" disabled={busy} onClick={onContinue}>Continue<Icon name="next" size={16} /></button><button className="button" disabled={busy} onClick={onTraining}>Training<Icon name="training" size={16} /></button></div>}

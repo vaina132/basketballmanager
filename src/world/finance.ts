@@ -243,7 +243,8 @@ export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture
   validatePrice(price);
   const venue = clubFinanceDefinition(worldOf(state), fixture.homeClubId);
   const recorded = state.finance ? financeLedgerTicket(state.finance, fixture.id)?.capacity : undefined;
-  const capacity = recorded ?? (fixture.round === state.round ? state.finance?.roundCapacities?.[fixture.homeClubId] : undefined) ?? getArenaCapacity(state, fixture.homeClubId, fixture.date ?? state.date);
+  // The week's locked capacity applies to games on its Saturday; a midweek game day (step 3.4a) uses that day's capacity.
+  const capacity = recorded ?? (fixture.round === state.round && (fixture.date === undefined || fixture.date === state.date) ? state.finance?.roundCapacities?.[fixture.homeClubId] : undefined) ?? getArenaCapacity(state, fixture.homeClubId, fixture.date ?? state.date);
   const own = winShare(state, fixture.homeClubId, fixture.round), opponent = winShare(state, fixture.awayClubId, fixture.round);
   const derby = state.seasonNumber === undefined ? null : governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round, worldOf(state));
   const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent) * (derby ? 1 + RIVALRY_CROWD_PERCENT * derby.intensity / 100 : 1);

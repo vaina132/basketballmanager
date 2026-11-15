@@ -91,11 +91,25 @@
 .career-start-player small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
 .career-review-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
 .career-review-options{display:flex;flex-direction:column;gap:16px;padding:16px 14px}
-.career-advanced{border-top:1px solid var(--border);padding-top:12px;font-size:12px}
-.career-advanced summary{font-size:12px;color:var(--muted);cursor:pointer}
-.career-advanced summary:hover{color:var(--accent)}
-.career-advanced summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
-.career-advanced>.career-start-field{margin-top:12px}
+.career-review-leagues{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.career-review-leagues li{display:flex;align-items:center;gap:8px}
+.career-review-leagues small{color:var(--muted);margin-left:auto}
+.game-speed{border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:grid;gap:6px}
+.game-speed-heading{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.game-speed-heading span{font-weight:650}
+.game-speed p{margin:0;color:var(--muted);font-size:12px}
+.game-speed-meter{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.game-speed-meter span{height:6px;border-radius:3px;background:var(--border)}
+.game-speed-meter .game-speed-0{background:#3fb97a}
+.game-speed-meter .game-speed-1{background:#c9b03a}
+.game-speed-meter .game-speed-2{background:#d9822b}
+.game-speed-meter .game-speed-3{background:#d9534f}
+.career-starting{display:flex;align-items:center;gap:12px;border:1px solid var(--accent);border-radius:8px;padding:12px 14px;margin:12px 0}
+.career-starting>div{display:grid;gap:2px}
+.career-starting span:not(.career-starting-spinner){color:var(--muted);font-size:13px}
+.career-starting-spinner{width:22px;height:22px;flex:none;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:career-spin .9s linear infinite}
+@keyframes career-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.career-starting-spinner{animation-duration:3s}}
 .career-start-storage-note{padding:12px 14px;margin-top:18px;border-left:2px solid var(--accent);font-size:12px;line-height:1.6;color:var(--muted);background:var(--surface)}
 .career-setup-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
 .career-setup-footer>div{display:flex;align-items:center;gap:14px}

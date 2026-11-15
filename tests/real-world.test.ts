@@ -44,7 +44,7 @@ describe('a career world from a real-data pack', () => {
   it('builds the league\'s real clubs with complete imported squads, neutral figures and the pack\'s identities', () => {
     const world = worldFromPack(pack, 'competition-league');
     expect(() => validateWorld(world)).not.toThrow();
-    expect(world).toMatchObject({ id: 'real-tables-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
+    expect(world).toMatchObject({ id: 'real-playoffs-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
     expect(world.clubs.map(club => club.players.length)).toEqual([14, 14, 14, 14]);
     // Missing statistics must not silently discard a real identity.
     expect(world.clubs.every(club => club.players.some(item => item.id.endsWith('-13')))).toBe(true);
@@ -73,6 +73,23 @@ describe('a career world from a real-data pack', () => {
     expect(() => validateWorld(world)).not.toThrow();
     const incomplete = { ...shortPack, clubs: shortPack.clubs.map(club => ({ ...club, playerIds: club.playerIds.slice(0, 7) })) };
     expect(() => worldFromPack(incomplete, 'competition-league')).toThrow(/no players have been added or discarded/);
+  });
+
+  it('gives opening contracts estimated lengths of one to three seasons by age, so a career does not start with renewals (owner feedback)', () => {
+    const world = worldFromPack(pack, 'competition-league');
+    const ids = world.clubs.flatMap(club => club.players.map(item => item.id));
+    expect(Object.keys(world.playerContracts!).sort()).toEqual([...ids].sort());
+    for (const id of ids) expect([1, 2, 3]).toContain(world.playerContracts![id]);
+    // Ages 21-33 in this pack: the youngest get two or three seasons, the 33-year-olds one.
+    expect(ids.filter(id => id.endsWith('-1')).every(id => world.playerContracts![id]! >= 2)).toBe(true);
+    expect(ids.filter(id => id.endsWith('-13')).every(id => world.playerContracts![id] === 1)).toBe(true);
+    const state = createSeason({ seed: 3, world, managedClubId: 'club-c', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS });
+    for (const contract of state.employment.contracts) expect(contract.endsSeason - contract.startsSeason + 1).toBe(world.playerContracts![contract.playerId]);
+    const ending = state.employment.contracts.filter(contract => contract.endsSeason === 1).length;
+    expect(ending).toBeGreaterThan(0);
+    expect(ending).toBeLessThan(state.employment.contracts.length * 0.7);
+    expect(parseSeason(serializeSeason(state))).toEqual(state);
+    expect(() => validateWorld({ ...world, playerContracts: { ...world.playerContracts, [ids[0]!]: 4 } })).toThrow(/one to three seasons/);
   });
 
   it('estimates birth dates from ages and gives fictional wages within the contract rules', () => {

@@ -85,8 +85,10 @@ export function resolveTrainingPlan(plan: TrainingPlan, club: Team, conditions: 
 
 function trainingDates(fromDate: string, toDate: string): string[] {
   const start = Date.parse(`${fromDate}T00:00:00.000Z`), end = Date.parse(`${toDate}T00:00:00.000Z`);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || new Date(start).toISOString().slice(0, 10) !== fromDate || new Date(end).toISOString().slice(0, 10) !== toDate || end - start !== 7 * DAY_MS) throw new Error('Training must resolve one seven-day calendar interval.');
-  return Array.from({ length: 7 }, (_, index) => new Date(start + (index + 1) * DAY_MS).toISOString().slice(0, 10));
+  // Step 3.4a: after a week with a midweek game day, practice runs from that week's last game day, so 1-7 days.
+  const days = (end - start) / DAY_MS;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || new Date(start).toISOString().slice(0, 10) !== fromDate || new Date(end).toISOString().slice(0, 10) !== toDate || !Number.isInteger(days) || days < 1 || days > 7) throw new Error('Training must resolve one seven-day calendar interval (shorter after a midweek game day).');
+  return Array.from({ length: days }, (_, index) => new Date(start + (index + 1) * DAY_MS).toISOString().slice(0, 10));
 }
 
 export function trainingAvailableDays(injuries: readonly SeasonInjury[], playerId: string, fromDate: string, toDate: string, physio?: SeasonPhysio): number {

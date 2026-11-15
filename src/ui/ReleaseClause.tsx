@@ -1,6 +1,7 @@
 import type { ContractOfferOptions } from '../domain/employment'
 import type { SeasonState } from '../domain/season'
-import { getApplicableReleaseClause, MAX_RELEASE_FEE, MIN_RELEASE_FEE, RELEASE_FEE_STEP, releaseFeeReason } from '../world/release-clauses'
+import { getApplicableReleaseClause, maxReleaseFee, MIN_RELEASE_FEE, RELEASE_FEE_STEP, releaseFeeReason } from '../world/release-clauses'
+import type { WorldContext } from '../domain/world'
 import { quoteTransferOffer, requiredTransferFee } from '../world/transfers-policy'
 import { quoteInSeasonTransferOffer, requiredInSeasonTransferFee } from '../world/recruitment-policy'
 import { transferMoney as money } from './TransferPaymentTerms'
@@ -17,11 +18,11 @@ export function transferEntryQuote(season: SeasonState, playerId: string, wage: 
   return alternative.canOffer ? alternative : ordinary
 }
 
-export function ReleaseClauseFields({ id, value, onChange, disabled, years }: { id: string; value: number | undefined; onChange: (value: number | undefined) => void; disabled: boolean; years: number }) {
-  const invalid = releaseFeeReason(value)
+export function ReleaseClauseFields({ id, value, onChange, disabled, years, context }: { id: string; value: number | undefined; onChange: (value: number | undefined) => void; disabled: boolean; years: number; context?: WorldContext }) {
+  const invalid = releaseFeeReason(value, context)
   return <section className="release-clause-fields" aria-labelledby={`${id}-title`}>
     <div className="release-clause-heading"><h3 id={`${id}-title`}><Icon name="shield" size={16} />New contract release clause</h3><label><input id={`${id}-enabled`} type="checkbox" checked={value !== undefined} onChange={event => onChange(event.target.checked ? 10_000_000 : undefined)} disabled={disabled} />Include clause</label></div>
-    {value !== undefined ? <><div className="contract-offer-field"><label htmlFor={`${id}-amount`}>Release amount (EUR)</label><input id={`${id}-amount`} type="number" min={MIN_RELEASE_FEE / 100} max={MAX_RELEASE_FEE / 100} step={RELEASE_FEE_STEP / 100} value={value / 100} onChange={event => onChange(Math.round(Number(event.target.value) * 100))} disabled={disabled} aria-invalid={!!invalid} aria-describedby={`${id}-help${invalid ? ` ${id}-error` : ''}`} /><input id={`${id}-slider`} type="range" min={MIN_RELEASE_FEE / 100} max={MAX_RELEASE_FEE / 100} step={RELEASE_FEE_STEP / 100} value={Math.max(MIN_RELEASE_FEE / 100, Math.min(MAX_RELEASE_FEE / 100, value / 100))} aria-label="New contract release amount slider" aria-valuetext={money(value)} onChange={event => onChange(Number(event.target.value) * 100)} disabled={disabled} /></div>{invalid && <p id={`${id}-error`} role="status">{invalid}</p>}<p id={`${id}-help`}>Another club can offer this amount in full on signing to approach the player without your fee approval. The player still chooses whether to leave.</p>{years === 3 && <small>Three-season deals have a lower salary demand with a release clause.</small>}</> : <small>No clause. Other clubs must negotiate a transfer fee with you.</small>}
+    {value !== undefined ? <><div className="contract-offer-field"><label htmlFor={`${id}-amount`}>Release amount (EUR)</label><input id={`${id}-amount`} type="number" min={MIN_RELEASE_FEE / 100} max={maxReleaseFee(context) / 100} step={RELEASE_FEE_STEP / 100} value={value / 100} onChange={event => onChange(Math.round(Number(event.target.value) * 100))} disabled={disabled} aria-invalid={!!invalid} aria-describedby={`${id}-help${invalid ? ` ${id}-error` : ''}`} /><input id={`${id}-slider`} type="range" min={MIN_RELEASE_FEE / 100} max={maxReleaseFee(context) / 100} step={RELEASE_FEE_STEP / 100} value={Math.max(MIN_RELEASE_FEE / 100, Math.min(maxReleaseFee(context) / 100, value / 100))} aria-label="New contract release amount slider" aria-valuetext={money(value)} onChange={event => onChange(Number(event.target.value) * 100)} disabled={disabled} /></div>{invalid && <p id={`${id}-error`} role="status">{invalid}</p>}<p id={`${id}-help`}>Another club can offer this amount in full on signing to approach the player without your fee approval. The player still chooses whether to leave.</p>{years === 3 && <small>Three-season deals have a lower salary demand with a release clause.</small>}</> : <small>No clause. Other clubs must negotiate a transfer fee with you.</small>}
   </section>
 }
 

@@ -19,6 +19,38 @@ export type EuropeanFormatId = 'euroleague-2026-1' | 'eurocup-2026-1' | 'bcl-202
 export interface EuropeanCompetition { id: string; name: string; kind: EuropeanCompetitionKind; season: string; clubIds: string[]; format?: EuropeanFormatId; countries?: Record<string, string>; oneYear?: string[] }
 /** Format 60 (step 3.5f): a top division of a country with domestic data that was not chosen. Its clubs are in the world outside the full world; each season end ranks them in an estimated table. */
 export interface BackgroundLeague { id: string; name: string; country: string; tier: 1; clubIds: string[] }
+/** Format 62 (sprint 4): money of real-club worlds follows researched 2025-27 club budgets (`src/world/economy.ts`). */
+export type WorldEconomyId = 'real-2026-1';
+/** The money level a club's figures were placed in (`REAL_ECONOMY_RULES`). */
+export type EconomyBand = 'euroleague-top' | 'euroleague' | 'top-upper' | 'top-lower' | 'second' | 'third';
+/**
+ * A club's estimated money for one season, in euro cents (format 62). Flows read these figures when a world has an
+ * economy and the development constants otherwise.
+ */
+export interface ClubEconomy {
+  band: EconomyBand;
+  /** Total annual budget: the season's income and its costs are built to balance around it. */
+  budget: number;
+  /** Main sponsorship each season (also the reference for negotiated sponsorship). */
+  sponsorship: number;
+  /**
+   * League and European distributions, public money, other income and the owner's contribution each season. The game
+   * has no separate income kinds for these, so they are booked together as one season-funding receipt; the owner's
+   * share covers the gap left by tickets and sponsorship, as in reality.
+   */
+  funding: number;
+  /** Cash at the career's start (or when the club first joins the full world). */
+  openingCash: number;
+  /** Default ticket price in whole euros (cents); the price control ranges up to three times it. */
+  ticketPrice: number;
+  /** Annual operating costs (arena, travel, administration, youth teams), charged in equal weekly parts. */
+  operatingCost: number;
+  /**
+   * Per-mille multiplier for the game's catalog amounts that have no researched value per club: staff fees and the
+   * staff allocation, facility costs and upkeep, owner capital and the automation cushions (1000 = unchanged).
+   */
+  scale: number;
+}
 
 /**
  * Everything a career's league is made of at its start: clubs and squads, player birth dates and wages, venues,
@@ -60,7 +92,12 @@ export interface CareerWorld {
   europeanPlaces?: 'places-2026-1';
   /** Format 60: the unchosen top divisions of the countries with domestic data, for their estimated tables. */
   backgroundLeagues?: readonly BackgroundLeague[];
-  /** Every original player's gross season wage in euro cents. */
+  /**
+   * Format 62: the world's money follows researched club budgets; each club's `finances` entry then carries its
+   * `economy` figures. Absent: the development economy's constants (every older or test world).
+   */
+  economy?: WorldEconomyId;
+  /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];
   presidents: readonly DevelopmentPresident[];

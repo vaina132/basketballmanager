@@ -17,16 +17,22 @@ import { withLowerDivisions } from './lower-division';
 import { NO_LOWER_DIVISION_COUNTRIES } from './career-world';
 import { overallRating } from './overall-rating';
 import { POSTSEASON_FORMATS, postseasonFormatAllowed, postseasonFormatFor } from './postseason';
+import { withRealEconomy } from './economy';
 
 /**
  * A career world from a private real-data pack: one domestic league's real clubs, squads, positions and ratings.
- * Wages, budgets, presidents and sponsors are fictional estimates. Researched birth dates are retained;
- * missing dates are estimated from ages. Derbies are left out rather than invented between real clubs.
+ * Since format 62 its wages, budgets, arenas and ticket prices follow researched 2025-27 club budgets (`withRealEconomy`
+ * in `./economy`); presidents and sponsors are fictional. Researched birth dates are retained; missing dates are
+ * estimated from ages. Derbies are left out rather than invented between real clubs.
  */
 export const REAL_WORLD_RULES = Object.freeze({
   /** Players without a known age are assumed to be this old. */
   defaultAge: 26,
-  /** Fictional season wages in euros: 9,000 plus 220 per overall-rating point above 40, in 500 steps, within 5,000-30,000. */
+  /**
+   * The development-scale season wage in euros (9,000 plus 220 per overall-rating point above 40, in 500 steps, within
+   * 5,000-30,000), used by worlds built without an economy (`withLowerDivisions` and `withEuropeanCompetitions` on their
+   * own); `worldFromPack` replaces every wage with the economy's.
+   */
   wage: Object.freeze({ base: 9_000, perPoint: 220, from: 40, step: 500, min: 5_000, max: 30_000 }),
   /** Arena size and usual crowd follow squad strength within the league (no real capacities in the pack yet). */
   arena: Object.freeze({ smallest: 3_000, largest: 6_500, step: 100, fillFrom: 0.72, fillRange: 0.1 }),
@@ -51,9 +57,9 @@ export function careerCompetitions(pack: DataPack): DataPackCompetition[] {
   return pack.competitions.filter(item => item.kind === 'domestic' && item.clubIds.length >= MIN_WORLD_CLUBS && item.clubIds.length <= 20);
 }
 
-/** New worlds change prefix whenever they gain a rule: `real-tables-` (format 48), `real-playoffs-` (49), `real-tiebreak-` (51), `real-rules-` (52), `real-europe-` (56), `real-europlay-` (57), `real-bcl-` (59), `real-places-` (60). */
+/** New worlds change prefix whenever they gain a rule: `real-tables-` (format 48), `real-playoffs-` (49), `real-tiebreak-` (51), `real-rules-` (52), `real-europe-` (56), `real-europlay-` (57), `real-bcl-` (59), `real-places-` (60), `real-economy-` (62). */
 export function realWorldId(pack: DataPack, competitionId: string): string {
-  return `real-places-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
+  return `real-economy-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
 }
 
 /** The fictional season wage for a player of this overall rating, in euro cents. */
@@ -130,6 +136,8 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
     return [{ country: list.country, tier: list.tier, name: list.name, clubs: list.clubs.map(item => ({ id: `lower-${slug(list.country)}-${slug(item.name)}`.slice(0, 80), name: item.name, shortName: item.shortName, color: item.color ?? LOWER_DIVISION_COLOUR })) }];
   });
   const world = lowerLists.length ? withLowerDivisions(domesticWorld, lowerLists) : domesticWorld;
+  // Format 62 (sprint 4): every club's money follows researched club budgets, once the world has all its clubs.
+  const priced = (complete: CareerWorld) => { const next = withRealEconomy(complete, clubId => pack.clubs.find(club => club.id === clubId)?.country ?? null); validateWorld(next); return next; };
   // Step 3.5a: the season's European competitions (each kind once, a club in one competition) and their entrants.
   const seen = new Set<string>(), kinds = new Set<string>();
   const european: EuropeanCompetition[] = pack.competitions.filter(item => item.kind === 'european' && item.season === competition.season).flatMap(item => {
@@ -149,7 +157,7 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
     const countries = size !== undefined && format!.staged ? { countries: Object.fromEntries(entrantIds.map(clubId => [clubId, world.domesticLeagues!.find(league => league.clubIds.includes(clubId))?.country ?? pack.clubs.find(club => club.id === clubId)?.country ?? `unknown-${clubId}`])) } : {};
     return entrantIds.length >= 2 ? [{ id: item.id, name: item.name, kind, season: item.season, clubIds: entrantIds, ...(size !== undefined ? { format: format!.id } : {}), ...countries }] : [];
   });
-  if (!european.length) return world;
+  if (!european.length) return priced(world);
   // Step 3.5f (format 60): when a competition is played, the unchosen countries' top divisions join the world for their
   // estimated tables, every played competition gives its entrants' countries and the EuroLeague its one-year places.
   const played = european.some(item => item.format);
@@ -167,7 +175,7 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
     const team = clubTeam(pack, clubId);
     return { team, venue: pack.clubs.find(club => club.id === clubId)!.arena, profiles: Object.fromEntries(team.players.map(player => [player.id, profileOf(player.id)])) };
   });
-  return withEuropeanCompetitions(world, placed, entrants, played ? { backgroundLeagues } : undefined);
+  return priced(withEuropeanCompetitions(world, placed, entrants, played ? { backgroundLeagues } : undefined));
 }
 
 /** Next-division clubs without a known colour. */

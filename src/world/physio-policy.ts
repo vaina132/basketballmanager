@@ -8,6 +8,7 @@ import { getTransferPaymentSummary } from './transfer-payments';
 import { seasonRounds, worldOf } from './career-world';
 import { PHYSIO_DIRECTORY, staffMarket } from '../data/staff-directory';
 import type { WorldContext } from '../domain/world';
+import { staffFee } from './economy';
 
 export const MAX_PHYSIOS = 1;
 export function physioRating(physio: Physio): number { return physio.rehabilitation; }
@@ -33,7 +34,7 @@ export function quotePhysioHire(state: SeasonState, physioId: string, clubId = s
   else if (!availablePhysios(state).some(available => available.id === physioId)) reason = 'This physio already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a physio.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a physio.';
-  else if (physio.fee > remainingAllocation) reason = 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
-  else if (physio.fee > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
-  return { physioId, clubId, fee: physio?.fee ?? 0, remainingAllocation, remainingBudget, canHire: reason === null, reason };
+  else if (staffFee(state, clubId, physio.fee) > remainingAllocation) reason = 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
+  else if (staffFee(state, clubId, physio.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
+  return { physioId, clubId, fee: staffFee(state, clubId, physio?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

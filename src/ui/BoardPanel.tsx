@@ -15,6 +15,7 @@ import { FACILITY_LABELS } from './FacilitiesPanel'
 import { Icon, type IconName } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
 import './board-panel.css'
+import { formatEuros } from './money-format'
 
 interface BoardPanelProps {
   season: SeasonState
@@ -26,7 +27,7 @@ interface BoardPanelProps {
   onEnableCareerMoves: () => void
 }
 
-const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(cents / 100)
+const money = (cents: number) => formatEuros(cents, true)
 const signed = (value: number) => `${value > 0 ? '+' : ''}${value}`
 const sportingLabels: Record<BoardSummary['sportingStatus'], string> = { waiting: 'Awaiting review', building: 'Early games', 'on-track': 'On track', behind: 'Behind target', met: 'Target met', missed: 'Target missed' }
 const financeLabels: Record<BoardSummary['financeStatus'], string> = { unassessed: 'Not assessed', waiting: 'Awaiting review', 'on-track': 'Within target', behind: 'Above target' }

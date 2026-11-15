@@ -3,7 +3,7 @@ import type { SeasonState } from '../domain/season';
 import type { CareerMove } from '../domain/career';
 import { managedClubAtLedger } from '../world/career';
 import { clubsEverInFullWorld, fullWorldClubsIn, incumbentSponsorId, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
-import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, createCommercial, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, SPONSORSHIP_REFERENCE_FEE, SPONSORSHIP_RENEWAL_ROUND } from '../world/commercial-policy';
+import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, createCommercial, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorshipReferenceFee, SPONSORSHIP_RENEWAL_ROUND } from '../world/commercial-policy';
 import { dateForRound, MAX_SEASON_NUMBER, seasonStartDate } from '../world/season';
 import { financeLedgerCount } from '../world/finance-ledger';
 
@@ -79,7 +79,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
 
   const inherited: SponsorshipAgreement[] = fullWorldClubsIn(state, activation.seasonNumber).map((club, index) => ({
     id: `sponsorship-agreement-${index + 1}`, clubId: club.id, sponsorId: incumbentSponsorId(worldOf(state), club.id), source: 'inherited', offerId: null,
-    startsSeason: activation.seasonNumber, endsSeason: activation.seasonNumber, annualFee: SPONSORSHIP_REFERENCE_FEE, bonus: 0, signedOn: activation.date, automatic: false, prepaidSeasons: [activation.seasonNumber],
+    startsSeason: activation.seasonNumber, endsSeason: activation.seasonNumber, annualFee: sponsorshipReferenceFee(worldOf(state), club.id), bonus: 0, signedOn: activation.date, automatic: false, prepaidSeasons: [activation.seasonNumber],
   }));
   let replay: SeasonCommercial = { ...defaults, plans: createCommercial([...planClubs], managedClubAtLedger(state, activation.ledgerCount)).plans, enabledSince: activation, agreements: inherited };
   const events = fields.events as unknown[];

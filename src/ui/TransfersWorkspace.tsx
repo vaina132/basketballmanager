@@ -23,6 +23,7 @@ import { negotiationOutcome, PlayerContractOffer } from './PlayerContractOffer'
 import { chosenMarketOffer, marketOfferStatus, OffseasonMarketPanel, RivalOfferBadge } from './OffseasonMarketPanel'
 import { ReleaseClauseValue, transferEntryQuote } from './ReleaseClause'
 import './transfers-workspace.css'
+import { formatEuros } from './money-format'
 
 interface TransfersWorkspaceProps {
   season: SeasonState
@@ -52,7 +53,7 @@ interface TransfersWorkspaceProps {
 }
 
 const formatter = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
-const money = (cents: number) => formatter.format(cents / 100)
+const money = (cents: number) => formatEuros(cents)
 const seasonLabel = (number: number) => number > MAX_SEASON_NUMBER ? 'Calendar limit' : supportedSeasonLabel(number)
 const positions: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
 type ContractView = 'squad' | 'next' | 'market' | 'transfer' | 'now' | 'now-transfer'
@@ -199,7 +200,7 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
         const destination = lastOffer?.status === 'lost' ? season.clubs.find(team => team.id === chosenMarketOffer(season, lastOffer)?.clubId) : null
         return <tr key={record.id} data-negotiation-player={record.playerId}><th scope="row">{player.name}</th><td>{money(record.offeredWage)} / season<small>{record.offeredSeasons} {record.offeredSeasons === 1 ? 'season' : 'seasons'} · from {seasonLabel(record.startsSeason)}</small></td><td><strong>{negotiationOutcome(record)}</strong><small>{destination ? `Talks closed · chose ${destination.name}` : record.counterOffer ? `${money(record.counterOffer.seasonWage)} · ${record.counterOffer.seasons} seasons` : record.outcome === 'accepted' ? buyout ? `Bought out ${scoutingDate(buyout.completedOn)}` : 'Contract signed' : 'Improve the offer'}</small></td><td><time dateTime={record.date}>{scoutingDate(record.date)}</time><small>{record.status === 'complete' ? 'Offseason' : `Matchday ${record.round}`}</small></td><td><button className="button small" data-review-negotiation={player.id} aria-label={`Review negotiations with ${player.name}`} onClick={() => openOffer(player.id, true)} disabled={disabled}>Review<Icon name="chevron" size={13} /></button></td></tr>
       })}</tbody></table></div> : <p className="transfers-empty">No replies recorded yet. Open a player’s contract to start talks.</p>}</section>}
-      <p className="transfers-model-note">Fictional development wages. The board allocation limits annual promises; wages are paid through the season payroll. Contract decisions trigger an automatic save. Export keeps a separate file backup.</p>
+      <p className="transfers-model-note">{season.world?.economy ? 'Wages and fees estimated from published 2025-27 club budgets and salary reports.' : 'Fictional development wages.'} The board allocation limits annual promises; wages are paid through the season payroll. Contract decisions trigger an automatic save. Export keeps a separate file backup.</p>
     </>}
     {inSeasonPlayer && enabled && <InSeasonOfferDialog key={inSeasonPlayer.id} season={season} player={inSeasonPlayer} disabled={disabled} onClose={() => setInSeasonPlayerId(null)} onOffer={onInSeasonOffer} onTransferOffer={onInSeasonTransferOffer} onWithdraw={onWithdrawInSeasonOffer} onOpenScouting={onOpenScouting} onOpenMatch={onOpenMatch} />}
     {selectedBuyout && enabled && <PlayerBuyout key={selectedBuyout.id} season={season} player={selectedBuyout} disabled={disabled} onClose={() => setBuyoutId(null)} onBuyout={onBuyout} onFindReplacement={() => { setBuyoutId(null); setView('market'); setQuery(''); setPosition('all'); requestAnimationFrame(() => document.getElementById('transfers-heading')?.focus({ preventScroll: true })) }} />}

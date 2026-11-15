@@ -13,6 +13,7 @@ import { staffAllocation } from './board-consequences';
 import { MAX_SEASON_ROUNDS, seasonRounds } from './career-world';
 import { COACH_DIRECTORY, staffMarket } from '../data/staff-directory';
 import type { CareerWorld } from '../domain/world';
+import { staffFee } from './economy';
 
 export const COACHING_BUDGET = STAFF_BUDGET;
 export const MAX_COACHES = 3;
@@ -69,15 +70,16 @@ export function enableCoaching(state: SeasonState): SeasonState {
 }
 
 function canPayCoach(state: SeasonState, clubId: string, coach: Coach): boolean {
-  if (staffCommitted(state, clubId) + coach.fee > staffAllocation(state, clubId)) return false;
+  const fee = staffFee(state, clubId, coach.fee);
+  if (staffCommitted(state, clubId) + fee > staffAllocation(state, clubId)) return false;
   if (!state.finance.enabledSince) return true;
   const balance = getFinanceBalance(state.finance, clubId);
-  return balance.unpaid === 0 && getTransferPaymentSummary(state, clubId).overdue === 0 && getSpendableCash(state, clubId) >= coach.fee;
+  return balance.unpaid === 0 && getTransferPaymentSummary(state, clubId).overdue === 0 && getSpendableCash(state, clubId) >= fee;
 }
 
 /** Contracts and their cash payment are one immutable operation for every club. */
 function hireContractForClub(state: SeasonState, clubId: string, coachId: string, focus: TrainingFocus): SeasonState {
-  if (staffCommitted(state, clubId) > coachingCommitted(state.coaching, clubId) && staffCommitted(state, clubId) + coachById(coachId).fee > staffAllocation(state, clubId)) throw new Error('This contract exceeds the shared staff allocation. Released staff fees remain committed for the season.');
+  if (staffCommitted(state, clubId) > coachingCommitted(state.coaching, clubId) && staffCommitted(state, clubId) + staffFee(state, clubId, coachById(coachId).fee) > staffAllocation(state, clubId)) throw new Error('This contract exceeds the shared staff allocation. Released staff fees remain committed for the season.');
   const coaching = hireForClub(state.coaching, state.clubs, clubId, state.seasonNumber, state.round, coachId, focus);
   return recordCoachFee({ ...state, coaching }, coaching.contracts.at(-1)!);
 }
@@ -140,7 +142,7 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
     while (getClubCoaching(next.coaching, club.id).length < MAX_COACHES) {
       const assignments = coachingAssignments(next.coaching, state.clubs, state.seasonNumber, state.round)![club.id]!;
       const remaining = staffAllocation(next, club.id) - staffCommitted(next, club.id);
-      const candidates = withCalculationCache(() => availableCoaches(next.coaching, next).filter(coach => coach.fee <= remaining && canPayCoach(next, club.id, coach))).flatMap(coach => FOCUSES.map(focus => ({ coach, focus, utility: ATTRIBUTES.reduce((sum, attribute) => {
+      const candidates = withCalculationCache(() => availableCoaches(next.coaching, next).filter(coach => staffFee(next, club.id, coach.fee) <= remaining && canPayCoach(next, club.id, coach))).flatMap(coach => FOCUSES.map(focus => ({ coach, focus, utility: ATTRIBUTES.reduce((sum, attribute) => {
         const current = coachingRatingForAttribute(assignments, attribute);
         const next = coachingRatingForAttribute([{ contractId: '', coachId: coach.id, focus }], attribute);
         return sum + demand[attribute] * Math.max(0, next - current);
@@ -162,7 +164,7 @@ export function renewSeasonCoaching(state: SeasonState, previous: SeasonCoaching
   // A club that has left the full world renews no one (step 3.4d-2).
   for (const contract of previous.contracts.filter(contract => contract.releasedRound === null && contract.renew && next.clubs.some(club => club.id === contract.clubId))) {
     const coach = coachById(contract.coachId);
-    if (getClubCoaching(next.coaching, contract.clubId).length < MAX_COACHES && staffCommitted(next, contract.clubId) + coach.fee <= staffAllocation(next, contract.clubId) && canPayCoach(next, contract.clubId, coach)) {
+    if (getClubCoaching(next.coaching, contract.clubId).length < MAX_COACHES && staffCommitted(next, contract.clubId) + staffFee(next, contract.clubId, coach.fee) <= staffAllocation(next, contract.clubId) && canPayCoach(next, contract.clubId, coach)) {
       next = hireContractForClub(next, contract.clubId, contract.coachId, contract.focus);
     }
   }

@@ -10,6 +10,7 @@ import { agreementCommittedFromLedger, agreementThroughRound, getPayrollReserve,
 import { seasonRounds } from './career-world';
 import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
 import { payrollLedgerReader, type PayrollLedgerReader } from './finance-ledger-index';
+import { automationCushion } from './economy';
 
 export { getSeasonWage } from '../data/development-wages';
 export { agreementCommitted, getPayrollReserve, getSpendableCash, isAgreementPrepaid, PAYROLL_AUTOMATION_CUSHION, PAYROLL_INSTALLMENTS, payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from './payroll-policy';
@@ -111,7 +112,7 @@ function prepareClubPayroll(state: SeasonState, clubId: string): SeasonState {
   const agreements = state.payroll.agreements.filter(agreement => agreement.clubId === clubId && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= state.round && agreementThroughRound(state, agreement) >= state.round).sort((a, b) => a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0);
   for (const agreement of agreements) {
     const quote = prepaymentQuote(next, agreement.playerId, clubId);
-    if (quote.canPrepay && getFinanceBalance(next.finance, clubId).cash >= quote.requiredCash + PAYROLL_AUTOMATION_CUSHION) next = prepayForClub(next, agreement.playerId, clubId);
+    if (quote.canPrepay && getFinanceBalance(next.finance, clubId).cash >= quote.requiredCash + automationCushion(next, clubId, PAYROLL_AUTOMATION_CUSHION)) next = prepayForClub(next, agreement.playerId, clubId);
   }
   return next;
 }

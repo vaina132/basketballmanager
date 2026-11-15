@@ -7,6 +7,7 @@ import { getTransferPaymentSummary } from './transfer-payments';
 import { SCOUT_DIRECTORY, staffMarket } from '../data/staff-directory';
 import type { WorldContext } from '../domain/world';
 import { worldOf } from './career-world';
+import { staffFee } from './economy';
 
 export const MAX_SCOUTS = 3;
 export function scoutRating(scout: Scout): number { return Math.round((scout.skills.evaluation + scout.skills.reporting) / 2); }
@@ -32,7 +33,7 @@ export function quoteScoutHire(state: SeasonState, scoutId: string, clubId = sta
   else if (!availableScouts(state).some(available => available.id === scoutId)) reason = 'This scout already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a scout.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a scout.';
-  else if (scout.fee > remainingAllocation) reason = 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
-  else if (scout.fee > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
-  return { scoutId, clubId, fee: scout?.fee ?? 0, remainingAllocation, remainingBudget, canHire: reason === null, reason };
+  else if (staffFee(state, clubId, scout.fee) > remainingAllocation) reason = 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
+  else if (staffFee(state, clubId, scout.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
+  return { scoutId, clubId, fee: staffFee(state, clubId, scout?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

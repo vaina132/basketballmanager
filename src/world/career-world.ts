@@ -12,6 +12,8 @@ import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { roundRobinRoundCount } from './competition-calendar';
 import { POSTSEASON_FORMATS, postseasonFormatAllowed, postseasonWeeks } from './postseason';
 import { EUROPEAN_FORMATS, europeanWeeks, fieldFits } from './european-formats';
+import type { EconomyBand } from '../domain/world';
+import { CLUB_ECONOMY_KEYS, ECONOMY_BANDS, MAX_ECONOMY_AMOUNT, REAL_ECONOMY_RULES } from './economy';
 
 /**
  * The world a career plays in. Careers in the built-in fictional league carry no world and use DEVELOPMENT_WORLD;
@@ -369,7 +371,7 @@ function checkLowerDivisions(world: CareerWorld, clubIds: ReadonlySet<string>): 
 export function validateWorld(value: unknown): asserts value is CareerWorld {
   if (isObject(value) && !Object.hasOwn(value, 'domesticLeagues') && validated.has(value)) return;
   const fail = (path: string, reason: string): never => { throw new Error(`Invalid career world: ${path} ${reason}.`); };
-  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : []), ...(isObject(value) && Object.hasOwn(value, 'europeanCompetitions') ? ['europeanCompetitions'] : []), ...(['europeanPlaces', 'backgroundLeagues'] as const).filter(key => isObject(value) && Object.hasOwn(value, key))])) fail('world', 'must contain exactly the world fields');
+  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : []), ...(isObject(value) && Object.hasOwn(value, 'europeanCompetitions') ? ['europeanCompetitions'] : []), ...(['europeanPlaces', 'backgroundLeagues', 'economy'] as const).filter(key => isObject(value) && Object.hasOwn(value, key))])) fail('world', 'must contain exactly the world fields');
   const world = value as unknown as CareerWorld;
   if (Object.hasOwn(world, 'rosterModel') && world.rosterModel !== FULL_ROSTER_MODEL) fail('world.rosterModel', 'has an unsupported value');
   if (!isText(world.id, 80) || !ID.test(world.id)) fail('world.id', 'must be a supported identifier');
@@ -421,7 +423,8 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
       checkPlayerShape(player, playerPath, playerIds, numbers);
       const profile = Object.hasOwn(world.playerProfiles, player.id) ? world.playerProfiles[player.id] : undefined;
       if (!profile || typeof profile.dateOfBirth !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(profile.dateOfBirth) || profile.dateOfBirth >= world.startDate) fail(`world.playerProfiles.${player.id}`, 'must give a date of birth before the career starts');
-      if (!Object.hasOwn(world.wages, player.id) || !isWhole(world.wages[player.id], 0, 1_000_000_000)) fail(`world.wages.${player.id}`, 'must give a season wage');
+      // Format 62: researched wages reach EUR 15 million a season; every limit stays far inside safe integers.
+      if (!Object.hasOwn(world.wages, player.id) || !isWhole(world.wages[player.id], 0, MAX_ECONOMY_AMOUNT)) fail(`world.wages.${player.id}`, 'must give a season wage');
     }
   }
   if (Object.hasOwn(world, 'lowerDivisions')) checkLowerDivisions(world, clubIds);
@@ -439,12 +442,18 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
     if (!Array.isArray(list) || list.length !== clubIds.size || list.some(item => !isObject(item) || !clubIds.has(item.clubId as string)) || new Set(list.map(item => (item as { clubId: string }).clubId)).size !== clubIds.size) fail(path, 'must cover every club exactly once');
   };
   perClub(world.finances, 'world.finances');
+  if (Object.hasOwn(world, 'economy') && world.economy !== REAL_ECONOMY_RULES.id) fail('world.economy', 'has an unsupported value');
   for (const finance of world.finances) {
-    if (!exactKeys(finance, ['clubId', 'venue', 'sponsor', 'capacity', 'referenceDemand']) || !isText(finance.venue) || !sponsorNames.has(finance.sponsor) || !isWhole(finance.capacity, 500, 60_000) || !isWhole(finance.referenceDemand, 100, finance.capacity)) fail(`world.finances.${finance.clubId}`, 'needs a venue, a listed sponsor, a capacity and a demand within it');
+    if (!exactKeys(finance, ['clubId', 'venue', 'sponsor', 'capacity', 'referenceDemand', ...(world.economy ? ['economy'] : [])]) || !isText(finance.venue) || !sponsorNames.has(finance.sponsor) || !isWhole(finance.capacity, 500, 60_000) || !isWhole(finance.referenceDemand, 100, finance.capacity)) fail(`world.finances.${finance.clubId}`, 'needs a venue, a listed sponsor, a capacity and a demand within it');
+    // Format 62: each club's researched money figures, in euro cents.
+    if (world.economy) {
+      const economy = finance.economy as unknown as Record<string, unknown>;
+      if (!exactKeys(economy, CLUB_ECONOMY_KEYS) || !ECONOMY_BANDS.includes(economy.band as EconomyBand) || !isWhole(economy.budget, 1, MAX_ECONOMY_AMOUNT) || ['sponsorship', 'funding', 'openingCash', 'operatingCost'].some(key => !isWhole(economy[key], 0, MAX_ECONOMY_AMOUNT)) || !isWhole(economy.ticketPrice, 100, 100_000) || (economy.ticketPrice as number) % 100 !== 0 || !isWhole(economy.scale, 1, 1_000_000)) fail(`world.finances.${finance.clubId}.economy`, 'needs a band, a budget, season income and costs, a whole-euro ticket price and a scale');
+    }
   }
   perClub(world.presidents, 'world.presidents');
   for (const president of world.presidents) {
-    if (!exactKeys(president, ['clubId', 'name', 'generosity', 'seasonCapital']) || !isText(president.name) || !isWhole(president.generosity, 1, 5) || !isWhole(president.seasonCapital, 0, 1_000_000_000)) fail(`world.presidents.${president.clubId}`, 'needs a name, a generosity from 1 to 5 and a season capital');
+    if (!exactKeys(president, ['clubId', 'name', 'generosity', 'seasonCapital']) || !isText(president.name) || !isWhole(president.generosity, 1, 5) || !isWhole(president.seasonCapital, 0, MAX_ECONOMY_AMOUNT)) fail(`world.presidents.${president.clubId}`, 'needs a name, a generosity from 1 to 5 and a season capital');
   }
   if (!Array.isArray(world.rivalries)) fail('world.rivalries', 'must be a list');
   const rivals = new Set<string>(), rivalryIds = new Set<string>();

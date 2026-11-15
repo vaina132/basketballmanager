@@ -7,7 +7,7 @@ import { getCareerPlayers, getActiveCareerPlayers } from './player-catalog';
 import { retirementContractReason } from './lifecycle-policy';
 import { getAcademyProspect } from './academy-policy';
 import { getYouthPlayerStatus } from './youth-competition';
-import { contractForSeason, effectiveContractsForRound, MAX_CONTRACT_WAGE, MIN_CONTRACT_WAGE, WAGE_STEP } from './employment-policy';
+import { contractForSeason, effectiveContractsForRound, maxContractWage, MIN_CONTRACT_WAGE, WAGE_STEP } from './employment-policy';
 import { getFinanceBalance } from './finance';
 import { getSpendableCash, payrollInstallment } from './payroll-policy';
 import { dateForRound } from './season';
@@ -52,7 +52,7 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   const resolving = !!resolvingOfferId && own?.id === resolvingOfferId && own.responseRound === state.round && own.responseOn === state.date;
   const rounds = seasonRounds(state), responseRound = resolving ? state.round : Math.min(rounds, state.round + 1);
   const responseOn = dateForRound(responseRound, state.seasonNumber);
-  const validWage = Number.isSafeInteger(seasonWage) && seasonWage >= MIN_CONTRACT_WAGE && seasonWage <= MAX_CONTRACT_WAGE && seasonWage % WAGE_STEP === 0;
+  const validWage = Number.isSafeInteger(seasonWage) && seasonWage >= MIN_CONTRACT_WAGE && seasonWage <= maxContractWage(state) && seasonWage % WAGE_STEP === 0;
   const remainingWages = validWage ? remainingSeasonWages(seasonWage, responseRound, rounds) : 0;
   const budget = getInSeasonBudget(state, clubId, own?.id);
   let reason: string | null = null;

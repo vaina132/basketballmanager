@@ -10,6 +10,7 @@ import { BOARD_VERDICT_EFFECTS, verdictForConfidence } from './board-consequence
 import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS } from './rivalries';
 import { roundKey, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
 import { seasonLeagues } from './divisions';
+import { scaledMoney } from './economy';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
@@ -115,7 +116,8 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     }
     const injuryRelief = Math.max(0, Math.min(-Math.min(0, resultsImpact), Math.round(Math.min(6, rosterPlaces ? carriedAbsences / rosterPlaces * 30 : 0))));
     const unpaid = objective.startingUnpaid === null ? null : boardUnpaidCosts(state, club.id);
-    const financeImpact = unpaid === null || objective.startingUnpaid === null ? 0 : Math.round(clamp((objective.startingUnpaid - unpaid) / 200_000, -25, 10)) || 0;
+    // One point per EUR 2,000 of unpaid costs cleared or added, at the club's money level (format 62).
+    const financeImpact = unpaid === null || objective.startingUnpaid === null ? 0 : Math.round(clamp((objective.startingUnpaid - unpaid) / scaledMoney(state, club.id, 200_000, 100), -25, 10)) || 0;
     const derbies = rivalriesCount ? games.filter(fixture => governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round, worldOf(state))) : [];
     const derbyBalance = derbies.reduce((sum, fixture) => sum + (fixture.result!.winnerClubId === club.id ? 1 : -1), 0);
     const rivalryImpact = clamp(derbyBalance * RIVALRY_BOARD_POINTS, -RIVALRY_BOARD_CAP, RIVALRY_BOARD_CAP) || 0;

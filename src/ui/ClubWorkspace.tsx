@@ -8,7 +8,9 @@ import { DEVELOPMENT_SCOUTS } from '../data/development-scouts'
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness'
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios'
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants'
-import { financeLedgerRows, forecastGate, getFinanceBalance, MAX_TICKET_PRICE, OPENING_CASH, recommendTicketPrice, ROUND_OPERATING_COST, TICKET_PRICE_STEP } from '../world/finance'
+import { financeLedgerRows, forecastGate, fundingSourceId, getFinanceBalance, maxTicketPriceFor, openingCashFor, recommendTicketPrice, roundOperatingCostFor, TICKET_PRICE_STEP } from '../world/finance'
+import { clubEconomy } from '../world/economy'
+import { formatEuros, formatExactEuros } from './money-format'
 import { dateForRound, seasonLabel } from '../world/season'
 import { getTransferPayments } from '../world/transfer-payments'
 import { TransferPaymentsPanel } from './TransferPaymentsPanel'
@@ -29,10 +31,12 @@ interface ClubWorkspaceProps extends FacilitiesActions, SponsorshipActions {
   busy?: boolean
 }
 
-const moneyFormatter = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 })
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
-const money = (cents: number) => moneyFormatter.format(cents / 100)
-const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${money(Math.abs(cents))}`
+const money = (cents: number) => formatEuros(cents, true)
+/** Ledger rows keep exact amounts so detailed accounting reconciles to the cent. */
+const exact = formatExactEuros
+const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${exact(Math.abs(cents))}`
+const BAND_LABELS = { 'euroleague-top': 'EuroLeague top group', euroleague: 'EuroLeague', 'top-upper': 'top division, upper half', 'top-lower': 'top division, lower half', second: 'second division', third: 'third division' } as const
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
 const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital' }
@@ -42,6 +46,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
   const [period, setPeriod] = useState<'current' | 'all'>('current')
   const club = season.clubs.find(team => team.id === season.managedClubId)!
   const definition = clubFinanceDefinition(worldOf(season), club.id)
+  const economy = clubEconomy(season, club.id)
   const facilities = getClubFacilities(season)
   const enabled = season.finance.enabledSince !== null
   const balance = getFinanceBalance(season.finance, club.id)
@@ -97,6 +102,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
     if (entry.scout) return SCOUT_DIRECTORY.find(scout => scout.id === entry.scout!.scoutId)?.name ?? 'Scout fee'
     if (entry.coach) return COACHES.find(coach => coach.id === entry.coach!.coachId)!.name
     if (entry.sponsorship) return `${getDevelopmentSponsor(entry.sponsorship.sponsorId).name} · ${seasonLabel(entry.seasonNumber)} · ${entry.sponsorship.installment === 'bonus' ? 'Top-half bonus' : entry.sponsorship.installment === 1 ? 'Opening installment' : 'Matchday 6 installment'}`
+    if (entry.kind === 'sponsor' && entry.sourceId === fundingSourceId(entry.seasonNumber)) return `Season funding: league and European distributions, public money and the owner's contribution · ${seasonLabel(entry.seasonNumber)}`
     if (entry.kind === 'sponsor') return `${definition.sponsor} · ${seasonLabel(entry.seasonNumber)}`
     if (entry.kind === 'operations') return `Matchday ${entry.round} club operations`
     return 'Club finances activated'
@@ -106,7 +112,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
 
     {!enabled ? <section className="club-finance-enable panel" aria-labelledby="club-finance-enable-title">
       <header className="club-heading"><h2 id="club-finance-enable-title">Club finances</h2><span>Not enabled</span></header>
-      <div><p>Start every club with {money(OPENING_CASH)} in opening cash, sponsorship for the remaining season, and charges for existing staff commitments. Ticket income and operating costs begin from the current matchday.</p>{season.status === 'complete' && <p id="finance-enable-reason">Start next season before enabling club finances.</p>}<button id="enable-finance" className="button primary" onClick={onEnable} disabled={busy || season.status === 'complete'} aria-describedby={season.status === 'complete' ? 'finance-enable-reason' : undefined}>Enable club finances<Icon name="building" size={16} /></button></div>
+      <div><p>Start every club with its opening cash ({money(openingCashFor(season, club.id))} here), sponsorship{economy ? ' and season funding' : ''} for the remaining season, and charges for existing staff commitments. Ticket income and operating costs begin from the current matchday.</p>{season.status === 'complete' && <p id="finance-enable-reason">Start next season before enabling club finances.</p>}<button id="enable-finance" className="button primary" onClick={onEnable} disabled={busy || season.status === 'complete'} aria-describedby={season.status === 'complete' ? 'finance-enable-reason' : undefined}>Enable club finances<Icon name="building" size={16} /></button></div>
     </section> : <>
       {balance.unpaid > 0 && <p className="club-unpaid-note panel">{money(balance.unpaid)} of costs remain unpaid. New income clears unpaid costs first; staff recruitment requires these costs to be settled.</p>}
 
@@ -114,7 +120,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
 
       <section className="club-venue panel" aria-labelledby="club-venue-title">
         <header className="club-heading"><h2 id="club-venue-title">Venue</h2></header>
-        <dl><div><dt>Venue</dt><dd>{definition.venue}</dd></div><div><dt>{facilities.arenaCapacity === facilities.arenaFullCapacity ? 'Capacity' : 'Capacity this matchday'}</dt><dd>{count(facilities.arenaCapacity)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{money(ROUND_OPERATING_COST + facilities.upkeepPerRound)}</dd></div></dl>
+        <dl><div><dt>Venue</dt><dd>{definition.venue}</dd></div><div><dt>{facilities.arenaCapacity === facilities.arenaFullCapacity ? 'Capacity' : 'Capacity this matchday'}</dt><dd>{count(facilities.arenaCapacity)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{money(roundOperatingCostFor(season, club.id) + facilities.upkeepPerRound)}</dd></div></dl>
       </section>
 
       <SponsorshipPanel season={season} busy={busy} onEnableSponsorship={onEnableSponsorship} onAcceptSponsorship={onAcceptSponsorship} onDeclineSponsorship={onDeclineSponsorship} onRequestSponsorship={onRequestSponsorship} onSponsorshipDelegation={onSponsorshipDelegation} />
@@ -123,7 +129,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
         <header className="club-heading"><h2 id="club-ticket-plan-title"><Icon name="wallet" size={18} />Ticket price</h2><span>{season.status === 'complete' ? 'Next season' : 'Next matchday'}</span></header>
         <div className="club-ticket-controls">
           <div className="club-ticket-control"><div><label htmlFor="ticket-control">Pricing control</label><output htmlFor="ticket-control">{plan.delegated ? 'Automatic' : 'Manual'}</output></div><input type="range" id="ticket-control" min={0} max={1} step={1} value={plan.delegated ? 1 : 0} aria-valuetext={plan.delegated ? 'Automatic' : 'Manual'} onChange={event => onPlanChange({ ...plan, delegated: event.target.value === '1' })} disabled={busy} /><div className="club-range-labels"><span>Manual</span><span>Automatic</span></div></div>
-          <div className="club-ticket-control"><div><label htmlFor="ticket-price">Ticket price</label><output htmlFor="ticket-price">{plan.delegated && recommendation === null ? 'Automatic' : money(plannedPrice)}{plan.delegated && recommendation !== null && <small>recommended</small>}</output></div><input type="range" id="ticket-price" min={0} max={MAX_TICKET_PRICE / 100} step={TICKET_PRICE_STEP / 100} value={plannedPrice / 100} aria-valuetext={`${money(plannedPrice)} per ticket${plan.delegated ? ', automatic pricing' : ''}`} aria-describedby="ticket-plan-help" onChange={event => onPlanChange({ ...plan, price: Number(event.target.value) * 100 })} disabled={busy || plan.delegated} /><div className="club-range-labels"><span>{money(0)}</span><span>{money(MAX_TICKET_PRICE)}</span></div></div>
+          <div className="club-ticket-control"><div><label htmlFor="ticket-price">Ticket price</label><output htmlFor="ticket-price">{plan.delegated && recommendation === null ? 'Automatic' : money(plannedPrice)}{plan.delegated && recommendation !== null && <small>recommended</small>}</output></div><input type="range" id="ticket-price" min={0} max={maxTicketPriceFor(season, club.id) / 100} step={TICKET_PRICE_STEP / 100} value={plannedPrice / 100} aria-valuetext={`${money(plannedPrice)} per ticket${plan.delegated ? ', automatic pricing' : ''}`} aria-describedby="ticket-plan-help" onChange={event => onPlanChange({ ...plan, price: Number(event.target.value) * 100 })} disabled={busy || plan.delegated} /><div className="club-range-labels"><span>{money(0)}</span><span>{money(maxTicketPriceFor(season, club.id))}</span></div></div>
         </div>
         <details className="game-disclosure"><summary><Icon name="clock" size={15} />When prices change</summary><div className="club-note" id="ticket-plan-help"><p>This matchday’s price stays locked. Automatic prices are set before each matchday.</p>{plan.delegated && recommendationFixture && <p>Recommendation: {recommendationFixture.round === season.round ? 'current home demand' : `home fixture ${formatDate(recommendationFixture.date)}`} · may change with results.</p>}</div></details>
       </section>
@@ -148,13 +154,13 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
           return <tr key={entry.id} data-finance-entry={entry.id} data-finance-kind={entry.kind}>
             <td><time dateTime={date}>{formatDate(date)}</time><small>{buyout ? 'Player compensation' : transfer && payment ? `Transfer payment ${payment.installmentIndex + 1}/${transfer.installments.length}` : `Matchday ${entry.round}`}</small></td><th scope="row">{kinds[entry.kind]}<small>{entryDetail(entry)}</small>{entry.payroll && <details className="club-payroll-breakdown" data-payroll-ledger={entry.id}><summary>Player charges</summary><ul>{entry.payroll.items.map(item => <li key={item.agreementId}><span>{getCareerPlayer(season, item.playerId).name}</span><strong>{money(item.amount)}</strong>{item.discount > 0 && <small>Gross {money(item.gross)} · discount {money(item.discount)}</small>}</li>)}</ul></details>}</th>
             <td className={entry.amount < 0 ? 'club-finance-cost' : entry.amount > 0 ? 'club-finance-income' : ''}>{movement(entry.amount)}</td>
-            <td><span className={entry.cashDelta < 0 ? 'club-finance-cost' : entry.cashDelta > 0 ? 'club-finance-income' : ''}>{movement(entry.cashDelta)}</span><small>Balance {money(entry.cashAfter)}</small></td>
-            <td><span className={entry.unpaidDelta > 0 ? 'club-finance-cost' : entry.unpaidDelta < 0 ? 'club-finance-income' : ''}>{movement(entry.unpaidDelta)}</span><small>Balance {money(entry.unpaidAfter)}</small></td>
+            <td><span className={entry.cashDelta < 0 ? 'club-finance-cost' : entry.cashDelta > 0 ? 'club-finance-income' : ''}>{movement(entry.cashDelta)}</span><small>Balance {exact(entry.cashAfter)}</small></td>
+            <td><span className={entry.unpaidDelta > 0 ? 'club-finance-cost' : entry.unpaidDelta < 0 ? 'club-finance-income' : ''}>{movement(entry.unpaidDelta)}</span><small>Balance {exact(entry.unpaidAfter)}</small></td>
           </tr>
         })}{!ledger.length && <tr><td colSpan={5} className="club-empty">No financial activity matches this view.</td></tr>}</tbody></table></div>
         <p className="club-note">Income clears unpaid costs before adding to cash. Balances include all earlier activity, even when filtered. Staff commitments track season allocation separately from cash.</p>
       </details>
     </>}
-    <p className="club-model-note">Fictional development finances. {payrollEnabled ? season.employment.enabledSince ? 'Player wages follow signed employment contracts.' : 'Player wages follow the fixed squad terms.' : 'Player payroll is not enabled.'}</p>
+    <p className="club-model-note">{economy ? `Estimated from published 2025-27 club budgets, salary and attendance reports: about ${formatEuros(economy.budget)} a season (${BAND_LABELS[economy.band]}). ` : 'Fictional development finances. '}{payrollEnabled ? season.employment.enabledSince ? 'Player wages follow signed employment contracts.' : 'Player wages follow the fixed squad terms.' : 'Player payroll is not enabled.'}</p>
   </div>
 }

@@ -4,6 +4,7 @@ import { buildBoardMandate, buildBoardReview, createBoard, type BoardCalculation
 import { validationReplayCache } from './replay-cache';
 import { dateForRound } from '../world/season';
 import { openingSponsorshipClubs } from '../world/commercial-policy';
+import { fundingSourceId } from '../world/finance';
 import { fullWorldClubsIn, roundOrdinal, seasonRounds } from '../world/career-world';
 import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
 
@@ -135,8 +136,10 @@ export function validateBoard(state: SeasonState, version: number): void {
     if (first ? !equal(anchor, enabled) : anchor.seasonNumber !== year || anchor.round !== 1 || anchor.completedRounds !== ordinal(year, 0, seasonRounds(state)) || anchor.date !== dateForRound(1, year)) fail(path, 'must freeze the objective at activation or the next season opening');
     if (!first && state.finance.enabledSince && ordinal(state.finance.enabledSince.seasonNumber, state.finance.enabledSince.round, seasonRounds(state)) < ordinal(year, 1, seasonRounds(state))) {
       // Opening sponsorship: every club under the fixed model, only covered clubs under negotiated agreements.
-      const sponsorship = state.finance.ledger.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.seasonNumber === year && entry.kind === 'sponsor' && entry.round === 1);
-      if (sponsorship.length !== openingSponsorshipClubs(state.commercial, fullWorldClubsIn(state, year), year).length || sponsorship.some(({ index }) => index >= anchor.ledgerCount)) fail(path, 'must include the new-season funding before setting expectations');
+      // Format 62: season funding (`funding-s<season>`) is sponsorship-kind income booked after the sponsors.
+      const opening = state.finance.ledger.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.seasonNumber === year && entry.kind === 'sponsor' && entry.round === 1);
+      const sponsorship = opening.filter(({ entry }) => entry.sourceId !== fundingSourceId(year));
+      if (sponsorship.length !== openingSponsorshipClubs(state.commercial, fullWorldClubsIn(state, year), year).length || opening.some(({ index }) => index >= anchor.ledgerCount)) fail(path, 'must include the new-season funding before setting expectations');
     }
     chronological(anchor, path);
     let expected: BoardMandate;

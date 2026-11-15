@@ -10,6 +10,7 @@ import { scoutingDate } from './ScoutingKnowledge'
 import { paymentPlanLabel } from '../world/transfer-payments'
 import { TransferPaymentTerms } from './TransferPaymentTerms'
 import './offseason-market.css'
+import { formatEuros } from './money-format'
 
 interface OffseasonMarketPanelProps {
   season: SeasonState
@@ -20,7 +21,7 @@ interface OffseasonMarketPanelProps {
   onClubDecision: (offerId: string, response: 'accept' | 'reject' | 'counter') => void
 }
 
-const money = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100)
+const money = (cents: number) => formatEuros(cents)
 const daysBetween = (first: string, last: string) => Math.round((Date.parse(`${last}T00:00:00Z`) - Date.parse(`${first}T00:00:00Z`)) / 86_400_000)
 export function marketOfferStatus(offer: MarketOffer): string {
   if (offer.status === 'club-review') return 'Club decision needed'

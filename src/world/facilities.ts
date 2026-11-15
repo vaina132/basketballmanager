@@ -3,7 +3,7 @@ import type { FacilityAnchor, FacilityEvent, FacilityProject, FacilityType, Main
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { clubFinanceDefinition, worldOf } from './career-world';
-import { FACILITY_AUTOMATION_BUFFER, FACILITY_TYPES, getActiveFacilityProject, getFacilityLevel, maintenancePlanOn, quoteFacilityUpgrade } from './facilities-policy';
+import { facilityAutomationBuffer, FACILITY_TYPES, getActiveFacilityProject, getFacilityLevel, maintenancePlanOn, quoteFacilityUpgrade } from './facilities-policy';
 import { getSpendableCash, getSpendablePosition } from './payroll-policy';
 import { getFinanceBalance, recordBoardCapital, recordFacilityInvestment } from './finance';
 import { quoteBoardFunding, type BoardFundingQuote } from './board-funding-policy';
@@ -156,11 +156,11 @@ export function automateFacilities(state: SeasonState): SeasonState {
     if (next.facilities.maintenanceSince && FACILITY_TYPES.some(type => getFacilityLevel(next, type, club.id) > 1)) {
       const current = maintenancePlanOn(next.facilities, club.id);
       const tight = getSpendablePosition(next, club.id) < 0 || getFinanceBalance(next.finance, club.id).unpaid > 0;
-      const plan: MaintenancePlan = current === 'full' ? tight ? 'reduced' : 'full' : !tight && getSpendableCash(next, club.id) >= FACILITY_AUTOMATION_BUFFER / 2 ? 'full' : 'reduced';
+      const plan: MaintenancePlan = current === 'full' ? tight ? 'reduced' : 'full' : !tight && getSpendableCash(next, club.id) >= facilityAutomationBuffer(next, club.id) / 2 ? 'full' : 'reduced';
       if (plan !== current) next = applyFacilityEvent(next, { ...facilityEventAnchor(next), type: 'maintenance', clubId: club.id, plan });
     }
     if (getActiveFacilityProject(next, club.id)) continue;
-    const quote = FACILITY_TYPES.map(type => quoteFacilityUpgrade(next, type, club.id)).filter(quote => quote.canStart && quote.remainingBudgetAfter >= FACILITY_AUTOMATION_BUFFER).sort((left, right) => left.cost - right.cost || FACILITY_TYPES.indexOf(left.type) - FACILITY_TYPES.indexOf(right.type))[0];
+    const quote = FACILITY_TYPES.map(type => quoteFacilityUpgrade(next, type, club.id)).filter(quote => quote.canStart && quote.remainingBudgetAfter >= facilityAutomationBuffer(next, club.id)).sort((left, right) => left.cost - right.cost || FACILITY_TYPES.indexOf(left.type) - FACILITY_TYPES.indexOf(right.type))[0];
     if (quote) next = startFacilityUpgrade(next, quote.type, club.id);
     else if (next.facilities.fundingSince) {
       const funded = FACILITY_TYPES.map(type => quoteBoardFunding(next, type, club.id, 'automatic')).filter(item => item.approved).sort((left, right) => left.cost - right.cost || FACILITY_TYPES.indexOf(left.facilityType) - FACILITY_TYPES.indexOf(right.facilityType))[0];

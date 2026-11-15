@@ -84,6 +84,8 @@
 .profile-condition { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
 .profile-condition > span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
 .profile-condition .stamina-meter { max-width: 200px; }
+.profile-potential { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+.profile-potential > span:first-child { font-size: 11px; color: var(--muted); }
 .career-entry-loading { padding:32px; color:var(--muted); font-size:14px; }
 .game-shell .manager-profile-button { width:100%; border:0; background:transparent; color:var(--text); padding:8px 0; text-align:left; cursor:pointer; }
 .manager-identity { display:block; min-width:0; }
@@ -110,7 +112,7 @@
   .game-shell .player-profile { display: grid; grid-template-columns: 90px 1fr; column-gap: 14px; }
   .game-shell .profile-portrait { grid-row: 1 / 5; }
   .game-shell .profile-number { display: none; }
-  .game-shell .profile-divider, .game-shell .player-profile > .section-heading, .game-shell .attribute-list, .game-shell .profile-condition { grid-column: 1 / -1; }
+  .game-shell .profile-divider, .game-shell .player-profile > .section-heading, .game-shell .attribute-list, .game-shell .profile-potential, .game-shell .profile-condition { grid-column: 1 / -1; }
   .game-shell .attribute-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
   .game-shell .attribute-track { width: 50px; }
 }

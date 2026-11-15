@@ -7,7 +7,7 @@ import { isRecovering } from './health';
 import { overallRating } from './overall-rating';
 import { developClub } from './training';
 
-export type MatchdayContext = Pick<SeasonState, 'plans' | 'conditions' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'lifecycle' | 'academy' | 'seasonNumber'>> & WorldContext;
+export type MatchdayContext = Pick<SeasonState, 'seed' | 'plans' | 'conditions' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'lifecycle' | 'academy' | 'seasonNumber'>> & WorldContext;
 
 /** A selection is a subset of the registration at this boundary; order is retained in historical results. */
 export function selectedTeam(club: Team, ids: readonly string[]): Team {

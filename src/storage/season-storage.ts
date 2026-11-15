@@ -58,6 +58,7 @@ import { divisionChanges, openingDivisions, seasonLeagues } from '../world/divis
 import { calendarDaysBetween } from '../world/competition-calendar';
 import { createSeasonInjury, isRecovering } from '../world/health';
 import { createTraining, developClub, processTrainingWeek, TRAINING_ATTRIBUTES, TRAINING_FOCUSES, TRAINING_INTENSITIES } from '../world/training';
+import { potentialPointCap, trainingHeadroom } from '../world/potential';
 import { coachingAssignments, COACHING_BUDGET, createCoaching, MAX_COACHES } from '../world/coaching';
 import { ANNUAL_SPONSORSHIP, createFinance, forecastGate, MAX_TICKET_PRICE, OPENING_CASH, ROUND_OPERATING_COST, TICKET_PRICE_STEP } from '../world/finance';
 import { createPayroll } from '../world/payroll';
@@ -2583,9 +2584,11 @@ function migrateTrainingCoaching(training: SeasonTraining): SeasonTraining {
 }
 
 /** Reconcile the retained week; older development remains bounded state, not invented history. */
-function validateTraining(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], injuries: SeasonInjury[], seasonNumber: number, round: number, coaching?: SeasonCoaching, rosters?: readonly RosterSnapshot[], fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), version = 30, context: CareerPlayerContext & LifecycleContext & { facilities?: SeasonFacilities; restWeeks?: SeasonState['restWeeks'] } = {}): { training: SeasonTraining; conditionsAfter: Record<string, number> | null } {
+function validateTraining(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], injuries: SeasonInjury[], seasonNumber: number, round: number, coaching?: SeasonCoaching, rosters?: readonly RosterSnapshot[], fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), version = 30, context: CareerPlayerContext & LifecycleContext & Partial<Pick<SeasonState, 'seed'>> & { facilities?: SeasonFacilities; restWeeks?: SeasonState['restWeeks'] } = {}): { training: SeasonTraining; conditionsAfter: Record<string, number> | null } {
+  // Sprint 4: each player's hidden potential, derived from the career seed, limits his training points.
+  const seed = context.seed ?? fail('seed', 'is required to check training against player potential');
   const fields = record(value, 'training', ['model', 'enabledSince', 'plans', 'points', 'lastWeek']);
-  if (fields.model !== 'training-1') fail('training.model', 'is unsupported');
+  if (fields.model !== 'training-1' && fields.model !== 'training-2') fail('training.model', 'is unsupported');
   validateTrainingPlans(fields.plans, 'training.plans', clubs);
   let weeks = 0;
   if (fields.enabledSince !== null) {
@@ -2610,8 +2613,8 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
     return available * 35 + weighted * 8 + coached * 8 + Math.min(coached, weighted) * 2 + Math.min(available, Math.max(0, facilityWeeks - Number(prior))) * 4;
   };
   for (const player of catalog) {
-    const entry = record(points[player.id], `training.points.${player.id}`, TRAINING_ATTRIBUTES);
-    for (const attribute of TRAINING_ATTRIBUTES) number(entry[attribute], `training.points.${player.id}.${attribute}`, 0, Math.min(200, (20 - player.attributes[attribute]) * 100));
+    const entry = record(points[player.id], `training.points.${player.id}`, TRAINING_ATTRIBUTES), headroom = trainingHeadroom({ ...context, seed, training: { model: fields.model } }, player.id);
+    for (const attribute of TRAINING_ATTRIBUTES) number(entry[attribute], `training.points.${player.id}.${attribute}`, 0, potentialPointCap(headroom, player.attributes[attribute]));
     if (TRAINING_ATTRIBUTES.reduce((total, attribute) => total + (entry[attribute] as number), 0) > pointBudget(player.id)) fail(`training.points.${player.id}`, 'exceeds available training weeks');
   }
   const training = fields as unknown as SeasonTraining, anchor = training.enabledSince;
@@ -2661,7 +2664,7 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
     }
   }
   const replayed = processTrainingWeek({
-    ...(context.world ? { world: context.world } : {}),
+    ...(context.world ? { world: context.world } : {}), seed,
     training: { ...training, plans: appliedPlans, points: pointsBefore, lastWeek: null }, clubs: intervalClubs, conditions: conditionsBefore,
     // Final-round injuries happen after the last training day and must not be replayed into it.
     injuries: injuries.filter(injury => injury.occurredOn <= (report.fromDate as string)),
@@ -2745,7 +2748,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version >= 35) validateRivalries(state.rivalries, state as unknown as SeasonState);
   const rivalries = version >= 35 ? state.rivalries as unknown as SeasonRivalries : createRivalries();
   const careerRecord = version >= 37 ? state.career as unknown as SeasonCareer : undefined;
-  const careerContext: CareerPlayerContext & Partial<Pick<SeasonState, 'seed' | 'career'>> = { world, academy, lifecycle, seasonNumber, round, date: state.date as string, seed, ...(version >= 37 ? { career: state.career as SeasonCareer } : {}), ...(Object.hasOwn(state, 'background') ? { background: state.background as SeasonBackground } : {}) };
+  const careerContext: CareerPlayerContext & Pick<SeasonState, 'seed'> & Partial<Pick<SeasonState, 'career'>> = { world, academy, lifecycle, seasonNumber, round, date: state.date as string, seed, ...(version >= 37 ? { career: state.career as SeasonCareer } : {}), ...(Object.hasOwn(state, 'background') ? { background: state.background as SeasonBackground } : {}) };
   const marketEnabled = version >= 13 && record(state.market, 'market', ['model', 'enabledSince', 'windows']).enabledSince !== null;
   // Every later replay attributes decisions through the validated moves.
   if (version >= 37) validateCareer(state.career, state as unknown as SeasonState, version);

@@ -133,7 +133,7 @@ describe('dated rehabilitation, immutable diagnosis and prospective clearance', 
     expect(isRecovering(episode, '2026-09-12', medical)).toBe(false);
     const plan = state.training.plans[club]!;
     const training = { ...state.training, plans: { ...state.training.plans, [club]: { ...plan, delegated: false, intensity: 'standard' as const, focus: 'passing' as const } } };
-    const result = processTrainingWeek({ training, clubs: state.clubs, rosters: state.rosters, conditions: Object.fromEntries(Object.keys(state.conditions).map(id => [id, 80])), injuries: [episode], physio: medical, seasonNumber: 1, afterRound: 1, fromDate: dateForRound(1), toDate: dateForRound(2) });
+    const result = processTrainingWeek({ seed: state.seed, training, clubs: state.clubs, rosters: state.rosters, conditions: Object.fromEntries(Object.keys(state.conditions).map(id => [id, 80])), injuries: [episode], physio: medical, seasonNumber: 1, afterRound: 1, fromDate: dateForRound(1), toDate: dateForRound(2) });
     expect(result.training.lastWeek!.players[player]!.availableDays).toBe(1);
     expect(result.training.lastWeek!.players[player]!.gains.passing).toBe(4);
   });

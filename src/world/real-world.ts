@@ -3,7 +3,7 @@ import { EUROPEAN_FORMATS, fieldFits } from './european-formats';
 import type { Team } from '../domain/types';
 import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPlayerProfile } from '../data/development-player-profiles';
-import { playerAgeOnDate } from '../data/development-player-profiles';
+import { DEFAULT_PLAYER_AGE, playerAgeOnDate } from '../data/development-player-profiles';
 import { standingsRuleFor } from '../domain/competition';
 import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { DevelopmentPresident } from '../data/development-presidents';
@@ -25,7 +25,7 @@ import { POSTSEASON_FORMATS, postseasonFormatAllowed, postseasonFormatFor } from
  */
 export const REAL_WORLD_RULES = Object.freeze({
   /** Players without a known age are assumed to be this old. */
-  defaultAge: 26,
+  defaultAge: DEFAULT_PLAYER_AGE,
   /** Fictional season wages in euros: 9,000 plus 220 per overall-rating point above 40, in 500 steps, within 5,000-30,000. */
   wage: Object.freeze({ base: 9_000, perPoint: 220, from: 40, step: 500, min: 5_000, max: 30_000 }),
   /** Arena size and usual crowd follow squad strength within the league (no real capacities in the pack yet). */

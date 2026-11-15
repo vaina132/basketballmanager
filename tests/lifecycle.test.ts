@@ -4,7 +4,7 @@ import type { MarketOffer } from '../src/domain/market';
 import { createSeason, dateForRound, seasonStartDate } from '../src/world/season';
 import { createLifecycle, enableLifecycle, lifecycleAtBoundary, prepareLifecycleSeason } from '../src/world/lifecycle';
 import { ageTrainingRate, applyAgingAttributes, getPlayerAging, getPlayerRetirement, isPlayerRetired, lifecycleDateOfBirth, retirementContractReason, retirementTargetAge } from '../src/world/lifecycle-policy';
-import { developClub, processTrainingWeek, TRAINING_ATTRIBUTES } from '../src/world/training';
+import { developClub, processTrainingWeek, TRAINING_ATTRIBUTES, trainingPointCap } from '../src/world/training';
 import { getCareerPlayers } from '../src/world/player-catalog';
 import { prepareAcademySeason } from '../src/world/academy';
 
@@ -17,7 +17,7 @@ function ageWorld(state: SeasonState, seasonNumber = 20): SeasonState {
   return { ...next, seasonNumber, round: 1, date: seasonStartDate(seasonNumber) };
 }
 function trainingInput(state: SeasonState) {
-  return { training: state.training, clubs: state.clubs, conditions: state.conditions, injuries: state.injuries, seasonNumber: state.seasonNumber, afterRound: state.round, fromDate: state.date, toDate: dateForRound(state.round + 1, state.seasonNumber), lifecycle: state.lifecycle, academy: state.academy, rosters: state.rosters };
+  return { seed: state.seed, training: state.training, clubs: state.clubs, conditions: state.conditions, injuries: state.injuries, seasonNumber: state.seasonNumber, afterRound: state.round, fromDate: state.date, toDate: dateForRound(state.round + 1, state.seasonNumber), lifecycle: state.lifecycle, academy: state.academy, rosters: state.rosters };
 }
 
 describe('prospective senior aging and real practice', () => {
@@ -33,7 +33,7 @@ describe('prospective senior aging and real practice', () => {
     expect(enabled.lifecycle.reviews).toHaveLength(1);
     expect(enabled.lifecycle.notices).toHaveLength(0); // all sixty seniors are protected until the academy replenishes them.
     expect(enableLifecycle(enabled)).toBe(enabled);
-    expect(developClub(base.clubs[0]!, base.training, base)).toEqual(developClub(base.clubs[0]!, base.training));
+    expect(developClub(base.clubs[0]!, base.training, base)).toEqual(developClub(base.clubs[0]!, base.training, { seed: base.seed }));
     expect(processTrainingWeek(trainingInput(base))).toEqual(processTrainingWeek({ ...trainingInput(base), lifecycle: undefined, academy: undefined }));
     expect(() => enableLifecycle({ ...base, status: 'complete' })).toThrow(/active season/);
     expect(() => enableLifecycle({ ...base, academy: { ...base.academy, enabledSince: null } })).toThrow(/academy/);
@@ -76,7 +76,8 @@ describe('prospective senior aging and real practice', () => {
     const injured = processTrainingWeek({ ...trainingInput(enabled), injuries: [{ id: 'test-injury', playerId: id, clubId: 'rhine-falcons', kind: 'ankle', fixtureId: 'test', occurredOn: base.date, returnOn: '2026-10-01' }] });
     expect(injured.training.lastWeek!.players[id]!.aging).toMatchObject({ ordinaryPracticePoints: 0, adjustedPracticePoints: 0 });
     expect(injured.training.lastWeek!.players[id]!.availableDays).toBe(0);
-    const allCapped = { ...enabled.training, points: Object.fromEntries(Object.entries(enabled.training.points).map(([playerId, points]) => [playerId, Object.fromEntries(Object.keys(points).map(key => [key, 200]))])) } as typeof enabled.training;
+    const catalog = new Map(getCareerPlayers(enabled).map(player => [player.id, player]));
+    const allCapped = { ...enabled.training, points: Object.fromEntries(Object.entries(enabled.training.points).map(([playerId, points]) => [playerId, Object.fromEntries(Object.keys(points).map(key => [key, trainingPointCap(enabled, catalog.get(playerId)!, key as typeof TRAINING_ATTRIBUTES[number])]))])) } as typeof enabled.training;
     const capped = processTrainingWeek({ ...trainingInput(enabled), training: allCapped });
     expect(Object.values(capped.training.lastWeek!.players['alp-10']!.gains).every(gain => gain === 0)).toBe(true);
   });

@@ -6,6 +6,7 @@ import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { advanceSeason, createSeason, dateForRound, managedSide } from '../src/world/season';
 import { enableFacilities, processFacilityProjects, startFacilityUpgrade } from '../src/world/facilities';
 import { processTrainingWeek, trainingPointCap, TRAINING_ATTRIBUTES } from '../src/world/training';
+import { playerHeadroom } from '../src/world/potential';
 import { processAcademyWeek } from '../src/world/academy';
 import { getClubAcademy } from '../src/world/academy-policy';
 import { getClubCashOutlook } from '../src/world/finance-outlook';
@@ -21,7 +22,7 @@ function practice(): TrainingWeekInput {
   const started = startFacilityUpgrade(initial(), 'training');
   const state = processFacilityProjects({ ...started, date: dateForRound(4), round: 4 });
   return {
-    facilities: state.facilities, training: { ...state.training, plans: Object.fromEntries(Object.entries(state.training.plans).map(([id, plan]) => [id, { ...plan, delegated: false, intensity: 'standard' as const, focus: 'passing' as const }])) },
+    seed: state.seed, facilities: state.facilities, training: { ...state.training, plans: Object.fromEntries(Object.entries(state.training.plans).map(([id, plan]) => [id, { ...plan, delegated: false, intensity: 'standard' as const, focus: 'passing' as const }])) },
     coaching: state.coaching, clubs: state.clubs, conditions: Object.fromEntries(Object.keys(state.conditions).map(id => [id, 80])), injuries: [], seasonNumber: 1, afterRound: 4, fromDate: dateForRound(4), toDate: dateForRound(5),
   };
 }
@@ -35,9 +36,11 @@ describe('facility effects on earned development', () => {
       const before = baseline.training.lastWeek!.players[player.id]!, after = upgraded.training.lastWeek!.players[player.id]!;
       expect(after.coachingGains).toEqual(before.coachingGains);
       expect(after.facility!.earnedPoints).toBe(1);
-      expect(total(after.facility!.gains)).toBe(1);
-      expect(total(after.gains)).toBe(total(before.gains) + 1);
-      expect(after.facility!.gains.passing).toBe(1);
+      // A player without potential headroom earns the point but cannot keep it.
+      const kept = playerHeadroom(input, player.id) > 0 ? 1 : 0;
+      expect(total(after.facility!.gains)).toBe(kept);
+      expect(total(after.gains)).toBe(total(before.gains) + kept);
+      expect(after.facility!.gains.passing).toBe(kept);
     }
   });
 
@@ -48,7 +51,7 @@ describe('facility effects on earned development', () => {
     expect(total(injured.training.lastWeek!.players[player.id]!.gains)).toBe(0);
     const recovery = processTrainingWeek({ ...input, training: { ...input.training, plans: { ...input.training.plans, [clubId]: { ...input.training.plans[clubId]!, intensity: 'recovery' } } } });
     expect(recovery.training.lastWeek!.players[player.id]!.facility!.earnedPoints).toBe(0);
-    const capped = processTrainingWeek({ ...input, training: { ...input.training, points: { ...input.training.points, [player.id]: Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => [attribute, trainingPointCap(player.attributes[attribute])])) as typeof input.training.points[string] } } });
+    const capped = processTrainingWeek({ ...input, training: { ...input.training, points: { ...input.training.points, [player.id]: Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => [attribute, trainingPointCap(input, player, attribute)])) as typeof input.training.points[string] } } });
     expect(capped.training.lastWeek!.players[player.id]!.facility!.earnedPoints).toBe(1);
     expect(total(capped.training.lastWeek!.players[player.id]!.facility!.gains)).toBe(0);
   });

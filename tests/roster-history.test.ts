@@ -85,7 +85,7 @@ describe('fixture, training and archive ownership', () => {
   it('training references its registration and refuses mismatched membership', () => {
     const finished = finish(initial);
     const conditions = { ...initial.conditions, ...Object.fromEntries(Object.entries(finished.activeMatch!.stats).map(([id, stat]) => [id, stat.condition])) };
-    const input = { training: initial.training, clubs: initial.clubs, conditions, injuries: [], seasonNumber: 1, afterRound: 1, fromDate: initial.date, toDate: secondRound.date, rosters: initial.rosters };
+    const input = { seed: initial.seed, training: initial.training, clubs: initial.clubs, conditions, injuries: [], seasonNumber: 1, afterRound: 1, fromDate: initial.date, toDate: secondRound.date, rosters: initial.rosters };
     const withSnapshots = processTrainingWeek(input), inferred = processTrainingWeek({ ...input, rosters: undefined });
     expect(withSnapshots).toEqual(inferred);
     const first = initial.rosters[0]!;

@@ -6,6 +6,7 @@ import type { Rivalry } from './rivalries';
 import type { Team } from './types';
 import type { DomesticStandingsRule } from './competition';
 import type { PostseasonFormatId } from '../world/postseason';
+import type { LowerDivision } from './background';
 
 /**
  * Everything a career's league is made of at its start: clubs and squads, player birth dates and wages, venues,
@@ -32,6 +33,11 @@ export interface CareerWorld {
    * estimated from age and quality because no source has real contract data. Absent: one season, as before.
    */
   playerContracts?: Readonly<Record<string, number>>;
+  /**
+   * Format 53 (step 3.4d-1): each country's real next division below its lowest full division, identities only.
+   * Absent when no list is known (public worlds; Italy and France for now).
+   */
+  lowerDivisions?: readonly LowerDivision[];
   /** Every original player's gross season wage in euro cents. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

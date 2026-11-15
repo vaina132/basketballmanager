@@ -354,6 +354,15 @@ Step 3.4c (promotion and relegation inside the full world, 15 November 2026), re
 - Careers saved in format 49 begin moving clubs at the end of the season they are in; seasons already played keep their divisions.
 - Until step 3.4d, clubs relegated out of the game's leagues (below a second division, and Germany's and Greece's relegated clubs) stay where they are; the playoff panel says so.
 
+### Background-club foundation (step 3.4d-1, 15 November 2026)
+
+Reversible defaults under the approved plan ("Levels of detail" in `multi-league-world.md`):
+- **Two records.** The world may carry each country's real next division below its lowest full division (`world.lowerDivisions`, identities only, format 53). Italy and France may not have one (owner decision (b) below). The career records the clubs outside the full world that have squads (`SeasonState.background`, format 53), present exactly when divisions are recorded.
+- **What a background club keeps:** the world identity and country, the season it left, and its squad as developed until then. It is in none of the season's divisions and not among the full world's clubs, so finances, staff, academy, board, contracts, transfers and scouting never see it, and its players cannot be signed.
+- **Aging:** background squads do not train. Their players age by the same dated decline as everyone else (`applyAgingAttributes`), computed for the date in question rather than stored at each rollover, so the save keeps the squad as it left.
+- **Matchday selection** (for 3.5): the best available player at each position, then the best of the rest by overall rating on that date, up to twelve.
+- **Until 3.4d-2** no club leaves the full world, so the record must be empty; saves listing a club are refused. Careers saved before format 53 that record divisions gain an empty record when loaded.
+
 ### Owner decisions for step 3.4d-2 (15 November 2026)
 
 The owner decided both open questions on 15 November 2026:

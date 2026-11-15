@@ -99,8 +99,9 @@ describe('promotion and relegation between a country\'s divisions (step 3.4c)', 
     expect(state.divisions).toEqual({ changesFrom: 2, leagues: state.world.domesticLeagues.map(league => ({ id: league.id, clubIds: league.clubIds })) });
     expect(roundTrip(state)).toEqual(state);
     const next = advanceSeason(play(state));
-    const { divisions, ...rest } = next;
+    const { divisions, background, ...rest } = next;
     expect(divisions).toEqual(state.divisions);
+    expect(background).toEqual({ model: 'background-1', clubs: [] });
     expect(rest).toEqual({ ...JSON.parse(gunzipSync(nextBytes).toString('utf8')), schemaVersion: next.schemaVersion });
   }, 300_000);
 });

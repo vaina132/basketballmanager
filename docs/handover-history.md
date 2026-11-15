@@ -8,6 +8,16 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.4d-1, background-club foundation (15 November 2026)
+
+- **Fixtures first:** `tests/fixtures/season52-background-legacy-*` from unchanged commit `9f159de` (119 modules, FIBA-ruled world); `tests/season52-continuation.test.js` (3). The format-49/50/51 continuation tests now expect the empty record added on load.
+- **Types:** `src/domain/background.ts` (`BackgroundClub`, `SeasonBackground`, `LowerDivision`). `CareerWorld.lowerDivisions` (format 53): one per country, the tier below its lowest full division, 1-30 clubs not in the world; Italy and France refused (`NO_LOWER_DIVISION_COUNTRIES`). `checkPlayerShape` extracted from `validateWorld` for reuse.
+- **Season record:** `SeasonState.background` (format 53) exactly when divisions are recorded; `createSeason` starts it empty; `parseSeason` adds it to older careers with divisions. `validateBackground` checks the shape and each club (`validateBackgroundClub`: a world club outside this season's divisions, same identity and country, `since` 2 to the current season, 5-40 valid players nobody in the full world holds) and refuses any listed club until 3.4d-2.
+- **Module:** `src/world/background.ts`: `createBackground`, `backgroundClubFrom`, `backgroundSquad` (dated decline via `applyAgingAttributes`, no training), `backgroundMatchday` (best per position, then best others, up to twelve; unavailable players only when fewer than five are fit).
+- **Tests:** `tests/background-clubs.test.js` (8: lower-division lists and their refusals, the format guard, the record's presence and refusals, a club made from a full-world club, its checks, aging and matchday selection).
+- **Verification:** full serial suite **2,567 tests / 186 files passed** (629 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.4d-2 (see the size warning in HANDOVER.md).
+
 ## Cloud continuation: step 3.4e-2, league-specific standings rules (15 November 2026)
 
 - **Research** (free official sources, 15 November 2026; details and links in `docs/competition-rules-2026.md#league-specific-ranking-rules-step-34e-2`): ACB Normas Internas 2026/2027 art. 6.2 and 7; BBL Spielordnung 2026/2027 §§ 16 and 20; FIP Regolamento Esecutivo Gare (25 March 2026) art. 60 and 62, applied by LBA (Regolamento Sportivo 8.2) and Serie A2. Greece: ESAKE regulations leave ties to an unpublished season notice. Turkey: tbf.org.tr refuses automated access, so the BSL/TBL statutes could not be read (local-only follow-up).

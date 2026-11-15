@@ -10,6 +10,7 @@ import { jobOfferRefusal, seasonEndOutlook, type SeasonEndOutlook } from './care
 import { addCalendarDays, domesticRoundDates, roundRobinGames, roundRobinRoundCount, calendarDaysBetween } from './competition-calendar';
 import { derivePostseason, POSTSEASON_FORMATS, POSTSEASON_SLOT_OFFSETS, postseasonOutcome } from './postseason';
 import { divisionChanges, openingDivisions, seasonLeagues } from './divisions';
+import { createBackground } from './background';
 import type { SeasonEndDecision } from '../domain/career';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
 import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
@@ -374,7 +375,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   };
   const state: SeasonState = {
     schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), facilities: createFacilities(clubs, managedClubId), relationships: createRelationships(), board: createBoard(), rivalries: createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
-    ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
+    ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
     activeFixtureId: first?.id ?? null, activeMatch: first ? prepareMatch(preparation, first) : null,
   };
   const funded = financeEnabled ? enableFinance(state) : state;

@@ -147,6 +147,7 @@ const COLOUR = /^#[0-9a-f]{6}$/iu;
 const isText = (value: unknown, max = 120): value is string => typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\u0000-\u001f\u007f]/u.test(value);
 const isWhole = (value: unknown, min: number, max: number): value is number => typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
 const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+const worldFail = (path: string, reason: string): never => { throw new Error(`Invalid career world: ${path} ${reason}.`); };
 const exactKeys = (value: unknown, keys: readonly string[]) => isObject(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 
 /**
@@ -154,10 +155,49 @@ const exactKeys = (value: unknown, keys: readonly string[]) => isObject(value) &
  * unique club and player identities, playable squads, and every club and player covered by the club data.
  * All worlds share the career calendar: season one starts on DEVELOPMENT_WORLD.startDate.
  */
+/**
+ * A player record's shape: identity, unique shirt number, position, build, appearance and seven abilities from 1 to 20.
+ * `ids` and `numbers` collect what has been seen so far (identities across the scope, shirt numbers within the club).
+ */
+export function checkPlayerShape(value: unknown, path: string, ids: Set<string>, numbers: Set<number>): asserts value is Player {
+  const fail = worldFail;
+  if (!exactKeys(value, ['id', 'name', 'number', 'position', 'heightCm', 'weightKg', 'skinTone', 'hairColor', 'attributes'])) fail(path, 'must be a player');
+  const player = value as Record<string, any>;
+  if (!isText(player.id, 80) || !ID.test(player.id) || ids.has(player.id)) fail(`${path}.id`, 'must be a unique supported identifier');
+  ids.add(player.id);
+  if (!isText(player.name) || !isWhole(player.number, 0, 99) || numbers.has(player.number) || !['PG', 'SG', 'SF', 'PF', 'C'].includes(player.position as string)) fail(path, 'needs a name, a unique shirt number and a position');
+  numbers.add(player.number);
+  if (!isWhole(player.heightCm, 120, 260) || typeof player.weightKg !== 'number' || !(player.weightKg >= 35 && player.weightKg <= 250) || typeof player.skinTone !== 'string' || !COLOUR.test(player.skinTone) || typeof player.hairColor !== 'string' || !COLOUR.test(player.hairColor)) fail(path, 'needs a supported build and appearance');
+  if (!exactKeys(player.attributes, ATTRIBUTE_KEYS) || ATTRIBUTE_KEYS.some(key => !isWhole((player.attributes as Record<string, unknown>)[key], 1, 20))) fail(`${path}.attributes`, 'must hold seven abilities from 1 to 20');
+}
+
+/** Countries without a lower-division list (owner decision, 15 November 2026): no club leaves their full world for now. */
+export const NO_LOWER_DIVISION_COUNTRIES: readonly string[] = Object.freeze(['Italy', 'France']);
+
+/** Format 53: each listed country's real next division, one below its lowest full division, with clubs not in the world. */
+function checkLowerDivisions(world: CareerWorld, clubIds: ReadonlySet<string>): void {
+  const fail = worldFail;
+  const lists = world.lowerDivisions as unknown as Record<string, any>[];
+  if (!Array.isArray(lists) || lists.length > 10) fail('world.lowerDivisions', 'must be a short list');
+  const countries = new Set<string>(), ids = new Set<string>();
+  for (const [index, entry] of lists.entries()) {
+    const path = `world.lowerDivisions[${index}]`;
+    if (!exactKeys(entry, ['country', 'tier', 'name', 'clubs']) || !isText(entry.country) || countries.has(entry.country) || !isText(entry.name) || !Array.isArray(entry.clubs) || entry.clubs.length < 1 || entry.clubs.length > 30) fail(path, 'must name a country once, its division and its clubs');
+    countries.add(entry.country);
+    const tiers = world.domesticLeagues?.filter(league => league.country === entry.country).map(league => league.tier) ?? [];
+    if (!tiers.length || entry.tier !== Math.max(...tiers) + 1) fail(`${path}.tier`, 'must be the division below the lowest league of its country in this world');
+    if (NO_LOWER_DIVISION_COUNTRIES.includes(entry.country)) fail(`${path}.country`, 'has no relegation out of the full world for now');
+    for (const club of entry.clubs as Record<string, any>[]) {
+      if (!exactKeys(club, ['id', 'name', 'shortName', 'color']) || !isText(club.id, 80) || !ID.test(club.id) || ids.has(club.id) || clubIds.has(club.id) || !isText(club.name) || !isText(club.shortName, 12) || typeof club.color !== 'string' || !COLOUR.test(club.color)) fail(`${path}.clubs`, 'must hold unique clubs outside this world with a name, a short name and a colour');
+      ids.add(club.id);
+    }
+  }
+}
+
 export function validateWorld(value: unknown): asserts value is CareerWorld {
   if (isObject(value) && !Object.hasOwn(value, 'domesticLeagues') && validated.has(value)) return;
   const fail = (path: string, reason: string): never => { throw new Error(`Invalid career world: ${path} ${reason}.`); };
-  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : [])])) fail('world', 'must contain exactly the world fields');
+  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : [])])) fail('world', 'must contain exactly the world fields');
   const world = value as unknown as CareerWorld;
   if (Object.hasOwn(world, 'rosterModel') && world.rosterModel !== FULL_ROSTER_MODEL) fail('world.rosterModel', 'has an unsupported value');
   if (!isText(world.id, 80) || !ID.test(world.id)) fail('world.id', 'must be a supported identifier');
@@ -199,18 +239,13 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
     const numbers = new Set<number>();
     for (const [playerIndex, player] of club.players.entries()) {
       const playerPath = `${path}.players[${playerIndex}]`;
-      if (!exactKeys(player, ['id', 'name', 'number', 'position', 'heightCm', 'weightKg', 'skinTone', 'hairColor', 'attributes'])) fail(playerPath, 'must be a player');
-      if (!isText(player.id, 80) || !ID.test(player.id) || playerIds.has(player.id)) fail(`${playerPath}.id`, 'must be a unique supported identifier');
-      playerIds.add(player.id);
-      if (!isText(player.name) || !isWhole(player.number, 0, 99) || numbers.has(player.number) || !['PG', 'SG', 'SF', 'PF', 'C'].includes(player.position)) fail(playerPath, 'needs a name, a unique shirt number and a position');
-      numbers.add(player.number);
-      if (!isWhole(player.heightCm, 120, 260) || typeof player.weightKg !== 'number' || !(player.weightKg >= 35 && player.weightKg <= 250) || !COLOUR.test(player.skinTone) || !COLOUR.test(player.hairColor)) fail(playerPath, 'needs a supported build and appearance');
-      if (!exactKeys(player.attributes, ATTRIBUTE_KEYS) || ATTRIBUTE_KEYS.some(key => !isWhole(player.attributes[key], 1, 20))) fail(`${playerPath}.attributes`, 'must hold seven abilities from 1 to 20');
+      checkPlayerShape(player, playerPath, playerIds, numbers);
       const profile = Object.hasOwn(world.playerProfiles, player.id) ? world.playerProfiles[player.id] : undefined;
       if (!profile || typeof profile.dateOfBirth !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(profile.dateOfBirth) || profile.dateOfBirth >= world.startDate) fail(`world.playerProfiles.${player.id}`, 'must give a date of birth before the career starts');
       if (!Object.hasOwn(world.wages, player.id) || !isWhole(world.wages[player.id], 0, 1_000_000_000)) fail(`world.wages.${player.id}`, 'must give a season wage');
     }
   }
+  if (Object.hasOwn(world, 'lowerDivisions')) checkLowerDivisions(world, clubIds);
   if (Object.hasOwn(world, 'playerContracts') && (!isObject(world.playerContracts) || Object.keys(world.playerContracts!).length !== playerIds.size || [...playerIds].some(id => !Object.hasOwn(world.playerContracts!, id) || !isWhole(world.playerContracts![id], 1, 3)))) fail('world.playerContracts', 'must give every player an opening contract of one to three seasons');
   if (Object.keys(world.playerProfiles).length !== playerIds.size || Object.keys(world.wages).length !== playerIds.size) fail('world', 'must give profiles and wages for exactly its players');
   if (!Array.isArray(world.sponsors)) fail('world.sponsors', 'must be a list');

@@ -12,6 +12,7 @@ import { validateRelationships } from './relationships-validation';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonArchive, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import { STANDINGS_RULE_FORMAT } from '../domain/competition';
+import { createBackground, validateBackground } from '../world/background';
 import type { FacilityAnchor, FacilityEvent, SeasonFacilities } from '../domain/facilities';
 import { createFacilities, applyFacilityEvent, facilitiesAtEventCount } from '../world/facilities';
 import { getArenaCapacity, getFacilityUpkeepBreakdown } from '../world/facilities-policy';
@@ -103,7 +104,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -2569,7 +2570,7 @@ function validateState(value: unknown, version: SeasonFormatVersion): void {
 function validateStateUncached(value: unknown, version: SeasonFormatVersion): void {
   const legacy = version === 1, career = version >= 3;
   checkJsonTree(value);
-  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
+  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 53 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'background') ? ['background'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
   if (state.schemaVersion !== version || state.engineVersion !== 'possession-3') fail('state', 'uses an unsupported schema or engine');
   // Format 39: careers outside the built-in league carry their world, which must be complete and named by dataPackId.
   if (Object.hasOwn(state, 'world')) {
@@ -2583,10 +2584,13 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   for (const league of world.domesticLeagues ?? []) if (Object.hasOwn(league, 'standingsRule') && version < STANDINGS_RULE_FORMAT[league.standingsRule!]) fail('world.domesticLeagues.standingsRule', `requires format ${STANDINGS_RULE_FORMAT[league.standingsRule!]} or later`);
   if (version < 49 && world.domesticLeagues?.some(league => Object.hasOwn(league, 'postseason'))) fail('world.domesticLeagues.postseason', 'requires format 49 or later');
   if (version < 50 && Object.hasOwn(world, 'playerContracts')) fail('world.playerContracts', 'requires format 50 or later');
+  if (version < 53 && Object.hasOwn(world, 'lowerDivisions')) fail('world.lowerDivisions', 'requires format 53 or later');
   // Format 50: careers whose leagues have postseasons record each season's divisions.
   const usesDivisions = version >= 50 && !!world.domesticLeagues?.some(league => league.postseason);
   if (usesDivisions !== Object.hasOwn(state, 'divisions')) fail('divisions', usesDivisions ? 'must record this season\'s division memberships' : 'requires format 50 and leagues with postseasons');
   const seasonDivisions = usesDivisions ? validateDivisionShape(state.divisions, world, 'divisions', number(state.seasonNumber, 'seasonNumber', 1, MAX_SEASON_NUMBER)) : undefined;
+  // Format 53: careers that record divisions also record the clubs outside the full world.
+  if ((usesDivisions && version >= 53) !== Object.hasOwn(state, 'background')) fail('background', usesDivisions && version >= 53 ? 'must record the clubs outside the full world' : 'requires format 53 and recorded divisions');
   if (fullRoster && version < 46) fail('world.rosterModel', 'requires format 46 or later');
   if (version >= 8 && state.manager !== null && !sameData(state.manager, validateManagerProfile(state.manager, DEVELOPMENT_START_DATE))) fail('manager', 'must contain normalized profile details valid at the initial career date');
   const seed = number(state.seed, 'seed', 0, 0xffff_ffff), round = number(state.round, 'round', 1, worldRounds(world));
@@ -2611,6 +2615,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const marketEnabled = version >= 13 && record(state.market, 'market', ['model', 'enabledSince', 'windows']).enabledSince !== null;
   // Every later replay attributes decisions through the validated moves.
   if (version >= 37) validateCareer(state.career, state as unknown as SeasonState, version);
+  if (Object.hasOwn(state, 'background')) validateBackground(state.background, { ...(state as unknown as SeasonState), divisions: seasonDivisions });
   const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId, marketEnabled, version, careerContext) : undefined;
   if (!sameData(state.clubs, clubsForEmploymentYear(employment, seasonNumber, round, careerContext))) fail('clubs', 'must match the versioned player catalog and effective employment registrations');
   const clubs = state.clubs as readonly Team[], clubIds = clubs.map(club => club.id);
@@ -2956,8 +2961,10 @@ export function parseSeason(text: string): SeasonState {
   // Saves from format 50 on already record the season's divisions and keep them.
   const divisions = version < 50 ? openingDivisions(worldOf(archived), archived.seasonNumber) : undefined;
   const withDivisions = divisions ? { ...archived, divisions } : archived;
-  validateSeasonState(withDivisions);
-  return withDivisions;
+  // Format 53: careers that record divisions start an empty record of clubs outside the full world.
+  const withBackground = version < 53 && withDivisions.divisions ? { ...withDivisions, background: createBackground() } : withDivisions;
+  validateSeasonState(withBackground);
+  return withBackground;
 }
 
 export async function saveLocalSeason(state: SeasonState, expectedRevision: number): Promise<void> { await writeLocalSeason(serializeSeasonCompact(state), expectedRevision); }

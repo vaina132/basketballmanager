@@ -43,7 +43,9 @@ describe('original format-50 two-division baseline (captured before format 51, s
     }
     expect(roundTrip(state)).toEqual(state);
     const next = play(state);
-    expect(next).toEqual({ ...fixture('mid-next').raw, schemaVersion: next.schemaVersion });
+    // Format 53 adds an empty record of clubs outside the full world; everything else continues exactly.
+    expect(next.background).toEqual({ model: 'background-1', clubs: [] });
+    expect(next).toEqual({ ...fixture('mid-next').raw, schemaVersion: next.schemaVersion, background: next.background });
   }, 300_000);
 
   it('keeps the divisions a format-50 save records and rolls over exactly as captured', () => {
@@ -54,7 +56,7 @@ describe('original format-50 two-division baseline (captured before format 51, s
     expect(roundTrip(complete)).toEqual(complete);
     const opening = rolloverSeason(complete);
     const captured = fixture('opening');
-    expect(opening).toEqual({ ...captured.raw, schemaVersion: opening.schemaVersion });
+    expect(opening).toEqual({ ...captured.raw, schemaVersion: opening.schemaVersion, background: { model: 'background-1', clubs: [] } });
     // Season two's recorded divisions differ from the opening leagues; loading must not reset them.
     const loaded = parseSeason(captured.text);
     expect(loaded.divisions).toEqual(captured.raw.divisions);

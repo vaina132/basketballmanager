@@ -154,3 +154,10 @@ export function stripBoardConsequences(value: object): void {
   const board = (value as { board?: Record<string, unknown> }).board;
   if (board) delete board.consequencesSince;
 }
+
+/** Format 52 and earlier have no record of clubs outside the full world and no lower-division lists. */
+export function stripBackground(value: object): void {
+  const state = value as Record<string, unknown>;
+  delete state.background;
+  if (state.world && typeof state.world === 'object') delete (state.world as Record<string, unknown>).lowerDivisions;
+}

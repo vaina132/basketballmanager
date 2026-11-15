@@ -1,3 +1,4 @@
+import type { SeasonBackground } from './background';
 import type { CompetitionStage } from './competition';
 import type { CareerWorld } from './world';
 import type { SeasonBoard } from './board';
@@ -111,7 +112,8 @@ export interface DomesticDivisions {
 /** Format 49 adds domestic postseasons and game days inside a week; format 50 moves clubs between divisions. */
 /** Format 51 adds the FIBA Appendix D standings rule, the labelled default for new worlds' leagues without a sourced rule. */
 /** Format 52 adds the verified ACB, BBL and FIP standings rules for new worlds' Spanish, German and Italian leagues. */
-export const SEASON_SCHEMA_VERSION = 52;
+/** Format 53 adds the record of clubs outside the full world (`background`) and the world's lower-division lists. */
+export const SEASON_SCHEMA_VERSION = 53;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -164,6 +166,8 @@ export interface SeasonState {
   restWeeks?: { round: number; clubId: string; conditions: Record<string, number> }[];
   /** Format 50: this season's division memberships, in worlds whose leagues have postseasons. */
   divisions?: DomesticDivisions;
+  /** Format 53: clubs outside the full world, with their squads (step 3.4d). Present exactly when divisions are. */
+  background?: SeasonBackground;
   activeFixtureId: string | null;
   activeMatch: MatchState | null;
 }

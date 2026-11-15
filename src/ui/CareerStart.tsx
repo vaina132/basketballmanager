@@ -89,7 +89,7 @@ function SavedDetails({ career }: { career: CareerSummary }) {
 
 export function CareerStart(props: CareerStartProps) {
   return <div className="career-start">
-    <header className="career-start-header"><div className="career-start-brand"><Icon name="ball" size={30} /><div>COURTSIDE<small>Basketball Manager</small></div></div><span className="career-start-edition">Real clubs<br />Private data pack</span></header>
+    <header className="career-start-header"><div className="career-start-brand"><Icon name="ball" size={30} /><div>COURTSIDE<small>Basketball Manager</small></div></div><span className="career-start-edition">Real clubs<br />Online real data</span></header>
     <main className="career-start-body">
       {props.view === 'menu' ? <CareerMenu {...props} /> : <CareerForm key={props.view} {...props} profileOnly={props.view === 'profile'} />}
     </main>

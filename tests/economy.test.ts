@@ -3,7 +3,7 @@ import type { CareerWorld, EconomyBand } from '../src/domain/world';
 import type { SeasonState } from '../src/domain/season';
 import { economyPack } from './helpers/economy-pack';
 import { worldFromPack } from '../src/world/real-world';
-import { REAL_ECONOMY_RULES, revenueMixFor } from '../src/world/economy';
+import { knownClubBudget, REAL_ECONOMY_RULES, revenueMixFor } from '../src/world/economy';
 import { overallRating } from '../src/world/overall-rating';
 import { requireWorldContexts, validateWorld } from '../src/world/career-world';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
@@ -67,12 +67,17 @@ describe('realistic money for real-club worlds (format 62)', () => {
     }
     // Stronger squads get bigger budgets within their band and country.
     expect(economyOf(world, 'acb-3').budget).toBeGreaterThan(economyOf(world, 'acb-4').budget);
+    // Upper halves are placed per country: each country's strongest club outside the EuroLeague reaches its own ceiling.
+    for (const [clubId, country] of [['acb-3', 'Spain'], ['lnb-1', 'France'], ['bsl-2', 'Turkey'], ['gbl-2', 'Greece']] as const) {
+      expect(band(clubId)).toBe('top-upper');
+      expect(economyOf(world, clubId).budget).toBe(REAL_ECONOMY_RULES.budgets['top-upper'][country]![2] * EURO);
+    }
     expect(economyOf(world, 'acb-5').budget).toBeGreaterThan(economyOf(world, 'acb-8').budget);
     // Typical lower-half budgets differ by country: a Spanish club outspends a Greek one of the same place.
     expect(economyOf(world, 'acb-8').budget).toBeGreaterThan(economyOf(world, 'gbl-6').budget);
   });
 
-  it('pays player wage bills near the band\'s share, convex by overall rating, within the contract limits', () => {
+  it('pays player wage bills near the band\'s share, shaped like real contract lists, within the contract limits', () => {
     for (const finance of world.finances) {
       const economy = finance.economy!;
       const share = wageBill(world, finance.clubId) / economy.budget * 100;
@@ -80,9 +85,20 @@ describe('realistic money for real-club worlds (format 62)', () => {
       expect(Math.abs(share - target)).toBeLessThan(2);
     }
     const ranked = (clubId: string) => [...world.clubs.find(item => item.id === clubId)!.players].sort((a, b) => overallRating(b.attributes, b.position) - overallRating(a.attributes, a.position)).map(player => world.wages[player.id]!);
-    const middle = ranked('acb-5');
-    expect(middle[0]!).toBeGreaterThan(middle[Math.floor(middle.length / 2)]! * 2);
-    expect(middle[0]!).toBeGreaterThan(middle.at(-1)! * 5);
+    // The best paid takes 14-25% of the bill (real lists: Olympiacos 20%, Panathinaikos 14.5%), the next about a tenth,
+    // and a better overall rating never earns less.
+    for (const club of world.clubs) {
+      const wages = ranked(club.id), bill = wageBill(world, club.id);
+      const ratings = club.players.map(player => overallRating(player.attributes, player.position)).sort((a, b) => b - a);
+      expect(wages[0]! / bill).toBeLessThanOrEqual(0.25);
+      // Players of equal rating share their places' weights (generated squads' two best are equal).
+      if (ratings[0] === ratings[1]) { expect(wages[0]).toBe(wages[1]); continue; }
+      expect(wages[0]! / bill).toBeGreaterThanOrEqual(0.14);
+      expect(wages[0]! / bill).toBeLessThanOrEqual(0.25);
+      expect(wages[1]! / bill).toBeLessThan(0.16);
+      expect(wages.at(-1)! / bill).toBeGreaterThan(0.015);
+      for (let index = 1; index < wages.length; index += 1) expect(wages[index]!).toBeLessThanOrEqual(wages[index - 1]!);
+    }
     const top = ranked('acb-1');
     // EuroLeague top group: the bench floor (EUR 150,000 net, cost x2 in Spain) and a star in the millions.
     expect(Math.min(...top)).toBeGreaterThanOrEqual(REAL_ECONOMY_RULES.benchFloor['euroleague-top'] * 2 * EURO * 0.99);
@@ -167,6 +183,21 @@ describe('realistic money for real-club worlds (format 62)', () => {
     envelope.formatVersion = 61; envelope.state.schemaVersion = 61;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/economy requires format 62/);
   }, 300_000);
+
+  it('replaces the strength placement with a published budget, matched on the whole club name', () => {
+    const renamed = { ...pack, clubs: pack.clubs.map(club => club.id === 'acb-1' ? { ...club, name: 'Real Madrid' } : club.id === 'bsl-2' ? { ...club, name: 'Fenerbahçe II' } : club.id === 'bsl-1' ? { ...club, name: 'Fenerbahçe Beko' } : club) };
+    const named = worldFromPack(renamed, ['acb', 'feb', 'lnb', 'a2', 'bsl', 'gbl']);
+    // The band stays the competition's; only the amount is replaced.
+    expect(economyOf(named, 'acb-1')).toMatchObject({ band: economyOf(world, 'acb-1').band, budget: 60_000_000 * EURO });
+    expect(economyOf(named, 'bsl-1').budget).toBe(44_000_000 * EURO);
+    // A reserve side is never matched by a partial name.
+    expect(economyOf(named, 'bsl-2').budget).toBe(economyOf(world, 'bsl-2').budget);
+    expect(knownClubBudget('  Žalgiris  KAUNAS ')).toBe(29_000_000);
+    expect([knownClubBudget('Real Madrid B'), knownClubBudget('Partizan'), knownClubBudget('Hapoel Tel Aviv')]).toEqual([null, null, null]);
+    // Wage bills follow the replaced budget.
+    const share = REAL_ECONOMY_RULES.wageShare[economyOf(named, 'acb-1').band] * (100 - REAL_ECONOMY_RULES.headCoachPercent) / 100;
+    expect(Math.abs(wageBill(named, 'acb-1') / (60_000_000 * EURO) * 100 - share)).toBeLessThan(2);
+  });
 
   it('rejects incomplete economy figures', () => {
     const club = world.finances[0]!;

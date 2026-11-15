@@ -28,8 +28,12 @@ export const REAL_ECONOMY_RULES = Object.freeze({
     'euroleague-top': { default: [40e6, 48e6, 70e6] },
     /** [S] Baskonia 17-23, ASVEL 19-25, Virtus 25-28, Paris 29-31, Beşiktaş 20, Žalgiris 22-29: 25M (17-38M). */
     euroleague: { default: [17e6, 25e6, 38e6] },
-    /** [S] EuroCup/BCL level: Unicaja 19, Tortona 14.5, Alba 11.4, Ulm/Bonn 9.2, Bourg 8.1: 10M (7-20M). [E] Turkey and Greece lower. */
-    'top-upper': { default: [7e6, 10e6, 20e6], Turkey: [5e6, 8e6, 15e6], Greece: [3e6, 5e6, 9e6] },
+    /**
+     * [S] EuroCup/BCL level (Unicaja 19, Tortona 14.5, Alba 11.4, Ulm/Bonn 9.2, Bourg 8.1), per country so a club is
+     * placed among its own country's upper half: Spain 8/11/19, Germany 7/9/14, France 5.5/7/9, Italy 7/10/15; [E] Turkey
+     * 5/8/15, Greece 3/5/9 and every other country 4/7/12 (other countries' clubs are placed among each other).
+     */
+    'top-upper': { Spain: [8e6, 11e6, 19e6], Germany: [7e6, 9e6, 14e6], France: [5.5e6, 7e6, 9e6], Italy: [7e6, 10e6, 15e6], Turkey: [5e6, 8e6, 15e6], Greece: [3e6, 5e6, 9e6], default: [4e6, 7e6, 12e6] },
     /** [S] typical by country with minimums (France 3.7M, Germany 3.5M licensing rule, Italy 3.7M, Turkey 1.8M); [E] highs, Spain and Greece lows. */
     'top-lower': { France: [3.7e6, 5.5e6, 7.5e6], Germany: [3.5e6, 5.5e6, 7.5e6], Italy: [3.7e6, 6e6, 8e6], Spain: [3.5e6, 6e6, 8e6], Turkey: [1.8e6, 3e6, 5e6], Greece: [2e6, 2.5e6, 4e6], default: [2e6, 4e6, 6e6] },
     /** [S] France 3.5M (2-5.75M), Italy 2.0M, Spain 1.5M (0.4-2.6M), Turkey 1.0M; [E] Germany 1.5M, Greece 0.6M and the other ranges. */
@@ -37,6 +41,34 @@ export const REAL_ECONOMY_RULES = Object.freeze({
     /** [E] Third divisions (Spain's Segunda FEB): no published figures; about a third of the second division. */
     third: { default: [0.15e6, 0.45e6, 0.9e6] },
   } as Readonly<Record<EconomyBand, Readonly<Record<string, readonly [number, number, number]>>>>),
+  /**
+   * [S] Published club budgets (EUR million) from the sprint-4 finance research (2025-27 money: the latest published
+   * season, mostly 2025-26; club accounts, LNB budget tables, BBL licensing reports, Italian, Spanish, Greek and Turkish
+   * press). They replace the strength placement of the budget amount only: the club keeps the band its competition gives
+   * it. Matched on the whole normalised club name (accents, case and punctuation ignored); several spellings per club,
+   * never a partial match, so reserve sides ("Fenerbahçe II") stay unmatched. Partizan, Crvena zvezda, Maccabi, Hapoel
+   * Tel Aviv and Dubai have no reliable 2026-27 figure and keep the strength rule.
+   */
+  knownBudgets: Object.freeze([
+    [60, ['real madrid']], [57, ['panathinaikos', 'panathinaikos aktor athens', 'panathinaikos athens']], [42, ['olympiacos', 'olympiakos', 'olympiacos piraeus']],
+    [44, ['fenerbahce', 'fenerbahce beko', 'fenerbahce beko istanbul']], [35, ['anadolu efes', 'efes', 'anadolu efes istanbul']], [45, ['fc barcelona', 'barcelona', 'barca']],
+    [40, ['olimpia milano', 'ea7 emporio armani milano', 'armani milano', 'ax armani exchange milano']], [39, ['as monaco', 'monaco', 'as monaco basket']],
+    [48, ['bayern munich', 'fc bayern munich', 'bayern munchen', 'fc bayern munchen', 'fc bayern munchen basketball']], [25, ['virtus bologna', 'virtus segafredo bologna', 'virtus olidata bologna']],
+    [31, ['paris basketball', 'paris']], [25, ['ldlc asvel', 'asvel', 'asvel villeurbanne', 'ldlc asvel villeurbanne']], [29, ['zalgiris kaunas', 'zalgiris']],
+    [23, ['baskonia', 'saski baskonia', 'baskonia vitoria gasteiz']], [38, ['valencia basket', 'valencia basket club']], [20, ['besiktas', 'besiktas fibabanka', 'besiktas gain']],
+    [19, ['unicaja', 'unicaja malaga']], [5.9, ['basquet coruna', 'leyma coruna', 'leyma basquet coruna']], [11.4, ['alba berlin']], [9.2, ['ratiopharm ulm']],
+    [9.2, ['telekom baskets bonn']], [9.1, ['ewe baskets oldenburg']], [8.2, ['jl bourg', 'jl bourg en bresse', 'jeanne d arc bourg']],
+    [7.5, ['le mans sarthe', 'le mans sarthe basket', 'le mans']], [7.2, ['elan chalon', 'chalon', 'elan chalon sur saone']], [7.1, ['sig strasbourg', 'strasbourg']],
+    [6.5, ['cholet basket', 'cholet']], [6.4, ['jda dijon', 'dijon', 'jda dijon basket']], [6.2, ['limoges csp', 'limoges']], [5.9, ['bcm gravelines dunkerque', 'gravelines dunkerque', 'gravelines']],
+    [5.8, ['sluc nancy', 'nancy', 'sluc nancy basket']], [5.6, ['nanterre 92', 'nanterre']], [4.1, ['saint quentin', 'saint quentin basket ball']], [3.9, ['boulazac', 'boulazac basket dordogne']],
+    [3.7, ['essm le portel', 'le portel']], [14.5, ['derthona tortona', 'bertram derthona tortona', 'tortona']], [11, ['reyer venezia', 'umana reyer venezia', 'venezia']],
+    [10, ['napoli basket', 'napoli', 'gevi napoli basket']], [10, ['varese', 'pallacanestro varese', 'openjobmetis varese']],
+    [9, ['reggiana', 'pallacanestro reggiana', 'reggio emilia', 'unahotels reggio emilia']], [7, ['cantu', 'pallacanestro cantu', 'acqua s bernardo cantu']],
+    [7, ['aquila trento', 'trento', 'dolomiti energia trento', 'aquila basket trento']], [6.5, ['verona', 'tezenis verona', 'scaligera verona']], [6.1, ['apu udine', 'udine', 'old wild west udine']],
+    [6, ['treviso', 'treviso basket', 'nutribullet treviso']], [6, ['trieste', 'pallacanestro trieste']], [3.7, ['scafati', 'givova scafati', 'scafati basket']], [1.7, ['bursaspor', 'bursaspor basketbol', 'bursaspor info yatirim']],
+  ] as readonly (readonly [number, readonly string[]])[]),
+  /** [S] AS Monaco plays in France's LNB: clubs of these countries use the named country's rules. */
+  countryAliases: Object.freeze({ Monaco: 'France' } as Readonly<Record<string, string>>),
   /** [S] The EuroLeague's strongest squads form its top group: this share of its clubs (9 of 20). */
   euroleagueTopShare: 0.45,
   /** [S] Players plus head coach, gross cost to the club, % of budget. */
@@ -66,15 +98,27 @@ export const REAL_ECONOMY_RULES = Object.freeze({
   /** [S] Country adjustments in points; the net change is taken from other income, then sponsorship, so the mix sums to 100. */
   countryMix: Object.freeze({ Spain: { public: 10 }, Italy: { owner: 10 }, Turkey: { owner: 15 }, Greece: { owner: 15 }, Germany: { owner: -5, sponsorship: 10 } } as Readonly<Record<string, Partial<RevenueMix>>>),
   /**
-   * Player wages: a floor per player (the band's bench minimum, net euros) and the rest of the wage bill shared by
-   * overall rating, convex (`wageCurve` rating points multiply a player's share by e). [S] Role bands, net per season:
+   * Player wages share the club's wage bill by rank in the squad (best overall rating first), the shape of real
+   * contract lists: [S] Olympiacos 2024-25, 15 contracts 3.9 / 2.1 / 1.85 / 1.65 / 1.5 / 1.25 / 1.2 / 1.1 / 1.1 / 1.0 /
+   * 0.75 / 0.65 / 0.6 / 0.6 / 0.5 (EUR million, top 20% of 19.75M); Panathinaikos' best paid 2.68M of 18.5M (14.5%).
+   * `wageRanks` are the twelve regulars' weights, `wageExtra` each further player's (`wageFringe` from the fifteenth);
+   * a rating `wageRating` points above the regulars' average multiplies a weight by e (within `wageRatingLimits`),
+   * generated players' weights are halved, and no player takes more than `wageTopShare` of the bill. Equal ratings
+   * share their places' weights. The band's bench minimum (net euros, below) is each player's floor. [S] Role bands,
+   * net per season:
    * EuroLeague top star 2.5-5.0M, starter 1.0-2.5M, rotation 0.5-1.2M, bench 0.15-0.5M; other EuroLeague star 1.0-2.0M,
    * starter 0.5-1.0M, rotation 0.25-0.5M, bench 0.1-0.25M; top division upper star 350-700k, starter 150-350k, rotation
    * 80-150k, bench 30-80k; lower star 150-300k, starter 80-150k, rotation 40-80k, bench 15-40k; second division star
    * 60-120k, starter 35-60k, rotation 20-35k, bench 8-20k. [E] third division bench 4k.
    */
   benchFloor: Object.freeze({ 'euroleague-top': 150_000, euroleague: 100_000, 'top-upper': 30_000, 'top-lower': 15_000, second: 8_000, third: 4_000 } as Readonly<Record<EconomyBand, number>>),
-  wageCurve: 4.5,
+  wageRanks: Object.freeze([15, 10, 9, 8.5, 7.5, 7, 6.5, 6, 5.5, 5, 4.5, 4] as const),
+  wageExtra: 2.5,
+  wageFringe: 1.5,
+  wageRating: 80,
+  wageRatingLimits: Object.freeze([0.75, 1.25] as const),
+  wageGenerated: 0.5,
+  wageTopShare: 0.25,
   /** [S] Gross cost to the club per euro net: Spain, Germany 2.0; Italy 2.4; France 1.9; Greece 1.5; Turkey 1.4. [E] elsewhere 1.8. */
   costPerNet: Object.freeze({ Spain: 2, Germany: 2, Italy: 2.4, France: 1.9, Greece: 1.5, Turkey: 1.4, default: 1.8 } as Readonly<Record<string, number>>),
   /**
@@ -189,16 +233,51 @@ export function revenueMixFor(band: EconomyBand, country: string): RevenueMix {
   return mix;
 }
 
-/** Each player's season wage (club cost, cents, in €500 steps) sharing `bill` by overall rating above a per-player floor. */
-export function shareWageBill(players: readonly Team['players'][number][], bill: number, floor: number): Record<string, number> {
+/** A club name for matching published budgets: lower case, no accents or punctuation, single spaces. */
+export const normalClubName = (name: string): string => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const knownBudgetIndex = new Map(REAL_ECONOMY_RULES.knownBudgets.flatMap(([budget, names]) => names.map(name => [name, budget] as const)));
+/** A club's published budget in euros (`knownBudgets`), or null when none is known. */
+export const knownClubBudget = (name: string): number | null => { const budget = knownBudgetIndex.get(normalClubName(name)); return budget === undefined ? null : budget * 1e6; };
+
+/**
+ * Each player's season wage (club cost, cents, in €500 steps) sharing `bill` by rank in the squad (see `wageRanks`),
+ * never below `floor` per player, the best paid at most `wageTopShare` of the bill. `generated` names generated players.
+ */
+export function shareWageBill(players: readonly Team['players'][number][], bill: number, floor: number, generated: ReadonlySet<string> = new Set()): Record<string, number> {
+  const rules = REAL_ECONOMY_RULES;
   const ratings = players.map(player => overallRating(player.attributes, player.position));
-  const top = Math.max(...ratings);
-  const weights = ratings.map(rating => Math.exp((rating - top) / REAL_ECONOMY_RULES.wageCurve));
-  const total = weights.reduce((sum, value) => sum + value, 0);
-  const base = Math.min(floor, bill / players.length / 2), rest = Math.max(0, bill - base * players.length);
-  const limit = REAL_ECONOMY_RULES.limits.maxContractWage * CENTS;
+  const order = players.map((_, index) => index).sort((a, b) => ratings[b]! - ratings[a]!);
+  const rankWeight = (rank: number) => rank < rules.wageRanks.length ? rules.wageRanks[rank]! : rank < 14 ? rules.wageExtra : rules.wageFringe;
+  // Equal ratings share the weights of the places they hold together.
+  const place = new Array<number>(players.length);
+  for (let start = 0; start < order.length;) {
+    let end = start;
+    while (end + 1 < order.length && ratings[order[end + 1]!] === ratings[order[start]!]) end += 1;
+    let total = 0;
+    for (let rank = start; rank <= end; rank += 1) total += rankWeight(rank);
+    for (let rank = start; rank <= end; rank += 1) place[order[rank]!] = total / (end - start + 1);
+    start = end + 1;
+  }
+  const regulars = order.slice(0, rules.wageRanks.length).map(index => ratings[index]!);
+  const average = regulars.reduce((sum, value) => sum + value, 0) / regulars.length;
+  const [lowest, highest] = rules.wageRatingLimits;
+  const weights = players.map((player, index) => place[index]! * clamp(Math.exp((ratings[index]! - average) / rules.wageRating), lowest, highest) * (generated.has(player.id) ? rules.wageGenerated : 1));
+  const sum = weights.reduce((total, value) => total + value, 0);
+  let shares = weights.map(value => value / sum);
+  // No single player takes more than the top share; the rest keep their proportions.
+  const best = shares.indexOf(Math.max(...shares));
+  if (shares[best]! > rules.wageTopShare) { const rest = 1 - shares[best]!; shares = shares.map((value, index) => index === best ? rules.wageTopShare : value * (1 - rules.wageTopShare) / rest); }
+  // Players below the floor get the floor; the others share what is left in proportion (a few passes settle it).
+  const minimum = Math.min(floor, bill / players.length / 2);
+  let amounts = shares.map(value => value * bill);
+  for (let pass = 0; pass < 4; pass += 1) {
+    const floored = amounts.map(value => value <= minimum);
+    const free = bill - floored.filter(Boolean).length * minimum, flexible = amounts.reduce((total, value, index) => total + (floored[index] ? 0 : value), 0);
+    amounts = amounts.map((value, index) => floored[index] ? minimum : value * free / flexible);
+  }
+  const limit = rules.limits.maxContractWage * CENTS;
   return Object.fromEntries(players.map((player, index) => {
-    const wage = base + rest * weights[index]! / total;
+    const wage = amounts[index]!;
     // Larger wages round to €5,000, smaller ones to €500 (the contract wage step).
     const step = wage >= 10_000_000 ? 500_000 : 50_000;
     return [player.id, clamp(Math.round(wage / step) * step, 500_000, limit)];
@@ -225,6 +304,7 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
   const competitions = world.europeanCompetitions ?? [];
   for (const competition of competitions) for (const clubId of competition.clubIds) if (!place.has(clubId)) place.set(clubId, { country: competition.countries?.[clubId] ?? countryOf(clubId) ?? 'Other', tier: 1, league: null, size: 1 });
   for (const club of world.clubs) if (!place.has(club.id)) place.set(club.id, { country: countryOf(club.id) ?? 'Other', tier: 1, league: null, size: 1 });
+  for (const item of place.values()) item.country = rules.countryAliases[item.country] ?? item.country;
   const kindOf = (clubId: string) => competitions.find(competition => competition.clubIds.includes(clubId))?.kind ?? null;
 
   // Bands: the EuroLeague's strongest share is its top group; other top-division clubs are upper half when they play
@@ -246,7 +326,8 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
   const budgetGroups = new Map<string, string[]>(), gateGroups = new Map<string, string[]>();
   for (const [clubId, item] of place) {
     const own = band.get(clubId)!, euro = own === 'euroleague-top' || own === 'euroleague';
-    const country = rules.budgets[own][item.country] ? item.country : item.league ? `${item.country}-default` : 'default';
+    // Within a band, clubs are placed among their own country's clubs; countries without their own range share one group.
+    const country = rules.budgets[own][item.country] ? item.country : 'default';
     addTo(budgetGroups, `${own}/${euro ? '' : country}`, clubId);
     addTo(gateGroups, euro ? 'euroleague' : item.league ?? `${item.country}-${item.tier}`, clubId);
   }
@@ -258,7 +339,9 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
     const clubId = definition.clubId, item = place.get(clubId)!, own = band.get(clubId)!, t = budgetT.get(clubId)!, g = gateT.get(clubId)!;
     const euro = own === 'euroleague-top' || own === 'euroleague';
     const [low, typical, high] = bandFor(rules.budgets[own], item.country);
-    const budget = Math.round((t < 0.5 ? lerp(low, typical, t * 2) : lerp(typical, high, t * 2 - 1)) / 10_000) * 10_000 * CENTS;
+    const club = world.clubs.find(entry => entry.id === clubId)!;
+    // A published budget replaces the strength placement (the band stays the competition's).
+    const budget = Math.round((knownClubBudget(club.name) ?? (t < 0.5 ? lerp(low, typical, t * 2) : lerp(typical, high, t * 2 - 1))) / 10_000) * 10_000 * CENTS;
     // Gate: seats around the league's average by strength, a usual crowd within them, and the league's ticket yield.
     const gate = euro ? rules.gates.euroleague : bandFor(item.tier >= 3 ? rules.gates.third : item.tier === 2 ? rules.gates.second : rules.gates.top, item.country);
     const [small, middle, large] = rules.seatSpread;
@@ -279,8 +362,7 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
     const staff = wageBill * rules.headCoachPercent / 100 + budget * rules.supportStaffPercent / 100;
     const operatingCost = Math.max(0, Math.round((budget - playerBill - staff - budget * rules.reservePercent / 100) / 10_000) * 10_000);
     const floor = rules.benchFloor[own] * bandFor(rules.costPerNet, item.country) * CENTS;
-    const club = world.clubs.find(entry => entry.id === clubId)!;
-    Object.assign(wages, shareWageBill(club.players, playerBill, floor));
+    Object.assign(wages, shareWageBill(club.players, playerBill, floor, new Set(club.players.filter(player => world.playerProfiles[player.id]?.source === 'generated').map(player => player.id))));
     const economy: ClubEconomy = {
       band: own, budget, sponsorship, funding, openingCash: Math.round(budget * rules.openingCashPercent / 100 / 10_000) * 10_000, ticketPrice, operatingCost,
       scale: Math.max(1, Math.round(staff / STAFF_BUDGET * PER_MILLE)),

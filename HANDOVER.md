@@ -64,7 +64,8 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 - **3.4d-4 done (cloud, researched online):** real next divisions in new worlds: Turkey TB2L (22), Spain Segunda FEB (28), Germany ProA (18), Greece Elite League (16) (`src/data/lower-divisions-2026.ts`, sources in `competition-rules-2026.md`). Worlds may now hold up to 400 clubs (all six countries: 306).
 - **3.6 done:** the setup screen's game-speed panel now uses real-data measurements with Europe (18 clubs: 92 s a season, 4.6 MiB; 36: 247 s, 7.5 MiB; 54: 10.6 MiB), scaled by 1.5 for a typical laptop, and shows the first-season save size. The review step counted European-only clubs as weekly clubs; fixed.
 - **Contract lengths (sprint 4):** new real-club worlds use `openingContractYears` (`src/world/real-world.ts`), calibrated on published figures (EuroLeague trackers, FIBA/CIES migration report 2025): with the real pack, Spain and Turkey give one-season opening contracts to 37% of EuroLeague players (real: 45%; their squads include many young players), 66% of other top-division and 76% of second-division players; US imports outside the EuroLeague mostly one season. Generated next-division squads and joining clubs keep the old rule so saved careers replay unchanged. Real contract ends need the owner's decision (Suggestions).
-- **Next:** sprint 4 with parallel agents: match calibration, realistic injuries, hidden potential, finances (agents running).
+- **Hidden potential (sprint 4):** `src/world/potential.ts`. New careers record training model `'training-2'`: each player's headroom is the most for his age at the career start (19 or younger 8, 20-21 6, 22-23 4, 24-26 2, 27-29 1, 30+ 0 rating points) times a stable 25-100% share, capped at 20 per skill; practice stops there (100 points per rating point). Older careers (`'training-1'`) keep the two-point limit. Scouting reports and the player profile show a potential star range (unknown until scouted; narrow for the own squad). Players 30 or older no longer improve through practice in new careers. Owner check: the Potential rows in the browser, below 850 px too.
+- **Next:** sprint 4 with parallel agents: match calibration, realistic injuries, finances (agents running).
 
 ## Real clubs on every device (owner request, 15 November 2026)
 
@@ -172,6 +173,7 @@ Browser checks still to do locally (by the owner, or by a local Claude session w
 6. **Quick play-test of the feedback fixes:**
    - Start a new career and check the country-filtered league list, the speed meter and the "Preparing your career…" panel. These were checked automatically in Edge.
    - Then check in Transfers that only some players' contracts end after the first season.
+7. **Hidden potential (sprint 4):** in a new career, a scouted player's report and your own players' profiles show a "Potential" star range; unscouted players show none. Check the layout below 850 px wide.
 
 ## Suggestions for the owner
 

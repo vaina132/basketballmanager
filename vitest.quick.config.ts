@@ -11,4 +11,4 @@ export const SLOW_TESTS = [
   'tests/transfers-storage.test.ts', 'tests/season*-continuation.test.js', 'tests/league-size.test.ts',
 ];
 
-export default mergeConfig(base, defineConfig({ test: { exclude: [...configDefaults.exclude, ...SLOW_TESTS] } }));
+export default mergeConfig(base, defineConfig({ test: { exclude: [...configDefaults.exclude, '**/.claude/**', ...SLOW_TESTS] } }));

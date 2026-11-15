@@ -10,6 +10,7 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 ## Sprint 4 start: rating fairness, fast autosaves, real-data measurements (15 November 2026)
 
+- 3.6 measured estimates (15 November 2026): real-data seasons with Europe measured in the cloud (Germany 18 clubs 92 s / 4.6 MiB; Spain 36 clubs 247 s / 7.5 MiB; Spain+Germany 54 clubs 10.6 MiB, time not used: busy machine). `src/ui/GameSpeed.tsx` uses 2.26 × clubs^1.42 s (×1.5 laptop scaling) and 1.6 + 0.165 × clubs MiB; the review step now counts only weekly clubs. Vitest skips `.claude/` worktrees.
 - `src/world/rating-fairness.ts` (`withFairRatings`, in `worldFromPack`), pack field `ratingMinutes` (Edge Function v2 republished the online pack). Tests: `tests/rating-fairness.test.js` (2).
 - Checkpoints use `serializeSeasonCompact(state, { check: false })` (development mode); exports and imports stay strict. Ten checkpoint-policy tests paused with `it.skip` (listed under "Before release").
 - Measured a Spanish real-data season with Europe: 247 s a season, 7.5 MiB save, 17 s full check per save before this change.

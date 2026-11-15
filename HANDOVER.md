@@ -41,7 +41,7 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
   - "Preparing your career…" panel; careers are now built in the worker.
   - Opening contracts of 1-3 seasons (`world.playerContracts`).
 
-**Unfinished in sprint 3:** the measured estimates of 3.6 and the 3.7 browser acceptance.
+**Unfinished in sprint 3:** the 3.7 browser acceptance (3.6's measured speed and save-size estimates are done).
 
 **Known open points:**
 - Player statistics combine domestic and European games; the Competition page lists domestic games and the Europe page European ones.
@@ -62,7 +62,8 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 - **Real-data measurements** (online pack, Spain's two divisions plus the three European competitions, 166 world clubs, 1,300 opening fixtures): world built in 0.3 s, career created in 6.4 s, a full season (43 weeks) simulated in 247 s, save 7.5 MiB. The full career check took 17 s per save and 13 s per strict load; matchday autosaves now skip it (development mode), so saving costs only the encoding.
 - **Rating fairness (sprint 4):** `src/world/rating-fairness.ts`, applied in `worldFromPack`: ratings resting on fewer than 600 minutes move towards the club's minutes-weighted level (one step lower) in proportion to the minutes missing; players without statistics take that level. The online pack now carries `ratingMinutes` (version `2026.11-world-1-online-2`). Example: Anadolu Efes' 30 and 32 become 61 and 60; their regulars keep their ratings.
 - **3.4d-4 done (cloud, researched online):** real next divisions in new worlds: Turkey TB2L (22), Spain Segunda FEB (28), Germany ProA (18), Greece Elite League (16) (`src/data/lower-divisions-2026.ts`, sources in `competition-rules-2026.md`). Worlds may now hold up to 400 clubs (all six countries: 306).
-- **Next:** sprint 4 with parallel agents: match calibration, realistic injuries, hidden potential, finances.
+- **3.6 done:** the setup screen's game-speed panel now uses real-data measurements with Europe (18 clubs: 92 s a season, 4.6 MiB; 36: 247 s, 7.5 MiB; 54: 10.6 MiB), scaled by 1.5 for a typical laptop, and shows the first-season save size. The review step counted European-only clubs as weekly clubs; fixed.
+- **Next:** sprint 4 with parallel agents: match calibration, realistic injuries, hidden potential, finances (agents running), contract-data research.
 
 ## Real clubs on every device (owner request, 15 November 2026)
 

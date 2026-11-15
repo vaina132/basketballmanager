@@ -12,6 +12,9 @@ import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { MIN_WORLD_CLUBS, validateWorld } from './career-world';
 import { clubTeam, type DataPack, type DataPackCompetition } from './data-pack';
 import { withFairRatings } from './rating-fairness';
+import { LOWER_DIVISIONS_2026 } from '../data/lower-divisions-2026';
+import { withLowerDivisions } from './lower-division';
+import { NO_LOWER_DIVISION_COUNTRIES } from './career-world';
 import { overallRating } from './overall-rating';
 import { POSTSEASON_FORMATS, postseasonFormatAllowed, postseasonFormatFor } from './postseason';
 
@@ -102,7 +105,7 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   const playerContracts = Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, REAL_WORLD_RULES.contractYears(ageOf(player.id), hash(player.id))])));
   const profileOf = (playerId: string): DevelopmentPlayerProfile => ({ dateOfBirth: byId.get(playerId)?.birthDate ?? `${2026 - (byId.get(playerId)?.age ?? REAL_WORLD_RULES.defaultAge)}-01-01`, source: byId.get(playerId)?.birthDate ? 'official-profile' as const : 'estimated-from-age' as const,
     positionSource: byId.get(playerId)?.profileEvidence?.positionSource ?? (byId.get(playerId)?.estimated.includes('game_position') ? 'estimated' as const : 'unverified' as const) });
-  const world: CareerWorld = {
+  const domesticWorld: CareerWorld = {
     id: realWorldId(pack, competitions.length === 1 ? competition.id : `leagues-${hash(competitions.map(item => item.id).sort().join('|')).toString(16)}`), name: competitions.length === 1 ? `${competition.name} ${competition.season}` : `European domestic leagues ${competition.season}`, source: 'real-data-pack', rosterModel: FULL_ROSTER_MODEL, startDate: DEVELOPMENT_WORLD.startDate,
     domesticLeagues: competitions.map(item => ({ id: item.id, name: item.name, country: item.country ?? 'Other', tier: item.tier, clubIds: [...item.clubIds], standingsRule: standingsRuleFor(item.country ?? 'Other', item.tier), ...(postseasons ? { postseason: postseasons.get(item.id)! } : {}) })),
     clubs: teams,
@@ -118,7 +121,15 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
     sponsors: [...market],
     rivalries: [],
   };
-  validateWorld(world);
+  validateWorld(domesticWorld);
+  // Step 3.4d-4: each chosen country's real next division (researched names, generated squads), never Italy or France.
+  const lowerLists = LOWER_DIVISIONS_2026.flatMap(list => {
+    const own = domesticWorld.domesticLeagues!.filter(league => league.country === list.country);
+    if (!own.length || NO_LOWER_DIVISION_COUNTRIES.includes(list.country) || list.tier !== Math.max(...own.map(league => league.tier)) + 1) return [];
+    const slug = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return [{ country: list.country, tier: list.tier, name: list.name, clubs: list.clubs.map(item => ({ id: `lower-${slug(list.country)}-${slug(item.name)}`.slice(0, 80), name: item.name, shortName: item.shortName, color: item.color ?? LOWER_DIVISION_COLOUR })) }];
+  });
+  const world = lowerLists.length ? withLowerDivisions(domesticWorld, lowerLists) : domesticWorld;
   // Step 3.5a: the season's European competitions (each kind once, a club in one competition) and their entrants.
   const seen = new Set<string>(), kinds = new Set<string>();
   const european: EuropeanCompetition[] = pack.competitions.filter(item => item.kind === 'european' && item.season === competition.season).flatMap(item => {
@@ -158,6 +169,9 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   });
   return withEuropeanCompetitions(world, placed, entrants, played ? { backgroundLeagues } : undefined);
 }
+
+/** Next-division clubs without a known colour. */
+const LOWER_DIVISION_COLOUR = '#6B7280';
 
 /** The EuroLeague's one-year places in 2026-27 (research of 15 November 2026): the wildcards Paris and Beşiktaş and the EuroCup route's Hapoel Tel Aviv. */
 export const ONE_YEAR_EUROLEAGUE_2026: readonly string[] = ['paris', 'besiktas', 'hapoel tel aviv'];

@@ -101,6 +101,15 @@ Checked from free sources by Claude; euroleaguebasketball.net refused direct dow
 
 `bcl-2026-1`, following the 2026-27 regulations (qualification tournaments, eight groups of four with country protection, play-ins A2-B3 and so on with the second-placed club at home in games 1 and 3, the Round of 16 pattern, best-of-three quarter-finals with the group winner at home in games 1 and 3, and a Final Four with a third-place game). Published dates checked on 15 November 2026 (BCL draw news and games page): regular season from Tuesday 6 October 2026 on Tuesdays and Wednesdays, game days through 23 December, play-ins in January, competition end 16 May 2027. **Assumed:** squad strength instead of club rankings for direct places, qualification places and pots; qualification days (8-17 September at one venue); the regular-season round dates among the listed game days; play-in, Round of 16 and quarter-final dates; quarter-final pairings I1-J2, J1-I2, K1-L2, L1-K2 and Final Four semi-finals I/J against K/L on 11 May with third place and final on 13 May; the FIBA Appendix D default for every group.
 
+### Next divisions, 2026-27 (step 3.4d-4, researched 15 November 2026)
+
+Built into new worlds below the chosen leagues (`src/data/lower-divisions-2026.ts`; generated squads until promoted; never Italy or France):
+- **Turkey, TB2L (tier 3):** 22 clubs in two groups of 11. Sources: basketfaul.com.tr draw report (2 September 2026), corumhaber.net (group B), Turkish Wikipedia; the TBF list (18 August 2026) blocks automated reading.
+- **Spain, Segunda FEB (tier 3):** 28 clubs in Grupo A and Grupo B of 14. Sources: es.wikipedia.org/wiki/Segunda_FEB_2026-27, gigantes.com (22 July 2026), diariodeleon.es.
+- **Germany, ProA (tier 2):** 18 clubs. Sources: 2basketballbundesliga.de/teams/, its table, English Wikipedia.
+- **Greece, Elite League (tier 2):** 16 clubs. Sources: eliteleague.gr standings, allstarbasket.gr fixture list.
+Groups are not modelled (one list per country); colours are from the clubs' public identities where a source gives one, otherwise neutral grey.
+
 ## Registration evidence and limits
 
 BBL permits up to twelve on a match sheet, with at least ten fit players. Its domestic-player minima are four for ten selected, five for eleven, six for twelve, with additional U23 exceptions. Its registered list and late additions have exceptions too. The simple nationality field in the pack **does not prove legal German status or an exception**. Source: BBL regulations above, section 3.

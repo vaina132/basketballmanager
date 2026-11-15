@@ -34,7 +34,7 @@ export function worldOf(context: WorldContext): CareerWorld {
   return DEVELOPMENT_WORLD;
 }
 
-/** Legacy single-league bounds. New domestic worlds allow up to 192 clubs across leagues of 4–20. */
+/** Legacy single-league bounds. New domestic worlds allow up to 400 clubs (chosen leagues of 4–20, next divisions, unchosen top divisions and European entrants). */
 export const MIN_WORLD_CLUBS = 4;
 export const MAX_WORLD_CLUBS = 40;
 /** The longest possible season: a double round robin of the largest world. */
@@ -376,7 +376,7 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
   if (!isText(world.name)) fail('world.name', 'must be a nonempty, bounded text value');
   if (world.source !== 'fictional-development' && world.source !== 'real-data-pack') fail('world.source', 'has an unsupported value');
   if (world.startDate !== DEVELOPMENT_WORLD.startDate) fail('world.startDate', 'must use the shared career calendar');
-  if (!Array.isArray(world.clubs) || world.clubs.length < MIN_WORLD_CLUBS || world.clubs.length > (world.domesticLeagues ? 192 : MAX_WORLD_CLUBS) || !world.domesticLeagues && world.clubs.length % 2 !== 0) fail('world.clubs', world.domesticLeagues ? 'must list a supported number of clubs' : `must list an even number of clubs from ${MIN_WORLD_CLUBS} to ${MAX_WORLD_CLUBS}`);
+  if (!Array.isArray(world.clubs) || world.clubs.length < MIN_WORLD_CLUBS || world.clubs.length > (world.domesticLeagues ? 400 : MAX_WORLD_CLUBS) || !world.domesticLeagues && world.clubs.length % 2 !== 0) fail('world.clubs', world.domesticLeagues ? 'must list a supported number of clubs' : `must list an even number of clubs from ${MIN_WORLD_CLUBS} to ${MAX_WORLD_CLUBS}`);
   if (Object.hasOwn(world, 'domesticLeagues')) {
     if (world.rosterModel !== FULL_ROSTER_MODEL || !Array.isArray(world.domesticLeagues) || world.domesticLeagues.length < 1 || world.domesticLeagues.length > 10) fail('world.domesticLeagues', 'requires full rosters and one to ten leagues');
     const ids = new Set<string>(), members = new Set<string>();

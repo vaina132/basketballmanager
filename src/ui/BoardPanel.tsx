@@ -12,6 +12,7 @@ import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS, RIVALRY_CROWD_
 import { careerMovesGovern, managedClubFor } from '../world/career'
 import { managerReputation, VACANCY_BASE_REQUIREMENT, VACANCY_STEP } from '../world/career-policy'
 import { FACILITY_LABELS } from './FacilitiesPanel'
+import { GrownRivalrySection } from './GrownRivalrySection'
 import { Icon, type IconName } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
 import './board-panel.css'
@@ -82,6 +83,7 @@ const effectText = (verdict: BoardVerdict) => {
 const INTENSITY_LABELS = { 1: 'Mild', 2: 'Strong', 3: 'Fierce' } as const
 
 function RivalrySection({ season, busy, onEnableRivalries }: { season: SeasonState; busy: boolean; onEnableRivalries: () => void }) {
+  if (season.rivalries?.model === 'rivalries-2') return <GrownRivalrySection season={season} busy={busy} onEnableRivalries={onEnableRivalries} />
   const clubId = season.managedClubId, entry = rivalryFor(clubId, worldOf(season))
   if (!entry) return null
   const rival = season.clubs.find(club => club.id === entry.rivalId)!

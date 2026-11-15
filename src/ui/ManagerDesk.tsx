@@ -4,6 +4,7 @@ import { getBoardSummary } from '../world/board'
 import { getPressQuestion } from '../world/press-policy'
 import { FACILITY_TYPES, getFacilityCondition, getFacilityLevel } from '../world/facilities-policy'
 import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
+import { rivalryNote } from './rivalry-text'
 import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/board-consequences'
 import { getClubSponsorship } from '../world/commercial'
 import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
@@ -85,7 +86,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   const derby = season && derbyFixture ? governingDerby(season.rivalries, derbyFixture.homeClubId, derbyFixture.awayClubId, season.seasonNumber, derbyFixture.round, worldOf(season)) : null
   if (season && derbyFixture && derby && onOpenBoard) {
     const home = derbyFixture.homeClubId === season.managedClubId, rival = season.clubs.find(club => club.id === (home ? derbyFixture.awayClubId : derbyFixture.homeClubId))!
-    notices.push({ key: 'derby', title: `Derby next · ${derby.name}`, detail: `${home ? 'Home' : 'Away'} against ${rival.name}. ${home ? `Crowd demand +${RIVALRY_CROWD_PERCENT * derby.intensity}%. ` : ''}The board and the squad weigh this result more than usual.`, action: 'View rivalry', open: onOpenBoard })
+    notices.push({ key: 'derby', title: `Derby next · ${derby.name}`, detail: `${home ? 'Home' : 'Away'} against ${rival.name}. ${home ? `Crowd demand +${RIVALRY_CROWD_PERCENT * derby.intensity}%. ` : ''}The board and the squad weigh this result more than usual.${rivalryNote(season, rival.id)}`, action: 'View rivalry', open: onOpenBoard })
   }
   const worn = season?.facilities.maintenanceSince ? FACILITY_TYPES.filter(type => getFacilityLevel(season, type, season.managedClubId) > 1).map(type => ({ type, condition: getFacilityCondition(season, type, season.managedClubId) })).filter(item => item.condition < 60) : []
   const move = season?.status === 'complete' ? season.career?.moves.find(item => item.seasonNumber === season.seasonNumber) : undefined

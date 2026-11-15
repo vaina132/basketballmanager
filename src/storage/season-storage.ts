@@ -9,7 +9,7 @@ import { commercialGovernsSeason, createCommercial, openingSponsorshipClubs, spo
 import { createRelationships } from '../world/relationships';
 import type { SeasonRelationships } from '../domain/relationships';
 import { validateRelationships } from './relationships-validation';
-import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonArchive, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
+import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonArchive, SeasonEurope, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import { STANDINGS_RULE_FORMAT } from '../domain/competition';
 import type { BackgroundClub, ClubExchange, SeasonBackground } from '../domain/background';
@@ -17,7 +17,8 @@ import type { EmploymentDeparture } from '../domain/employment';
 import { computeExchanges, departureFor, joinedContracts, leavingRecord } from '../world/exchanges';
 import { createBackground, validateBackground } from '../world/background';
 import { backgroundConditions, backgroundRosterId, backgroundSide } from '../world/europe';
-import { EUROPEAN_FORMAT_VERSION } from '../world/european-formats';
+import { EUROPEAN_FORMAT_VERSION, playedEuropeanCompetitions } from '../world/european-formats';
+import { openingEurope } from '../world/european-places';
 import { selectBackgroundMatchday } from '../world/background';
 import type { FacilityAnchor, FacilityEvent, SeasonFacilities } from '../domain/facilities';
 import { createFacilities, applyFacilityEvent, facilitiesAtEventCount } from '../world/facilities';
@@ -52,7 +53,7 @@ import { clubsEverInFullWorld, fullWorldClubs, fullWorldClubsIn, isMemberList, i
 import type { CareerWorld, WorldContext } from '../domain/world';
 import { getCareerPlayers, getCareerPlayer, getCareerWage, type CareerPlayerContext } from '../world/player-catalog';
 import { MAX_MATCH_PERIODS } from '../engine/match';
-import { applyExchanges, domesticSchedule, DAILY_RECOVERY, dateForRound, fixtureSeed, getPostseasons, seasonExchangesOf, getStandings, MAX_SEASON_NUMBER, recoverThroughGameDays, ROUND_INTERVAL_DAYS, scheduledFixtures, weekCloseCondition, weekLastGameDate } from '../world/season';
+import { applyExchanges, domesticSchedule, europeanPlacesAfter, DAILY_RECOVERY, dateForRound, fixtureSeed, getPostseasons, seasonExchangesOf, getStandings, MAX_SEASON_NUMBER, recoverThroughGameDays, ROUND_INTERVAL_DAYS, scheduledFixtures, weekCloseCondition, weekLastGameDate } from '../world/season';
 import { divisionChanges, openingDivisions, seasonLeagues } from '../world/divisions';
 import { calendarDaysBetween } from '../world/competition-calendar';
 import { createSeasonInjury, isRecovering } from '../world/health';
@@ -110,7 +111,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -123,7 +124,7 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
 
 /** The canonical games of a season given its own results (regular calendar plus due postseason games, step 3.4b). */
-function canonicalFixtures(context: { clubs: readonly Team[]; fixtures: unknown; world: CareerWorld; divisions?: DomesticDivisions; seed: number }, seasonNumber: number, path: string): SeasonFixture[] {
+function canonicalFixtures(context: { clubs: readonly Team[]; fixtures: unknown; world: CareerWorld; divisions?: DomesticDivisions; seed: number; europe?: SeasonEurope }, seasonNumber: number, path: string): SeasonFixture[] {
   if (!Array.isArray(context.fixtures)) fail(path, 'must be an array');
   try { return scheduledFixtures({ ...context, fixtures: context.fixtures as SeasonFixture[] }, seasonNumber); }
   catch { return fail(path, 'does not match the versioned schedule'); }
@@ -158,6 +159,35 @@ function validateDivisionHistory(state: SeasonState): void {
     catch (error) { fail(path, `cannot move clubs between divisions: ${error instanceof Error ? error.message : 'invalid postseason'}`); }
   }
   if (!sameData(divisions.leagues, expected)) fail('divisions.leagues', 'must follow from the opening leagues and each completed season\'s promotions and relegations');
+}
+
+/** Step 3.5f: a season's European places list every played competition in order at its field size, each club once. */
+function validateEuropeShape(value: unknown, world: CareerWorld, path: string): SeasonEurope {
+  const europe = record(value, path, ['model', 'entrants', 'oneYear']);
+  if (europe.model !== 'places-1') fail(`${path}.model`, 'is unsupported');
+  const competitions = playedEuropeanCompetitions(world), entrants = array(europe.entrants, `${path}.entrants`, competitions.length), seen = new Set<string>();
+  for (const [index, value] of entrants.entries()) {
+    const entry = record(value, `${path}.entrants[${index}]`, ['competitionId', 'clubIds']), competition = competitions[index]!;
+    if (entry.competitionId !== competition.id || !Array.isArray(entry.clubIds) || entry.clubIds.length !== competition.clubIds.length) fail(`${path}.entrants[${index}]`, 'must list the competition at its field size');
+    for (const id of entry.clubIds as unknown[]) { if (typeof id !== 'string' || seen.has(id) || !world.clubs.some(club => club.id === id)) fail(`${path}.entrants[${index}].clubIds`, 'must list clubs of this world, each in one competition'); seen.add(id); }
+  }
+  const euroleague = competitions.findIndex(competition => competition.kind === 'euroleague');
+  if (!Array.isArray(europe.oneYear) || (europe.oneYear as unknown[]).some(id => euroleague < 0 || !((entrants[euroleague] as { clubIds: unknown[] }).clubIds.includes(id)))) fail(`${path}.oneYear`, 'must list EuroLeague entrants');
+  return europe as unknown as SeasonEurope;
+}
+
+/** Step 3.5f: the opening season uses the world's lists; every later season's places follow from the season before. */
+function validateEuropeHistory(state: SeasonState, context: CareerPlayerContext): void {
+  const world = worldOf(state);
+  let expected = openingEurope(world);
+  for (const archive of state.history) {
+    const path = `history[${archive.seasonNumber - 1}].europe`;
+    if (!sameData(archive.europe, expected)) fail(path, 'must follow from the opening lists and each completed season\'s orders and European results');
+    try {
+      expected = europeanPlacesAfter({ ...context, world, seed: state.seed, seasonNumber: archive.seasonNumber, history: state.history, fixtures: archive.fixtures as unknown as SeasonFixture[], clubs: state.clubs, europe: archive.europe!, ...(archive.divisions ? { divisions: archive.divisions } : {}), ...(state.background ? { background: state.background } : {}) });
+    } catch (error) { fail(path, `cannot decide the next season's places: ${error instanceof Error ? error.message : 'invalid results'}`); }
+  }
+  if (!sameData(state.europe, expected)) fail('europe', 'must follow from the opening lists and each completed season\'s orders and European results');
 }
 
 /** Whether a club was in the full world in that season (step 3.4d-2): staff appointments name a club of their own season. */
@@ -1091,7 +1121,7 @@ function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employ
   for (const [index, value] of physio.rehabilitation.entries()) record(value, `physio.rehabilitation[${index}]`, ['id', 'injuryId', 'playerId', 'clubId', 'seasonNumber', 'afterRound', 'fromDate', 'toDate', 'rosterId', 'contractId', 'physioId', 'eligibleDays', 'creditBefore', 'creditEarned', 'creditAfter', 'returnBefore', 'returnAfter']);
   const schedules = new Map<string, SeasonFixture>(), years = new Map<string, number>();
   // Each season's canonical games, including the postseason games its own results made due (step 3.4b).
-  for (let year = 1; year <= state.seasonNumber; year += 1) for (const fixture of canonicalFixtures({ clubs: state.clubs, fixtures: year === state.seasonNumber ? state.fixtures : state.history[year - 1]?.fixtures, world: worldOf(state), divisions: year === state.seasonNumber ? state.divisions : state.history[year - 1]?.divisions, seed: state.seed }, year, 'injuries')) { schedules.set(fixture.id, fixture); years.set(fixture.id, year); }
+  for (let year = 1; year <= state.seasonNumber; year += 1) for (const fixture of canonicalFixtures({ clubs: state.clubs, fixtures: year === state.seasonNumber ? state.fixtures : state.history[year - 1]?.fixtures, world: worldOf(state), divisions: year === state.seasonNumber ? state.divisions : state.history[year - 1]?.divisions, seed: state.seed, ...((year === state.seasonNumber ? state.europe : state.history[year - 1]?.europe) ? { europe: year === state.seasonNumber ? state.europe : state.history[year - 1]!.europe } : {}) }, year, 'injuries')) { schedules.set(fixture.id, fixture); years.set(fixture.id, year); }
   const players = new Set(getCareerPlayers(state).map(player => player.id));
   // Step 3.5b: a background side's player injured in a European game.
   const backgroundPlayer = (fixture: SeasonFixture, clubId: string, playerId: string) => !!fixture.competition && !fullWorldClubsIn(state, years.get(fixture.id)!).some(club => club.id === clubId) && backgroundSide(state, clubId, years.get(fixture.id)!).players.some(player => player.id === playerId);
@@ -2662,7 +2692,7 @@ function validateState(value: unknown, version: SeasonFormatVersion): void {
 function validateStateUncached(value: unknown, version: SeasonFormatVersion): void {
   const legacy = version === 1, career = version >= 3;
   checkJsonTree(value);
-  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 53 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'background') ? ['background'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
+  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 53 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'background') ? ['background'] : []), ...(version >= 60 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'europe') ? ['europe'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
   if (state.schemaVersion !== version || state.engineVersion !== 'possession-3') fail('state', 'uses an unsupported schema or engine');
   // Format 39: careers outside the built-in league carry their world, which must be complete and named by dataPackId.
   if (Object.hasOwn(state, 'world')) {
@@ -2682,6 +2712,11 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     const since = Object.hasOwn(EUROPEAN_FORMAT_VERSION, competition.format!) ? EUROPEAN_FORMAT_VERSION[competition.format!] : 57;
     if (version < since) fail('world.europeanCompetitions.format', `requires format ${since} or later`);
   }
+  // Format 60 (step 3.5f): European places, unchosen top divisions and one-year EuroLeague places.
+  if (version < 60 && (Object.hasOwn(world, 'europeanPlaces') || Object.hasOwn(world, 'backgroundLeagues') || world.europeanCompetitions?.some(competition => Object.hasOwn(competition, 'oneYear')))) fail('world.europeanPlaces', 'requires format 60 or later');
+  const usesEurope = version >= 60 && Object.hasOwn(world, 'europeanPlaces');
+  if (usesEurope !== Object.hasOwn(state, 'europe')) fail('europe', usesEurope ? 'must record this season\'s European places' : 'requires format 60 and a world with European places');
+  const seasonEurope = usesEurope ? validateEuropeShape(state.europe, world, 'europe') : undefined;
   // Format 53 listed identities only; from format 54 the next-division clubs are in the world.
   if (world.lowerDivisions?.some(entry => isMemberList(entry) !== (version >= 54))) fail('world.lowerDivisions', version >= 54 ? 'must list clubs of the world from format 54' : 'requires format 54 to list clubs of the world');
   // Format 50: careers whose leagues have postseasons record each season's divisions.
@@ -2778,13 +2813,14 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     const archives = array(state.history, 'history', seasonNumber - 1);
     for (const [archiveIndex, value] of archives.entries()) {
       const path = `history[${archiveIndex}]`, summarized = version >= 45 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'summary');
-      const archive = record(value, path, ['seasonNumber', 'fixtures', ...(version >= 9 ? ['rosters'] : []), ...(summarized ? ['summary'] : []), ...(usesDivisions && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : [])]);
+      const archive = record(value, path, ['seasonNumber', 'fixtures', ...(version >= 9 ? ['rosters'] : []), ...(summarized ? ['summary'] : []), ...(usesDivisions && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(usesEurope ? ['europe'] : [])]);
       const archiveDivisions = archive.divisions === undefined ? undefined : validateDivisionShape(archive.divisions, world, `${path}.divisions`, archiveIndex + 1);
       if (archive.seasonNumber !== archiveIndex + 1) fail(`${path}.seasonNumber`, 'must preserve every previous season in order');
       // That season's own full-world clubs (step 3.4d-2).
       const archiveClubs = clubsForEmploymentYear(employment, archiveIndex + 1, worldRounds(world), careerContext);
       const archivedRosters = version >= 9 ? validateRosters(archive.rosters, `${path}.rosters`, archiveClubs, archiveIndex + 1, employment, worldRounds(world), careerContext) : undefined;
-      const schedule = canonicalFixtures({ clubs: archiveClubs, fixtures: archive.fixtures, world, divisions: archiveDivisions, seed }, archiveIndex + 1, `${path}.fixtures`);
+      const archiveEurope = usesEurope ? validateEuropeShape(archive.europe, world, `${path}.europe`) : undefined;
+      const schedule = canonicalFixtures({ clubs: archiveClubs, fixtures: archive.fixtures, world, divisions: archiveDivisions, seed, ...(archiveEurope ? { europe: archiveEurope } : {}) }, archiveIndex + 1, `${path}.fixtures`);
       const fixtures = array(archive.fixtures, `${path}.fixtures`, schedule.length);
       let hasPlayerStats: boolean | undefined;
       for (const [index, value] of fixtures.entries()) {
@@ -2803,7 +2839,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       if (version >= 45) validateSeniorSummary(archive as unknown as SeasonState['history'][number], managedClubFor(state as unknown as SeasonState, archiveIndex + 1, false), path);
     }
   }
-  const schedule = canonicalFixtures({ clubs, fixtures: state.fixtures, world, divisions: seasonDivisions, seed }, seasonNumber, 'fixtures'), fixtures = array(state.fixtures, 'fixtures', schedule.length);
+  const schedule = canonicalFixtures({ clubs, fixtures: state.fixtures, world, divisions: seasonDivisions, seed, ...(seasonEurope ? { europe: seasonEurope } : {}) }, seasonNumber, 'fixtures'), fixtures = array(state.fixtures, 'fixtures', schedule.length);
   const committedRound = state.status === 'complete' ? round : round - 1;
   // Step 3.4a: the current week's game day is its earliest date with an unplayed game; earlier game days are committed.
   let pendingDay: string | null = null;
@@ -2837,6 +2873,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   }
   // Step 3.4c: each season's divisions follow from the previous seasons' promotions and relegations.
   if (seasonDivisions) validateDivisionHistory(state as unknown as SeasonState);
+  // Step 3.5f: each season's European places follow from the opening lists and every completed season.
+  if (seasonEurope) validateEuropeHistory(state as unknown as SeasonState, careerContext);
   if (!legacy) {
     const injuries = state.injuries as unknown[];
     for (const [index, injury] of injuries.entries()) record(injury, `injuries[${index}]`, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);

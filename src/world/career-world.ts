@@ -121,13 +121,27 @@ export function europeanOnlyClubIds(world: CareerWorld): ReadonlySet<string> {
   }
   return ids;
 }
+const backgroundLeagueSets = new WeakMap<CareerWorld, ReadonlySet<string>>();
+/** Clubs of the unchosen top divisions (format 60): outside the full world, ranked in estimated tables. */
+export function backgroundLeagueClubIds(world: CareerWorld): ReadonlySet<string> {
+  let ids = backgroundLeagueSets.get(world);
+  if (!ids) { ids = new Set((world.backgroundLeagues ?? []).flatMap(league => league.clubIds)); backgroundLeagueSets.set(world, ids); }
+  return ids;
+}
+/** A club's country: its opening league's or background league's, else as a European competition lists it (null when unknown). */
+export function clubCountry(world: CareerWorld, clubId: string): string | null {
+  const league = world.domesticLeagues?.find(item => item.clubIds.includes(clubId)) ?? world.backgroundLeagues?.find(item => item.clubIds.includes(clubId));
+  if (league) return league.country;
+  for (const competition of world.europeanCompetitions ?? []) if (competition.countries && Object.hasOwn(competition.countries, clubId)) return competition.countries[clubId]!;
+  return null;
+}
 const fullClubLists = new WeakMap<CareerWorld, readonly Team[]>();
 /** The clubs a career starts with: every club of the world except next-division and European-only clubs (the same array when there are none). */
 export function fullWorldClubs(world: CareerWorld): readonly Team[] {
   let clubs = fullClubLists.get(world);
   if (!clubs) {
-    const lower = lowerDivisionClubIds(world), european = europeanOnlyClubIds(world);
-    clubs = lower.size || european.size ? world.clubs.filter(club => !lower.has(club.id) && !european.has(club.id)) : world.clubs;
+    const lower = lowerDivisionClubIds(world), european = europeanOnlyClubIds(world), background = backgroundLeagueClubIds(world);
+    clubs = lower.size || european.size || background.size ? world.clubs.filter(club => !lower.has(club.id) && !european.has(club.id) && !background.has(club.id)) : world.clubs;
     fullClubLists.set(world, clubs);
   }
   return clubs;
@@ -272,7 +286,7 @@ function checkEuropeanCompetitions(world: CareerWorld, clubIds: ReadonlySet<stri
   const kinds = new Set<string>(), ids = new Set<string>(), entrants = new Set<string>();
   for (const [index, entry] of lists.entries()) {
     const path = `world.europeanCompetitions[${index}]`;
-    if (!exactKeys(entry, ['id', 'name', 'kind', 'season', 'clubIds', ...(isObject(entry) && Object.hasOwn(entry, 'format') ? ['format'] : []), ...(isObject(entry) && Object.hasOwn(entry, 'countries') ? ['countries'] : [])]) || !isText(entry.id, 80) || !ID.test(entry.id) || ids.has(entry.id) || !isText(entry.name) || !['euroleague', 'eurocup', 'bcl'].includes(entry.kind) || kinds.has(entry.kind) || !isText(entry.season, 20) || !Array.isArray(entry.clubIds) || entry.clubIds.length < 2 || entry.clubIds.length > 64) fail(path, 'must name one of the three competitions once, its season and its entrants');
+    if (!exactKeys(entry, ['id', 'name', 'kind', 'season', 'clubIds', ...(isObject(entry) && Object.hasOwn(entry, 'format') ? ['format'] : []), ...(isObject(entry) && Object.hasOwn(entry, 'countries') ? ['countries'] : []), ...(isObject(entry) && Object.hasOwn(entry, 'oneYear') ? ['oneYear'] : [])]) || !isText(entry.id, 80) || !ID.test(entry.id) || ids.has(entry.id) || !isText(entry.name) || !['euroleague', 'eurocup', 'bcl'].includes(entry.kind) || kinds.has(entry.kind) || !isText(entry.season, 20) || !Array.isArray(entry.clubIds) || entry.clubIds.length < 2 || entry.clubIds.length > 64) fail(path, 'must name one of the three competitions once, its season and its entrants');
     kinds.add(entry.kind); ids.add(entry.id);
     if (world.domesticLeagues!.some(league => league.id === entry.id)) fail(`${path}.id`, 'must differ from every domestic league\'s id');
     // Format 57: a played competition follows its real format, in a world whose clubs have full rosters.
@@ -284,19 +298,39 @@ function checkEuropeanCompetitions(world: CareerWorld, clubIds: ReadonlySet<stri
     }
     // Format 59: the BCL's draw keeps clubs of one country apart, so its entrants carry their countries.
     const protectedDraw = Object.hasOwn(entry, 'format') && !!EUROPEAN_FORMATS[entry.format as keyof typeof EUROPEAN_FORMATS]?.staged;
-    if (protectedDraw !== Object.hasOwn(entry, 'countries')) fail(`${path}.countries`, protectedDraw ? 'must give every entrant\'s country for the draw' : 'belong only to the BCL format');
-    if (protectedDraw) {
+    // Format 60: with European places every played competition gives its entrants' countries (the places go by country).
+    const needsCountries = protectedDraw || Object.hasOwn(world, 'europeanPlaces') && Object.hasOwn(entry, 'format');
+    if (needsCountries !== Object.hasOwn(entry, 'countries')) fail(`${path}.countries`, needsCountries ? 'must give every entrant\'s country for the draw' : 'belong only to the BCL format or a world with European places');
+    if (Object.hasOwn(entry, 'oneYear') && (!Object.hasOwn(world, 'europeanPlaces') || entry.kind !== 'euroleague' || !Array.isArray(entry.oneYear) || new Set(entry.oneYear).size !== entry.oneYear.length || (entry.oneYear as unknown[]).some(id => !(entry.clubIds as unknown[]).includes(id)))) fail(`${path}.oneYear`, 'must list EuroLeague entrants on one-year places, in a world with European places');
+    if (needsCountries) {
       const countries = entry.countries as Record<string, unknown>;
       if (!exactKeys(countries, entry.clubIds) || (entry.clubIds as string[]).some(id => !isText(countries[id], 60))) fail(`${path}.countries`, 'must give every entrant\'s country for the draw');
-      for (const id of entry.clubIds as string[]) { const league = world.domesticLeagues!.find(item => item.clubIds.includes(id)); if (league && countries[id] !== league.country) fail(`${path}.countries`, 'must match the country of each league club'); }
+      for (const id of entry.clubIds as string[]) { const league = world.domesticLeagues!.find(item => item.clubIds.includes(id)) ?? (Array.isArray(world.backgroundLeagues) ? world.backgroundLeagues.find(item => isObject(item) && Array.isArray(item.clubIds) && item.clubIds.includes(id)) : undefined); if (league && countries[id] !== league.country) fail(`${path}.countries`, 'must match the country of each league club'); }
       const counts = new Map<string, number>();
       for (const id of entry.clubIds as string[]) counts.set(countries[id] as string, (counts.get(countries[id] as string) ?? 0) + 1);
-      if (Math.max(...counts.values()) > 8) fail(`${path}.countries`, 'can list at most eight clubs of one country (one a group)');
+      if (protectedDraw && Math.max(...counts.values()) > 8) fail(`${path}.countries`, 'can list at most eight clubs of one country (one a group)');
     }
     for (const id of entry.clubIds as unknown[]) {
       if (typeof id !== 'string' || !clubIds.has(id) || entrants.has(id) || lowerDivisionClubIds(world).has(id)) fail(`${path}.clubIds`, 'must list clubs of this world, each in one competition and none of a next division');
       entrants.add(id as string);
     }
+  }
+}
+
+/** Format 60: European places need the played competitions; unchosen top divisions belong to countries without a chosen league. */
+function checkEuropeanPlaces(world: CareerWorld, clubIds: ReadonlySet<string>): void {
+  const fail = worldFail;
+  if (Object.hasOwn(world, 'europeanPlaces') && (world.europeanPlaces !== 'places-2026-1' || !world.europeanCompetitions?.some(competition => competition.format))) fail('world.europeanPlaces', 'must name the supported default for a world that plays European competitions');
+  if (!Object.hasOwn(world, 'backgroundLeagues')) return;
+  const lists = world.backgroundLeagues as unknown as Record<string, any>[];
+  if (!Object.hasOwn(world, 'europeanPlaces') || !Array.isArray(lists) || lists.length > 10) fail('world.backgroundLeagues', 'must be a short list in a world with European places');
+  const ids = new Set([...(world.domesticLeagues ?? []).map(league => league.id), ...(world.europeanCompetitions ?? []).map(competition => competition.id)]), countries = new Set<string>(), members = new Set<string>();
+  const chosen = new Set((world.domesticLeagues ?? []).map(league => league.country)), lower = lowerDivisionClubIds(world);
+  for (const [index, entry] of lists.entries()) {
+    const path = `world.backgroundLeagues[${index}]`;
+    if (!exactKeys(entry, ['id', 'name', 'country', 'tier', 'clubIds']) || !isText(entry.id, 80) || !ID.test(entry.id) || ids.has(entry.id) || !isText(entry.name) || !isText(entry.country, 60) || chosen.has(entry.country) || countries.has(entry.country) || entry.tier !== 1 || !Array.isArray(entry.clubIds) || entry.clubIds.length < 2 || entry.clubIds.length > 40) fail(path, 'must name an unchosen country\'s top division once, with its clubs');
+    ids.add(entry.id); countries.add(entry.country);
+    for (const id of entry.clubIds as unknown[]) { if (typeof id !== 'string' || !clubIds.has(id) || members.has(id) || lower.has(id) || (world.domesticLeagues ?? []).some(league => league.clubIds.includes(id as string))) fail(`${path}.clubIds`, 'must list clubs of this world in no other league'); members.add(id as string); }
   }
 }
 
@@ -335,7 +369,7 @@ function checkLowerDivisions(world: CareerWorld, clubIds: ReadonlySet<string>): 
 export function validateWorld(value: unknown): asserts value is CareerWorld {
   if (isObject(value) && !Object.hasOwn(value, 'domesticLeagues') && validated.has(value)) return;
   const fail = (path: string, reason: string): never => { throw new Error(`Invalid career world: ${path} ${reason}.`); };
-  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : []), ...(isObject(value) && Object.hasOwn(value, 'europeanCompetitions') ? ['europeanCompetitions'] : [])])) fail('world', 'must contain exactly the world fields');
+  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : []), ...(isObject(value) && Object.hasOwn(value, 'europeanCompetitions') ? ['europeanCompetitions'] : []), ...(['europeanPlaces', 'backgroundLeagues'] as const).filter(key => isObject(value) && Object.hasOwn(value, key))])) fail('world', 'must contain exactly the world fields');
   const world = value as unknown as CareerWorld;
   if (Object.hasOwn(world, 'rosterModel') && world.rosterModel !== FULL_ROSTER_MODEL) fail('world.rosterModel', 'has an unsupported value');
   if (!isText(world.id, 80) || !ID.test(world.id)) fail('world.id', 'must be a supported identifier');
@@ -360,7 +394,10 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
     const lowerMembers = Array.isArray(world.lowerDivisions) ? world.lowerDivisions.filter(entry => isObject(entry) && Array.isArray((entry as unknown as LowerDivisionMembers).clubIds)).flatMap(entry => (entry as unknown as LowerDivisionMembers).clubIds) : [];
     // Format 56: European-only entrants are in the world too, in no domestic league.
     const europeanOnly = Array.isArray(world.europeanCompetitions) ? [...new Set(world.europeanCompetitions.flatMap(entry => isObject(entry) && Array.isArray(entry.clubIds) ? entry.clubIds as string[] : []).filter(id => !members.has(id)))] : [];
-    if (members.size + lowerMembers.length + europeanOnly.length !== world.clubs.length || lowerMembers.some(id => members.has(id) || europeanOnly.includes(id))) fail('world.domesticLeagues', 'must cover every club');
+    // Format 60: unchosen top divisions' clubs too (some of them European entrants).
+    const backgroundMembers = Array.isArray(world.backgroundLeagues) ? world.backgroundLeagues.flatMap(entry => isObject(entry) && Array.isArray(entry.clubIds) ? entry.clubIds as string[] : []) : [];
+    const outside = new Set([...europeanOnly, ...backgroundMembers]);
+    if (members.size + lowerMembers.length + outside.size !== world.clubs.length || lowerMembers.some(id => members.has(id) || outside.has(id)) || backgroundMembers.some(id => members.has(id))) fail('world.domesticLeagues', 'must cover every club');
     // Worlds created since format 51 give every league a rule (its own or the FIBA default); older worlds rank only French leagues by a rule.
     if (world.domesticLeagues!.some(league => league.standingsRule && STANDINGS_RULE_FORMAT[league.standingsRule] >= STANDINGS_RULE_FORMAT['fiba-2026-d']) && world.domesticLeagues!.some(league => !Object.hasOwn(league, 'standingsRule'))) fail('world.domesticLeagues.standingsRule', 'must be given to every league of a world that uses the FIBA default or a later rule');
     // Postseasons are all or nothing, and a format seeding from the other division needs that division's postseason too.
@@ -389,6 +426,7 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
   }
   if (Object.hasOwn(world, 'lowerDivisions')) checkLowerDivisions(world, clubIds);
   if (Object.hasOwn(world, 'europeanCompetitions')) checkEuropeanCompetitions(world, clubIds);
+  if (Object.hasOwn(world, 'europeanPlaces') || Object.hasOwn(world, 'backgroundLeagues')) checkEuropeanPlaces(world, clubIds);
   if (Object.hasOwn(world, 'playerContracts') && (!isObject(world.playerContracts) || Object.keys(world.playerContracts!).length !== playerIds.size || [...playerIds].some(id => !Object.hasOwn(world.playerContracts!, id) || !isWhole(world.playerContracts![id], 1, 3)))) fail('world.playerContracts', 'must give every player an opening contract of one to three seasons');
   if (Object.keys(world.playerProfiles).length !== playerIds.size || Object.keys(world.wages).length !== playerIds.size) fail('world', 'must give profiles and wages for exactly its players');
   if (!Array.isArray(world.sponsors)) fail('world.sponsors', 'must be a list');

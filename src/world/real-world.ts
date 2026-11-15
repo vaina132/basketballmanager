@@ -1,4 +1,4 @@
-import type { CareerWorld, EuropeanCompetition, EuropeanCompetitionKind } from '../domain/world';
+import type { BackgroundLeague, CareerWorld, EuropeanCompetition, EuropeanCompetitionKind } from '../domain/world';
 import { EUROPEAN_FORMATS, fieldFits } from './european-formats';
 import type { Team } from '../domain/types';
 import type { ClubFinanceDefinition } from '../data/development-finances';
@@ -47,9 +47,9 @@ export function careerCompetitions(pack: DataPack): DataPackCompetition[] {
   return pack.competitions.filter(item => item.kind === 'domestic' && item.clubIds.length >= MIN_WORLD_CLUBS && item.clubIds.length <= 20);
 }
 
-/** New worlds change prefix whenever they gain a rule: `real-tables-` (format 48), `real-playoffs-` (49), `real-tiebreak-` (51), `real-rules-` (52), `real-europe-` (56), `real-europlay-` (57), `real-bcl-` (59). */
+/** New worlds change prefix whenever they gain a rule: `real-tables-` (format 48), `real-playoffs-` (49), `real-tiebreak-` (51), `real-rules-` (52), `real-europe-` (56), `real-europlay-` (57), `real-bcl-` (59), `real-places-` (60). */
 export function realWorldId(pack: DataPack, competitionId: string): string {
-  return `real-bcl-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
+  return `real-places-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
 }
 
 /** The fictional season wage for a player of this overall rating, in euro cents. */
@@ -136,12 +136,28 @@ export function worldFromPack(pack: DataPack, competitionId: string | readonly s
     return entrantIds.length >= 2 ? [{ id: item.id, name: item.name, kind, season: item.season, clubIds: entrantIds, ...(size !== undefined ? { format: format!.id } : {}), ...countries }] : [];
   });
   if (!european.length) return world;
-  const entrants = [...seen].filter(clubId => !clubIds.includes(clubId)).map(clubId => {
+  // Step 3.5f (format 60): when a competition is played, the unchosen countries' top divisions join the world for their
+  // estimated tables, every played competition gives its entrants' countries and the EuroLeague its one-year places.
+  const played = european.some(item => item.format);
+  const chosenCountries = new Set(competitions.map(item => item.country));
+  const backgroundLeagues: BackgroundLeague[] = played ? pack.competitions.filter(item => item.kind === 'domestic' && item.tier === 1 && item.season === competition.season && item.country && !chosenCountries.has(item.country)).flatMap(item => {
+    const members = [...new Set(item.clubIds)].filter(clubId => !clubIds.includes(clubId) && (pack.clubs.find(club => club.id === clubId)?.playerIds.length ?? 0) >= 8);
+    return members.length >= 2 ? [{ id: item.id, name: item.name, country: item.country!, tier: 1 as const, clubIds: members }] : [];
+  }) : [];
+  const countryOf = (clubId: string) => world.domesticLeagues!.find(league => league.clubIds.includes(clubId))?.country ?? backgroundLeagues.find(league => league.clubIds.includes(clubId))?.country ?? pack.clubs.find(club => club.id === clubId)?.country ?? `unknown-${clubId}`;
+  const plain = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const placed = played ? european.map(item => item.format ? { ...item, countries: Object.fromEntries(item.clubIds.map(clubId => [clubId, countryOf(clubId)])), ...(item.kind === 'euroleague' ? { oneYear: item.clubIds.filter(clubId => ONE_YEAR_EUROLEAGUE_2026.some(name => plain(pack.clubs.find(club => club.id === clubId)?.name ?? '').includes(name))) } : {}) } : item) : european;
+  const built = new Set([...seen].filter(clubId => !clubIds.includes(clubId)));
+  for (const league of backgroundLeagues) for (const clubId of league.clubIds) built.add(clubId);
+  const entrants = [...built].map(clubId => {
     const team = clubTeam(pack, clubId);
     return { team, venue: pack.clubs.find(club => club.id === clubId)!.arena, profiles: Object.fromEntries(team.players.map(player => [player.id, profileOf(player.id)])) };
   });
-  return withEuropeanCompetitions(world, european, entrants);
+  return withEuropeanCompetitions(world, placed, entrants, played ? { backgroundLeagues } : undefined);
 }
+
+/** The EuroLeague's one-year places in 2026-27 (research of 15 November 2026): the wildcards Paris and Beşiktaş and the EuroCup route's Hapoel Tel Aviv. */
+export const ONE_YEAR_EUROLEAGUE_2026: readonly string[] = ['paris', 'besiktas', 'hapoel tel aviv'];
 
 /**
  * European competitions (step 3.5a). A world carries the three competitions and their entrants for the opening season.
@@ -169,7 +185,8 @@ const FIRST = ['Aldo', 'Berta', 'Ciro', 'Dora', 'Emil', 'Flora', 'Gino', 'Hanna'
 const LAST = ['Arnold', 'Bianchi', 'Costa', 'Dumas', 'Eriksen', 'Fischer', 'Garcia', 'Horvat', 'Ivanov', 'Jansen', 'Kovac', 'Lindqvist', 'Moreau', 'Novak', 'Olsen', 'Petrov'];
 
 /** A world with its European competitions; European-only entrants are added outside the full world. */
-export function withEuropeanCompetitions(world: CareerWorld, competitions: readonly EuropeanCompetition[], entrants: readonly EuropeanEntrant[]): CareerWorld {
+/** With `places` (format 60), the world records European places and the unchosen top divisions, whose clubs are among `entrants`. */
+export function withEuropeanCompetitions(world: CareerWorld, competitions: readonly EuropeanCompetition[], entrants: readonly EuropeanEntrant[], places?: { backgroundLeagues: readonly BackgroundLeague[] }): CareerWorld {
   if (world.europeanCompetitions?.length) throw new Error('This world already has its European competitions.');
   const known = new Set(world.clubs.map(club => club.id));
   const added = entrants.filter(entrant => !known.has(entrant.team.id));
@@ -194,6 +211,7 @@ export function withEuropeanCompetitions(world: CareerWorld, competitions: reado
     ...world, clubs: [...world.clubs, ...added.map(entrant => entrant.team)], playerProfiles: { ...world.playerProfiles, ...profiles }, wages: { ...world.wages, ...wages },
     ...(world.playerContracts ? { playerContracts: { ...world.playerContracts, ...contracts } } : {}),
     finances: [...world.finances, ...finances], presidents: [...world.presidents, ...presidents], europeanCompetitions: competitions.map(item => ({ ...item, clubIds: [...item.clubIds] })),
+    ...(places ? { europeanPlaces: 'places-2026-1' as const, ...(places.backgroundLeagues.length ? { backgroundLeagues: places.backgroundLeagues.map(league => ({ ...league, clubIds: [...league.clubIds] })) } : {}) } : {}),
   };
   validateWorld(next);
   return next;

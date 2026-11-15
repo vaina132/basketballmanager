@@ -18,7 +18,8 @@ import type { SeasonEndDecision } from '../domain/career';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
 import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
 import { createFacilities, enableBoardFunding, enableFacilities, enableFacilityMaintenance, processFacilityProjects, automateFacilities } from './facilities';
-import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonFixture, SeasonState, Standing } from '../domain/season';
+import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonEurope, SeasonFixture, SeasonState, Standing } from '../domain/season';
+import { nextEuropeanPlaces, openingEurope } from './european-places';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import { archiveFinancialHistory } from './finance-archives';
 import type { InjuryMode, MatchState, Side, Team } from '../domain/types';
@@ -109,7 +110,7 @@ export function dateForRound(round: number, seasonNumber = 1): string {
  * clubs gives 2 x (clubs - 1) matchdays; six clubs give the built-in league's ten, with unchanged fixtures.
  */
 /** The season-specific division memberships a schedule, table or postseason uses (step 3.4c). */
-type DivisionContext = WorldContext & { divisions?: DomesticDivisions | null; seed?: number };
+type DivisionContext = WorldContext & { divisions?: DomesticDivisions | null; seed?: number; europe?: SeasonEurope };
 
 /** Format 57: worlds with European games keep every game in calendar order (date, then id), so each club's games are in the order played. */
 const byCalendar = (a: Pick<SeasonFixture, 'date' | 'id'>, b: Pick<SeasonFixture, 'date' | 'id'>) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
@@ -392,7 +393,9 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const clubs = fullWorldClubs(world);
   const divisions = openingDivisions(world);
   // Step 3.5e: the season's opening games include those already due (the BCL's qualification and drawn groups).
-  const fixtures = scheduledFixtures({ clubs, fixtures: [], world, divisions, seed }, 1);
+  // Step 3.5f: worlds with European places record each season's entrants.
+  const europe = world.europeanPlaces ? openingEurope(world) : undefined;
+  const fixtures = scheduledFixtures({ clubs, fixtures: [], world, divisions, seed, ...(europe ? { europe } : {}) }, 1);
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId));
   const preparation = {
     ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled),
@@ -401,7 +404,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   };
   const state: SeasonState = {
     schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), facilities: createFacilities(clubs, managedClubId), relationships: createRelationships(), board: createBoard(), rivalries: createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
-    ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
+    ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), ...(europe ? { europe } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
     activeFixtureId: first?.id ?? null, activeMatch: first ? prepareMatch(preparation, first) : null,
   };
   const funded = financeEnabled ? enableFinance(state) : state;
@@ -640,6 +643,25 @@ export function nextSeasonDivisions(state: Pick<SeasonState, 'divisions' | 'seas
   return { changesFrom: state.divisions.changesFrom, leagues: applyExchanges(changed.leagues, seasonExchangesOf(state.background, state.seasonNumber)) };
 }
 
+/** Consecutive seasons, ending with `seasonNumber`, in which a club held a one-year EuroLeague place (step 3.5f). */
+export function oneYearSeasons(state: Pick<SeasonState, 'seasonNumber' | 'history' | 'europe'>, clubId: string, seasonNumber = state.seasonNumber): number {
+  let count = 0;
+  for (let year = seasonNumber; year >= 1; year -= 1) {
+    const europe = year === state.seasonNumber ? state.europe : state.history.find(archive => archive.seasonNumber === year)?.europe;
+    if (!europe?.oneYear.includes(clubId)) break;
+    count += 1;
+  }
+  return count;
+}
+
+/** Next season's European places from a completed season (step 3.5f): its top divisions' final orders and its European results. */
+export function europeanPlacesAfter(state: Pick<SeasonState, 'seed' | 'seasonNumber' | 'history' | 'fixtures' | 'clubs' | 'europe'> & Partial<Pick<SeasonState, 'divisions' | 'background' | 'lifecycle' | 'academy'>> & WorldContext): SeasonEurope {
+  const world = worldOf(state), standings = getStandings(state);
+  const topDivisions = seasonLeagues(world, state.divisions).filter(league => league.tier === 1);
+  const domesticOrders = new Map(topDivisions.map(league => [league.id, standings.filter(row => league.clubIds.includes(row.clubId)).sort((a, b) => a.position - b.position).map(row => row.clubId)]));
+  return nextEuropeanPlaces({ context: { ...state, europe: state.europe! }, seasonNumber: state.seasonNumber, domesticOrders, topDivisions, oneYearSeasons: clubId => oneYearSeasons(state, clubId) });
+}
+
 /** Archive the completed competition and prepare the same club's next opening day. */
 export function rolloverSeason(state: SeasonState): SeasonState {
   if (state.status !== 'complete') throw new Error('Complete the current season before starting the next one.');
@@ -668,12 +690,14 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   }
   const seasonNumber = state.seasonNumber + 1;
   const divisions = nextSeasonDivisions(state);
-  const fixtures = scheduledFixtures({ ...state, divisions, fixtures: [] }, seasonNumber);
+  const europe = state.europe ? europeanPlacesAfter(state) : undefined;
+  const fixtures = scheduledFixtures({ ...state, divisions, fixtures: [], ...(europe ? { europe } : {}) }, seasonNumber);
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(state.managedClubId));
   const recoveryDays = (Date.parse(`${dateForRound(1, seasonNumber)}T00:00:00.000Z`) - Date.parse(`${state.date}T00:00:00.000Z`)) / DAY_MS;
   const archive = {
     seasonNumber: state.seasonNumber,
     ...(state.divisions ? { divisions: state.divisions } : {}),
+    ...(state.europe ? { europe: state.europe } : {}),
     rosters: state.rosters.map(roster => ({ ...roster, players: roster.players.map(player => ({ ...player, attributes: { ...player.attributes } })) })),
     fixtures: state.fixtures.map((fixture): ArchivedFixture => {
       const result = fixture.result!;
@@ -704,7 +728,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
     ],
   } : state.background;
   let next: SeasonState = {
-    ...recruited, seasonNumber, history: [...state.history, archive], rosters: createRosterSnapshots(recruited.clubs, seasonNumber), fixtures, ...(state.restWeeks ? { restWeeks: [] } : {}), ...(divisions ? { divisions } : {}), ...(background ? { background } : {}), round: 1, date: dateForRound(1, seasonNumber), status: 'active', activeFixtureId: first?.id ?? null, activeMatch: null,
+    ...recruited, seasonNumber, history: [...state.history, archive], rosters: createRosterSnapshots(recruited.clubs, seasonNumber), fixtures, ...(state.restWeeks ? { restWeeks: [] } : {}), ...(divisions ? { divisions } : {}), ...(background ? { background } : {}), ...(europe ? { europe } : {}), round: 1, date: dateForRound(1, seasonNumber), status: 'active', activeFixtureId: first?.id ?? null, activeMatch: null,
     plans: Object.fromEntries(recruited.clubs.map(club => {
       // A club joining the full world starts from the default plan (step 3.4d-2).
       const plan = state.plans[club.id] ?? { ...defaultPlan(club, true), ...(usesFullClubRoster(state) ? { matchday: null } : {}) };

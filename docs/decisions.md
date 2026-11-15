@@ -414,6 +414,15 @@ Reversible defaults (format 59; `bcl-2026-1`), from the 2026-27 regulations wher
 - **Dates (the published ones are only the start on 6 October, Tuesdays and Wednesdays, play-ins in January and the end by 16 May):** regular rounds 6 and 20 October, 3 and 17 November, 8 and 22 December (groups A-D Tuesdays, E-H Wednesdays); play-ins 6, 13 and 20 January (second-placed club at home in games 1 and 3, as the regulations say); Round of 16 on 26 January, 2, 9 and 16 February and 9 and 16 March (I-J Tuesdays, K-L Wednesdays) by the regulations' pattern; quarter-finals I1-J2, J1-I2, K1-L2, L1-K2 on 24 and 31 March and 7 April (group winner at home in games 1 and 3); Final Four semi-finals I/J winners against K/L winners on Tuesday 11 May, third place and final on Thursday 13 May.
 - **Ranking:** the FIBA Appendix D default in every group (the BCL's own tie-break article was not checked).
 
+### Background tables and next season's European places (step 3.5f, 15 November 2026)
+
+The plan's reversible default, implemented for new worlds (format 60; `src/world/european-places.ts`). **For the owner to confirm.**
+- **Unchosen top divisions** of the countries with domestic data (the six) are built into new worlds outside the full world (`world.backgroundLeagues`, real squads, no games). At each season end their table is estimated from squad strength (best-eight position-weighted rating, squads aged to the season's start) plus a seeded random element of at most one rating point either way; second divisions are not estimated (their clubs cannot enter Europe).
+- **Countries without domestic data** (Žalgiris, Partizan, Maccabi and the like) keep their places; one leaving the EuroLeague returns to the EuroCup.
+- **EuroLeague:** clubs on long-term places (licences and multi-year wildcards) keep them. One-year places (2026-27: Paris, Beşiktaş and the EuroCup route's Hapoel Tel Aviv, matched by name in the pack) are kept by reaching the playoffs, at most twice (three seasons in a row). Open one-year places go to the EuroCup champion, the runner-up only when two are open, and then to the best domestic finishers not yet qualified (by final place across the countries' top divisions, then squad strength). Multi-year wildcards that end (Dubai, Valencia, Virtus Bologna) are kept for now.
+- **EuroCup and BCL:** each country with domestic data keeps as many places as it had in 2026-27, filled from its top division's final regular-season order (the real order for chosen leagues, the estimated table otherwise), EuroLeague first, then EuroCup, then BCL; places still open go to the best finishers of any such country. Every competition keeps its 2026-27 size, so its format still fits.
+- **Records:** each season's entrants and one-year holders are recorded (`state.europe`, and in each archive) and checked against the opening lists and every completed season. Worlds before format 60 keep their opening entrants every season.
+
 ### Owner decisions for step 3.4d-2 (15 November 2026)
 
 The owner decided both open questions on 15 November 2026:

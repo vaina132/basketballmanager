@@ -89,6 +89,9 @@ export interface ArchivedAppearance { secondsPlayed: number; fouls: number; appe
 export interface ArchivedPlayerTotals { clubId: string; playerId: string; games: number; totals: Omit<PlayerStats, 'condition'> }
 export interface SeniorSeasonSummary { model: 'senior-totals-1'; players: ArchivedPlayerTotals[] }
 
+/** Format 60 (step 3.5f): a season's European entrants (the opening lists, then each season end's places) and the EuroLeague's one-year place holders. */
+export interface SeasonEurope { model: 'places-1'; entrants: { competitionId: string; clubIds: string[] }[]; oneYear: string[] }
+
 export interface SeasonArchive {
   seasonNumber: number;
   rosters: RosterSnapshot[];
@@ -97,6 +100,8 @@ export interface SeasonArchive {
   summary?: SeniorSeasonSummary;
   /** Format 50: the season's division memberships (absent for seasons before division changes began). */
   divisions?: DomesticDivisions;
+  /** Format 60: the season's European entrants, in worlds with European places. */
+  europe?: SeasonEurope;
 }
 
 /**
@@ -121,7 +126,8 @@ export interface DomesticDivisions {
 /** Format 57 plays European competitions in their real formats on midweek game days (steps 3.5b-c). */
 /** Format 58 adds the EuroCup format: four groups and best-of-three playoffs (step 3.5d). */
 /** Format 59 adds the BCL format: qualification, a protected draw, play-ins, Round of 16 groups and a Final Four (step 3.5e). */
-export const SEASON_SCHEMA_VERSION = 59;
+/** Format 60 adds estimated tables for unchosen leagues and each season end's European places (`europe`, step 3.5f). */
+export const SEASON_SCHEMA_VERSION = 60;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -176,6 +182,8 @@ export interface SeasonState {
   divisions?: DomesticDivisions;
   /** Format 53: clubs outside the full world, with their squads (step 3.4d). Present exactly when divisions are. */
   background?: SeasonBackground;
+  /** Format 60: this season's European entrants, exactly in worlds with European places (step 3.5f). */
+  europe?: SeasonEurope;
   activeFixtureId: string | null;
   activeMatch: MatchState | null;
 }

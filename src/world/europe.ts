@@ -1,11 +1,11 @@
 import type { SeasonBackground } from '../domain/background';
 import type { CompetitionGame } from '../domain/competition';
-import type { ArchivedFixture, ClubPlan, SeasonFixture, SeasonInjury, Standing } from '../domain/season';
+import type { ArchivedFixture, ClubPlan, SeasonEurope, SeasonFixture, SeasonInjury, Standing } from '../domain/season';
 import type { Team } from '../domain/types';
 import type { CareerWorld, EuropeanCompetition, WorldContext } from '../domain/world';
 import { DEVELOPMENT_START_DATE } from '../data/development-league';
 import { selectBackgroundMatchday, backgroundClubsIn } from './background';
-import { worldOf } from './career-world';
+import { clubCountry, worldOf } from './career-world';
 import { addCalendarDays, calendarDaysBetween, firstSeasonSaturday, roundRobinGames, roundRobinRoundCount } from './competition-calendar';
 import { competitionTable } from './competition-table';
 import { EUROPEAN_FORMATS, knockoutOf, playedEuropeanCompetitions, qualificationSplit, type EuropeanFormat } from './european-formats';
@@ -26,7 +26,7 @@ import type { SeasonPhysio } from '../domain/physio';
  * condition carried from their earlier European games of the season and injuries like every other player. They have no
  * plans, finances, training or staff.
  */
-export type EuropeContext = WorldContext & LifecycleContext & { seed?: number; background?: SeasonBackground };
+export type EuropeContext = WorldContext & LifecycleContext & { seed?: number; background?: SeasonBackground; europe?: SeasonEurope };
 
 /** The same daily recovery as every player of the full world (`DAILY_RECOVERY` in season.ts). */
 export const BACKGROUND_DAILY_RECOVERY = 3;
@@ -63,17 +63,17 @@ export function europeanRoundDates(format: EuropeanFormat, seasonNumber: number,
   return Array.from({ length: weeks }, (_, index) => index).flatMap(index => Math.floor((index + 1) * doubles / weeks) > Math.floor(index * doubles / weeks) ? doubleDays.map(offset => date(firstWeek + index, offset)) : [date(firstWeek + index, day)]);
 }
 
-/** A competition's entrants in a season (the opening season's entrants until step 3.5f decides later places). */
-export function europeanEntrants(competition: EuropeanCompetition): readonly string[] {
-  return competition.clubIds;
+/** A competition's entrants in a season: the season's recorded places (format 60), else the opening entrants. */
+export function europeanEntrants(competition: EuropeanCompetition, europe?: SeasonEurope): readonly string[] {
+  return europe?.entrants.find(entry => entry.competitionId === competition.id)?.clubIds ?? competition.clubIds;
 }
 
 /** A regular-season group: its id (null for a single table), its clubs in draw order and its day. */
 export interface EuropeanGroup { id: string | null; clubIds: string[]; day: number }
 
 /** The season's regular-season groups: the drawn entrants dealt into the format's groups in turn (one table without groups). */
-export function europeanGroups(seed: number, seasonNumber: number, competition: EuropeanCompetition): EuropeanGroup[] {
-  const format = EUROPEAN_FORMATS[competition.format!], order = europeanDrawOrder(seed, seasonNumber, competition.id, europeanEntrants(competition));
+export function europeanGroups(seed: number, seasonNumber: number, competition: EuropeanCompetition, europe?: SeasonEurope): EuropeanGroup[] {
+  const format = EUROPEAN_FORMATS[competition.format!], order = europeanDrawOrder(seed, seasonNumber, competition.id, europeanEntrants(competition, europe));
   const groups = format.regular.groups;
   if (!groups) return [{ id: null, clubIds: order, day: format.regular.day }];
   return groups.map((group, index) => ({ id: group.id, clubIds: order.filter((_, position) => position % groups.length === index), day: group.day }));
@@ -92,7 +92,7 @@ export function europeanRegularFixtures(context: EuropeContext, seasonNumber: nu
   // The BCL's games all follow from results (its regular season waits for the qualification winners): `getEuropeanCompetitions`.
   return competitions.filter(competition => !EUROPEAN_FORMATS[competition.format!].staged).flatMap(competition => {
     const format = EUROPEAN_FORMATS[competition.format!];
-    return europeanGroups(seed, seasonNumber, competition).flatMap(group => roundRobinGames({ competitionId: competition.id, clubIds: group.clubIds, dates: europeanRoundDates(format, seasonNumber, roundRobinRoundCount(group.clubIds.length), group.day), season: seasonNumber, groupId: group.id })
+    return europeanGroups(seed, seasonNumber, competition, context.europe).flatMap(group => roundRobinGames({ competitionId: competition.id, clubIds: group.clubIds, dates: europeanRoundDates(format, seasonNumber, roundRobinRoundCount(group.clubIds.length), group.day), season: seasonNumber, groupId: group.id })
       .map(game => ({ id: game.id, round: weekOf(game.date, start), date: game.date, homeClubId: game.homeClubId, awayClubId: game.awayClubId, result: null, competition: competition.id })));
   });
 }
@@ -101,9 +101,9 @@ type GameRecord = SeasonFixture | ArchivedFixture;
 const asGame = (fixture: GameRecord, competitionId: string, groupId: string | null): CompetitionGame => ({ id: fixture.id, competitionId, stage: 'regular', stageRound: fixture.round, groupId, seriesId: null, date: fixture.date, homeClubId: fixture.homeClubId, awayClubId: fixture.awayClubId, neutral: false });
 
 /** Each regular-season group's table so far, by the format's ranking. */
-export function europeanTables(context: { seed?: number }, competition: EuropeanCompetition, fixtures: readonly GameRecord[], seasonNumber: number): (EuropeanGroup & { rows: Standing[] })[] {
+export function europeanTables(context: { seed?: number; europe?: SeasonEurope }, competition: EuropeanCompetition, fixtures: readonly GameRecord[], seasonNumber: number): (EuropeanGroup & { rows: Standing[] })[] {
   const format = EUROPEAN_FORMATS[competition.format!], games = fixtures.filter(fixture => fixture.competition === competition.id && !fixture.stage);
-  const groups = format.regular.groups ? europeanGroups(requireSeed(context), seasonNumber, competition) : [{ id: null, clubIds: [...europeanEntrants(competition)], day: format.regular.day }];
+  const groups = format.regular.groups ? europeanGroups(requireSeed(context), seasonNumber, competition, context.europe) : [{ id: null, clubIds: [...europeanEntrants(competition, context.europe)], day: format.regular.day }];
   return groups.map(group => {
     const own = games.filter(fixture => group.clubIds.includes(fixture.homeClubId));
     return { ...group, rows: competitionTable({
@@ -114,8 +114,8 @@ export function europeanTables(context: { seed?: number }, competition: European
 }
 
 /** A competition's single regular-season table (formats without groups). */
-export function europeanTable(competition: EuropeanCompetition, fixtures: readonly GameRecord[]): Standing[] {
-  return europeanTables({}, competition, fixtures, 1)[0]!.rows;
+export function europeanTable(competition: EuropeanCompetition, fixtures: readonly GameRecord[], europe?: SeasonEurope): Standing[] {
+  return europeanTables({ ...(europe ? { europe } : {}) }, competition, fixtures, 1)[0]!.rows;
 }
 
 /** A knockout slot's week and date. */
@@ -130,9 +130,9 @@ export function europeanSlotDay(format: EuropeanFormat, seasonNumber: number, sl
  * exist and its champion. Across groups, home advantage goes to the better group place, then more wins, a better point
  * difference and more points scored.
  */
-export function getEuropeanCompetitions(context: WorldContext & { fixtures: readonly GameRecord[]; seed?: number }, seasonNumber: number) {
+export function getEuropeanCompetitions(context: WorldContext & { fixtures: readonly GameRecord[]; seed?: number; europe?: SeasonEurope }, seasonNumber: number) {
   return playedEuropeanCompetitions(worldOf(context)).map(competition => {
-    const format = EUROPEAN_FORMATS[competition.format!], entrants = europeanEntrants(competition);
+    const format = EUROPEAN_FORMATS[competition.format!], entrants = europeanEntrants(competition, context.europe);
     if (format.staged) return deriveStaged(context, competition, seasonNumber);
     const tables = europeanTables(context, competition, context.fixtures, seasonNumber);
     const regular = context.fixtures.filter(fixture => fixture.competition === competition.id && !fixture.stage);
@@ -158,8 +158,8 @@ export function clubStrength(world: CareerWorld, clubId: string): number {
 const byStrength = (world: CareerWorld, ids: readonly string[]) => [...ids].sort((a, b) => clubStrength(world, b) - clubStrength(world, a) || (a < b ? -1 : a > b ? 1 : 0));
 
 /** The BCL field: the strongest clubs take the direct places, the next ones the first qualification tournament and the rest the second. */
-export function bclField(world: CareerWorld, competition: EuropeanCompetition): { direct: string[]; qualification: readonly [string[], string[]] } {
-  const ranked = byStrength(world, europeanEntrants(competition)), [first, second] = qualificationSplit(ranked.length), direct = ranked.length - first - second;
+export function bclField(world: CareerWorld, competition: EuropeanCompetition, europe?: SeasonEurope): { direct: string[]; qualification: readonly [string[], string[]] } {
+  const ranked = byStrength(world, europeanEntrants(competition, europe)), [first, second] = qualificationSplit(ranked.length), direct = ranked.length - first - second;
   return { direct: ranked.slice(0, direct), qualification: [ranked.slice(direct, direct + first), ranked.slice(direct + first)] };
 }
 
@@ -212,16 +212,16 @@ const drawCache = new WeakMap<CareerWorld, Map<string, string[][]>>();
  * deterministic: pots are drawn in turn, each club into the first group (in its own seeded order) that keeps the rules,
  * going back a step whenever a later club would have no group.
  */
-export function bclDraw(world: CareerWorld, seed: number, seasonNumber: number, competition: EuropeanCompetition): string[][] {
-  const key = `${seed}|${seasonNumber}|${competition.id}`;
+export function bclDraw(world: CareerWorld, seed: number, seasonNumber: number, competition: EuropeanCompetition, europe?: SeasonEurope): string[][] {
+  const key = `${seed}|${seasonNumber}|${competition.id}|${europeanEntrants(competition, europe).join(',')}`;
   let cache = drawCache.get(world);
   if (!cache) { cache = new Map(); drawCache.set(world, cache); }
   const known = cache.get(key);
   if (known) return known;
-  const field = bclField(world, competition), slots = [...field.direct, ...(field.qualification[0].length ? ['#q1', '#q2'] : [])];
+  const field = bclField(world, competition, europe), slots = [...field.direct, ...(field.qualification[0].length ? ['#q1', '#q2'] : [])];
   const order = (items: readonly string[], salt: string) => [...items].sort((a, b) => drawHash(seed, `${salt}:${a}`) - drawHash(seed, `${salt}:${b}`) || (a < b ? -1 : 1));
   const pots = [0, 1, 2, 3].map(pot => order(slots.slice(pot * 8, pot * 8 + 8), `bcl-pot:${competition.id}:s${seasonNumber}`));
-  const country = (id: string) => id.startsWith('#') ? null : competition.countries![id]!;
+  const country = (id: string) => id.startsWith('#') ? null : clubCountry(world, id) ?? `unknown-${id}`;
   const groups: string[][] = Array.from({ length: 8 }, () => []);
   const assign = (pot: number, index: number): boolean => {
     if (pot === 4) return true;
@@ -247,7 +247,7 @@ const datesOn = (seasonNumber: number, weeks: readonly number[], day: number) =>
  * known, the play-ins, the Round of 16 groups and the quarter-finals and Final Four. Every game exists once both its
  * clubs are known.
  */
-function deriveStaged(context: WorldContext & { fixtures: readonly GameRecord[]; seed?: number }, competition: EuropeanCompetition, seasonNumber: number) {
+function deriveStaged(context: WorldContext & { fixtures: readonly GameRecord[]; seed?: number; europe?: SeasonEurope }, competition: EuropeanCompetition, seasonNumber: number) {
   const world = worldOf(context), format = EUROPEAN_FORMATS[competition.format!], staged = format.staged!, seed = requireSeed(context), start = seasonStart(seasonNumber);
   const games = context.fixtures.filter(fixture => fixture.competition === competition.id);
   const result = (fixture: GameRecord) => fixture.result ? [{ fixtureId: fixture.id, home: fixture.result.officialScore.home, away: fixture.result.officialScore.away, winnerClubId: fixture.result.winnerClubId }] : [];
@@ -258,7 +258,7 @@ function deriveStaged(context: WorldContext & { fixtures: readonly GameRecord[];
     return derived.series;
   };
   // 1. Qualification (both tournaments end on the last qualification day).
-  const field = bclField(world, competition), sizes = [field.qualification[0].length, field.qualification[1].length] as const;
+  const field = bclField(world, competition, context.europe), sizes = [field.qualification[0].length, field.qualification[1].length] as const;
   let qualification: ReturnType<typeof knockout> = [];
   if (sizes[0]) {
     const days = staged.qualificationDays.slice(staged.qualificationDays.length - Math.log2(Math.max(...sizes)));
@@ -267,7 +267,7 @@ function deriveStaged(context: WorldContext & { fixtures: readonly GameRecord[];
   const winners: Record<string, string | null> = { '#q1': qualification.find(series => series.id === 'q1-final')?.winner ?? null, '#q2': qualification.find(series => series.id === 'q2-final')?.winner ?? null };
   // 2. The regular-season groups: games once the group's clubs are all known.
   const groupIds = format.regular.groups!;
-  const groups = bclDraw(world, seed, seasonNumber, competition).map((members, index) => ({ id: groupIds[index]!.id, day: groupIds[index]!.day, clubIds: members.map(id => id.startsWith('#') ? winners[id] ?? id : id) }));
+  const groups = bclDraw(world, seed, seasonNumber, competition, context.europe).map((members, index) => ({ id: groupIds[index]!.id, day: groupIds[index]!.day, clubIds: members.map(id => id.startsWith('#') ? winners[id] ?? id : id) }));
   const tables: GroupTable[] = groups.map(group => {
     if (group.clubIds.some(id => id.startsWith('#'))) return { ...group, rows: [] };
     const dates = europeanRoundDates(format, seasonNumber, roundRobinRoundCount(group.clubIds.length), group.day);

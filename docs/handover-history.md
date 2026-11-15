@@ -8,6 +8,17 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.5f, background tables and next season's European places (15 November 2026)
+
+- **Fixtures first:** `tests/fixtures/season59-places-legacy-*` from unchanged commit `308d10b` (126 modules); `tests/season59-continuation.test.js` (3; also: no places recorded).
+- **Format 60:** `world.europeanPlaces` ('places-2026-1'), `world.backgroundLeagues` (unchosen top divisions with clubs in the world, outside the full world: `backgroundLeagueClubIds`), `EuropeanCompetition.oneYear` (EuroLeague) and `countries` on every played competition; `SeasonState.europe` and `SeasonArchive.europe` (`SeasonEurope`: entrants per competition and one-year holders). Guards: all need format 60; `europe` exactly in worlds with places.
+- **Engine** (`src/world/european-places.ts`): `estimatedTable` (aged best-eight strength plus a seeded element of at most one point), `openingEurope`, `nextEuropeanPlaces` (the plan's default; see `docs/decisions.md`), `MAX_ONE_YEAR_SEASONS`. `season.ts`: `oneYearSeasons`, `europeanPlacesAfter`; `createSeason` records the opening places, the rollover archives the season's places and plays the next season's. Entrants now come from `europeanEntrants(competition, europe)` everywhere (draws, tables, the BCL field and draw; the BCL draw's countries via `clubCountry`).
+- **Save checks:** `validateEuropeShape` (each played competition in order at its field size, a club once, holders in the EuroLeague) and `validateEuropeHistory` (opening lists, then each archive's next places); each season's canonical games use its own places.
+- **Real worlds:** unchosen top divisions with enough players, countries for every played competition, the EuroLeague's one-year places by name (`ONE_YEAR_EUROLEAGUE_2026`); IDs `real-places-`.
+- **Tests:** `tests/europe-places.test.js` (5: world refusals; estimated tables and opening places with the format guard; EuroLeague places with renewal, the EuroCup champion and the three-season cap; EuroCup outside clubs and country quotas; season two with its places and strict save refusals).
+- **Verification:** full serial suite **2,628 tests / 200 files passed** (691 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.5g, the Calendar view and the European Competition screens.
+
 ## Cloud continuation: step 3.5e, the Basketball Champions League (15 November 2026)
 
 - **Fixtures first:** `tests/fixtures/season58-bcl-legacy-*` from unchanged commit `5feca33` (126 modules); `tests/season58-continuation.test.js` (3).

@@ -18,4 +18,12 @@ describe('profile uncertainty in the game', () => {
     expect(html).toContain('opening-day membership is not verified');
     expect(html).toContain('166');
   });
+  it('uses the latest membership audit while retaining its uncertainty and old-save warning', () => {
+    const html = renderToStaticMarkup(<DataPackDetails pack={{ season: '2026-27', source: { profileAudit: { observedAt: '2026-11-13', membershipConflicts: 166 }, membershipAudit: { observedAt: '2026-11-14', confirmed: 630, changed: 27, unresolved: 263 } } }} />);
+    expect(html).toContain('657 club assignments');
+    expect(html).toContain('27 corrected');
+    expect(html).toContain('263 assignments still need review');
+    expect(html).not.toContain('166');
+    expect(html).toContain('Saved careers keep their original data');
+  });
 });

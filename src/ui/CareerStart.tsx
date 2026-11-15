@@ -12,6 +12,8 @@ import { managerAge, MAX_MANAGER_NAME_LENGTH, MAX_MANAGER_NATIONALITY_LENGTH, va
 import { Avatar } from './Avatar'
 import { PositionLabel } from './PositionLabel'
 import { DataPackDetails } from './DataPackDetails'
+import { CountryFlag } from './CountryFlag'
+import { SquadStrength } from './SquadStrength'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
 import { NATIONALITY_SUGGESTIONS } from './nationality-suggestions'
@@ -116,6 +118,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
   const leagues = useMemo(() => props.pack ? careerCompetitions(props.pack) : [], [props.pack])
   const [competitionId, setCompetitionId] = useState('')
   const league = leagues.find(item => item.id === competitionId) ?? leagues[0] ?? null
+  const countries = [...new Set(leagues.map(item => item.country ?? 'Other'))].sort()
   const world = useMemo(() => { try { return props.pack && league ? worldFromPack(props.pack, league.id) : null } catch { return null } }, [props.pack, league])
   const [clubId, setClubId] = useState('')
   const [packError, setPackError] = useState<string | null>(null)
@@ -199,9 +202,10 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
           </section>
         </div> : <div className="career-club-layout">
           <section className="panel" aria-labelledby="career-club-title"><header className="career-start-panel-heading"><h2 id="career-club-title">Choose your club</h2><span data-career-pack={props.pack.version}>Pack {props.pack.version}</span></header>
-            {leagues.length > 1 && <div className="career-start-field career-league-field"><label htmlFor="career-league">League</label><select id="career-league" value={league!.id} onChange={event => { setCompetitionId(event.target.value); setClubId('') }}>{leagues.map(item => <option key={item.id} value={item.id}>{item.name} · {item.clubIds.length} clubs</option>)}</select></div>}
+            <div className="career-country-options" role="group" aria-label="Choose country">{countries.map(country => <button key={country} type="button" aria-pressed={(league?.country ?? 'Other') === country} onClick={() => { setCompetitionId(leagues.find(item => (item.country ?? 'Other') === country)!.id); setClubId('') }}><CountryFlag country={country} decorative /><span>{country}</span></button>)}</div>
+            {leagues.length > 1 && <div className="career-start-field career-league-field"><label htmlFor="career-league">League</label><select id="career-league" value={league!.id} onChange={event => { setCompetitionId(event.target.value); setClubId('') }}>{leagues.map(item => <option key={item.id} value={item.id}>{item.country ?? 'Other'} · {item.name} · Division {item.tier}</option>)}</select></div>}
             <p className="career-league-summary"><strong>{world.name}</strong> · {world.clubs.length} clubs · {worldRounds(world)} matchdays</p>
-            <div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{world.clubs.map(team => <label className={`career-club-option${club.id === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={club.id === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players · squad {squadRating(team)}</small></span></label>)}</div>
+            <div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{world.clubs.map(team => <label className={`career-club-option${club.id === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={club.id === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players</small><SquadStrength value={squadRating(team)} clubName={team.name} /></span></label>)}</div>
             <button type="button" className="text-button career-pack-change" onClick={() => packInput.current?.click()} disabled={packLoading}>Load another data pack</button>
             <DataPackDetails pack={props.pack} />
             <input ref={packInput} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />

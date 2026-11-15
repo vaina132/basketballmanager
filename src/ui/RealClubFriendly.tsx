@@ -31,8 +31,8 @@ export function RealClubFriendly({ pack, busy = false, onPackLoaded, onStart, on
   }, [])
   useEffect(() => {
     if (!pack) return
-    const clubs = [...pack.clubs].sort((a, b) => a.name.localeCompare(b.name))
-    setHome(current => current || clubs[0]?.id || ''); setAway(current => current || clubs[1]?.id || '')
+    const clubs = pack.clubs.filter(club => club.playerIds.length >= 5 && pack.competitions.some(competition => competition.clubIds.includes(club.id))).sort((a, b) => a.name.localeCompare(b.name))
+    setHome(current => clubs.some(club => club.id === current) ? current : clubs[0]?.id || ''); setAway(current => clubs.some(club => club.id === current) ? current : clubs[1]?.id || '')
   }, [pack])
 
   async function load(file: File | undefined) {
@@ -47,7 +47,7 @@ export function RealClubFriendly({ pack, busy = false, onPackLoaded, onStart, on
 
   const options = pack ? pack.competitions.map(competition => ({ competition, clubs: competition.clubIds.map(id => pack.clubs.find(club => club.id === id)!).sort((a, b) => a.name.localeCompare(b.name)) })) : []
   const clubName = (id: string) => pack?.clubs.find(club => club.id === id)?.name ?? ''
-  const select = (id: string, label: string, value: string, change: (value: string) => void) => <label className="real-friendly-club" htmlFor={id}>{label}<select id={id} value={value} onChange={event => change(event.target.value)} disabled={busy}>
+  const select = (id: string, label: string, value: string, change: (value: string) => void) => <label className="real-friendly-club" htmlFor={id}>{label}<select id={id} value={value} onChange={event => change(event.target.value)} disabled={busy || loading}>
     {options.map(({ competition, clubs }) => <optgroup key={competition.id} label={`${competition.name} ${competition.season}`}>{clubs.map(club => <option key={club.id} value={club.id}>{club.name}</option>)}</optgroup>)}
   </select></label>
 
@@ -65,12 +65,12 @@ export function RealClubFriendly({ pack, busy = false, onPackLoaded, onStart, on
       {pack && <>
         <div className="real-friendly-clubs">{select('friendly-home', 'Home', home, setHome)}{select('friendly-away', 'Away', away, setAway)}</div>
         {home && home === away && <p className="real-friendly-error" role="alert">Choose two different clubs.</p>}
-        <p className="real-friendly-note">Each club fields its twelve best-rated players. Defence, heights and weights are estimates, players are drawn as neutral figures, and clubs without verified colours appear in grey.</p>
+        <p className="real-friendly-note">Each club fields up to twelve players. Unverified abilities and physical details remain estimates. Players use neutral figures; clubs without verified colours appear in grey.</p>
       </>}
     </div>
     <footer className="real-friendly-actions">
       <button className="text-button" onClick={onClose} disabled={busy}>Cancel</button>
-      <button id="start-real-friendly" className="button primary" disabled={!pack || !home || !away || home === away || busy} onClick={() => pack && onStart(matchdayTeam(pack, home), matchdayTeam(pack, away), pack)}>{pack && home && away && home !== away ? `Start ${clubName(home)} vs ${clubName(away)}` : 'Start friendly'}</button>
+      <button id="start-real-friendly" className="button primary" disabled={!pack || !home || !away || home === away || busy || loading || !options.some(group => group.clubs.some(club => club.id === home)) || !options.some(group => group.clubs.some(club => club.id === away))} onClick={() => pack && onStart(matchdayTeam(pack, home), matchdayTeam(pack, away), pack)}>{pack && home && away && home !== away ? `Start ${clubName(home)} vs ${clubName(away)}` : 'Start friendly'}</button>
     </footer>
   </dialog>
 }

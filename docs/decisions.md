@@ -307,6 +307,10 @@ Step 3.2i narrows relationship calculations to the precise game windows already 
 
 ## Evidence still required
 
+15 November 2026: correlate dated official registrations with stable provider IDs before moving a real player. Preserve unresolved records and old private packs; do not treat a provider team-season list as a current or opening-day guarantee. A historical club can remain in a pack after leaving every current competition, but is not a playable friendly opponent with an incomplete squad. Current source/rule research is in [competition-rules-2026.md](competition-rules-2026.md).
+
+For the shared-calendar foundation, keep competition stage rounds, calendar dates and weekly accounting periods distinct. An odd field gets real byes, not dummy fixtures. Reserved playoff games are cancelled when a series is won. Missing legal eligibility is `unknown`, never inferred from nationality. These are implemented helper policies; live career integration is still pending. Do not bypass existing save validation to expose them early.
+
 1. Which season pack can meet field-level roster and rules coverage across all thirteen competitions in the current scope?
 2. What are the actual formats, registration constraints, qualification rules, and calendars for that pack?
 3. Which portrait/data bundles have a documented basis for the intended distribution?

@@ -1,6 +1,38 @@
 # Project handover
 
-## Current continuation: full club rosters and matchday selection (14 November 2026)
+## Current continuation: roster reconciliation and Sprint 3 foundations (15 November 2026)
+
+**Read this entry first; earlier entries are history.** The owner requested the remaining items up to Sprint 4. **The requested boundary is not complete.** Sprint 3.2's single-league work remains complete; shared-career integration, domestic postseason/promotion, Europe/background leagues and integrated acceptance remain open. Sprint 4 has not started. Baseline is owner commit `2b2222a`; current work is uncommitted.
+
+### Implemented
+
+- Immutable private pack **`real-2026.11-world-3.json`**: 27 club assignments corrected using active official registrations plus stable provider observations; 630 unchanged assignments confirmed. EuroCup's extra entry removed, leaving 32. Historical Monaco club/remaining player records stay in the pack. Old packs and the database are unchanged; no new paid provider requests were made.
+- `data:reconcile-pack` validates complete observation scope, reviewed identities and output, refuses overwrites and saves an individual audit. Unknown/ambiguous memberships remain flagged. The disclosure distinguishes the latest membership audit from the earlier profile audit. Active competition entries still need at least five players; inactive historical records need not be padded. Friendly selectors only offer active entries and repair selection after replacing a pack.
+- Club setup now has **six offline SVG country flags**, country buttons with keyboard access, country/division labels, actual roster counts and visual squad strength from the best eight position-weighted ratings. Ratings remain provisional. This is still a single-league setup; no unmeasured speed estimate is shown.
+- New **unintegrated** competition foundations: `competition-calendar.ts` (odd/even round robins, byes, aligned Saturdays, rest/overlap/offseason guards, weekly boundaries separate from fixtures); `competition-series.ts` (seeded brackets, 7–10 play-ins, best-of series and cancellation); `competition-table.ts` (scoped tables and tied-group head-to-head handling); `competition-registration.ts` (separate competition lists, windows/ownership/limits, sourced three-state eligibility). These have public synthetic tests. They are **not** wired into live careers or saves and must not be advertised as playable multi-league/European features.
+- Current source research and gaps are in [competition-rules-2026.md](docs/competition-rules-2026.md). The linked BCL PDF is actually 2025–26; do not treat it as current rule proof. EuroLeague's third-place-game assumption still needs checking.
+- Original format-46 full-roster save/continuation fixtures were captured before calendar integration, comparing all 111 loaded source/test modules with `2b2222a`. Their manifest hashes and independent continuation test must be preserved. **Schema 46, compact-2 and checks 3 remain unchanged.**
+
+### Verification
+
+**Full serial regression passed 2,489 tests across 172 files in 466.23 seconds**, with no failures or skips (`.artifacts/sprint3-foundations-full-tests.log`). Typecheck/production build passed with native exit 0 and the existing large-chunk advisory (`.artifacts/sprint3-foundations-build.log`). Production source and tests stayed unchanged through this run, build and browser verification.
+
+Nine private real-league careers retain every imported member, advance one matchday and strictly roundtrip with pack 3 (`.artifacts/membership-private-report.json`). **Nine real Edge checks passed without browser errors** (`.artifacts/sprint3-foundations-browser-report.json`), including keyboard country switching/flags/meters, actual file import and corrected Efes roles, full-roster selection, actual matchday advance, IndexedDB/worker reload, and 1024px tablet overflow checks. The setup screenshot was visually reviewed (`.artifacts/sprint3-setup-tablet.png`). Owned browser/server helpers closed cleanly. `git diff --check` passed and private data remains ignored. These checks cover existing single-league gameplay and the new setup; they do not establish shared-career acceptance.
+
+### Remaining work, in plan order
+
+1. Finish membership/new-identity and competition-eligibility evidence. Current audit has **263 unresolved assignments**, **169 uncorrelated official identities**, the previous **17 extra provider IDs**, and **2,811 estimated precise positions**; sets overlap. Dated November observations do not certify September opening-day rosters.
+2. **3.3:** integrate a shared calendar and league identities into `CareerWorld`/`SeasonState`, worker commands, save migration/strict validation and UI, including manager byes. Keep weekly wages/training/upkeep independent of game volume and charge gates per home game. The existing career assumes every club plays once per week; isolated schedule helpers alone do not fix that.
+3. **3.4:** real domestic playoffs/titles and promotion/relegation; research remaining TBL, Greek, ACB and Serie A rules; source real lower-tier clubs. France's promotion bracket includes the top division's 15th club and needs its actual pairing.
+4. **3.5:** European competitions, background clubs and estimated background tables, then sourced/reversible qualification rules. Retain one identity and condition history per player/club across domestic and European games.
+5. **3.6:** multi-country setup and speed/save-size estimates based on actual measurements. Flags/strength/count presentation is already present.
+6. **3.7:** actual multi-league plus Europe browser season, strict saves, rollover and five-season performance/capacity checks. Stop before Sprint 4 calibration, as agreed.
+
+Key integration constraints: `SeasonState.round`, `dateForRound`, `createSchedule`, payroll/finance, academy and save validators currently assume a weekly single-league round. `activeMatch` is non-null and assumes the manager plays. Training insists on seven days. Preserve dated roster ownership, historical managed-club attribution, original save evidence and exact journal references. Do not implement independent unsynchronised league careers or bypass strict validation to expose the new helpers. No calendar schema decision has been implemented yet.
+
+Run Node 24.14+: `npm.cmd run dev`, `npm.cmd run typecheck`, `npm.cmd test -- --maxWorkers=1 --testTimeout=120000`, `npm.cmd run build`. Heavy checks run serially. For the corrected data choose **New career → Club → Load another data pack** and `.local-data/real-data/packs/real-2026.11-world-3.json`. Existing saves retain their own rosters. Private packs and `.artifacts` remain ignored; the owner commits. Follow AGENTS.md's compact game UI and separate budget rules.
+
+## Previous continuation: full club rosters and matchday selection (14 November 2026)
 
 **Start here.** The owner committed the previous player-profile/hiring fixes as `b51e375` and asked for the next item. This increment implements the club-roster/matchday separation prerequisite before 3.3. Changes remain uncommitted for the owner. Earlier entries below describe their own completed increments, not the current task list.
 

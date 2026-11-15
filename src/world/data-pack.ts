@@ -76,10 +76,12 @@ export async function parseDataPack(fileText: string): Promise<DataPack> {
     if (!isObject(raw) || typeof raw.id !== 'string' || !ID.test(raw.id) || clubIds.has(raw.id)) fail('a club has a missing or repeated identity');
     text(raw.name, 'a club name'); text(raw.shortName, 'a club short name', 12);
     if (raw.color !== null && (typeof raw.color !== 'string' || !COLOR.test(raw.color))) fail(`${raw.name} has an invalid colour`);
-    if (!Array.isArray(raw.playerIds) || raw.playerIds.length < 5 || raw.playerIds.some(id => !players.has(id as string) || players.get(id as string)!.clubId !== raw.id)) fail(`${raw.name} has an incomplete squad`);
+    const competing = pack.competitions.some(competition => isObject(competition) && Array.isArray(competition.clubIds) && competition.clubIds.includes(raw.id));
+    if (!Array.isArray(raw.playerIds) || (competing && raw.playerIds.length < 5) || new Set(raw.playerIds).size !== raw.playerIds.length || raw.playerIds.some(id => !players.has(id as string) || players.get(id as string)!.clubId !== raw.id)) fail(`${raw.name} has an incomplete squad`);
     clubIds.add(raw.id);
   }
   for (const raw of pack.competitions) if (!isObject(raw) || !Array.isArray(raw.clubIds) || raw.clubIds.some(id => !clubIds.has(id as string))) fail('a competition lists an unknown club');
+  for (const player of players.values()) if (!pack.clubs.some(raw => isObject(raw) && raw.id === player.clubId && Array.isArray(raw.playerIds) && raw.playerIds.includes(player.id))) fail(`${player.name} has an inconsistent club membership`);
   return pack as unknown as DataPack;
 }
 

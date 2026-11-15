@@ -56,4 +56,26 @@ The output uses the game's pack parser before writing, refuses existing filename
 
 ## Next work
 
+## Membership revision, 15 November 2026
+
+The immutable **`real-2026.11-world-3.json`** revision correlates the retained 14 November provider observations with active official EuroLeague/EuroCup registrations. It confirms 630 retained assignments and corrects **27**. A move requires one official person and destination, a reviewed club mapping, and the same stable provider identity observed at that destination; conflicting known birth dates and ambiguous canonical identities prevent a move. Existing abilities remain unchanged.
+
+The official active-registration fields contain 20 EuroLeague clubs and 32 EuroCup clubs. The extra provider-listed EuroCup club, Monaco, is removed from that competition. Its remaining three historical player records and club identity are retained. Inactive clubs may have fewer than five players; active competition entries still require a usable squad, and friendly selection offers only active clubs. No identities are discarded or invented to fill the gap.
+
+There are **263 unresolved existing assignments** under the broader reconciliation checks and **169 official identities not safely correlated**. These are different issue sets from the earlier profile audit, not a claim that 263 newly incorrect assignments were discovered. Seventeen extra provider IDs remain unreviewed; precise positions and ability estimates retain the previous limitations. This is dated current-registration evidence, not certified opening-day membership or proof that all domestic-only records are current.
+
+Pack checksum (`SHA-256(JSON.stringify(pack))`): `1528ef46e17ff0eee35fa4cb484ac949fee6f21672975a8084db080e88a4d1f2`. File SHA-256: `bd7070b37b1fabdcc68fd05e5c365ab254145e05213ee20846240525405e6233`. Previous pack checksums are unchanged. The individual audit is beside the new private pack with suffix `.audit.json`.
+
+For a new career or friendly, load `.local-data/real-data/packs/real-2026.11-world-3.json`. The data disclosure shows corrected and unresolved memberships; existing careers retain their embedded data. A private serial check created all nine currently supported real leagues, retained their complete imported rosters, advanced a matchday and strictly roundtripped each save (`.artifacts/membership-private-report.json`). Schema 46 is unchanged.
+
+Repeatable command, using a **new version/output path** each time (the command refuses overwrites):
+
+```powershell
+npm.cmd run data:reconcile-pack -- --base .local-data/real-data/packs/real-2026.11-world-2.json --observation-base .local-data/real-data/packs/real-2026.11-world-1.json --snapshot .local-data/real-data/observations-20261114-quality/snapshot.json --official .artifacts/official-E2026-people.json,.artifacts/official-U2026-people.json --version NEW-VERSION --out .local-data/real-data/packs/real-NEW-VERSION.json
+```
+
+This reconciliation makes no new paid provider requests or database writes. Raw observations and packs remain private. Continue source review for unresolved identities/memberships while integrating competition registration into the shared career calendar.
+
+## Earlier roster prerequisite status
+
 The subsequent roster increment now preserves full imported club membership and separates five-to-twelve-player matchday selection in new careers (schema 46). Existing saves keep their original embedded roster. Competition registration remains automatic from contracts in one domestic league. Continue the 3.1 follow-up / 3.3 prerequisite by reconciling flagged memberships and new identities using dated club/competition evidence, then implement competition-specific registration rules. This profile audit itself did not adjudicate memberships. Full opening-day roster certification, domestic-only profile verification, European participant reconciliation and sprint-4 ability calibration remain open. Do not hide these limitations by treating the new retrieval timestamp as a freshness guarantee.

@@ -20,6 +20,7 @@
     "data:verify": "node scripts/real-data-verify.mjs",
     "data:roster-snapshot": "node scripts/real-data-roster-snapshot.mjs",
     "data:refresh-pack": "node scripts/real-data-refresh-pack.mjs",
+    "data:reconcile-pack": "node scripts/real-data-reconcile-pack.mjs",
     "benchmark:match": "node scripts/benchmark-match.mjs",
     "benchmark:saves": "node scripts/benchmark-saves.mjs",
     "benchmark:career": "node scripts/benchmark-career.mjs",

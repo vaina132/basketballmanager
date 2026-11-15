@@ -67,13 +67,27 @@ These are targets, not completed behavior. A local checkpoint fingerprint may sk
 | 3.1 | Data: import the other eight domestic divisions, the EuroCup and the BCL (2025-26 and 2026-27); club identities; ratings that compare every league with the European level (rating-3); a new private pack with all thirteen competitions | Import complete; roster fidelity/freshness follow-up below remains |
 | 3.2 | Save checks that scale: sealed seasons and lighter records for clubs the manager does not run | Single-league implementation and verification complete. Combined-world capacity/load acceptance remains at 3.7 |
 | 3.1 follow-up / 3.3 prerequisite | Distinguish full club rosters, competition registration and matchday selection; preserve variable real roster sizes and audit fresh API memberships | In progress: profile audit and full club/matchday roster separation implemented; membership reconciliation and competition-specific registration remain |
-| 3.3 | One calendar for several leagues: competitions in the world, game days, days without the manager's game, a table per league, amounts per week or home game | Planned |
+| 3.3 | One calendar for several leagues: competitions in the world, game days, days without the manager's game, a table per league, amounts per week or home game | Foundation implemented and unit-tested; career/system/save integration remains |
 | 3.4 | Domestic playoffs, titles, and promotion and relegation (real formats, checked per league) | Planned |
 | 3.5 | European competitions in their real formats on midweek dates, with background clubs and background tables; European places for the next season | Planned |
-| 3.6 | League selection at career start: country flags/names, league/division, visual squad strength, actual roster counts and the speed/size estimate | Planned; includes owner feedback of 14 November |
+| 3.6 | League selection at career start: country flags/names, league/division, visual squad strength, actual roster counts and the speed/size estimate | Flags, country switching, readable division and strength bars implemented for current single-league setup; multi-country selection and measured estimates remain |
 | 3.7 | Final check: a multi-league season with Europe in the browser, save and load, rollover into season two, measurements | Planned |
 
 Order as approved on 14 November 2026. Each step is tested and recorded in `HANDOVER.md`; the owner commits.
+
+### Continuation on 15 November 2026
+
+The owner requested the remaining work up to Sprint 4. **That boundary has not been reached.** The latest pack is a source-correlated membership revision: 27 corrections, 630 unchanged assignments confirmed, EuroCup field corrected to 32. Unresolved membership and registration evidence remains explicit; see [player data quality](player-data-quality.md#membership-revision-15-november-2026).
+
+New competition foundations provide odd/even double round robins, aligned domestic weekends, overlap/rest/offseason checks, weekly calendar boundaries independent of fixtures, nullable manager games, separate tables, play-ins, best-of-three/five series and cancelled unused games. Registration lists are distinct from employment and selection; sourced eligibility is three-state, so missing homegrown/passport facts stay unverified. **These modules are not yet connected to `SeasonState`, saves, budgets, training, scouting or the match viewer.** They do not make the 17-club TBL or Europe playable yet.
+
+The independently usable setup visuals were implemented alongside data review: six offline SVG country flags, country buttons, country/division labels, actual roster counts and a position-weighted best-eight squad-strength bar. No speed/save-size estimate is invented before the integrated measurements exist.
+
+Current rule sources and unresolved questions are recorded in [competition-rules-2026.md](competition-rules-2026.md). In particular, the linked BCL regulation PDF is for 2025–26 despite being linked from the current page; the EuroLeague third-place assumption is not established by the current format page. Those gaps must be resolved before claiming full real-format coverage.
+
+Next is the actual 3.3 career integration, then domestic postseason/promotion, Europe/background leagues/qualification, complete setup and five-season acceptance. Do not mark 3.4–3.7 complete from isolated helpers. Preserve the original format-46 fixture captured from `2b2222a` before calendar integration.
+
+Verification of this increment: 2,489 tests / 172 files passed, production build passed, nine private real-league start/advance/strict-save checks passed, and nine Edge checks passed with no browser errors. Source/tests stayed unchanged through final full regression, build and browser checks. Details and remaining work are in the latest handover.
 
 ## Step 3.1: all thirteen competitions imported, rated and packed (14 November 2026)
 

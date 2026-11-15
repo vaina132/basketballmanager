@@ -1,5 +1,7 @@
 # Save compatibility fixtures
 
+The `season46-calendar-legacy` save and `season46-calendar-legacy-next` state were captured from the original format-46 runtime at `2b2222a`, before calendar integration. Every loaded source/test module was compared against that commit before writing. The public synthetic career has variable 9/14/17/25-player squads and all management systems enabled. Its manifest retains gzip hashes and verified module count; `season46-continuation.test.js` checks exact independent continuation. Never regenerate these expectations from changed calendar code.
+
 The gzip files contain UTF-8 JSON and use only Node's built-in `fs` and `zlib` in the migration test.
 
 - `season19-pending-paid` is the genuine format19 pending transfer produced by `paid-midseason-scenarios.mjs` before the release-clause change (baseline `f0bf303`).

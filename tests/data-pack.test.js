@@ -23,6 +23,18 @@ const pack = {
 const file = (contents, checksum = createHash('sha256').update(JSON.stringify(contents)).digest('hex')) => JSON.stringify({ checksum, writtenAt: '2026-11-13T00:00:00Z', pack: contents });
 
 describe('real-data packs in the game', () => {
+  it('retains inactive historical clubs with small squads but refuses them in an active field', async () => {
+    const revision = structuredClone(pack);
+    const oldPlayers = Array.from({ length: 3 }, (_, index) => player('old', index));
+    revision.players.push(...oldPlayers);
+    revision.clubs.push({ ...revision.clubs[0], id: 'club-old', name: 'Historical Club', playerIds: oldPlayers.map(row => row.id) });
+    expect((await parseDataPack(file(revision))).clubs).toHaveLength(3);
+    revision.competitions[0].clubIds.push('club-old');
+    await expect(parseDataPack(file(revision))).rejects.toThrow(/incomplete squad/);
+    revision.competitions[0].clubIds.pop();
+    revision.clubs[2].playerIds.pop();
+    await expect(parseDataPack(file(revision))).rejects.toThrow(/inconsistent club membership/);
+  });
   it('rejects invalid dates and contradictory position evidence even with a recomputed fingerprint', async () => {
     const invalid = structuredClone(pack);
     invalid.players[0].birthDate = '2000-02-31';

@@ -110,7 +110,8 @@ export interface DomesticDivisions {
 /** Format 48 adds opt-in sourced domestic standings rules; existing worlds keep their original ranking. */
 /** Format 49 adds domestic postseasons and game days inside a week; format 50 moves clubs between divisions. */
 /** Format 51 adds the FIBA Appendix D standings rule, the labelled default for new worlds' leagues without a sourced rule. */
-export const SEASON_SCHEMA_VERSION = 51;
+/** Format 52 adds the verified ACB, BBL and FIP standings rules for new worlds' Spanish, German and Italian leagues. */
+export const SEASON_SCHEMA_VERSION = 52;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

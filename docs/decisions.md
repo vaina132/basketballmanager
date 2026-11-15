@@ -16,6 +16,14 @@ Reversible defaults taken under the approved plan:
 - Mid-season reading: classification points favour clubs that have played more games (a bye means a game in hand), as in real FIBA-ruled tables. Clubs that have not met yet have no games between them, so the next criterion decides. Final ties use the reproducible draw of `lnb-2026-1`, never match randomness.
 - When a league-specific rule is verified later (3.4e-2), only new worlds take it; worlds created with the FIBA default keep it.
 
+### League-specific tie-break rules (step 3.4e-2, 15 November 2026)
+
+New worlds (format 52) give Spain's top division ACB article 7, Germany's BBL § 20 and both Italian divisions FIP article 62 (sources in `competition-rules-2026.md`). Greece and Turkey keep the labelled FIBA default: Greece's tie rule is in an unpublished season notice, and the Turkish federation's site refuses automated access. Reversible defaults:
+- ACB 7.3.3 (previous season's final classification) is replaced by the game's reproducible draw; FIP article 62 names nothing after the foul totals, so the same draw follows them; BBL's own last step is lots, which the draw implements.
+- FIP foul totals are personal fouls only (the engine has no technical fouls), counted from the selected players' retained evidence.
+- During a season, BBL and FIP criteria use the direct games played so far; ACB's text covers this itself (7.3.1).
+- Clubs level on ACB win percentage with different games played put the club with fewer games first (7.2).
+
 Fix found while testing: strict save checks accepted a manager's club change only between clubs of the built-in league, so any career in a carried world in which the manager was dismissed or changed jobs could not be saved. The checks now use the career's own world. This accepts saves that were wrongly refused and refuses nothing new, so the checks version is unchanged.
 
 ## Domestic calendar integration (15 November 2026)

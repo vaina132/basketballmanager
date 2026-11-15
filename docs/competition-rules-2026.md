@@ -1,6 +1,6 @@
 # Competition rules research, 2026–27
 
-Checked 15 November 2026. This is a source register for Sprint 3, **not a claim that every format below is playable**. Domestic regular-season calendars are integrated. New French careers also use the sourced LNB sporting ranking described below, and new careers rank every other league by the labelled FIBA Appendix D default (step 3.4e-1). Postseason, European stages and competition-specific registration are still unintegrated. Raw captures remain private under `.artifacts/sprint3-source-*.json` and `.artifacts/postseason-rules-*.md`.
+Checked 15 November 2026. This is a source register for Sprint 3, **not a claim that every format below is playable**. Domestic regular-season calendars are integrated. New French careers also use the sourced LNB sporting ranking described below, new Spanish, German and Italian careers use those leagues' verified rules (step 3.4e-2), and every other league uses the labelled FIBA Appendix D default (step 3.4e-1). Postseason, European stages and competition-specific registration are still unintegrated. Raw captures remain private under `.artifacts/sprint3-source-*.json` and `.artifacts/postseason-rules-*.md`.
 
 ## Confirmed formats
 
@@ -42,9 +42,9 @@ Article 205 also covers sanctions and exclusions. The engine records sporting wi
 Old careers keep their original wins/difference/points ordering. New careers rank other countries' leagues by the FIBA default below until their own rules have been verified and implemented; do not apply LNB rules to them. Research leads checked this increment:
 
 - [FIBA 2026 rules, Appendix D](https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2026-v1-1.pdf): general classification points, head-to-head criteria and a final draw. Integrated as the labelled default for new worlds (step 3.4e-1, below). This is not proof of every national league's variations.
-- [ACB published tie-break rules](https://acb.com/es/liga/noticias/reglas-de-desempate-liga-endesa-22-23-138397): incomplete direct schedules use overall criteria; two-team and larger ties differ; a sum of per-game scoring quotients is a later criterion. The page is dated 2023, so current applicability remains to verify before enabling it.
-- [FIP Regolamento Esecutivo Gare, article 62](https://fip.it/wp-content/uploads/2025/08/RE-Gare-approvato-dal-CF-17-luglio-2025-del-n-48.pdf): direct wins, scoring quotients to four decimals and, for unresolved ties, personal/technical foul totals. Verify current applicability and retained team-foul evidence before implementing this; generic points difference is not equivalent.
-- The retrieved BSL and BBL competition-format PDFs do not by themselves establish their complete regular-season tie-break rules. TBL and Greek ranking rules also remain to verify.
+- [ACB published tie-break rules](https://acb.com/es/liga/noticias/reglas-de-desempate-liga-endesa-22-23-138397): incomplete direct schedules use overall criteria; two-team and larger ties differ; a sum of per-game scoring quotients is a later criterion. Confirmed current by the 2026/2027 Normas Internas and integrated at step 3.4e-2 (above).
+- [FIP Regolamento Esecutivo Gare, article 62](https://fip.it/wp-content/uploads/2025/08/RE-Gare-approvato-dal-CF-17-luglio-2025-del-n-48.pdf): direct wins, scoring quotients to four decimals and, for unresolved ties, personal/technical foul totals. Confirmed current (25 March 2026 edition) and integrated at step 3.4e-2 (above); team fouls come from retained player evidence.
+- The retrieved BSL and BBL competition-format PDFs do not by themselves establish their complete regular-season tie-break rules. The BBL rule is in its Spielordnung (integrated at step 3.4e-2); the TBL, BSL and Greek rules remain unverified (above).
 
 ## Default ranking: FIBA Official Basketball Rules 2026, Appendix D (step 3.4e-1)
 
@@ -56,6 +56,29 @@ Checked 15 November 2026 against the [FIBA Official Basketball Rules 2026 (July 
 - The seven worked examples D.2.1-D.2.7 are reproduced exactly by `tests/fiba-standings.test.js`.
 - During a season, clubs that have not met yet score nothing against each other; the procedure then moves on to overall points difference. Ties still unresolved are marked "=" and a completed table uses the same reproducible draw as `lnb-2026-1` (independent stream keyed by competition, fixture identities and tied clubs). D.3 (forfeits, nullified results) and D.4 (cross-group comparisons) are not used: the engine has no forfeits, and domestic leagues are single groups.
 - Implementation: `src/world/fiba-ranking.ts`; rule choice `standingsRuleFor` in `src/domain/competition.ts`.
+
+## League-specific ranking rules (step 3.4e-2)
+
+Checked 15 November 2026. New worlds (format 52, IDs `real-rules-`) give these leagues their own rule; worlds created earlier keep the rule they were created with. Implementation: `src/world/league-rankings.ts`; tests `tests/league-standings.test.js`. Raw downloads stayed in the session scratchpad and are not committed.
+
+| League | Rule id | Source (current for 2026-27) | Criteria |
+| --- | --- | --- | --- |
+| Spain ACB | `acb-art7-2026` | [ACB Normas Internas 2026/2027](https://www.acb.com/docs/descarga/pdf/transparencia/221026_normasinternas.pdf), articles 6.2 and 7 (cover "Temporada 2026/2027"; article 7 is unchanged from the 2024/25 edition and from the [2022-23 summary](https://acb.com/es/liga/noticias/reglas-de-desempate-liga-endesa-22-23-138397)) | Most wins, or win percentage while clubs have played different numbers of games (6.2). Level clubs with fewer games first (7.2). Level clubs that have not all met home and away (7.3.1): overall difference, overall points scored, sum of per-game quotients (points scored / conceded) to a thousandth. All met home and away (7.3.2): two clubs by direct wins, direct difference, overall difference, overall points, quotient sum; three or more also use direct points scored after the direct difference; clubs still level restart with the list for their number |
+| Germany BBL | `bbl-art20-2026` | [easyCredit BBL Spielordnung 2026/2027](https://cms.easycredit-bbl.de/wp-content/uploads/2026/08/easyCredit-BBL-Spielordnung-2026_2027.pdf), §§ 16 and 20 | 2:0 Wertungspunkte for a win, 0:2 for a loss; more plus points, then fewer minus points. Level clubs: direct plus points, direct difference, overall difference, the better quotient (smaller with a positive difference, larger with a negative one: at equal difference, more points scored; no decision at zero), then lots. Placed clubs leave the comparison and the rest restart (§ 20 (8)-(9)) |
+| Italy LBA and Serie A2 | `fip-art62-2026` | [FIP Regolamento Esecutivo Gare, 25 March 2026](https://fip.it/wp-content/uploads/2026/04/RE-Gare-approvato-CF-25-marzo-2026-n-360.pdf), articles 60 and 62 (unchanged from the 17 July 2025 edition). The [LBA Regolamento Sportivo](https://segreteriagenerale.fip.it/wp-content/uploads/2023/10/All.-del.97-LBA-Regolamento-Sportivo.pdf), article 8.2, applies FIP article 62; no Serie A2 override was found, and the [FIP 2026/27 annual rules](https://fip.it/wp-content/uploads/2026/05/DOA-26_27-versione-1.pdf) add none | 2 points for a win, none for a loss. Two clubs: direct wins, direct quotient (scored / conceded), overall quotient. Three or more: a table of their direct games, the direct quotient among clubs still level, the overall quotient; two or more still level restart with the list for their number (62.2). Then fewer personal and technical fouls in the direct games, then in all games (62.3). Quotients keep four decimals (62.5) |
+
+Readings and limits:
+- **Sanctions** (ACB 7.1, BBL § 20 (2), forfeits): the engine records none, so these clauses never apply.
+- **ACB 7.3.3** (the previous season's final classification) is not applied; a tie that survives the quotient sum uses the game's reproducible draw. Season one has no previous classification in the game's data, and the rule does not say how promoted clubs compare.
+- **ACB 6.2/7.2** while games played differ: clubs level on win percentage with different games (for example 2-1 and 4-2) put the club with fewer games first. In the game's even leagues all clubs play every week, so this arises only with byes.
+- **ACB quotient:** read as the sum of each game's quotient ("la suma de los cocientes"), rounded to a thousandth; a game conceding 0 points (a 2-0 default) counts as an infinite quotient.
+- **FIP fouls:** the engine records personal fouls only (no technical fouls); team totals come from the players selected for each game, using full box scores or the per-player appearances kept for archived games. A tie that survives the fouls uses the reproducible draw (article 62 names no further criterion; 62.4 covers only competitions of three clubs). A direct quotient of 0:0 counts as equal totals.
+- **Incomplete direct games during a season** (BBL, FIP): the texts describe final tables; the game applies the same criteria to the games played so far.
+
+Not changed (the FIBA default stays, labelled):
+- **Greece GBL:** the [ESAKE competition regulations 2025-2026](https://www.esake.gr/img/GBL_COMPETITIONS_REGULATIONS_2025-2026.pdf) (the latest published) give 2 points for a win and 1 for a loss (article 27), the same as FIBA, and leave ties to each season's special notice (article 28.2), which is not published; article 3 applies FIBA rules otherwise.
+- **Turkey BSL and TBL:** tbf.org.tr refuses automated access (a browser check), so the 2026-27 statute "BSL 2026-2027 Sezonu Statüsü ve Lig Sıralaması" (in force from 28 August 2026) could not be read. Secondary sources list points, games between the clubs, overall difference and points scored. Local-only: the owner can open the TBF PDF in a browser.
+- **Spain Primera FEB** was not among the candidates; it keeps the default.
 
 ## Registration evidence and limits
 

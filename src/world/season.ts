@@ -3,7 +3,7 @@ import { competitionTable } from './competition-table';
 import { createBoard, enableBoard, enableBoardConsequences, prepareBoardSeason, processBoardRound } from './board';
 import { summarizeAcademyHistory } from './academy-history';
 import { summarizeYouthHistory } from './youth-history';
-import { summarizeSeniorHistory } from './senior-history';
+import { fixturePlayerEvidence, summarizeSeniorHistory } from './senior-history';
 import { createRivalries, enableRivalries } from './rivalries';
 import { appointManager, createCareer, enableCareerMoves, matchClubFor } from './career';
 import { jobOfferRefusal, seasonEndOutlook, type SeasonEndOutlook } from './career-policy';
@@ -685,6 +685,17 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   return summarizeSeniorHistory(summarizeYouthHistory(summarizeAcademyHistory(next)));
 }
 
+/**
+ * Each side's personal fouls in a completed game, from the retained player evidence of its selected players (full box
+ * scores, or the per-player appearances kept for archived games of other clubs). The engine has no technical fouls.
+ */
+function fixtureFouls(fixture: SeasonFixture | ArchivedFixture): { home: number; away: number } {
+  const selection = fixture.result?.selection;
+  if (!selection) throw new Error('A table that counts fouls needs each game\'s selected players.');
+  const side = (ids: readonly string[]) => ids.reduce((sum, id) => sum + (fixturePlayerEvidence(fixture, id)?.fouls ?? 0), 0);
+  return { home: side(selection.home), away: side(selection.away) };
+}
+
 /** Each domestic league uses its saved rule; legacy worlds retain their original ordering. */
 export function getStandings(season: { clubs: readonly Team[]; fixtures: readonly (SeasonFixture | ArchivedFixture)[] } & DivisionContext): Standing[] {
   if (season.world?.domesticLeagues) return seasonLeagues(season.world, season.divisions).flatMap(league => {
@@ -692,7 +703,7 @@ export function getStandings(season: { clubs: readonly Team[]; fixtures: readonl
     if (league.standingsRule) return competitionTable({
       competitionId: league.id, clubIds: league.clubIds, rule: league.standingsRule,
       games: fixtures.map(fixture => ({ ...fixture, competitionId: league.id, stage: 'regular' as const, stageRound: fixture.round, groupId: null, seriesId: null, neutral: false })),
-      results: fixtures.flatMap(fixture => fixture.result ? [{ fixtureId: fixture.id, home: fixture.result.officialScore.home, away: fixture.result.officialScore.away, winnerClubId: fixture.result.winnerClubId }] : []),
+      results: fixtures.flatMap(fixture => fixture.result ? [{ fixtureId: fixture.id, home: fixture.result.officialScore.home, away: fixture.result.officialScore.away, winnerClubId: fixture.result.winnerClubId, ...(league.standingsRule === 'fip-art62-2026' ? { fouls: fixtureFouls(fixture) } : {}) }] : []),
     }).map(row => ({ ...row, difference: row.pointsFor - row.pointsAgainst }));
     return getStandings({ clubs: season.clubs.filter(club => league.clubIds.includes(club.id)), fixtures });
   });

@@ -3,6 +3,7 @@
 // Run this BEFORE changing the season save format, on unchanged code, so the files come from the old runtime:
 //   node scripts/capture-format-baseline.mjs <label>          (writes tests/fixtures/season<version>-<label>-*.json.gz)
 //   node scripts/capture-format-baseline.mjs <label> --force  (overwrites files of the same names; unchanged code only)
+//   node scripts/capture-format-baseline.mjs <label> --fiba   (both leagues use the FIBA default standings rule; format 51 on)
 //
 // The world is the public test world of tests/division-changes.test.js: one country ("Testland") with a six-club
 // first division and a five-club second division, both with postseasons, and opening contracts of one to three
@@ -21,6 +22,7 @@ import assert from 'node:assert/strict';
 
 const label = process.argv[2];
 const force = process.argv.includes('--force');
+const fiba = process.argv.includes('--fiba');
 if (!label || label.startsWith('-') || !/^[a-z0-9-]+$/.test(label)) throw new Error('Usage: node scripts/capture-format-baseline.mjs <label> [--force]');
 const server = await createServer({
   configFile: false,
@@ -48,7 +50,7 @@ try {
   const world = { ...base, id: 'format-baseline-test', rosterModel: 'club-roster-1', playerContracts, domesticLeagues: [
     { id: 'first', name: 'First division', country: 'Testland', tier: 1, clubIds: base.clubs.slice(0, 6).map(club => club.id), postseason: 'test-tier1-1' },
     { id: 'second', name: 'Second division', country: 'Testland', tier: 2, clubIds: base.clubs.slice(6).map(club => club.id), postseason: 'test-tier2-1' },
-  ] };
+  ].map(league => fiba ? { ...league, standingsRule: 'fiba-2026-d' } : league) };
   const manager = { name: 'Fixture Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
   const play = state => season.advanceSeason(state.activeMatch ? { ...state, activeMatch: engine.simulateToEnd(engine.setAutoSubstitutions(state.activeMatch, season.managedSide(state), true)) } : state);
 
@@ -82,7 +84,7 @@ try {
     commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
     clean = execFileSync('git', ['status', '--porcelain', '--', 'src'], { encoding: 'utf8' }).trim() === '';
   } catch { /* Not a git checkout: the module hashes still identify the runtime. */ }
-  const manifest = { source: `commit ${commit}${clean ? ' (src unchanged)' : ' (src has uncommitted changes)'}`, schema: version, world: world.id, seed: 5150, files, moduleCount: Object.keys(modules).length, modules };
+  const manifest = { source: `commit ${commit}${clean ? ' (src unchanged)' : ' (src has uncommitted changes)'}`, schema: version, world: world.id, seed: 5150, standingsRule: fiba ? 'fiba-2026-d' : null, files, moduleCount: Object.keys(modules).length, modules };
   await writeFile(`tests/fixtures/${prefix}-manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(JSON.stringify({ prefix, files, moduleCount: manifest.moduleCount, source: manifest.source }, null, 2));
 } finally {

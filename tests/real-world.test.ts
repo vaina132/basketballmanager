@@ -44,7 +44,7 @@ describe('a career world from a real-data pack', () => {
   it('builds the league\'s real clubs with complete imported squads, neutral figures and the pack\'s identities', () => {
     const world = worldFromPack(pack, 'competition-league');
     expect(() => validateWorld(world)).not.toThrow();
-    expect(world).toMatchObject({ id: 'real-tiebreak-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
+    expect(world).toMatchObject({ id: 'real-rules-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
     expect(world.clubs.map(club => club.players.length)).toEqual([14, 14, 14, 14]);
     // Missing statistics must not silently discard a real identity.
     expect(world.clubs.every(club => club.players.some(item => item.id.endsWith('-13')))).toBe(true);
@@ -63,9 +63,10 @@ describe('a career world from a real-data pack', () => {
       expect(() => validateWorld(world)).not.toThrow();
     }
     // Step 3.4e-1: leagues without a verified rule of their own use FIBA Appendix D; the French rule is never applied elsewhere.
-    for (const country of ['Germany', 'Spain', 'X']) {
-      const otherPack = { ...pack, competitions: pack.competitions.map(item => item.id === 'competition-league' ? { ...item, country } : item) };
-      expect(worldFromPack(otherPack, 'competition-league').domesticLeagues![0]!.standingsRule).toBe('fiba-2026-d');
+    // Step 3.4e-2: Spain's, Germany's and Italy's top divisions use their own verified rules.
+    for (const [country, rule] of [['Greece', 'fiba-2026-d'], ['X', 'fiba-2026-d'], ['Spain', 'acb-art7-2026'], ['Germany', 'bbl-art20-2026'], ['Italy', 'fip-art62-2026']] as const) {
+      const otherPack = { ...pack, competitions: pack.competitions.map(item => item.id === 'competition-league' ? { ...item, country, tier: 1 } : item) };
+      expect(worldFromPack(otherPack, 'competition-league').domesticLeagues![0]!.standingsRule).toBe(rule);
     }
   });
 

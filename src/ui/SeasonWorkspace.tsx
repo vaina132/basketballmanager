@@ -45,6 +45,31 @@ export function SeasonWorkspace(props: SeasonWorkspaceProps) {
   return <ActiveSeason key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}:${season.round}:${season.status}`} {...props} season={season} onNewGame={props.onNewCareer} />
 }
 
+/** Verified league rules (step 3.4e-2): the table label, an optional points column and a short explanation. */
+const LEAGUE_RULES = {
+  'acb-art7-2026': {
+    label: 'ACB · Wins', points: null, pointsTitle: '',
+    text: [
+      'ACB Normas Internas 2026/2027, articles 6.2 and 7. Most wins, or win percentage while clubs have played different numbers of games; level clubs that have played fewer games come first.',
+      'Level clubs that have met home and away are ranked by their games against each other (wins, points difference and, for three or more clubs, points scored), then overall points difference, points scored and the sum of per-game scoring quotients; otherwise only the overall criteria count. A tie the rules settle by last season\'s final position uses a reproducible draw; “=” marks an unresolved tie during the season.',
+    ],
+  },
+  'bbl-art20-2026': {
+    label: 'BBL · Wertungspunkte', points: (row: { wins: number; losses: number }) => `${2 * row.wins}:${2 * row.losses}`, pointsTitle: 'Wertungspunkte: 2:0 for a win, 0:2 for a loss',
+    text: [
+      'easyCredit BBL Spielordnung 2026/2027, §§ 16 and 20. A win scores 2:0 points and a loss 0:2.',
+      'Level clubs are ranked by the points in their games against each other, then points difference in those games, overall points difference and the scoring quotient. The procedure restarts for clubs still level; lots decide a final tie (a reproducible draw here), and “=” marks an unresolved tie during the season.',
+    ],
+  },
+  'fip-art62-2026': {
+    label: 'FIP · Points', points: (row: { wins: number }) => String(2 * row.wins), pointsTitle: 'Points: 2 for a win, none for a loss',
+    text: [
+      'FIP Regolamento Esecutivo Gare, articles 60 and 62. Two points for a win, none for a loss.',
+      'Level clubs are ranked by their games against each other (wins, then the quotient of points scored and conceded), then the quotient over all games, restarting for clubs still level; then fewer fouls in those games and in all games. A tie the rules leave open uses a reproducible draw; “=” marks an unresolved tie during the season.',
+    ],
+  },
+} as const
+
 function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, busy = false }: SeasonWorkspaceProps & { season: SeasonState; onNewGame: () => void }) {
   const [selectedSeason, setSelectedSeason] = useState(season.seasonNumber)
   // Step 3.4c: the selected season's own divisions (clubs move between divisions from season to season).
@@ -67,6 +92,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const standings = getStandings({ ...season, fixtures: archive?.fixtures ?? season.fixtures, divisions: shownDivisions }).filter(row => !league || league.clubIds.includes(row.clubId))
   const lnbRanking = league?.standingsRule === 'lnb-2026-1'
   const fibaRanking = league?.standingsRule === 'fiba-2026-d'
+  const leagueRule = league?.standingsRule && Object.hasOwn(LEAGUE_RULES, league.standingsRule) ? LEAGUE_RULES[league.standingsRule as keyof typeof LEAGUE_RULES] : null
   const club = (id: string) => season.clubs.find(team => team.id === id)!
   const active = season.fixtures.find(fixture => fixture.id === season.activeFixtureId)
   // The club the manager ran in the season shown; after a move, the new club appears from the next season.
@@ -124,13 +150,13 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
 
     <section className="season-standings panel" aria-labelledby="season-table-title">
       <header className="season-panel-heading"><div><h2 id="season-table-title">{leagues ? 'Regular-season table' : 'League table'}</h2>{leagues && <label>Competition <select aria-label="Competition" value={leagueId} onChange={event => { setLeagueId(event.target.value); setReviewId(null) }} disabled={busy}>{leagues.map(item => <option key={item.id} value={item.id}>{item.country} · {item.name}</option>)}</select></label>}<p>{leagueName} · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
-      <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th>{lnbRanking && <th scope="col" title="Wins divided by games played">Win %</th>}{fibaRanking && <th scope="col" title="Classification points: 2 for a win, 1 for a loss">Pts</th>}<th scope="col" title="Points for">PF</th><th scope="col" title="Points against">PA</th><th scope="col" title="Point difference">Diff</th></tr></thead><tbody>{standings.map(row => <tr key={row.clubId} data-club-id={row.clubId} className={row.clubId === season.managedClubId ? 'season-managed-row' : ''}>
-        <td>{row.position}{row.rankingTie === 'unresolved' && <span className="season-tie-mark" title="Still tied on sporting criteria; display order only" aria-label="Still tied">=</span>}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} />{row.rankingTie === 'draw' && <span className="season-draw-label" title="Equal after all sporting tie-breaks; position decided by a reproducible draw">Draw</span>}</th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td>{lnbRanking && <td>{row.played ? `${(row.wins / row.played * 100).toFixed(1)}%` : '—'}</td>}{fibaRanking && <td className="season-wins">{classificationPoints(row)}</td>}<td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
+      <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th>{lnbRanking && <th scope="col" title="Wins divided by games played">Win %</th>}{fibaRanking && <th scope="col" title="Classification points: 2 for a win, 1 for a loss">Pts</th>}{leagueRule?.points && <th scope="col" title={leagueRule.pointsTitle}>Pts</th>}<th scope="col" title="Points for">PF</th><th scope="col" title="Points against">PA</th><th scope="col" title="Point difference">Diff</th></tr></thead><tbody>{standings.map(row => <tr key={row.clubId} data-club-id={row.clubId} className={row.clubId === season.managedClubId ? 'season-managed-row' : ''}>
+        <td>{row.position}{row.rankingTie === 'unresolved' && <span className="season-tie-mark" title="Still tied on sporting criteria; display order only" aria-label="Still tied">=</span>}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} />{row.rankingTie === 'draw' && <span className="season-draw-label" title="Equal after all sporting tie-breaks; position decided by a reproducible draw">Draw</span>}</th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td>{lnbRanking && <td>{row.played ? `${(row.wins / row.played * 100).toFixed(1)}%` : '—'}</td>}{fibaRanking && <td className="season-wins">{classificationPoints(row)}</td>}{leagueRule?.points && <td className="season-wins">{leagueRule.points(row)}</td>}<td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
       </tr>)}</tbody></table></div>
-      <details className="season-table-rules"><summary>Table rules <span>{lnbRanking ? 'LNB · Win percentage' : fibaRanking ? 'FIBA default · Classification points' : 'Prototype ranking'}</span></summary>{lnbRanking ? <>
+      <details className="season-table-rules"><summary>Table rules <span>{lnbRanking ? 'LNB · Win percentage' : fibaRanking ? 'FIBA default · Classification points' : leagueRule ? leagueRule.label : 'Prototype ranking'}</span></summary>{lnbRanking ? <>
         <p>Win percentage comes first. Tied clubs are ranked by their results against each other, then points difference and points scored. Clubs without a direct meeting keep their overall points-difference position.</p>
         <p>Remaining ties use overall points difference, then points scored. The process restarts for any clubs still tied. A fully tied final table uses a reproducible draw; “=” marks an unresolved tie during the season.</p>
-      </> : fibaRanking ? <>
+      </> : leagueRule ? <>{leagueRule.text.map(paragraph => <p key={paragraph}>{paragraph}</p>)}</> : fibaRanking ? <>
         <p>This league's own tie-break rules have not been verified yet, so the game uses the FIBA Official Basketball Rules 2026, Appendix D. Classification points come first: 2 for a win, 1 for a loss.</p>
         <p>Clubs level on points are ranked by the games between them: points, then points difference and points scored in those games, then overall points difference and points scored. The process restarts for any clubs still tied. A fully tied final table uses a reproducible draw; “=” marks an unresolved tie during the season.</p>
       </> : <p>Ranked by wins, overall point difference, points scored, then club ID. This career retains its original ranking rules.</p>}</details>

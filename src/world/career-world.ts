@@ -4,7 +4,7 @@ import type { Rivalry } from '../domain/rivalries';
 import type { Player } from '../domain/types';
 import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { CareerWorld, WorldContext } from '../domain/world';
-import { standingsRuleAllowed } from '../domain/competition';
+import { STANDINGS_RULE_FORMAT, standingsRuleAllowed } from '../domain/competition';
 import { DEVELOPMENT_PLAYERS } from '../data/development-players';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { roundRobinRoundCount } from './competition-calendar';
@@ -180,7 +180,7 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
     }
     if (members.size !== world.clubs.length) fail('world.domesticLeagues', 'must cover every club');
     // Worlds created since format 51 give every league a rule (its own or the FIBA default); older worlds rank only French leagues by a rule.
-    if (world.domesticLeagues!.some(league => league.standingsRule === 'fiba-2026-d') && world.domesticLeagues!.some(league => !Object.hasOwn(league, 'standingsRule'))) fail('world.domesticLeagues.standingsRule', 'must be given to every league of a world that uses the FIBA default');
+    if (world.domesticLeagues!.some(league => league.standingsRule && STANDINGS_RULE_FORMAT[league.standingsRule] >= STANDINGS_RULE_FORMAT['fiba-2026-d']) && world.domesticLeagues!.some(league => !Object.hasOwn(league, 'standingsRule'))) fail('world.domesticLeagues.standingsRule', 'must be given to every league of a world that uses the FIBA default or a later rule');
     // Postseasons are all or nothing, and a format seeding from the other division needs that division's postseason too.
     const withPostseason = world.domesticLeagues!.filter(league => league.postseason);
     if (withPostseason.length && withPostseason.length !== world.domesticLeagues!.length) fail('world.domesticLeagues.postseason', 'must be given to every league or none');

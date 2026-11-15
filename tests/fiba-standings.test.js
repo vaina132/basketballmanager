@@ -79,10 +79,11 @@ describe('FIBA Official Basketball Rules 2026, Appendix D (the labelled default,
     expect(new Set(first.map(entry => entry.position)).size).toBe(3);
   });
 
-  it('gives new worlds the French rule in France only and the FIBA default everywhere else', () => {
+  it('gives new worlds the French rule in France only and the FIBA default to leagues without a verified rule', () => {
     expect(standingsRuleFor('France', 1)).toBe('lnb-2026-1');
     expect(standingsRuleFor('France', 2)).toBe('lnb-2026-1');
-    for (const country of ['Germany', 'Greece', 'Italy', 'Spain', 'Turkey']) for (const tier of [1, 2]) expect(standingsRuleFor(country, tier)).toBe('fiba-2026-d');
+    // Spain's, Germany's and Italy's top divisions and Italy's second gained their own rules at step 3.4e-2.
+    for (const [country, tier] of [['Greece', 1], ['Spain', 2], ['Turkey', 1], ['Turkey', 2]]) expect(standingsRuleFor(country, tier)).toBe('fiba-2026-d');
     expect(standingsRuleAllowed('fiba-2026-d', 'France', 1)).toBe(false);
     expect(standingsRuleAllowed('lnb-2026-1', 'Spain', 1)).toBe(false);
     expect(standingsRuleAllowed('made-up', 'Spain', 1)).toBe(false);

@@ -8,6 +8,17 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.4e-2, league-specific standings rules (15 November 2026)
+
+- **Research** (free official sources, 15 November 2026; details and links in `docs/competition-rules-2026.md#league-specific-ranking-rules-step-34e-2`): ACB Normas Internas 2026/2027 art. 6.2 and 7; BBL Spielordnung 2026/2027 §§ 16 and 20; FIP Regolamento Esecutivo Gare (25 March 2026) art. 60 and 62, applied by LBA (Regolamento Sportivo 8.2) and Serie A2. Greece: ESAKE regulations leave ties to an unpublished season notice. Turkey: tbf.org.tr refuses automated access, so the BSL/TBL statutes could not be read (local-only follow-up).
+- **Fixtures first:** `tests/fixtures/season51-rules-legacy-*` from unchanged commit `ba377eb` (118 modules), captured with the new `--fiba` option of `scripts/capture-format-baseline.mjs`; `tests/season51-continuation.test.js` (3).
+- **Rules:** `src/world/league-rankings.ts` (`rankAcbTable`, `rankBblTable`, `rankFipTable`, shared restart helper). `competitionTable` dispatches by rule (`RANKINGS`); results may carry `fouls` (whole, non-negative). `getStandings` supplies each side's personal fouls for FIP leagues from the selected players' retained evidence (`fixtureFouls`: box scores or archived appearances).
+- **Worlds:** `sourcedStandingsRule` maps Spain/1, Germany/1, Italy/1-2; `standingsRuleAllowed` still accepts the FIBA default there (worlds created in format 51). Any rule from format 51 on requires every league to have a rule. New IDs `real-rules-`. Format **52** (guard `requires format 52 or later`).
+- **Screen:** "ACB · Wins", "BBL · Wertungspunkte" (Pts as 2:0 points), "FIP · Points" (Pts), each with a short explanation behind "Table rules".
+- **Tests:** `tests/league-standings.test.js` (13: each rule's criteria from the texts, rule choice, foul and format validation, and a three-country career with strict saves whose archived table is rebuilt from retained foul evidence); updated `tests/fiba-standings.test.js`, `tests/real-world.test.ts`.
+- **Verification:** full serial suite **2,556 tests / 184 files passed** (603 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.4d-1, the background-club foundation.
+
 ## Cloud continuation: step 3.4e-1, FIBA default standings rule (15 November 2026)
 
 First cloud session (Linux). Node 24.22.3 installed in `/opt/node24`. The owner decided the two 3.4d-2 questions (recorded in `docs/decisions.md#owner-decisions-for-step-34d-2-15-november-2026`) and asked for the plan to continue to the end of sprint 3.

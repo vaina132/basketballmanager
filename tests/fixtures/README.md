@@ -1,5 +1,7 @@
 # Save compatibility fixtures
 
+The `season47-standings-legacy` save and `season47-standings-legacy-next` state were captured from unchanged `81fa080` before adding sourced standings rules. This public all-system career contains two leagues of five and four clubs, including byes. Every loaded source/test module was compared with that commit; the manifest records hashes and module count. Migration must retain the original ranking even though both leagues have French country metadata. `season47-continuation.test.js` verifies the independently captured next week. Never regenerate these expectations from new ranking code.
+
 The `season46-calendar-legacy` save and `season46-calendar-legacy-next` state were captured from the original format-46 runtime at `2b2222a`, before calendar integration. Every loaded source/test module was compared against that commit before writing. The public synthetic career has variable 9/14/17/25-player squads and all management systems enabled. Its manifest retains gzip hashes and verified module count; `season46-continuation.test.js` checks exact independent continuation. Never regenerate these expectations from changed calendar code.
 
 The gzip files contain UTF-8 JSON and use only Node's built-in `fs` and `zlib` in the migration test.

@@ -1,0 +1,8 @@
+{
+  "sourceCommit": "81fa080",
+  "schema": 47,
+  "inputSha256": "265f91bdaeccd67a0ac12ab42e95764a6e42cbea1c8c048346ba1ba613cd0cb6",
+  "nextSha256": "1c3bd7c5c5ac165a9784be541f3b027ce55be3696b5b95331a2c838f14161734",
+  "verifiedModuleCount": 112,
+  "note": "Original public all-system 5+4 club domestic career; original rules must survive new standings models. Every loaded production/test module compared to the commit before capture."
+}

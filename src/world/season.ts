@@ -1,4 +1,5 @@
 import { requireCalendarWeek } from './calendar-boundary';
+import { competitionTable } from './competition-table';
 import { createBoard, enableBoard, enableBoardConsequences, prepareBoardSeason, processBoardRound } from './board';
 import { summarizeAcademyHistory } from './academy-history';
 import { summarizeYouthHistory } from './youth-history';
@@ -543,9 +544,17 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   return summarizeSeniorHistory(summarizeYouthHistory(summarizeAcademyHistory(next)));
 }
 
-/** Fictional league rules: wins, overall point difference, points scored, club ID. */
+/** Each domestic league uses its saved rule; legacy worlds retain their original ordering. */
 export function getStandings(season: { clubs: readonly Team[]; fixtures: readonly (SeasonFixture | ArchivedFixture)[] } & WorldContext): Standing[] {
-  if (season.world?.domesticLeagues) return season.world.domesticLeagues.flatMap(league => getStandings({ clubs: season.clubs.filter(club => league.clubIds.includes(club.id)), fixtures: season.fixtures.filter(fixture => league.clubIds.includes(fixture.homeClubId)) }));
+  if (season.world?.domesticLeagues) return season.world.domesticLeagues.flatMap(league => {
+    const fixtures = season.fixtures.filter(fixture => league.clubIds.includes(fixture.homeClubId));
+    if (league.standingsRule) return competitionTable({
+      competitionId: league.id, clubIds: league.clubIds, rule: league.standingsRule,
+      games: fixtures.map(fixture => ({ ...fixture, competitionId: league.id, stage: 'regular' as const, stageRound: fixture.round, groupId: null, seriesId: null, neutral: false })),
+      results: fixtures.flatMap(fixture => fixture.result ? [{ fixtureId: fixture.id, home: fixture.result.officialScore.home, away: fixture.result.officialScore.away, winnerClubId: fixture.result.winnerClubId }] : []),
+    }).map(row => ({ ...row, difference: row.pointsFor - row.pointsAgainst }));
+    return getStandings({ clubs: season.clubs.filter(club => league.clubIds.includes(club.id)), fixtures });
+  });
   const rows = new Map(season.clubs.map(club => [club.id, { position: 0, clubId: club.id, played: 0, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, difference: 0 }]));
   for (const fixture of season.fixtures) {
     if (!fixture.result) continue;

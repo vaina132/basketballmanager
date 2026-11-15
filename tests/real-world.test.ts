@@ -44,7 +44,7 @@ describe('a career world from a real-data pack', () => {
   it('builds the league\'s real clubs with complete imported squads, neutral figures and the pack\'s identities', () => {
     const world = worldFromPack(pack, 'competition-league');
     expect(() => validateWorld(world)).not.toThrow();
-    expect(world).toMatchObject({ id: 'real-calendar-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
+    expect(world).toMatchObject({ id: 'real-tables-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
     expect(world.clubs.map(club => club.players.length)).toEqual([14, 14, 14, 14]);
     // Missing statistics must not silently discard a real identity.
     expect(world.clubs.every(club => club.players.some(item => item.id.endsWith('-13')))).toBe(true);
@@ -53,6 +53,16 @@ describe('a career world from a real-data pack', () => {
     expect(world.finances[0]!.venue).toBe('Alpha Hall');
     expect(world.finances[1]!.venue).toBe('Club B Arena');
     expect(new Set(world.clubs[0]!.players.map(item => item.number)).size).toBe(14);
+  });
+
+  it('opts new French top and second divisions into sourced ranking without changing other leagues', () => {
+    for (const tier of [1, 2]) {
+      const frenchPack = { ...pack, competitions: pack.competitions.map(item => item.id === 'competition-league' ? { ...item, country: 'France', tier } : item) };
+      const world = worldFromPack(frenchPack, 'competition-league');
+      expect(world.domesticLeagues![0]!.standingsRule).toBe('lnb-2026-1');
+      expect(() => validateWorld(world)).not.toThrow();
+    }
+    expect(worldFromPack(pack, 'competition-league').domesticLeagues![0]!.standingsRule).toBeUndefined();
   });
 
   it('keeps smaller squads intact and rejects incomplete data without invented reserves', () => {

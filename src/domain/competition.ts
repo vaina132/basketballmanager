@@ -43,7 +43,12 @@ export interface CompetitionTableRow {
   pointsFor: number;
   pointsAgainst: number;
   position: number;
+  /** No sporting tie-break separates these clubs; a completed LNB table uses a deterministic draw. */
+  rankingTie?: 'unresolved' | 'draw';
 }
+
+/** Opt-in, immutable career rules. Absence preserves the original prototype ranking. */
+export type DomesticStandingsRule = 'lnb-2026-1';
 
 export interface CalendarDay {
   date: string;

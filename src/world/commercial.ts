@@ -23,7 +23,7 @@ function withEvent(state: SeasonState, commercial: SeasonCommercial, event: Comm
   return { ...state, commercial: { ...commercial, events: [...commercial.events, event] } };
 }
 
-function finalPosition(state: Pick<SeasonState, 'clubs' | 'fixtures' | 'seasonNumber'>): (seasonNumber: number, clubId: string) => number | null {
+function finalPosition(state: Pick<SeasonState, 'clubs' | 'fixtures' | 'seasonNumber'> & WorldContext): (seasonNumber: number, clubId: string) => number | null {
   return (seasonNumber, clubId) => seasonNumber === state.seasonNumber ? getStandings(state).find(row => row.clubId === clubId)?.position ?? null : null;
 }
 

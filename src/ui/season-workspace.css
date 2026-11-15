@@ -68,6 +68,13 @@
 .season-managed-row{background:#e5aa5507}
 .season-managed-row>td:first-child{border-left:3px solid var(--accent)}
 .season-table-note{font-size:12px;color:var(--muted);padding:9px 14px;border-top:1px solid var(--border);line-height:1.5}
+.season-table-rules{padding:9px 14px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;line-height:1.5}
+.season-table-rules summary{cursor:pointer;width:fit-content;color:var(--text)}
+.season-table-rules summary span{color:var(--muted);margin-left:10px}
+.season-table-rules summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.season-table-rules p{margin:7px 0 0;max-width:80ch}
+.season-tie-mark{margin-left:4px;color:var(--muted)}
+.season-draw-label{display:inline-block;font-size:12px;color:var(--muted);border:1px solid var(--border);padding:0 5px;margin-top:3px}
 .season-fixtures-heading{flex-wrap:wrap}
 .season-fixture-filters{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
 .season-fixture-filters label{font-size:12px;color:var(--muted)}

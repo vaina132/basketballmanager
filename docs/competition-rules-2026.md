@@ -1,6 +1,6 @@
 # Competition rules research, 2026–27
 
-Checked 15 November 2026. This is a source register for Sprint 3, **not a claim that these competitions are playable**. Raw source captures are private working artifacts under `.artifacts/sprint3-source-*.json`. The generic calendar, series, standings and registration modules are foundations; career integration remains open.
+Checked 15 November 2026. This is a source register for Sprint 3, **not a claim that every format below is playable**. Domestic regular-season calendars are integrated. New French careers also use the sourced LNB sporting ranking described below. Postseason, European stages and competition-specific registration are still unintegrated. Raw captures remain private under `.artifacts/sprint3-source-*.json` and `.artifacts/postseason-rules-*.md`.
 
 ## Confirmed formats
 
@@ -19,6 +19,21 @@ Checked 15 November 2026. This is a source register for Sprint 3, **not a claim 
 The France promotion bracket's semi-final pairing differs from a conventional eight-seed bracket: QFA (1–8) meets QFB (3–6), and QFC (2–7) meets QFD (4–5). Preserve the official table instead of applying the generic helper blindly.
 
 Serie A2's first play-in round is 10–13 and 11–12; the winners visit 9 and 8 respectively. Those two winners enter as the last two playoff seeds. The BSL's final domestic order also includes a Turkish Cup provision. National cups are outside this sprint; do not fabricate cup results to apply it.
+
+## Regular-season ranking: first integrated rule
+
+New French top- and second-division careers save `standingsRule: lnb-2026-1`. [LNB 2026/27 regulations, articles 205.1–205.2](https://cdn.lnb.fr/uploads/content-library/39111ddae9f1edf9b1c739b6c69d3203ba0936c6d444634fa341d83db9fcc283.pdf) establish win percentage, then the tied clubs' direct win percentage, direct scoring difference, direct points scored, overall difference and overall points scored. A partially separated group restarts the procedure. The special in-season example keeps a club with no direct meeting in its overall-difference slot; the implementation tests that published six-club example.
+
+When sporting criteria remain equal, a completed table uses a reproducible draw. During the season those clubs keep a stable display order marked as unresolved. The draw uses an independent stream keyed by competition, scheduled fixture identities and tied clubs; it does not advance the match random generator. This is the game's implementation of drawing lots, not an imported real-world draw. No championship, promotion or playoff qualification is awarded here.
+
+Article 205 also covers sanctions and exclusions. The engine records sporting wins/losses and its own default results, not disciplinary forfeits, deducted wins or exclusions. A default is not reinterpreted as a sanction. Implement explicit sanction evidence and validation before enabling those exceptions.
+
+Old careers keep their original wins/difference/points ordering. Other countries keep that prototype ranking until their own rules have been verified and implemented; do not apply LNB rules to them. Research leads checked this increment:
+
+- [FIBA 2026 rules, Appendix D](https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2026-v1-1.pdf): general classification points, head-to-head criteria and a final draw. This is not proof of every national league's variations.
+- [ACB published tie-break rules](https://acb.com/es/liga/noticias/reglas-de-desempate-liga-endesa-22-23-138397): incomplete direct schedules use overall criteria; two-team and larger ties differ; a sum of per-game scoring quotients is a later criterion. The page is dated 2023, so current applicability remains to verify before enabling it.
+- [FIP Regolamento Esecutivo Gare, article 62](https://fip.it/wp-content/uploads/2025/08/RE-Gare-approvato-dal-CF-17-luglio-2025-del-n-48.pdf): direct wins, scoring quotients to four decimals and, for unresolved ties, personal/technical foul totals. Verify current applicability and retained team-foul evidence before implementing this; generic points difference is not equivalent.
+- The retrieved BSL and BBL competition-format PDFs do not by themselves establish their complete regular-season tie-break rules. TBL and Greek ranking rules also remain to verify.
 
 ## Registration evidence and limits
 

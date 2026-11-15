@@ -4,6 +4,7 @@ import type { DevelopmentPlayerProfile } from '../data/development-player-profil
 import type { DevelopmentSponsor } from '../data/development-sponsors';
 import type { Rivalry } from './rivalries';
 import type { Team } from './types';
+import type { DomesticStandingsRule } from './competition';
 
 /**
  * Everything a career's league is made of at its start: clubs and squads, player birth dates and wages, venues,
@@ -18,7 +19,7 @@ export interface CareerWorld {
   /** New careers separate contracted club membership from the twelve-player matchday selection. */
   rosterModel?: 'club-roster-1';
   /** Versioned domestic membership; absent in legacy single-league careers. */
-  domesticLeagues?: { id: string; name: string; country: string; tier: number; clubIds: string[] }[];
+  domesticLeagues?: { id: string; name: string; country: string; tier: number; clubIds: string[]; standingsRule?: DomesticStandingsRule }[];
   /** First matchday of season one (a Saturday). */
   startDate: string;
   clubs: readonly Team[];

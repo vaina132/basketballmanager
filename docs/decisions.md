@@ -1,5 +1,13 @@
 # Decision record
 
+## Domestic standings rules (15 November 2026)
+
+Implement each sourced domestic rule explicitly; do not treat one generic head-to-head formula as all ten leagues' regulations. The first is LNB article 205 for new French top/second divisions. Existing careers keep their embedded ranking: changing past tables would alter sponsor bonuses and job decisions. Format 48 permits the optional `lnb-2026-1` marker; earlier formats cannot carry it, and migration never adds it. New world IDs begin `real-tables-`.
+
+A completely tied final LNB table uses reproducible lots from an independent stream, keyed by competition, canonical fixture identities and the tied club IDs. Reading the table never consumes match randomness. An unfinished season shows unresolved ties in stable display order. No title or qualification is inferred from that display order. The sporting engine's defaults remain sporting losses; they are not invented disciplinary forfeits. Sanctions, promotion and postseason remain separate work.
+
+The live Competition screen must call the same world-aware standings function used by sponsor/career logic and historical validation, then filter the selected league. Rules are behind a compact disclosure. A regular-season leader is not described as the playoff champion.
+
 ## Domestic calendar integration (15 November 2026)
 
 Within the approved shared-calendar plan, new domestic careers use the longest selected league's double-round-robin length as the common regular-season duration (at most 38 weeks for the available 20-club leagues). Shorter competitions distribute their rounds across those Saturdays and finish together; odd fields retain genuine club byes. This is a reversible scheduling default, not a sourced claim about official fixture dates. Midweek Europe and postseason dates remain later integration work.

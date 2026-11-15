@@ -1,5 +1,32 @@
 # Project handover
 
+## Current continuation: domestic standings, first part of 3.4 (15 November 2026)
+
+**Read this entry first; entries below are historical.** Baseline is owner commit `81fa080`. The worktree was clean at the start. This increment begins 3.4 with correct sporting standings for the two French divisions, a prerequisite for playoff seeding. **3.4 is not complete:** playoff games, champions and promotion/relegation are not implemented. Other countries retain the prototype ranking pending their own sourced rules. Changes are left for the owner to commit; Sprint 4 has not started.
+
+### Implemented
+
+- New French top/second-division careers opt into `lnb-2026-1`, based on [LNB 2026/27 article 205](https://cdn.lnb.fr/uploads/content-library/39111ddae9f1edf9b1c739b6c69d3203ba0936c6d444634fa341d83db9fcc283.pdf): win percentage, recursive head-to-head criteria, and the partial-season exception for clubs with no direct meeting. The published six-club example is covered. Fully equal final records use an independent reproducible draw; unresolved in-season records carry an explicit display marker. No match random state is consumed by reading a table.
+- `getStandings` uses each league's saved rule. The Competition screen now calls that same world-aware function, as sponsor payments, job positions and strict historical checks already do. It filters the selected league afterward, including archived seasons. The table shows win percentage for LNB and keeps short explanations behind a keyboard-accessible disclosure. It is labeled regular-season standings, with no championship or qualification claim.
+- **Format 48**, unchanged compact-2/checks-3 encoding. Only new worlds gain the optional rule; new world IDs start `real-tables-`. Old worlds retain their exact original ranking across migration and rollover. Strict validation rejects unknown/wrong-country rules and rule metadata disguised as format 47. Format-47 public input/next-state fixtures were captured before edits, verifying 112 loaded modules against `81fa080`; never regenerate those expected states from new code.
+- All-system public tests cover a mixed 5+4-club world, weekly strict roundtrips, two completed seasons, sponsor/career validation and archived rankings. The actual private French leagues (36 clubs, 465 players) start, advance two weeks and strictly roundtrip with both rules active; the retained compact state is 1,003,758 bytes. This is correctness coverage, not a performance benchmark or postseason acceptance.
+
+### Verification
+
+Focused tests and production build passed. Five real Edge checks passed with no browser errors: live table ordering and keyboard disclosure; independent league rules/columns; worker/IndexedDB reload with identical state; 1024px layout; original archived standings after actual rollover. The tablet screenshot was visually reviewed. Browser/server helpers closed. Full regression result is being recorded below after completion; do not infer it from earlier entries.
+
+Evidence: `.artifacts/standings-focused-final.log`, `standings-build.log`, `standings-browser-report.json`, `standings-tablet.png`, `standings-private-report.json`, `standings-full-tests.log`. Private packs are unchanged and ignored.
+
+### Next work and important limits
+
+1. Finish **3.4**: verify the other domestic ranking/format rules, then integrate playoff/play-in/play-out dates and results, titles, and promotion/relegation. See [competition-rules-2026.md](docs/competition-rules-2026.md) for official sources and gaps. France's promotion bracket includes Élite's 15th club and has a nonstandard semi-final pairing. Italy's ranking uses quotients and later foul criteria; ACB's incomplete-season criteria differ. Do not apply the French rule to all countries.
+2. Extend the live calendar deliberately: `SeasonState.round` still means a weekly boundary; wages, training, rehab and upkeep must remain weekly even when a club has extra games. Reserve/cancel playoff fixtures properly, keep at least a full rest day and enough offseason before September. Keep regular tables separate from postseason games when adding fixture stages: today's `SeasonFixture` contains only regular-season games.
+3. Division changes need season-specific membership and archived memberships, not mutation of the opening `world.domesticLeagues`. External promotions also need sourced real lower-tier clubs and complete lifecycle/financial identities. None is implemented here.
+4. **3.5:** Europe, midweek processing, background clubs/tables and qualification. **3.6:** measured setup speed/save guidance and European inclusion. **3.7:** actual three-league-plus-Europe five-season storage/performance/browser acceptance. All remain open; no fixed lifetime size or fast large-world claim.
+5. LNB sanctions (forfeits, deducted wins, exclusions) need explicit disciplinary evidence before implementation. The engine's sporting defaults remain losses; they are not reclassified as disciplinary forfeits. Roster/position evidence gaps and rating calibration remain as recorded previously. The build's existing chunk-size advisory remains.
+
+Run `npm.cmd run dev`, `npm.cmd run typecheck`, `npm.cmd test -- --maxWorkers=1`, `npm.cmd run build`. Focused checks: `npm.cmd test -- tests/domestic-standings.test.js tests/season47-continuation.test.js tests/real-world.test.ts --maxWorkers=1`. Follow AGENTS.md: compact game workspaces, actual state, accessible controls, no new placeholder destinations. Preserve historical fixtures, source evidence, separate budget rules and strict import validation.
+
 ## Current continuation: shared domestic careers (15 November 2026)
 
 **Read this entry first; entries below are historical.** Baseline is owner commit `f4f45de`. This continuation integrates the domestic part of step 3.3 into actual careers, workers, saves and screens. It also brings forward the working multi-country selector from 3.6. Sprint 4 has not started. Changes are left for the owner to commit.

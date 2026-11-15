@@ -156,7 +156,8 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
     if (world.rosterModel !== FULL_ROSTER_MODEL || !Array.isArray(world.domesticLeagues) || world.domesticLeagues.length < 1 || world.domesticLeagues.length > 10) fail('world.domesticLeagues', 'requires full rosters and one to ten leagues');
     const ids = new Set<string>(), members = new Set<string>();
     for (const league of world.domesticLeagues!) {
-      if (!exactKeys(league, ['id', 'name', 'country', 'tier', 'clubIds']) || !isText(league.id, 80) || !ID.test(league.id) || ids.has(league.id) || !isText(league.name) || !isText(league.country) || !isWhole(league.tier, 1, 2) || !Array.isArray(league.clubIds) || league.clubIds.length < 4 || league.clubIds.length > 20) fail('world.domesticLeagues', 'contains an invalid league');
+      if (!exactKeys(league, ['id', 'name', 'country', 'tier', 'clubIds', ...(isObject(league) && Object.hasOwn(league, 'standingsRule') ? ['standingsRule'] : [])]) || !isText(league.id, 80) || !ID.test(league.id) || ids.has(league.id) || !isText(league.name) || !isText(league.country) || !isWhole(league.tier, 1, 2) || !Array.isArray(league.clubIds) || league.clubIds.length < 4 || league.clubIds.length > 20) fail('world.domesticLeagues', 'contains an invalid league');
+      if (Object.hasOwn(league, 'standingsRule') && (league.standingsRule !== 'lnb-2026-1' || league.country !== 'France')) fail('world.domesticLeagues.standingsRule', 'must name a supported rule for this country');
       ids.add(league.id);
       for (const id of league.clubIds) {
         if (members.has(id) || !world.clubs.some(club => club.id === id)) fail('world.domesticLeagues', 'must assign each club to exactly one league');

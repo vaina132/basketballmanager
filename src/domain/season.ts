@@ -90,8 +90,8 @@ export interface SeasonArchive {
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
 /** Format 39 carries the world; 40 compacts strings/shapes; 41 shares subtrees; 42 summarizes rival academy reports; 43 summarizes rival youth fixtures. */
-/** Format 47 adds versioned domestic calendars and nullable managed games with retained rest-week conditions. */
-export const SEASON_SCHEMA_VERSION = 47;
+/** Format 48 adds opt-in sourced domestic standings rules; existing worlds keep their original ranking. */
+export const SEASON_SCHEMA_VERSION = 48;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -155,4 +155,5 @@ export interface Standing {
   pointsFor: number;
   pointsAgainst: number;
   difference: number;
+  rankingTie?: 'unresolved' | 'draw';
 }

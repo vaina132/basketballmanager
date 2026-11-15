@@ -9,7 +9,7 @@ import { offerPlayerContract } from '../src/world/employment';
 import { advanceMarket, enableMarket, submitMarketOffer, withdrawMarketOffer } from '../src/world/market';
 import { getMarketWindow } from '../src/world/market-policy';
 import { requiredNegotiationWage } from '../src/world/negotiations-policy';
-import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
+import { advanceSeason, createSeason, DAILY_RECOVERY, managedSide, rolloverSeason } from '../src/world/season';
 
 const clubId = 'rhine-falcons', playerId = 'rhf-1';
 const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
@@ -59,7 +59,10 @@ describe('dated recruitment persistence', () => {
     expect(restored.finance).toEqual(legacy.finance);
     expect(restored.payroll).toEqual(legacy.payroll);
     expect(restored.clubs).toEqual(legacy.clubs);
-    expect(Object.values(restored.conditions).every(condition => condition === 100)).toBe(true);
+    // Sprint 4: starters' longer minutes can leave some below 100; each condition is the final one plus the days' recovery.
+    const days = (Date.parse(restored.date) - Date.parse(legacy.date)) / 86_400_000;
+    expect(days).toBeGreaterThan(0);
+    expect(Object.entries(restored.conditions).every(([id, condition]) => condition === Math.min(100, Math.round((legacy.conditions[id]! + DAILY_RECOVERY * days) * 1000) / 1000))).toBe(true);
   });
 
   it('migrates a real format-12 career without changing its prior immediate negotiation behavior', () => {

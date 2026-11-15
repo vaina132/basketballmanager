@@ -112,7 +112,7 @@ describe('possession-3 shared match rules', () => {
 
 describe('authoritative possession actions', () => {
   it('records completed passes before independent later misses and credits only the actual last passer', () => {
-    let passes = 0, passesFollowedByMisses = 0, assists = 0, andOneAssists = 0, clearedByDrive = 0, offensiveRebounds = 0;
+    let passes = 0, passesFollowedByMisses = 0, assists = 0, andOneAssists = 0, keptByDrive = 0, offensiveRebounds = 0;
     for (let seed = 1; seed <= 3; seed += 1) {
       let state = fixture(seed);
       for (let step = 0; step < 5000 && state.status !== 'finished'; step += 1) {
@@ -129,9 +129,10 @@ describe('authoritative possession actions', () => {
           expect(events.some(event => event.type === 'shot')).toBe(false);
         }
         const drive = events.find(event => event.type === 'drive');
+        // Sprint 4: a catch-and-drive keeps the passer's assist credit.
         if (drive) {
-          if (play?.passerId) clearedByDrive += 1;
-          expect(next.possessionPlay?.passerId).toBeNull();
+          if (play?.passerId) keptByDrive += 1;
+          expect(next.possessionPlay?.passerId).toBe(play?.passerId ?? null);
         }
         for (const event of events.filter(event => event.shot)) {
           const changedBeforeShot = events.slice(0, events.indexOf(event)).some(before => before.type === 'substitution' || before.type === 'period-start');
@@ -159,7 +160,7 @@ describe('authoritative possession actions', () => {
       for (const [id, stats] of Object.entries(state.stats)) expect(state.events.filter(event => event.assistPlayerId === id)).toHaveLength(stats.assists);
     }
     expect(passes).toBeGreaterThan(100); expect(passesFollowedByMisses).toBeGreaterThan(10);
-    expect(assists).toBeGreaterThan(10); expect(clearedByDrive).toBeGreaterThan(0); expect(offensiveRebounds).toBeGreaterThan(0);
+    expect(assists).toBeGreaterThan(10); expect(keptByDrive).toBeGreaterThan(0); expect(offensiveRebounds).toBeGreaterThan(0);
     expect(andOneAssists).toBeGreaterThan(0);
   });
 
@@ -168,7 +169,7 @@ describe('authoritative possession actions', () => {
     const seen = new Set<string>();
     for (let count = 0; count < 200 && seen.size < 3; count += 1) {
       const next = stepMatch(state), events = next.events.slice(state.events.length);
-      const action = events.find(event => event.type === 'pass' || event.type === 'drive' || (event.type === 'command' && event.scene?.kind === 'setup'));
+      const action = events.find(event => event.type === 'pass' || event.type === 'drive' || (event.type === 'command' && event.scene?.kind === 'setup' && /half-court offense/.test(event.text)));
       if (action) {
         const seconds = state.clockSeconds - next.clockSeconds;
         expect(seconds).toBeGreaterThan(0);

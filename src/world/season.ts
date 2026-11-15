@@ -476,9 +476,9 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
   for (const side of SIDES) {
     const club = match[side], previous = season.plans[club.id];
     if (!previous) continue;
-    // Fouls reset next game. Keep the final lineup, filling any excluded-player
-    // vacancies from the previous starters and then the roster's stable order.
-    const lineup = [...new Set([...match.lineups[side], ...previous.lineup, ...club.players.map(player => player.id)])].slice(0, 5);
+    // Fouls reset next game. The manager's club keeps its final lineup; other clubs keep their starting five (sprint 4:
+    // a closing or garbage-time five is not the next game's starters). Vacancies come from the roster's stable order.
+    const lineup = [...new Set([...(club.id === season.managedClubId ? match.lineups[side] : []), ...previous.lineup, ...club.players.map(player => player.id)])].slice(0, 5);
     season.plans[club.id] = { ...previous, tactics: { ...match.tactics[side] }, lineup, autoSubstitutions: club.id === season.managedClubId ? match.autoSubstitutions[side] : true };
     for (const player of club.players) season.conditions[player.id] = match.stats[player.id]!.condition;
   }

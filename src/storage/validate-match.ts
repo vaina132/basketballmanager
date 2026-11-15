@@ -220,6 +220,8 @@ function sceneLineups(events: MatchEvent[], currentLineups: Record<Side, string[
       }
       if (event.assistPlayerId && (!active[event.side!].has(event.assistPlayerId) || !lastPass || lastPass.side !== event.side || lastPass.receiverId !== event.playerId || lastPass.playerId !== event.assistPlayerId)) fail(`events[${index}].assistPlayerId`, 'must credit the active player who completed the preceding pass to this shooter');
       if (event.type === 'pass') lastPass = event;
+      // Sprint 4: the receiver's drive keeps the pass's assist credit (catch and drive).
+      else if (event.type === 'drive' && lastPass && lastPass.side === event.side && lastPass.receiverId === event.playerId) { /* the pass still counts */ }
       else if (!['tactics', 'command'].includes(event.type) || (event.type === 'command' && (event.scene || event.period !== events[index - 1]?.period || event.clockSeconds !== events[index - 1]?.clockSeconds))) lastPass = null;
     }
     if (!event.scene) continue;

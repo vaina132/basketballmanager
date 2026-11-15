@@ -1,4 +1,5 @@
 import type { CourtPoint, CourtPosition, MatchState, Player, Position, PossessionPlay, Side } from '../domain/types';
+import { HOME_COURT_MAKE_BONUS, SCORE_EFFECT, SHOT_MAKING } from './calibration';
 
 const other = (side: Side): Side => side === 'home' ? 'away' : 'home';
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
@@ -61,10 +62,14 @@ export function possessionFormation(state: MatchState, offense: Side, frontcourt
   return positions;
 }
 
+/** The side's primary ball handler on court: the best passer, a point guard counting six points more. */
+export function primaryHandler(state: MatchState, side: Side): string {
+  return [...active(state, side)].sort((a, b) => (b.attributes.passing + (b.position === 'PG' ? 6 : 0)) - (a.attributes.passing + (a.position === 'PG' ? 6 : 0)) || a.id.localeCompare(b.id))[0]!.id;
+}
+
 export function createPossessionPlay(state: MatchState, handlerId?: string): PossessionPlay {
   const offense = state.possession;
-  const handler = handlerId && state.lineups[offense].includes(handlerId) ? handlerId : [...active(state, offense)]
-    .sort((a, b) => (b.attributes.passing + (b.position === 'PG' ? 6 : 0)) - (a.attributes.passing + (a.position === 'PG' ? 6 : 0)) || a.id.localeCompare(b.id))[0]!.id;
+  const handler = handlerId && state.lineups[offense].includes(handlerId) ? handlerId : primaryHandler(state, offense);
   return { offense, handlerId: handler, passerId: null, actions: 0, positions: possessionFormation(state, offense, state.frontcourt), matchups: assignMatchups(state, offense) };
 }
 
@@ -122,9 +127,13 @@ export function shotContext(state: MatchState, play: PossessionPlay): { defender
   const skill = value === 3 ? shooter.attributes.threePoint : shooter.attributes.twoPoint;
   const fatigue = (100 - state.stats[shooter.id]!.condition) / 100;
   const space = clamp((separationM - 1.3) * .045, -.05, .075);
-  const defense = (defender.attributes.defense - 10) * .004;
+  const defense = (defender.attributes.defense - 10) * SHOT_MAKING.defense;
   const height = clamp((defender.heightCm - shooter.heightCm) / 1000, -.025, .025) * (value === 2 ? 1 : .5);
   const range = value === 3 ? Math.max(0, distance - 7.2) * .025 : Math.max(0, distance - 2) * .025;
-  const makeChance = clamp((value === 3 ? .16 + skill * .014 : .40 + skill * .015) + space - defense - height - range - fatigue * .07, .08, value === 3 ? .65 : .82);
+  const home = play.offense === 'home' ? HOME_COURT_MAKE_BONUS : -HOME_COURT_MAKE_BONUS;
+  const lead = clamp(state.score[play.offense] - state.score[play.offense === 'home' ? 'away' : 'home'], -SCORE_EFFECT.cap, SCORE_EFFECT.cap);
+  const base = value === 3 ? SHOT_MAKING.threeBase + skill * SHOT_MAKING.threeSkill : SHOT_MAKING.twoBase + skill * SHOT_MAKING.twoSkill;
+  const scoreEffect = lead * SCORE_EFFECT.perPoint * (state.period >= 4 ? SCORE_EFFECT.fourthQuarter : 1);
+  const makeChance = clamp(base + space - defense - height - range - fatigue * .07 + home - scoreEffect, .08, value === 3 ? .65 : .82);
   return { defenderId: defender.id, distanceM: Math.round(distance * 100) / 100, separationM, contest, value, makeChance };
 }

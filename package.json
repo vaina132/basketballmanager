@@ -10,6 +10,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:quick": "vitest run --config vitest.quick.config.ts",
     "test:watch": "vitest",
     "data:fetch": "node scripts/euroleague-data.mjs",
     "data:api-sports-probe": "node scripts/api-sports-probe.mjs",

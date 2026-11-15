@@ -2,7 +2,7 @@
 
 This file holds only the current state, the next steps and the rules that must not be broken. Finished steps, verification logs and earlier notes are in [docs/handover-history.md](docs/handover-history.md). Search that file; never read it in full.
 
-**Keeping this file short:** when a step is finished, update "Current state" and "Next steps" here, and add the step's detailed notes (what changed, tests, measurements) to the top of `docs/handover-history.md` under a dated heading. Keep this file under 20 KB, with exactly one current entry.
+**Keeping this file short:** when a step is finished, update "Current state" and "Next steps" here, and add a short entry (a few lines: what changed, tests, verification) to the top of `docs/handover-history.md`. Record decisions and plan-table changes only when a rule or default is decided. Keep this file under 20 KB, with exactly one current entry.
 
 ## Current state (15 November 2026, sprint 3 cloud work complete)
 
@@ -137,7 +137,7 @@ After sprint 3 (new levels, each needing the owner's approval):
 - Ask the owner before any paid option.
 
 **Tests**
-- Run the full suite serially. Long tests carry their own time limits.
+- Cloud: `npm run test:quick` (about 2.5 minutes) while working; the full suite with four workers (about 5 minutes) before every push. Long tests carry their own time limits. (Owner request, 15 November 2026: faster development.)
 - Never weaken assertions or raise time limits to hide a failure.
 - Temporary private checks (`tests/zz-*`) are local-only and deleted before the build and before any commit.
 

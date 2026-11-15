@@ -40,8 +40,9 @@ The project needs Node 24.14 or newer. If `node --version` shows an older defaul
 
 ```bash
 PATH=/opt/node24/bin:$PATH npm ci
-PATH=/opt/node24/bin:$PATH npm test -- tests/postseason.test.ts --maxWorkers=1 --testTimeout=120000   # focused tests
-PATH=/opt/node24/bin:$PATH npm test -- --maxWorkers=1 --testTimeout=120000 > full-suite.log 2>&1        # full suite, about 10 minutes: run it in the background
+PATH=/opt/node24/bin:$PATH npm test -- tests/postseason.test.ts --maxWorkers=4 --testTimeout=120000   # focused tests
+PATH=/opt/node24/bin:$PATH npm run test:quick -- --maxWorkers=4 --testTimeout=120000                   # quick check while working, about 2.5 minutes (skips the long simulations)
+PATH=/opt/node24/bin:$PATH npm test -- --maxWorkers=4 --testTimeout=120000 > full-suite.log 2>&1        # full suite before every push, about 5 minutes: run it in the background
 PATH=/opt/node24/bin:$PATH npm run build
 git diff --check
 ```
@@ -83,7 +84,7 @@ These rules apply when you run in a Claude Code cloud session (a temporary Linux
 - Never write secret values into any file. This repository is public.
 
 ### Finish a step
-- Add or update tests. Run the focused tests, then the full suite (npm test -- --maxWorkers=1 --testTimeout=120000, about 10 minutes, run it in the background) plus npm run build.
+- Add or update tests. Run the focused tests and `npm run test:quick` while working; before each push run the full suite (npm test -- --maxWorkers=4 --testTimeout=120000, about 5 minutes, in the background) plus npm run build. Group related steps into one push (owner request, 15 November 2026: faster development).
 - Every push to main goes live on Vercel. Push only when the full suite and the build pass.
 - Update HANDOVER.md, then commit code and notes together with a clear message (for example "feat: LNB playoff fixtures (step 3.4b)") and push to main.
 - List any browser checks you could not run under "Owner checks" in HANDOVER.md.

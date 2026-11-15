@@ -3,7 +3,9 @@ import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../data/fictional-teams';
 import type { CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, PossessionPlay, Side, Tactics, Team } from '../domain/types';
 import { nextRandom, normalizeSeed } from './random';
 import { actionScene, freeThrowPosition, passScene, reboundScene, setupScene, shotScene, turnoverScene } from './court-events';
-import { basketPoint, courtDistance, createPossessionPlay, matchedDefender, moveForAction, positionOf, possessionFormation, shotContext } from './possession';
+import { basketPoint, courtDistance, createPossessionPlay, matchedDefender, moveForAction, positionOf, possessionFormation, primaryHandler, shotContext } from './possession';
+import { ACTION_SECONDS, BLOCKS, DEFENDER_ROLES, DEFENSIVE_FOULS, LATE_GAME, REBOUNDS, ROTATION, SHOOTING_FOULS, SHOT_MAKING, SHOT_SELECTION, TEAM_REBOUND_OFFENSIVE_SHARE, TEAM_REBOUND_SHARE, TURNOVERS } from './calibration';
+import { overallRating } from '../world/overall-rating';
 export const MAX_MATCH_PERIODS = 24;
 const MAX_SIMULATION_STEPS = 20_000;
 const SIDES: readonly Side[] = ['home', 'away'];
@@ -123,8 +125,72 @@ function applySubstitution(state: MatchState, side: Side, outId: string, inId: s
   emit(state, { type: 'substitution', side, playerId: inId, outgoingPlayerId: outId, text: `${incoming.name} replaces ${outgoing.name}${mandatory ? ' after becoming ineligible' : ''}.`, scene });
 }
 function bestReplacement(state: MatchState, side: Side, outgoing: Player): Player | undefined {
+  // The legacy exhibition engine keeps its original condition-first choice.
+  const need = state.engineVersion === 'rules-2' ? null : rotationNeeds(state, side);
   return state[side].players.filter(p => !state.lineups[side].includes(p.id) && isPlayerEligible(state, p.id)).sort((a, b) => replacementScore(b) - replacementScore(a) || a.id.localeCompare(b.id))[0];
-  function replacementScore(p: Player): number { return state.stats[p.id]!.condition - state.stats[p.id]!.fouls * 5 + (p.position === outgoing.position ? 12 : 0) + (p.attributes.defense + p.attributes.twoPoint) / 4; }
+  function replacementScore(p: Player): number {
+    if (need) return need.get(p.id)! - positionGap(outgoing, p) * ROTATION.positionStep;
+    return state.stats[p.id]!.condition - state.stats[p.id]!.fouls * 5 + (p.position === outgoing.position ? 12 : 0) + (p.attributes.defense + p.attributes.twoPoint) / 4;
+  }
+}
+const POSITION_ORDER: Readonly<Record<Player['position'], number>> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };
+const positionGap = (a: Player, b: Player): number => Math.abs(POSITION_ORDER[a.position] - POSITION_ORDER[b.position]);
+/** The starting five: the tip-off court positions, then any change made before the clock first ran. */
+function startingFive(state: MatchState, side: Side): Set<string> {
+  const roster = new Set(state[side].players.map(p => p.id)), tip = state.events[0];
+  let starters = tip?.type === 'tipoff' && tip.scene ? tip.scene.start.map(point => point.playerId).filter(id => roster.has(id)) : state[side].players.slice(0, 5).map(p => p.id);
+  for (let index = 1; index < state.events.length; index += 1) {
+    const event = state.events[index]!;
+    if (event.period !== 1 || event.clockSeconds !== 600) break;
+    if (event.type === 'substitution' && event.side === side && event.outgoingPlayerId && event.playerId) starters = starters.map(id => id === event.outgoingPlayerId ? event.playerId! : id);
+  }
+  return new Set(starters);
+}
+/**
+ * The automatic rotation's need for each player to be on court, in minutes (calibration.ts, ROTATION). Players are
+ * ranked by overall rating with the starters ahead; each rank plans a share of the team's minutes. Need is the planned
+ * time not yet played, less fatigue and foul trouble; the best five close tight games and the deep bench plays out
+ * blowouts. Reads state only: no random draws.
+ */
+function rotationNeeds(state: MatchState, side: Side): Map<string, number> {
+  const starters = startingFive(state, side), unavailable = new Set(state.preExistingInjuries ?? []);
+  const ranked = state[side].players.filter(p => !unavailable.has(p.id)).map(player => ({ player, quality: overallRating(player.attributes, player.position) + (starters.has(player.id) ? ROTATION.starterBonus : 0), base: overallRating(player.attributes, player.position) }))
+    .sort((a, b) => b.quality - a.quality || a.player.id.localeCompare(b.player.id));
+  const core = ranked.slice(0, 10), average = core.reduce((sum, entry) => sum + entry.base, 0) / Math.max(1, core.length);
+  const minutes = ranked.map((entry, rank) => Math.max(0, (ROTATION.plannedMinutes[rank] ?? 0) + ROTATION.qualityMinutes * (entry.base - average)));
+  const total = minutes.reduce((sum, value) => sum + value, 0) || 1, played = elapsed(state), margin = Math.abs(state.score.home - state.score.away);
+  const garbage = state.period === 4 && state.clockSeconds <= ROTATION.garbageSeconds && margin >= ROTATION.garbageMargin;
+  const closing = !garbage && state.period >= 4 && state.clockSeconds <= ROTATION.closingSeconds && margin <= ROTATION.closingMargin;
+  const closers = new Set(ranked.filter(entry => isPlayerEligible(state, entry.player.id)).slice(0, 5).map(entry => entry.player.id));
+  const foulLimit = state.period === 1 ? 2 : state.period === 2 ? 3 : 4;
+  const needs = new Map<string, number>(state[side].players.map(p => [p.id, -100]));
+  ranked.forEach((entry, rank) => {
+    const stats = state.stats[entry.player.id]!;
+    const deficit = (minutes[rank]! / total * 12_000 * played / 2400 - stats.secondsPlayed) / 60;
+    const fatigue = Math.max(0, ROTATION.restCondition - stats.condition) * ROTATION.fatigueWeight * (closing ? .5 : 1);
+    const fouls = stats.fouls >= foulLimit && !closing ? ROTATION.foulTrouble : 0;
+    const role = closing ? (closers.has(entry.player.id) ? ROTATION.closingBonus : 0) : garbage ? (rank >= ROTATION.garbageRank ? ROTATION.garbageBonus : rank < 5 ? -ROTATION.garbageBonus : 0) : rank >= ROTATION.rotationSize ? -ROTATION.depthPenalty : 0;
+    needs.set(entry.player.id, deficit - fatigue - fouls + role);
+  });
+  return needs;
+}
+/** Up to ROTATION.maxSwaps changes whose gain in rotation need clears the threshold, best first. */
+function automaticSwaps(state: MatchState, side: Side): [Player, Player][] {
+  const need = rotationNeeds(state, side), swaps: [Player, Player][] = [];
+  let court = activePlayers(state, side).filter(p => !state.substitutionLocks.includes(p.id) && state.freeThrows?.shooterId !== p.id);
+  let bench = state[side].players.filter(p => !state.lineups[side].includes(p.id) && isPlayerEligible(state, p.id) && !state.substitutionLocks.includes(p.id));
+  for (let count = 0; count < ROTATION.maxSwaps; count += 1) {
+    let best: { out: Player; incoming: Player; gain: number } | null = null;
+    for (const out of court) for (const incoming of bench) {
+      const gain = need.get(incoming.id)! - need.get(out.id)! - positionGap(out, incoming) * ROTATION.positionStep;
+      if (gain > ROTATION.swapThreshold && (!best || gain > best.gain)) best = { out, incoming, gain };
+    }
+    if (!best) break;
+    const chosen = best;
+    swaps.push([chosen.out, chosen.incoming]);
+    court = court.filter(p => p.id !== chosen.out.id); bench = bench.filter(p => p.id !== chosen.incoming.id);
+  }
+  return swaps;
 }
 function clearCommands(state: MatchState): void { state.pendingSubstitutions = { home: [], away: [] }; state.timeoutRequested = { home: false, away: false }; state.requiredSubstitutions = []; }
 function finishDefault(state: MatchState, losing: Side): void {
@@ -190,23 +256,36 @@ function serviceStoppage(state: MatchState): void {
       }
     }
     for (const side of SIDES) {
-      if (rotated.has(side) || !state.autoSubstitutions[side] || !canSubstituteNow(state, side)) continue;
-      const foulLimit = state.period === 1 ? 2 : state.period === 2 ? 3 : 4;
-      const priority = (p: Player) => state.stats[p.id]!.condition - (state.stats[p.id]!.fouls >= foulLimit ? 35 : 0);
-      const tired = activePlayers(state, side).filter(p => !state.substitutionLocks.includes(p.id) && state.freeThrows?.shooterId !== p.id).sort((a, b) => priority(a) - priority(b))[0];
-      if (!tired) continue; const incoming = bestReplacement(state, side, tired);
-      const current = state.stats[tired.id]!;
-      const reserve = incoming ? state.stats[incoming.id]! : null;
-      const needsRest = reserve && current.condition < 85 && reserve.condition >= current.condition + 7;
-      const foulTrouble = reserve && current.fouls >= foulLimit && reserve.fouls < current.fouls && reserve.condition >= current.condition - 3;
-      if (incoming && !state.substitutionLocks.includes(incoming.id) && (needsRest || foulTrouble)) {
-        applySubstitution(state, side, tired.id, incoming.id); rotated.add(side); changed = true;
-        if (state.stoppage!.reason === 'made-basket') whistle(state);
-      }
+      if (state.engineVersion === 'rules-2') { if (legacyRotation(state, side, rotated)) changed = true; continue; }
+      // The prepared starting five plays the tip; the rotation starts once the clock has run.
+      if (rotated.has(side) || !state.autoSubstitutions[side] || !canSubstituteNow(state, side) || state.stepCount === 0) continue;
+      const swaps = automaticSwaps(state, side);
+      if (!swaps.length) continue;
+      for (const [out, incoming] of swaps) applySubstitution(state, side, out.id, incoming.id);
+      rotated.add(side); changed = true;
+      if (state.stoppage!.reason === 'made-basket') whistle(state);
     }
     if (!changed) return;
   }
 }
+/** The legacy exhibition engine's condition-first rotation, unchanged: one change per stoppage. */
+function legacyRotation(state: MatchState, side: Side, rotated: Set<Side>): boolean {
+  if (rotated.has(side) || !state.autoSubstitutions[side] || !canSubstituteNow(state, side)) return false;
+  const foulLimit = state.period === 1 ? 2 : state.period === 2 ? 3 : 4;
+  const priority = (p: Player) => state.stats[p.id]!.condition - (state.stats[p.id]!.fouls >= foulLimit ? 35 : 0);
+  const tired = activePlayers(state, side).filter(p => !state.substitutionLocks.includes(p.id) && state.freeThrows?.shooterId !== p.id).sort((a, b) => priority(a) - priority(b))[0];
+  if (!tired) return false; const incoming = bestReplacement(state, side, tired);
+  const current = state.stats[tired.id]!;
+  const reserve = incoming ? state.stats[incoming.id]! : null;
+  const needsRest = reserve && current.condition < 85 && reserve.condition >= current.condition + 7;
+  const foulTrouble = reserve && current.fouls >= foulLimit && reserve.fouls < current.fouls && reserve.condition >= current.condition - 3;
+  if (!incoming || state.substitutionLocks.includes(incoming.id) || !(needsRest || foulTrouble)) return false;
+  applySubstitution(state, side, tired.id, incoming.id); rotated.add(side);
+  if (state.stoppage!.reason === 'made-basket') whistle(state);
+  return true;
+}
+/** Players with three or four fouls defend more carefully (calibration.ts, DEFENDER_ROLES.caution). */
+function foulCaution(state: MatchState, p: Player): number { const fouls = state.stats[p.id]!.fouls; return fouls >= 4 ? DEFENDER_ROLES.caution[4] : fouls === 3 ? DEFENDER_ROLES.caution[3] : 1; }
 function personalFoul(state: MatchState, side: Side, offender: Player, text: string): void {
   state.stats[offender.id]!.fouls += 1; state.teamFouls[side] += 1;
   emit(state, { type: 'foul', side, playerId: offender.id, text });
@@ -376,7 +455,7 @@ function installControl(state: MatchState, side: Side, handlerId: string, positi
 }
 function possessionTurnover(state: MatchState, play: PossessionPlay, shotClock = false): void {
   const offense = play.offense, defense = other(offense), handler = player(state, offense, play.handlerId), defender = matchedDefender(state, play);
-  const stolen = !shotClock && draw(state) < .68;
+  const stolen = !shotClock && draw(state) < TURNOVERS.stealShare;
   state.stats[handler.id]!.turnovers += 1;
   if (stolen) state.stats[defender.id]!.steals += 1;
   const from = ballAt(positionOf(play, handler.id)), to = stolen ? ballAt(positionOf(play, defender.id)) : { ...from, y: from.y < .5 ? 0 : 1, height: .2 };
@@ -390,7 +469,14 @@ function possessionRebound(state: MatchState, play: PossessionPlay, landing: Cou
   const offense = play.offense, defense = other(offense), attackers = activePlayers(state, offense), defenders = activePlayers(state, defense);
   const proximity = (candidate: Player) => 1 / (1 + courtDistance(positionOf(play, candidate.id), landing) * .2);
   const strength = (players: Player[]) => players.reduce((total, p) => total + p.attributes.rebounding * proximity(p), 0) / Math.max(1, players.length);
-  const offensive = draw(state) < clamp(.25 + (strength(attackers) - strength(defenders)) * .014 + (attackers.length - defenders.length) * .035, .12, .46);
+  if (draw(state) < TEAM_REBOUND_SHARE) {
+    // Out of bounds: a team rebound, credited to no player, and a throw-in (in the frontcourt for the attack).
+    const offensive = draw(state) < TEAM_REBOUND_OFFENSIVE_SHARE, side = offensive ? offense : defense;
+    resetPossession(state, side, offensive ? rimContact ? 14 : defensiveFoulShotClock(state.shotClockSeconds, true) : 24); state.frontcourt = offensive; whistle(state);
+    emit(state, { type: 'command', side, text: `The rebound goes out of bounds off ${offensive ? 'a defender' : 'an attacker'}: team rebound, ${state[side].name} ${offensive ? 'keep' : 'take'} possession.` });
+    return;
+  }
+  const offensive = draw(state) < clamp(REBOUNDS.offensiveBase + (strength(attackers) - strength(defenders)) * REBOUNDS.strength + (attackers.length - defenders.length) * REBOUNDS.numbers, REBOUNDS.min, REBOUNDS.max);
   const side = offensive ? offense : defense;
   const rebounder = choose(state, offensive ? attackers : defenders, p => p.attributes.rebounding * proximity(p));
   const positions = play.positions.map(point => point.playerId === rebounder.id ? { ...point, ...landing } : { ...point });
@@ -402,25 +488,29 @@ function possessionRebound(state: MatchState, play: PossessionPlay, landing: Cou
 function resolvePossessionShot(state: MatchState, play: PossessionPlay, rushed: boolean): void {
   const offense = play.offense, defense = other(offense), shooter = player(state, offense, play.handlerId), stats = state.stats[shooter.id]!;
   const context = shotContext(state, play), defender = matchedDefender(state, play), three = context.value === 3;
-  const fouled = draw(state) < clamp(.055 + state.tactics[defense].pressure * .065 + (three ? 0 : .025) - Math.max(0, context.separationM - 1.5) * .025, .025, .16);
-  const blocked = !fouled && draw(state) < clamp(.008 + defender.attributes.defense * .0012 + Math.max(0, defender.heightCm - shooter.heightCm) * .0008 - Math.max(0, context.separationM - .75) * .012, .002, .065);
-  const made = !blocked && draw(state) < context.makeChance * (fouled ? .65 : 1) - (rushed ? .06 : 0);
+  const fouled = draw(state) < clamp(SHOOTING_FOULS.base + state.tactics[defense].pressure * SHOOTING_FOULS.pressure + (three ? 0 : SHOOTING_FOULS.twoPoint) - Math.max(0, context.separationM - 1.5) * SHOOTING_FOULS.separation, SHOOTING_FOULS.min, SHOOTING_FOULS.max);
+  // Inside, help defenders (mostly bigs) foul and block as well as the shooter's own defender; threes stay with him.
+  const defenders = activePlayers(state, defense), helper = (weights: Readonly<Record<Player['position'], number>>, matched: number, careful: boolean) => three ? defender : choose(state, defenders, p => weights[p.position] * (p.id === defender.id ? matched : 1) * (careful ? foulCaution(state, p) : 1));
+  const fouler = fouled ? helper(DEFENDER_ROLES.foul, DEFENDER_ROLES.matchedFoul, true) : defender, blocker = fouled ? defender : helper(DEFENDER_ROLES.block, DEFENDER_ROLES.matchedBlock, false);
+  const blockChance = clamp(BLOCKS.base + blocker.attributes.defense * BLOCKS.defense + Math.max(0, blocker.heightCm - shooter.heightCm) * BLOCKS.height - Math.max(0, context.separationM - .75) * BLOCKS.separation, BLOCKS.min, BLOCKS.max) * (three ? BLOCKS.threeFactor : 1);
+  const blocked = !fouled && draw(state) < blockChance;
+  const made = !blocked && draw(state) < context.makeChance * (fouled ? SHOT_MAKING.andOne : 1) - (rushed ? SHOT_MAKING.rushed : 0);
   const origin = positionOf(play, shooter.id), hoop = basketPoint(state, offense);
   const landing: CourtPoint = made ? hoop : { x: clamp(hoop.x - attackingDirection(state, offense) * (.5 + draw(state) * 1.4) / 28, .025, .975), y: clamp(.5 + (draw(state) - .5) * .22, .08, .92) };
-  // A final completed pass is credited only if no drive, whistle or control
-  // change intervened. It exists before this attempt's outcome is sampled.
+  // A final completed pass is credited only if no whistle or control change
+  // intervened (the receiver's own drive keeps it). It exists before this attempt's outcome is sampled.
   const passerId = made ? play.passerId : null;
   if (!fouled || made) {
     stats.fieldGoalsAttempted += 1; if (three) stats.threePointersAttempted += 1;
     if (made) { stats.fieldGoalsMade += 1; if (three) stats.threePointersMade += 1; creditPoints(state, offense, shooter, context.value); }
-    if (blocked) state.stats[defender.id]!.blocks += 1;
+    if (blocked) state.stats[blocker.id]!.blocks += 1;
     if (passerId) state.stats[passerId]!.assists += 1;
     emit(state, { type: 'shot', side: offense, playerId: shooter.id, ...(passerId ? { assistPlayerId: passerId } : {}),
-      text: blocked ? `${defender.name} blocks ${shooter.name}.` : `${shooter.name} ${made ? 'makes' : 'misses'} ${context.contest === 'open' ? 'an open' : `a ${context.contest}`} ${three ? 'three-pointer' : 'two-point shot'}${state.clockSeconds === 0 ? ' released before the period horn' : ''}.`,
+      text: blocked ? `${blocker.name} blocks ${shooter.name}.` : `${shooter.name} ${made ? 'makes' : 'misses'} ${context.contest === 'open' ? 'an open' : `a ${context.contest}`} ${three ? 'three-pointer' : 'two-point shot'}${state.clockSeconds === 0 ? ' released before the period horn' : ''}.`,
       shot: { x: origin.x, y: origin.y, made, value: context.value, defenderId: context.defenderId, contest: context.contest, distanceM: context.distanceM },
       scene: actionScene('shot', offense, play.positions, play.positions, ballAt(origin, 2.1), ballAt(landing, made ? 3.05 : .45), made ? 3.1 : 2.8) });
   }
-  if (fouled) { personalFoul(state, defense, defender, `${defender.name} fouls ${shooter.name} on the shot.`); startFreeThrows(state, offense, shooter, made ? 1 : context.value); }
+  if (fouled) { personalFoul(state, defense, fouler, `${fouler.name} fouls ${shooter.name} on the shot.`); startFreeThrows(state, offense, shooter, made ? 1 : context.value); }
   else if (made) madeBasketWindow(state, offense);
   else if (state.clockSeconds > 0) possessionRebound(state, play, landing, !blocked);
 }
@@ -431,20 +521,34 @@ function resolvePossessionAction(state: MatchState): void {
   const tactics = state.tactics[offense], pressure = state.tactics[defense].pressure;
   const distance = courtDistance(positionOf(play, handler.id), basketPoint(state, offense));
   let action: 'advance' | 'pass' | 'drive' | 'shot';
+  // The last possession of the fourth quarter or an overtime, tied or down by three or less: the attack holds the ball
+  // for a last shot, a three when down three. Decided from the score and clocks, without a random draw.
+  const lead = state.score[offense] - state.score[defense];
+  const lastShot = state.period >= 4 && state.frontcourt && !restarted && state.clockSeconds <= state.shotClockSeconds + LATE_GAME.shotClockGrace && lead <= 0 && lead >= -LATE_GAME.maxDeficit;
+  const threeNeeded = lastShot && lead === -3, holdFor = Math.min(state.clockSeconds, state.shotClockSeconds);
+  // Late in a close game a defense that trails fouls at once to stop the clock.
+  const stopClock = state.period >= 4 && state.clockSeconds <= LATE_GAME.foulSeconds && lead >= 1 && lead <= LATE_GAME.foulMaxLead;
   if (restarted || !state.frontcourt) action = 'advance';
+  else if (lastShot) action = holdFor > LATE_GAME.shootAt || threeNeeded && distance < 6.75 && holdFor > 1 ? 'pass' : 'shot';
   // Leave room to release after the longer creation windows. A new pass or
   // drive with only a few seconds left should not routinely strand the ball.
   else if (state.shotClockSeconds <= 8 || play.actions >= 4) action = 'shot';
   else {
-    const roll = draw(state), shootChance = distance < 4.5 ? .66 : clamp(.12 + play.actions * .12 + tactics.outsideShare * .13, .12, .68);
-    action = roll < shootChance ? 'shot' : roll < shootChance + (1 - shootChance) * (.3 + tactics.outsideShare * .58) ? 'pass' : 'drive';
+    const roll = draw(state), shootChance = distance < 4.5 ? SHOT_SELECTION.closeRange : clamp(SHOT_SELECTION.base + (play.actions - 1) * SHOT_SELECTION.perAction + tactics.outsideShare * SHOT_SELECTION.outsideShare, SHOT_SELECTION.base, SHOT_SELECTION.max);
+    const passShare = clamp(SHOT_SELECTION.passBase - (play.actions - 1) * SHOT_SELECTION.passDecay + tactics.outsideShare * SHOT_SELECTION.passOutside, .15, .9);
+    action = roll < shootChance ? 'shot' : roll < shootChance + (1 - shootChance) * passShare ? 'pass' : 'drive';
   }
   // Include organizing, reading the defense and executing each action. Tempo
   // changes these windows modestly; animation duration is unrelated to them.
-  const actionSeconds = action === 'advance' || action === 'drive' ? 6 : 5;
+  // A throw-in in the frontcourt (after a foul or a team rebound) is set up faster than bringing the ball up.
+  const actionSeconds = action === 'advance' && state.frontcourt ? ACTION_SECONDS.frontcourtInbound : ACTION_SECONDS[action];
   let proposed = clamp(Math.round(actionSeconds + (.5 - tactics.tempo) + (draw(state) - .5) * 2), 1, action === 'advance' ? 8 : 7);
   const rushed = action === 'shot' && state.shotClockSeconds <= 5;
   if (action === 'shot' && state.shotClockSeconds <= 8 && state.shotClockSeconds > 1) proposed = Math.min(proposed, state.shotClockSeconds - 1);
+  if (lastShot && action === 'pass') proposed = Math.max(1, Math.min(proposed, holdFor - 1));
+  if (stopClock) proposed = Math.min(proposed, LATE_GAME.foulDelay);
+  // A shot with the game clock running out is released at the horn rather than stranded.
+  if (action === 'shot' && proposed > state.clockSeconds && state.clockSeconds <= state.shotClockSeconds) proposed = state.clockSeconds;
   const shotClockExpired = proposed >= state.shotClockSeconds && state.shotClockSeconds < state.clockSeconds;
   const seconds = Math.min(state.clockSeconds, state.shotClockSeconds, proposed);
   if (seconds <= 0) throw new Error('A live action must have time on both clocks.');
@@ -452,40 +556,46 @@ function resolvePossessionAction(state: MatchState): void {
   if (shotClockExpired) possessionTurnover(state, play, true);
   else if (seconds < proposed || state.clockSeconds === 0 && action !== 'shot') {
     emit(state, { type: 'command', side: offense, playerId: handler.id, text: `The period horn interrupts ${handler.name}'s ${action === 'advance' ? 'advance' : action === 'shot' ? 'shot preparation' : action}.`, scene: settledScene(play) });
-  } else if (action === 'advance') {
-    const start = restarted ? visualStart(state, play.positions) : play.positions;
-    const positions = moveForAction(state, play, 'advance');
-    const from = visualBallStart(state, start.find(point => point.playerId === handler.id)!), to = ballAt(positions.find(point => point.playerId === handler.id)!);
-    play.positions = positions; play.actions += 1; play.passerId = null; state.frontcourt = true;
-    emit(state, { type: 'command', side: offense, playerId: handler.id, text: `${handler.name} brings ${state[offense].name} into their half-court offense.`, scene: actionScene('setup', offense, start, positions, from, to) });
   } else {
+    // Every action can end in a turnover or a whistle (the advance: backcourt pressure); the rates are calibrated.
     const fatigue = (100 - state.stats[handler.id]!.condition) / 100;
-    const turnoverChance = clamp((action === 'shot' ? .008 : .018) + pressure * .024 + (defender.attributes.defense - handler.attributes.passing) * .002 + fatigue * .014 + moraleTurnoverAdjustment(state, handler.id), .006, .095);
-    const foulChance = (action === 'drive' ? .028 : .012) + pressure * .018;
+    const turnoverChance = clamp(TURNOVERS[action] + pressure * TURNOVERS.pressure + (defender.attributes.defense - handler.attributes.passing) * TURNOVERS.skillGap + fatigue * TURNOVERS.fatigue + moraleTurnoverAdjustment(state, handler.id), .006, TURNOVERS.max);
+    const offensiveFoul = action === 'advance' ? 0 : TURNOVERS.offensiveFoul, heldBall = action === 'advance' ? 0 : .004;
+    const foulChance = stopClock ? 1 : DEFENSIVE_FOULS[action] + pressure * DEFENSIVE_FOULS.pressure;
     const roll = draw(state);
     if (roll < turnoverChance) possessionTurnover(state, play);
-    else if (roll < turnoverChance + .007) {
+    else if (roll < turnoverChance + offensiveFoul) {
       personalFoul(state, offense, handler, `${handler.name} commits a team-control offensive foul. No free throws.`);
       state.stats[handler.id]!.turnovers += 1; resetPossession(state, defense); whistle(state);
-    } else if (roll < turnoverChance + .007 + foulChance) {
-      personalFoul(state, defense, defender, `${defender.name} commits a non-shooting defensive foul on ${handler.name}.`);
+    } else if (roll < turnoverChance + offensiveFoul + foulChance) {
+      // Off the ball, screens and boxing out spread these fouls over the defense, mostly to its bigs.
+      const fouler = stopClock ? defender : choose(state, activePlayers(state, defense), p => DEFENDER_ROLES.foul[p.position] * (p.id === defender.id ? DEFENDER_ROLES.matchedFoul : 1) * foulCaution(state, p));
+      personalFoul(state, defense, fouler, stopClock ? `${fouler.name} fouls ${handler.name} to stop the clock.` : `${fouler.name} commits a non-shooting defensive foul on ${handler.name}.`);
       if (state.teamFouls[defense] >= 5) startFreeThrows(state, offense, handler, 2);
       else { state.shotClockSeconds = defensiveFoulShotClock(state.shotClockSeconds, state.frontcourt); whistle(state); }
-    } else if (roll < turnoverChance + .011 + foulChance) {
+    } else if (roll < turnoverChance + offensiveFoul + foulChance + heldBall) {
       const receiving = state.possessionArrow; state.possessionArrow = other(receiving);
       if (receiving !== offense) resetPossession(state, receiving);
       whistle(state); emit(state, { type: 'held-ball', side: receiving, text: `Held ball. The possession arrow awards the throw-in to ${state[receiving].name}.` });
+    } else if (action === 'advance') {
+      const start = restarted ? visualStart(state, play.positions) : play.positions;
+      // The ball is brought up by the primary handler (a rebounder or a stealing big makes the outlet pass).
+      const positions = moveForAction(state, play, 'advance'), carrier = player(state, offense, primaryHandler(state, offense));
+      const from = visualBallStart(state, start.find(point => point.playerId === handler.id)!), to = ballAt(positions.find(point => point.playerId === carrier.id)!);
+      play.positions = positions; play.handlerId = carrier.id; play.actions += 1; play.passerId = null; state.frontcourt = true;
+      emit(state, { type: 'command', side: offense, playerId: carrier.id, text: `${carrier.name} brings ${state[offense].name} into their half-court offense.`, scene: actionScene('setup', offense, start, positions, from, to) });
     } else if (action === 'shot') resolvePossessionShot(state, play, rushed);
     else {
       const receiver = action === 'pass' ? choose(state, activePlayers(state, offense).filter(p => p.id !== handler.id), p => {
+        if (threeNeeded) return POSITION_ORDER[p.position] <= 2 ? p.attributes.threePoint ** 2 : .01;
         const rangePreference = tactics.outsideShare * p.attributes.threePoint + (1 - tactics.outsideShare) * p.attributes.twoPoint;
-        const rolePreference = p.position === 'PF' || p.position === 'C' ? 1.5 - tactics.outsideShare : .5 + tactics.outsideShare;
+        const rolePreference = p.position === 'PF' || p.position === 'C' ? SHOT_SELECTION.bigReceiver - tactics.outsideShare : SHOT_SELECTION.wingReceiver + tactics.outsideShare;
         const separation = courtDistance(positionOf(play, p.id), positionOf(play, matchedDefender(state, play, p.id).id));
         return rangePreference * rolePreference * clamp(.8 + separation * .15, .8, 1.35);
       }) : handler;
       const start = play.positions, positions = moveForAction(state, play, action, receiver.id, draw(state));
       const from = ballAt(positionOf(play, handler.id)), to = ballAt(positions.find(point => point.playerId === receiver.id)!);
-      play.positions = positions; play.handlerId = receiver.id; play.passerId = action === 'pass' ? handler.id : null; play.actions += 1;
+      play.positions = positions; play.handlerId = receiver.id; play.passerId = action === 'pass' ? handler.id : play.passerId; play.actions += 1;
       emit(state, { type: action, side: offense, playerId: handler.id, ...(action === 'pass' ? { receiverId: receiver.id } : {}),
         text: action === 'pass' ? `${handler.name} finds ${receiver.name} with the pass.` : `${handler.name} drives toward the basket.`, scene: actionScene(action, offense, start, positions, from, to, action === 'pass' ? .35 : .08) });
     }

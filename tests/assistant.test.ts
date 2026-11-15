@@ -4,7 +4,7 @@ import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_ASSISTANTS } from '../src/data/development-assistants';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { createAssistant, enableAssistant, hireAssistant, recruitAiAssistants, releaseAssistant, renewSeasonAssistant, setAssistantRenewal } from '../src/world/assistant';
-import { applyAssistantTactics } from '../src/world/assistant-advice';
+import { applyAssistantTactics, getAssistantAdvice } from '../src/world/assistant-advice';
 import { assistantEffects, availableAssistants, getClubAssistant, quoteAssistantHire } from '../src/world/assistant-policy';
 import { hireCoach } from '../src/world/coaching';
 import { getFinanceBalance, recordAssistantFee } from '../src/world/finance';
@@ -169,7 +169,11 @@ describe('assistant appointments and shared five-role staff allocation', () => {
     const side = managedSide(next) === 'home' ? 'away' : 'home';
     const contract = getClubAssistant(next, next.activeMatch![side].id)!;
     const coach = DEVELOPMENT_ASSISTANTS.find(coach => coach.id === contract.assistantId)!;
-    expect(next.activeMatch!.events.some(event => event.type === 'tactics' && event.text.includes(coach.name))).toBe(true);
+    // The coach's advice shapes the prepared fixture. Sprint 4: an unchanged, rested five gets unchanged advice, so the
+    // advice can already be in place from the first matchday and add no new event.
+    const advice = getAssistantAdvice(next.activeMatch!, side, coach).tactics!;
+    expect(next.activeMatch!.tactics[side]).toEqual(advice);
+    expect(advice).not.toEqual({ tempo: .5, outsideShare: .45, pressure: .5 });
     expect(next.fixtures.find(fixture => fixture.id === legacy.activeFixtureId!)!.result!.score).toEqual(finished.score);
     expect(enabled.activeMatch!).toBe(legacy.activeMatch!);
   });

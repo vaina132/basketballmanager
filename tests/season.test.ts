@@ -127,7 +127,9 @@ describe('atomic season progression', () => {
     }
     expect(Object.values(next.activeMatch!.stats).every(stats => stats.fouls === 0 && stats.secondsPlayed === 0 && stats.points === 0)).toBe(true);
     for (const [id, stats] of Object.entries(next.activeMatch!.stats)) expect(stats.condition).toBe(next.conditions[id]);
-    expect(next.activeMatch![managedSide(next)].players.some(player => next.conditions[player.id]! < 100)).toBe(true);
+    // Sprint 4: with the calibrated rotation a week's rest can bring every player back to 100; the exact recovery
+    // above still starts from real match fatigue.
+    expect(Object.values(completed.activeMatch!.stats).some(stats => stats.secondsPlayed > 0 && stats.condition < 90)).toBe(true);
     expect(advanceSeason(completed)).toEqual(next);
     expect(() => advanceSeason(next)).toThrow(/Finish/);
     expect(next.fixtures.filter(fixture => fixture.result)).toHaveLength(3);

@@ -21,15 +21,22 @@ export function PostseasonPanel({ season, seasonNumber, leagueId, managedId }: {
   const start = postseasonSlotDay(worldOf(season), seasonNumber, 1).date
   const { champion, promoted, relegated } = entry.outcome
   const decided = (ids: (string | null)[]) => ids.filter((id): id is string => !!id)
-  // Until step 3.4d, a division with no lower division in the game keeps its relegated clubs.
-  const lowerInGame = !!worldOf(season).domesticLeagues?.some(league => league.country === entry.league.country && league.tier === entry.league.tier + 1)
+  // A division with another division of the game below sends its relegated clubs there. Without one, its relegated clubs
+  // leave the game's leagues when the world lists the real next division (step 3.4d-2), and otherwise stay.
+  const world = worldOf(season)
+  const lowerInGame = !!world.domesticLeagues?.some(league => league.country === entry.league.country && league.tier === entry.league.tier + 1)
+  const nextDivision = (world.lowerDivisions ?? []).find(item => item.country === entry.league.country && item.tier === entry.league.tier + 1)
+  const exchange = (season.background?.exchanges ?? []).find(item => item.seasonNumber === seasonNumber && item.leagueId === leagueId)
+  const returning = (id: string) => (season.background?.clubs ?? []).some(club => club.id === id && club.since <= seasonNumber)
   return <section className="postseason panel" aria-labelledby="postseason-title">
     <header className="season-panel-heading"><div><h2 id="postseason-title">Playoffs</h2><p>{entry.format.label}{entry.format.verified ? '' : ' · default format (official 2026-27 rules not found)'}</p></div></header>
     {!entry.order ? <p className="season-table-note">The playoffs start after the regular season, from {formatDate(start)}. Seeds come from the final regular-season table.</p> : <>
       {(champion && entry.series.every(series => series.winner)) || decided(promoted).length || decided(relegated.map(item => item.clubId)).length ? <ul className="postseason-outcome">
         {champion && ('series' in entry.format.champion ? entry.series.find(series => series.id === 'final')?.winner : true) && <li><strong>Champion</strong>{name(champion)}</li>}
         {decided(promoted).length > 0 && <li><strong>Promoted</strong>{decided(promoted).map(name).join(', ')}</li>}
-        {decided(relegated.map(item => item.clubId)).length > 0 && <li><strong>Relegated</strong>{relegated.filter(item => item.clubId).map(item => `${name(item.clubId!)}${item.unlessWinsLowerFinal ? ' (unless it wins the lower division\'s promotion final)' : ''}`).join(', ')}{!lowerInGame && <small className="postseason-note"> · they stay for now: the division below is not in this game yet</small>}</li>}
+        {decided(relegated.map(item => item.clubId)).length > 0 && <li><strong>Relegated</strong>{relegated.filter(item => item.clubId).map(item => `${name(item.clubId!)}${item.unlessWinsLowerFinal ? ' (unless it wins the lower division\'s promotion final)' : ''}`).join(', ')}{!lowerInGame && (nextDivision ? !exchange && <small className="postseason-note"> · they leave for {nextDivision.name} when the season ends</small> : <small className="postseason-note"> · they stay: the division below is not in this game</small>)}</li>}
+        {exchange && <li><strong>Leaving</strong>{exchange.leaving.map(name).join(', ')}<small className="postseason-note"> · to {nextDivision?.name ?? 'the division below'}, outside the game's leagues</small></li>}
+        {exchange && <li><strong>Joining</strong>{exchange.joining.map(id => `${name(id)} (${returning(id) ? 'returning' : 'generated squad'})`).join(', ')}<small className="postseason-note"> · from {nextDivision?.name ?? 'the division below'}</small></li>}
       </ul> : null}
       {stages.map(stage => <div key={stage} className="postseason-stage">
         <h3>{STAGES[stage]}</h3>

@@ -42,7 +42,7 @@ describe('promotion and relegation between a country\'s divisions (step 3.4c)', 
     expect(promoted[1]).toBe(second.series.find(series => series.id === 'final').winner);
     // The first division's relegations move; the second division's have no division below in this game yet.
     const panel = league => renderToStaticMarkup(createElement(PostseasonPanel, { season: state, seasonNumber: 1, leagueId: league, managedId: world.clubs[0].id }));
-    expect(panel('first')).not.toContain('they stay for now');
+    expect(panel('first')).not.toContain('they stay');
     expect(panel('second')).toContain('Promoted');
     for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
     state = rolloverSeason(state);

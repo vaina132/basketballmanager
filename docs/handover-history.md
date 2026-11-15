@@ -8,6 +8,15 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.4d-3, screens for leaving and joining (15 November 2026)
+
+- `src/ui/PostseasonPanel.tsx`: the lowest division of a country with a next-division list shows **Leaving** (to the next division, outside the game's leagues) and **Joining** (from it, marked returning or generated squad) once the season has decided them, and "they leave for ... when the season ends" before that; without a list the note now reads "they stay: the division below is not in this game".
+- `src/ui/GeneratedTag.tsx`: a "Generated" label for players whose profile source is `generated`, on Squad and the player profile (`App.tsx`) and on Scouting (list rows and report header). Style in `styles.css`.
+- Tests: `tests/lower-division-world.test.js` (panel texts after a first-time and a returning club join; the label on a generated player, none on a real one; the scouting report header), `tests/division-changes.test.js` updated.
+- Not browser-checked here: no public world lists a next division (owner check after 3.4d-4).
+- **Verification:** full serial suite **2,581 tests / 190 files passed** (641 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.5 (3.4d-4 is local-only).
+
 ## Cloud continuation: step 3.4d-2b, clubs leaving and joining the full world (15 November 2026)
 
 - **Part 1 (format 55, commit "exchange record plumbing"):** `background.changesFrom`/`exchanges`, `BackgroundClub.until`, `employment.departures`, contract kind `joined`; `fullWorldClubsIn(context, season)` for contracted clubs; the catalog adds joined clubs' players (`joinedPlayers`) and hides players away with their club. Fixtures `season54-exchange-legacy-*` (`--lower`).

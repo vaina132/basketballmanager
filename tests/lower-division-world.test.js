@@ -10,6 +10,11 @@ import { fullWorldClubs, validateWorld, worldPlayers } from '../src/world/career
 import { getActiveCareerPlayers } from '../src/world/player-catalog';
 import { LOWER_DIVISION_RULES, squadStrength, withLowerDivisions } from '../src/world/lower-division';
 import { currentSeasonFile } from './helpers/season-format';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { PostseasonPanel } from '../src/ui/PostseasonPanel';
+import { GeneratedTag } from '../src/ui/GeneratedTag';
+import { ScoutingWorkspace } from '../src/ui/ScoutingWorkspace';
 
 /** Testland's two divisions (six clubs each, with postseasons) and its real third division of four clubs. */
 export function lowerWorld(clubs = 4, secondFormat = 'test-tier2-2') {
@@ -79,6 +84,18 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
     const away = new Set(state.background.clubs[0].players.map(player => player.id));
     expect(getActiveCareerPlayers(state).some(player => away.has(player.id))).toBe(false);
     expect(getActiveCareerPlayers(state).some(player => generated.has(player.id))).toBe(true);
+    // Screens (step 3.4d-3): the playoff panel names who left and who joined; generated players are labelled.
+    const panel = (seasonNumber, leagueId = 'second') => renderToStaticMarkup(createElement(PostseasonPanel, { season: state, seasonNumber, leagueId, managedId: state.managedClubId }));
+    const name = id => world.clubs.find(club => club.id === id).name;
+    expect(panel(1)).toContain(`<strong>Leaving</strong>${name('w1-aegean-waves')}`);
+    expect(panel(1)).toContain(`<strong>Joining</strong>${name('third-1')} (generated squad)`);
+    expect(panel(1)).toContain('from Third division');
+    expect(panel(1)).not.toContain('they stay');
+    const generatedId = world.clubs.find(club => club.id === 'third-1').players[0].id, realId = world.clubs[0].players[0].id;
+    expect(renderToStaticMarkup(createElement(GeneratedTag, { season: state, playerId: generatedId }))).toContain('Generated');
+    expect(renderToStaticMarkup(createElement(GeneratedTag, { season: state, playerId: realId }))).toBe('');
+    const scouting = renderToStaticMarkup(createElement(ScoutingWorkspace, { season: state, disabled: false, selectedPlayerId: generatedId, onSelectPlayer() {}, onEnable() {}, onAssign() {}, onCancel() {}, onShortlist() {}, onDelegation() {}, onOpenTransfers() {}, onOpenScouts() {} }));
+    expect(scouting).toMatch(/id="scouting-player-title">[^<]+<small class="generated-tag"/);
     // Season two: the club that left comes back with its squad.
     finishSeason();
     expect(state.background.exchanges.at(-1)).toEqual({ seasonNumber: 2, leagueId: 'second', leaving: ['w1-rhine-falcons'], joining: ['w1-aegean-waves'] });
@@ -87,6 +104,7 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
     expect(state.background.clubs.map(club => [club.id, club.since, club.until])).toEqual([['w1-aegean-waves', 2, 3], ['w1-rhine-falcons', 3, undefined]]);
     expect(state.clubs.find(club => club.id === 'w1-aegean-waves').players.map(player => player.id).sort()).toEqual([...away].sort());
     expect(state.finance.ledger.some(entry => entry.clubId === 'w1-aegean-waves' && entry.sourceId === 'opening-s3')).toBe(false);
+    expect(panel(2)).toContain(`${name('w1-aegean-waves')} (returning)`);
     // Season three: the generated club goes back down and another first-time club comes up.
     finishSeason();
     expect(state.background.exchanges.at(-1)).toEqual({ seasonNumber: 3, leagueId: 'second', leaving: ['third-1'], joining: ['third-3'] });

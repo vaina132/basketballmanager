@@ -363,6 +363,13 @@ Reversible defaults under the approved plan ("Levels of detail" in `multi-league
 - **Matchday selection** (for 3.5): the best available player at each position, then the best of the rest by overall rating on that date, up to twelve.
 - **Until 3.4d-2** no club leaves the full world, so the record must be empty; saves listing a club are refused. Careers saved before format 53 that record divisions gain an empty record when loaded.
 
+### Leaving and joining: first pieces (step 3.4d-2, in progress, 15 November 2026)
+
+Reversible defaults in `src/world/lower-division.ts` (pure functions, not yet used by careers):
+- **Estimated next-division table:** squad strength (best-eight average overall rating) plus a seeded random element of up to 8 rating points, from an independent stream keyed by seed, country, season and club. Returning clubs are rated by their aged squads; first-time clubs at the generated strength.
+- **Who comes up:** as many clubs as the lowest full division relegates, from the top of that table; clubs relegated at the same season end are never candidates.
+- **Generated squads:** twelve fictional players (PG 2, SG 3, SF 2, PF 3, C 2), aged 19-33, rated so the best eight average 2 points below the weakest club of the division joined; identities `<club>-generated-s<season>-<n>` and profile source `generated`; wages and opening contracts estimated by the real-club world rules.
+
 ### Owner decisions for step 3.4d-2 (15 November 2026)
 
 The owner decided both open questions on 15 November 2026:

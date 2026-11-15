@@ -8,6 +8,13 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.4d-2 started (15 November 2026, work in progress)
+
+- `src/world/lower-division.ts` (pure, not yet wired into careers): `squadStrength`, `estimatedLowerDivisionOrder` (strength plus a seeded random element; the hash has a full avalanche finaliser, because plain FNV-1a gave nearly identical values to ids differing in their last character), `lowerDivisionExchanges` (per country: the lowest full division's relegated clubs leave; as many come up, returning or first time; Italy and France refused), `generateLowerDivisionSquad` (twelve fictional, labelled players around a target strength, with profiles, wages and contract lengths).
+- `tests/lower-division.test.js` (5).
+- **Verification:** full serial suite **2,572 tests / 187 files passed** (620 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Left for 3.4d-2:** see HANDOVER.md "Next steps".
+
 ## Cloud continuation: step 3.4d-1, background-club foundation (15 November 2026)
 
 - **Fixtures first:** `tests/fixtures/season52-background-legacy-*` from unchanged commit `9f159de` (119 modules, FIBA-ruled world); `tests/season52-continuation.test.js` (3). The format-49/50/51 continuation tests now expect the empty record added on load.

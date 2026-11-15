@@ -4,7 +4,7 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Keeping this file short:** when a step is finished, update "Current state" and "Next steps" here, and add the step's detailed notes (what changed, tests, measurements) to the top of `docs/handover-history.md` under a dated heading. Keep this file under 20 KB, with exactly one current entry.
 
-## Current state (15 November 2026, after step 3.4d-1)
+## Current state (15 November 2026, after step 3.4d-1 and part of 3.4d-2)
 
 **Active level:** Sprint 3, the multi-league world ([docs/multi-league-world.md#steps](docs/multi-league-world.md#steps)).
 
@@ -15,11 +15,11 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 4. Release preparation
 5. Interface simplification (last)
 
-**Active step:** 3.4, domestic playoffs, titles, and promotion and relegation. The next step is 3.4d-2 (see "Next steps").
+**Active step:** 3.4, domestic playoffs, titles, and promotion and relegation. The next step is the rest of 3.4d-2 (see "Next steps").
 
 **Code baseline:**
-- Step 3.4d-1 commit on `main` (cloud session); save format **53** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
-- Last verification, on Linux (cloud) for 3.4d-1: full serial suite **2,567 tests / 186 files passed** (629 s), and `npm run build` passed with the known chunk-size advisory.
+- Commit "wip: 3.4d-2 partial" on `main` (cloud session); save format **53** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
+- Last verification, on Linux (cloud): full serial suite **2,572 tests / 187 files passed** (620 s), and `npm run build` passed with the known chunk-size advisory.
 - Cloud sessions: Node 24.22.3 is installed in `/opt/node24` (put it first in `PATH`).
 
 **Done in sprint 3** (details in the history, search for the step number):
@@ -71,6 +71,8 @@ Each step below should fit one session. A step that needs private data, keys or 
      - **(a)** If the manager's own club is relegated out of the full world, treat it like a dismissal: the season-end choice offers jobs at full-world clubs, with at least one offer guaranteed.
      - **(b)** Italy and France have no relegation out of the full world for now (API-Sports has no Serie B or NM1 clubs); their 3.4c behaviour stays.
    - Defaults a session may take and record as reversible in `docs/decisions.md`: promoted clubs are chosen from an estimated next-division table (squad strength plus a seeded random element, as for the plan's background tables), and generated squads are rated just below the division they join.
+   - **Done so far (pure functions, not yet used by careers; `src/world/lower-division.ts`, `tests/lower-division.test.js`):** the estimated next-division table, the season-end exchange per country (who leaves, who comes up, returning or first time; Italy and France refused) and generated squads for first-time clubs. Defaults in `docs/decisions.md#leaving-and-joining-first-pieces-step-34d-2-in-progress-15-november-2026`.
+   - **Still to do:** wire the exchange into `rolloverSeason` and `nextSeasonDivisions` (format 54 with an activation season), move leaving clubs into `state.background` and out of every system, bring returning and first-time clubs in (club data for first-time clubs: venue, sponsor, president, wages and contracts estimated as in `worldFromPack`), the save checks for all of it, and owner decision (a) in `seasonEndOutlook` (at least one offer when the manager's club leaves).
    - Foundation to use (3.4d-1): `backgroundClubFrom`, `validateBackgroundClub`, `world.lowerDivisions`; `validateBackground` currently refuses any listed club and must instead rebuild the record from each season's outcomes. Capture format-53 fixtures first (`scripts/capture-format-baseline.mjs <label> --fiba`); careers created before the new format keep their clubs (activation point, like `divisions.changesFrom`).
    - **Size warning:** about 150 places in `src/world` and `src/storage` handle every club (finances, staff, payroll, contracts, scouting, academy, youth, facilities, commercial, board, relationships, market). Most weekly systems loop over `state.clubs`, so a club removed from it at rollover stops being processed; the work is closing each system's records for a departing club (contracts, staff, sponsorship, facilities, academy and youth teams), creating them for an arriving one, and teaching every replay check about departures and arrivals. Expect several sessions, in this order: (i) leaving, (ii) returning, (iii) first-time clubs with generated squads and estimated club data, (iv) the manager's own club (owner decision (a)).
 2. **3.4d-3: screens.**

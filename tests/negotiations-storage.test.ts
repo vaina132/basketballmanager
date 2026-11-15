@@ -14,7 +14,7 @@ import { evaluateNegotiation, requiredNegotiationWage } from '../src/world/negot
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 const clubId = 'rhine-falcons';
-const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 const envelope = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const accepted = (state: SeasonState): NegotiationRecord => state.negotiations.records.find(record => record.outcome === 'accepted')!;
@@ -46,7 +46,7 @@ describe('negotiation journal persistence', () => {
       const text = serializeSeason(state), restored = parseSeason(text);
       expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
       expect(restored).toEqual(state);
-      expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
+      expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(state.activeMatch!));
     }
   });
 
@@ -97,7 +97,7 @@ describe('negotiation journal persistence', () => {
     expect(restored.scouting).toEqual(secondWeek.scouting);
     expect(restored.employment).toEqual(secondWeek.employment);
     expect(restored.history).toEqual(secondWeek.history);
-    expect(restored.activeMatch).toEqual(secondWeek.activeMatch);
+    expect(restored.activeMatch!).toEqual(secondWeek.activeMatch!);
     const enabled = enableNegotiations(restored);
     expect(enabled.negotiations.enabledSince!.contractCount).toBe(restored.employment.contracts.length);
     expect(parseSeason(serializeSeason(enabled))).toEqual(enabled);

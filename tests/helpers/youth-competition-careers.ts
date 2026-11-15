@@ -8,7 +8,7 @@ import { requiredNegotiationWage } from '../../src/world/negotiations-policy';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../../src/world/season';
 import { enableYouthCompetition, getYouthFixtures, getYouthPlayerStatus } from '../../src/world/youth-competition';
 
-export const advanceYouthCareer = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+export const advanceYouthCareer = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 export const createYouthCareer = (seed = 227) => createSeason(seed, 'rhine-falcons', 'standard', true, true, true, true, null, true, true, true, false, true, true, true, true, true, true, true, true);
 
 export function createYouthCompetitionCareers() {

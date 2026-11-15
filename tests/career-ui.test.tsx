@@ -18,7 +18,7 @@ const career = (seed: number, careerMoves = true) => setEmploymentDelegation(set
 function finalMatchday(seed: number): SeasonState {
   let state = career(seed);
   while (state.round < 10) state = advanceMatchday(state);
-  return { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+  return { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 }
 let sackedDay: SeasonState, offeredDay: SeasonState;
 

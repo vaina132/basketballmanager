@@ -15,7 +15,7 @@ import { advanceSeason, createSeason, managedSide } from '../src/world/season';
 
 const club = 'rhine-falcons';
 const scout = (id: string) => DEVELOPMENT_SCOUTS.find(scout => scout.id === id)!;
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 let baseline: SeasonState, low: SeasonState, high: SeasonState;
 beforeAll(() => {
   baseline = createSeason(19, club, 'off', true, false, true, true, null, false, true, false, false, true);

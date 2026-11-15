@@ -12,14 +12,14 @@ import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
 
 const create = (seed = 227, mode: InjuryMode = 'off', youthMatches = true) => createSeason(seed, 'rhine-falcons', mode, true, true, true, true, null, true, true, true, true, true, true, true, true, true, true, true, youthMatches);
-const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 
 describe('youth matches in the actual career calendar', () => {
   it('activates prospectively without rewriting senior matches, finances or previous academy work', () => {
     let old = create(227, 'off', false);
     old = advance(advance(old));
     const started = enableYouthCompetition(old);
-    expect(started.activeMatch).toBe(old.activeMatch);
+    expect(started.activeMatch!).toBe(old.activeMatch!);
     expect(started.fixtures).toBe(old.fixtures);
     expect(started.finance).toBe(old.finance);
     expect(started.academy.weeks).toBe(old.academy.weeks);
@@ -56,11 +56,11 @@ describe('youth matches in the actual career calendar', () => {
     expect(youthFixture?.round).toBe(1);
     expect(promoted.fixtures.filter(fixture => fixture.result).every(fixture => !fixture.result!.stats[id])).toBe(true);
     const side = managedSide(promoted);
-    expect(promoted.activeMatch[side].players.some(player => player.id === id)).toBe(true);
+    expect(promoted.activeMatch![side].players.some(player => player.id === id)).toBe(true);
     const graduate = promoted.academy.graduates.find(graduate => graduate.player.id === id)!;
     expect(graduate.condition).toBe(getYouthPlayerStatus(promoted, id, promoted.date).condition);
     expect(promoted.conditions[id]).toBe(graduate.condition);
-    expect(promoted.activeMatch.stats[id]!.condition).toBe(graduate.condition);
+    expect(promoted.activeMatch!.stats[id]!.condition).toBe(graduate.condition);
     expect(getClubAcademy(promoted)).toHaveLength(7);
     const later = advance(promoted);
     expect(getYouthFixtures(later).filter(fixture => fixture.round === 2).every(fixture => !fixture.result!.stats[id])).toBe(true);

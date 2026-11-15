@@ -12,7 +12,7 @@ import { advanceSeason, createSchedule, createSeason, DAILY_RECOVERY, dateForRou
 function finishSeason(initial: SeasonState): SeasonState {
   let state = initial;
   while (state.status === 'active') {
-    const match = state.activeMatch.status === 'finished' ? state.activeMatch : simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true));
+    const match = state.activeMatch!.status === 'finished' ? state.activeMatch! : simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true));
     state = advanceSeason({ ...state, activeMatch: match });
   }
   return state;
@@ -111,14 +111,14 @@ describe('same-club career rollover', () => {
       expect(getPlayerHealth(next, id)).toBeNull();
     }
     expect(next.injuries.every(injury => !isRecovering(injury, next.date))).toBe(true);
-    expect(next.activeMatch.preExistingInjuries ?? []).toEqual([]);
-    expect(next.activeMatch.injuries).toEqual({});
-    expect(next.activeMatch.status).toBe('ready');
-    expect(next.activeMatch.tactics[managedSide(next)]).toEqual(completed.plans[next.managedClubId]!.tactics);
-    expect(next.activeMatch.autoSubstitutions[managedSide(next)]).toBe(completed.plans[next.managedClubId]!.autoSubstitutions);
-    expect(next.activeMatch.lineups[managedSide(next)]).toEqual(completed.plans[next.managedClubId]!.lineup);
-    expect(next.activeMatch.seed).toBe(fixtureSeed(next.seed, getActiveFixture(next).id));
-    for (const [id, stats] of Object.entries(next.activeMatch.stats)) expect(stats).toMatchObject({ condition: next.conditions[id], secondsPlayed: 0, fouls: 0, points: 0 });
+    expect(next.activeMatch!.preExistingInjuries ?? []).toEqual([]);
+    expect(next.activeMatch!.injuries).toEqual({});
+    expect(next.activeMatch!.status).toBe('ready');
+    expect(next.activeMatch!.tactics[managedSide(next)]).toEqual(completed.plans[next.managedClubId]!.tactics);
+    expect(next.activeMatch!.autoSubstitutions[managedSide(next)]).toBe(completed.plans[next.managedClubId]!.autoSubstitutions);
+    expect(next.activeMatch!.lineups[managedSide(next)]).toEqual(completed.plans[next.managedClubId]!.lineup);
+    expect(next.activeMatch!.seed).toBe(fixtureSeed(next.seed, getActiveFixture(next).id));
+    for (const [id, stats] of Object.entries(next.activeMatch!.stats)) expect(stats).toMatchObject({ condition: next.conditions[id], secondsPlayed: 0, fouls: 0, points: 0 });
     expect(() => rolloverSeason(next)).toThrow(/Complete the current season/);
     expect(next.history).toHaveLength(1);
     expect(completed.date).toBe('2026-11-07');
@@ -131,9 +131,9 @@ describe('same-club career rollover', () => {
     wrongFixture.fixtures[0]!.id = 'dev-r1-g2';
     const duplicateHistory = structuredClone(completed);
     duplicateHistory.history = rolloverSeason(completed).history;
-    const unfinished = { ...completed, activeMatch: { ...completed.activeMatch, status: 'ready' as const } };
-    const changedScore = { ...completed, activeMatch: { ...completed.activeMatch, score: { ...completed.activeMatch.score, home: completed.activeMatch.score.home + 1 } } };
-    const invalid = [createSeason(), missing, wrongFixture, duplicateHistory, unfinished, changedScore, { ...completed, round: 9 }, { ...completed, date: '2026-11-08' }, { ...completed, activeMatch: { ...completed.activeMatch, seed: completed.activeMatch.seed + 1 } }];
+    const unfinished = { ...completed, activeMatch: { ...completed.activeMatch!, status: 'ready' as const } };
+    const changedScore = { ...completed, activeMatch: { ...completed.activeMatch!, score: { ...completed.activeMatch!.score, home: completed.activeMatch!.score.home + 1 } } };
+    const invalid = [createSeason(), missing, wrongFixture, duplicateHistory, unfinished, changedScore, { ...completed, round: 9 }, { ...completed, date: '2026-11-08' }, { ...completed, activeMatch: { ...completed.activeMatch!, seed: completed.activeMatch!.seed + 1 } }];
     for (const state of invalid) {
       const before = structuredClone(state);
       expect(() => rolloverSeason(state)).toThrow();
@@ -144,7 +144,7 @@ describe('same-club career rollover', () => {
   it('continues for multiple seasons with unique fixtures and injury provenance', () => {
     let state = rolloverSeason(completed);
     const instructions = { tempo: .75, outsideShare: .3, pressure: .65 };
-    state = { ...state, activeMatch: setTactics(state.activeMatch, managedSide(state), instructions) };
+    state = { ...state, activeMatch: setTactics(state.activeMatch!, managedSide(state), instructions) };
     const firstArchive = structuredClone(state.history[0]);
     for (const seasonNumber of [2, 3]) {
       state = finishSeason(state);
@@ -154,7 +154,7 @@ describe('same-club career rollover', () => {
       state = rolloverSeason(state);
       expect(state.seasonNumber).toBe(seasonNumber + 1);
       expect(state.date).toBe(seasonStartDate(seasonNumber + 1));
-      expect(state.activeMatch.tactics[managedSide(state)]).toEqual(instructions);
+      expect(state.activeMatch!.tactics[managedSide(state)]).toEqual(instructions);
       expect(state.history.map(archive => archive.seasonNumber)).toEqual(Array.from({ length: seasonNumber }, (_, index) => index + 1));
     }
     expect(state.history[0]).toEqual(firstArchive);

@@ -43,8 +43,8 @@ export const DEVELOPMENT_SPONSORS: readonly DevelopmentSponsor[] = Object.freeze
 const NAME_PARTS = ['Alder', 'Brightwater', 'Cobalt', 'Dunmore', 'Eastgate', 'Fairhaven', 'Granite', 'Hollowell', 'Ironvale', 'Juniper', 'Kingsmere', 'Larkspur', 'Millbrook', 'Northwind', 'Oakridge', 'Pinecrest', 'Quayside', 'Redfern', 'Stonebridge', 'Thornbury', 'Upland', 'Valemont', 'Westmoor', 'Yewdale'];
 const SECTORS: readonly (readonly [string, string])[] = [['Logistics', 'Freight'], ['Foods', 'Food'], ['Energy', 'Energy'], ['Insurance', 'Insurance'], ['Motors', 'Automotive'], ['Telecom', 'Telecommunications'], ['Outfitters', 'Retail']];
 const AUTHORED_SPONSORS = DEVELOPMENT_SPONSORS.length;
-/** The largest supported league (MAX_WORLD_CLUBS in world/career-world.ts) and the built-in league's six clubs. */
-const DIRECTORY_CLUBS = 40, BUILT_IN_CLUBS = 6;
+/** Covers the shared domestic world; the existing sponsor prefix remains unchanged for legacy worlds. */
+const DIRECTORY_CLUBS = 192, BUILT_IN_CLUBS = 6;
 export const SPONSOR_DIRECTORY: readonly DevelopmentSponsor[] = Object.freeze([
   ...DEVELOPMENT_SPONSORS,
   ...Array.from({ length: Math.ceil(AUTHORED_SPONSORS * DIRECTORY_CLUBS / BUILT_IN_CLUBS) - AUTHORED_SPONSORS }, (_, index) => {

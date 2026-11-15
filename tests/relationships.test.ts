@@ -11,7 +11,7 @@ const freeze = <T>(value: T): T => { if (value && typeof value === 'object' && !
 
 /** Explicit policy fixtures with controlled minutes/eligibility, never presented as valid career exports. */
 function atRound(state: SeasonState, nextRound: number, minutes: number | number[] = 0, excluded: Record<number, 'injury' | 'fouls' | 'default'> = {}): SeasonState {
-  const playerId = target(state), baseline = Object.values(state.activeMatch.stats)[0]!;
+  const playerId = target(state), baseline = Object.values(state.activeMatch!.stats)[0]!;
   return { ...state, round: Math.min(nextRound, 10), date: dateForRound(Math.min(nextRound, 10)), status: nextRound > 10 ? 'complete' : 'active', fixtures: state.fixtures.map(fixture => {
     if (fixture.round >= nextRound) return { ...fixture, result: null };
     const home = rosterForRound(state.rosters, fixture.homeClubId, fixture.round), away = rosterForRound(state.rosters, fixture.awayClubId, fixture.round);
@@ -24,7 +24,7 @@ describe('roles, meaningful conversations and dated playing-time promises', () =
   it('opts in prospectively and freezes neutral exact-roster morale without mutating a prepared match', () => {
     const before = freeze(createSeason(227, clubId, 'off', false, false, false, false)), enabled = enableRelationships(before);
     expect(before.relationships).toEqual(createRelationships());
-    expect(enabled.activeMatch).toBe(before.activeMatch);
+    expect(enabled.activeMatch!).toBe(before.activeMatch!);
     expect(getPreparedRelationshipMorale(enabled)).toBeUndefined();
     expect(enableRelationships(enabled)).toBe(enabled);
     const prepared = prepareRelationshipsRound(enabled), snapshot = getPreparedRelationshipMorale(prepared)!;

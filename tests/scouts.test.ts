@@ -43,7 +43,7 @@ describe('recruitable scouts and shared staff allocation', () => {
     expect(activated.scouts.enabledSince).toEqual({ seasonNumber: 1, round: 1, ledgerIndex: legacy.finance.ledger.length });
     expect(activated.scouting.clubs[clubId]!.assignments).toBe(legacy.scouting.clubs[clubId]!.assignments);
     expect(activated.scouting.clubs[clubId]!.assignments[0]).not.toHaveProperty('observer');
-    expect(activated.activeMatch).toBe(legacy.activeMatch);
+    expect(activated.activeMatch!).toBe(legacy.activeMatch!);
     expect(getClubScouts(activated)).toHaveLength(0);
     expect(enableScouts(activated)).toBe(activated);
     expect(() => enableScouts(createSeason())).toThrow(/scouting/i);
@@ -73,7 +73,7 @@ describe('recruitable scouts and shared staff allocation', () => {
     const full = hireScout(hireCoach(initial, 'coach-07'), 'scout-13');
     expect(staffCommitted(full, clubId)).toBe(STAFF_BUDGET);
     expect(quoteScoutHire(full, 'scout-06')).toMatchObject({ canHire: false, remainingAllocation: 0, remainingBudget: 0 });
-    expect(full.activeMatch).toBe(initial.activeMatch);
+    expect(full.activeMatch!).toBe(initial.activeMatch!);
   });
 
   it('limits every club to three unique scouts and retains full fees after release', () => {
@@ -157,7 +157,7 @@ describe('named observations and frozen report quality', () => {
     expect(assigned.scouting.clubs[clubId]!.assignments[0]?.observer).toEqual({ contractId: contract.id, scoutId: 'scout-19', evidence: 200, assignedLedgerIndex: staffed.finance.ledger.length });
     const second = assignScouting(assigned, targets[1]!);
     expect(second.scouting.clubs[clubId]!.assignments[1]?.observer).toMatchObject({ contractId: null, scoutId: null, evidence: 100 });
-    expect(second.activeMatch).toBe(initial.activeMatch);
+    expect(second.activeMatch!).toBe(initial.activeMatch!);
   });
 
   it('improves evidence only with actual minutes while ranges remain uncertain and old reports keep their quality', () => {

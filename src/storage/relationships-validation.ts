@@ -45,7 +45,7 @@ function contextAt(state: SeasonState, anchor: RelationshipAnchor, relationships
     // A completed final matchday is that season's offseason, which a move at the season end hands to the new club.
     ...state, managedClubId: managedClubFor(state, anchor.seasonNumber, localCompleted === seasonRounds(state)), seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
     status: localCompleted === seasonRounds(state) ? 'complete' : 'active', clubs, rosters, history, fixtures, relationships,
-    activeFixtureId: fixtures.find(fixture => fixture.round === anchor.round && [fixture.homeClubId, fixture.awayClubId].includes(managedClubFor(state, anchor.seasonNumber, false)))!.id,
+    activeFixtureId: fixtures.find(fixture => fixture.round === anchor.round && [fixture.homeClubId, fixture.awayClubId].includes(managedClubFor(state, anchor.seasonNumber, false)))?.id ?? null,
     injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
     employment: { ...state.employment, contracts: state.employment.contracts.slice(0, anchor.contractCount) },
   };
@@ -54,7 +54,7 @@ function contextAt(state: SeasonState, anchor: RelationshipAnchor, relationships
 /** Schema29 promises are journaled decisions; morale and outcomes are regenerated from those decisions. */
 export function validateRelationships(state: SeasonState, version: number): void {
   if (version < 29) {
-    if (Object.hasOwn(state.activeMatch, 'morale')) fail('activeMatch.morale', 'must be absent from careers predating player relationships');
+    if (state.activeMatch && Object.hasOwn(state.activeMatch, 'morale')) fail('activeMatch.morale', 'must be absent from careers predating player relationships');
     return;
   }
   const fields = record(state.relationships, 'relationships', ['model', 'enabledSince', 'events']);
@@ -62,7 +62,7 @@ export function validateRelationships(state: SeasonState, version: number): void
   if (!Array.isArray(fields.events) || fields.events.length > 20000) fail('relationships.events', 'must retain a bounded chronological command history');
   if (fields.enabledSince === null) {
     if (!equal(fields, createRelationships())) fail('relationships', 'must remain empty while disabled');
-    if (Object.hasOwn(state.activeMatch, 'morale')) fail('activeMatch.morale', 'cannot be applied while relationships are disabled');
+    if (state.activeMatch && Object.hasOwn(state.activeMatch, 'morale')) fail('activeMatch.morale', 'cannot be applied while relationships are disabled');
     return;
   }
   const completedNow = ordinal(state.seasonNumber, state.status === 'complete' ? state.round : state.round - 1, seasonRounds(state));
@@ -118,9 +118,10 @@ export function validateRelationships(state: SeasonState, version: number): void
   for (let boundary = ordinal(anchor.seasonNumber, anchor.round, seasonRounds(state)) + 1; boundary <= ordinal(state.seasonNumber, state.round, seasonRounds(state)); boundary += 1) {
     if (!prepared.has(boundary)) fail('relationships.events', 'must freeze player morale at every new prepared matchday after activation');
   }
+  if (!state.activeMatch) return;
   const snapshot = getPreparedRelationshipMorale(state);
   if (!snapshot) {
-    if (Object.hasOwn(state.activeMatch, 'morale')) fail('activeMatch.morale', 'must remain absent until the first prepared matchday after activation');
+    if (state.activeMatch && Object.hasOwn(state.activeMatch, 'morale')) fail('activeMatch.morale', 'must remain absent until the first prepared matchday after activation');
   } else {
     const expected = { ...snapshot, values: Object.fromEntries([...state.activeMatch.home.players, ...state.activeMatch.away.players].map(player => [player.id, snapshot.values[player.id]])) };
     if (!equal(state.activeMatch.morale, expected)) fail('activeMatch.morale', 'must retain exactly the values frozen before this fixture, excluding later conversations');

@@ -16,7 +16,7 @@ function freeze<T>(value: T): T {
   return value;
 }
 function finish(state: SeasonState): SeasonState {
-  return state.activeMatch.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+  return state.activeMatch!.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 }
 function trainingWeek(): TrainingWeekInput {
   const training = createTraining(DEVELOPMENT_CLUBS);
@@ -85,9 +85,9 @@ describe('fictional coaches and contract decisions', () => {
     const contract = getClubCoaching(state.coaching, clubId)[0]!;
     state = setCoachAssignment(state, contract.id, 'freeThrow');
     state = setCoachRenewal(state, contract.id, false);
-    expect(state.activeMatch).toBe(current.activeMatch);
+    expect(state.activeMatch!).toBe(current.activeMatch!);
     expect(state.training.lastWeek).toBe(current.training.lastWeek);
-    expect(stepMatch(state.activeMatch)).toEqual(stepMatch(current.activeMatch));
+    expect(stepMatch(state.activeMatch!)).toEqual(stepMatch(current.activeMatch!));
     expect(current).toEqual(before);
     expect(enableCoaching(state)).toBe(state);
     expect(() => setCoachAssignment(state, contract.id, 'unknown' as never)).toThrow(/assignment/);
@@ -167,7 +167,7 @@ describe('AI recruitment and season renewal', () => {
   it('recruits deterministically after results, obeys identical limits, and never changes the completed games', () => {
     const enabled = freeze(finish(createSeason(11, clubId, 'off', true, true)));
     const disabled = finish(createSeason(11, clubId, 'off', true, false));
-    expect(enabled.activeMatch).toEqual(disabled.activeMatch);
+    expect(enabled.activeMatch!).toEqual(disabled.activeMatch!);
     const next = advanceSeason(enabled), baseline = advanceSeason(disabled);
     expect(next.fixtures).toEqual(baseline.fixtures);
     expect(next.coaching.contracts.length).toBeGreaterThan(6);

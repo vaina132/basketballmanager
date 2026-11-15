@@ -45,7 +45,7 @@ export function AssistantStaff({ season, busy = false, onEnableAssistant, onHire
   const releaseTrigger = useRef<HTMLButtonElement>(null)
   const club = season.clubs.find(item => item.id === season.managedClubId)!
   const enabled = season.assistant.enabledSince !== null
-  const seasonFinished = season.status === 'complete' || season.round === seasonRounds(season) && season.activeMatch.status === 'finished'
+  const seasonFinished = season.status === 'complete' || season.round === seasonRounds(season) && season.activeMatch?.status === 'finished'
   const enableReason = !season.finance.enabledSince ? 'Enable club finances before recruiting an assistant coach.' : seasonFinished ? 'No matches left for advice; recruit next season.' : null
   const contract = getClubAssistant(season)
   const appointed = contract ? assistantById(contract.assistantId) : null
@@ -80,7 +80,7 @@ export function AssistantStaff({ season, busy = false, onEnableAssistant, onHire
 
   return <div className="staff-workspace assistant-staff-workspace">
     <section className="staff-current panel" aria-labelledby="assistant-current-title">
-      <header className="staff-heading"><div><h2 id="assistant-current-title" tabIndex={-1}>Assistant coach</h2><span>{club.name} &middot; one position</span></div><div className="scout-header-actions"><span className="staff-slot-count"><span aria-hidden="true"><i className={contract ? 'filled' : ''} /></span>{contract ? 1 : 0} / 1</span>{contract && <button className="button small" onClick={onOpenAssistantAdvice} disabled={busy || season.activeMatch.status === 'finished'} title={season.activeMatch.status === 'finished' ? 'Advice resumes with the next fixture.' : undefined}>Review advice<Icon name="court" size={14} /></button>}</div></header>
+      <header className="staff-heading"><div><h2 id="assistant-current-title" tabIndex={-1}>Assistant coach</h2><span>{club.name} &middot; one position</span></div><div className="scout-header-actions"><span className="staff-slot-count"><span aria-hidden="true"><i className={contract ? 'filled' : ''} /></span>{contract ? 1 : 0} / 1</span>{contract && <button className="button small" onClick={onOpenAssistantAdvice} disabled={busy || !season.activeMatch || season.activeMatch.status === 'finished'} title={season.activeMatch?.status === 'finished' ? 'Advice resumes with the next fixture.' : undefined}>Review advice<Icon name="court" size={14} /></button>}</div></header>
       {!enabled ? <div className="scout-enable"><Icon name="staff" size={28} /><div><strong>Recruit an assistant coach</strong><p>Get suggestions for team instructions and substitutions.</p></div><button id="enable-assistant" className="button primary" onClick={onEnableAssistant} disabled={busy || !!enableReason} aria-describedby={enableReason ? 'assistant-enable-reason' : undefined}>Enable assistant staff</button>{enableReason && <p id="assistant-enable-reason">{enableReason}</p>}</div> : appointed && contract ? <div className="assistant-roster">
         <article className="staff-owned-card assistant-owned-card" data-assistant-contract={contract.id}>
           <div className="assistant-owned-profile"><div className="staff-owned-identity"><AssistantPortrait coach={appointed} color={club.color} size={72} /><div><span className="staff-role">Assistant coach</span><h3>{appointed.name}</h3><StaffStars rating={assistantRating(appointed)} /><span className="staff-card-fee">{money(appointed.fee)} <small>/ season</small></span></div></div><AssistantSkills coach={appointed} /></div>

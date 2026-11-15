@@ -10,7 +10,7 @@ import { advanceSeason, createSeason, getActiveFixture, managedSide, rolloverSea
 import { processTrainingWeek } from '../src/world/training';
 
 function finish(state: SeasonState): SeasonState {
-  return state.activeMatch.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+  return state.activeMatch!.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 }
 function complete(initial: SeasonState): SeasonState {
   let state = initial;
@@ -75,7 +75,7 @@ describe('fixture, training and archive ownership', () => {
   });
 
   it('refuses a match squad absent from the registered roster without committing partial results', () => {
-    const state = finish(initial), side = managedSide(state), clubId = state.activeMatch[side].id;
+    const state = finish(initial), side = managedSide(state), clubId = state.activeMatch![side].id;
     const bad = { ...state, rosters: state.rosters.map(roster => roster.clubId === clubId ? { ...roster, players: roster.players.slice(1) } : roster) };
     const before = structuredClone(bad);
     expect(() => advanceSeason(bad)).toThrow(/registered roster/);
@@ -84,7 +84,7 @@ describe('fixture, training and archive ownership', () => {
 
   it('training references its registration and refuses mismatched membership', () => {
     const finished = finish(initial);
-    const conditions = { ...initial.conditions, ...Object.fromEntries(Object.entries(finished.activeMatch.stats).map(([id, stat]) => [id, stat.condition])) };
+    const conditions = { ...initial.conditions, ...Object.fromEntries(Object.entries(finished.activeMatch!.stats).map(([id, stat]) => [id, stat.condition])) };
     const input = { training: initial.training, clubs: initial.clubs, conditions, injuries: [], seasonNumber: 1, afterRound: 1, fromDate: initial.date, toDate: secondRound.date, rosters: initial.rosters };
     const withSnapshots = processTrainingWeek(input), inferred = processTrainingWeek({ ...input, rosters: undefined });
     expect(withSnapshots).toEqual(inferred);
@@ -121,7 +121,7 @@ describe('fixture, training and archive ownership', () => {
     expect(getFixtureTeams(changed, fixture, 1)).toEqual(before);
     expect(getFixtureTeams(changed, fixture, 1).home.players[0]!.id).toBe(before.home.players[0]!.id);
     expect(fixture.result.stats).toEqual(completed.fixtures[0]!.result!.stats);
-    expect(getFixtureTeams(changed, getActiveFixture(changed)).home.players).toEqual(changedClubs.find(club => club.id === changed.activeMatch.home.id)!.players);
+    expect(getFixtureTeams(changed, getActiveFixture(changed)).home.players).toEqual(changedClubs.find(club => club.id === changed.activeMatch!.home.id)!.players);
   });
 
   it('rejects missing, opposing, obsolete and overlapping roster references', () => {
@@ -138,7 +138,7 @@ describe('fixture, training and archive ownership', () => {
 
   it('carried injury eligibility follows the registered player rather than the injury origin club', () => {
     const state = createSeason(84, 'atlantic-pilots', 'standard', false, false, false, false);
-    const opponentPair = new Set([state.activeMatch.home.id, state.activeMatch.away.id]);
+    const opponentPair = new Set([state.activeMatch!.home.id, state.activeMatch!.away.id]);
     const destination = state.clubs.find(club => !opponentPair.has(club.id))!, player = destination.players[0]!;
     const originClubId = state.managedClubId;
     const injury = { id: `previous-registration:${player.id}`, playerId: player.id, clubId: originClubId, fixtureId: 'previous-registration', kind: 'ankle' as const, occurredOn: '2026-09-04', returnOn: '2026-09-20' };

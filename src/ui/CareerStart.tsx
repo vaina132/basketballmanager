@@ -117,9 +117,11 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
   const [step, setStep] = useState(0)
   const leagues = useMemo(() => props.pack ? careerCompetitions(props.pack) : [], [props.pack])
   const [competitionId, setCompetitionId] = useState('')
+  const [extraCountries, setExtraCountries] = useState<string[]>([])
   const league = leagues.find(item => item.id === competitionId) ?? leagues[0] ?? null
   const countries = [...new Set(leagues.map(item => item.country ?? 'Other'))].sort()
-  const world = useMemo(() => { try { return props.pack && league ? worldFromPack(props.pack, league.id) : null } catch { return null } }, [props.pack, league])
+  const built = useMemo(() => { try { return { world: props.pack && league ? worldFromPack(props.pack, leagues.filter(item => item.country === league.country || extraCountries.includes(item.country ?? 'Other')).map(item => item.id)) : null, error: null } } catch (error) { return { world: null, error: error instanceof Error ? error.message : 'The selected leagues could not be loaded.' } } }, [props.pack, league, leagues, extraCountries])
+  const world = built.world
   const [clubId, setClubId] = useState('')
   const [packError, setPackError] = useState<string | null>(null)
   const [packLoading, setPackLoading] = useState(false)
@@ -128,7 +130,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
   const [replayCode, setReplayCode] = useState('')
   const [issue, setIssue] = useState<{ message: string; revision: number } | null>(null)
   const title = useRef<HTMLDivElement>(null)
-  const club = world ? world.clubs.find(team => team.id === clubId) ?? world.clubs[0]! : null
+  const club = world ? world.clubs.find(team => team.id === clubId && league?.clubIds.includes(team.id)) ?? world.clubs.find(team => league?.clubIds.includes(team.id))! : null
   const squadRating = (team: CareerWorld['clubs'][number]) => { const best = team.players.map(player => overallRating(player.attributes, player.position)).sort((a, b) => b - a).slice(0, 8); return Math.round(best.reduce((sum, value) => sum + value, 0) / best.length) }
 
   async function loadPack(selected: File | undefined) {
@@ -138,8 +140,8 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
     setPackLoading(true)
     try {
       const loaded = await parseDataPack(await selected.text())
-      if (!careerCompetitions(loaded).length) throw new Error('This data pack has no domestic league with an even number of clubs to play a career in.')
-      setCompetitionId(''); setClubId(''); setIssue(null); props.onPackLoaded(loaded)
+      if (!careerCompetitions(loaded).length) throw new Error('This data pack has no supported domestic league to play a career in.')
+      setCompetitionId(''); setClubId(''); setExtraCountries([]); setIssue(null); props.onPackLoaded(loaded)
     } catch (error) { setPackError(error instanceof Error ? error.message : 'This file could not be read as a data pack.') }
     finally { setPackLoading(false); if (packInput.current) packInput.current.value = '' }
   }
@@ -197,15 +199,16 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
               <input ref={packInput} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />
               <button id="career-load-pack" type="button" className="button primary" disabled={packLoading} onClick={() => packInput.current?.click()}><Icon name="upload" size={16} />{packLoading ? 'Checking data pack…' : props.pack ? 'Load another data pack' : 'Load data pack'}</button>
               {packError && <p id="career-pack-error" className="career-pack-error" role="alert">{packError}</p>}
-              {props.pack && !world && !packError && <p className="career-pack-error" role="alert">This data pack has no league a career can be played in.</p>}
+              {props.pack && !world && !packError && <p className="career-pack-error" role="alert">{built.error ?? 'This data pack has no league a career can be played in.'}</p>}
             </div>
           </section>
         </div> : <div className="career-club-layout">
           <section className="panel" aria-labelledby="career-club-title"><header className="career-start-panel-heading"><h2 id="career-club-title">Choose your club</h2><span data-career-pack={props.pack.version}>Pack {props.pack.version}</span></header>
             <div className="career-country-options" role="group" aria-label="Choose country">{countries.map(country => <button key={country} type="button" aria-pressed={(league?.country ?? 'Other') === country} onClick={() => { setCompetitionId(leagues.find(item => (item.country ?? 'Other') === country)!.id); setClubId('') }}><CountryFlag country={country} decorative /><span>{country}</span></button>)}</div>
             {leagues.length > 1 && <div className="career-start-field career-league-field"><label htmlFor="career-league">League</label><select id="career-league" value={league!.id} onChange={event => { setCompetitionId(event.target.value); setClubId('') }}>{leagues.map(item => <option key={item.id} value={item.id}>{item.country ?? 'Other'} · {item.name} · Division {item.tier}</option>)}</select></div>}
-            <p className="career-league-summary"><strong>{world.name}</strong> · {world.clubs.length} clubs · {worldRounds(world)} matchdays</p>
-            <div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{world.clubs.map(team => <label className={`career-club-option${club.id === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={club.id === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players</small><SquadStrength value={squadRating(team)} clubName={team.name} /></span></label>)}</div>
+            <fieldset className="career-country-options"><legend>Playable countries</legend>{countries.map(country => <label key={country}><input type="checkbox" checked={country === (league?.country ?? 'Other') || extraCountries.includes(country)} disabled={country === (league?.country ?? 'Other')} onChange={event => setExtraCountries(previous => event.target.checked ? [...previous, country] : previous.filter(item => item !== country))} /><CountryFlag country={country} decorative /><span>{country}</span></label>)}</fieldset>
+            <p className="career-league-summary">{world.domesticLeagues?.length ?? 1} leagues · {world.clubs.length} clubs · {worldRounds(world)} weeks. Each selected country includes its available divisions.</p>
+            <div className="career-club-options" role="radiogroup" aria-labelledby="career-club-title">{world.clubs.filter(team => league?.clubIds.includes(team.id)).map(team => <label className={`career-club-option${club.id === team.id ? ' selected' : ''}`} key={team.id}><input type="radio" name="career-club" data-career-club={team.id} value={team.id} checked={club.id === team.id} onChange={() => setClubId(team.id)} /><span className="career-club-code" style={{ color: team.color }}>{team.shortName}</span><span><strong>{team.name}</strong><small>{team.players.length} players</small><SquadStrength value={squadRating(team)} clubName={team.name} /></span></label>)}</div>
             <button type="button" className="text-button career-pack-change" onClick={() => packInput.current?.click()} disabled={packLoading}>Load another data pack</button>
             <DataPackDetails pack={props.pack} />
             <input ref={packInput} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => void loadPack(event.target.files?.[0])} />

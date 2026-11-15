@@ -10,7 +10,7 @@ import { setTrainingPlan } from '../../src/world/training';
 
 export const finishPhysioMatch = (state: SeasonState): SeasonState => ({
   ...state,
-  activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)),
+  activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)),
 });
 
 /** Exercise the same committed world transition used by the browser worker. */

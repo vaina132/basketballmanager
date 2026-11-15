@@ -12,7 +12,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'atlantic-pilots';
 const profile: ManagerProfile = { name: 'Anıl Türkmen', dateOfBirth: '1990-02-28', nationality: 'Turkish' };
 const oldest: ManagerProfile = { ...profile, dateOfBirth: '1925-09-06' };
-const finish = (state: SeasonState): SeasonState => state.activeMatch.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+const finish = (state: SeasonState): SeasonState => state.activeMatch!.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 function completeSeason(state: SeasonState): SeasonState { while (state.status !== 'complete') state = advanceSeason(finish(state)); return state; }
 function legacyText(season: SeasonState, version: number): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
@@ -35,10 +35,10 @@ function legacyText(season: SeasonState, version: number): string {
 let current: SeasonState, live: SeasonState, completed: SeasonState, later: SeasonState, originalLegacy: SeasonState;
 beforeAll(() => {
   current = createSeason(37, clubId, 'off', true, true, true, true, oldest);
-  live = { ...current, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(current.activeMatch, managedSide(current), true)) };
+  live = { ...current, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(current.activeMatch!, managedSide(current), true)) };
   completed = completeSeason(live); later = rolloverSeason(completed);
   const baseline = createSeason(37, clubId, 'off', false, false, false, false);
-  originalLegacy = { ...baseline, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(baseline.activeMatch, managedSide(baseline), true)) };
+  originalLegacy = { ...baseline, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(baseline.activeMatch!, managedSide(baseline), true)) };
 }, 60_000);
 
 describe('manager identity and calendar age', () => {
@@ -108,9 +108,9 @@ describe('manager profiles in saved careers', () => {
   it('sets or edits the profile without changing the live simulation, finance, or caller objects', () => {
     const before = structuredClone(live), input = { ...profile, name: ` ${profile.name} ` }, changed = setManagerProfile(live, input);
     expect(changed).toEqual({ ...live, manager: profile });
-    expect(changed.activeMatch).toBe(live.activeMatch);
+    expect(changed.activeMatch!).toBe(live.activeMatch!);
     expect(changed.finance).toBe(live.finance);
-    expect(stepMatch(changed.activeMatch)).toEqual(stepMatch(live.activeMatch));
+    expect(stepMatch(changed.activeMatch!)).toEqual(stepMatch(live.activeMatch!));
     expect(advanceSeason(finish(changed))).toEqual({ ...advanceSeason(finish(live)), manager: profile });
     expect(parseSeason(serializeSeason(changed))).toEqual(changed);
     expect(live).toEqual(before);
@@ -144,8 +144,8 @@ describe('manager profiles in saved careers', () => {
     const restored = parseSeason(legacyText(originalLegacy, version));
     expect(restored).toEqual(originalLegacy);
     expect(restored.manager).toBeNull();
-    expect(JSON.stringify(restored.activeMatch)).toBe(JSON.stringify(originalLegacy.activeMatch));
-    expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(originalLegacy.activeMatch));
+    expect(JSON.stringify(restored.activeMatch!)).toBe(JSON.stringify(originalLegacy.activeMatch!));
+    expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(originalLegacy.activeMatch!));
   });
 
   it.each(['live', 'complete', 'later year'] as const)('preserves format 7 %s payroll, training and future simulation', boundary => {

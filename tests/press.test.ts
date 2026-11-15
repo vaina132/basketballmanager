@@ -44,7 +44,7 @@ describe('press questions in a career', () => {
     expect(morale(answered, other) - morale(open, other)).toBe(2);
     expect(getPlayerRelationship(answered, core).reasons.at(-1)).toEqual({ label: 'Press comments', impact: -3 });
     expect(getPlayerRelationship(answered, other).history[0]).toMatchObject({ label: 'Press: demand more from the regulars' });
-    expect(answered.activeMatch).toEqual(open.activeMatch);
+    expect(answered.activeMatch!).toEqual(open.activeMatch!);
     expect(getPressQuestion(answered)!.answered).toBe('demand');
     expect(() => answerPress(answered, 'back')).toThrow(/already been answered/);
     expect(() => answerPress(open, 'credit')).toThrow(/answers offered/);

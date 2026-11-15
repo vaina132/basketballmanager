@@ -30,7 +30,7 @@ function renamedWorld(): CareerWorld {
   };
 }
 
-const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 const roundTrip = (state: SeasonState) => parseSeason(serializeSeason(state));
 const world = renamedWorld();
 let opening: SeasonState, complete: SeasonState, nextSeason: SeasonState;

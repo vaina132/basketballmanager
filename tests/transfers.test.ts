@@ -15,7 +15,7 @@ import { getTransferCandidates, MAX_TRANSFER_FEE, quoteTransferOffer, requiredTr
 const buyer = 'rhine-falcons', seller = 'aegean-waves', rival = 'alpine-stags';
 const create = () => createSeason(53, buyer, 'off', true, true, true, true, null, true, true, true, true);
 function finish(state: SeasonState): SeasonState {
-  while (state.status === 'active') state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+  while (state.status === 'active') state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
   return state;
 }
 const offerFor = (state: SeasonState, clubId: string, playerId: string) => getMarketOffers(state, clubId).filter(offer => offer.playerId === playerId).at(-1)!;

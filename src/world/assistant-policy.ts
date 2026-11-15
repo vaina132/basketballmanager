@@ -29,7 +29,7 @@ export function quoteAssistantHire(state: SeasonState, assistantId: string, club
   let reason: string | null = null;
   if (!state.assistant.enabledSince) reason = 'Enable assistant-coach recruitment before hiring.';
   else if (!state.finance.enabledSince) reason = 'Assistant-coach recruitment requires club finances.';
-  else if (state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch.status === 'finished') reason = 'No match advice remains this season. Recruit an assistant when the next season starts.';
+  else if (state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch?.status === 'finished') reason = 'No match advice remains this season. Recruit an assistant when the next season starts.';
   else if (!state.clubs.some(club => club.id === clubId) || !coach) reason = 'Choose an assistant coach and club from this career.';
   else if (getClubAssistant(state, clubId)) reason = 'The assistant-coach position is already occupied.';
   else if (!availableAssistants(state).some(available => available.id === assistantId)) reason = 'This assistant coach already has an active club contract.';

@@ -17,7 +17,7 @@ import { quoteTransferOffer, requiredTransferFee } from '../src/world/transfers-
 const buyer = 'rhine-falcons', seller = 'aegean-waves', third = 'alpine-stags';
 const create = () => createSeason(53, buyer, 'off', true, true, true, true, null, true, true, true, true);
 function finish(state: SeasonState): SeasonState {
-  while (state.status === 'active') state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+  while (state.status === 'active') state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
   return state;
 }
 

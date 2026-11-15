@@ -21,7 +21,7 @@ export type CareerSaveEntry = CheckpointMetadata & ({
   date: string;
   round: number;
   status: SeasonState['status'];
-  matchStatus: MatchState['status'];
+  matchStatus: MatchState['status'] | 'rest';
   error?: never;
 } | {
   valid: false;
@@ -90,7 +90,7 @@ async function describeCheckpoint(checkpoint: SeasonCheckpoint, parse: StoredPar
       clubName: state.clubs.find(club => club.id === state.managedClubId)!.name,
       managerName: state.manager?.name ?? null,
       seasonNumber: state.seasonNumber, date: state.date, round: state.round,
-      status: state.status, matchStatus: state.activeMatch.status,
+      status: state.status, matchStatus: state.activeMatch?.status ?? 'rest',
     };
   } catch (error) {
     return {

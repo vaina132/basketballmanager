@@ -16,7 +16,7 @@ import { getMarketStartReason } from '../src/world/market-policy';
 import { advanceSeason, createSchedule, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
 import { testWorld } from './world-fixtures';
 
-const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 
 describe('leagues of any even size', () => {
   it('schedules a double round robin: every club plays every matchday and meets every other club home and away', () => {

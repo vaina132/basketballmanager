@@ -33,7 +33,7 @@ describe('fitness appointments and shared staff spending', () => {
     const legacy = freeze(create(false)), activated = enableFitness(legacy);
     expect(legacy.fitness).toEqual(createFitness());
     expect(activated.fitness.enabledSince).toEqual({ seasonNumber: 1, round: 1, ledgerIndex: legacy.finance.ledger.length });
-    expect(activated.activeMatch).toBe(legacy.activeMatch);
+    expect(activated.activeMatch!).toBe(legacy.activeMatch!);
     expect(activated.conditions).toBe(legacy.conditions);
     expect(activated.training).toBe(legacy.training);
     expect(activated.injuries).toBe(legacy.injuries);
@@ -59,7 +59,7 @@ describe('fitness appointments and shared staff spending', () => {
     expect(hired.finance.ledger.at(-1)).toMatchObject({ kind: 'fitness', amount: -5_000_000, sourceId: `fitness-${contract.id}`, fitness: { contractId: contract.id, coachId: 'fitness-12' }, ticket: null, coach: null, payroll: null });
     expect(contract.hiredLedgerIndex).toBe(initial.finance.ledger.length);
     expect(getFinanceBalance(initial.finance, club).cash - getFinanceBalance(hired.finance, club).cash).toBe(5_000_000);
-    expect(hired.activeMatch).toBe(initial.activeMatch);
+    expect(hired.activeMatch!).toBe(initial.activeMatch!);
     expect(getClubFitnessEffects(hired)).toEqual({ contractId: contract.id, coachId: 'fitness-12', recoveryPerDay: 1, practiceCostReductionPercent: 25 });
     expect(() => hireFitnessCoach(hired, 'fitness-06')).toThrow(/occupied/i);
     const released = releaseFitnessCoach(hired, contract.id);

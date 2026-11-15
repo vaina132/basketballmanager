@@ -9,7 +9,7 @@ import { createSeasonInjury, getPlayerHealth, getSeasonInjuries } from '../src/w
 
 const clubId = 'atlantic-pilots', playerId = 'atl-8';
 let live: SeasonState, firstFinished: SeasonState, second: SeasonState, third: SeasonState;
-const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: simulateToEnd(setAutoSubstitutions(season.activeMatch, managedSide(season), true)) });
+const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: simulateToEnd(setAutoSubstitutions(season.activeMatch!, managedSide(season), true)) });
 const restore = (season: SeasonState) => parseSeason(serializeSeason(season));
 function legacyText(season: SeasonState): string {
   const legacy = structuredClone(season) as unknown as Record<string, unknown>;
@@ -22,7 +22,7 @@ function legacyText(season: SeasonState): string {
 
 beforeAll(() => {
   const season = createSeason(9, clubId, 'standard', false, false, false);
-  let match = setAutoSubstitutions(season.activeMatch, managedSide(season), true);
+  let match = setAutoSubstitutions(season.activeMatch!, managedSide(season), true);
   for (let count = 0; count < 2000 && !match.injuries[playerId] && match.status !== 'finished'; count += 1) match = stepMatch(match);
   expect(match.injuries[playerId]).toBeDefined();
   live = { ...season, activeMatch: match };
@@ -36,14 +36,14 @@ describe('health-aware season persistence', () => {
     const season = createSeason(17, clubId, mode, false, false, false), text = serializeSeason(season);
     expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restore(season)).toEqual(season);
-    expect(restore(season).activeMatch.injuryMode).toBe(mode);
+    expect(restore(season).activeMatch!.injuryMode).toBe(mode);
   });
 
   it('preserves a new in-match injury without prematurely committing its history', () => {
     const restored = restore(live);
     expect(restored).toEqual(live);
     expect(restored.injuries).toEqual([]);
-    expect(restored.activeMatch.rngState).toBe(live.activeMatch.rngState);
+    expect(restored.activeMatch!.rngState).toBe(live.activeMatch!.rngState);
     expect(getPlayerHealth(restored, playerId)?.returnOn).toBe('2026-09-15');
     expect(getSeasonInjuries(restored)).toEqual(getSeasonInjuries(live));
     expect(advanceSeason(finish(restored))).toEqual(second);
@@ -52,11 +52,11 @@ describe('health-aware season persistence', () => {
   it('restores inherited unavailability and excludes the recovering player from exposure', () => {
     const restored = restore(second);
     expect(restored).toEqual(second);
-    expect(restored.activeMatch.preExistingInjuries).toContain(playerId);
-    expect(restored.activeMatch.lineups[managedSide(restored)]).not.toContain(playerId);
+    expect(restored.activeMatch!.preExistingInjuries).toContain(playerId);
+    expect(restored.activeMatch!.lineups[managedSide(restored)]).not.toContain(playerId);
     const played = finish(restored);
-    expect(played.activeMatch.stats[playerId]!.secondsPlayed).toBe(0);
-    expect(played.activeMatch.events.filter(event => event.type === 'injury' && event.playerId === playerId)).toEqual([]);
+    expect(played.activeMatch!.stats[playerId]!.secondsPlayed).toBe(0);
+    expect(played.activeMatch!.events.filter(event => event.type === 'injury' && event.playerId === playerId)).toEqual([]);
     expect(advanceSeason(played)).toEqual(third);
   });
 
@@ -64,7 +64,7 @@ describe('health-aware season persistence', () => {
     const restored = restore(third);
     expect(restored.date).toBe('2026-09-19');
     expect(getPlayerHealth(restored, playerId)).toBeNull();
-    expect(restored.activeMatch.preExistingInjuries ?? []).not.toContain(playerId);
+    expect(restored.activeMatch!.preExistingInjuries ?? []).not.toContain(playerId);
     expect(restored.injuries.filter(injury => injury.playerId === playerId)).toHaveLength(1);
     expect(restored.injuries.find(injury => injury.playerId === playerId)?.returnOn).toBe('2026-09-15');
   });
@@ -92,13 +92,13 @@ describe('strict health history and eligibility validation', () => {
     ['altered diagnosis', state => { state.injuries[0]!.kind = state.injuries[0]!.kind === 'muscle' ? 'ankle' : 'muscle'; }],
     ['unsupported episode field', state => { Object.assign(state.injuries[0]!, { rehabBonus: 10 }); }],
     ['invalid injury mode', state => { Object.assign(state, { injuryMode: 'rare' }); }],
-    ['one-fixture mode override', state => { state.activeMatch.injuryMode = 'off'; }],
+    ['one-fixture mode override', state => { state.activeMatch!.injuryMode = 'off'; }],
     ['foreign result diagnosis', state => { state.fixtures[0]!.result!.injuries.missing = 'ankle'; }],
     ['unsupported result diagnosis', state => { Object.assign(state.fixtures[0]!.result!.injuries, { [playerId]: 'unknown' }); }],
     ['erased result injury', state => { delete state.fixtures[0]!.result!.injuries[playerId]; }],
-    ['removed inherited marker', state => { delete state.activeMatch.preExistingInjuries; }],
-    ['removed inherited injury', state => { delete state.activeMatch.injuries[playerId]; }],
-    ['changed inherited diagnosis', state => { state.activeMatch.injuries[playerId]!.kind = 'ankle'; }],
+    ['removed inherited marker', state => { delete state.activeMatch!.preExistingInjuries; }],
+    ['removed inherited injury', state => { delete state.activeMatch!.injuries[playerId]; }],
+    ['changed inherited diagnosis', state => { state.activeMatch!.injuries[playerId]!.kind = 'ankle'; }],
   ];
   it.each(mutations)('rejects %s without altering the original season', (_label, mutate) => {
     const damaged = structuredClone(second), original = structuredClone(second);
@@ -123,9 +123,9 @@ describe('strict health history and eligibility validation', () => {
 
   it('counts injuries as exclusions when validating a compact default result', () => {
     const season = advanceSeason(finish(createSeason(37, clubId, 'standard', false, false, false)));
-    const fixture = season.fixtures.find(item => item.round === 1 && item.result && [item.homeClubId, item.awayClubId].some(id => ![season.activeMatch.home.id, season.activeMatch.away.id].includes(id)))!;
+    const fixture = season.fixtures.find(item => item.round === 1 && item.result && [item.homeClubId, item.awayClubId].some(id => ![season.activeMatch!.home.id, season.activeMatch!.away.id].includes(id)))!;
     const result = fixture.result!;
-    const losingClub = season.clubs.find(club => [fixture.homeClubId, fixture.awayClubId].includes(club.id) && ![season.activeMatch.home.id, season.activeMatch.away.id].includes(club.id))!;
+    const losingClub = season.clubs.find(club => [fixture.homeClubId, fixture.awayClubId].includes(club.id) && ![season.activeMatch!.home.id, season.activeMatch!.away.id].includes(club.id))!;
     const winner = losingClub.id === fixture.homeClubId ? 'away' : 'home';
     const injured = losingClub.players.find(player => result.stats[player.id]!.secondsPlayed > 0)!;
     for (const player of losingClub.players) result.stats[player.id]!.fouls = player.id === injured.id ? 0 : 5;
@@ -151,7 +151,7 @@ describe('explicit injury-free legacy migration', () => {
     expect(restored.schemaVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restored.injuryMode).toBe('off');
     expect(restored.injuries).toEqual([]);
-    expect(restored.activeMatch).toEqual(snapshot.activeMatch);
+    expect(restored.activeMatch!).toEqual(snapshot.activeMatch!);
     expect(restored.conditions).toEqual(snapshot.conditions);
     expect(restored.plans).toEqual(snapshot.plans);
     expect(restored.fixtures.filter(fixture => fixture.result).every(fixture => Object.keys(fixture.result!.injuries).length === 0)).toBe(true);
@@ -173,7 +173,7 @@ describe('explicit injury-free legacy migration', () => {
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/officialScore|points/);
     const extra = JSON.parse(legacyText(season)); extra.state.injuries = [];
     expect(() => parseSeason(JSON.stringify(extra))).toThrow(/unsupported fields/);
-    const injuring = JSON.parse(legacyText(season)); injuring.state.activeMatch.injuryMode = 'standard';
+    const injuring = JSON.parse(legacyText(season)); injuring.state.activeMatch!.injuryMode = 'standard';
     expect(() => parseSeason(JSON.stringify(injuring))).toThrow(/season-wide injury/);
   });
 

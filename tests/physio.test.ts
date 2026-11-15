@@ -41,7 +41,7 @@ describe('physio recruitment and four-role staff allocation', () => {
     const legacy = freeze(create(false)), active = enablePhysio(legacy);
     expect(legacy.physio).toEqual(createPhysio());
     expect(active.physio.enabledSince).toEqual({ seasonNumber: 1, round: 1, ledgerIndex: legacy.finance.ledger.length });
-    expect(active.activeMatch).toBe(legacy.activeMatch);
+    expect(active.activeMatch!).toBe(legacy.activeMatch!);
     expect(active.injuries).toBe(legacy.injuries);
     expect(active.training).toBe(legacy.training);
     expect(enablePhysio(active)).toBe(active);
@@ -62,7 +62,7 @@ describe('physio recruitment and four-role staff allocation', () => {
     expect(hired.finance.ledger.at(-1)).toMatchObject({ kind: 'physio', amount: -5_000_000, sourceId: `physio-${contract.id}`, physio: { contractId: contract.id, physioId: 'physio-12' } });
     expect(contract.hiredLedgerIndex).toBe(initial.finance.ledger.length);
     expect(() => hirePhysio(hired, 'physio-06')).toThrow(/occupied/i);
-    expect(hired.activeMatch).toBe(initial.activeMatch);
+    expect(hired.activeMatch!).toBe(initial.activeMatch!);
     const released = releasePhysio(hired, contract.id);
     expect(released.finance).toBe(hired.finance);
     expect(staffCommitted(released, club)).toBe(staffCommitted(hired, club));

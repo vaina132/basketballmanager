@@ -13,7 +13,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 
 const clubId = 'rhine-falcons', playerId = 'rhf-1';
 const create = (enabled = true) => createSeason(53, clubId, 'standard', true, true, true, true, null, true, true, enabled);
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function finish(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 
 describe('contract negotiations in persistent careers', () => {
@@ -76,7 +76,7 @@ describe('contract negotiations in persistent careers', () => {
     expect(activated.employment).toBe(old.employment);
     expect(activated.negotiations.enabledSince?.contractCount).toBe(61);
     expect(activated.negotiations.records).toEqual([]);
-    expect(activated.activeMatch).toBe(old.activeMatch);
+    expect(activated.activeMatch!).toBe(old.activeMatch!);
     expect(parseSeason(serializeSeason(activated))).toEqual(activated);
     const after = setEmploymentDelegation(activated, true);
     expect(getClubContractSummary(after, clubId).rosterSize).toBe(10);

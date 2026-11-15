@@ -19,7 +19,7 @@ const window = (state: SeasonState) => getMarketWindow(state)!;
 const ownOffer = (state: SeasonState) => getMarketOffers(state).find(offer => offer.transfer)!;
 const complete = (initial: SeasonState): SeasonState => {
   let state = initial;
-  while (state.status === 'active') state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+  while (state.status === 'active') state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
   return state;
 };
 function legacy14(state: SeasonState): string {
@@ -69,7 +69,7 @@ describe('paid transfer persistence and accounting', () => {
       expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
       const restored = parseSeason(text);
       expect(restored).toEqual(state);
-      expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
+      expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(state.activeMatch!));
     }
     expect(advanceMarket(parseSeason(serializeSeason(pending)))).toEqual(approved);
     expect(advanceMarket(parseSeason(serializeSeason(approved)))).toEqual(accepted);
@@ -88,7 +88,7 @@ describe('paid transfer persistence and accounting', () => {
     expect(getFinanceBalance(accepted.finance, managed).cash).toBe(getFinanceBalance(opened.finance, managed).cash - fee);
     expect(getFinanceBalance(accepted.finance, seller).cash).toBe(getFinanceBalance(opened.finance, seller).cash + fee);
     expect(accepted.payroll).toEqual(opened.payroll);
-    expect(accepted.activeMatch).toEqual(opened.activeMatch);
+    expect(accepted.activeMatch!).toEqual(opened.activeMatch!);
     expect(accepted.fixtures).toEqual(opened.fixtures);
   });
 

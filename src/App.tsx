@@ -15,7 +15,7 @@ import type { SeasonEndDecision } from './domain/career'
 import { boardFundingRefusal } from './world/board-funding-policy'
 import { acceptSponsorshipOffer, declineSponsorshipOffer, enableCommercial, requestSponsorshipImprovement, setSponsorshipDelegation } from './world/commercial'
 import { getDevelopmentSponsor } from './data/development-sponsors'
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { MatchState, Player, Side, Team } from './domain/types'
 import type { ManagerProfile } from './domain/manager'
@@ -50,7 +50,8 @@ import { enableYouth, hireYouthCoach, releaseYouthCoach, setYouthCoachRenewal } 
 import { StaminaMeter } from './ui/StaminaMeter'
 import { ManagerDesk } from './ui/ManagerDesk'
 import type { SeasonState } from './domain/season'
-import { createSeason, getActiveFixture, getStandings, managedSide as seasonManagedSide, NEW_CAREER_SYSTEMS } from './world/season'
+import { RestWeek } from './ui/RestWeek'
+import { careerPresentationMatch, createSeason, getStandings, managedSide as seasonManagedSide, NEW_CAREER_SYSTEMS } from './world/season'
 import { MAX_SEASON_SAVE_BYTES } from './storage/season-storage'
 import { readCareerSaves, readCurrentCareer, loadCareerCheckpoint, saveCareerCheckpoint } from './storage/career-saves'
 import type { CareerSaveList } from './storage/career-saves'
@@ -120,9 +121,10 @@ export default function App() {
   const [session, setSession] = useState<GameSession>(() => ({ kind: 'exhibition', match: createMatch(42) }))
   const sessionRef = useRef(session)
   const season = session.kind === 'season' ? session.season : null
-  const match = session.kind === 'season' ? session.season.activeMatch : session.match
+  const restWeek = !!season && !season.activeMatch
+  const match = useMemo(() => session.kind === 'season' ? careerPresentationMatch(session.season) : session.match, [session])
   const matchRef = useRef(match)
-  const managedSide = season ? seasonManagedSide(season) : 'home'
+  const managedSide = season ? restWeek ? match.home.id === season.managedClubId ? 'home' : 'away' : seasonManagedSide(season) : 'home'
   // After a move at a season end, the final match still belongs to the former club; identity and squad follow the new one.
   const managedTeam = season && match[managedSide].id !== season.managedClubId ? season.clubs.find(club => club.id === season.managedClubId)! : match[managedSide]
   const [advancing, setAdvancing] = useState(false)
@@ -177,16 +179,18 @@ export default function App() {
   const replaceSession = useCallback((next: GameSession) => {
     replacementRequest.current += 1
     sessionRef.current = next
-    matchRef.current = next.kind === 'season' ? next.season.activeMatch : next.match
+    matchRef.current = next.kind === 'season' ? careerPresentationMatch(next.season) : next.match
     setSession(next)
   }, [])
   const replaceMatch = useCallback((next: MatchState) => {
     const current = sessionRef.current
+    if (current.kind === 'season' && !current.season.activeMatch) return
     replaceSession(current.kind === 'season' ? { kind: 'season', season: { ...current.season, activeMatch: next } } : { kind: 'exhibition', match: next })
   }, [replaceSession])
   const apply = useCallback((action: (current: MatchState) => MatchState, animate = false, progression = false) => {
     if (seasonWorker.current || persistenceBusy.current) return
     try {
+      if (sessionRef.current.kind === 'season' && !sessionRef.current.season.activeMatch) return
       const before = matchRef.current
       const next = action(before)
       const newEvents = next.events.slice(before.events.length)
@@ -396,8 +400,8 @@ export default function App() {
     seasonJob.current += 1; seasonWorker.current?.terminate(); seasonWorker.current = null; setAdvancing(false)
     setPlaying(false); resetPlayback(); setPresentationBase(null); setCheckpointIssue(null); replaceSession(next)
     if (next.kind === 'exhibition') setPage(current => current === 'training' || current === 'staff' || current === 'club' || current === 'transfers' || current === 'scouting' || current === 'inbox' ? 'home' : current)
-    const active = next.kind === 'season' ? next.season.activeMatch : next.match
-    setSeedInput(String(active.seed)); setBoxSide(next.kind === 'season' ? seasonManagedSide(next.season) : 'home')
+    const active = next.kind === 'season' ? careerPresentationMatch(next.season) : next.match
+    setSeedInput(String(active.seed)); setBoxSide(next.kind === 'season' ? active.home.id === next.season.managedClubId ? 'home' : 'away' : 'home')
     setSelectedPlayer(null); setRosterFilter('all'); setRosterQuery(''); setSquadView('selection'); setPerformancePlayer(null); setRelationshipPlayer(null); setClubView('operations')
     setScoutingPlayer(null); setTransferPlayer(null)
     setHasSession(true); setEntryView(null); setEntryError(null)
@@ -573,7 +577,7 @@ export default function App() {
     const current = sessionRef.current
     if (seasonWorker.current || persistenceBusy.current || current.kind !== 'season') return
     if (action !== 'round' ? current.season.status !== 'complete' : current.season.status === 'complete') return
-    if (current.season.activeMatch.status !== 'finished') { navigate('match'); return }
+    if (current.season.activeMatch && current.season.activeMatch.status !== 'finished') { navigate('match'); return }
     const preview = action === 'round' && !choice && current.season.round === seasonRounds(current.season) && careerMovesGovern(current.season.career, current.season.seasonNumber)
     replacementRequest.current += 1
     setPlaying(false); settlePlayback()
@@ -593,7 +597,7 @@ export default function App() {
         }
         install({ kind: 'season', season: data.state })
         const move = data.state.status === 'complete' ? data.state.career?.moves.find(item => item.seasonNumber === data.state.seasonNumber) : undefined
-        setNotice({ message: action === 'market' ? 'Recruitment advanced. Review player replies and your squad.' : action === 'rollover' ? `Season ${data.state.seasonNumber} ready. Your previous results are in Competitions.` : move ? `Season complete. You now manage ${data.state.clubs.find(club => club.id === move.toClubId)!.name}, including its offseason.` : data.state.status === 'complete' ? 'Season complete. Final standings and all results are available.' : `Matchday ${data.state.round - 1} recorded. Your next fixture is ready.` })
+        setNotice({ message: action === 'market' ? 'Recruitment advanced. Review player replies and your squad.' : action === 'rollover' ? `Season ${data.state.seasonNumber} ready. Your previous results are in Competitions.` : move ? `Season complete. You now manage ${data.state.clubs.find(club => club.id === move.toClubId)!.name}, including its offseason.` : data.state.status === 'complete' ? 'Season complete. Final standings and all results are available.' : data.state.activeMatch ? `Week ${data.state.round - 1} recorded. Your next fixture is ready.` : `Week ${data.state.round - 1} recorded. Your club has a rest week.` })
         navigate(action === 'market' || data.state.status === 'complete' && data.state.market.enabledSince ? 'transfers' : data.state.status === 'complete' ? 'season' : 'home')
         await persistSeason(data.state, action === 'market' ? 'manual' : action === 'rollover' ? 'rollover' : 'matchday')
       }
@@ -626,12 +630,12 @@ export default function App() {
     </aside>
 
     <div className="main-shell">
-      <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{season && isMarketActive(season) ? 'Recruitment' : complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span><button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save season' : 'Save match'}</button></div></header>
+      <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{restWeek ? season?.status === 'complete' ? 'Season complete' : 'Rest week' : season && isMarketActive(season) ? 'Recruitment' : complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span><button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save season' : 'Save match'}</button></div></header>
       {advancing && <div className="season-processing" role="status"><span>{seasonOperation === 'market' ? 'Processing player replies...' : seasonOperation === 'rollover' ? 'Preparing next season...' : seasonOperation === 'preview' ? 'The board is reviewing your season...' : 'Processing matchday results...'}</span><button className="text-button" onClick={cancelAdvance}>Cancel</button></div>}
       {checkpointIssue && <div className="career-save-issue" role="alert"><span>{checkpointIssue}</span><button className="text-button" onClick={openSaveHistory} disabled={saving || advancing}>Save history</button><button className="text-button" onClick={exportSave} disabled={saving || advancing}>Export current</button></div>}
       <main id="main" tabIndex={-1} inert={advancing || leavingSeason || saving}>
         {season && page !== 'match' && <ClubBudgetBar season={season} disabled={saving || advancing} onOpenClub={() => { setClubView('operations'); navigate('club') }} onOpenStaff={() => navigate('staff')} onOpenTransfers={() => navigate('transfers')} />}
-        <div className={page === 'match' ? 'sr-only' : 'page-heading'}><h1>{pageNames[page]}</h1><div className="heading-meta"><span className="pill">{season || page === 'season' ? (season ? worldOf(season).name : 'Development league').toUpperCase() : 'EXHIBITION'}</span><span className="muted">{page === 'season' ? season ? season.date : 'Club selection' : `${match.home.shortName} vs ${match.away.shortName}`}</span></div></div>
+        <div className={page === 'match' ? 'sr-only' : 'page-heading'}><h1>{pageNames[page]}</h1><div className="heading-meta"><span className="pill">{season || page === 'season' ? (season ? worldOf(season).name : 'Development league').toUpperCase() : 'EXHIBITION'}</span><span className="muted">{page === 'season' ? season ? season.date : 'Club selection' : restWeek ? 'Rest week' : `${match.home.shortName} vs ${match.away.shortName}`}</span></div></div>
 
         {season && page !== 'season' && page !== 'match' && <SeasonProgress season={season} showRollover={page !== 'transfers'} showMatchAction={page === 'academy' || page === 'squad' || page === 'medical' || page === 'training' || page === 'staff' || page === 'club' || page === 'transfers' || page === 'scouting'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={reviewNextSeason} />}
         <Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
@@ -658,9 +662,10 @@ export default function App() {
           else { if (playerId) setSelectedPlayer(playerId); setRosterFilter('all'); setRosterQuery(''); navigate('squad', playerId ? '.player-profile' : '#main') }
         }} />}
 
-        {page === 'home' && <ManagerDesk onOpenInbox={() => navigate('inbox', '#press-conference')} onOpenBoard={() => { setClubView('board'); navigate('club') }} onOpenRelationships={id => { setRelationshipPlayer(id ?? null); setSquadView('relationships'); navigate('squad') }} assistant={assistantCoach} onOpenAssistantAdvice={() => navigate('match', '#assistant-advice-toggle')} onOpenMedical={() => navigate('medical')} season={season} match={match} managedSide={managedSide} apply={apply} fixtureLabel={season ? `Development League / Matchday ${season.round}` : undefined} onOpenMatch={() => navigate('match')} onOpenSquad={() => navigate('squad')} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} onOpenCoaching={() => navigate('match', needsReplacement ? '#match-rotation' : complete ? '.coaching-workbench' : '#tempo')} onOpenClub={() => { setClubView('operations'); navigate('club') }} onOpenPayroll={openPayroll} onOpenTransfers={() => navigate('transfers')} onOpenScouting={() => openScouting()} />}
+        {restWeek && season && (page === 'home' || page === 'match') && <RestWeek season={season} busy={advancing || saving} onContinue={advance} onTraining={() => navigate('training')} />}
+        {page === 'home' && !restWeek && <ManagerDesk onOpenInbox={() => navigate('inbox', '#press-conference')} onOpenBoard={() => { setClubView('board'); navigate('club') }} onOpenRelationships={id => { setRelationshipPlayer(id ?? null); setSquadView('relationships'); navigate('squad') }} assistant={assistantCoach} onOpenAssistantAdvice={() => navigate('match', '#assistant-advice-toggle')} onOpenMedical={() => navigate('medical')} season={season} match={match} managedSide={managedSide} apply={apply} fixtureLabel={season ? `${season.world?.domesticLeagues?.find(league => league.clubIds.includes(season.managedClubId))?.name ?? worldOf(season).name} / Week ${season.round}` : undefined} onOpenMatch={() => navigate('match')} onOpenSquad={() => navigate('squad')} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} onOpenCoaching={() => navigate('match', needsReplacement ? '#match-rotation' : complete ? '.coaching-workbench' : '#tempo')} onOpenClub={() => { setClubView('operations'); navigate('club') }} onOpenPayroll={openPayroll} onOpenTransfers={() => navigate('transfers')} onOpenScouting={() => openScouting()} />}
 
-        {page === 'match' && <>
+        {page === 'match' && !restWeek && <>
           <section className="scoreboard panel" aria-label="Match scoreboard"><div className="score-team home-team"><ClubMark name={match.home.shortName} color={match.home.color} large /><div><span className="eyebrow">{managedSide === 'home' ? 'YOUR TEAM / HOME' : 'OPPOSITION / HOME'}</span><h2>{match.home.name}</h2></div></div><div className="score-middle"><div className={`match-status ${playing ? 'is-playing' : ''}`}><span className="status-dot" />{complete && !playback.busy ? 'FULL TIME' : complete && playback.busy ? playing ? 'FINAL PLAY' : 'REPLAY PAUSED' : needsReplacement ? 'REPLACEMENT NEEDED' : playing ? 'IN PLAY' : match.stepCount === 0 ? 'READY FOR TIPOFF' : 'PAUSED'}</div><div className="score-digits" aria-live="off"><span>{displayScore.home}</span><span className="score-divider">:</span><span>{displayScore.away}</span></div><div className="match-clock">{periodLabel(match.period)}<span />{clock(match.clockSeconds)}</div></div><div className="score-team away-team"><div><span className="eyebrow">{managedSide === 'away' ? 'YOUR TEAM / AWAY' : 'OPPOSITION / AWAY'}</span><h2>{match.away.name}</h2></div><ClubMark name={match.away.shortName} color={match.away.color} large /></div></section>
           <section className="court-panel panel" aria-label="Courtside match view"><div className="court-top"><div className="court-title"><span className="live-dot" /><h2>Courtside</h2><span className="court-view-label">{textOnly ? 'MATCH COMMENTARY' : 'LIVE COURT'}</span></div><div className="viewer-options"><div className="segmented" aria-label="Match presentation"><button aria-pressed={!textOnly} className={!textOnly ? 'selected' : ''} onClick={() => setTextOnly(false)}>Court</button><button aria-pressed={textOnly} className={textOnly ? 'selected' : ''} onClick={() => setTextOnly(true)}>Text only</button></div><label className="motion-option"><input type="checkbox" checked={reducedMotion} onChange={event => setMotionOverride(event.target.checked)} />Reduced motion</label></div></div>{textOnly ? <div className="text-match-view" role="log" aria-label="Text match presentation"><span className="eyebrow">FROM THE FLOOR</span>{visibleEvents.slice(-5).map(event => <p key={event.id}><time>{periodLabel(event.period)} / {clock(event.clockSeconds)}</time>{event.text}</p>)}</div> : <Court match={match} event={presentedEvent} progress={presentedProgress} />}<div className="court-caption"><span className="event-chip">{(captionEvent?.scene?.kind ?? captionEvent?.type)?.replace('-', ' ').toUpperCase() ?? 'COURTSIDE'}</span><p>{playback.busy && presentedProgress < 1 && (presentedEvent?.shot || presentedEvent?.scene?.kind === 'free-throw') ? presentedEvent.scene?.kind === 'free-throw' ? 'Free throw in flight...' : 'Shot in flight...' : captionEvent?.text ?? 'Ready for tipoff.'}</p></div>
           <RequiredDecision match={match} managedSide={managedSide} apply={apply} />
@@ -676,7 +681,7 @@ export default function App() {
           <div className="squad-summary panel"><div><ClubMark name={managedTeam.shortName} color={managedTeam.color} /><h2>{managedTeam.name}</h2><span className="pill">FIRST TEAM</span></div><div><Stat label="AVAILABLE" value={`${eligiblePlayers.length}/${squadTeam.players.length}`} /><Stat label={offseason ? "LAST LINEUP" : "ON COURT"} value={match.lineups[managedSide].length} /><Stat label="AVG. STAMINA" value={`${averageCondition}%`} /></div></div>
           {season && <div className="squad-view-controls"><div className="segmented" role="group" aria-label="Squad view"><button aria-pressed={squadView === 'selection'} className={squadView === 'selection' ? 'selected' : ''} onClick={() => setSquadView('selection')}>Selection</button><button aria-pressed={squadView === 'performance'} className={squadView === 'performance' ? 'selected' : ''} onClick={() => { setSquadView('performance'); setPerformancePlayer(null) }}>Season statistics</button><button aria-pressed={squadView === 'relationships'} className={squadView === 'relationships' ? 'selected' : ''} onClick={() => setSquadView('relationships')}>Dynamics</button><button aria-pressed={squadView === 'payroll'} className={squadView === 'payroll' ? 'selected' : ''} onClick={() => setSquadView('payroll')}>Wages</button></div><span>{squadView === 'relationships' ? 'Roles, morale and promises' : squadView === 'selection' ? 'Current fixture and availability' : squadView === 'payroll' ? 'Player wage commitments' : 'Committed match results'}</span></div>}
           {season && squadView === 'relationships' ? <RelationshipsPanel key={`${season.seed}:${season.managedClubId}`} season={season} busy={advancing || saving} selectedPlayerId={relationshipPlayer} onSelectPlayer={setRelationshipPlayer} onEnable={() => updateCareer(enableRelationships, 'Squad dynamics enabled. Agreed roles and future match focus now have a recorded history.', true)} onRole={(playerId, role) => updateCareer(state => agreeSquadRole(state, playerId, role), 'Playing-time role agreed. Review the expectation in Dynamics.', true)} onTalk={(playerId, choice) => updateCareer(state => talkToPlayer(state, playerId, choice), 'Conversation recorded. Review the response and any commitment in Dynamics.', true)} /> : season && squadView === 'payroll' ? <PayrollWorkspace key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}`} season={season} busy={advancing || saving} onEnable={() => updateCareer(enablePayroll, 'Player payroll enabled. Wage schedules start from this matchday.')} onDelegationChange={delegated => updateCareer(state => setPayrollDelegation(state, delegated), delegated ? 'Automatic payroll enabled. Affordable wage settlements have been reviewed.' : 'Payroll is now managed manually. Existing settlements remain in place.')} onPrepay={playerId => updateCareer(state => prepayWages(state, playerId), 'Remaining season wages settled. The payment and discount are recorded in the ledger.')} onOpenClub={() => { setClubView('operations'); navigate('club') }} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} /> : season && squadView === 'performance' ? <SquadPerformance key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}`} season={season} selectedPlayerId={performancePlayer} onSelectPlayer={setPerformancePlayer} busy={advancing || saving} /> : <>
-          {fullRoster && season && <MatchdaySquad season={season} busy={advancing || saving} onAutomatic={() => updateCareer(state => setMatchdaySelection(state, null), 'Assistant selected the matchday squad.', true)} />}
+          {fullRoster && season && !restWeek && <MatchdaySquad season={season} busy={advancing || saving} onAutomatic={() => updateCareer(state => setMatchdaySelection(state, null), 'Assistant selected the matchday squad.', true)} />}
           <div className="squad-layout"><section className="panel roster-panel">
             <div className="section-heading"><h2>Players</h2><button className="text-button" onClick={() => navigate('match', '#match-rotation')}>Manage rotation <Icon name="swap" size={15} /></button></div>
             <div className="roster-toolbar"><div className="roster-filters" aria-label="Filter squad">{[{id:'all',label:'All'},{id:'court',label:offseason ? 'Last lineup' : 'On court'},{id:'bench',label:offseason ? 'Last bench' : 'Bench'},{id:'unavailable',label:'Unavailable'}].map(filter => <button key={filter.id} aria-pressed={rosterFilter === filter.id} onClick={() => setRosterFilter(filter.id)}>{filter.label}</button>)}</div><label className="roster-search"><Icon name="search" size={15}/><input type="search" placeholder="Find player" aria-label="Search squad" value={rosterQuery} onChange={event => setRosterQuery(event.target.value)}/></label></div>
@@ -707,14 +712,14 @@ function PlayerProfile({ player, match, managedSide, season, onPerformance, onOp
 
 
 function SeasonProgress({ season, showRollover, showMatchAction, canContinue, onCompetition, onOpenMatch, onAdvance, onRollover }: { season: SeasonState; showRollover: boolean; showMatchAction: boolean; canContinue: boolean; onCompetition: () => void; onOpenMatch: () => void; onAdvance: () => void; onRollover: () => void }) {
-  const fixture = getActiveFixture(season)
+  const fixture = season.fixtures.find(item => item.id === season.activeFixtureId)
   const standing = getStandings(season).find(row => row.clubId === season.managedClubId)!
   const date = new Date(`${season.date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
   return <section className="season-progress panel" aria-label="Season progress">
-    <div><time dateTime={season.date}>{date}</time><span>{season.status === 'complete' ? isMarketActive(season) ? 'Offseason recruitment' : `Season ${season.seasonNumber} complete` : `Season ${season.seasonNumber} / Matchday ${fixture.round} / ${seasonRounds(season)}`}</span></div>
-    <div className="season-record"><strong>{standing.played ? `${standing.position} / ${season.clubs.length}` : 'Unplayed'}</strong><span>{standing.wins} W / {standing.losses} L</span></div>
+    <div><time dateTime={season.date}>{date}</time><span>{season.status === 'complete' ? isMarketActive(season) ? 'Offseason recruitment' : `Season ${season.seasonNumber} complete` : `Season ${season.seasonNumber} / Matchday ${fixture?.round ?? season.round} / ${seasonRounds(season)}`}</span></div>
+    <div className="season-record"><strong>{standing.played ? `${standing.position} / ${season.world?.domesticLeagues?.find(league => league.clubIds.includes(season.managedClubId))?.clubIds.length ?? season.clubs.length}` : 'Unplayed'}</strong><span>{standing.wins} W / {standing.losses} L</span></div>
     <button className="text-button" onClick={onCompetition}>League table<Icon name="chevron" size={14} /></button>
     {season.status === 'complete' && showRollover && <button className="button primary season-continue" onClick={onRollover}>{season.employment.enabledSince ? 'Review offseason' : 'Next season'}<Icon name="next" size={15} /></button>}
-    {season.status !== 'complete' && (canContinue || showMatchAction) && <button className="button primary season-continue" onClick={canContinue ? onAdvance : onOpenMatch}>{canContinue ? season.round === seasonRounds(season) ? 'Finalize season' : 'Continue' : 'Go to match'}<Icon name="next" size={15} /></button>}
+    {season.status !== 'complete' && (!season.activeMatch || canContinue || showMatchAction) && <button className="button primary season-continue" onClick={!season.activeMatch || canContinue ? onAdvance : onOpenMatch}>{!season.activeMatch || canContinue ? season.round === seasonRounds(season) ? 'Finalize season' : 'Continue' : 'Go to match'}<Icon name="next" size={15} /></button>}
   </section>
 }

@@ -1,3 +1,4 @@
+import { requireCalendarWeek } from './calendar-boundary';
 import type { ClubPayrollSummary, PlayerPayroll, PlayerWageAgreement, SeasonPayroll, WagePrepaymentQuote } from '../domain/payroll';
 import type { SeasonState } from '../domain/season';
 import type { EmploymentContract } from '../domain/employment';
@@ -142,7 +143,8 @@ export function processPayrollRound(state: SeasonState): SeasonState {
   if (!state.payroll.enabledSince) return state;
   if (!state.finance.enabledSince) throw new Error('Player payroll requires enabled club finances.');
   const fixtures = state.fixtures.filter(fixture => fixture.round === state.round);
-  if (fixtures.length !== state.clubs.length / 2 || fixtures.some(fixture => fixture.result === null)) throw new Error('Commit every matchday result before recording payroll.');
+  if (fixtures.some(fixture => fixture.result === null)) throw new Error('Commit every matchday result before recording payroll.');
+  requireCalendarWeek(state, true);
   let next = state;
   const readPayroll = payrollLedgerReader(state.finance);
   for (const club of state.clubs) {

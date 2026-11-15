@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/season'
 import type { Side, Team } from '../domain/types'
-import { getActiveFixture, getStandings, seasonLabel } from '../world/season'
+import { getStandings, seasonLabel } from '../world/season'
 import { getFixtureTeams } from '../world/rosters'
 import { managedClubFor } from '../world/career'
 import { Icon } from './Icon'
@@ -43,7 +43,10 @@ export function SeasonWorkspace(props: SeasonWorkspaceProps) {
 
 function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, busy = false }: SeasonWorkspaceProps & { season: SeasonState; onNewGame: () => void }) {
   const [selectedSeason, setSelectedSeason] = useState(season.seasonNumber)
-  const leagueName = worldOf(season).source === 'fictional-development' ? 'the development league' : worldOf(season).name
+  const leagues = worldOf(season).domesticLeagues
+  const [leagueId, setLeagueId] = useState(() => leagues?.find(league => league.clubIds.includes(season.managedClubId))?.id ?? '')
+  const league = leagues?.find(league => league.id === leagueId)
+  const leagueName = league?.name ?? (worldOf(season).source === 'fictional-development' ? 'the development league' : worldOf(season).name)
   const [round, setRound] = useState(String(season.round))
   const [ownFixtures, setOwnFixtures] = useState(false)
   const [reviewId, setReviewId] = useState<string | null>(null)
@@ -51,17 +54,17 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const seasonSelector = useRef<HTMLSelectElement | null>(null)
   const archive = season.history.find(entry => entry.seasonNumber === selectedSeason)
   const archived = !!archive
-  const selectedFixtures = archive?.fixtures ?? season.fixtures
+  const selectedFixtures = (archive?.fixtures ?? season.fixtures).filter(fixture => !league || league.clubIds.includes(fixture.homeClubId))
   const selectedNumber = archive?.seasonNumber ?? season.seasonNumber
   const selectedDate = archived ? selectedFixtures.at(-1)!.date : season.date
-  const standings = getStandings({ clubs: season.clubs, fixtures: selectedFixtures })
+  const standings = getStandings({ clubs: season.clubs.filter(club => !league || league.clubIds.includes(club.id)), fixtures: selectedFixtures })
   const club = (id: string) => season.clubs.find(team => team.id === id)!
-  const active = getActiveFixture(season)
+  const active = season.fixtures.find(fixture => fixture.id === season.activeFixtureId)
   // The club the manager ran in the season shown; after a move, the new club appears from the next season.
   const managedId = managedClubFor(season, selectedNumber, false)
   const managed = club(managedId)
   const complete = archived || season.status === 'complete'
-  const matchFinished = season.activeMatch.status === 'finished'
+  const matchFinished = !season.activeMatch || season.activeMatch.status === 'finished'
   const champion = complete ? club(standings[0]!.clubId) : null
   const fixtures = selectedFixtures.filter(fixture => (round === 'all' || fixture.round === Number(round)) && (!ownFixtures || fixture.homeClubId === managedId || fixture.awayClubId === managedId))
   const review = selectedFixtures.find(fixture => fixture.id === reviewId && fixture.result?.stats)
@@ -96,34 +99,34 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
         <span>{archived ? 'Archived season' : complete ? 'Season complete' : `Matchday ${season.round} of ${totalRounds}`}<time dateTime={selectedDate}>{formatDate(selectedDate)}</time></span>
       </div>
       <div className="season-matchday-action">
-        <p>{complete ? <><strong>{champion!.name}</strong> win {leagueName}.</> : matchFinished ? 'Match finished. Continue to complete this matchday and update the table.' : <>{club(active.homeClubId).name} <span>vs</span> {club(active.awayClubId).name}</>}</p>
+        <p>{complete ? <><strong>{champion!.name}</strong> finish first in {leagueName}.</> : !active ? 'Rest week. Continue to play the other games and complete this week.' : matchFinished ? 'Match finished. Continue to complete this matchday and update the table.' : <>{club(active.homeClubId).name} <span>vs</span> {club(active.awayClubId).name}</>}</p>
         <div className="season-result-actions">{archived ? <button className="button" onClick={() => { selectSeason(season.seasonNumber); seasonSelector.current?.focus() }} disabled={busy}>Current season<Icon name="chevron" size={16} /></button> : complete ? <>
           <button className="button primary" onClick={onRollover} disabled={busy}>{busy ? 'Preparing next season…' : season.employment.enabledSince ? 'Review offseason' : 'Next season'}<Icon name="next" size={16} /></button>
-          <button className="button" onClick={onOpenMatch} disabled={busy}>View last match<Icon name="court" size={16} /></button>
+          <button className="button" onClick={onOpenMatch} disabled={busy || !active}>View last match<Icon name="court" size={16} /></button>
           <button className="text-button" onClick={onNewGame} disabled={busy}>New career</button>
         </> : <button className="button primary" onClick={matchFinished ? onAdvance : onOpenMatch} disabled={busy}>{busy ? 'Completing matchday…' : matchFinished ? season.round === totalRounds ? 'Finalize season' : 'Continue' : 'Go to match'}<Icon name={matchFinished ? 'next' : 'court'} size={16} /></button>}</div>
       </div>
     </section>
 
     <section className="season-standings panel" aria-labelledby="season-table-title">
-      <header className="season-panel-heading"><div><h2 id="season-table-title">League table</h2><p>{worldOf(season).source === 'fictional-development' ? 'Fictional development league' : worldOf(season).name} · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
+      <header className="season-panel-heading"><div><h2 id="season-table-title">League table</h2>{leagues && <label>Competition <select aria-label="Competition" value={leagueId} onChange={event => { setLeagueId(event.target.value); setReviewId(null) }} disabled={busy}>{leagues.map(item => <option key={item.id} value={item.id}>{item.country} · {item.name}</option>)}</select></label>}<p>{leagueName} · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
       <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th><th scope="col" title="Points for">PF</th><th scope="col" title="Points against">PA</th><th scope="col" title="Point difference">Diff</th></tr></thead><tbody>{standings.map(row => <tr key={row.clubId} data-club-id={row.clubId} className={row.clubId === season.managedClubId ? 'season-managed-row' : ''}>
         <td>{row.position}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} /></th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td><td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
       </tr>)}</tbody></table></div>
       <p className="season-table-note">Ranked by wins, overall point difference, points scored, then club ID.</p>
     </section>
 
-    <SeasonLeaders key={selectedNumber} season={season} seasonNumber={selectedNumber} busy={busy} onReviewFixture={openFixtureReview} />
+    <SeasonLeaders key={`${selectedNumber}:${leagueId}`} season={season} seasonNumber={selectedNumber} clubIds={league?.clubIds} busy={busy} onReviewFixture={openFixtureReview} />
 
     <section className="season-fixtures panel" aria-labelledby="season-fixtures-title">
       <header className="season-panel-heading season-fixtures-heading"><h2 id="season-fixtures-title">Fixtures &amp; results</h2><div className="season-fixture-filters"><label htmlFor="season-matchday">Matchday</label><select id="season-matchday" value={round} onChange={event => setRound(event.target.value)}><option value="all">All matchdays</option>{Array.from({ length: totalRounds }, (_, index) => <option key={index + 1} value={index + 1}>Matchday {index + 1}</option>)}</select><div className="segmented" aria-label="Fixture clubs"><button aria-pressed={!ownFixtures} className={!ownFixtures ? 'selected' : ''} onClick={() => setOwnFixtures(false)}>All clubs</button><button aria-pressed={ownFixtures} className={ownFixtures ? 'selected' : ''} onClick={() => setOwnFixtures(true)}>Your club</button></div></div></header>
       <div className="season-table-scroll"><table className="season-fixtures-table"><thead><tr><th scope="col">Date</th><th scope="col">Home</th><th scope="col">Score</th><th scope="col">Away</th><th scope="col">Match</th></tr></thead><tbody>{fixtures.map(fixture => {
         const mvp = fixture.result ? getFixtureMvp(season, fixture, selectedNumber) : null
         const isActive = !archived && fixture.id === season.activeFixtureId
-        const score = fixture.result?.officialScore ?? (isActive && season.activeMatch.status !== 'ready' ? season.activeMatch.result?.officialScore ?? season.activeMatch.score : null)
+        const score = fixture.result?.officialScore ?? (isActive && season.activeMatch?.status !== 'ready' ? season.activeMatch?.result?.officialScore ?? season.activeMatch?.score : null)
         return <tr key={fixture.id} data-fixture-id={fixture.id} className={fixture.homeClubId === managedId || fixture.awayClubId === managedId ? 'season-managed-row' : ''}>
           <td><time dateTime={fixture.date}>{formatDate(fixture.date)}</time><small>Matchday {fixture.round}</small></td><td><ClubName club={club(fixture.homeClubId)} /></td><td className="season-fixture-score">{score ? `${score.home} : ${score.away}` : '—'}</td><td><ClubName club={club(fixture.awayClubId)} /></td>
-          <td>{fixture.result ? fixture.result.stats ? <button className="text-button" aria-label={`Review ${club(fixture.homeClubId).shortName} vs ${club(fixture.awayClubId).shortName}`} onClick={event => openFixtureReview(fixture.id, event.currentTarget)} aria-expanded={reviewId === fixture.id} aria-controls="season-result-review" disabled={busy}>Review<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">{fixture.result.kind === 'default' ? 'Awarded by default' : fixture.result.periods > 4 ? `Full time · ${fixture.result.periods - 4} OT` : 'Full time'} · {'appearances' in fixture.result ? 'Season totals retained' : 'Box score unavailable'}</span> : isActive ? <button className="text-button" onClick={onOpenMatch} disabled={busy}>{matchFinished ? 'Played · pending' : season.activeMatch.status === 'ready' ? 'Pre-match' : 'In progress'}<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">Scheduled</span>}{mvp && <small className="season-fixture-mvp" data-fixture-mvp={mvp.playerId}>MVP {mvp.player.name} &middot; {mvp.pir} PIR</small>}</td>
+          <td>{fixture.result ? fixture.result.stats ? <button className="text-button" aria-label={`Review ${club(fixture.homeClubId).shortName} vs ${club(fixture.awayClubId).shortName}`} onClick={event => openFixtureReview(fixture.id, event.currentTarget)} aria-expanded={reviewId === fixture.id} aria-controls="season-result-review" disabled={busy}>Review<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">{fixture.result.kind === 'default' ? 'Awarded by default' : fixture.result.periods > 4 ? `Full time · ${fixture.result.periods - 4} OT` : 'Full time'} · {'appearances' in fixture.result ? 'Season totals retained' : 'Box score unavailable'}</span> : isActive ? <button className="text-button" onClick={onOpenMatch} disabled={busy}>{matchFinished ? 'Played · pending' : season.activeMatch?.status === 'ready' ? 'Pre-match' : 'In progress'}<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">Scheduled</span>}{mvp && <small className="season-fixture-mvp" data-fixture-mvp={mvp.playerId}>MVP {mvp.player.name} &middot; {mvp.pir} PIR</small>}</td>
         </tr>
       })}</tbody></table></div>
       {!fixtures.length && <p className="season-table-note">No fixtures match this filter.</p>}

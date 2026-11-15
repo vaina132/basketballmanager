@@ -12,7 +12,7 @@ import { contractForSeason, getAvailablePlayers } from '../src/world/employment-
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 const clubId = 'atlantic-pilots';
-const finish = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const finish = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status !== 'complete') state = advanceSeason(finish(state)); return state; }
 const envelope = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 
@@ -37,7 +37,7 @@ describe('employment persistence across registrations', () => {
     for (const state of [initial, early, offseason, recruited, second, secondWeek]) {
       const restored = parseSeason(serializeSeason(state));
       expect(restored).toEqual(state);
-      expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
+      expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(state.activeMatch!));
     }
   });
 
@@ -93,7 +93,7 @@ describe('employment persistence across registrations', () => {
   it('supports opt-in activation in a completed legacy career without changing its final game', () => {
     const legacy = complete(createSeason(12, clubId, 'off'));
     const enabled = enableEmployment(legacy);
-    expect(enabled.activeMatch).toEqual(legacy.activeMatch);
+    expect(enabled.activeMatch!).toEqual(legacy.activeMatch!);
     expect(enabled.employment.market).toEqual({ seasonNumber: 2 });
     expect(parseSeason(serializeSeason(enabled))).toEqual(enabled);
   });

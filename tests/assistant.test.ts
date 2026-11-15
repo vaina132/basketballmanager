@@ -32,7 +32,7 @@ describe('assistant appointments and shared five-role staff allocation', () => {
     expect(legacy.assistant).toEqual(createAssistant());
     const enabled = enableAssistant(legacy);
     expect(enabled.assistant.enabledSince).toEqual({ seasonNumber: 1, round: 1, ledgerIndex: legacy.finance.ledger.length });
-    expect(enabled.activeMatch).toBe(legacy.activeMatch);
+    expect(enabled.activeMatch!).toBe(legacy.activeMatch!);
     expect(enabled.plans).toBe(legacy.plans);
     expect(enabled.training).toBe(legacy.training);
     expect(enableAssistant(enabled)).toBe(enabled);
@@ -60,13 +60,13 @@ describe('assistant appointments and shared five-role staff allocation', () => {
     expect(contract.hiredLedgerIndex).toBe(initial.finance.ledger.length);
     expect(hired.finance.ledger.at(-1)).toMatchObject({ kind: 'assistant', amount: -2_000_000, sourceId: `assistant-${contract.id}`, assistant: { contractId: contract.id, assistantId: 'assistant-06' } });
     expect(getFinanceBalance(initial.finance, club).cash - getFinanceBalance(hired.finance, club).cash).toBe(2_000_000);
-    expect(hired.activeMatch).toBe(initial.activeMatch);
+    expect(hired.activeMatch!).toBe(initial.activeMatch!);
     expect(hired.plans).toBe(initial.plans);
     expect(() => hireAssistant(hired, 'assistant-05')).toThrow(/occupied/i);
     expect(() => recordAssistantFee(hired, contract)).toThrow(/exact newly appointed/i);
     const released = releaseAssistant(hired, contract.id);
     expect(released.finance).toBe(hired.finance);
-    expect(released.activeMatch).toBe(hired.activeMatch);
+    expect(released.activeMatch!).toBe(hired.activeMatch!);
     expect(staffCommitted(released, club)).toBe(staffCommitted(hired, club));
     expect(released.assistant.contracts.at(-1)).toMatchObject({ releasedRound: 1, releasedLedgerIndex: hired.finance.ledger.length });
     expect(availableAssistants(released).some(coach => coach.id === contract.assistantId)).toBe(true);
@@ -126,13 +126,13 @@ describe('assistant appointments and shared five-role staff allocation', () => {
   it('permits advice for the final game but closes new appointments after its final whistle', () => {
     const finalReady = { ...initial, round: 10, date: dateForRound(10) };
     expect(quoteAssistantHire(finalReady, 'assistant-06').canHire).toBe(true);
-    const finalFinished = { ...finalReady, activeMatch: { ...initial.activeMatch, status: 'finished' as const } };
+    const finalFinished = { ...finalReady, activeMatch: { ...initial.activeMatch!, status: 'finished' as const } };
     expect(quoteAssistantHire(finalFinished, 'assistant-06').reason).toMatch(/next season/i);
     expect(() => enableAssistant({ ...finalFinished, assistant: createAssistant() })).toThrow(/final match/i);
     expect(recruitAiAssistants(finalFinished)).toBe(finalFinished);
-    expect(quoteAssistantHire({ ...initial, activeMatch: finalFinished.activeMatch }, 'assistant-06').canHire).toBe(true);
+    expect(quoteAssistantHire({ ...initial, activeMatch: finalFinished.activeMatch! }, 'assistant-06').canHire).toBe(true);
     const hired = hireAssistant(finalReady, 'assistant-06'), contract = getClubAssistant(hired)!;
-    expect(getClubAssistant(setAssistantRenewal({ ...hired, activeMatch: finalFinished.activeMatch }, contract.id, false))?.renew).toBe(false);
+    expect(getClubAssistant(setAssistantRenewal({ ...hired, activeMatch: finalFinished.activeMatch! }, contract.id, false))?.renew).toBe(false);
     expect(() => setAssistantRenewal(hired, contract.id, 'yes' as never)).toThrow(/renew/i);
     expect(() => enableAssistant({ ...legacy, status: 'complete' })).toThrow(/next season/i);
   });
@@ -154,23 +154,23 @@ describe('assistant appointments and shared five-role staff allocation', () => {
 
   it('prepares new-career AI tactics through the same advice command without consuming RNG', () => {
     const side = managedSide(initial) === 'home' ? 'away' : 'home';
-    const contract = getClubAssistant(initial, initial.activeMatch[side].id)!;
+    const contract = getClubAssistant(initial, initial.activeMatch![side].id)!;
     const coach = DEVELOPMENT_ASSISTANTS.find(coach => coach.id === contract.assistantId)!;
-    expect(initial.activeMatch).toEqual(applyAssistantTactics(legacy.activeMatch, side, coach));
-    expect(initial.activeMatch.rngState).toEqual(legacy.activeMatch.rngState);
-    expect(initial.activeMatch.tactics[managedSide(initial)]).toEqual(legacy.activeMatch.tactics[managedSide(initial)]);
-    expect(initial.activeMatch.events.some(event => event.type === 'tactics' && event.text.includes(coach.name))).toBe(true);
+    expect(initial.activeMatch!).toEqual(applyAssistantTactics(legacy.activeMatch!, side, coach));
+    expect(initial.activeMatch!.rngState).toEqual(legacy.activeMatch!.rngState);
+    expect(initial.activeMatch!.tactics[managedSide(initial)]).toEqual(legacy.activeMatch!.tactics[managedSide(initial)]);
+    expect(initial.activeMatch!.events.some(event => event.type === 'tactics' && event.text.includes(coach.name))).toBe(true);
   });
 
   it('applies newly activated AI advice only when preparing the next fixture', () => {
     const enabled = enableAssistant(legacy);
-    const finished = simulateToEnd(setAutoSubstitutions(enabled.activeMatch, managedSide(enabled), true));
+    const finished = simulateToEnd(setAutoSubstitutions(enabled.activeMatch!, managedSide(enabled), true));
     const next = advanceSeason({ ...enabled, activeMatch: finished });
     const side = managedSide(next) === 'home' ? 'away' : 'home';
-    const contract = getClubAssistant(next, next.activeMatch[side].id)!;
+    const contract = getClubAssistant(next, next.activeMatch![side].id)!;
     const coach = DEVELOPMENT_ASSISTANTS.find(coach => coach.id === contract.assistantId)!;
-    expect(next.activeMatch.events.some(event => event.type === 'tactics' && event.text.includes(coach.name))).toBe(true);
-    expect(next.fixtures.find(fixture => fixture.id === legacy.activeFixtureId)!.result!.score).toEqual(finished.score);
-    expect(enabled.activeMatch).toBe(legacy.activeMatch);
+    expect(next.activeMatch!.events.some(event => event.type === 'tactics' && event.text.includes(coach.name))).toBe(true);
+    expect(next.fixtures.find(fixture => fixture.id === legacy.activeFixtureId!)!.result!.score).toEqual(finished.score);
+    expect(enabled.activeMatch!).toBe(legacy.activeMatch!);
   });
 });

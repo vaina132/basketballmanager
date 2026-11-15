@@ -14,7 +14,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 const clubId = 'rhine-falcons', playerId = 'rhf-1';
 const window = (state: SeasonState) => getMarketWindow(state)!;
 const envelope = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
-const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 
 /** Reconstruct the format13 shape from a window explicitly replayed under its original rules. */
@@ -62,7 +62,7 @@ describe('competing recruitment persistence', () => {
       const text = serializeSeason(state), restored = parseSeason(text);
       expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
       expect(restored).toEqual(state);
-      expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
+      expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(state.activeMatch!));
     }
     expect(advanceMarket(parseSeason(serializeSeason(pending)))).toEqual(resolved);
   });
@@ -103,7 +103,7 @@ describe('competing recruitment persistence', () => {
     expect(window(restored).offers).toEqual(window(legacyPending).offers);
     expect(restored.negotiations).toEqual(legacyPending.negotiations);
     expect(restored.employment).toEqual(legacyPending.employment);
-    expect(restored.activeMatch).toEqual(legacyPending.activeMatch);
+    expect(restored.activeMatch!).toEqual(legacyPending.activeMatch!);
     expect(restored.finance).toEqual(legacyPending.finance);
     expect(restored.payroll).toEqual(legacyPending.payroll);
     expect(() => submitMarketOffer(restored, playerId, 2_000_000, 1, winnerId)).toThrow();
@@ -129,7 +129,7 @@ describe('competing recruitment persistence', () => {
     expect(historic.market.windows[0]!.competitionFromEvent).toBeNull();
     expect(historic.market.windows[0]!.offers).toEqual(legacySecond.market.windows[0]!.offers);
     expect(historic.history).toEqual(legacySecond.history);
-    expect(historic.activeMatch).toEqual(legacySecond.activeMatch);
+    expect(historic.activeMatch!).toEqual(legacySecond.activeMatch!);
     const nextWindow = complete(historic);
     expect(window(nextWindow).competitionFromEvent).toBe(0);
     expect(parseSeason(serializeSeason(nextWindow))).toEqual(nextWindow);

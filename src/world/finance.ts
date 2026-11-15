@@ -1,3 +1,4 @@
+import { requireCalendarWeek } from './calendar-boundary';
 import type { CoachingContract } from '../domain/coaching';
 import type { ScoutContract } from '../domain/scouts';
 import type { FitnessContract } from '../domain/fitness';
@@ -212,7 +213,7 @@ export function recordPhysioFee(state: SeasonState, contract: PhysioContract): S
 export function recordAssistantFee(state: SeasonState, contract: AssistantContract): SeasonState {
   const coach = ASSISTANT_DIRECTORY.find(coach => coach.id === contract.assistantId);
   const stored = state.assistant.contracts.at(-1);
-  if (!state.finance.enabledSince || !state.assistant.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch.status === 'finished' || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `assistant-contract-${state.assistant.contracts.length}`) throw new Error('Pay only the exact newly appointed assistant-coach contract.');
+  if (!state.finance.enabledSince || !state.assistant.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch?.status === 'finished' || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `assistant-contract-${state.assistant.contracts.length}`) throw new Error('Pay only the exact newly appointed assistant-coach contract.');
   const active = state.assistant.contracts.filter(item => item.seasonNumber === state.seasonNumber && item.releasedRound === null);
   if (!state.clubs.some(club => club.id === contract.clubId) || active.filter(item => item.clubId === contract.clubId).length !== 1 || active.filter(item => item.assistantId === contract.assistantId).length !== 1) throw new Error('Only one active assistant coach is allowed per club and per person.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
@@ -295,7 +296,8 @@ export function enableFinance(state: SeasonState): SeasonState {
 export function processFinanceRound(state: SeasonState): SeasonState {
   if (!state.finance.enabledSince) return state;
   const fixtures = state.fixtures.filter(fixture => fixture.round === state.round).sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
-  if (fixtures.length !== state.clubs.length / 2 || fixtures.some(fixture => !fixture.result)) throw new Error('Commit every game in the matchday before recording finances.');
+  if (fixtures.some(fixture => !fixture.result)) throw new Error('Commit every game in the matchday before recording finances.');
+  requireCalendarWeek(state, true);
   let next = state;
   for (const fixture of fixtures) {
     const gate = forecastGate(state, fixture, state.finance.roundPrices[fixture.homeClubId]!);

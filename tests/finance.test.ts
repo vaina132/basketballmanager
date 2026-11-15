@@ -21,7 +21,7 @@ function freeze<T>(value: T): T {
   return value;
 }
 function finish(state: SeasonState): SeasonState {
-  return state.activeMatch.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+  return state.activeMatch!.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 }
 function finishSeason(initial: SeasonState): SeasonState {
   let state = initial;
@@ -92,14 +92,14 @@ describe('fictional gates and locked ticket decisions', () => {
     const original = freeze(createSeason(9, clubId, 'off', false, false));
     const revised = setTicketPlan(original, { delegated: false, price: 6000 });
     expect(revised.finance.roundPrices).toBe(original.finance.roundPrices);
-    expect(revised.activeMatch).toBe(original.activeMatch);
+    expect(revised.activeMatch!).toBe(original.activeMatch!);
     const pending = finish(revised);
     const cheaper = setTicketPlan(pending, { delegated: false, price: 0 });
     expect(cheaper.finance.roundPrices).toBe(original.finance.roundPrices);
     const next = advanceSeason(cheaper);
-    expect(financeLedgerSlice(next.finance).find(entry => entry.ticket?.fixtureId === original.activeFixtureId)?.ticket?.price).toBe(1800);
+    expect(financeLedgerSlice(next.finance).find(entry => entry.ticket?.fixtureId === original.activeFixtureId!)?.ticket?.price).toBe(1800);
     expect(next.finance.roundPrices[clubId]).toBe(0);
-    expect(stepMatch(revised.activeMatch)).toEqual(stepMatch(original.activeMatch));
+    expect(stepMatch(revised.activeMatch!)).toEqual(stepMatch(original.activeMatch!));
   });
 
   it.each([-100, 50, 6001, 6100, NaN, Infinity])('rejects invalid ticket price %s atomically', price => {
@@ -145,7 +145,7 @@ describe('cash, unpaid obligations and staff affordability', () => {
     const rehired = hireCoach(released, 'coach-25');
     expect(getFinanceBalance(rehired.finance, clubId).cash).toBe(getFinanceBalance(hired.finance, clubId).cash - 3_500_000);
     expect(() => recordCoachFee(hired, contract)).toThrow(/already been recorded/);
-    expect(hired.activeMatch).toBe(state.activeMatch);
+    expect(hired.activeMatch!).toBe(state.activeMatch!);
     expect(hired.training).toBe(state.training);
   });
 
@@ -186,7 +186,7 @@ describe('cash, unpaid obligations and staff affordability', () => {
     expect(state.coaching.contracts).toHaveLength(5);
     expect(state.finance.ledger.filter(entry => entry.kind === 'coaching')).toHaveLength(5);
     expect(getFinanceBalance(state.finance, clubId).cash).toBe(OPENING_CASH + ANNUAL_SPONSORSHIP - 4_000_000);
-    expect(state.activeMatch).toBe(poor.activeMatch);
+    expect(state.activeMatch!).toBe(poor.activeMatch!);
     expect(state.training).toBe(poor.training);
     expect(enableCoaching(state)).toBe(state);
   });
@@ -246,11 +246,11 @@ describe('calendar finance commits and carryover', () => {
     expect(financeLedgerSlice(next.finance).some(entry => ['tickets', 'operations'].includes(entry.kind))).toBe(false);
     expect(getFinanceBalance(next.finance, clubId).cash).toBe(OPENING_CASH + ANNUAL_SPONSORSHIP * .8 - coachingCommitted(next.coaching, clubId));
     expect(financeLedgerSlice(next.finance).filter(entry => entry.kind === 'coaching')).toHaveLength(legacy.coaching.contracts.length);
-    expect(next.activeMatch).toBe(before.activeMatch);
+    expect(next.activeMatch!).toBe(before.activeMatch!);
     expect(next.fixtures).toBe(before.fixtures);
     expect(next.coaching).toBe(before.coaching);
     expect(next.training).toBe(before.training);
-    expect(stepMatch(next.activeMatch)).toEqual(stepMatch(before.activeMatch));
+    expect(stepMatch(next.activeMatch!)).toEqual(stepMatch(before.activeMatch!));
     expect(() => enableFinance({ ...completed, finance: createFinance(completed.clubs, clubId) })).toThrow(/next season/);
     expect(() => enableCoaching({ ...completed, coaching: { model: 'coaching-1', enabledSince: null, contracts: [] } })).toThrow(/next season/);
   });
@@ -259,7 +259,7 @@ describe('calendar finance commits and carryover', () => {
     let legacy = createSeason(19, clubId, 'off', false, true, false);
     while (legacy.round < 10) legacy = advanceSeason(finish(legacy));
     const pending = freeze(finish(legacy)), activated = enableFinance(pending);
-    expect(activated.activeMatch).toBe(pending.activeMatch);
+    expect(activated.activeMatch!).toBe(pending.activeMatch!);
     expect(activated.finance.enabledSince).toEqual({ seasonNumber: 1, round: 10 });
     expect(activated.finance.ledger.filter(entry => entry.kind === 'sponsor').every(entry => entry.amount === ANNUAL_SPONSORSHIP / 10)).toBe(true);
     const final = advanceSeason(activated);
@@ -303,9 +303,9 @@ describe('calendar finance commits and carryover', () => {
   it('leaves sporting continuation identical while healthy clubs have enough cash under either finance setting', () => {
     const enabled = createSeason(11, clubId, 'off', true, true, true);
     const disabled = createSeason(11, clubId, 'off', true, true, false);
-    expect(enabled.activeMatch).toEqual(disabled.activeMatch);
+    expect(enabled.activeMatch!).toEqual(disabled.activeMatch!);
     const a = advanceSeason(finish(freeze(enabled))), b = advanceSeason(finish(freeze(disabled)));
-    expect(a.activeMatch).toEqual(b.activeMatch);
+    expect(a.activeMatch!).toEqual(b.activeMatch!);
     expect(a.coaching).toEqual(b.coaching);
     expect(a.training).toEqual(b.training);
     expect(a.fixtures).toEqual(b.fixtures);

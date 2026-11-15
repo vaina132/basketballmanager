@@ -13,7 +13,7 @@ type PreviousState = Omit<SeasonState, 'schemaVersion' | 'seasonNumber' | 'histo
 let firstLive: SeasonState, firstSecondRound: SeasonState, firstComplete: SeasonState;
 let secondStart: SeasonState, secondLive: SeasonState, secondComplete: SeasonState, thirdStart: SeasonState;
 const restore = (season: SeasonState) => parseSeason(serializeSeason(season));
-const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: season.activeMatch.status === 'finished' ? season.activeMatch : simulateToEnd(setAutoSubstitutions(season.activeMatch, managedSide(season), true)) });
+const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: season.activeMatch!.status === 'finished' ? season.activeMatch! : simulateToEnd(setAutoSubstitutions(season.activeMatch!, managedSide(season), true)) });
 
 function completeSeason(season: SeasonState): SeasonState {
   let state = season;
@@ -34,14 +34,14 @@ function previousFormat(season: SeasonState, version: 1 | 2): string {
 
 beforeAll(() => {
   const first = createSeason(9, clubId, 'standard', false, false, false);
-  let match = setAutoSubstitutions(first.activeMatch, managedSide(first), true);
+  let match = setAutoSubstitutions(first.activeMatch!, managedSide(first), true);
   while (!match.injuries['atl-8'] && match.status !== 'finished') match = stepMatch(match);
   expect(match.injuries['atl-8']).toBeDefined();
   firstLive = { ...first, activeMatch: match };
   firstSecondRound = advanceSeason(finish(firstLive));
   firstComplete = completeSeason(firstSecondRound);
   secondStart = rolloverSeason(firstComplete);
-  secondLive = { ...secondStart, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(secondStart.activeMatch, managedSide(secondStart), true)) };
+  secondLive = { ...secondStart, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(secondStart.activeMatch!, managedSide(secondStart), true)) };
   secondComplete = completeSeason(secondLive);
   thirdStart = rolloverSeason(secondComplete);
 }, 60_000);
@@ -54,14 +54,14 @@ describe('career save boundaries', () => {
     expect(restored.history).toHaveLength(1);
     expect(getStandings({ clubs: restored.clubs, fixtures: restored.history[0]!.fixtures })).toEqual(getStandings(firstComplete));
     expect(restored.history[0]!.fixtures.every(fixture => fixture.result.stats !== null || fixture.result.appearances !== undefined)).toBe(true);
-    expect(restored.activeFixtureId).toBe('dev-s2-r1-g1');
+    expect(restored.activeFixtureId!).toBe('dev-s2-r1-g1');
     expect(restored.date).toBe('2027-09-04');
   });
 
   it('continues a live second-year match and next matchday identically after import', () => {
     const restored = restore(secondLive);
-    expect(restored.activeMatch.rngState).toBe(secondLive.activeMatch.rngState);
-    expect(restored.activeMatch).toEqual(secondLive.activeMatch);
+    expect(restored.activeMatch!.rngState).toBe(secondLive.activeMatch!.rngState);
+    expect(restored.activeMatch!).toEqual(secondLive.activeMatch!);
     expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(secondLive)));
   }, 30_000);
 
@@ -80,7 +80,7 @@ describe('career save boundaries', () => {
     expect(restored.injuries.length).toBeGreaterThan(0);
     expect(restored.injuries.some(injury => injury.playerId === 'atl-8')).toBe(true);
     expect(getPlayerHealth(restored, 'atl-8')).toBeNull();
-    expect(restored.activeMatch.preExistingInjuries ?? []).toEqual([]);
+    expect(restored.activeMatch!.preExistingInjuries ?? []).toEqual([]);
     expect(Object.values(restored.conditions).every(condition => condition === 100)).toBe(true);
     expect(thirdStart.injuries.some(injury => injury.fixtureId.startsWith('dev-s2-'))).toBe(true);
     expect(restore(thirdStart).injuries).toEqual(secondComplete.injuries);
@@ -100,9 +100,9 @@ describe('career save boundaries', () => {
     }));
     season.fixtures = createSchedule(season.clubs, season.seasonNumber);
     const fixture = season.fixtures.find(item => item.round === 1 && [item.homeClubId, item.awayClubId].includes(clubId))!;
-    season.activeFixtureId = fixture.id; season.date = fixture.date;
+    season.activeFixtureId! = fixture.id; season.date = fixture.date;
     const home = season.clubs.find(club => club.id === fixture.homeClubId)!, away = season.clubs.find(club => club.id === fixture.awayClubId)!;
-    season.activeMatch = createFixtureMatch(fixtureSeed(season.seed, fixture.id), home, away, { injuryMode: 'off', autoSubstitutions: { home: home.id !== clubId, away: away.id !== clubId } });
+    season.activeMatch! = createFixtureMatch(fixtureSeed(season.seed, fixture.id), home, away, { injuryMode: 'off', autoSubstitutions: { home: home.id !== clubId, away: away.id !== clubId } });
     const text = serializeSeason(season);
     expect(new TextEncoder().encode(text).byteLength).toBeLessThan(MAX_SEASON_SAVE_BYTES);
     const restored = parseSeason(text);
@@ -120,7 +120,7 @@ describe('explicit career migrations', () => {
     expect(restored.schemaVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restored.seasonNumber).toBe(1);
     expect(restored.history).toEqual([]);
-    expect(restored.activeMatch).toEqual(snapshot.activeMatch);
+    expect(restored.activeMatch!).toEqual(snapshot.activeMatch!);
     expect(restored.injuries).toEqual(snapshot.injuries);
     expect(restored.fixtures).toEqual(original.fixtures);
     expect(JSON.parse(text).state).toEqual(snapshot);
@@ -129,16 +129,16 @@ describe('explicit career migrations', () => {
 
   it('preserves the next RNG outcome after format 2 migration', () => {
     const restored = parseSeason(previousFormat(firstLive, 2));
-    expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(firstLive.activeMatch));
+    expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(firstLive.activeMatch!));
     expect(advanceSeason(finish(restored))).toEqual(firstSecondRound);
   });
 
   it('migrates format 1 through its injury-free rules into the first career season', () => {
     const season = createSeason(37, clubId, 'off', false, false, false);
-    season.activeMatch = simulateToQuarterEnd(setAutoSubstitutions(season.activeMatch, managedSide(season), true));
+    season.activeMatch! = simulateToQuarterEnd(setAutoSubstitutions(season.activeMatch!, managedSide(season), true));
     const restored = parseSeason(previousFormat(season, 1));
     expect(restored).toEqual(season);
-    expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(season.activeMatch));
+    expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(season.activeMatch!));
   });
 
   it.each([
@@ -181,7 +181,7 @@ describe('career history validation', () => {
     ['reused prior-year injury source', season => { const injury = season.injuries.find(injury => injury.fixtureId.startsWith('dev-s2-'))!; injury.fixtureId = injury.fixtureId.replace('dev-s2-', 'dev-'); }],
     ['omitted inherited historical absence', season => { delete season.history[0]!.fixtures.find(fixture => fixture.round === 2 && [fixture.homeClubId, fixture.awayClubId].includes(clubId))!.result.injuries['atl-8']; }],
     ['unrecovered new-season condition', season => { season.conditions['atl-8'] = 90; }],
-    ['injuries disabled after injuring seasons', season => { season.injuryMode = 'off'; season.activeMatch.injuryMode = 'off'; }],
+    ['injuries disabled after injuring seasons', season => { season.injuryMode = 'off'; season.activeMatch!.injuryMode = 'off'; }],
   ];
   it.each(mutations)('rejects %s without changing the loaded career', (_name, mutate) => {
     const damaged = structuredClone(thirdStart), original = structuredClone(thirdStart);

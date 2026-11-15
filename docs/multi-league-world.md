@@ -67,15 +67,21 @@ These are targets, not completed behavior. A local checkpoint fingerprint may sk
 | 3.1 | Data: import the other eight domestic divisions, the EuroCup and the BCL (2025-26 and 2026-27); club identities; ratings that compare every league with the European level (rating-3); a new private pack with all thirteen competitions | Import complete; roster fidelity/freshness follow-up below remains |
 | 3.2 | Save checks that scale: sealed seasons and lighter records for clubs the manager does not run | Single-league implementation and verification complete. Combined-world capacity/load acceptance remains at 3.7 |
 | 3.1 follow-up / 3.3 prerequisite | Distinguish full club rosters, competition registration and matchday selection; preserve variable real roster sizes and audit fresh API memberships | In progress: profile audit and full club/matchday roster separation implemented; membership reconciliation and competition-specific registration remain |
-| 3.3 | One calendar for several leagues: competitions in the world, game days, days without the manager's game, a table per league, amounts per week or home game | Foundation implemented and unit-tested; career/system/save integration remains |
+| 3.3 | One calendar for several leagues: competitions in the world, game days, days without the manager's game, a table per league, amounts per week or home game | Domestic regular-season integration implemented: shared weekly careers, real byes, separate tables, weekly settlement, saves and UI. Midweek event processing will extend this at 3.5 |
 | 3.4 | Domestic playoffs, titles, and promotion and relegation (real formats, checked per league) | Planned |
 | 3.5 | European competitions in their real formats on midweek dates, with background clubs and background tables; European places for the next season | Planned |
-| 3.6 | League selection at career start: country flags/names, league/division, visual squad strength, actual roster counts and the speed/size estimate | Flags, country switching, readable division and strength bars implemented for current single-league setup; multi-country selection and measured estimates remain |
+| 3.6 | League selection at career start: country flags/names, league/division, visual squad strength, actual roster counts and the speed/size estimate | Multi-country domestic selection, both available divisions, flags, readable division, strength and roster counts implemented. Measured estimates and European inclusion remain |
 | 3.7 | Final check: a multi-league season with Europe in the browser, save and load, rollover into season two, measurements | Planned |
 
 Order as approved on 14 November 2026. Each step is tested and recorded in `HANDOVER.md`; the owner commits.
 
 ### Continuation on 15 November 2026
+
+**Latest domestic integration:** format 47 connects league membership, aligned weekly schedules, manager byes and league tables to careers, workers, strict save/load and management. All ten real domestic leagues can start, including TBL. The selected country's available divisions are always loaded; more countries can be selected. Legacy embedded worlds keep their original calendar. See the latest [handover](../HANDOVER.md) for verification and limitations. The paragraphs below describe the earlier foundation checkpoint, before this integration.
+
+Final verification for the domestic integration: **2,495 tests / 173 files passed**, production build passed, and six real Edge checks passed without browser errors. All ten real domestic leagues and a 51-club, three-league career passed private opening/advance/strict-save checks. Postseason, Europe and the five-season combined-world performance target remain unimplemented/unaccepted as listed above.
+
+An all-country correctness check also passed (173 clubs, 2,335 players, one completed week, 4,210,677 compact bytes). Its combined creation/advance/repeated strict roundtrip script took roughly ten minutes alongside regression, so this does not establish acceptable loading or turn speed. Large-world phase profiling remains necessary at 3.7.
 
 The owner requested the remaining work up to Sprint 4. **That boundary has not been reached.** The latest pack is a source-correlated membership revision: 27 corrections, 630 unchanged assignments confirmed, EuroCup field corrected to 32. Unresolved membership and registration evidence remains explicit; see [player data quality](player-data-quality.md#membership-revision-15-november-2026).
 

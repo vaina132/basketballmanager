@@ -15,7 +15,7 @@ let initial: SeasonState, second: SeasonState, edited: SeasonState, completed: S
 let legacyLive: SeasonState, legacyComplete: SeasonState;
 let starterId: string, specialistId: string;
 const restore = (season: SeasonState) => parseSeason(serializeSeason(season));
-const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: season.activeMatch.status === 'finished' ? season.activeMatch : simulateToEnd(setAutoSubstitutions(season.activeMatch, managedSide(season), true)) });
+const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: season.activeMatch!.status === 'finished' ? season.activeMatch! : simulateToEnd(setAutoSubstitutions(season.activeMatch!, managedSide(season), true)) });
 function completeSeason(season: SeasonState): SeasonState {
   let current = season;
   while (current.status !== 'complete') current = advanceSeason(finish(current));
@@ -50,7 +50,7 @@ beforeAll(() => {
   let legacy = createSeason(37, clubId, 'off', true, false, false);
   legacy = setTrainingPlan(legacy, { ...legacy.training.plans[clubId]!, delegated: false, intensity: 'light', focus: 'passing' });
   legacy = advanceSeason(finish(legacy));
-  legacyLive = { ...legacy, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(legacy.activeMatch, managedSide(legacy), true)) };
+  legacyLive = { ...legacy, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(legacy.activeMatch!, managedSide(legacy), true)) };
   legacyComplete = completeSeason(legacy);
 }, 60_000);
 
@@ -60,7 +60,7 @@ describe('coaching-aware season persistence', () => {
     expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(restore(initial)).toEqual(initial);
     expect(coachingCommitted(restore(initial).coaching, clubId)).toBe(10_500_000);
-    expect(restore(initial).activeMatch).toEqual(initial.activeMatch);
+    expect(restore(initial).activeMatch!).toEqual(initial.activeMatch!);
   });
 
   it('round-trips applied coach identities and actual bonus gains for every club', () => {
@@ -94,10 +94,10 @@ describe('coaching-aware season persistence', () => {
   });
 
   it('preserves exact live-match RNG and the next coaching/training interval on import', () => {
-    const live = { ...edited, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(edited.activeMatch, managedSide(edited), true)) };
+    const live = { ...edited, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(edited.activeMatch!, managedSide(edited), true)) };
     const restored = restore(live);
-    expect(JSON.stringify(restored.activeMatch)).toBe(JSON.stringify(live.activeMatch));
-    expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(live.activeMatch));
+    expect(JSON.stringify(restored.activeMatch!)).toBe(JSON.stringify(live.activeMatch!));
+    expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(live.activeMatch!));
     expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(live)));
   });
 
@@ -119,7 +119,7 @@ describe('coaching-aware season persistence', () => {
     expect(enabled.coaching.enabledSince).toEqual({ seasonNumber: 1, round: 2 });
     expect(enabled.training.lastWeek!.coaching).toBeNull();
     expect(restore(enabled)).toEqual(enabled);
-    expect(enabled.activeMatch).toEqual(legacyLive.activeMatch);
+    expect(enabled.activeMatch!).toEqual(legacyLive.activeMatch!);
     expect(restore(advanceSeason(finish(enabled))).training.lastWeek!.coaching).not.toBeNull();
   });
 
@@ -141,7 +141,7 @@ describe('format 4 migration without coaching side effects', () => {
     expect(restored.coaching).toEqual({ model: 'coaching-1', enabledSince: null, contracts: [] });
     expect(restored.training.plans).toEqual(snapshot.training.plans);
     expect(restored.training.points).toEqual(snapshot.training.points);
-    expect(JSON.stringify(restored.activeMatch)).toBe(JSON.stringify(snapshot.activeMatch));
+    expect(JSON.stringify(restored.activeMatch!)).toBe(JSON.stringify(snapshot.activeMatch!));
     for (const [id, report] of Object.entries(restored.training.lastWeek!.players)) {
       expect(report.gains).toEqual(snapshot.training.lastWeek.players[id].gains);
       expect(Object.values(report.coachingGains).every(gain => gain === 0)).toBe(true);

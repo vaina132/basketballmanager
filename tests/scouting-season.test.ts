@@ -10,7 +10,7 @@ import { getPlayerKnowledge, SCOUTING_ATTRIBUTES, scoutingRecruitmentRating } fr
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 function play(state: SeasonState): SeasonState {
-  return advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+  return advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 }
 function finish(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 
@@ -44,7 +44,7 @@ describe('scouting in the career calendar', () => {
     for (const range of Object.values(knowledge.ranges!)) expect(range.max).toBeGreaterThan(range.min);
     const withoutScouting = finish(createSeason(43, 'rhine-falcons', 'off', true, true, true, true, null, true));
     expect(completed.fixtures).toEqual(withoutScouting.fixtures);
-    expect(completed.activeMatch).toEqual(withoutScouting.activeMatch);
+    expect(completed.activeMatch!).toEqual(withoutScouting.activeMatch!);
     expect(completed.training).toEqual(withoutScouting.training);
     expect(completed.finance).toEqual(withoutScouting.finance);
     expect(completed.scouting.clubs[completed.managedClubId]!.shortlist).toEqual([targetId]);
@@ -91,7 +91,7 @@ describe('scouting in the career calendar', () => {
     expect(scoutingRecruitmentRating(changed, changed.managedClubId, targetId)).toBe(scoutingRecruitmentRating(threeReports, threeReports.managedClubId, targetId));
     const legacy = createSeason(43);
     const activated = enableScouting(legacy);
-    expect(activated.activeMatch).toBe(legacy.activeMatch);
+    expect(activated.activeMatch!).toBe(legacy.activeMatch!);
     expect(activated.employment).toBe(legacy.employment);
     expect(activated.finance).toBe(legacy.finance);
     expect(parseSeason(serializeSeason(activated))).toEqual(activated);

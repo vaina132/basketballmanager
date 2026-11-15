@@ -12,7 +12,7 @@ const managed = 'rhine-falcons', playerId = 'rhf-1';
 const rivals = ['aegean-waves', 'alpine-stags'] as const;
 const create = () => createSeason(53, managed, 'off', true, true, true, true, null, true, true, true, true);
 function finish(state: SeasonState): SeasonState {
-  while (state.status === 'active') state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+  while (state.status === 'active') state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
   return state;
 }
 function clearOffers(state: SeasonState): SeasonState {
@@ -52,7 +52,7 @@ describe('competing offers and player choice', () => {
     }
     expect(state.finance).toBe(clean.finance);
     expect(state.payroll).toBe(clean.payroll);
-    expect(state.activeMatch).toBe(clean.activeMatch);
+    expect(state.activeMatch!).toBe(clean.activeMatch!);
     expect(state.employment).toBe(clean.employment);
   });
 
@@ -73,7 +73,7 @@ describe('competing offers and player choice', () => {
       expect(getAvailablePlayers(resolved).some(player => player.id === playerId)).toBe(false);
       expect(quotePlayerContract(resolved, playerId, 5_000_000, 1).canOffer).toBe(false);
       for (const key of ['activeMatch', 'clubs', 'fixtures', 'rosters', 'finance', 'payroll', 'training', 'scouting'] as const) expect(resolved[key]).toBe(pending[key]);
-      expect(resolved.activeMatch.rngState).toBe(pending.activeMatch.rngState);
+      expect(resolved.activeMatch!.rngState).toBe(pending.activeMatch!.rngState);
       expect(respond(pending)).toEqual(resolved);
       expect(pending).toEqual(snapshot);
     }
@@ -98,8 +98,8 @@ describe('competing offers and player choice', () => {
     const chosen = contractForSeason(forward.employment, playerId, 2)?.clubId;
     expect(rivals).toContain(chosen);
     expect(contractForSeason(reverse.employment, playerId, 2)?.clubId).toBe(chosen);
-    expect(forward.activeMatch.rngState).toBe(clean.activeMatch.rngState);
-    expect(reverse.activeMatch.rngState).toBe(clean.activeMatch.rngState);
+    expect(forward.activeMatch!.rngState).toBe(clean.activeMatch!.rngState);
+    expect(reverse.activeMatch!.rngState).toBe(clean.activeMatch!.rngState);
   });
 
   it('only replaces the acting club’s offer and releases its old multi-year holds', () => {
@@ -186,7 +186,7 @@ describe('competing offers and player choice', () => {
     expect(getClubContractSummary(firstReply, rivals[0])).toMatchObject({ rosterSize: 7, reservedRosterSize: 1 });
     const secondReply = advanceMarket(firstReply);
     expect(getClubContractSummary(secondReply, rivals[0])).toMatchObject({ rosterSize: 8, reservedRosterSize: 0 });
-    expect(secondReply.activeMatch).toBe(completed.activeMatch);
+    expect(secondReply.activeMatch!).toBe(completed.activeMatch!);
     expect(secondReply.finance).toBe(completed.finance);
     expect(getMarketWindow(secondReply)!.offers.find(offer => offer.id === lost.id)?.chosenOfferId).toBe(lost.chosenOfferId);
   });
@@ -225,7 +225,7 @@ describe('competing offers and player choice', () => {
     expect(getMarketStartReason(resolved)).toBeNull();
     expect(getMarketWindow(resolved)!.closesOn).toBe(closing);
     expect(resolved.finance).toBe(state.finance);
-    expect(resolved.activeMatch).toBe(state.activeMatch);
+    expect(resolved.activeMatch!).toBe(state.activeMatch!);
     expect(parseSeason(serializeSeason(resolved))).toEqual(resolved);
   });
 

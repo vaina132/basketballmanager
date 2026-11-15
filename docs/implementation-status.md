@@ -1,10 +1,12 @@
 # Implementation status
 
-Updated: 14 November 2026.
+Updated: 15 November 2026.
 
 ## Current work: multi-league sprint 3
 
-The remaining **single-league 3.2 implementation and verification are complete**. The combined-world performance target stays open until 3.7. Level 7 and the real-data pilot are implemented; 3.1 supplies 13 competitions, 223 clubs and 3,087 players. Nine even-sized domestic leagues support separate careers; the 17-club Turkish second division needs byes. European competition gameplay is still ahead. See [the active steps](multi-league-world.md#steps).
+The remaining **single-league 3.2 implementation and verification are complete**. The domestic portion of 3.3 now runs all ten domestic leagues, individually or together, on aligned weekly calendars with genuine rest weeks, separate tables and weekly club management. The 17-club TBL is playable. Country selection includes the available divisions of each selected country. Format 47 preserves old embedded worlds' schedules and validates new calendar/rest evidence. Private checks cover all ten domestic leagues plus a combined 51-club Turkey/Germany career; real browser checks cover setup, rest weeks, worker advancement and reload. Final test/build evidence is in the latest [handover](../HANDOVER.md).
+
+**Next:** real domestic postseason and promotion/relegation (3.4), European midweek events/background clubs/qualification (3.5), measured setup estimates (3.6), and five-season combined-world acceptance (3.7). Europe is not playable yet. Import scope remains 13 competitions, 223 clubs and 3,087 players; unresolved roster/precise-position evidence remains documented. The following dated storage and roster paragraphs are historical checkpoints, not the current task list. See [the active steps](multi-league-world.md#steps).
 
 Current save format **46** uses `compact-2` and local checks version **3**. Completed rival senior games retain exact season totals and the per-match participation/minutes/fouls needed by existing rules; historical manager games and current-season box scores stay full. Earlier academy/youth outcomes and lossless financial archives remain. Old inputs validate before migration; summary invariants are checked independently. Strict reads/writes can reuse pure academy/board calculations with exact complete inputs and bounded private caching, while every raw-record comparison and chronological/accounting guard still runs. Verified local checkpoints skip repeat historical replay only for unchanged previously validated text.
 

@@ -17,6 +17,8 @@ export interface CareerWorld {
   source: 'fictional-development' | 'real-data-pack';
   /** New careers separate contracted club membership from the twelve-player matchday selection. */
   rosterModel?: 'club-roster-1';
+  /** Versioned domestic membership; absent in legacy single-league careers. */
+  domesticLeagues?: { id: string; name: string; country: string; tier: number; clubIds: string[] }[];
   /** First matchday of season one (a Saturday). */
   startDate: string;
   clubs: readonly Team[];

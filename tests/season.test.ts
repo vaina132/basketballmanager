@@ -9,8 +9,8 @@ import { advanceSeason, createSchedule, createSeason, DAILY_RECOVERY, dateForRou
 
 const sides: Side[] = ['home', 'away'];
 function finishCurrent(state: SeasonState): SeasonState {
-  if (state.activeMatch.status === 'finished') return state;
-  return { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+  if (state.activeMatch!.status === 'finished') return state;
+  return { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 }
 function sum(match: MatchState, side: Side, stat: keyof PlayerStats): number {
   return match[side].players.reduce((total, player) => total + match.stats[player.id]![stat], 0);
@@ -48,12 +48,12 @@ describe('development league schedule and initialization', () => {
     expect(new Set(DEVELOPMENT_CLUBS.flatMap(club => club.players.map(player => player.id))).size).toBe(60);
     for (const club of DEVELOPMENT_CLUBS) {
       const state = createSeason(12, club.id), side = managedSide(state), opponent = side === 'home' ? 'away' : 'home';
-      expect(state.activeMatch[side].id).toBe(club.id);
-      expect(state.activeMatch.autoSubstitutions[side]).toBe(false);
-      expect(state.activeMatch.autoSubstitutions[opponent]).toBe(true);
-      expect(state.activeMatch.injuryMode).toBe('standard');
-      expect(state.activeMatch.seed).toBe(fixtureSeed(12, getActiveFixture(state).id));
-      expect(state.activeMatch.status).toBe('ready');
+      expect(state.activeMatch![side].id).toBe(club.id);
+      expect(state.activeMatch!.autoSubstitutions[side]).toBe(false);
+      expect(state.activeMatch!.autoSubstitutions[opponent]).toBe(true);
+      expect(state.activeMatch!.injuryMode).toBe('standard');
+      expect(state.activeMatch!.seed).toBe(fixtureSeed(12, getActiveFixture(state).id));
+      expect(state.activeMatch!.status).toBe('ready');
       expect(Object.values(state.conditions).every(condition => condition === 100)).toBe(true);
       expect(getStandings(state).every(row => row.played === 0 && row.wins === 0)).toBe(true);
     }
@@ -97,7 +97,7 @@ describe('atomic season progression', () => {
   it('refuses an unfinished or critical match without advancing its date', () => {
     const state = createSeason(42);
     expect(() => advanceSeason(state)).toThrow(/Finish/);
-    const critical = { ...state, activeMatch: { ...state.activeMatch, requiredSubstitutions: [{ side: managedSide(state), playerId: state.activeMatch.lineups[managedSide(state)][0]!, reason: 'fouled-out' as const }] } };
+    const critical = { ...state, activeMatch: { ...state.activeMatch!, requiredSubstitutions: [{ side: managedSide(state), playerId: state.activeMatch!.lineups[managedSide(state)][0]!, reason: 'fouled-out' as const }] } };
     expect(() => advanceSeason(critical)).toThrow(/Finish/);
     expect(state.date).toBe(DEVELOPMENT_START_DATE);
     expect(state.fixtures.every(fixture => fixture.result === null)).toBe(true);
@@ -107,27 +107,27 @@ describe('atomic season progression', () => {
     let state = createSeason(23, DEVELOPMENT_CLUBS[1]!.id, 'standard', false);
     const side = managedSide(state);
     expect(side).toBe('away');
-    state = { ...state, activeMatch: setTactics(state.activeMatch, side, { tempo: .9, pressure: .85 }) };
+    state = { ...state, activeMatch: setTactics(state.activeMatch!, side, { tempo: .9, pressure: .85 }) };
     // Let the starters accumulate real fatigue before allowing the assistant to
     // resolve a late foul-out; next week must not simply reset everyone to 100.
-    state = { ...state, activeMatch: simulateToEnd(state.activeMatch) };
+    state = { ...state, activeMatch: simulateToEnd(state.activeMatch!) };
     const completed = freeze(finishCurrent(state));
     const before = structuredClone(completed);
     const next = advanceSeason(completed);
     expect(completed).toEqual(before);
     expect(next.round).toBe(2); expect(next.date).toBe('2026-09-12');
     expect(next.fixtures.filter(fixture => fixture.result)).toHaveLength(3);
-    expect(next.plans[state.managedClubId]!.tactics).toEqual(completed.activeMatch.tactics[side]);
-    expect(next.activeMatch[managedSide(next)].id).toBe(state.managedClubId);
-    expect(next.activeMatch.tactics[managedSide(next)]).toEqual(completed.activeMatch.tactics[side]);
+    expect(next.plans[state.managedClubId]!.tactics).toEqual(completed.activeMatch!.tactics[side]);
+    expect(next.activeMatch![managedSide(next)].id).toBe(state.managedClubId);
+    expect(next.activeMatch!.tactics[managedSide(next)]).toEqual(completed.activeMatch!.tactics[side]);
     for (const fixture of next.fixtures.filter(fixture => fixture.round === 1)) {
       for (const [id, stats] of Object.entries(fixture.result!.stats)) {
         expect(next.conditions[id]).toBe(Math.min(100, Math.round((stats.condition + DAILY_RECOVERY * ROUND_INTERVAL_DAYS) * 1000) / 1000));
       }
     }
-    expect(Object.values(next.activeMatch.stats).every(stats => stats.fouls === 0 && stats.secondsPlayed === 0 && stats.points === 0)).toBe(true);
-    for (const [id, stats] of Object.entries(next.activeMatch.stats)) expect(stats.condition).toBe(next.conditions[id]);
-    expect(next.activeMatch[managedSide(next)].players.some(player => next.conditions[player.id]! < 100)).toBe(true);
+    expect(Object.values(next.activeMatch!.stats).every(stats => stats.fouls === 0 && stats.secondsPlayed === 0 && stats.points === 0)).toBe(true);
+    for (const [id, stats] of Object.entries(next.activeMatch!.stats)) expect(stats.condition).toBe(next.conditions[id]);
+    expect(next.activeMatch![managedSide(next)].players.some(player => next.conditions[player.id]! < 100)).toBe(true);
     expect(advanceSeason(completed)).toEqual(next);
     expect(() => advanceSeason(next)).toThrow(/Finish/);
     expect(next.fixtures.filter(fixture => fixture.result)).toHaveLength(3);
@@ -144,7 +144,7 @@ describe('atomic season progression', () => {
 
   it('keeps watched, quarter-skipped and instant match results equivalent in the season', () => {
     const season = createSeason(88, DEVELOPMENT_CLUBS[3]!.id);
-    const initial = setAutoSubstitutions(season.activeMatch, managedSide(season), true);
+    const initial = setAutoSubstitutions(season.activeMatch!, managedSide(season), true);
     let stepped = initial, quarters = initial;
     for (let count = 0; count < 5000 && stepped.status !== 'finished'; count += 1) stepped = stepMatch(stepped);
     for (let count = 0; count < 24 && quarters.status !== 'finished'; count += 1) quarters = simulateToQuarterEnd(quarters);
@@ -162,12 +162,12 @@ describe('atomic season progression', () => {
       const venues: Side[] = [];
       for (let round = 1; round <= 10; round += 1) {
         expect(state.round).toBe(round);
-        expect(seen.has(state.activeFixtureId)).toBe(false);
-        seen.add(state.activeFixtureId); venues.push(managedSide(state));
+        expect(seen.has(state.activeFixtureId!)).toBe(false);
+        seen.add(state.activeFixtureId!); venues.push(managedSide(state));
         state = advanceSeason(finishCurrent(state));
       }
       expect(state.status).toBe('complete');
-      expect(state.activeMatch.status).toBe('finished');
+      expect(state.activeMatch!.status).toBe('finished');
       expect(state.fixtures.every(fixture => fixture.result)).toBe(true);
       expect(state.fixtures.filter(fixture => fixture.result)).toHaveLength(30);
       expect(venues.filter(side => side === 'home')).toHaveLength(5);

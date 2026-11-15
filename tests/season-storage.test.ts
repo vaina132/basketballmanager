@@ -11,7 +11,7 @@ const selectedClub = DEVELOPMENT_CLUBS.at(-1)!.id;
 let initial: SeasonState, completedMatch: SeasonState, nextRound: SeasonState;
 let initialText: string, nextRoundText: string;
 function finish(season: SeasonState): SeasonState {
-  return { ...season, activeMatch: simulateToEnd(setAutoSubstitutions(season.activeMatch, managedSide(season), true)) };
+  return { ...season, activeMatch: simulateToEnd(setAutoSubstitutions(season.activeMatch!, managedSide(season), true)) };
 }
 function corrupt(text: string, change: (envelope: Envelope) => void): string {
   const envelope = JSON.parse(text) as Envelope;
@@ -37,15 +37,15 @@ describe('season persistence boundaries', () => {
 
   it('resumes away-side tactical changes and a lineup change to the identical next matchday', () => {
     const side = managedSide(initial);
-    let match = simulateToQuarterEnd(setAutoSubstitutions(initial.activeMatch, side, true));
+    let match = simulateToQuarterEnd(setAutoSubstitutions(initial.activeMatch!, side, true));
     match = setTactics(match, side, { outsideShare: .8, pressure: .25 });
     const incoming = match[side].players.find(player => !match.lineups[side].includes(player.id) && match.stats[player.id]!.fouls < 5)!;
     match = substitutePlayer(match, side, match.lineups[side][0]!, incoming.id);
     const changed = { ...initial, activeMatch: match };
     const restored = parseSeason(serializeSeason(changed));
     expect(restored).toEqual(changed);
-    const uninterrupted = { ...changed, activeMatch: simulateToEnd(changed.activeMatch) };
-    const resumed = { ...restored, activeMatch: simulateToEnd(restored.activeMatch) };
+    const uninterrupted = { ...changed, activeMatch: simulateToEnd(changed.activeMatch!) };
+    const resumed = { ...restored, activeMatch: simulateToEnd(restored.activeMatch!) };
     expect(advanceSeason(resumed)).toEqual(advanceSeason(uninterrupted));
   }, 30_000);
 
@@ -58,7 +58,7 @@ describe('season persistence boundaries', () => {
   });
 
   it('round-trips a live completed pass with its authoritative handler and matchups', () => {
-    let match = initial.activeMatch;
+    let match = initial.activeMatch!;
     for (let count = 0; count < 100 && !match.possessionPlay?.passerId; count += 1) match = stepMatch(match);
     expect(match.possessionPlay?.passerId).toBeTruthy();
     const state = { ...initial, activeMatch: match };
@@ -69,16 +69,16 @@ describe('season persistence boundaries', () => {
     let critical: SeasonState | undefined;
     for (let seed = 1; seed <= 30 && !critical; seed += 1) {
       const candidate = createSeason(seed, selectedClub, 'off', false, false, false);
-      candidate.activeMatch = simulateToEnd(candidate.activeMatch);
-      if (candidate.activeMatch.requiredSubstitutions.length) critical = candidate;
+      candidate.activeMatch! = simulateToEnd(candidate.activeMatch!);
+      if (candidate.activeMatch!.requiredSubstitutions.length) critical = candidate;
     }
     expect(critical).toBeDefined();
     const restored = parseSeason(serializeSeason(critical!));
     expect(restored).toEqual(critical);
     expect(() => advanceSeason(restored)).toThrow(/resolve required decisions/);
-    const side = managedSide(restored), decision = restored.activeMatch.requiredSubstitutions[0]!;
-    const incoming = restored.activeMatch[side].players.find(player => !restored.activeMatch.lineups[side].includes(player.id) && isPlayerEligible(restored.activeMatch, player.id))!;
-    restored.activeMatch = substitutePlayer(restored.activeMatch, side, decision.playerId, incoming.id);
+    const side = managedSide(restored), decision = restored.activeMatch!.requiredSubstitutions[0]!;
+    const incoming = restored.activeMatch![side].players.find(player => !restored.activeMatch!.lineups[side].includes(player.id) && isPlayerEligible(restored.activeMatch!, player.id))!;
+    restored.activeMatch! = substitutePlayer(restored.activeMatch!, side, decision.playerId, incoming.id);
     expect(parseSeason(serializeSeason(restored))).toEqual(restored);
     const next = advanceSeason(finish(restored));
     expect(parseSeason(serializeSeason(next))).toEqual(next);
@@ -115,7 +115,7 @@ describe('season persistence boundaries', () => {
     expect(season.fixtures.every(fixture => !Object.hasOwn(fixture.result!, 'events'))).toBe(true);
     expect(() => advanceSeason(season)).toThrow(/complete/);
     const damaged = structuredClone(season);
-    damaged.activeMatch.stats[damaged.activeMatch.home.players[0]!.id]!.condition -= 1;
+    damaged.activeMatch!.stats[damaged.activeMatch!.home.players[0]!.id]!.condition -= 1;
     expect(() => validateSeasonState(damaged)).toThrow(/committed final result/);
   }, 60_000);
 
@@ -139,7 +139,7 @@ describe('season persistence boundaries', () => {
     const unusual = structuredClone(initial) as unknown as Record<string, unknown>;
     unusual.conditions = new Date();
     expect(() => validateSeasonState(unusual)).toThrow(/plain save data/);
-    expect(initial.activeMatch.status).toBe('ready');
+    expect(initial.activeMatch!.status).toBe('ready');
     expect(initial.fixtures.every(fixture => fixture.result === null)).toBe(true);
   });
 });
@@ -171,12 +171,12 @@ describe('malformed season imports', () => {
     ['duplicate fixture', e => { e.state.fixtures[1] = e.state.fixtures[0]!; }],
     ['altered fixture date', e => { e.state.fixtures[0]!.date = '2026-09-12'; }],
     ['swapped fixture venue', e => { const f = e.state.fixtures[0]!; [f.homeClubId, f.awayClubId] = [f.awayClubId, f.homeClubId]; }],
-    ['wrong active fixture', e => { e.state.activeFixtureId = e.state.fixtures[4]!.id; }],
-    ['wrong match seed', e => { e.state.activeMatch.seed += 1; }],
-    ['foreign active match', e => { e.state.activeMatch = createMatch(e.state.activeMatch.seed); }],
-    ['injury setting changed for one fixture', e => { e.state.activeMatch.injuryMode = 'standard'; }],
-    ['opponent assistant disabled', e => { e.state.activeMatch.autoSubstitutions.home = false; }],
-    ['pregame condition mismatch', e => { e.state.activeMatch.stats[e.state.activeMatch.home.players[0]!.id]!.condition = 99; }],
+    ['wrong active fixture', e => { e.state.activeFixtureId! = e.state.fixtures[4]!.id; }],
+    ['wrong match seed', e => { e.state.activeMatch!.seed += 1; }],
+    ['foreign active match', e => { e.state.activeMatch! = createMatch(e.state.activeMatch!.seed); }],
+    ['injury setting changed for one fixture', e => { e.state.activeMatch!.injuryMode = 'standard'; }],
+    ['opponent assistant disabled', e => { e.state.activeMatch!.autoSubstitutions.home = false; }],
+    ['pregame condition mismatch', e => { e.state.activeMatch!.stats[e.state.activeMatch!.home.players[0]!.id]!.condition = 99; }],
     ['future fixture prematurely committed', e => { e.state.fixtures[0]!.result = nextRound.fixtures[0]!.result; }],
   ];
   it.each(cases)('rejects %s', (_name, change) => {

@@ -15,7 +15,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason, seasonStartDa
 
 const clubId = 'rhine-falcons';
 const create = (market = true) => createSeason(53, clubId, 'off', true, true, true, true, null, true, true, true, market);
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function finish(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 function resolvePending(state: SeasonState): SeasonState {
   for (let count = 0; getLiveMarketOffers(state).length && count < 20; count += 1) state = advanceMarket(state);
@@ -63,7 +63,7 @@ describe('offseason calendar through genuine season boundaries', () => {
     const delegated = setEmploymentDelegation(completed, true);
     expect(delegated.employment.contracts).toBe(completed.employment.contracts);
     expect(getMarketOffers(delegated, clubId, true)).toHaveLength(10);
-    expect(delegated.activeMatch).toBe(completed.activeMatch);
+    expect(delegated.activeMatch!).toBe(completed.activeMatch!);
     const manual = setEmploymentDelegation(delegated, false);
     expect(getMarketOffers(manual, clubId, true)).toEqual(getMarketOffers(delegated, clubId, true));
     const resolved = resolvePending(manual);
@@ -75,7 +75,7 @@ describe('offseason calendar through genuine season boundaries', () => {
     const enabled = enableMarket(legacyCompleted);
     expect(enabled.employment.contracts).toBe(legacyCompleted.employment.contracts);
     expect(enabled.negotiations.records).toBe(legacyCompleted.negotiations.records);
-    expect(enabled.activeMatch).toBe(legacyCompleted.activeMatch);
+    expect(enabled.activeMatch!).toBe(legacyCompleted.activeMatch!);
     expect(enabled.finance).toBe(legacyCompleted.finance);
     expect(enabled.market.enabledSince).toMatchObject({ seasonNumber: 1, round: 10, contractCount: 100, negotiationCount: 40 });
     expect(getMarketWindow(enabled)).toMatchObject({ contractCountBefore: 100, negotiationCountBefore: 40 });
@@ -97,7 +97,7 @@ describe('offseason calendar through genuine season boundaries', () => {
     expect(parseSeason(serializeSeason(accepted))).toEqual(accepted);
     expect(accepted.finance).toEqual(completed.finance);
     expect(accepted.payroll).toEqual(completed.payroll);
-    expect(accepted.activeMatch).toEqual(completed.activeMatch);
+    expect(accepted.activeMatch!).toEqual(completed.activeMatch!);
   });
 
   it('registers a recruited player and agreed wages only at rollover, retaining dated market and sporting history', () => {

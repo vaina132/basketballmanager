@@ -14,7 +14,7 @@ import { getFinanceBalance, ROUND_OPERATING_COST } from '../src/world/finance';
 const clubId = 'rhine-falcons';
 const total = (points: Record<string, number>) => Object.values(points).reduce((sum, value) => sum + value, 0);
 const initial = () => enableFacilities(createSeason(227, clubId, 'off', true, true, true, true, null, true, false, true, false, false, false, false, false, true, true));
-const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 
 /** Isolated daily-practice inputs; completion still goes through the project command. */
 function practice(): TrainingWeekInput {

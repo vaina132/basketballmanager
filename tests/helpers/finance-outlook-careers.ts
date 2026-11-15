@@ -12,7 +12,7 @@ import { requiredInSeasonTransferFee } from '../../src/world/recruitment-policy'
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../../src/world/season';
 
 export const outlookClub = 'rhine-falcons', outlookCounterparty = 'aegean-waves';
-export const finishOutlookMatch = (state: SeasonState): SeasonState => state.activeMatch.status === 'finished' ? state : ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+export const finishOutlookMatch = (state: SeasonState): SeasonState => state.activeMatch!.status === 'finished' ? state : ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 export const advanceOutlookCareer = (state: SeasonState): SeasonState => advanceSeason(finishOutlookMatch(state));
 export function completeOutlookSeason(state: SeasonState): SeasonState {
   while (state.status === 'active') state = advanceOutlookCareer(state);

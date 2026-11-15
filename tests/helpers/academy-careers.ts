@@ -17,7 +17,7 @@ import { hireYouthCoach, releaseYouthCoach } from '../../src/world/youth';
 import { availableYouthCoaches, getClubYouthCoach } from '../../src/world/youth-policy';
 
 export const academyClub = 'rhine-falcons';
-export const advanceAcademyCareer = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+export const advanceAcademyCareer = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 
 /** All six staff roles, real completed weeks, and a prospect accepted for the next matchday. */
 export function createAcademyCareers() {

@@ -16,7 +16,7 @@ import { requiredTransferFee } from '../src/world/transfers-policy';
 
 const managed = 'rhine-falcons', seller = 'aegean-waves', rival = 'alpine-stags', ownPlayer = 'rhf-1';
 const create = () => createSeason(53, managed, 'off', true, true, true, true, null, true, true, true, true);
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function finish(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 function settle(initial: SeasonState): SeasonState {
   let state = initial;

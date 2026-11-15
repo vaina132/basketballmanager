@@ -1,5 +1,13 @@
 # Decision record
 
+## Domestic calendar integration (15 November 2026)
+
+Within the approved shared-calendar plan, new domestic careers use the longest selected league's double-round-robin length as the common regular-season duration (at most 38 weeks for the available 20-club leagues). Shorter competitions distribute their rounds across those Saturdays and finish together; odd fields retain genuine club byes. This is a reversible scheduling default, not a sourced claim about official fixture dates. Midweek Europe and postseason dates remain later integration work.
+
+New worlds use versioned `domesticLeagues` metadata and `real-calendar-` identities. Old embedded worlds never acquire a changed schedule through migration. A null managed match means no game that week; no fabricated score, appearance or opponent fills the gap. Wages/training/upkeep retain weekly boundaries and gate receipts require actual home games. Rest condition outcomes are retained separately for current-season recovery validation.
+
+Country selection includes every available division of that country, with the manager's country mandatory. Speed/save-size estimates remain absent until measured against the completed competition world. Domestic tables keep the existing provisional wins/difference/points tie-break pending the sourced rules in step 3.4.
+
 Updated: 5 November 2026. This records the user's answers, not inferred approval of every proposed formula.
 
 ## Confirmed in discovery

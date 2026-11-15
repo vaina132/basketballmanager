@@ -12,7 +12,7 @@ import { SponsorshipPanel } from '../src/ui/SponsorshipPanel';
 const club = 'rhine-falcons';
 const noop = () => {};
 const render = (season: SeasonState) => renderToStaticMarkup(<SponsorshipPanel season={season} onEnableSponsorship={noop} onAcceptSponsorship={noop} onDeclineSponsorship={noop} onRequestSponsorship={noop} onSponsorshipDelegation={noop} />);
-const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 let opening: SeasonState, renewal: SeasonState, signed: SeasonState, nextSeason: SeasonState;
 
 beforeAll(() => {

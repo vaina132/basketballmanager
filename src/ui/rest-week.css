@@ -1,0 +1,12 @@
+.rest-week { padding: 16px; }
+.rest-week .section-heading h2 { display: flex; align-items: center; gap: 8px; }
+.rest-week table { width: 100%; border-collapse: collapse; margin-top: 16px; text-align: left; }
+.rest-week th, .rest-week td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.rest-week tbody th { font-weight: 500; font-size: 14px; }
+.rest-week td { font-size: 14px; }
+.rest-week td:last-child { width: 200px; }
+.rest-week-player { display: flex; align-items: center; gap: 9px; }
+.career-country-options label { display: inline-flex; align-items: center; gap: 6px; padding: 8px; }
+fieldset.career-country-options { border: 1px solid var(--border); margin: 0 12px; padding: 4px; }
+.career-country-options legend { padding: 0 6px; }
+@media (max-width: 800px) { .rest-week { padding: 12px; } .rest-week td:last-child { width: 140px; } }

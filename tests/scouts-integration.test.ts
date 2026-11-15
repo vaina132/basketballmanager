@@ -17,7 +17,7 @@ import { remainingStaffBudget, STAFF_BUDGET, staffCommitted } from '../src/world
 const club = 'rhine-falcons', target = 'aeg-1';
 const restore = (state: SeasonState) => parseSeason(serializeSeason(state));
 const opening = (coaching = true) => createSeason(731, club, 'off', true, coaching, true, true, null, false, true, false, false, true);
-const advance = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const advance = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 const fee = (id: string) => DEVELOPMENT_SCOUTS.find(scout => scout.id === id)!.fee;
 let initial: SeasonState, hired: SeasonState, assigned: SeasonState, reported: SeasonState, released: SeasonState, nextYear: SeasonState;
 const boundaries: SeasonState[] = [];
@@ -57,7 +57,7 @@ describe('recruitable scouts in actual careers', () => {
     expect(hired.finance.ledger.slice(initial.finance.ledger.length)).toMatchObject([{ kind: 'scouting', clubId: club, amount: -fee('scout-19'), scout: { scoutId: 'scout-19' } }]);
     expect(after.baseline.endBalance).toBe(before.baseline.endBalance - fee('scout-19'));
     expect(after.rows.map(row => [row.wages, row.operations, row.transferOut])).toEqual(before.rows.map(row => [row.wages, row.operations, row.transferOut]));
-    expect(hired.activeMatch).toEqual(initial.activeMatch);
+    expect(hired.activeMatch!).toEqual(initial.activeMatch!);
   });
 
   it('cancels only a released scout\'s queued visit, with no report or refund', () => {
@@ -118,7 +118,7 @@ describe('recruitable scouts in actual careers', () => {
 
   it('preserves the next match action and world transition through save/load', () => {
     const loaded = restore(assigned);
-    expect(stepMatch(loaded.activeMatch)).toEqual(stepMatch(assigned.activeMatch));
+    expect(stepMatch(loaded.activeMatch!)).toEqual(stepMatch(assigned.activeMatch!));
     expect(advance(loaded)).toEqual(reported);
     expect(getClubScouts(setScoutRenewal(hired, getClubScouts(hired)[0]!.id, false))[0]!.renew).toBe(false);
     expect(getClubScouts(hired)[0]!.renew).toBe(true);

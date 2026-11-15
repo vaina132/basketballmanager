@@ -30,7 +30,7 @@ function finalPosition(state: Pick<SeasonState, 'clubs' | 'fixtures' | 'seasonNu
 function paymentsDueNow(state: SeasonState): DueSponsorshipPayment[] {
   const booked = new Set<string>();
   for (const entry of financeLedgerEntries(state.finance)) if (entry.kind === 'sponsor') booked.add(`${entry.clubId}/${entry.sourceId}`);
-  return sponsorshipPaymentsDue(state.commercial, state.clubs.length, { seasonNumber: state.seasonNumber, round: state.round, complete: state.status === 'complete' }, finalPosition(state))
+  return sponsorshipPaymentsDue(state.commercial, id => state.world?.domesticLeagues?.find(league => league.clubIds.includes(id))?.clubIds.length ?? state.clubs.length, { seasonNumber: state.seasonNumber, round: state.round, complete: state.status === 'complete' }, finalPosition(state), seasonRounds(state))
     .filter(payment => payment.seasonNumber === state.seasonNumber && payment.round === state.round && payment.sponsorship.installment !== 1 && !booked.has(`${payment.clubId}/${payment.sourceId}`));
 }
 

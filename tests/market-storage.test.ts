@@ -12,7 +12,7 @@ import { requiredNegotiationWage } from '../src/world/negotiations-policy';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 const clubId = 'rhine-falcons', playerId = 'rhf-1';
-const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 const envelope = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const window = (state: SeasonState) => getMarketWindow(state)!;
@@ -41,7 +41,7 @@ describe('dated recruitment persistence', () => {
       const text = serializeSeason(state), restored = parseSeason(text);
       expect(JSON.parse(text).formatVersion).toBe(SEASON_SCHEMA_VERSION);
       expect(restored).toEqual(state);
-      expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
+      expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(state.activeMatch!));
     }
   });
 
@@ -54,7 +54,7 @@ describe('dated recruitment persistence', () => {
   it('preserves results and cash while deriving recovered condition from the advanced date', () => {
     const restored = parseSeason(serializeSeason(expired));
     expect(restored.date).toBe(firstOffer(pending).expiresOn);
-    expect(restored.activeMatch).toEqual(legacy.activeMatch);
+    expect(restored.activeMatch!).toEqual(legacy.activeMatch!);
     expect(restored.fixtures).toEqual(legacy.fixtures);
     expect(restored.finance).toEqual(legacy.finance);
     expect(restored.payroll).toEqual(legacy.payroll);
@@ -71,7 +71,7 @@ describe('dated recruitment persistence', () => {
     const signed = offerPlayerContract(restored, playerId, getSeasonWage(playerId), 1);
     expect(signed.employment.contracts.length).toBe(restored.employment.contracts.length + 1);
     expect(signed.negotiations.records.length).toBe(restored.negotiations.records.length + 1);
-    expect(signed.activeMatch).toEqual(restored.activeMatch);
+    expect(signed.activeMatch!).toEqual(restored.activeMatch!);
     expect(parseSeason(serializeSeason(signed))).toEqual(signed);
   });
 

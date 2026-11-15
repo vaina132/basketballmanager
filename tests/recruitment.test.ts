@@ -15,7 +15,7 @@ import { advanceSeason, createSeason, dateForRound, managedSide, rolloverSeason 
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 
 const clubId = 'rhine-falcons';
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function finish(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -74,7 +74,7 @@ describe('dated in-season free-agent recruitment', () => {
     expect(next.training.points[playerId]).toEqual(opening.training.points[playerId]);
     expect(next.conditions[playerId]).toBe(opening.conditions[playerId]);
     expect(next.fixtures.filter(fixture => fixture.round === 1).every(fixture => !fixture.result!.stats[playerId])).toBe(true);
-    expect(next.activeMatch[managedSide(next)].players.some(player => player.id === playerId)).toBe(true);
+    expect(next.activeMatch![managedSide(next)].players.some(player => player.id === playerId)).toBe(true);
     expect(getPlayerPayroll(next, playerId)).toMatchObject({ agreement: { startsRound: 2 }, charged: 0, futureCommitted: wage * .9, nextInstallment: payrollInstallment(wage, 2, 10) });
     const played = play(next);
     expect(getPlayerPayroll(played, playerId)).toMatchObject({ charged: payrollInstallment(wage, 2, 10), futureCommitted: wage * .8 });
@@ -145,7 +145,7 @@ describe('dated in-season free-agent recruitment', () => {
     legacy = play(legacy);
     const enabled = enableInSeasonRecruitment(legacy);
     expect(enabled.recruitment.enabledSince).toMatchObject({ seasonNumber: 2, round: 2 });
-    expect(enabled.activeMatch).toBe(legacy.activeMatch);
+    expect(enabled.activeMatch!).toBe(legacy.activeMatch!);
     expect(quoteInSeasonOffer(enabled, playerId, wage).responseRound).toBe(3);
     let late = opening;
     while (late.round < 9) late = play(late);

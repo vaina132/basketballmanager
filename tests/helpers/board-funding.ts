@@ -8,7 +8,7 @@ import { advanceMarket } from '../../src/world/market';
 import { getMarketStartReason } from '../../src/world/market-policy';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../../src/world/season';
 
-export const advanceMatchday = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+export const advanceMatchday = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 
 /** Seed-227 Rhine career with automatic contracts and facilities, played to the end of the first offseason market. */
 export function playFirstSeason(boardConsequences: boolean): SeasonState {

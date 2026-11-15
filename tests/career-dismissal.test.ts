@@ -12,7 +12,7 @@ import { currentSeasonFile } from './helpers/season-format';
 import { getInboxItems } from '../src/ui/inbox-items';
 
 const CLUB = 'rhine-falcons';
-const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 const start = (seed: number, careerMoves = true) => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves }), true), true);
 /** An all-automatic Rhine Falcons season, played to the finished final match. */
 function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number): SeasonState {

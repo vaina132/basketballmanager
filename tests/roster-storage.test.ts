@@ -10,7 +10,7 @@ import { getSeasonPerformance } from '../src/world/performance';
 
 const clubId = 'atlantic-pilots';
 const manager = { name: 'Historical Coach', dateOfBirth: '1980-03-17', nationality: 'Turkish' };
-const finish = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const finish = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function completed(state: SeasonState): SeasonState { while (state.status !== 'complete') state = advanceSeason(finish(state)); return state; }
 function oldFormat(state: SeasonState, version: 7 | 8): string {
   const previous = structuredClone(state) as unknown as Record<string, unknown>;
@@ -30,7 +30,7 @@ function expectRetainedHistory(state: SeasonState): void {
 beforeAll(() => {
   firstComplete = completed(createSeason(9, clubId, 'standard', true, true, true, true, manager));
   const next = advanceSeason(finish(rolloverSeason(firstComplete)));
-  secondLive = { ...next, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(next.activeMatch, managedSide(next), true)) };
+  secondLive = { ...next, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(next.activeMatch!, managedSide(next), true)) };
 }, 60_000);
 
 describe('historical roster persistence', () => {
@@ -42,7 +42,7 @@ describe('historical roster persistence', () => {
     expect(restored.history[0]!.rosters).toEqual(firstComplete.rosters);
     expectRetainedHistory(restored);
     expect(restored.training.lastWeek!.rosterIds[clubId]).toBe('roster-s2-atlantic-pilots-r1');
-    expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(secondLive.activeMatch));
+    expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(secondLive.activeMatch!));
     expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(secondLive)));
   });
 
@@ -52,7 +52,7 @@ describe('historical roster persistence', () => {
     expect(restored).toEqual({ ...withUnavailableArchivedStats(secondLive), manager: version === 8 ? manager : null });
     expect(restored.history[0]!.fixtures.every(fixture => fixture.result.stats === null)).toBe(true);
     expect(restored.fixtures.filter(fixture => fixture.result).every(fixture => fixture.result!.stats !== null)).toBe(true);
-    expect(restored.activeMatch).toEqual(source.activeMatch);
+    expect(restored.activeMatch!).toEqual(source.activeMatch!);
     expect(restored.payroll).toEqual(source.payroll);
     expect(financeAtLedgerBoundary(restored.finance, financeLedgerCount(restored.finance))).toEqual(source.finance);
     expect(restored.injuries).toEqual(source.injuries);

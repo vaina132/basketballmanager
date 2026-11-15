@@ -3,7 +3,7 @@ import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import { sponsorMarket } from '../data/development-sponsors';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
-import { MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, validateWorld } from './career-world';
+import { MIN_WORLD_CLUBS, validateWorld } from './career-world';
 import { clubTeam, type DataPack, type DataPackCompetition } from './data-pack';
 import { overallRating } from './overall-rating';
 
@@ -28,11 +28,11 @@ const clamp = (value: number, low: number, high: number) => Math.max(low, Math.m
 
 /** Domestic leagues in the pack that a career can be played in (an even number of 4 to 40 clubs). */
 export function careerCompetitions(pack: DataPack): DataPackCompetition[] {
-  return pack.competitions.filter(item => item.kind === 'domestic' && item.clubIds.length >= MIN_WORLD_CLUBS && item.clubIds.length <= MAX_WORLD_CLUBS && item.clubIds.length % 2 === 0);
+  return pack.competitions.filter(item => item.kind === 'domestic' && item.clubIds.length >= MIN_WORLD_CLUBS && item.clubIds.length <= 20);
 }
 
 export function realWorldId(pack: DataPack, competitionId: string): string {
-  return `real-full-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
+  return `real-calendar-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
 }
 
 /** The fictional season wage for a player of this overall rating, in euro cents. */
@@ -44,11 +44,15 @@ export function realWorldWage(overall: number): number {
 /** Recognises generated reserves retained in older careers; new worlds never add them. */
 export const isGeneratedReserve = (playerId: string) => playerId.includes('-reserve-');
 
-export function worldFromPack(pack: DataPack, competitionId: string): CareerWorld {
-  const competition = careerCompetitions(pack).find(item => item.id === competitionId);
-  if (!competition) throw new Error('Choose a domestic league with an even number of clubs from the loaded data pack.');
+export function worldFromPack(pack: DataPack, competitionId: string | readonly string[]): CareerWorld {
+  const ids = typeof competitionId === 'string' ? [competitionId] : [...competitionId];
+  const competitions = careerCompetitions(pack).filter(item => ids.includes(item.id));
+  if (!ids.length || new Set(ids).size !== ids.length || competitions.length !== ids.length) throw new Error('Choose supported domestic leagues from the loaded data pack.');
+  const competition = competitions[0]!;
+  const clubIds = competitions.flatMap(item => item.clubIds);
+  if (new Set(clubIds).size !== clubIds.length) throw new Error('A club cannot enter two domestic leagues.');
   const byId = new Map(pack.players.map(player => [player.id, player]));
-  const teams = competition.clubIds.map(clubId => {
+  const teams = clubIds.map(clubId => {
     const club = pack.clubs.find(club => club.id === clubId)!;
     if (club.playerIds.length < 8 || club.playerIds.length > MAX_CLUB_ROSTER_SIZE) throw new Error(`${club.name} needs 8–${MAX_CLUB_ROSTER_SIZE} imported players for this career. Check the roster data; no players have been added or discarded.`);
     return clubTeam(pack, clubId);
@@ -68,7 +72,8 @@ export function worldFromPack(pack: DataPack, competitionId: string): CareerWorl
     return { clubId: team.id, name: `${PRESIDENT_FIRST[h % PRESIDENT_FIRST.length]} ${PRESIDENT_LAST[Math.floor(h / PRESIDENT_FIRST.length) % PRESIDENT_LAST.length]}`, generosity: (1 + (h >>> 8) % 5) as DevelopmentPresident['generosity'], seasonCapital: capitals[index % capitals.length]! };
   });
   const world: CareerWorld = {
-    id: realWorldId(pack, competition.id), name: `${competition.name} ${competition.season}`, source: 'real-data-pack', rosterModel: FULL_ROSTER_MODEL, startDate: DEVELOPMENT_WORLD.startDate,
+    id: realWorldId(pack, competitions.length === 1 ? competition.id : `leagues-${hash(competitions.map(item => item.id).sort().join('|')).toString(16)}`), name: competitions.length === 1 ? `${competition.name} ${competition.season}` : `European domestic leagues ${competition.season}`, source: 'real-data-pack', rosterModel: FULL_ROSTER_MODEL, startDate: DEVELOPMENT_WORLD.startDate,
+    domesticLeagues: competitions.map(item => ({ id: item.id, name: item.name, country: item.country ?? 'Other', tier: item.tier, clubIds: [...item.clubIds] })),
     clubs: teams,
     playerProfiles: Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id,
       { dateOfBirth: byId.get(player.id)?.birthDate ?? `${2026 - (byId.get(player.id)?.age ?? REAL_WORLD_RULES.defaultAge)}-01-01`, source: byId.get(player.id)?.birthDate ? 'official-profile' as const : 'estimated-from-age' as const,

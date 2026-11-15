@@ -6,7 +6,7 @@ import './matchday-squad.css'
 
 export function MatchdaySquad({ season, busy, onAutomatic }: { season: SeasonState; busy: boolean; onAutomatic: () => void }) {
   const club = season.clubs.find(club => club.id === season.managedClubId)!
-  const selected = season.activeMatch[managedSide(season)].players.length
+  const selected = season.activeMatch ? season.activeMatch[managedSide(season)].players.length : 0
   const editable = canSelectMatchday(season)
   return <section className="panel matchday-squad" aria-label="Matchday selection">
     <div><Icon name="court" size={20} /><strong>{selected} / 12</strong><span>Matchday squad</span><small>{club.players.length} at club</small></div>

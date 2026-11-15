@@ -15,7 +15,7 @@ const clubId = 'atlantic-pilots', playerId = 'atl-1';
 let initial: SeasonState, second: SeasonState, prepaid: SeasonState, partial: SeasonState, completed: SeasonState, nextYear: SeasonState;
 let legacyLive: SeasonState, legacyComplete: SeasonState, constrained: SeasonState, belowReserve: SeasonState;
 const restore = (state: SeasonState) => parseSeason(serializeSeason(state));
-const finish = (state: SeasonState): SeasonState => state.activeMatch.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+const finish = (state: SeasonState): SeasonState => state.activeMatch!.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 function completeSeason(state: SeasonState): SeasonState { while (state.status !== 'complete') state = advanceSeason(finish(state)); return state; }
 function formatSix(season: SeasonState): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
@@ -41,7 +41,7 @@ beforeAll(() => {
   prepaid = prepayWages(initial, playerId); partial = advanceSeason(finish(prepaid));
   completed = completeSeason(second); nextYear = rolloverSeason(completed);
   const legacy = advanceSeason(finish(createSeason(37, clubId, 'off', true, true, true, false)));
-  legacyLive = { ...legacy, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(legacy.activeMatch, managedSide(legacy), true)) };
+  legacyLive = { ...legacy, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(legacy.activeMatch!, managedSide(legacy), true)) };
   legacyComplete = completeSeason(legacyLive);
   let fourth = nextYear;
   while (fourth.seasonNumber < 4) fourth = rolloverSeason(completeSeason(fourth));
@@ -81,9 +81,9 @@ describe('payroll-aware career persistence', () => {
     expect(installment(partial).payroll!.items).toHaveLength(9);
     expect(installment(partial).payroll!.items.some(item => item.playerId === playerId)).toBe(false);
     expect(restore(partial)).toEqual(partial);
-    const live = { ...prepaid, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(prepaid.activeMatch, managedSide(prepaid), true)) }, restored = restore(live);
-    expect(JSON.stringify(restored.activeMatch)).toBe(JSON.stringify(live.activeMatch));
-    expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(live.activeMatch));
+    const live = { ...prepaid, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(prepaid.activeMatch!, managedSide(prepaid), true)) }, restored = restore(live);
+    expect(JSON.stringify(restored.activeMatch!)).toBe(JSON.stringify(live.activeMatch!));
+    expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(live.activeMatch!));
     expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(live)));
   });
 
@@ -121,7 +121,7 @@ describe('format 6 migration and prospective activation', () => {
     const text = formatSix(original), source = JSON.parse(text).state, restored = parseSeason(text);
     expect(restored).toEqual(withUnavailableArchivedStats(original));
     expect(restored.payroll).toEqual(createPayroll(original.clubs, clubId));
-    expect(JSON.stringify(restored.activeMatch)).toBe(JSON.stringify(source.activeMatch));
+    expect(JSON.stringify(restored.activeMatch!)).toBe(JSON.stringify(source.activeMatch!));
     expect(financeLedgerSlice(restored.finance).map(({ payroll: _payroll, ...entry }) => entry)).toEqual(source.finance.ledger);
     expect(restored.training).toEqual(original.training);
     expect(restored.coaching).toEqual(source.coaching);
@@ -206,7 +206,7 @@ describe('strict payroll ledger reconciliation', () => {
     ['unsupported payment type', state => { Object.assign(installment(state).payroll!, { type: 'bonus' }); }],
     ['missing payroll metadata', state => { installment(state).payroll = null; }],
     ['payroll metadata on other event', state => { state.finance.ledger[0]!.payroll = structuredClone(installment(state).payroll); }],
-    ['ticket metadata on wages', state => { installment(state).ticket = { fixtureId: state.activeFixtureId, price: 1800, attendance: 0 }; }],
+    ['ticket metadata on wages', state => { installment(state).ticket = { fixtureId: state.activeFixtureId!, price: 1800, attendance: 0 }; }],
     ['extra item metadata', state => { Object.assign(installment(state).payroll!.items[0]!, { paid: true }); }],
   ];
   it.each(changes)('rejects %s', (_name, change) => reject(second, change));

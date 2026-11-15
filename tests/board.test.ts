@@ -36,13 +36,13 @@ describe('communicated board mandates and evidence-based confidence', () => {
   it('opts in prospectively without altering prepared gameplay and waits until next season after round ten', () => {
     const before = freeze(initial()), enabled = enableBoard(before);
     expect(before.board).toEqual(createBoard());
-    expect(enabled.activeMatch).toBe(before.activeMatch);
+    expect(enabled.activeMatch!).toBe(before.activeMatch!);
     expect(enabled.board.enabledSince?.includeCurrentRound).toBe(false);
     expect(enabled.board.mandates[0]).toMatchObject({ startsRound: 2, deadlineDate: dateForRound(10) });
     expect(enabled.board.mandates[0]!.clubs[clubId]!.games).toBe(9);
     expect(enableBoard(enabled)).toBe(enabled);
     expect(processBoardRound(committed(enabled, 1))).toEqual(committed(enabled, 1));
-    expect(() => enableBoard({ ...before, activeMatch: { ...before.activeMatch, stepCount: 1 } }, 'career')).toThrow(/untouched/);
+    expect(() => enableBoard({ ...before, activeMatch: { ...before.activeMatch!, stepCount: 1 } }, 'career')).toThrow(/untouched/);
     const late = enableBoard(committed(initial(), 10));
     expect(late.board.mandates).toHaveLength(0);
     expect(getBoardSummary(late)).toMatchObject({ enabled: true, confidence: 50, mandate: null, latest: null, nextReviewDate: null });

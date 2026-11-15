@@ -27,7 +27,7 @@ describe('prospective senior aging and real practice', () => {
   it('leaves prepared matches, RNG, authored skills and old training unchanged on activation', () => {
     expect(base.lifecycle).toEqual(createLifecycle());
     const enabled = enableLifecycle(base);
-    expect(enabled.activeMatch).toBe(base.activeMatch);
+    expect(enabled.activeMatch!).toBe(base.activeMatch!);
     expect(enabled.training).toBe(base.training);
     expect(enabled.clubs).toBe(base.clubs);
     expect(enabled.lifecycle.reviews).toHaveLength(1);

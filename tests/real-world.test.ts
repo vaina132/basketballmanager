@@ -44,7 +44,7 @@ describe('a career world from a real-data pack', () => {
   it('builds the league\'s real clubs with complete imported squads, neutral figures and the pack\'s identities', () => {
     const world = worldFromPack(pack, 'competition-league');
     expect(() => validateWorld(world)).not.toThrow();
-    expect(world).toMatchObject({ id: 'real-full-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
+    expect(world).toMatchObject({ id: 'real-calendar-test-2-competition-league', rosterModel: 'club-roster-1', name: 'Test Liga 2026-27', source: 'real-data-pack', rivalries: [] });
     expect(world.clubs.map(club => club.players.length)).toEqual([14, 14, 14, 14]);
     // Missing statistics must not silently discard a real identity.
     expect(world.clubs.every(club => club.players.some(item => item.id.endsWith('-13')))).toBe(true);
@@ -110,7 +110,7 @@ describe('a career world from a real-data pack', () => {
     const world = worldFromPack(pack, 'competition-league');
     let state = createSeason({ seed: 3, world, managedClubId: 'club-c', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS });
     expect([state.dataPackId, seasonRounds(state), state.clubs.map(club => club.name)]).toEqual([world.id, 6, ['Club A', 'Club B', 'Club C', 'Club D']]);
-    for (let matchday = 0; matchday < 3; matchday += 1) state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+    for (let matchday = 0; matchday < 3; matchday += 1) state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
     expect(state.round).toBe(4);
     expect(parseSeason(serializeSeason(state))).toEqual(state);
   }, 300_000);

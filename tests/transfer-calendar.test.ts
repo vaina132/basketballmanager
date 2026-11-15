@@ -23,7 +23,7 @@ describe('club consent, expiry and the final transfer dates', () => {
   let ready: SeasonState;
   beforeAll(() => {
     ready = createSeason(77, buyer, 'off', true, true, true, true, null, true, true, true, true);
-    while (ready.status === 'active') ready = advanceSeason({ ...ready, activeMatch: simulateToEnd(setAutoSubstitutions(ready.activeMatch, managedSide(ready), true)) });
+    while (ready.status === 'active') ready = advanceSeason({ ...ready, activeMatch: simulateToEnd(setAutoSubstitutions(ready.activeMatch!, managedSide(ready), true)) });
     for (const player of ready.clubs.find(club => club.id === buyer)!.players.slice(0, 8)) ready = submitMarketOffer(ready, player.id, getSeasonWage(player.id), 1);
     ready = advanceMarket(ready);
     expect(getMarketStartReason(ready)).toBeNull();
@@ -76,7 +76,7 @@ describe('club consent, expiry and the final transfer dates', () => {
     expect(latest(completed, buyer, playerId).status).toBe('accepted');
     expect(getClubContractSummary(completed, seller).rosterSize).toBe(8);
     expect(completed.finance.ledger.slice(state.finance.ledger.length).map(entry => entry.amount)).toEqual([-fee, fee]);
-    expect(completed.activeMatch).toBe(state.activeMatch);
+    expect(completed.activeMatch!).toBe(state.activeMatch!);
     expect(getMarketStartReason(completed)).toBeNull();
     expect(parseSeason(serializeSeason(completed))).toEqual(completed);
   });

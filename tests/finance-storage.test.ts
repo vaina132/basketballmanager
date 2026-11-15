@@ -16,7 +16,7 @@ const clubId = DEVELOPMENT_CLUBS[0]!.id;
 let initial: SeasonState, second: SeasonState, completed: SeasonState, nextYear: SeasonState;
 let legacyLive: SeasonState, legacyComplete: SeasonState;
 const restore = (state: SeasonState) => parseSeason(serializeSeason(state));
-const finish = (state: SeasonState): SeasonState => state.activeMatch.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+const finish = (state: SeasonState): SeasonState => state.activeMatch!.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 function completeSeason(state: SeasonState): SeasonState {
   while (state.status !== 'complete') state = advanceSeason(finish(state));
   return state;
@@ -42,7 +42,7 @@ beforeAll(() => {
   second = advanceSeason(finish(initial));
   completed = completeSeason(second); nextYear = rolloverSeason(completed);
   const legacy = advanceSeason(finish(createSeason(37, clubId, 'off', true, true, false)));
-  legacyLive = { ...legacy, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(legacy.activeMatch, managedSide(legacy), true)) };
+  legacyLive = { ...legacy, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(legacy.activeMatch!, managedSide(legacy), true)) };
   legacyComplete = completeSeason(legacyLive);
 }, 60_000);
 
@@ -78,12 +78,12 @@ describe('finance ledger persistence', () => {
 
   it('keeps price locks while future plans change and continues identical match RNG', () => {
     const changed = setTicketPlan(initial, { delegated: false, price: 0 });
-    const live = { ...changed, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(changed.activeMatch, managedSide(changed), true)) };
+    const live = { ...changed, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(changed.activeMatch!, managedSide(changed), true)) };
     const restored = restore(live);
     expect(restored.finance.roundPrices).toEqual(initial.finance.roundPrices);
     expect(restored.finance.plans[clubId]).toEqual({ delegated: false, price: 0 });
-    expect(JSON.stringify(restored.activeMatch)).toBe(JSON.stringify(live.activeMatch));
-    expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(live.activeMatch));
+    expect(JSON.stringify(restored.activeMatch!)).toBe(JSON.stringify(live.activeMatch!));
+    expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(live.activeMatch!));
     const continued = advanceSeason(finish(restored));
     expect(continued).toEqual(advanceSeason(finish(live)));
     expect(continued.finance.roundPrices[clubId]).toBe(0);
@@ -107,7 +107,7 @@ describe('finance ledger persistence', () => {
     expect(enabled.finance.ledger.filter(entry => entry.kind === 'sponsor').every(entry => entry.amount === 18_000_000)).toBe(true);
     expect(enabled.finance.ledger.filter(entry => entry.kind === 'tickets' || entry.kind === 'operations')).toHaveLength(0);
     expect(enabled.finance.ledger.filter(entry => entry.kind === 'coaching')).toHaveLength(enabled.coaching.contracts.length);
-    expect(enabled.activeMatch).toBe(before.activeMatch);
+    expect(enabled.activeMatch!).toBe(before.activeMatch!);
     expect(restore(advanceSeason(finish(enabled)))).toEqual(advanceSeason(finish(enabled)));
   });
 
@@ -132,7 +132,7 @@ describe('format 5 migration without financial side effects', () => {
     expect(restored.finance).toEqual(createFinance(original.clubs, clubId));
     expect(restored.training).toEqual(original.training);
     expect(restored.coaching).toEqual(source.coaching);
-    expect(JSON.stringify(restored.activeMatch)).toBe(JSON.stringify(source.activeMatch));
+    expect(JSON.stringify(restored.activeMatch!)).toBe(JSON.stringify(source.activeMatch!));
     if (original.status === 'complete') expect(rolloverSeason(restored)).toEqual(rolloverSeason(withUnavailableArchivedStats(original)));
     else expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(withUnavailableArchivedStats(original))));
   });
@@ -174,7 +174,7 @@ describe('strict finance metadata and origins', () => {
     ['fractional amount', state => { firstEntry(state, 'opening').amount += .5; }],
     ['extra entry metadata', state => { Object.assign(state.finance.ledger[0]!, { balance: 1 }); }],
     ['wrong funding order', state => { [state.finance.ledger[0], state.finance.ledger[6]] = [state.finance.ledger[6]!, state.finance.ledger[0]!]; renumber(state); }],
-    ['ticket details on opening', state => { firstEntry(state, 'opening').ticket = { fixtureId: state.activeFixtureId, price: 1800, attendance: 0 }; }],
+    ['ticket details on opening', state => { firstEntry(state, 'opening').ticket = { fixtureId: state.activeFixtureId!, price: 1800, attendance: 0 }; }],
     ['wrong coach fee', state => { firstEntry(state, 'coaching').amount += 1; }],
     ['unknown coach', state => { firstEntry(state, 'coaching').coach!.coachId = 'coach-99'; }],
     ['wrong contract owner', state => { firstEntry(state, 'coaching').clubId = state.clubs[1]!.id; }],

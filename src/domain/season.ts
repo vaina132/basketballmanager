@@ -90,7 +90,8 @@ export interface SeasonArchive {
 
 /** Current season save format. Bumping it also requires a migration in season-storage.ts. */
 /** Format 39 carries the world; 40 compacts strings/shapes; 41 shares subtrees; 42 summarizes rival academy reports; 43 summarizes rival youth fixtures. */
-export const SEASON_SCHEMA_VERSION = 46;
+/** Format 47 adds versioned domestic calendars and nullable managed games with retained rest-week conditions. */
+export const SEASON_SCHEMA_VERSION = 47;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -139,8 +140,10 @@ export interface SeasonState {
   market: SeasonMarket;
   recruitment: SeasonRecruitment;
   fixtures: SeasonFixture[];
-  activeFixtureId: string;
-  activeMatch: MatchState;
+  /** End-of-week condition evidence for clubs with no senior fixture. New calendars only. */
+  restWeeks?: { round: number; clubId: string; conditions: Record<string, number> }[];
+  activeFixtureId: string | null;
+  activeMatch: MatchState | null;
 }
 
 export interface Standing {

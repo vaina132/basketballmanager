@@ -48,7 +48,7 @@ function MedicalCaseRow({ season, summary, busy, onSelectPlayer }: { season: Sea
   const player = currentClub?.players.find(item => item.id === injury.playerId) ?? getCareerPlayer(season, injury.playerId)
   const originalClub = season.clubs.find(club => club.id === injury.clubId)!
   const recovering = summary.daysRemaining > 0
-  const condition = inSquad ? season.status === 'complete' ? season.conditions[player.id] : season.activeMatch.stats[player.id]?.condition ?? season.conditions[player.id] : null
+  const condition = inSquad ? season.status === 'complete' ? season.conditions[player.id] : season.activeMatch?.stats[player.id]?.condition ?? season.conditions[player.id] : null
   const physio = summary.lastReview ? PHYSIO_DIRECTORY.find(item => item.id === summary.lastReview?.physioId) : null
   const reviews = season.physio.rehabilitation.filter(record => record.injuryId === injury.id && record.toDate <= season.date).slice().sort((left, right) => right.toDate.localeCompare(left.toDate))
   return <article className={`medical-case${recovering ? ' is-recovering' : ''}`} data-medical-injury={injury.id} data-medical-player={player.id}>

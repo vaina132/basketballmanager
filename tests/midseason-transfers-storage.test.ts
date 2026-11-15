@@ -12,7 +12,7 @@ import { rosterForRound } from '../src/world/rosters';
 import { advanceSeason, createSeason, dateForRound, managedSide } from '../src/world/season';
 
 const managed = 'rhine-falcons', seller = 'aegean-waves', target = 'aew-1';
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 let opening: SeasonState, pending: SeasonState, arrived: SeasonState, paid: SeasonState, incoming: SeasonState, sold: SeasonState, lost: SeasonState;
 let playerId: string, ownPlayerId: string;
 
@@ -33,7 +33,7 @@ describe('paid in-season transfer persistence', () => {
     for (const state of [opening, pending, arrived, paid, incoming, sold, lost]) {
       const restored = parseSeason(serializeSeason(state));
       expect(restored).toEqual(state);
-      expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
+      expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(state.activeMatch!));
     }
   });
 

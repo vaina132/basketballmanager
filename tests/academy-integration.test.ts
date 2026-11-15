@@ -20,7 +20,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 
 const clubId = 'rhine-falcons';
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 
 describe('academy graduates across the senior career systems', () => {
   let initial: SeasonState, offered: SeasonState, promoted: SeasonState, played: SeasonState, nextYear: SeasonState;
@@ -33,7 +33,7 @@ describe('academy graduates across the senior career systems', () => {
     offered = offerAcademyPromotion(trained, playerId, requiredNegotiationWage(playerId, 1, undefined, trained));
     promoted = play(offered);
     const side = managedSide(promoted);
-    const match = promoted.activeMatch.lineups[side].includes(playerId) ? promoted.activeMatch : substitutePlayer(promoted.activeMatch, side, promoted.activeMatch.lineups[side][0]!, playerId);
+    const match = promoted.activeMatch!.lineups[side].includes(playerId) ? promoted.activeMatch! : substitutePlayer(promoted.activeMatch!, side, promoted.activeMatch!.lineups[side][0]!, playerId);
     played = play({ ...promoted, activeMatch: match });
     let continuing = offerPlayerContract(played, playerId, requiredNegotiationWage(playerId, 3, undefined, played), 3);
     continuing = setEmploymentDelegation(continuing, true);
@@ -45,11 +45,11 @@ describe('academy graduates across the senior career systems', () => {
   it('retains academy gains and joins only after the actual offer response', () => {
     const prospect = initial.academy.prospects.find(row => row.player.id === playerId)!;
     expect(getCareerPlayers(offered).some(player => player.id === playerId)).toBe(false);
-    expect(offered.activeMatch[managedSide(offered)].players.some(player => player.id === playerId)).toBe(false);
+    expect(offered.activeMatch![managedSide(offered)].players.some(player => player.id === playerId)).toBe(false);
     const graduate = promoted.academy.graduates.find(row => row.player.id === playerId)!;
     expect(graduate.player.attributes.threePoint).toBeGreaterThan(prospect.player.attributes.threePoint);
     expect(getCareerPlayer(promoted, playerId)).toEqual(graduate.player);
-    expect(promoted.activeMatch[managedSide(promoted)].players.find(player => player.id === playerId)?.attributes).toEqual(graduate.player.attributes);
+    expect(promoted.activeMatch![managedSide(promoted)].players.find(player => player.id === playerId)?.attributes).toEqual(graduate.player.attributes);
     expect(Object.values(promoted.training.points[playerId]!)).toEqual(Array(7).fill(0));
     expect(promoted.conditions[playerId]).toBe(100);
     expect(getPlayerHealth(promoted, playerId)).toBeNull();
@@ -59,7 +59,7 @@ describe('academy graduates across the senior career systems', () => {
   });
 
   it('preserves pre-promotion rosters and records actual minutes and wages afterward', () => {
-    const before = promoted.fixtures.find(fixture => fixture.id === offered.activeFixtureId)!;
+    const before = promoted.fixtures.find(fixture => fixture.id === offered.activeFixtureId!)!;
     const teams = getFixtureTeams(promoted, before);
     expect([...teams.home.players, ...teams.away.players].some(player => player.id === playerId)).toBe(false);
     expect(before.result!.stats![playerId]).toBeUndefined();
@@ -112,6 +112,6 @@ describe('academy graduates across the senior career systems', () => {
     expect(history.log.some(log => log.round === promoted.round && log.stats.secondsPlayed > 0)).toBe(true);
     expect(nextYear.academy.intakes.filter(intake => intake.clubId === clubId && intake.seasonNumber === 2)[0]!.prospectIds).toHaveLength(2);
     expect(parseSeason(serializeSeason(nextYear))).toEqual(nextYear);
-    expect(advanceSeason({ ...nextYear, activeMatch: simulateToEnd(setAutoSubstitutions(nextYear.activeMatch, managedSide(nextYear), true)) })).toEqual(play(parseSeason(serializeSeason(nextYear))));
+    expect(advanceSeason({ ...nextYear, activeMatch: simulateToEnd(setAutoSubstitutions(nextYear.activeMatch!, managedSide(nextYear), true)) })).toEqual(play(parseSeason(serializeSeason(nextYear))));
   });
 });

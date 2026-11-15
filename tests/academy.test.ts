@@ -25,7 +25,7 @@ import { availableYouthCoaches, getClubYouthCoach, quoteYouthCoachHire, youthCoa
 const club = 'rhine-falcons';
 const create = (academy = true, youth = true) => createSeason(227, club, 'off', true, true, true, true, null, true, true, true, true, true, true, true, true, academy, youth);
 function freeze<T>(value: T): T { if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
-function nextRound(state: SeasonState): SeasonState { return advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) }); }
+function nextRound(state: SeasonState): SeasonState { return advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) }); }
 const total = (values: Record<string, number>) => Object.values(values).reduce((sum, value) => sum + value, 0);
 function week(state: SeasonState, afterRound = state.round) { return { rounds: 10, academy: state.academy, youth: state.youth, clubs: state.clubs, seasonNumber: state.seasonNumber, afterRound, fromDate: dateForRound(afterRound, state.seasonNumber), toDate: dateForRound(afterRound + 1, state.seasonNumber) }; }
 
@@ -36,7 +36,7 @@ describe('persistent academy intake and development', () => {
   it('generates deterministic private prospects without altering the prepared match or senior population', () => {
     const legacy = freeze(create(false, false)), activated = enableAcademy(legacy);
     expect(legacy.academy).toEqual(createAcademy());
-    expect(activated.activeMatch).toBe(legacy.activeMatch);
+    expect(activated.activeMatch!).toBe(legacy.activeMatch!);
     expect(activated.training).toBe(legacy.training);
     expect(activated.conditions).toBe(legacy.conditions);
     expect(activated.academy.prospects).toHaveLength(18);
@@ -63,7 +63,7 @@ describe('persistent academy intake and development', () => {
     expect(total(fullAcademyReport(advanced.weeks[0]!.players[balanced]).gains)).toBe(42);
     expect(initial.training.points[id]).toBeUndefined();
     expect(initial.conditions[id]).toBeUndefined();
-    expect(coached.activeMatch).toBe(initial.activeMatch);
+    expect(coached.activeMatch!).toBe(initial.activeMatch!);
     expect(() => processAcademyWeek({ ...week(coached), academy: advanced })).toThrow(/already.*processed/i);
     expect(() => processAcademyWeek(week(coached, 2))).toThrow(/calendar order/i);
   });
@@ -120,7 +120,7 @@ describe('academy promotion through normal recruitment', () => {
     const [one, two, three] = getClubAcademy(initial);
     const offered = offerAcademyPromotion(initial, one!.player.id, one!.prospect.seasonWage);
     const quote = quoteAcademyPromotion(initial, one!.player.id, one!.prospect.seasonWage);
-    expect(offered.activeMatch).toBe(initial.activeMatch);
+    expect(offered.activeMatch!).toBe(initial.activeMatch!);
     expect(offered.clubs).toBe(initial.clubs);
     expect(getSpendableCash(initial, club) - getSpendableCash(offered, club)).toBe(quote.remainingWages);
     expect(getReservedInSeasonWages(offered, club)).toBe(quote.remainingWages);
@@ -200,7 +200,7 @@ describe('youth staff share the existing financial rules', () => {
 
   it('keeps prospective activation and last-week boundaries explicit', () => {
     const state = create(true, false), enabled = enableYouth(state);
-    expect(enabled.activeMatch).toBe(state.activeMatch);
+    expect(enabled.activeMatch!).toBe(state.activeMatch!);
     expect(getClubYouthCoach(enabled)).toBeNull();
     expect(enabled.youth.contracts).toHaveLength(5);
     expect(new Set(enabled.youth.contracts.map(contract => contract.coachId)).size).toBe(5);

@@ -13,7 +13,7 @@ import { advanceSeason, createSeason, dateForRound, managedSide } from '../src/w
 const clubId = 'rhine-falcons', playerId = 'rhf-1';
 const ownIds = Array.from({ length: 10 }, (_, index) => `rhf-${index + 1}`);
 const create = (enabled = true) => createSeason(53, clubId, 'off', true, true, true, true, null, true, true, true, enabled);
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function finish(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -51,7 +51,7 @@ describe('dated offseason offers and reserved commitments', () => {
     const renewed = offerPlayerContract(enabled, playerId, getSeasonWage(playerId), 1);
     expect(contractForSeason(renewed.employment, playerId, 2)?.clubId).toBe(clubId);
     expect(renewed.market).toBe(enabled.market);
-    expect(renewed.activeMatch).toBe(legacy.activeMatch);
+    expect(renewed.activeMatch!).toBe(legacy.activeMatch!);
   });
 
   it('opens real dated decisions without changing final results, cash or current registrations', () => {

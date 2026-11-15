@@ -10,7 +10,7 @@ import { requiredInSeasonTransferFee } from '../src/world/recruitment-policy';
 import { advanceSeason, createSeason, dateForRound, managedSide, rolloverSeason } from '../src/world/season';
 
 const initial = (enabled = true) => createSeason(227, 'rhine-falcons', 'off', true, false, true, true, null, true, false, true, false, false, false, false, false, true, false, false, false, false, true, enabled);
-const finish = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const finish = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 const advance = (state: SeasonState) => advanceSeason(finish(state));
 const withoutBoard = (state: SeasonState) => { const { board: _board, ...rest } = state; return rest; };
 
@@ -43,7 +43,7 @@ describe('board expectations in the actual career calendar', () => {
     for (let i = 0; i < 3; i += 1) before = advance(before);
     before = finish(before);
     const enabled = enableBoard(before), mandate = enabled.board.mandates[0]!;
-    expect(enabled.activeMatch).toBe(before.activeMatch);
+    expect(enabled.activeMatch!).toBe(before.activeMatch!);
     expect(mandate.startsRound).toBe(5);
     expect(enabled.board.reviews).toHaveLength(0);
     const next = advanceSeason(enabled);

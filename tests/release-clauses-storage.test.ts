@@ -14,7 +14,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 
 const managed = 'rhine-falcons', buyer = 'aegean-waves', playerId = 'rhf-1';
 const sourceFee = 1_000_000, newFee = 2_000_000;
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 const complete = (state: SeasonState): SeasonState => { while (state.status === 'active') state = play(state); return state; };
 const sourceTerms = (state: SeasonState) => state.employment.contracts.find(contract => contract.playerId === playerId && contract.releaseFee === sourceFee)!;
 const triggered = (state: SeasonState) => state.recruitment.offers.find(offer => offer.playerId === playerId && offer.transfer?.mode === 'release-clause')!;
@@ -60,7 +60,7 @@ describe('release-clause persistence and historical replay', () => {
     for (const state of [counter, changedCounter, renewal, opening, pending, arrived, salaryCounter, withdrawn, offseasonPending, offseasonArrived, futureOnlySale, freeArrival, distinctFutureSale]) {
       const restored = parseSeason(serializeSeason(state));
       expect(restored).toEqual(state);
-      expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
+      expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(state.activeMatch!));
     }
   });
 
@@ -73,7 +73,7 @@ describe('release-clause persistence and historical replay', () => {
 
   it('keeps player agreement necessary while clause activation bypasses only the selling club decision', () => {
     expect(triggered(pending)).toMatchObject({ status: 'pending', transfer: { mode: 'release-clause', clubStatus: 'accepted', fee: sourceFee, paymentPlan: 'upfront' } });
-    expect(pending.activeMatch).toEqual(opening.activeMatch);
+    expect(pending.activeMatch!).toEqual(opening.activeMatch!);
     expect(pending.recruitment.events.some(event => event.type === 'club-decision')).toBe(false);
     expect(arrived.employment.transfers.at(-1)).toMatchObject({ mode: 'release-clause', fee: sourceFee, startsSeason: 2, startsRound: 2 });
     expect(contractForRound(arrived.employment, playerId, 2, 1)?.clubId).toBe(managed);

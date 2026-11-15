@@ -53,8 +53,8 @@ describe('committed current-season performance', () => {
 
   it('excludes a finished but uncommitted match and includes a partially committed fixture list exactly once', () => {
     const initial = createSeason(4, undefined, 'off', false);
-    const pending = { ...initial, activeMatch: simulateToEnd(setAutoSubstitutions(initial.activeMatch, managedSide(initial), true)) };
-    expect(pending.activeMatch.status).toBe('finished');
+    const pending = { ...initial, activeMatch: simulateToEnd(setAutoSubstitutions(initial.activeMatch!, managedSide(initial), true)) };
+    expect(pending.activeMatch!.status).toBe('finished');
     expect(getSeasonPerformance(pending).every(row => row.clubGames === 0 && row.games === 0)).toBe(true);
     const id = initial.clubs[0]!.players[0]!.id;
     const partial = commit(pending, 1, { [id]: { secondsPlayed: 600, fieldGoalsMade: 3, fieldGoalsAttempted: 6 } });
@@ -127,7 +127,7 @@ describe('committed current-season performance', () => {
     expect(rows).toEqual(reversed);
     expect(rows.find(row => row.player.id === id)!.log.map(log => log.round)).toEqual([3, 2, 1]);
     expect(original).toEqual(before);
-    expect(stepMatch(original.activeMatch)).toEqual(stepMatch(before.activeMatch));
+    expect(stepMatch(original.activeMatch!)).toEqual(stepMatch(before.activeMatch!));
     const row = rows.find(row => row.player.id === id)!;
     row.log[0]!.stats.points = 999; row.totals.points = 999;
     expect(original).toEqual(before);
@@ -136,7 +136,7 @@ describe('committed current-season performance', () => {
   it('starts fresh after rollover and excludes archived scores from player statistics', () => {
     let state = createSeason(6, undefined, 'off', false);
     while (state.status !== 'complete') {
-      const activeMatch = state.activeMatch.status === 'finished' ? state.activeMatch : simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true));
+      const activeMatch = state.activeMatch!.status === 'finished' ? state.activeMatch! : simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true));
       state = advanceSeason({ ...state, activeMatch });
     }
     const completed = getSeasonPerformance(state);

@@ -75,7 +75,7 @@ export function getPlayerKnowledge(state: SeasonState, playerId: string, clubId 
 export function getMatchPlayerKnowledge(state: SeasonState, playerId: string): PlayerKnowledge {
   const knowledge = getPlayerKnowledge(state, playerId);
   if (knowledge.kind !== 'own') return knowledge;
-  const player = [...state.activeMatch.home.players, ...state.activeMatch.away.players].find(candidate => candidate.id === playerId);
+  const player = [...(state.activeMatch?.home.players ?? []), ...(state.activeMatch?.away.players ?? [])].find(candidate => candidate.id === playerId);
   return player ? { ...knowledge, attributes: player.attributes } : knowledge;
 }
 
@@ -91,6 +91,7 @@ export function quoteScoutingAssignment(state: SeasonState, playerId: string, cl
   else if (state.status !== 'active') reason = 'New observations become available when the next season starts.';
   else if (!owner) reason = 'This player needs a registered club and a scheduled match before he can be observed.';
   else if (owner.id === clubId) reason = 'Your own squad already has exact skill assessments.';
+  else if (!state.fixtures.some(fixture => fixture.round === state.round && [fixture.homeClubId, fixture.awayClubId].includes(owner.id))) reason = 'This player has a rest week. Keep him shortlisted and assign an observation when his next match opens.';
   else if (club.assignments.some(assignment => assignment.playerId === playerId)) reason = 'This player already has a pending assignment.';
   else if (!selected) reason = scoutContractId !== undefined && scoutContractId !== null ? 'Choose an active scout at this club.' : state.scouts.enabledSince ? 'All observation slots are occupied for this matchday.' : 'Both scouting assignments are occupied for this matchday.';
   else if (!selected.available) reason = selected.reason;

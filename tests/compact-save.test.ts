@@ -35,7 +35,7 @@ describe('the compact save layout', () => {
 
   it('saves a career compactly and loads it back exactly; damage inside is still caught by the save checks', () => {
     let state = createSeason({ seed: 71, managedClubId: 'w1-rhine-falcons', world: testWorld(8), ...NEW_CAREER_SYSTEMS });
-    for (let round = 0; round < 4; round += 1) state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+    for (let round = 0; round < 4; round += 1) state = advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
     const plain = serializeSeason(state), compact = serializeSeasonCompact(state);
     expect(parseSeason(compact)).toEqual(state);
     expect(parseSeason(plain)).toEqual(state);

@@ -51,7 +51,7 @@ describe('real youth fixtures and explicit supplemental intake', () => {
     const enabled = enableYouthCompetition(final);
     expect(getYouthFixtures(enabled)).toHaveLength(3);
     expect(getYouthFixtures(enabled).every(fixture => fixture.round === 10 && fixture.date === final.date)).toBe(true);
-    expect(enabled.activeMatch).toBe(final.activeMatch);
+    expect(enabled.activeMatch!).toBe(final.activeMatch!);
     expect(enabled.training).toBe(final.training);
     expect(enabled.finance).toBe(final.finance);
     expect(enableYouthCompetition(enabled)).toBe(enabled);
@@ -76,7 +76,7 @@ describe('real youth fixtures and explicit supplemental intake', () => {
     expect(played.academy).toBe(initial.academy);
     expect(played.injuries).toBe(initial.injuries);
     expect(played.conditions).toBe(initial.conditions);
-    expect(played.activeMatch).toBe(initial.activeMatch);
+    expect(played.activeMatch!).toBe(initial.activeMatch!);
     expect(initial.youthCompetition.seasons[0]!.fixtures.every(fixture => fixture.result === null)).toBe(true);
     expect(processYouthRound(played)).toBe(played);
     expect(() => settleYouthFixture(played, recorded)).toThrow(/only once/);

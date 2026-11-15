@@ -11,7 +11,7 @@ import { getSeasonPerformance } from '../src/world/performance';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 function play(state: SeasonState): SeasonState {
-  return advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+  return advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 }
 function finish(state: SeasonState): SeasonState {
   while (state.status === 'active') state = play(state);
@@ -35,7 +35,7 @@ describe('employment across real season boundaries', () => {
 
   it('keeps renewals pending without changing sporting state or current payroll', () => {
     const renewed = offerPlayerContract(initial, retainedId, 2_000_000, 2);
-    expect(renewed.activeMatch).toBe(initial.activeMatch);
+    expect(renewed.activeMatch!).toBe(initial.activeMatch!);
     expect(renewed.clubs).toBe(initial.clubs);
     expect(renewed.rosters).toBe(initial.rosters);
     expect(renewed.finance).toBe(initial.finance);
@@ -75,7 +75,7 @@ describe('employment across real season boundaries', () => {
     expect(next.payroll.agreements.find(term => term.playerId === incomingId && term.seasonNumber === 2)?.clubId).toBe(club.id);
     expect(next.history[0]!.rosters).toEqual(recruited.rosters);
     expect(getSeasonPerformance(restoreSeniorDetail(next, recruited), 1)).toEqual(historical);
-    expect(next.activeMatch[managedSide(next)].players.map(player => player.id)).toEqual(club.players.map(player => player.id));
+    expect(next.activeMatch![managedSide(next)].players.map(player => player.id)).toEqual(club.players.map(player => player.id));
     expect(parseSeason(serializeSeason(next))).toEqual(next);
   });
 
@@ -98,7 +98,7 @@ describe('employment across real season boundaries', () => {
   it('lets an existing completed career opt in without rewriting its results or payment history', () => {
     const legacy = { ...completed, employment: { model: 'employment-1' as const, enabledSince: null, delegated: false, contracts: [], transfers: [], buyouts: [], market: null } };
     const enabled = enableEmployment(legacy);
-    expect(enabled.activeMatch).toBe(legacy.activeMatch);
+    expect(enabled.activeMatch!).toBe(legacy.activeMatch!);
     expect(enabled.fixtures).toBe(legacy.fixtures);
     expect(enabled.payroll).toBe(legacy.payroll);
     expect(enabled.employment.enabledSince).toEqual({ seasonNumber: 1, round: 10 });

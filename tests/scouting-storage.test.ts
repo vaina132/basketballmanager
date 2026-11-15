@@ -15,7 +15,7 @@ import { getPlayerKnowledge } from '../src/world/scouting-policy';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 const clubId = 'aegean-waves';
-const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState): SeasonState => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function complete(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 const envelope = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const office = (state: SeasonState) => state.scouting.clubs[clubId]!;
@@ -42,7 +42,7 @@ describe('scouting report persistence', () => {
     for (const state of [initial, pending, second, third, fourth, completed, nextYear]) {
       const restored = parseSeason(serializeSeason(state));
       expect(restored).toEqual(state);
-      expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
+      expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(state.activeMatch!));
       expect(getPlayerKnowledge(restored, 'atl-10')).toEqual(getPlayerKnowledge(state, 'atl-10'));
     }
   });
@@ -91,7 +91,7 @@ describe('scouting report persistence', () => {
     expect(restored.employment).toEqual(nextYear.employment);
     expect(restored.clubs).toEqual(nextYear.clubs);
     expect(restored.history).toEqual(nextYear.history);
-    expect(restored.activeMatch).toEqual(nextYear.activeMatch);
+    expect(restored.activeMatch!).toEqual(nextYear.activeMatch!);
     expect(Object.values(restored.scouting.clubs).every(club => !club.reviews.length && !club.assignments.length && !Object.keys(club.squadKnowledge).length)).toBe(true);
     const enabled = enableScouting(restored);
     expect(parseSeason(serializeSeason(enabled))).toEqual(enabled);

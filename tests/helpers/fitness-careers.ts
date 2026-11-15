@@ -7,7 +7,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../../
 import { setTrainingPlan } from '../../src/world/training';
 
 export const fitnessClub = 'rhine-falcons';
-export const finishFitnessMatch = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+export const finishFitnessMatch = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 export const advanceFitnessCareer = (state: SeasonState): SeasonState => advanceSeason(finishFitnessMatch(state));
 export const useHeavyTraining = (state: SeasonState): SeasonState => setTrainingPlan(state, { ...state.training.plans[state.managedClubId]!, delegated: false, intensity: 'heavy', focus: 'balanced' });
 

@@ -26,7 +26,7 @@ function spend(state: SeasonState, amount: number): SeasonState {
 describe('funded, dated club facilities', () => {
   it('activates prospectively, preserves sporting state and keeps dormant systems unavailable', () => {
     const before = freeze(initial()), after = enableFacilities(before);
-    expect(after.activeMatch).toBe(before.activeMatch);
+    expect(after.activeMatch!).toBe(before.activeMatch!);
     expect(after.training).toBe(before.training);
     expect(after.academy).toBe(before.academy);
     expect(after.finance.roundPrices).toBe(before.finance.roundPrices);
@@ -72,7 +72,7 @@ describe('funded, dated club facilities', () => {
     expect(processFacilityProjects(atRound(started, 3))).toEqual(atRound(started, 3));
     const completed = processFacilityProjects(freeze(due));
     expect(completed.finance).toBe(due.finance);
-    expect(completed.activeMatch).toBe(due.activeMatch);
+    expect(completed.activeMatch!).toBe(due.activeMatch!);
     expect(getFacilityLevel(completed, 'training', clubId)).toBe(2);
     expect(facilityPracticeBonusPercent(completed, 'training', clubId, dateForRound(3))).toBe(0);
     expect(facilityPracticeBonusPercent(completed, 'training', clubId, dateForRound(4))).toBe(5);

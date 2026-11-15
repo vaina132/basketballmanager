@@ -16,7 +16,7 @@ import { prepayWages, quoteWagePrepayment, setPayrollDelegation } from '../src/w
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src/world/season';
 
 const managed = 'rhine-falcons', seller = 'aegean-waves';
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 const complete = (initial: SeasonState): SeasonState => { let state = initial; while (state.status === 'active') state = play(state); return state; };
 const encode = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 const settleWindow = (initial: SeasonState): SeasonState => {

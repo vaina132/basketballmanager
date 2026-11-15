@@ -22,7 +22,7 @@ import { getPlayerRelationship } from '../src/world/relationships';
 
 const world = fullRosterWorld();
 const opening = () => createSeason({ seed: 8083, world, managedClubId: world.clubs[2]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
-const completeRound = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const completeRound = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 
 describe('full club rosters and separate matchday selection', () => {
   it('retains every player and funds/payrolls the full club while fielding no more than twelve', () => {
@@ -34,34 +34,34 @@ describe('full club rosters and separate matchday selection', () => {
       expect(getClubContractSummary(state, club.id, 1).seasonWages).toBe(club.players.length * 1_200_000);
       expect(getClubContractSummary(state, club.id, 1).budget).toBe(clubSalaryBudget(state, club.id));
     }
-    expect(state.activeMatch[managedSide(state)].players).toHaveLength(12);
+    expect(state.activeMatch![managedSide(state)].players).toHaveLength(12);
     expect(parseSeason(serializeSeasonCompact(state))).toEqual(state);
   });
   it('changes the selected twelve before tipoff without spending money and rejects invalid or late changes', () => {
-    const state = opening(), side = managedSide(state), current = state.activeMatch[side].players.map(player => player.id);
+    const state = opening(), side = managedSide(state), current = state.activeMatch![side].players.map(player => player.id);
     const outsider = state.clubs[2]!.players.find(player => !current.includes(player.id))!.id;
     const requested = [...current.slice(1), outsider], next = setMatchdaySelection(state, requested);
-    expect(next.activeMatch[side].players.map(player => player.id)).toContain(outsider);
+    expect(next.activeMatch![side].players.map(player => player.id)).toContain(outsider);
     expect(next.finance).toBe(state.finance);
     expect(next.payroll).toBe(state.payroll);
-    expect(state.activeMatch[side].players.map(player => player.id)).toEqual(current);
+    expect(state.activeMatch![side].players.map(player => player.id)).toEqual(current);
     expect(setMatchdaySelection(state, [...requested].reverse())).toEqual(next);
     expect(() => setMatchdaySelection(state, current.slice(0, 4))).toThrow(/five to twelve/);
     expect(() => setMatchdaySelection(state, [...current, outsider])).toThrow(/five to twelve/);
     expect(() => setMatchdaySelection(state, [...current.slice(1), current[1]!])).toThrow(/different registered/);
     expect(() => setMatchdaySelection(state, [...current.slice(1), state.clubs[0]!.players[0]!.id])).toThrow(/registered/);
-    expect(() => setMatchdaySelection({ ...state, activeMatch: stepMatch(state.activeMatch) }, null)).toThrow(/before tipoff/);
+    expect(() => setMatchdaySelection({ ...state, activeMatch: stepMatch(state.activeMatch!) }, null)).toThrow(/before tipoff/);
     expect(parseSeason(serializeSeasonCompact(next))).toEqual(next);
   });
   it('retains non-selected members through training, wages, results and repeated save/load', () => {
     let state = opening();
-    const selected = state.activeMatch[managedSide(state)].players.map(player => player.id);
+    const selected = state.activeMatch![managedSide(state)].players.map(player => player.id);
     state = setMatchdaySelection(state, selected);
     const resting = state.clubs[2]!.players.filter(player => !selected.includes(player.id));
     for (let round = 0; round < 3; round++) {
       const before = state;
       state = completeRound(state);
-      const fixture = state.fixtures.find(fixture => fixture.id === before.activeFixtureId)!;
+      const fixture = state.fixtures.find(fixture => fixture.id === before.activeFixtureId!)!;
       expect(fixture.result!.selection!.rested).toMatchObject(Object.fromEntries(resting.map(player => [player.id, before.conditions[player.id]])));
       for (const player of resting) {
         expect(fixture.result!.stats[player.id]).toBeUndefined();
@@ -77,8 +77,8 @@ describe('full club rosters and separate matchday selection', () => {
   });
   it('does not reveal ability when a scouting target was outside the matchday squad', () => {
     let state = opening();
-    const side = managedSide(state) === 'home' ? 'away' : 'home', opponent = state.clubs.find(club => club.id === state.activeMatch[side].id)!;
-    const selected = new Set(state.activeMatch[side].players.map(player => player.id));
+    const side = managedSide(state) === 'home' ? 'away' : 'home', opponent = state.clubs.find(club => club.id === state.activeMatch![side].id)!;
+    const selected = new Set(state.activeMatch![side].players.map(player => player.id));
     const target = opponent.players.find(player => !selected.has(player.id))!;
     state = assignScouting(state, target.id);
     state = completeRound(state);
@@ -87,7 +87,7 @@ describe('full club rosters and separate matchday selection', () => {
   });
   it('accepts a transfer into a roster already larger than twelve and retains the old match squad', () => {
     let state = opening();
-    const selected = state.activeMatch[managedSide(state)].players.map(player => player.id);
+    const selected = state.activeMatch![managedSide(state)].players.map(player => player.id);
     state = setMatchdaySelection(state, selected);
     const seller = state.clubs[1]!, target = seller.players[0]!.id;
     const wage = requiredNegotiationWage(target, 1, undefined, state), fee = requiredInSeasonTransferFee(state, target);
@@ -95,16 +95,16 @@ describe('full club rosters and separate matchday selection', () => {
     const next = completeRound(pending);
     expect(contractForRound(next.employment, target, 1, 2)?.clubId).toBe(state.managedClubId);
     expect(next.clubs[2]!.players).toHaveLength(18);
-    expect(next.activeMatch[managedSide(next)].players.map(player => player.id)).toEqual(selected);
+    expect(next.activeMatch![managedSide(next)].players.map(player => player.id)).toEqual(selected);
     expect(getPlayerPayroll(next, target)?.agreement).toMatchObject({ clubId: state.managedClubId, startsRound: 2 });
-    const previous = next.fixtures.find(fixture => fixture.id === state.activeFixtureId)!;
+    const previous = next.fixtures.find(fixture => fixture.id === state.activeFixtureId!)!;
     expect(getFixtureTeams(next, previous)[managedSide(state)].players.map(player => player.id)).toEqual(selected);
     expect(next.training.plans[state.managedClubId]!.individual[target]).toBe('team');
     expect(parseSeason(serializeSeasonCompact(next))).toEqual(next);
   });
   it('counts healthy players left outside the twelve as zero-minute games', () => {
     let state = opening();
-    const selected = state.activeMatch[managedSide(state)].players.map(player => player.id);
+    const selected = state.activeMatch![managedSide(state)].players.map(player => player.id);
     state = setMatchdaySelection(state, selected);
     const player = state.clubs[2]!.players.find(player => !selected.includes(player.id))!;
     for (let i = 0; i < 3; i++) state = completeRound(state);

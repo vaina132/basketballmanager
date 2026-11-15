@@ -14,7 +14,7 @@ import { advanceSeason, createSeason, dateForRound, managedSide, rolloverSeason 
 import { quoteTransferOffer, requiredTransferFee } from '../src/world/transfers-policy';
 
 const seller = 'rhine-falcons', buyer = 'aegean-waves', target = 'rhf-1', second = 'rhf-2', clause = 500_000;
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function finish(state: SeasonState): SeasonState { while (state.status === 'active') state = play(state); return state; }
 function freeze<T>(value: T): T { if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
 
@@ -87,7 +87,7 @@ describe('negotiated release clauses', () => {
     expect(offer).toMatchObject({ status: 'pending', transfer: { mode: 'release-clause', clubStatus: 'accepted', fee: clause, paymentPlan: 'upfront' } });
     expect(triggered.recruitment.events.at(-1)).toMatchObject({ type: 'offer', transferMode: 'release-clause', transferPaymentPlan: 'upfront' });
     expect(() => decideInSeasonTransfer(triggered, offer.id, 'reject')).toThrow(/awaiting/i);
-    expect(triggered.activeMatch).toBe(opening.activeMatch);
+    expect(triggered.activeMatch!).toBe(opening.activeMatch!);
     expect(triggered.finance).toBe(opening.finance);
     const joined = play(triggered), transfer = joined.employment.transfers.at(-1)!;
     expect(transfer).toMatchObject({ playerId: target, startsRound: 2, mode: 'release-clause', fee: clause });

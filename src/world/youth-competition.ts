@@ -1,3 +1,4 @@
+import { worldOf } from './career-world';
 import { financeLedgerCount } from './finance-ledger';
 import type { SeasonAcademy } from '../domain/academy';
 import type { SeasonInjury, SeasonState, Standing } from '../domain/season';
@@ -116,7 +117,7 @@ function supplement(state: SeasonState): { academy: SeasonAcademy; intakeIds: st
 
 function prepare(state: SeasonState, fromRound: number): SeasonState {
   const added = supplement(state);
-  const fixtures: YouthFixture[] = createSchedule(state.clubs, state.seasonNumber).filter(fixture => fixture.round >= fromRound).map(fixture => ({ ...fixture, id: `youth-s${state.seasonNumber}-r${fixture.round}-${fixture.id.slice(fixture.id.lastIndexOf('g'))}`, seasonNumber: state.seasonNumber, home: null, away: null, startingConditions: null, result: null }));
+  const fixtures: YouthFixture[] = createSchedule(state.clubs, state.seasonNumber, state).filter(fixture => fixture.round >= fromRound).map(fixture => ({ ...fixture, id: `youth-s${state.seasonNumber}-r${fixture.round}-${worldOf(state).domesticLeagues ? fixture.id : fixture.id.slice(fixture.id.lastIndexOf('g'))}`, seasonNumber: state.seasonNumber, home: null, away: null, startingConditions: null, result: null }));
   const season: YouthCompetitionSeason = { seasonNumber: state.seasonNumber, fromRound, preparedOn: state.date, supplementalIntakeIds: added.intakeIds, fixtures };
   return { ...state, academy: added.academy, youthCompetition: { ...state.youthCompetition, seasons: [...state.youthCompetition.seasons, season] } };
 }
@@ -181,7 +182,7 @@ export function processYouthRound(state: SeasonState): SeasonState {
   const season = state.youthCompetition.seasons.find(season => season.seasonNumber === state.seasonNumber);
   if (!season) throw new Error('Prepare this youth season before settling its matches.');
   const due = season.fixtures.filter(fixture => fixture.round === state.round);
-  if (due.length !== state.clubs.length / 2 || season.fixtures.some(fixture => fixture.round < state.round && !fixture.result)) throw new Error('Settle youth fixtures in calendar order.');
+  if (season.fixtures.some(fixture => fixture.round < state.round && !fixture.result)) throw new Error('Settle youth fixtures in calendar order.');
   if (due.every(fixture => fixture.result)) return state;
   if (due.some(fixture => fixture.result)) throw new Error('Settle the whole youth matchday atomically.');
   const settled = new Map(due.map(fixture => [fixture.id, settleYouthFixture(state, fixture)]));

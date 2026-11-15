@@ -10,7 +10,7 @@ import { hireScout } from '../../src/world/scouts';
 import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../../src/world/season';
 
 export const assistantClub = 'rhine-falcons';
-export const finishAssistantMatch = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+export const finishAssistantMatch = (state: SeasonState): SeasonState => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 export const advanceAssistantCareer = (state: SeasonState): SeasonState => advanceSeason(finishAssistantMatch(state));
 
 /** Actual appointments and career commands; all five staff roles share the allocation. */

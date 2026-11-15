@@ -11,7 +11,7 @@ import { requiredNegotiationWage } from '../src/world/negotiations-policy';
 import { setEmploymentDelegation } from '../src/world/employment';
 
 const initial = (enabled = true) => createSeason(227, 'rhine-falcons', 'off', true, false, true, true, null, true, false, true, false, false, false, false, false, true, false, false, false, false, enabled);
-const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 const advance = (state: SeasonState) => advanceSeason(finish(state));
 function careerWithConcern() {
   let state = initial();
@@ -25,26 +25,26 @@ function careerWithConcern() {
 describe('career relationships and match preparation boundaries', () => {
   it('preserves an older prepared match on opt-in and freezes every next-round player consistently', () => {
     const before = initial(false), enabled = enableRelationships(before);
-    expect(enabled.activeMatch).toBe(before.activeMatch);
-    expect(enabled.activeMatch.morale).toBeUndefined();
+    expect(enabled.activeMatch!).toBe(before.activeMatch!);
+    expect(enabled.activeMatch!.morale).toBeUndefined();
     expect(getPreparedRelationshipMorale(enabled)).toBeUndefined();
     const next = advance(enabled), prepared = getPreparedRelationshipMorale(next)!;
     expect(Object.keys(prepared.values)).toHaveLength(next.clubs.reduce((sum, club) => sum + club.players.length, 0));
-    expect(next.activeMatch.morale!.eventCount).toBe(prepared.eventCount);
-    for (const [id, value] of Object.entries(next.activeMatch.morale!.values)) expect(value).toBe(prepared.values[id]);
+    expect(next.activeMatch!.morale!.eventCount).toBe(prepared.eventCount);
+    for (const [id, value] of Object.entries(next.activeMatch!.morale!.values)) expect(value).toBe(prepared.values[id]);
     expect(parseSeason(serializeSeason(next))).toEqual(next);
   });
 
   it('keeps current-round AI and managed results fixed after same-day role edits', () => {
     const before = initial(), player = before.clubs.find(club => club.id === before.managedClubId)!.players[0]!;
-    expect(Object.values(before.activeMatch.morale!.values).every(value => value === 50)).toBe(true);
+    expect(Object.values(before.activeMatch!.morale!.values).every(value => value === 50)).toBe(true);
     const changed = agreeSquadRole(before, player.id, 'starter');
-    expect(changed.activeMatch).toBe(before.activeMatch);
+    expect(changed.activeMatch!).toBe(before.activeMatch!);
     expect(getPreparedRelationshipMorale(changed)).toEqual(getPreparedRelationshipMorale(before));
     const normal = advance(before), edited = advance(changed);
     expect(edited.fixtures.filter(fixture => fixture.round === 1)).toEqual(normal.fixtures.filter(fixture => fixture.round === 1));
     expect(edited.finance).toEqual(normal.finance);
-    expect(edited.activeMatch.morale!.eventCount).toBeGreaterThan(changed.activeMatch.morale!.eventCount);
+    expect(edited.activeMatch!.morale!.eventCount).toBeGreaterThan(changed.activeMatch!.morale!.eventCount);
     expect(parseSeason(serializeSeason(changed))).toEqual(changed);
   });
 
@@ -56,7 +56,7 @@ describe('career relationships and match preparation boundaries', () => {
     const quote = quoteRelationshipTalk(state, row!.player.id, 'minutes-promise');
     expect(quote.canTalk).toBe(true);
     const promised = talkToPlayer(state, row!.player.id, 'minutes-promise');
-    expect(promised.activeMatch).toBe(state.activeMatch);
+    expect(promised.activeMatch!).toBe(state.activeMatch!);
     const promise = getSquadRelationships(promised).find(item => item.player.id === row!.player.id)!.promise!;
     expect(promise.targetMinutes).toBe(row!.minMinutes);
     expect(promise.eligibleGames).toBe(0);

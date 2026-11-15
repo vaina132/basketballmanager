@@ -18,7 +18,7 @@ function freeze<T>(value: T): T {
   return value;
 }
 function finish(state: SeasonState): SeasonState {
-  return state.activeMatch.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+  return state.activeMatch!.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 }
 function finishSeason(initial: SeasonState): SeasonState {
   let state = initial;
@@ -86,10 +86,10 @@ describe('authored season wages and payroll activation', () => {
     expect(state.payroll.agreements.every(agreement => agreement.startsRound === 4)).toBe(true);
     expect(getPayrollReserve(state, clubId)).toBe(annualClubWages * .7);
     expect(state.finance).toBe(original.finance);
-    expect(state.activeMatch).toBe(original.activeMatch);
+    expect(state.activeMatch!).toBe(original.activeMatch!);
     expect(state.coaching).toBe(original.coaching);
     expect(state.training).toBe(original.training);
-    expect(stepMatch(state.activeMatch)).toEqual(stepMatch(original.activeMatch));
+    expect(stepMatch(state.activeMatch!)).toEqual(stepMatch(original.activeMatch!));
     expect(original).toEqual(before);
     const next = advanceSeason(finish(state));
     expect(financeLedgerSlice(next.finance).filter(entry => entry.payroll?.type === 'installment')).toHaveLength(6);
@@ -110,10 +110,10 @@ describe('discounted settlement and protected wage commitments', () => {
     expect(getFinanceBalance(next.finance, clubId).cash).toBe(getFinanceBalance(state.finance, clubId).cash - quote.amount);
     expect(getPayrollReserve(next, clubId)).toBe(quote.otherCommitments);
     expect(financeLedgerSlice(next.finance).at(-1)).toMatchObject({ kind: 'payroll', amount: -quote.amount, sourceId: `prepay-${quote.agreementId}`, payroll: { type: 'prepayment', fromRound: 2, throughRound: 10, items: [{ agreementId: quote.agreementId, playerId, gross, discount, amount: quote.amount }] } });
-    expect(next.activeMatch).toBe(state.activeMatch);
+    expect(next.activeMatch!).toBe(state.activeMatch!);
     expect(next.training).toBe(state.training);
     expect(next.coaching).toBe(state.coaching);
-    expect(stepMatch(next.activeMatch)).toEqual(stepMatch(state.activeMatch));
+    expect(stepMatch(next.activeMatch!)).toEqual(stepMatch(state.activeMatch!));
     expect(quoteWagePrepayment(next, playerId).canPrepay).toBe(false);
     expect(() => prepayWages(next, playerId)).toThrow(/already prepaid/);
     expect(prepayWages(state, playerId)).toEqual(next);
@@ -162,7 +162,7 @@ describe('shared automatic wage payment policy', () => {
     let manual = initial;
     for (const player of [...DEVELOPMENT_CLUBS[0]!.players].sort((a, b) => a.id < b.id ? -1 : 1)) manual = prepayWages(manual, player.id);
     expect(automatic.finance).toEqual(manual.finance);
-    expect(automatic.activeMatch).toBe(initial.activeMatch);
+    expect(automatic.activeMatch!).toBe(initial.activeMatch!);
     expect(setPayrollDelegation(automatic, false).finance).toBe(automatic.finance);
     expect(preparePayrollRound(preparePayrollRound(automatic))).toEqual(preparePayrollRound(automatic));
     expect(() => setPayrollDelegation(initial, 'yes' as never)).toThrow(/manual or delegated/);
@@ -208,11 +208,11 @@ describe('atomic payroll calendar and retained agreements', () => {
     // Isolate financial eligibility from sporting participation: the posted result marks a reserve DNP.
     const clean: SeasonState = { ...starting, fixtures: structuredClone(next.fixtures) };
     const unused = DEVELOPMENT_CLUBS[0]!.players.at(-1)!;
-    const fixture = clean.fixtures.find(fixture => fixture.id === starting.activeFixtureId)!;
+    const fixture = clean.fixtures.find(fixture => fixture.id === starting.activeFixtureId!)!;
     const stats = fixture.result!.stats[unused.id]!;
     for (const key of Object.keys(stats) as (keyof typeof stats)[]) if (key !== 'condition') stats[key] = 0;
     const funded = processFinanceRound(clean);
-    const injured = { ...funded, injuries: [{ id: 'test-injury', playerId, clubId, kind: 'ankle' as const, fixtureId: starting.activeFixtureId, occurredOn: starting.date, returnOn: '2027-01-01' }] };
+    const injured = { ...funded, injuries: [{ id: 'test-injury', playerId, clubId, kind: 'ankle' as const, fixtureId: starting.activeFixtureId!, occurredOn: starting.date, returnOn: '2027-01-01' }] };
     const charged = processPayrollRound(injured);
     expect(charged.finance).toEqual(processPayrollRound(funded).finance);
     const items = charged.finance.ledger.find(entry => entry.clubId === clubId && entry.payroll?.type === 'installment')!.payroll!.items;

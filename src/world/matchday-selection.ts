@@ -38,7 +38,7 @@ export function reconcileMatchdayPlan(plan: ClubPlan, club: Team): ClubPlan {
 }
 
 export function canSelectMatchday(state: SeasonState): boolean {
-  return usesFullClubRoster(state) && state.status === 'active' && (state.activeMatch.status === 'ready' || state.activeMatch.status === 'finished' && state.activeMatch.result?.kind === 'default') && state.activeMatch.stepCount === 0 && state.activeMatch.period === 1 && state.activeMatch.clockSeconds === 600;
+  return !!state.activeMatch && usesFullClubRoster(state) && state.status === 'active' && (state.activeMatch.status === 'ready' || state.activeMatch.status === 'finished' && state.activeMatch.result?.kind === 'default') && state.activeMatch.stepCount === 0 && state.activeMatch.period === 1 && state.activeMatch.clockSeconds === 600;
 }
 
 /** Non-selected members retain their real condition, without invented box-score appearances. */

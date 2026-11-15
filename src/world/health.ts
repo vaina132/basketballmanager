@@ -39,6 +39,7 @@ export function injuriesFromMatch(seed: number, fixture: Pick<SeasonFixture, 'id
 
 /** Read-only projection includes today's uncommitted match incidents for the UI. */
 export function getSeasonInjuries(season: SeasonState): SeasonInjury[] {
+  if (!season.activeMatch) return [...season.injuries];
   const fixture = season.fixtures.find(item => item.id === season.activeFixtureId);
   if (!fixture) throw new Error('The active season fixture is missing.');
   const injuries = new Map(season.injuries.map(injury => [injury.id, injury]));

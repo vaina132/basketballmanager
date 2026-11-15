@@ -48,7 +48,7 @@ export function TrainingWorkspace({ season, onEnable, onEnableLifecycle, onOpenF
   const club = developClub(baseClub, season.training, season)
   const enabled = season.training.enabledSince !== null
   const plan = season.training.plans[club.id]!
-  const conditions = Object.fromEntries(club.players.map(player => [player.id, season.activeMatch.stats[player.id]?.condition ?? season.conditions[player.id]!]))
+  const conditions = Object.fromEntries(club.players.map(player => [player.id, season.activeMatch?.stats[player.id]?.condition ?? season.conditions[player.id]!]))
   const appliedPlan = resolveTrainingPlan(plan, club, conditions)
   const injuries = getSeasonInjuries(season)
   const nextDate = season.round < seasonRounds(season) ? dateForRound(season.round + 1, season.seasonNumber) : null

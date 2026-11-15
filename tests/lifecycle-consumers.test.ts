@@ -22,12 +22,12 @@ describe('lifecycle boundaries in contracts, identity and scouting', () => {
   it('keeps match ability at its original roster while calendar aging changes current squad skills', () => {
     const initial = create(), id = 'rhf-3';
     const later = { ...initial, date: dateForRound(1, 11) };
-    const player = [...initial.activeMatch.home.players, ...initial.activeMatch.away.players].find(player => player.id === id)!;
+    const player = [...initial.activeMatch!.home.players, ...initial.activeMatch!.away.players].find(player => player.id === id)!;
     expect(getPlayerKnowledge(later, id).attributes!.stamina).toBeLessThan(player.attributes.stamina);
     expect(getMatchPlayerKnowledge(later, id).attributes).toEqual(player.attributes);
     expect(getMatchPlayerKnowledge(later, 'adr-3')).toEqual(getPlayerKnowledge(later, 'adr-3'));
     expect(getMatchPlayerKnowledge(later, 'adr-3').attributes).toBeNull();
-    expect(later.activeMatch).toBe(initial.activeMatch);
+    expect(later.activeMatch!).toBe(initial.activeMatch!);
   });
 
   it('keeps historical identity after retirement while removing the player from active recruitment and discovery', () => {

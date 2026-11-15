@@ -11,7 +11,7 @@ import { getMarketStartReason } from '../src/world/market-policy';
 import { advanceSeason, createSeason, dateForRound, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason, seasonStartDate } from '../src/world/season';
 
 const club = 'rhine-falcons';
-const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const advance = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 const advanceTo = (state: SeasonState, round: number) => { let next = state; while (next.round < round && next.status === 'active') next = advance(next); return next; };
 const finishSeason = (state: SeasonState) => {
   let next = setEmploymentDelegation(state, true);

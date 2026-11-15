@@ -76,10 +76,10 @@ export function seasonEndOutlook(state: CareerContext, seasonNumber = state.seas
   const fixtures = seasonFixtures(state, seasonNumber);
   if (!verdict || !fixtures) return null;
   const dismissed = verdict.verdict === DISMISSAL_VERDICT;
-  const standings = getStandings({ clubs: state.clubs, fixtures });
+  const standings = getStandings({ ...state, fixtures });
   const vacancy = (id: string, reason: ClubVacancy['reason']): ClubVacancy => {
     const position = standings.find(row => row.clubId === id)!.position;
-    return { clubId: id, position, requirement: vacancyRequirement(position, state.clubs), reason, confidence: seasonVerdict(state.board, id, seasonNumber, seasonRounds(state))!.confidence };
+    return { clubId: id, position, requirement: vacancyRequirement(position, state.clubs.filter(club => !state.world?.domesticLeagues || state.world.domesticLeagues.find(league => league.clubIds.includes(id))!.clubIds.includes(club.id))), reason, confidence: seasonVerdict(state.board, id, seasonNumber, seasonRounds(state))!.confidence };
   };
   const others = state.clubs.filter(club => club.id !== clubId && seasonVerdict(state.board, club.id, seasonNumber, seasonRounds(state)));
   const vacancies = others.filter(club => seasonVerdict(state.board, club.id, seasonNumber, seasonRounds(state))!.verdict === DISMISSAL_VERDICT).map(club => vacancy(club.id, 'pressure'));

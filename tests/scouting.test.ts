@@ -39,7 +39,7 @@ describe('scouting activation and assignment capacity', () => {
     expect(processScoutingRound(old)).toBe(old);
     expect(prepareScoutingAssignments(old)).toBe(old);
     const state = enableScouting(old);
-    expect(state.activeMatch).toBe(old.activeMatch);
+    expect(state.activeMatch!).toBe(old.activeMatch!);
     expect(state.finance).toBe(old.finance);
     expect(state.training).toBe(old.training);
     expect(state.employment).toBe(old.employment);
@@ -158,7 +158,7 @@ describe('frozen scouting observations and imperfect knowledge', () => {
     expect(memory.ranges).not.toBeNull();
     const incoming = getPlayerKnowledge(moved, own.id, otherClubId);
     expect(incoming).toMatchObject({ kind: 'own', attributes: own.attributes, ranges: null });
-    expect(refreshSquadKnowledge(state).activeMatch).toBe(state.activeMatch);
+    expect(refreshSquadKnowledge(state).activeMatch!).toBe(state.activeMatch!);
     expect(setShortlisted(moved, own.id, true).scouting.clubs[clubId]!.shortlist).toContain(own.id);
   });
 });
@@ -174,7 +174,7 @@ describe('fair scouting automation', () => {
     const mean = Object.values(report.ranges!).reduce((sum, range) => sum + (range.min + range.max) / 2, 0);
     expect(scoutingRecruitmentRating(state, clubId, target.id)).toBe(mean);
     expect(scoutingRecruitmentRating(state, otherClubId, target.id)).toBe(Object.values(target.attributes).reduce((sum, value) => sum + value, 0));
-    expect(state.activeMatch).toBe(initial.activeMatch);
+    expect(state.activeMatch!).toBe(initial.activeMatch!);
   });
 
   it('is deterministic, leaves frozen inputs untouched and never creates singleton ranges at rating boundaries', () => {

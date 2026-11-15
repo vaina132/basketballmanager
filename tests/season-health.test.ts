@@ -5,7 +5,7 @@ import { advanceSeason, createSeason, getActiveFixture, managedSide } from '../s
 import { createSeasonInjury, daysUntilReturn, getPlayerHealth, getSeasonInjuries, isRecovering } from '../src/world/health';
 
 function finish(state: SeasonState): SeasonState {
-  return { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+  return { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 }
 
 describe('season injury policy and deterministic recovery', () => {
@@ -13,9 +13,9 @@ describe('season injury policy and deterministic recovery', () => {
     expect(createSeason().injuryMode).toBe('standard');
     for (const injuryMode of ['standard', 'reduced', 'off'] as const) {
       const state = createSeason(19, 'aegean-waves', injuryMode);
-      expect(state.activeMatch.injuryMode).toBe(injuryMode);
+      expect(state.activeMatch!.injuryMode).toBe(injuryMode);
       const next = advanceSeason(finish(state));
-      expect(next.activeMatch.injuryMode).toBe(injuryMode);
+      expect(next.activeMatch!.injuryMode).toBe(injuryMode);
       if (injuryMode === 'off') {
         expect(next.injuries).toEqual([]);
         expect(next.fixtures.filter(fixture => fixture.result).every(fixture => !Object.keys(fixture.result!.injuries).length)).toBe(true);
@@ -45,7 +45,7 @@ describe('season injury policy and deterministic recovery', () => {
   it('shows a genuine uncommitted away-club incident without changing state or restarting recovery', () => {
     const initial = createSeason(9, 'atlantic-pilots');
     const state = finish(initial);
-    expect(state.activeMatch.injuries['atl-8']).toEqual({ kind: 'muscle', occurredAtSeconds: 1798 });
+    expect(state.activeMatch!.injuries['atl-8']).toEqual({ kind: 'muscle', occurredAtSeconds: 1798 });
     const before = structuredClone(state);
     const episode = getPlayerHealth(state, 'atl-8')!;
     expect(episode).toMatchObject({ playerId: 'atl-8', clubId: 'atlantic-pilots', fixtureId: 'dev-r1-g1', occurredOn: '2026-09-05', returnOn: '2026-09-15' });
@@ -61,25 +61,25 @@ describe('season injury policy and deterministic recovery', () => {
     expect(getSeasonInjuries(carried).filter(injury => injury.id === episode.id)).toHaveLength(1);
     expect(getPlayerHealth(carried, 'atl-8')).toEqual(episode);
     expect(daysUntilReturn(carried.date, episode.returnOn)).toBe(3);
-    expect(carried.activeMatch.preExistingInjuries).toContain('atl-8');
-    expect(carried.activeMatch.lineups[managedSide(carried)]).not.toContain('atl-8');
-    expect(carried.activeMatch.stats['atl-8']!.secondsPlayed).toBe(0);
-    expect(carried.activeMatch.events.some(event => event.type === 'injury' && event.playerId === 'atl-8')).toBe(false);
+    expect(carried.activeMatch!.preExistingInjuries).toContain('atl-8');
+    expect(carried.activeMatch!.lineups[managedSide(carried)]).not.toContain('atl-8');
+    expect(carried.activeMatch!.stats['atl-8']!.secondsPlayed).toBe(0);
+    expect(carried.activeMatch!.events.some(event => event.type === 'injury' && event.playerId === 'atl-8')).toBe(false);
     const nextFinished = finish(carried);
-    expect(nextFinished.activeMatch.stats['atl-8']!.secondsPlayed).toBe(0);
-    expect(nextFinished.activeMatch.stats['atl-8']!.points).toBe(0);
+    expect(nextFinished.activeMatch!.stats['atl-8']!.secondsPlayed).toBe(0);
+    expect(nextFinished.activeMatch!.stats['atl-8']!.points).toBe(0);
     const cleared = advanceSeason(nextFinished);
     expect(cleared.date).toBe('2026-09-19');
     expect(getPlayerHealth(cleared, 'atl-8')).toBeNull();
-    expect(cleared.activeMatch.injuries['atl-8']).toBeUndefined();
-    expect(cleared.activeMatch.preExistingInjuries ?? []).not.toContain('atl-8');
+    expect(cleared.activeMatch!.injuries['atl-8']).toBeUndefined();
+    expect(cleared.activeMatch!.preExistingInjuries ?? []).not.toContain('atl-8');
     expect(cleared.injuries.filter(injury => injury.playerId === 'atl-8')).toEqual([episode]);
     expect(advanceSeason(state)).toEqual(carried);
   });
 
   it('preserves a mandatory injury pause until replaced and projects recovery immediately', () => {
     let state = createSeason(9, 'atlantic-pilots');
-    let current = setAutoSubstitutions(state.activeMatch, managedSide(state), true);
+    let current = setAutoSubstitutions(state.activeMatch!, managedSide(state), true);
     for (let count = 0; count < 5000 && current.status !== 'finished'; count += 1) {
       const next = stepMatch(current);
       if (next.injuries['atl-8']) {
@@ -88,7 +88,7 @@ describe('season injury policy and deterministic recovery', () => {
       }
       current = next;
     }
-    expect(state.activeMatch.requiredSubstitutions).toContainEqual({ side: 'away', playerId: 'atl-8', reason: 'injured' });
+    expect(state.activeMatch!.requiredSubstitutions).toContainEqual({ side: 'away', playerId: 'atl-8', reason: 'injured' });
     expect(getPlayerHealth(state, 'atl-8')?.returnOn).toBe('2026-09-15');
     expect(() => advanceSeason(state)).toThrow(/Finish/);
     expect(advanceSeason(finish(state)).injuries.some(injury => injury.playerId === 'atl-8')).toBe(true);

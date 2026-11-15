@@ -46,7 +46,7 @@ describe('prospective negotiation activation and immutable history', () => {
     const enabled = enableNegotiations(freeze(legacy));
     expect(enabled.negotiations.enabledSince).toEqual({ seasonNumber: 1, round: 1, contractCount: 61 });
     expect(enabled.employment).toBe(legacy.employment);
-    expect(enabled.activeMatch).toBe(legacy.activeMatch);
+    expect(enabled.activeMatch!).toBe(legacy.activeMatch!);
     expect(enabled.finance).toBe(legacy.finance);
     expect(enabled.negotiations.records).toEqual([]);
     expect(enableNegotiations(enabled)).toBe(enabled);
@@ -62,7 +62,7 @@ describe('prospective negotiation activation and immutable history', () => {
     expect(countered.negotiations.records.map(record => record.id)).toEqual(['negotiation-1', 'negotiation-2']);
     expect(getLatestNegotiation(countered, playerId)).toMatchObject({ clubId, playerId, seasonNumber: 1, round: 1, date: initial.date, status: 'active', startsSeason: 2, offeredWage: 1_800_000, offeredSeasons: 3, contractCountBefore: 60, contractId: null, outcome: 'countered' });
     expect(countered.employment).toBe(initial.employment);
-    expect(countered.activeMatch).toBe(initial.activeMatch);
+    expect(countered.activeMatch!).toBe(initial.activeMatch!);
     expect(countered.finance).toBe(initial.finance);
     expect(countered.payroll).toBe(initial.payroll);
     expect(countered.training).toBe(initial.training);
@@ -81,7 +81,7 @@ describe('prospective negotiation activation and immutable history', () => {
     expect(contractForSeason(state.employment, playerId, 2)).toMatchObject({ id: record.contractId, clubId, playerId, startsSeason: 2, endsSeason: 2, seasonWage: 1_800_000 });
     expect(state.employment.contracts).toHaveLength(61);
     expect(state.clubs).toBe(before.clubs);
-    expect(state.activeMatch).toBe(before.activeMatch);
+    expect(state.activeMatch!).toBe(before.activeMatch!);
     expect(state.finance).toBe(before.finance);
     expect(offerPlayerContract(state, playerId, alternative.seasonWage, alternative.seasons)).toBe(state);
     expect(() => offerPlayerContract(state, playerId, 1_850_000, 1)).toThrow(/already has a contract/);

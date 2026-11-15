@@ -15,7 +15,7 @@ function input(intensity: TrainingIntensity = 'standard', condition = 80): Train
   return { training, clubs: DEVELOPMENT_CLUBS, conditions: Object.fromEntries(DEVELOPMENT_CLUBS.flatMap(team => team.players.map(player => [player.id, condition]))), injuries: [], seasonNumber: 1, afterRound: 1, fromDate: dateForRound(1), toDate: dateForRound(2) };
 }
 function finish(state: SeasonState): SeasonState {
-  return state.activeMatch.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
+  return state.activeMatch!.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
 }
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -121,15 +121,15 @@ describe('training in the season loop', () => {
   it('enables legacy careers and edits only future plans, preserving the active match and RNG', () => {
     const original = freeze(createSeason(42, club.id, 'standard', false, false));
     expect(original.training.enabledSince).toBeNull();
-    const enabled = enableTraining(original), active = structuredClone(original.activeMatch);
+    const enabled = enableTraining(original), active = structuredClone(original.activeMatch!);
     expect(enabled.training.enabledSince).toEqual({ seasonNumber: 1, round: 1 });
     const plan: TrainingPlan = { ...enabled.training.plans[club.id]!, delegated: false, intensity: 'heavy', focus: 'passing', individual: { ...enabled.training.plans[club.id]!.individual } };
     const edited = setTrainingPlan(enabled, plan);
     plan.individual[player.id] = 'defense';
     expect(edited.training.plans[club.id]!.individual[player.id]).toBe('team');
-    expect(edited.activeMatch).toBe(original.activeMatch);
-    expect(edited.activeMatch).toEqual(active);
-    expect(stepMatch(edited.activeMatch)).toEqual(stepMatch(original.activeMatch));
+    expect(edited.activeMatch!).toBe(original.activeMatch!);
+    expect(edited.activeMatch!).toEqual(active);
+    expect(stepMatch(edited.activeMatch!)).toEqual(stepMatch(original.activeMatch!));
     expect(original.training.enabledSince).toBeNull();
     expect(enableTraining(edited)).toBe(edited);
     expect(() => setTrainingPlan(original, plan)).toThrow(/Enable training/);
@@ -148,9 +148,9 @@ describe('training in the season loop', () => {
     expect(next.training.lastWeek!.afterRound).toBe(1);
     for (const fixture of next.fixtures.filter(fixture => fixture.result)) for (const [id, stats] of Object.entries(fixture.result!.stats)) expect(next.training.lastWeek!.players[id]!.conditionBefore).toBe(stats.condition);
     expect(next.training.points[player.id]!.passing).toBeGreaterThanOrEqual(100);
-    expect(next.activeMatch[managedSide(next)].players.find(item => item.id === player.id)!.attributes.passing).toBe(player.attributes.passing + 1);
+    expect(next.activeMatch![managedSide(next)].players.find(item => item.id === player.id)!.attributes.passing).toBe(player.attributes.passing + 1);
     expect(next.clubs).toEqual(DEVELOPMENT_CLUBS);
-    expect(completed.activeMatch[managedSide(completed)].players.find(item => item.id === player.id)!.attributes.passing).toBe(player.attributes.passing);
+    expect(completed.activeMatch![managedSide(completed)].players.find(item => item.id === player.id)!.attributes.passing).toBe(player.attributes.passing);
     expect(advanceSeason(completed)).toEqual(next);
     expect(() => advanceSeason(next)).toThrow(/Finish/);
   });
@@ -159,12 +159,12 @@ describe('training in the season loop', () => {
     const initial = createSeason(9, club.id, 'off', false, false), next = advanceSeason(finish(initial));
     expect(next.training).toEqual(initial.training);
     for (const fixture of next.fixtures.filter(fixture => fixture.result)) for (const [id, stats] of Object.entries(fixture.result!.stats)) expect(next.conditions[id]).toBe(Math.min(100, Math.round((stats.condition + 21) * 1000) / 1000));
-    const home = next.clubs.find(club => club.id === next.activeMatch.home.id)!, away = next.clubs.find(club => club.id === next.activeMatch.away.id)!;
-    const expected = createFixtureMatch(next.activeMatch.seed, home, away, { lineups: { home: next.plans[home.id]!.lineup, away: next.plans[away.id]!.lineup }, tactics: { home: next.plans[home.id]!.tactics, away: next.plans[away.id]!.tactics }, conditions: Object.fromEntries([...home.players, ...away.players].map(player => [player.id, next.conditions[player.id]!])), autoSubstitutions: next.activeMatch.autoSubstitutions, injuryMode: 'off' });
-    expect(next.activeMatch).toEqual(expected);
+    const home = next.clubs.find(club => club.id === next.activeMatch!.home.id)!, away = next.clubs.find(club => club.id === next.activeMatch!.away.id)!;
+    const expected = createFixtureMatch(next.activeMatch!.seed, home, away, { lineups: { home: next.plans[home.id]!.lineup, away: next.plans[away.id]!.lineup }, tactics: { home: next.plans[home.id]!.tactics, away: next.plans[away.id]!.tactics }, conditions: Object.fromEntries([...home.players, ...away.players].map(player => [player.id, next.conditions[player.id]!])), autoSubstitutions: next.activeMatch!.autoSubstitutions, injuryMode: 'off' });
+    expect(next.activeMatch!).toEqual(expected);
     const enabled = enableTraining(next);
     expect(enabled.training.enabledSince).toEqual({ seasonNumber: 1, round: 2 });
-    expect(enabled.activeMatch).toBe(next.activeMatch);
+    expect(enabled.activeMatch!).toBe(next.activeMatch!);
   });
 
   it('skips final-round training and preserves growth across offseason recovery without bonus XP', () => {
@@ -182,7 +182,7 @@ describe('training in the season loop', () => {
     expect(next.training.enabledSince).toEqual({ seasonNumber: 1, round: 1 });
     expect(next.training.lastWeek).toBeNull();
     expect(Object.values(next.conditions).every(value => value === 100)).toBe(true);
-    expect(next.activeMatch[managedSide(next)]).toEqual(developClub(club, next.training));
+    expect(next.activeMatch![managedSide(next)]).toEqual(developClub(club, next.training));
     expect(total(next.training.points[player.id]!)).toBeGreaterThan(0);
   }, 30_000);
 });

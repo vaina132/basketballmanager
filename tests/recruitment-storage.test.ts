@@ -14,7 +14,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 import { stripInSeasonRecruitment, stripInSeasonTransfers } from './helpers/legacy-season';
 
 const clubId = 'rhine-falcons';
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 const encode = (state: unknown, formatVersion: number = SEASON_SCHEMA_VERSION) => JSON.stringify({ format: 'basketball-manager-season', formatVersion, engineVersion: 'possession-3', state });
 let opening: SeasonState, pending: SeasonState, accepted: SeasonState, paid: SeasonState, competition: SeasonState, withdrawn: SeasonState;
 let playerId: string;
@@ -51,7 +51,7 @@ describe('in-season recruitment persistence', () => {
     for (const state of [opening, pending, withdrawn, accepted, paid, competition]) {
       const restored = parseSeason(serializeSeason(state));
       expect(restored).toEqual(state);
-      expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(state.activeMatch));
+      expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(state.activeMatch!));
     }
   });
 

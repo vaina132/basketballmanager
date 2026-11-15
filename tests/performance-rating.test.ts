@@ -98,7 +98,7 @@ describe('ability stars preserve knowledge boundaries', () => {
 
 describe('PIR match MVP', () => {
   const initial = createSeason(91, undefined, 'off', false);
-  const home = initial.activeMatch.home, away = initial.activeMatch.away;
+  const home = initial.activeMatch!.home, away = initial.activeMatch!.away;
   const h = home.players[0]!, h2 = home.players[1]!, a = away.players[0]!;
   const teams = [home, away];
 
@@ -131,7 +131,7 @@ describe('PIR match MVP', () => {
   });
 
   it('keeps live, committed and archived results coherent without mutating simulation state', () => {
-    const finished = simulateToEnd(setAutoSubstitutions(initial.activeMatch, managedSide(initial), true));
+    const finished = simulateToEnd(setAutoSubstitutions(initial.activeMatch!, managedSide(initial), true));
     const before = structuredClone(finished);
     expect(getMatchMvp({ ...finished, status: 'playing' })).toBeNull();
     const mvp = getMatchMvp(finished)!;
@@ -140,7 +140,7 @@ describe('PIR match MVP', () => {
     expect(finished).toEqual(before);
     expect(stepMatch(finished)).toEqual(stepMatch(before));
     const committed = advanceSeason({ ...initial, activeMatch: finished });
-    const fixture = committed.fixtures.find(item => item.id === initial.activeFixtureId)!;
+    const fixture = committed.fixtures.find(item => item.id === initial.activeFixtureId!)!;
     expect(getFixtureMvp(committed, fixture)).toMatchObject({ playerId: mvp.playerId, clubId: mvp.clubId, pir: mvp.pir, rating: mvp.rating });
     // Synthetic archive isolates identity lookup: today's roster no longer contains the MVP.
     const archived = fixture as ArchivedFixture;

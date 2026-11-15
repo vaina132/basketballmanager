@@ -10,7 +10,7 @@ import { createTraining, developClub, enableTraining, setTrainingPlan } from '..
 const clubId = 'atlantic-pilots';
 let second: SeasonState, complete: SeasonState, nextYear: SeasonState, legacyLive: SeasonState, legacyNextYear: SeasonState;
 const restore = (season: SeasonState): SeasonState => parseSeason(serializeSeason(season));
-const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: season.activeMatch.status === 'finished' ? season.activeMatch : simulateToEnd(setAutoSubstitutions(season.activeMatch, managedSide(season), true)) });
+const finish = (season: SeasonState): SeasonState => ({ ...season, activeMatch: season.activeMatch!.status === 'finished' ? season.activeMatch! : simulateToEnd(setAutoSubstitutions(season.activeMatch!, managedSide(season), true)) });
 function oldFormat(season: SeasonState, version: 1 | 2 | 3): string {
   const state = structuredClone(season) as unknown as Record<string, unknown>;
   state.schemaVersion = version; delete state.training; delete state.coaching; delete state.finance; delete state.payroll; delete state.manager; stripRosterHistory(state);
@@ -32,7 +32,7 @@ beforeAll(() => {
   complete = season; nextYear = rolloverSeason(complete);
 
   let legacy = advanceSeason(finish(createSeason(37, clubId, 'off', false, false, false)));
-  legacyLive = { ...legacy, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(legacy.activeMatch, managedSide(legacy), true)) };
+  legacyLive = { ...legacy, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(legacy.activeMatch!, managedSide(legacy), true)) };
   while (legacy.status !== 'complete') legacy = advanceSeason(finish(legacy));
   legacyNextYear = rolloverSeason(legacy);
 }, 60_000);
@@ -51,7 +51,7 @@ describe('training-aware season saves', () => {
     expect(report).toMatchObject({ seasonNumber: 1, afterRound: 1, fromDate: '2026-09-05', toDate: '2026-09-12' });
     expect(report.players['atl-8']!.availableDays).toBe(0);
     expect(Object.values(report.players['atl-8']!.gains).every(points => points === 0)).toBe(true);
-    expect(restored.activeMatch.preExistingInjuries).toContain('atl-8');
+    expect(restored.activeMatch!.preExistingInjuries).toContain('atl-8');
     for (const [id, result] of Object.entries(report.players)) expect(restored.conditions[id]).toBe(result.conditionAfter);
   });
 
@@ -60,7 +60,7 @@ describe('training-aware season saves', () => {
     expect(restored).toEqual(complete);
     const projected = developClub(club, restored.training);
     expect(projected.players.some((player, index) => player.attributes.freeThrow > club.players[index]!.attributes.freeThrow)).toBe(true);
-    expect(restored.activeMatch[managedSide(restored)]).toEqual(projected);
+    expect(restored.activeMatch![managedSide(restored)]).toEqual(projected);
     expect(restored.training.lastWeek!.afterRound).toBe(9);
     expect(restored.training.lastWeek!.players['atl-9']!.conditionAfter).not.toBe(restored.conditions['atl-9']);
   });
@@ -74,9 +74,9 @@ describe('training-aware season saves', () => {
   });
 
   it('resumes a trained live match and the next training boundary with identical RNG outcomes', () => {
-    const live = { ...second, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(second.activeMatch, managedSide(second), true)) };
+    const live = { ...second, activeMatch: simulateToQuarterEnd(setAutoSubstitutions(second.activeMatch!, managedSide(second), true)) };
     const restored = restore(live);
-    expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(live.activeMatch));
+    expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(live.activeMatch!));
     expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(live)));
   });
 
@@ -93,7 +93,7 @@ describe('training-aware season saves', () => {
     const migrated = parseSeason(oldFormat(legacyLive, 3)), enabled = enableTraining(migrated);
     expect(enabled.training.enabledSince).toEqual({ seasonNumber: 1, round: 2 });
     expect(enabled.training.lastWeek).toBeNull();
-    expect(restore(enabled).activeMatch).toEqual(legacyLive.activeMatch);
+    expect(restore(enabled).activeMatch!).toEqual(legacyLive.activeMatch!);
     const trained = restore(advanceSeason(finish(enabled)));
     expect(trained.training.lastWeek).toMatchObject({ seasonNumber: 1, afterRound: 2 });
   });
@@ -105,8 +105,8 @@ describe('strict older format migration', () => {
     const restored = parseSeason(text);
     expect(restored).toEqual(legacyLive);
     expect(restored.training).toEqual(createTraining(restored.clubs, false));
-    expect(restored.activeMatch).toEqual(snapshot.activeMatch);
-    expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(legacyLive.activeMatch));
+    expect(restored.activeMatch!).toEqual(snapshot.activeMatch!);
+    expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(legacyLive.activeMatch!));
     expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(legacyLive)));
     expect(JSON.parse(text).state).toEqual(snapshot);
   });
@@ -164,7 +164,7 @@ describe('training state and report tampering', () => {
     ['invented pre-training condition', season => { season.training.lastWeek!.players['atl-9']!.conditionBefore -= 1; }],
     ['invented post-training condition', season => { season.training.lastWeek!.players['atl-9']!.conditionAfter -= 1; }],
     ['incorrect world condition', season => { season.conditions['atl-9']! -= 1; }],
-    ['altered projected match attribute', season => { const player = season.activeMatch[managedSide(season)].players[0]!; Object.assign(player.attributes, { freeThrow: player.attributes.freeThrow + 1 }); }],
+    ['altered projected match attribute', season => { const player = season.activeMatch![managedSide(season)].players[0]!; Object.assign(player.attributes, { freeThrow: player.attributes.freeThrow + 1 }); }],
     ['altered canonical club attribute', season => { const player = season.clubs[0]!.players[0]!; Object.assign(player.attributes, { freeThrow: player.attributes.freeThrow + 1 }); }],
   ];
   it.each(cases)('rejects %s without mutating the original game', (_name, mutate) => {

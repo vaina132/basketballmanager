@@ -51,10 +51,13 @@ export function buildBoardMandate<T extends BoardCalculationContext>(state: T, s
     const top = roster.players.map(player => Object.values(player.attributes).reduce((sum, value) => sum + value, 0) / 7).sort((a, b) => b - a).slice(0, 8);
     return { clubId: club.id, rosterId: roster.id, strength: top.reduce((sum, value) => sum + value, 0) / 8 };
   });
-  const games = Math.max(0, seasonRounds(state) + 1 - startsRound);
+  const legacyGames = Math.max(0, seasonRounds(state) + 1 - startsRound);
   return { ...boardEventAnchor(state), id: `board-mandate-${state.board.mandates.length + 1}`, startsRound, deadlineDate: dateForRound(seasonRounds(state), state.seasonNumber), clubs: Object.fromEntries(resources.map(resource => {
-    const resourceRank = 1 + resources.filter(other => other.strength > resource.strength).length;
-    const rate = resourceRank <= Math.ceil(resources.length / 3) ? 0.6 : resourceRank <= Math.ceil(resources.length * 2 / 3) ? 0.5 : 0.4;
+    const league = worldOf(state).domesticLeagues?.find(league => league.clubIds.includes(resource.clubId));
+    const rivals = league ? resources.filter(other => league.clubIds.includes(other.clubId)) : resources;
+    const games = league ? state.fixtures.filter(fixture => fixture.round >= startsRound && [fixture.homeClubId, fixture.awayClubId].includes(resource.clubId)).length : legacyGames;
+    const resourceRank = 1 + rivals.filter(other => other.strength > resource.strength).length;
+    const rate = resourceRank <= Math.ceil(rivals.length / 3) ? 0.6 : resourceRank <= Math.ceil(rivals.length * 2 / 3) ? 0.5 : 0.4;
     return [resource.clubId, { rosterId: resource.rosterId, resourceRank, targetWins: Math.ceil(games * rate), games, startingUnpaid: boardUnpaidCosts(state, resource.clubId) }];
   })) };
 }
@@ -63,7 +66,7 @@ export function buildBoardMandate<T extends BoardCalculationContext>(state: T, s
 export function enableBoard(state: SeasonState, mode: 'career' | 'prospective' = 'prospective'): SeasonState {
   if (state.board.enabledSince) return state;
   if (mode !== 'career' && mode !== 'prospective') throw new Error('Choose a supported board activation mode.');
-  if (mode === 'career' && (state.seasonNumber !== 1 || state.round !== 1 || state.status !== 'active' || state.history.length || state.fixtures.some(fixture => fixture.result) || state.activeMatch.status !== 'ready' || state.activeMatch.stepCount !== 0)) throw new Error('Initial board expectations must be set at the untouched first career opening.');
+  if (mode === 'career' && (state.seasonNumber !== 1 || state.round !== 1 || state.status !== 'active' || state.history.length || state.fixtures.some(fixture => fixture.result) || state.activeMatch && (state.activeMatch.status !== 'ready' || state.activeMatch.stepCount !== 0))) throw new Error('Initial board expectations must be set at the untouched first career opening.');
   const board: SeasonBoard = { ...createBoard(), enabledSince: { ...boardEventAnchor(state), includeCurrentRound: mode === 'career' } };
   const enabled = { ...state, board };
   if (mode === 'prospective' && state.round === seasonRounds(state)) return enabled;
@@ -95,10 +98,10 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
   const rivalriesCount = !!from && roundKey(state.seasonNumber, state.round) >= roundKey(from.seasonNumber, from.round);
   for (const club of state.clubs) {
     const objective = mandate.clubs[club.id];
-    if (!objective || !objective.games) throw new Error('Review a club with a communicated sporting objective.');
+    if (!objective) throw new Error('Review a club with a communicated sporting objective.');
     const games = fixtures.filter(fixture => [fixture.homeClubId, fixture.awayClubId].includes(club.id));
     const played = games.length, wins = games.filter(fixture => fixture.result!.winnerClubId === club.id).length;
-    const targetPace = objective.targetWins * played / objective.games;
+    const targetPace = objective.games ? objective.targetWins * played / objective.games : 0;
     const difference = wins - targetPace;
     const sportingDelta = Math.sign(difference) * Math.max(0, Math.abs(difference) - BOARD_WIN_TOLERANCE);
     const resultsImpact = played < BOARD_SPORTING_GRACE_GAMES ? 0 : Math.round(clamp(sportingDelta * 10, -30, 30)) || 0;

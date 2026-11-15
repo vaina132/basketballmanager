@@ -9,7 +9,7 @@ import { advanceSeason, createSeason, managedSide, rolloverSeason } from '../src
 let completed: SeasonState, nextYear: SeasonState;
 beforeAll(() => {
   completed = createSeason(19, undefined, 'off');
-  while (completed.status !== 'complete') completed = advanceSeason({ ...completed, activeMatch: simulateToEnd(setAutoSubstitutions(completed.activeMatch, managedSide(completed), true)) });
+  while (completed.status !== 'complete') completed = advanceSeason({ ...completed, activeMatch: simulateToEnd(setAutoSubstitutions(completed.activeMatch!, managedSide(completed), true)) });
   nextYear = rolloverSeason(completed);
 }, 30_000);
 

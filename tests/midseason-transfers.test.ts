@@ -15,7 +15,7 @@ import { advanceSeason, createSeason, dateForRound, managedSide } from '../src/w
 import { getTransferObligationReserve } from '../src/world/transfer-payments';
 
 const buyer = 'rhine-falcons', seller = 'aegean-waves', rival = 'alpine-stags';
-const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
+const play = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 function freeze<T>(value: T): T { if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
 
 describe('midseason club transfers', () => {
@@ -59,7 +59,7 @@ describe('midseason club transfers', () => {
     expect(next.training.plans[seller]!.individual[target]).toBeUndefined();
     expect(next.training.plans[buyer]!.individual[target]).toBe('team');
     expect(next.conditions[target]).toBe(unchanged.conditions[target]);
-    expect(next.activeMatch[managedSide(next)].players.some(player => player.id === target)).toBe(true);
+    expect(next.activeMatch![managedSide(next)].players.some(player => player.id === target)).toBe(true);
     expect(getReservedInSeasonFees(next, buyer)).toBe(0);
   });
 
@@ -134,7 +134,7 @@ describe('midseason club transfers', () => {
     const old: SeasonState = { ...initial, recruitment: { ...initial.recruitment, transfersEnabledSince: null, events: initial.recruitment.events.filter(event => event.type !== 'enable-transfers') } };
     expect(quoteInSeasonTransferOffer(old, target, wage, 1, fee).reason).toMatch(/enable/i);
     const enabled = enableInSeasonTransfers(old);
-    expect(enabled.activeMatch).toBe(old.activeMatch);
+    expect(enabled.activeMatch!).toBe(old.activeMatch!);
     expect(enabled.recruitment.transfersEnabledSince?.round).toBe(1);
     const next = play(submitInSeasonTransferOffer(enabled, target, wage, 1, fee));
     expect(quoteInSeasonTransferOffer(next, target, wage, 1, requiredInSeasonTransferFee(next, target), rival).reason).toMatch(/already moved/i);

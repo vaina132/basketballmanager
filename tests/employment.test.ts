@@ -26,7 +26,7 @@ describe('employment activation and prospective terms', () => {
     const state = enableEmployment(original);
     expect(state.employment.contracts).toHaveLength(60);
     expect(state.employment.enabledSince).toEqual({ seasonNumber: 1, round: 1 });
-    expect(state.activeMatch).toBe(original.activeMatch);
+    expect(state.activeMatch!).toBe(original.activeMatch!);
     expect(state.finance).toBe(original.finance);
     expect(state.payroll).toBe(original.payroll);
     expect(state.clubs).toBe(original.clubs);
@@ -51,7 +51,7 @@ describe('employment activation and prospective terms', () => {
     expect(contractForSeason(next.employment, ownId, 5)).toBeNull();
     expect(next.clubs).toBe(state.clubs);
     expect(next.rosters).toBe(state.rosters);
-    expect(next.activeMatch).toBe(state.activeMatch);
+    expect(next.activeMatch!).toBe(state.activeMatch!);
     expect(next.finance).toBe(state.finance);
     expect(next.payroll).toBe(state.payroll);
     expect(() => offerPlayerContract(next, ownId, 2_000_000, 1)).toThrow(/already has a contract/);
@@ -118,7 +118,7 @@ describe('offseason recruitment and roster reconstruction', () => {
     const original = freeze(create());
     const state = offseason(original);
     expect(state.clubs).toBe(original.clubs);
-    expect(state.activeMatch).toBe(original.activeMatch);
+    expect(state.activeMatch!).toBe(original.activeMatch!);
     expect(state.rosters).toBe(original.rosters);
     for (const club of state.clubs.filter(club => club.id !== clubId)) expect(getClubContractSummary(state, club.id).rosterSize).toBe(8);
     expect(prepareEmploymentMarket(state)).toBe(state);
@@ -146,7 +146,7 @@ describe('offseason recruitment and roster reconstruction', () => {
     for (const player of club.players) expect({ ...player, number: getDevelopmentPlayer(player.id).number }).toEqual(getDevelopmentPlayer(player.id));
     expect(result.clubs).toEqual(getContractedClubs(result, 2));
     expect(result.employment.market).toBeNull();
-    expect(result.activeMatch).toBe(state.activeMatch);
+    expect(result.activeMatch!).toBe(state.activeMatch!);
     expect(finalizeEmploymentMarket(pending)).toEqual(result);
     expect(getContractedClubs(result, 1)).toEqual(DEVELOPMENT_CLUBS);
   });

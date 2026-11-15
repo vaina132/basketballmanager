@@ -6,6 +6,7 @@ import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { CareerWorld, WorldContext } from '../domain/world';
 import { DEVELOPMENT_PLAYERS } from '../data/development-players';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
+import { roundRobinRoundCount } from './competition-calendar';
 
 /**
  * The world a career plays in. Careers in the built-in fictional league carry no world and use DEVELOPMENT_WORLD;
@@ -28,7 +29,7 @@ export function worldOf(context: WorldContext): CareerWorld {
   return DEVELOPMENT_WORLD;
 }
 
-/** A world holds an even number of clubs (every club plays every matchday) from 4 to 40. */
+/** Legacy single-league bounds. New domestic worlds allow up to 192 clubs across leagues of 4–20. */
 export const MIN_WORLD_CLUBS = 4;
 export const MAX_WORLD_CLUBS = 40;
 /** The longest possible season: a double round robin of the largest world. */
@@ -36,6 +37,7 @@ export const MAX_SEASON_ROUNDS = 2 * (MAX_WORLD_CLUBS - 1);
 
 /** Matchdays in a season of this world: every club meets every other club home and away. */
 export function worldRounds(world: CareerWorld): number {
+  if (world.domesticLeagues) return Math.max(...world.domesticLeagues.map(league => roundRobinRoundCount(league.clubIds.length)));
   return 2 * (world.clubs.length - 1);
 }
 
@@ -140,16 +142,29 @@ const exactKeys = (value: unknown, keys: readonly string[]) => isObject(value) &
  * All worlds share the career calendar: season one starts on DEVELOPMENT_WORLD.startDate.
  */
 export function validateWorld(value: unknown): asserts value is CareerWorld {
-  if (isObject(value) && validated.has(value)) return;
+  if (isObject(value) && !Object.hasOwn(value, 'domesticLeagues') && validated.has(value)) return;
   const fail = (path: string, reason: string): never => { throw new Error(`Invalid career world: ${path} ${reason}.`); };
-  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : [])])) fail('world', 'must contain exactly the world fields');
+  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : [])])) fail('world', 'must contain exactly the world fields');
   const world = value as unknown as CareerWorld;
   if (Object.hasOwn(world, 'rosterModel') && world.rosterModel !== FULL_ROSTER_MODEL) fail('world.rosterModel', 'has an unsupported value');
   if (!isText(world.id, 80) || !ID.test(world.id)) fail('world.id', 'must be a supported identifier');
   if (!isText(world.name)) fail('world.name', 'must be a nonempty, bounded text value');
   if (world.source !== 'fictional-development' && world.source !== 'real-data-pack') fail('world.source', 'has an unsupported value');
   if (world.startDate !== DEVELOPMENT_WORLD.startDate) fail('world.startDate', 'must use the shared career calendar');
-  if (!Array.isArray(world.clubs) || world.clubs.length < MIN_WORLD_CLUBS || world.clubs.length > MAX_WORLD_CLUBS || world.clubs.length % 2 !== 0) fail('world.clubs', `must list an even number of clubs from ${MIN_WORLD_CLUBS} to ${MAX_WORLD_CLUBS}`);
+  if (!Array.isArray(world.clubs) || world.clubs.length < MIN_WORLD_CLUBS || world.clubs.length > (world.domesticLeagues ? 192 : MAX_WORLD_CLUBS) || !world.domesticLeagues && world.clubs.length % 2 !== 0) fail('world.clubs', world.domesticLeagues ? 'must list a supported number of clubs' : `must list an even number of clubs from ${MIN_WORLD_CLUBS} to ${MAX_WORLD_CLUBS}`);
+  if (Object.hasOwn(world, 'domesticLeagues')) {
+    if (world.rosterModel !== FULL_ROSTER_MODEL || !Array.isArray(world.domesticLeagues) || world.domesticLeagues.length < 1 || world.domesticLeagues.length > 10) fail('world.domesticLeagues', 'requires full rosters and one to ten leagues');
+    const ids = new Set<string>(), members = new Set<string>();
+    for (const league of world.domesticLeagues!) {
+      if (!exactKeys(league, ['id', 'name', 'country', 'tier', 'clubIds']) || !isText(league.id, 80) || !ID.test(league.id) || ids.has(league.id) || !isText(league.name) || !isText(league.country) || !isWhole(league.tier, 1, 2) || !Array.isArray(league.clubIds) || league.clubIds.length < 4 || league.clubIds.length > 20) fail('world.domesticLeagues', 'contains an invalid league');
+      ids.add(league.id);
+      for (const id of league.clubIds) {
+        if (members.has(id) || !world.clubs.some(club => club.id === id)) fail('world.domesticLeagues', 'must assign each club to exactly one league');
+        members.add(id);
+      }
+    }
+    if (members.size !== world.clubs.length) fail('world.domesticLeagues', 'must cover every club');
+  }
   if (!isObject(world.playerProfiles) || !isObject(world.wages)) fail('world', 'needs player profiles and wages');
   const clubIds = new Set<string>(), playerIds = new Set<string>();
   for (const [index, club] of world.clubs.entries()) {
@@ -200,5 +215,6 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
     rivalryIds.add(rivalry.id);
     for (const id of rivalry.clubIds) rivals.add(id);
   }
-  validated.add(world);
+  // Calendar membership may be edited in a mutable import object; never cache its validation.
+  if (!world.domesticLeagues) validated.add(world);
 }

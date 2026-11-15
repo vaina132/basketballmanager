@@ -34,8 +34,8 @@ describe('cash outlook against actual career commands', () => {
   });
 
   it('still includes an uncommitted full-time match and leaves its future sporting action unchanged', () => {
-    expect(careers.fulltime.activeMatch.status).toBe('finished');
-    expect(careers.fulltime.fixtures.find(fixture => fixture.id === careers.fulltime.activeFixtureId)!.result).toBeNull();
+    expect(careers.fulltime.activeMatch!.status).toBe('finished');
+    expect(careers.fulltime.fixtures.find(fixture => fixture.id === careers.fulltime.activeFixtureId!)!.result).toBeNull();
     expect(getClubCashOutlook(careers.fulltime)).toEqual(getClubCashOutlook(careers.healthy));
     const state = freeze(structuredClone(careers.fulltime)), before = structuredClone(state);
     getClubCashOutlook(state);
@@ -117,7 +117,7 @@ describe('cash outlook against actual career commands', () => {
       const first = getClubCashOutlook(restored);
       expect(getClubCashOutlook(restored)).toEqual(first);
       expect(restored).toEqual(before);
-      expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(before.activeMatch));
+      expect(stepMatch(restored.activeMatch!)).toEqual(stepMatch(before.activeMatch!));
     }
   });
 });

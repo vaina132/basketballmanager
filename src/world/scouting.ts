@@ -1,3 +1,4 @@
+import { requireCalendarWeek } from './calendar-boundary';
 import type { ClubScouting, ScoutingReview, SeasonScouting, SquadObservation } from '../domain/scouting';
 import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
@@ -119,7 +120,8 @@ export function setScoutingDelegation(state: SeasonState, delegated: boolean): S
 export function processScoutingRound(state: SeasonState): SeasonState {
   if (!state.scouting.enabledSince) return state;
   const fixtures = state.fixtures.filter(fixture => fixture.round === state.round);
-  if (fixtures.length !== state.clubs.length / 2 || fixtures.some(fixture => !fixture.result)) throw new Error('Commit every matchday result before resolving scouting observations.');
+  if (fixtures.some(fixture => !fixture.result)) throw new Error('Commit every matchday result before resolving scouting observations.');
+  requireCalendarWeek(state, true);
   let next = state;
   for (const observer of state.clubs) {
     const club = next.scouting.clubs[observer.id]!;

@@ -340,3 +340,16 @@ export function backgroundConditions(fixtures: readonly GameRecord[], team: Team
 
 /** The world plays European games (format 57). */
 export const playsEurope = (world: CareerWorld) => playedEuropeanCompetitions(world).length > 0;
+
+/** Every day a played competition reserves for knockout games, whether or not they will be needed (the Calendar shows them, step 3.5g). */
+export function reservedEuropeanDays(world: CareerWorld, seasonNumber: number): { date: string; round: number; competitionId: string; label: string }[] {
+  const start = seasonStart(seasonNumber), day = (week: number, offset: number) => ({ round: week, date: addCalendarDays(start, (week - 1) * 7 + offset) });
+  return playedEuropeanCompetitions(world).flatMap(competition => {
+    const format = EUROPEAN_FORMATS[competition.format!], staged = format.staged;
+    return [
+      ...(staged ? staged.playInSlots.map(slot => ({ ...day(slot.week, slot.day), label: 'Play-ins' })) : []),
+      ...(staged ? staged.roundOf16.weeks.flatMap(week => [...new Set(staged.roundOf16.groups.map(group => group.day))].map(offset => ({ ...day(week, offset), label: 'Round of 16' }))) : []),
+      ...format.slots.map(slot => ({ ...day(slot.week, slot.day), label: 'Knockout rounds' })),
+    ].map(entry => ({ ...entry, competitionId: competition.id }));
+  });
+}

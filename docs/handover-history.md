@@ -8,6 +8,17 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.5g and the cloud part of 3.6, screens; sprint 3 summary (15 November 2026)
+
+- **Calendar page** (`src/ui/SeasonCalendar.tsx`, nav "Calendar"): every week of the season, each game day's competitions and game counts, the manager's game (opponent, home or away, competition, result) and the days still reserved for domestic playoffs and European knockouts (`reservedEuropeanDays` in `src/world/europe.ts`, `postseasonSlotDay`), with a "weeks with your games" filter and the current week marked.
+- **Europe page** (`src/ui/EuropeWorkspace.tsx`, nav "Europe" in worlds that play Europe or estimate leagues): per competition and season, the table or groups (with Round of 16 groups for the BCL), knockout series with wins, format and venue, games and results (your club only, optionally), and each unchosen league's estimated table labelled as estimated.
+- **Setup screen (3.6, cloud part):** the club step's league summary names the European competitions included; the review lists them and the estimated leagues.
+- **Tests:** `tests/europe-ui.test.jsx` (3) on the places world shared through `tests/helpers/europe-worlds.js`.
+- **Sprint 3 summary** written in HANDOVER.md: the cloud work is complete; 3.4d-4, a real-pack Europe check, the measured estimates of 3.6 and 3.7 are local-only.
+- **Browser check:** Chromium with a synthetic, checksummed pack (no real data): setup review lists the EuroLeague and the estimated league; the Calendar and Europe pages render (screenshots in the session only).
+- **Verification:** full serial suite **2,631 tests / 201 files passed** (761 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** the owner reviews sprint 3.
+
 ## Cloud continuation: step 3.5f, background tables and next season's European places (15 November 2026)
 
 - **Fixtures first:** `tests/fixtures/season59-places-legacy-*` from unchanged commit `308d10b` (126 modules); `tests/season59-continuation.test.js` (3; also: no places recorded).

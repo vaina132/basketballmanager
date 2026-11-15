@@ -11,6 +11,7 @@ import { sponsorMarket } from '../data/development-sponsors';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { MIN_WORLD_CLUBS, validateWorld } from './career-world';
 import { clubTeam, type DataPack, type DataPackCompetition } from './data-pack';
+import { withFairRatings } from './rating-fairness';
 import { overallRating } from './overall-rating';
 import { POSTSEASON_FORMATS, postseasonFormatAllowed, postseasonFormatFor } from './postseason';
 
@@ -61,7 +62,9 @@ export function realWorldWage(overall: number): number {
 /** Recognises generated reserves retained in older careers; new worlds never add them. */
 export const isGeneratedReserve = (playerId: string) => playerId.includes('-reserve-');
 
-export function worldFromPack(pack: DataPack, competitionId: string | readonly string[]): CareerWorld {
+export function worldFromPack(original: DataPack, competitionId: string | readonly string[]): CareerWorld {
+  // Sprint 4: ratings resting on few minutes are pulled towards their club's level.
+  const pack = withFairRatings(original);
   const ids = typeof competitionId === 'string' ? [competitionId] : [...competitionId];
   const competitions = careerCompetitions(pack).filter(item => ids.includes(item.id));
   if (!ids.length || new Set(ids).size !== ids.length || competitions.length !== ids.length) throw new Error('Choose supported domestic leagues from the loaded data pack.');

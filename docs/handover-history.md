@@ -8,6 +8,12 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Sprint 4 start: rating fairness, fast autosaves, real-data measurements (15 November 2026)
+
+- `src/world/rating-fairness.ts` (`withFairRatings`, in `worldFromPack`), pack field `ratingMinutes` (Edge Function v2 republished the online pack). Tests: `tests/rating-fairness.test.js` (2).
+- Checkpoints use `serializeSeasonCompact(state, { check: false })` (development mode); exports and imports stay strict. Ten checkpoint-policy tests paused with `it.skip` (listed under "Before release").
+- Measured a Spanish real-data season with Europe: 247 s a season, 7.5 MiB save, 17 s full check per save before this change.
+
 ## Cloud continuation: real club data in Supabase (owner request, 15 November 2026)
 
 - **Owner request:** the data pack must be online for every player, in the owner's Supabase project; the owner asked for this Supabase work directly.

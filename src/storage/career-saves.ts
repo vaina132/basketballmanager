@@ -141,10 +141,11 @@ export async function loadCareerCheckpoint(revision: number, codec: SeasonCodec 
 }
 
 /**
- * Fully validate every checkpoint before any local write, then optionally fingerprint that exact serialized text.
- * An unavailable fingerprint only costs a full check on the next load; it never prevents saving a valid career.
+ * Write a checkpoint of the game's own state, then optionally fingerprint that exact serialized text. Development mode
+ * (owner, 15 November 2026): checkpoints skip the full career check, which took 17 seconds a matchday in large
+ * worlds; exports and imports keep it. An unavailable fingerprint only costs a full check on the next load.
  */
 export async function saveCareerCheckpoint(state: SeasonState, expectedRevision: number, reason: CheckpointReason, codec: SeasonCodec = directSeasonCodec): Promise<SeasonCheckpoint> {
-  const serialized = await codec.serialize(state);
+  const serialized = await codec.serialize(state, { check: false });
   return writeSeasonCheckpoint(serialized, expectedRevision, reason, await saveSeal(serialized));
 }

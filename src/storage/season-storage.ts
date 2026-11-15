@@ -2998,8 +2998,10 @@ export function serializeSeason(state: SeasonState): string {
  * Format 40's compact layout (`compact-json.ts`): repeated field names and long identifiers are stored once, which
  * makes a real 18-club season about 30% of the plain size. Local saves, checkpoints and exported files use it.
  */
-export function serializeSeasonCompact(state: SeasonState): string {
-  validateSeasonState(state);
+export function serializeSeasonCompact(state: SeasonState, options: { check?: boolean } = {}): string {
+  // Development mode (owner, 15 November 2026): the game's own checkpoints skip the full career check (`check: false`);
+  // imported files still get it when they are read.
+  if (options.check !== false) validateSeasonState(state);
   const { strings, shapes, nodes, value } = compactJson2(state);
   const envelope = { format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', encoding: COMPACT_JSON_ENCODING, strings, shapes, nodes, state: value };
   // Encoded tables, object markers and the envelope must fit the reader's limits too.

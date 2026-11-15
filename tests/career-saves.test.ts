@@ -150,7 +150,8 @@ describe('checkpoint restore and append', () => {
     expect(storage.writeSeasonCheckpoint).not.toHaveBeenCalled();
   });
 
-  it('validates malformed game state before issuing any write', async () => {
+  // Development mode (owner, 15 November 2026): checkpoints skip the full career check; restore before release.
+  it.skip('validates malformed game state before issuing any write', async () => {
     const invalid = createSeason(5);
     invalid.managedClubId = 'missing-club';
     await expect(saveCareerCheckpoint(invalid, 2, 'manual')).rejects.toThrow(/managedClubId/);

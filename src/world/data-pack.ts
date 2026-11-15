@@ -18,6 +18,8 @@ export interface DataPackPlayer {
   heightCm: number; weightKg: number; attributes: PlayerAttributes; estimated: string[];
   /** Optional researched profile facts; older packs keep their original estimates. */
   birthDate?: string;
+  /** Minutes of play the ratings rest on (sprint 4 rating fairness); absent in older packs. */
+  ratingMinutes?: number;
   profileEvidence?: { observedAt: string; positionSource: 'estimated' | 'official' | 'provider'; membership: 'needs-review' | 'official-registration-observed' | 'provider-observed'; sources: string[] };
 }
 export interface DataPackClub {
@@ -62,6 +64,7 @@ export async function parseDataPack(fileText: string): Promise<DataPack> {
     if (!POSITIONS.includes(raw.position as Position)) fail(`${raw.name} has an unknown position`);
     if (!Array.isArray(raw.estimated) || raw.estimated.some(field => typeof field !== 'string')) fail(`${raw.name} has invalid estimate labels`);
     if (raw.birthDate !== undefined && (typeof raw.birthDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw.birthDate) || !Number.isFinite(Date.parse(raw.birthDate)) || new Date(raw.birthDate).toISOString().slice(0, 10) !== raw.birthDate || raw.birthDate < `${Number(String(pack.season).slice(0, 4)) - 61}-09-05` || raw.birthDate > `${Number(String(pack.season).slice(0, 4)) - 12}-09-05`)) fail(`${raw.name} has an invalid birth date`);
+    if (raw.ratingMinutes !== undefined && (typeof raw.ratingMinutes !== 'number' || !Number.isFinite(raw.ratingMinutes) || raw.ratingMinutes < 0 || raw.ratingMinutes > 1_000_000)) fail(`${raw.name} has invalid rating minutes`);
     if (raw.profileEvidence !== undefined) {
       const evidence = raw.profileEvidence;
       if (!isObject(evidence) || typeof evidence.observedAt !== 'string' || !Number.isFinite(Date.parse(evidence.observedAt)) || !['estimated', 'official', 'provider'].includes(evidence.positionSource as string) || !['needs-review', 'official-registration-observed', 'provider-observed'].includes(evidence.membership as string) || !Array.isArray(evidence.sources) || evidence.sources.some(url => typeof url !== 'string' || !url.startsWith('https://'))) fail(`${raw.name} has invalid profile evidence`);

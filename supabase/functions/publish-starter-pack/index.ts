@@ -25,8 +25,12 @@ async function sha256(text: string) {
 Deno.serve(async () => {
   const client = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-  const { data: existing } = await client.storage.from('game-data').list('', { search: OBJECT });
-  if (existing?.some(item => item.name === OBJECT)) return json({ status: 'exists', note: 'A pack is already published; it is never replaced from here.' });
+  // A pack the owner published is never replaced from here; an earlier starter build of this function is.
+  const { data: existing } = await client.storage.from('game-data').download(OBJECT);
+  if (existing) {
+    const version = String(JSON.parse(await existing.text())?.pack?.version ?? '');
+    if (!version.startsWith(`${VERSION}-online`)) return json({ status: 'exists', version, note: 'The owner\'s pack is published; it is never replaced from here.' });
+  }
   const all = async (table: string, columns: string, apply: (query: any) => any = query => query) => {
     const rows: any[] = [];
     for (let from = 0; ; from += 1000) {
@@ -68,6 +72,8 @@ Deno.serve(async () => {
       return {
         id: `player-${row.player_id}`, name: player.full_name, clubId: `club-${row.club_id}`, number: row.shirt_number ?? null, position,
         nationality: player.nationality ?? null, age: player.age_observed ?? null, heightCm: height, weightKg: weight, attributes,
+        // Sprint 4 rating fairness: the minutes behind the ratings.
+        ...(rating && Number.isFinite(rating.method?.weightedMinutes) ? { ratingMinutes: Math.round(rating.method.weightedMinutes) } : {}),
         estimated: [...new Set([...(rating ? rating.estimated.filter((field: string) => field !== 'game_position') : ['all-abilities', 'height_cm', 'weight_kg']), 'age-unverified', ...(resolution.estimated ? ['game_position'] : [])])],
       };
     }).sort((a, b) => a.clubId.localeCompare(b.clubId) || a.name.localeCompare(b.name));
@@ -82,10 +88,10 @@ Deno.serve(async () => {
     const base = { format: 'basketball-manager-data-pack', formatVersion: 1, season: SEASON, source, competitions: packCompetitions, clubs: packClubs, players: packPlayers };
     // The same contents as the recorded pack, for checking the rebuild against its checksum.
     const recorded = await sha256(JSON.stringify({ format: base.format, formatVersion: 1, version: VERSION, season: SEASON, source, notice: 'Private evaluation data from API-SPORTS. Rights for publication or distribution are not cleared; do not upload or share.', competitions: packCompetitions, clubs: packClubs, players: packPlayers }));
-    const pack = { format: base.format, formatVersion: 1, version: `${VERSION}-online`, season: SEASON, source, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
+    const pack = { format: base.format, formatVersion: 1, version: `${VERSION}-online-2`, season: SEASON, source, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
     const checksum = await sha256(JSON.stringify(pack));
     const text = JSON.stringify({ checksum, writtenAt: new Date().toISOString(), pack });
-    const { error } = await client.storage.from('game-data').upload(OBJECT, new Blob([text], { type: 'application/json' }), { upsert: false, contentType: 'application/json', cacheControl: '300' });
+    const { error } = await client.storage.from('game-data').upload(OBJECT, new Blob([text], { type: 'application/json' }), { upsert: true, contentType: 'application/json', cacheControl: '300' });
     if (error) return json({ status: 'failed', error: error.message }, 500);
     return json({ status: 'published', version: pack.version, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, bytes: text.length, matchesRecordedChecksum: recorded === versionRow.checksum });
   } catch (error) {

@@ -8,6 +8,15 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.5a, European entrants in the world (15 November 2026)
+
+- **Fixtures first:** `tests/fixtures/season55-europe-legacy-*` from unchanged commit `664d1c1` (124 modules); `tests/season55-continuation.test.js` (3).
+- **Format 56:** `CareerWorld.europeanCompetitions` (`EuropeanCompetition`: id, name, kind euroleague/eurocup/bcl, season, clubIds). `validateWorld` (`checkEuropeanCompetitions`): up to three, each kind once, 2-64 entrants of this world, a club in one competition, no next-division club; leagues, next-division lists and European-only entrants together cover every club. Format guard `requires format 56`.
+- **World:** `europeanOnlyClubIds`; `fullWorldClubs` excludes them as well as next-division clubs. `withEuropeanCompetitions` and `europeanKind` in `src/world/real-world.ts`; `worldFromPack` adds the season's competitions and entrants (new IDs `real-europe-`).
+- **Tests:** `tests/european-world.test.js` (4: built entrants and estimated data; a career where they never appear in clubs, fixtures, the catalog or the ledger, with a strict save; refusals and the format guard; a real-data pack with chosen and outside entrants, seasons and kinds).
+- **Verification:** full serial suite **2,588 tests / 192 files passed** (630 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.5b, midweek European game days and draws.
+
 ## Cloud continuation: step 3.5 plan and research (15 November 2026)
 
 - Checked the proposed 3.5 split against the plan and recorded it as steps 3.5a-3.5g (`docs/multi-league-world.md#plan-for-step-35-checked-15-november-2026`).

@@ -382,6 +382,10 @@ Reversible defaults (format 55; `src/world/exchanges.ts`):
 - **Joining clubs** sign their squads at the rollover (contract kind `joined`): a first-time club's generated players on their estimated wages and lengths, plus the same opening funds every club had at the career's start (`opening-s<season>`); a returning club's players who have not retired on their career wages, with lengths estimated by age and never beyond an announced retirement. Their per-club settings start delegated. A returning club needs at least eight such players to come up.
 - **The manager's own club** leaving counts as a dismissal (owner decision (a) below); leaving clubs offer no jobs.
 
+### European entrants in the world (step 3.5a, 15 November 2026)
+
+Reversible defaults (format 56): new real-data worlds carry the pack's European competitions of the chosen season (`world.europeanCompetitions`), each kind once (first listed), a club in one competition only (the first listing wins), and clubs with fewer than eight pack players left out. Entrants from the chosen leagues are referenced; all others (leagues not chosen, countries outside the six) are built into the world outside the full world with their real squads, arena (or "<club> Arena") and estimated wages, contract lengths, venue figures and president, so the world stays complete; no system runs for them and their players are outside the catalog. The lists are as the pack has them (the EuroCup's extra listing and the BCL's qualification entrants included); the formats (3.5c-e) decide who plays where.
+
 ### Owner decisions for step 3.4d-2 (15 November 2026)
 
 The owner decided both open questions on 15 November 2026:

@@ -8,6 +8,9 @@ import type { DomesticStandingsRule } from './competition';
 import type { PostseasonFormatId } from '../world/postseason';
 import type { LowerDivision } from './background';
 
+export type EuropeanCompetitionKind = 'euroleague' | 'eurocup' | 'bcl';
+export interface EuropeanCompetition { id: string; name: string; kind: EuropeanCompetitionKind; season: string; clubIds: string[] }
+
 /**
  * Everything a career's league is made of at its start: clubs and squads, player birth dates and wages, venues,
  * presidents, sponsors and rivalries. The built-in fictional league is one world (`DEVELOPMENT_WORLD`, never stored
@@ -38,6 +41,12 @@ export interface CareerWorld {
    * Absent when no list is known (public worlds; Italy and France for now).
    */
   lowerDivisions?: readonly LowerDivision[];
+  /**
+   * Format 56 (step 3.5a): the European competitions and their entrants for the opening season. Entrants outside the
+   * chosen leagues (unchosen leagues and countries outside the six) are clubs of the world outside the full world, with
+   * their real squads; they play only European games.
+   */
+  europeanCompetitions?: readonly EuropeanCompetition[];
   /** Every original player's gross season wage in euro cents. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

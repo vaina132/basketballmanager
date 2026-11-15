@@ -81,7 +81,7 @@ The proposed split was checked against "Levels of detail", "Competition formats"
 
 | Step | What |
 | --- | --- |
-| 3.5a | The three competitions and their 2026-27 entrants in the world. Entrants from leagues that were not chosen, and from countries outside the six, become background clubs with their real pack squads, colours and arena (like next-division clubs, built into the world outside the full world). New format. |
+| 3.5a | The three competitions and their 2026-27 entrants in the world. Entrants from leagues that were not chosen, and from countries outside the six, become background clubs with their real pack squads, colours and arena (like next-division clubs, built into the world outside the full world). New format. **Done 15 November 2026 (format 56).** |
 | 3.5b | Midweek European game days on the shared calendar (EuroCup and BCL Tuesday and Wednesday; EuroLeague Thursday, and Tuesday in double-round weeks), draws at the season start (BCL country protection), and conflict checks with domestic postseason slots. Background clubs play with the match engine (legal matchday selection, box scores, injuries, fitness). |
 | 3.5c | EuroLeague: 38 rounds, play-in 7-10, best-of-five playoffs (2-2-1), Final Four without a third-place game. |
 | 3.5d | EuroCup: four groups of eight, best-of-three eighth-finals to finals. |

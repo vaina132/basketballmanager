@@ -4,7 +4,7 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Keeping this file short:** when a step is finished, update "Current state" and "Next steps" here, and add the step's detailed notes (what changed, tests, measurements) to the top of `docs/handover-history.md` under a dated heading. Keep this file under 20 KB, with exactly one current entry.
 
-## Current state (15 November 2026, after step 3.4d-3)
+## Current state (15 November 2026, after step 3.5a)
 
 **Active level:** Sprint 3, the multi-league world ([docs/multi-league-world.md#steps](docs/multi-league-world.md#steps)).
 
@@ -15,11 +15,11 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 4. Release preparation
 5. Interface simplification (last)
 
-**Active step:** 3.4, domestic playoffs, titles, and promotion and relegation. The next step is 3.5 (3.4d-4 is local-only; see "Next steps").
+**Active step:** 3.4, domestic playoffs, titles, and promotion and relegation. The next step is 3.5b (3.4d-4 is local-only; see "Next steps").
 
 **Code baseline:**
-- Step 3.4d-3 commit on `main` (cloud session); save format **55** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
-- Last verification, on Linux (cloud): full serial suite **2,581 tests / 190 files passed** (641 s), and `npm run build` passed with the known chunk-size advisory.
+- Step 3.5a commit on `main` (cloud session); save format **56** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
+- Last verification, on Linux (cloud): full serial suite **2,588 tests / 192 files passed** (630 s), and `npm run build` passed with the known chunk-size advisory.
 - Cloud sessions: Node 24.22.3 is installed in `/opt/node24` (put it first in `PATH`).
 
 **Done in sprint 3** (details in the history, search for the step number):
@@ -33,6 +33,7 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
   - **3.4c** promotion and relegation between a country's two divisions. Each season records its divisions (format 50).
   - **3.4e-1** FIBA Official Basketball Rules 2026, Appendix D, as the labelled default standings rule for new worlds' leagues without a verified rule of their own (format 51). Also fixed: strict checks refused any manager club change in a carried world.
   - **3.4e-2** verified league rules for new worlds (format 52): ACB article 7 (Spain's top division), BBL § 20 (Germany), FIP article 62 (both Italian divisions). Greece and Turkey keep the FIBA default (no readable official rule).
+  - **3.5a** European competitions in new worlds (format 56): `world.europeanCompetitions` from the pack; entrants outside the chosen leagues are background clubs with their real squads (`withEuropeanCompetitions`, `europeanOnlyClubIds`). They do not play yet.
   - **3.4d-3** screens: the playoff panel lists clubs leaving to and joining from the next division (returning or with a generated squad); generated players carry a "Generated" label on Squad, the player profile and Scouting.
   - **3.4d-2** clubs leave and join the full world at season ends (formats 54-55), wherever the world lists a country's next division (`withLowerDivisions`; real names need 3.4d-4). Decisions (a) and (b) implemented.
   - **3.4d-1** background-club foundation (format 53): `world.lowerDivisions` (a country's real next division, identities only; never Italy or France) and `SeasonState.background` (clubs outside the full world with their squads; empty until 3.4d-2). `src/world/background.ts`: a background club from a full-world club, its squad aged to a date, a matchday selection and the save checks.

@@ -115,7 +115,8 @@ export interface DomesticDivisions {
 /** Format 53 adds the record of clubs outside the full world (`background`) and the world's lower-division lists. */
 /** Format 54 builds next-division clubs into the world (generated squads), outside the full world until promoted. */
 /** Format 55 records exchanges with next divisions (`background.changesFrom`, `background.exchanges`) and contract departures. */
-export const SEASON_SCHEMA_VERSION = 55;
+/** Format 56 adds the European competitions and their entrants to new worlds (step 3.5a). */
+export const SEASON_SCHEMA_VERSION = 56;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

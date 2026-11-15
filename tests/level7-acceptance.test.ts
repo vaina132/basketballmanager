@@ -40,8 +40,9 @@ function nextSeason(state: SeasonState): SeasonState {
 let firstSeasonEnd: SeasonState, secondSeasonEnd: SeasonState, thirdSeason: SeasonState;
 
 beforeAll(() => {
-  // Seed 67: an all-automatic Rhine Falcons season ends Under pressure, so the board dismisses the manager.
-  firstSeasonEnd = playSeason(createSeason({ seed: 67, managedClubId: FIRST, injuryMode: 'standard', manager: { name: 'Acceptance Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS }));
+  // Seed 4 (67 before the match calibration of sprint 4): an all-automatic Rhine Falcons season ends Under pressure, so
+  // the board dismisses the manager.
+  firstSeasonEnd = playSeason(createSeason({ seed: 4, managedClubId: FIRST, injuryMode: 'standard', manager: { name: 'Acceptance Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS }));
   secondSeasonEnd = playSeason(nextSeason(firstSeasonEnd));
   thirdSeason = nextSeason(secondSeasonEnd);
   for (let round = 0; round < 2; round += 1) thirdSeason = advanceMatchday(thirdSeason);

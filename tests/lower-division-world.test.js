@@ -130,7 +130,8 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
 
   it('treats a manager whose club leaves the full world as dismissed, with a job offer at a full-world club (owner decision a)', () => {
     const world = lowerWorld();
-    let state = setEmploymentDelegation(createSeason({ world, seed: 11, managedClubId: 'w1-rhine-falcons', ...NEW_CAREER_SYSTEMS }), true);
+    // Seed 33 (11 before the match calibration of sprint 4): the managed club finishes last in the second division.
+    let state = setEmploymentDelegation(createSeason({ world, seed: 33, managedClubId: 'w1-rhine-falcons', ...NEW_CAREER_SYSTEMS }), true);
     while (state.status === 'active') state = play(state);
     expect(state.background.exchanges[0].leaving).toEqual(['w1-rhine-falcons']);
     expect(state.career.moves).toMatchObject([{ seasonNumber: 1, fromClubId: 'w1-rhine-falcons', reason: 'dismissed' }]);

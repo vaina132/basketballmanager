@@ -21,8 +21,10 @@ import { currentSeasonFile } from './helpers/season-format';
 
 const FROM = 'rhine-falcons';
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
-// Seed 6: Rhine Falcons keep their job and Adriatic Comets' season ends Under pressure, so Adriatic offers its job.
-const career = (careerMoves = true, seed = 6) => createSeason({ seed, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves });
+// Seed 8 (6 before the match calibration of sprint 4): Rhine Falcons keep their job and Aegean Waves' season ends Under
+// pressure, so Aegean Waves offer their job.
+const OFFER_SEED = 8;
+const career = (careerMoves = true, seed = OFFER_SEED) => createSeason({ seed, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves });
 /** Take the best job offered at the end of the season being finished; the test fails if nobody offers one. */
 function takeBestOffer(finished: SeasonState): SeasonState {
   const offer = previewSeasonEnd(finished)?.offers[0];
@@ -47,8 +49,8 @@ beforeAll(() => {
 
 describe('season-end club changes', () => {
   it('hands the offseason and later seasons to the new club while the final match stays with the former club', () => {
-    expect(previewSeasonEnd(finalDay)).toMatchObject({ dismissed: false, offers: [{ clubId: 'adriatic-comets', reason: 'pressure' }] });
-    expect(TO).toBe('adriatic-comets');
+    expect(previewSeasonEnd(finalDay)).toMatchObject({ dismissed: false, offers: [{ clubId: 'aegean-waves', reason: 'pressure' }] });
+    expect(TO).toBe('aegean-waves');
     expect(moved.career.moves).toEqual([{ seasonNumber: 1, date: finalDay.date, fromClubId: FROM, toClubId: TO, reason: 'moved', ledgerCount: expect.any(Number) }]);
     // Without a decision the manager stays.
     expect(advanceSeason(finalDay).managedClubId).toBe(FROM);
@@ -136,6 +138,7 @@ describe('club changes after manual decisions at both clubs', () => {
   let secondMove: SeasonState, thirdSeason: SeasonState;
 
   beforeAll(() => {
+    // With these decisions, seed 8 brings a job offer at both season ends (the second after a dismissal).
     let state = setTicketPlan(career(), { delegated: false, price: 2200 });
     while (state.round < 10) state = advanceMatchday(manage(state, FROM, log));
     state = takeBestOffer(finish(manage(state, FROM, log)));

@@ -1,4 +1,5 @@
 import type { CareerWorld } from '../domain/world';
+import { standingsRuleFor } from '../domain/competition';
 import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import { sponsorMarket } from '../data/development-sponsors';
@@ -41,8 +42,9 @@ export function careerCompetitions(pack: DataPack): DataPackCompetition[] {
   return pack.competitions.filter(item => item.kind === 'domestic' && item.clubIds.length >= MIN_WORLD_CLUBS && item.clubIds.length <= 20);
 }
 
+/** New worlds change prefix whenever they gain a rule: `real-tables-` (format 48), `real-playoffs-` (49), `real-tiebreak-` (51). */
 export function realWorldId(pack: DataPack, competitionId: string): string {
-  return `real-playoffs-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
+  return `real-tiebreak-${pack.version.replace(/[^a-zA-Z0-9]+/g, '-')}-${competitionId}`.slice(0, 80);
 }
 
 /** The fictional season wage for a player of this overall rating, in euro cents. */
@@ -92,7 +94,7 @@ export function worldFromPack(pack: DataPack, competitionId: string | readonly s
   const playerContracts = Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, REAL_WORLD_RULES.contractYears(ageOf(player.id), hash(player.id))])));
   const world: CareerWorld = {
     id: realWorldId(pack, competitions.length === 1 ? competition.id : `leagues-${hash(competitions.map(item => item.id).sort().join('|')).toString(16)}`), name: competitions.length === 1 ? `${competition.name} ${competition.season}` : `European domestic leagues ${competition.season}`, source: 'real-data-pack', rosterModel: FULL_ROSTER_MODEL, startDate: DEVELOPMENT_WORLD.startDate,
-    domesticLeagues: competitions.map(item => ({ id: item.id, name: item.name, country: item.country ?? 'Other', tier: item.tier, clubIds: [...item.clubIds], ...(item.country === 'France' && [1, 2].includes(item.tier) ? { standingsRule: 'lnb-2026-1' as const } : {}), ...(postseasons ? { postseason: postseasons.get(item.id)! } : {}) })),
+    domesticLeagues: competitions.map(item => ({ id: item.id, name: item.name, country: item.country ?? 'Other', tier: item.tier, clubIds: [...item.clubIds], standingsRule: standingsRuleFor(item.country ?? 'Other', item.tier), ...(postseasons ? { postseason: postseasons.get(item.id)! } : {}) })),
     clubs: teams,
     playerProfiles: Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id,
       { dateOfBirth: byId.get(player.id)?.birthDate ?? `${2026 - (byId.get(player.id)?.age ?? REAL_WORLD_RULES.defaultAge)}-01-01`, source: byId.get(player.id)?.birthDate ? 'official-profile' as const : 'estimated-from-age' as const,

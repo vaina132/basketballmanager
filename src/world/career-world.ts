@@ -4,6 +4,7 @@ import type { Rivalry } from '../domain/rivalries';
 import type { Player } from '../domain/types';
 import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { CareerWorld, WorldContext } from '../domain/world';
+import { standingsRuleAllowed } from '../domain/competition';
 import { DEVELOPMENT_PLAYERS } from '../data/development-players';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { roundRobinRoundCount } from './competition-calendar';
@@ -169,7 +170,7 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
     const ids = new Set<string>(), members = new Set<string>();
     for (const league of world.domesticLeagues!) {
       if (!exactKeys(league, ['id', 'name', 'country', 'tier', 'clubIds', ...(['standingsRule', 'postseason'] as const).filter(key => isObject(league) && Object.hasOwn(league, key))]) || !isText(league.id, 80) || !ID.test(league.id) || ids.has(league.id) || !isText(league.name) || !isText(league.country) || !isWhole(league.tier, 1, 2) || !Array.isArray(league.clubIds) || league.clubIds.length < 4 || league.clubIds.length > 20) fail('world.domesticLeagues', 'contains an invalid league');
-      if (Object.hasOwn(league, 'standingsRule') && (league.standingsRule !== 'lnb-2026-1' || league.country !== 'France')) fail('world.domesticLeagues.standingsRule', 'must name a supported rule for this country');
+      if (Object.hasOwn(league, 'standingsRule') && !standingsRuleAllowed(league.standingsRule, league.country, league.tier)) fail('world.domesticLeagues.standingsRule', 'must name a supported rule for this country');
       if (Object.hasOwn(league, 'postseason') && !postseasonFormatAllowed(String(league.postseason), league.country, league.tier, league.clubIds.length)) fail('world.domesticLeagues.postseason', 'must name this country and division\'s format, for a league with enough clubs');
       ids.add(league.id);
       for (const id of league.clubIds) {
@@ -178,6 +179,8 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
       }
     }
     if (members.size !== world.clubs.length) fail('world.domesticLeagues', 'must cover every club');
+    // Worlds created since format 51 give every league a rule (its own or the FIBA default); older worlds rank only French leagues by a rule.
+    if (world.domesticLeagues!.some(league => league.standingsRule === 'fiba-2026-d') && world.domesticLeagues!.some(league => !Object.hasOwn(league, 'standingsRule'))) fail('world.domesticLeagues.standingsRule', 'must be given to every league of a world that uses the FIBA default');
     // Postseasons are all or nothing, and a format seeding from the other division needs that division's postseason too.
     const withPostseason = world.domesticLeagues!.filter(league => league.postseason);
     if (withPostseason.length && withPostseason.length !== world.domesticLeagues!.length) fail('world.domesticLeagues.postseason', 'must be given to every league or none');

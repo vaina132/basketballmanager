@@ -13,6 +13,7 @@ import { divisionChanges, seasonLeagues } from '../src/world/divisions';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { PostseasonPanel } from '../src/ui/PostseasonPanel';
+import { currentSeasonFile } from './helpers/season-format';
 
 /** One test country with two divisions: six clubs (last two relegated) and five (first and the playoff winner promoted). */
 function twoDivisionWorld() {
@@ -66,7 +67,7 @@ describe('promotion and relegation between a country\'s divisions (step 3.4c)', 
     const swapped = structuredClone(state);
     const [a, b] = [swapped.divisions.leagues[0].clubIds[0], swapped.divisions.leagues[1].clubIds[0]];
     swapped.divisions.leagues[0].clubIds[0] = b; swapped.divisions.leagues[1].clubIds[0] = a;
-    expect(() => parseSeason(JSON.stringify({ format: 'basketball-manager-season', formatVersion: 50, engineVersion: 'possession-3', state: swapped }))).toThrow(/Invalid season save/);
+    expect(() => parseSeason(currentSeasonFile(swapped))).toThrow(/Invalid season save/);
   }, 600_000);
 
   it('keep France\'s 15th up when it wins the second division\'s promotion final, and refuse unbalanced counts', () => {

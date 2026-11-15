@@ -8,6 +8,16 @@ A completely tied final LNB table uses reproducible lots from an independent str
 
 The live Competition screen must call the same world-aware standings function used by sponsor/career logic and historical validation, then filter the selected league. Rules are behind a compact disclosure. A regular-season leader is not described as the playoff champion.
 
+### Default tie-break rule (step 3.4e-1, 15 November 2026)
+
+Reversible defaults taken under the approved plan:
+- New worlds give every league without a verified rule of its own the FIBA Official Basketball Rules 2026, Appendix D (`fiba-2026-d`, format 51), labelled "FIBA default" on the Competition screen. French leagues keep `lnb-2026-1`. A saved world may carry only its country's own rule, or the FIBA default where no own rule exists; a world that uses the FIBA default gives every league a rule. New world IDs begin `real-tiebreak-`.
+- Old worlds keep their embedded ranking: migration never adds a rule. Format-50 saves keep the divisions they record.
+- Mid-season reading: classification points favour clubs that have played more games (a bye means a game in hand), as in real FIBA-ruled tables. Clubs that have not met yet have no games between them, so the next criterion decides. Final ties use the reproducible draw of `lnb-2026-1`, never match randomness.
+- When a league-specific rule is verified later (3.4e-2), only new worlds take it; worlds created with the FIBA default keep it.
+
+Fix found while testing: strict save checks accepted a manager's club change only between clubs of the built-in league, so any career in a carried world in which the manager was dismissed or changed jobs could not be saved. The checks now use the career's own world. This accepts saves that were wrongly refused and refuses nothing new, so the checks version is unchanged.
+
 ## Domestic calendar integration (15 November 2026)
 
 Within the approved shared-calendar plan, new domestic careers use the longest selected league's double-round-robin length as the common regular-season duration (at most 38 weeks for the available 20-club leagues). Shorter competitions distribute their rounds across those Saturdays and finish together; odd fields retain genuine club byes. This is a reversible scheduling default, not a sourced claim about official fixture dates. Midweek Europe and postseason dates remain later integration work.
@@ -335,6 +345,12 @@ Step 3.4c (promotion and relegation inside the full world, 15 November 2026), re
 - France: the top division's 15th club stays up if it wins the second division's promotion final, and then takes that promotion place.
 - Careers saved in format 49 begin moving clubs at the end of the season they are in; seasons already played keep their divisions.
 - Until step 3.4d, clubs relegated out of the game's leagues (below a second division, and Germany's and Greece's relegated clubs) stay where they are; the playoff panel says so.
+
+### Owner decisions for step 3.4d-2 (15 November 2026)
+
+The owner decided both open questions on 15 November 2026:
+- **(a) Manager's club relegated out of the full world:** treat it like a dismissal. The season-end choice offers jobs at full-world clubs, with at least one offer guaranteed.
+- **(b) Italy and France:** no relegation out of the full world for now, because API-Sports has no clubs for Italy's Serie B or France's NM1. Their 3.4c behaviour stays: clubs relegated from Serie A2 and Élite 2 remain in their division. Free official club lists for those divisions remain local-only work if relegation there is wanted later.
 
 ## Owner feedback after playing, 15 November 2026
 

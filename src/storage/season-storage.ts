@@ -11,6 +11,7 @@ import type { SeasonRelationships } from '../domain/relationships';
 import { validateRelationships } from './relationships-validation';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonArchive, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
+import { STANDINGS_RULE_FORMAT } from '../domain/competition';
 import type { FacilityAnchor, FacilityEvent, SeasonFacilities } from '../domain/facilities';
 import { createFacilities, applyFacilityEvent, facilitiesAtEventCount } from '../world/facilities';
 import { getArenaCapacity, getFacilityUpkeepBreakdown } from '../world/facilities-policy';
@@ -102,7 +103,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -2579,7 +2580,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const world = worldOf(state as unknown as SeasonState);
   const fullRoster = usesFullClubRoster({ world });
   if (world.domesticLeagues && version < 47) fail('world.domesticLeagues', 'requires format 47 or later');
-  if (version < 48 && world.domesticLeagues?.some(league => Object.hasOwn(league, 'standingsRule'))) fail('world.domesticLeagues.standingsRule', 'requires format 48 or later');
+  for (const league of world.domesticLeagues ?? []) if (Object.hasOwn(league, 'standingsRule') && version < STANDINGS_RULE_FORMAT[league.standingsRule!]) fail('world.domesticLeagues.standingsRule', `requires format ${STANDINGS_RULE_FORMAT[league.standingsRule!]} or later`);
   if (version < 49 && world.domesticLeagues?.some(league => Object.hasOwn(league, 'postseason'))) fail('world.domesticLeagues.postseason', 'requires format 49 or later');
   if (version < 50 && Object.hasOwn(world, 'playerContracts')) fail('world.playerContracts', 'requires format 50 or later');
   // Format 50: careers whose leagues have postseasons record each season's divisions.
@@ -2952,7 +2953,8 @@ export function parseSeason(text: string): SeasonState {
   const summarized = version < 43 ? summarizeYouthHistory(academyUpgraded) : academyUpgraded;
   const archived = summarizeSeniorHistory(archiveFinancialHistory(summarized));
   // Format 50: careers with postseasons begin moving clubs between divisions at the end of the season being played.
-  const divisions = openingDivisions(worldOf(archived), archived.seasonNumber);
+  // Saves from format 50 on already record the season's divisions and keep them.
+  const divisions = version < 50 ? openingDivisions(worldOf(archived), archived.seasonNumber) : undefined;
   const withDivisions = divisions ? { ...archived, divisions } : archived;
   validateSeasonState(withDivisions);
   return withDivisions;

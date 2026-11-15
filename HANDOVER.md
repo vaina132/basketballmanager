@@ -4,7 +4,7 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Keeping this file short:** when a step is finished, update "Current state" and "Next steps" here, and add the step's detailed notes (what changed, tests, measurements) to the top of `docs/handover-history.md` under a dated heading. Keep this file under 20 KB, with exactly one current entry.
 
-## Current state (15 November 2026)
+## Current state (15 November 2026, after step 3.4e-1)
 
 **Active level:** Sprint 3, the multi-league world ([docs/multi-league-world.md#steps](docs/multi-league-world.md#steps)).
 
@@ -15,12 +15,12 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 4. Release preparation
 5. Interface simplification (last)
 
-**Active step:** 3.4, domestic playoffs, titles, and promotion and relegation. The next step is 3.4e (see "Next steps").
+**Active step:** 3.4, domestic playoffs, titles, and promotion and relegation. The next step is 3.4e-2 (see "Next steps").
 
 **Code baseline:**
-- Owner commit `4aad3c9` on `main`; save format **50** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
-- Last verification, on Windows at that commit: full serial suite **2,524 tests / 180 files passed** (752 s), and `npm run build` passed with the known chunk-size advisory.
-- The suite has not yet run on Linux. If the first cloud run fails before any test runs, check for file-name case mismatches first: Linux file names are case-sensitive.
+- Step 3.4e-1 commit on `main` (cloud session); save format **51** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
+- Last verification, on Linux (cloud) for 3.4e-1: full serial suite **2,540 tests / 182 files passed** (573 s), and `npm run build` passed with the known chunk-size advisory.
+- Cloud sessions: Node 24.22.3 is installed in `/opt/node24` (put it first in `PATH`).
 
 **Done in sprint 3** (details in the history, search for the step number):
 - **3.1 data:** all 13 competitions imported and rated. The private pack `real-2026.11-world-3.json` (local only) covers 223 clubs and about 3,087 players.
@@ -31,20 +31,21 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
   - **3.4a** game days inside a week. Saturday stays the decision day; extra game days fall on Tuesday and Thursday.
   - **3.4b** every league's sourced 2026-27 postseason (format 49).
   - **3.4c** promotion and relegation between a country's two divisions. Each season records its divisions (format 50).
+  - **3.4e-1** FIBA Official Basketball Rules 2026, Appendix D, as the labelled default standings rule for new worlds' leagues without a verified rule of their own (format 51). Also fixed: strict checks refused any manager club change in a carried world.
 - **3.6 so far:** country flags, multi-country selection, a league list filtered by country, roster counts, a squad-strength bar and a game-speed meter.
 - **Owner feedback round (15 November 2026)**, placements in `docs/decisions.md#owner-feedback-after-playing-15-november-2026`:
   - Setup screen fixed, and the injury and replay options removed.
   - "Preparing your career…" panel; careers are now built in the worker.
   - Opening contracts of 1-3 seasons (`world.playerContracts`).
 
-**Unfinished in sprint 3:** 3.4e, 3.4d, 3.5, the rest of 3.6, and 3.7.
+**Unfinished in sprint 3:** 3.4e-2, 3.4d, 3.5, the rest of 3.6, and 3.7.
 
 **Known open points:**
 - The Competition screen's player statistics combine regular-season and playoff games.
 - Primera FEB's one-venue final stage still gives the listed home club its home advantage.
 - The Turkish TBL postseason is a labelled default; its statute has not been found.
 - Clubs relegated out of the full world stay in their division until 3.4d (the playoff panel says so).
-- Ranking rules other than France's still use the prototype order (3.4e).
+- New worlds rank leagues other than France's by the labelled FIBA default until their own rules are verified (3.4e-2). Worlds created before format 51 keep the prototype order outside France.
 - **Large worlds are slow** (address at 3.7):
   - a 36-club season with every system takes 341 s;
   - the strict check of its season-two opening save takes 18 s;
@@ -58,36 +59,32 @@ Each step below should fit one session. A step that needs private data, keys or 
 
 **Order note:** the plan table ([docs/multi-league-world.md](docs/multi-league-world.md#plan-for-the-rest-of-34-15-november-2026-claude-continuing-after-codex)) lists 3.4d before 3.4e. The owner approved doing 3.4e first on 15 November 2026. Reasons: 3.4e needs no private data and has no open questions, while 3.4d has two owner questions (below) and a local-only data part. The plan table has been updated to match this order.
 
-1. **3.4e-1: default tie-break rule.**
-   - Add the FIBA Official Basketball Rules 2026, Appendix D, as a labelled standings rule for new worlds whose leagues have no sourced rule yet (source link in `docs/competition-rules-2026.md`).
-   - Old worlds keep their original ranking. Never apply the French rule elsewhere.
-   - Reading a table must not use match randomness. Final ties are settled by the reproducible draw pattern of `lnb-2026-1`.
-   - Strict save checks must reject a wrong rule for a country.
-2. **3.4e-2: league-specific rules where a current official source exists.**
+1. **3.4e-2: league-specific rules where a current official source exists.**
    - Candidates: ACB (published rules dated 2023, so check they still apply), Italy's FIP article 62 (scoring quotients; the foul criteria need team-foul evidence the game may not keep), BSL, BBL, GBL and TBL.
    - Record each source in `docs/competition-rules-2026.md`. Where no source is found, keep the FIBA default and say so.
-3. **3.4d-1: background clubs foundation** (shared with 3.5).
+   - A new rule is a new saved value: capture format-51 fixtures first (`scripts/capture-format-baseline.mjs <label>`), then format 52. Worlds created with the FIBA default keep it (`standingsRuleAllowed` must keep accepting it for that country).
+2. **3.4d-1: background clubs foundation** (shared with 3.5).
    - A record for clubs outside the full world. It keeps the identity and, for a relegated club, the real squad, which ages at rollover.
    - Background clubs have no finances, staff, academy, board, contracts or transfers, and their players cannot be signed in sprint 3 (plan table "Levels of detail").
-   - Capture genuine format-50 fixtures first (see "Rules"). New save format with migration and corruption tests.
-4. **3.4d-2: leaving and joining at season end.**
+   - Capture genuine fixtures of the then-current format first (see "Rules"). New save format with migration and corruption tests.
+3. **3.4d-2: leaving and joining at season end.**
    - Relegated clubs of the lowest full division in a country leave as background clubs.
    - The same number of clubs come up from the real next division:
      - a club that left earlier returns with its squad;
      - a first-time club gets a generated squad labelled "generated", plus the usual estimated finances, president, sponsor, wages and contracts.
    - Test with synthetic worlds that carry a list of next-division clubs.
-   - **Owner decisions needed before this step:**
-     - **(a)** What happens when the manager's own club is relegated out of the full world? Recommended default: treat it like a dismissal, so the season-end choice offers jobs at full-world clubs, with at least one offer guaranteed.
-     - **(b)** API-Sports has no clubs for Italy's Serie B or France's NM1. Recommended default: Italy and France have no relegation out of the full world until free official club lists are added (local-only), so the 3.4c behaviour stays.
+   - **Owner decisions (15 November 2026, recorded in `docs/decisions.md#owner-decisions-for-step-34d-2-15-november-2026`):**
+     - **(a)** If the manager's own club is relegated out of the full world, treat it like a dismissal: the season-end choice offers jobs at full-world clubs, with at least one offer guaranteed.
+     - **(b)** Italy and France have no relegation out of the full world for now (API-Sports has no Serie B or NM1 clubs); their 3.4c behaviour stays.
    - Defaults a session may take and record as reversible in `docs/decisions.md`: promoted clubs are chosen from an estimated next-division table (squad strength plus a seeded random element, as for the plan's background tables), and generated squads are rated just below the division they join.
-5. **3.4d-3: screens.**
+4. **3.4d-3: screens.**
    - The Competition and playoff panels show clubs leaving and joining; remove the "stay until 3.4d" note.
    - Generated players are labelled on Squad, profile and scouting screens.
-6. **3.4d-4 (local-only): real lower-division names.**
+5. **3.4d-4 (local-only): real lower-division names.**
    - Import the real names into a new private pack. API-Sports lists Turkey's TB2L, Spain's Segunda FEB, Germany's Pro A and Greece's A2.
    - Run a private real-data season across a season end.
    - Update the 3.4 rows in the plan tables.
-7. **3.5: European competitions.** Proposed split; the first 3.5 session checks it against the plan and records it in `docs/multi-league-world.md`.
+6. **3.5: European competitions.** Proposed split; the first 3.5 session checks it against the plan and records it in `docs/multi-league-world.md`.
    - **(a)** The three competitions and their entrants in the world. Entrants from leagues that were not chosen, and from countries outside the six, become background clubs.
    - **(b)** Midweek European game days on the shared calendar, with draws at the season start:
      - EuroCup and BCL on Tuesdays and Wednesdays;
@@ -98,13 +95,13 @@ Each step below should fit one session. A step that needs private data, keys or 
    - **(f)** Estimated background tables for unchosen leagues and European places for next season (the reversible default in the plan).
    - **(g)** A Calendar view of the whole season (owner feedback point 8) and the European Competition screens.
    - Open research before (c)-(e), from free sources: the EuroLeague third-place game, the 2026-27 BCL rules and EuroLeague licences (`docs/competition-rules-2026.md`, "Still to verify").
-8. **3.6: measured speed and save-size estimates, with Europe in setup.**
+7. **3.6: measured speed and save-size estimates, with Europe in setup.**
    - The screen work can be done in the cloud.
    - Measuring with the real pack is local-only.
-9. **3.7 (local-only): final check.**
+8. **3.7 (local-only): final check.**
    - A multi-league season with Europe in the browser, save and load, rollover into season two, and five-season speed and size measurements (target: loads in about 5 s; well inside the 32 MiB save limit).
    - A cloud session may prepare a public synthetic five-season test first.
-10. **Stop:** write the sprint-3 summary here and wait for the owner.
+9. **Stop:** write the sprint-3 summary here and wait for the owner.
 
 After sprint 3 (new levels, each needing the owner's approval):
 - **Sprint 4, realism:** match calibration against real statistics; realistic injuries; hidden potential and fair ratings for low-minute players at strong clubs; realistic finances (wages, budgets, sponsorship and ticket income); real contract data.
@@ -129,7 +126,8 @@ After sprint 3 (new levels, each needing the owner's approval):
 **Saves and fixtures**
 - **Fixtures first.** Before any save-format change, capture genuine current-format saves from the unchanged code, with a manifest of SHA-256 hashes, and describe them in `tests/fixtures/README.md`.
   - `scripts/capture-season-fixtures.mjs` captures the board career.
-  - The capture scripts for formats 46-49 were in the ignored `.artifacts` folder and are not in the repository. Write the script under `scripts/` and commit it with the fixtures.
+  - `scripts/capture-format-baseline.mjs <label>` captures a public two-division domestic career (mid-season week and its next week; completed season and its rollover) with a manifest of file and module hashes. Use it before each format change from format 51 on.
+  - The capture scripts for formats 46-49 were in the ignored `.artifacts` folder and are not in the repository.
   - Never regenerate, edit or replace an existing fixture. Never fake an old fixture by changing a version number.
   - Every `tests/season*-continuation.test.js` must keep passing.
 - **Format change checklist:**
@@ -188,7 +186,8 @@ Browser checks still to do locally (by the owner, or by a local Claude session w
    - Check that Competition shows the champion and the promoted and relegated clubs.
    - Check that season two's league tables have the new members.
    - In a German-only career, check that the playoff panel says relegated clubs stay because there is no lower division yet.
-2. **Quick play-test of the feedback fixes:**
+2. **FIBA default table (3.4e-1):** start a new German or Spanish career, play a week and open Competition. The table should show a **Pts** column (2 for a win, 1 for a loss), and "Table rules" should say "FIBA default · Classification points". A French career should still show "LNB · Win percentage".
+3. **Quick play-test of the feedback fixes:**
    - Start a new career and check the country-filtered league list, the speed meter and the "Preparing your career…" panel. These were checked automatically in Edge.
    - Then check in Transfers that only some players' contracts end after the first season.
 
@@ -196,5 +195,5 @@ Browser checks still to do locally (by the owner, or by a local Claude session w
 
 - Show regular-season and playoff player statistics separately on the Competition screen.
 - Play Primera FEB's one-venue final stage without home advantage.
-- Copy the two fixture capture scripts from `.artifacts` (`capture-postseason-baseline.mjs`, `capture-divisions-baseline.mjs`) into `scripts/`, so that cloud sessions can reuse them for the next format change.
+- Optionally copy the two older fixture capture scripts from `.artifacts` (`capture-postseason-baseline.mjs`, `capture-divisions-baseline.mjs`) into `scripts/` for the record. Cloud sessions now use the committed `scripts/capture-format-baseline.mjs`.
 - Make creating and checking large worlds faster before 3.7, because large worlds are slow today (see "Known open points").

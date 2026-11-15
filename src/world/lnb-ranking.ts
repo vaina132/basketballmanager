@@ -1,41 +1,49 @@
 import type { CompetitionTableRow } from '../domain/competition';
 import { nextRandom, normalizeSeed } from '../engine/random';
 
-interface PlayedGame { homeClubId: string; awayClubId: string; home: number; away: number; winnerClubId: string }
+export interface PlayedGame { homeClubId: string; awayClubId: string; home: number; away: number; winnerClubId: string }
 type RecordRow = Pick<CompetitionTableRow, 'played' | 'wins' | 'pointsFor' | 'pointsAgainst'>;
 const stableOrder = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 const recordOrder = (a: RecordRow, b: RecordRow) => b.wins * (a.played || 1) - a.wins * (b.played || 1);
 const difference = (row: RecordRow) => row.pointsFor - row.pointsAgainst;
 
+/** Splits clubs into groups that are equal under `compare`, best group first; each group keeps a stable order. */
+export function partition(ids: readonly string[], compare: (a: string, b: string) => number): string[][] {
+  const ordered = [...ids].sort((a, b) => compare(a, b) || stableOrder(a, b));
+  const groups: string[][] = [];
+  for (const id of ordered) {
+    const last = groups.at(-1);
+    if (last && compare(last[0]!, id) === 0) last.push(id); else groups.push([id]);
+  }
+  return groups;
+}
+
+/**
+ * Clubs still equal after every sporting criterion. During the season they keep a stable display order marked
+ * "unresolved"; a completed table (non-null `drawKey`) orders them by an independent, reproducible lot keyed by the
+ * competition, its scheduled fixtures and the tied clubs. It never consumes match or career random state.
+ */
+export function settleTie(ids: readonly string[], drawKey: string | null, marks: Map<string, 'unresolved' | 'draw'>): string[] {
+  if (ids.length < 2) return [...ids];
+  const ordered = [...ids].sort(stableOrder);
+  for (const id of ordered) marks.set(id, drawKey === null ? 'unresolved' : 'draw');
+  if (drawKey === null) return ordered;
+  let seed = 2166136261;
+  for (const character of JSON.stringify([drawKey, ordered])) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619) >>> 0;
+  seed = normalizeSeed(seed);
+  for (let i = ordered.length - 1; i > 0; i--) {
+    const random = nextRandom(seed); seed = random.state;
+    const j = Math.floor(random.value * (i + 1));
+    [ordered[i], ordered[j]] = [ordered[j]!, ordered[i]!];
+  }
+  return ordered;
+}
+
 /** LNB article 205.1–2. Only sporting wins/losses exist in the current engine: no invented sanctions. */
 export function rankLnbTable(rows: readonly CompetitionTableRow[], games: readonly PlayedGame[], drawKey: string | null): CompetitionTableRow[] {
   const overall = new Map(rows.map(row => [row.clubId, row]));
   const unresolved = new Map<string, 'unresolved' | 'draw'>();
-  const partition = (ids: string[], compare: (a: string, b: string) => number): string[][] => {
-    const ordered = [...ids].sort((a, b) => compare(a, b) || stableOrder(a, b));
-    const groups: string[][] = [];
-    for (const id of ordered) {
-      const last = groups.at(-1);
-      if (last && compare(last[0]!, id) === 0) last.push(id); else groups.push([id]);
-    }
-    return groups;
-  };
-  const finishTie = (ids: string[]): string[] => {
-    if (ids.length < 2) return ids;
-    const ordered = [...ids].sort(stableOrder);
-    for (const id of ordered) unresolved.set(id, drawKey === null ? 'unresolved' : 'draw');
-    if (drawKey === null) return ordered;
-    // An independent, reproducible lot; never consumes match or career random state.
-    let seed = 2166136261;
-    for (const character of JSON.stringify([drawKey, ordered])) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619) >>> 0;
-    seed = normalizeSeed(seed);
-    for (let i = ordered.length - 1; i > 0; i--) {
-      const random = nextRandom(seed); seed = random.state;
-      const j = Math.floor(random.value * (i + 1));
-      [ordered[i], ordered[j]] = [ordered[j]!, ordered[i]!];
-    }
-    return ordered;
-  };
+  const finishTie = (ids: string[]) => settleTie(ids, drawKey, unresolved);
   const overallOrder = (a: string, b: string) => difference(overall.get(b)!) - difference(overall.get(a)!) || overall.get(b)!.pointsFor - overall.get(a)!.pointsFor;
   const breakTie = (ids: string[]): string[] => {
     if (ids.length < 2) return ids;

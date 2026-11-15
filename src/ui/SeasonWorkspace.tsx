@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/season'
 import type { Side, Team } from '../domain/types'
 import { currentGameDay, getPostseasons, getStandings, seasonLabel } from '../world/season'
+import { classificationPoints } from '../world/fiba-ranking'
 import { PostseasonPanel } from './PostseasonPanel'
 import { getFixtureTeams } from '../world/rosters'
 import { managedClubFor } from '../world/career'
@@ -65,6 +66,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const selectedDate = archived ? selectedFixtures.at(-1)!.date : currentGameDay(season) ?? season.date
   const standings = getStandings({ ...season, fixtures: archive?.fixtures ?? season.fixtures, divisions: shownDivisions }).filter(row => !league || league.clubIds.includes(row.clubId))
   const lnbRanking = league?.standingsRule === 'lnb-2026-1'
+  const fibaRanking = league?.standingsRule === 'fiba-2026-d'
   const club = (id: string) => season.clubs.find(team => team.id === id)!
   const active = season.fixtures.find(fixture => fixture.id === season.activeFixtureId)
   // The club the manager ran in the season shown; after a move, the new club appears from the next season.
@@ -122,12 +124,15 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
 
     <section className="season-standings panel" aria-labelledby="season-table-title">
       <header className="season-panel-heading"><div><h2 id="season-table-title">{leagues ? 'Regular-season table' : 'League table'}</h2>{leagues && <label>Competition <select aria-label="Competition" value={leagueId} onChange={event => { setLeagueId(event.target.value); setReviewId(null) }} disabled={busy}>{leagues.map(item => <option key={item.id} value={item.id}>{item.country} · {item.name}</option>)}</select></label>}<p>{leagueName} · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
-      <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th>{lnbRanking && <th scope="col" title="Wins divided by games played">Win %</th>}<th scope="col" title="Points for">PF</th><th scope="col" title="Points against">PA</th><th scope="col" title="Point difference">Diff</th></tr></thead><tbody>{standings.map(row => <tr key={row.clubId} data-club-id={row.clubId} className={row.clubId === season.managedClubId ? 'season-managed-row' : ''}>
-        <td>{row.position}{row.rankingTie === 'unresolved' && <span className="season-tie-mark" title="Still tied on sporting criteria; display order only" aria-label="Still tied">=</span>}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} />{row.rankingTie === 'draw' && <span className="season-draw-label" title="Equal after all sporting tie-breaks; position decided by a reproducible draw">Draw</span>}</th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td>{lnbRanking && <td>{row.played ? `${(row.wins / row.played * 100).toFixed(1)}%` : '—'}</td>}<td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
+      <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th>{lnbRanking && <th scope="col" title="Wins divided by games played">Win %</th>}{fibaRanking && <th scope="col" title="Classification points: 2 for a win, 1 for a loss">Pts</th>}<th scope="col" title="Points for">PF</th><th scope="col" title="Points against">PA</th><th scope="col" title="Point difference">Diff</th></tr></thead><tbody>{standings.map(row => <tr key={row.clubId} data-club-id={row.clubId} className={row.clubId === season.managedClubId ? 'season-managed-row' : ''}>
+        <td>{row.position}{row.rankingTie === 'unresolved' && <span className="season-tie-mark" title="Still tied on sporting criteria; display order only" aria-label="Still tied">=</span>}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} />{row.rankingTie === 'draw' && <span className="season-draw-label" title="Equal after all sporting tie-breaks; position decided by a reproducible draw">Draw</span>}</th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td>{lnbRanking && <td>{row.played ? `${(row.wins / row.played * 100).toFixed(1)}%` : '—'}</td>}{fibaRanking && <td className="season-wins">{classificationPoints(row)}</td>}<td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
       </tr>)}</tbody></table></div>
-      <details className="season-table-rules"><summary>Table rules <span>{lnbRanking ? 'LNB · Win percentage' : 'Prototype ranking'}</span></summary>{lnbRanking ? <>
+      <details className="season-table-rules"><summary>Table rules <span>{lnbRanking ? 'LNB · Win percentage' : fibaRanking ? 'FIBA default · Classification points' : 'Prototype ranking'}</span></summary>{lnbRanking ? <>
         <p>Win percentage comes first. Tied clubs are ranked by their results against each other, then points difference and points scored. Clubs without a direct meeting keep their overall points-difference position.</p>
         <p>Remaining ties use overall points difference, then points scored. The process restarts for any clubs still tied. A fully tied final table uses a reproducible draw; “=” marks an unresolved tie during the season.</p>
+      </> : fibaRanking ? <>
+        <p>This league's own tie-break rules have not been verified yet, so the game uses the FIBA Official Basketball Rules 2026, Appendix D. Classification points come first: 2 for a win, 1 for a loss.</p>
+        <p>Clubs level on points are ranked by the games between them: points, then points difference and points scored in those games, then overall points difference and points scored. The process restarts for any clubs still tied. A fully tied final table uses a reproducible draw; “=” marks an unresolved tie during the season.</p>
       </> : <p>Ranked by wins, overall point difference, points scored, then club ID. This career retains its original ranking rules.</p>}</details>
     </section>
 

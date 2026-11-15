@@ -1,6 +1,6 @@
 # Competition rules research, 2026–27
 
-Checked 15 November 2026. This is a source register for Sprint 3, **not a claim that every format below is playable**. Domestic regular-season calendars are integrated. New French careers also use the sourced LNB sporting ranking described below. Postseason, European stages and competition-specific registration are still unintegrated. Raw captures remain private under `.artifacts/sprint3-source-*.json` and `.artifacts/postseason-rules-*.md`.
+Checked 15 November 2026. This is a source register for Sprint 3, **not a claim that every format below is playable**. Domestic regular-season calendars are integrated. New French careers also use the sourced LNB sporting ranking described below, and new careers rank every other league by the labelled FIBA Appendix D default (step 3.4e-1). Postseason, European stages and competition-specific registration are still unintegrated. Raw captures remain private under `.artifacts/sprint3-source-*.json` and `.artifacts/postseason-rules-*.md`.
 
 ## Confirmed formats
 
@@ -39,12 +39,23 @@ When sporting criteria remain equal, a completed table uses a reproducible draw.
 
 Article 205 also covers sanctions and exclusions. The engine records sporting wins/losses and its own default results, not disciplinary forfeits, deducted wins or exclusions. A default is not reinterpreted as a sanction. Implement explicit sanction evidence and validation before enabling those exceptions.
 
-Old careers keep their original wins/difference/points ordering. Other countries keep that prototype ranking until their own rules have been verified and implemented; do not apply LNB rules to them. Research leads checked this increment:
+Old careers keep their original wins/difference/points ordering. New careers rank other countries' leagues by the FIBA default below until their own rules have been verified and implemented; do not apply LNB rules to them. Research leads checked this increment:
 
-- [FIBA 2026 rules, Appendix D](https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2026-v1-1.pdf): general classification points, head-to-head criteria and a final draw. This is not proof of every national league's variations.
+- [FIBA 2026 rules, Appendix D](https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2026-v1-1.pdf): general classification points, head-to-head criteria and a final draw. Integrated as the labelled default for new worlds (step 3.4e-1, below). This is not proof of every national league's variations.
 - [ACB published tie-break rules](https://acb.com/es/liga/noticias/reglas-de-desempate-liga-endesa-22-23-138397): incomplete direct schedules use overall criteria; two-team and larger ties differ; a sum of per-game scoring quotients is a later criterion. The page is dated 2023, so current applicability remains to verify before enabling it.
 - [FIP Regolamento Esecutivo Gare, article 62](https://fip.it/wp-content/uploads/2025/08/RE-Gare-approvato-dal-CF-17-luglio-2025-del-n-48.pdf): direct wins, scoring quotients to four decimals and, for unresolved ties, personal/technical foul totals. Verify current applicability and retained team-foul evidence before implementing this; generic points difference is not equivalent.
 - The retrieved BSL and BBL competition-format PDFs do not by themselves establish their complete regular-season tie-break rules. TBL and Greek ranking rules also remain to verify.
+
+## Default ranking: FIBA Official Basketball Rules 2026, Appendix D (step 3.4e-1)
+
+Checked 15 November 2026 against the [FIBA Official Basketball Rules 2026 (July 2026, v1.1), Appendix D "Classification of teams"](https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2026-v1-1.pdf), pages 82-88. New worlds save `standingsRule: fiba-2026-d` for every league without a verified rule of its own; the Competition screen labels it "FIBA default". It is **not** a claim that a league uses these rules.
+
+- **D.1.1:** 2 classification points for a win, 1 for a loss (including a loss by default), 0 for a loss by forfeit. The engine's defaults are sporting losses and it records no forfeits, so a club's points are twice its wins plus its losses. A club with games in hand (a bye in an odd field) has fewer points.
+- **D.1.3:** clubs level on points are ranked by the games between them: classification points in those games, then points difference in those games, points scored in those games, overall points difference and overall points scored. Clubs still equal are settled by a draw (clubs have no FIBA ranking).
+- **D.1.4:** when a criterion classifies one or more clubs, the procedure restarts from D.1.3 for the clubs still level.
+- The seven worked examples D.2.1-D.2.7 are reproduced exactly by `tests/fiba-standings.test.js`.
+- During a season, clubs that have not met yet score nothing against each other; the procedure then moves on to overall points difference. Ties still unresolved are marked "=" and a completed table uses the same reproducible draw as `lnb-2026-1` (independent stream keyed by competition, fixture identities and tied clubs). D.3 (forfeits, nullified results) and D.4 (cross-group comparisons) are not used: the engine has no forfeits, and domestic leagues are single groups.
+- Implementation: `src/world/fiba-ranking.ts`; rule choice `standingsRuleFor` in `src/domain/competition.ts`.
 
 ## Registration evidence and limits
 

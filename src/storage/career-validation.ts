@@ -1,9 +1,8 @@
 import type { SeasonState } from '../domain/season';
-import { DEVELOPMENT_CLUBS } from '../data/development-league';
 import { dateForRound } from '../world/season';
 import { seasonEndOutlook } from '../world/career-policy';
 import type { SeasonCareer } from '../domain/career';
-import { roundOrdinal, seasonRounds } from '../world/career-world';
+import { isWorldClub, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
 import type { WorldContext } from '../domain/world';
 import { financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
 
@@ -50,7 +49,8 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
   // Format 38 also accepts a later start: careers migrated from format 37 are judged only from their next season end.
   const expected = career ? 1 : year + 1;
   if (version >= 38 ? effectiveFrom < expected : effectiveFrom !== expected) fail(`${path}.effectiveFrom`, 'must start with a new career or the season after activation');
-  const clubIds = DEVELOPMENT_CLUBS.map(club => club.id);
+  // The career's own world (the built-in league for careers without one), not always the built-in league.
+  const world = worldOf(state);
   const ledger = state.finance.ledger;
   let previous: { seasonNumber: number; toClubId: string; ledgerCount: number } | null = null;
   for (const [index, raw] of fields.moves.entries()) {
@@ -60,7 +60,7 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
     if (season === state.seasonNumber && state.status !== 'complete') fail(location, 'must follow a completed season');
     if (previous && season <= previous.seasonNumber) fail(location, 'must be in chronological order, at most one per season');
     if (move.date !== dateForRound(seasonRounds(state), season)) fail(`${location}.date`, 'must be the final matchday of that season');
-    if (typeof move.fromClubId !== 'string' || !clubIds.includes(move.fromClubId) || typeof move.toClubId !== 'string' || !clubIds.includes(move.toClubId) || move.fromClubId === move.toClubId) fail(location, 'must move between two different clubs in this league');
+    if (!isWorldClub(world, move.fromClubId) || !isWorldClub(world, move.toClubId) || move.fromClubId === move.toClubId) fail(location, 'must move between two different clubs in this league');
     if (previous && move.fromClubId !== previous.toClubId) fail(`${location}.fromClubId`, 'must be the club managed after the previous move');
     if (move.reason !== 'moved' && (move.reason !== 'dismissed' || version < 38)) fail(`${location}.reason`, 'must record a supported reason');
     // The move follows the committed final matchday (its tickets and operating costs) and precedes later seasons.

@@ -109,7 +109,8 @@ export interface DomesticDivisions {
 /** Format 39 carries the world; 40 compacts strings/shapes; 41 shares subtrees; 42 summarizes rival academy reports; 43 summarizes rival youth fixtures. */
 /** Format 48 adds opt-in sourced domestic standings rules; existing worlds keep their original ranking. */
 /** Format 49 adds domestic postseasons and game days inside a week; format 50 moves clubs between divisions. */
-export const SEASON_SCHEMA_VERSION = 50;
+/** Format 51 adds the FIBA Appendix D standings rule, the labelled default for new worlds' leagues without a sourced rule. */
+export const SEASON_SCHEMA_VERSION = 51;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

@@ -8,6 +8,20 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.4e-1, FIBA default standings rule (15 November 2026)
+
+First cloud session (Linux). Node 24.22.3 installed in `/opt/node24`. The owner decided the two 3.4d-2 questions (recorded in `docs/decisions.md#owner-decisions-for-step-34d-2-15-november-2026`) and asked for the plan to continue to the end of sprint 3.
+
+- **Fixtures first:** `scripts/capture-format-baseline.mjs` (new, reusable) captured `tests/fixtures/season50-tiebreak-legacy-*` from unchanged commit `e0679b8` (116 modules hashed): a two-division public career at week four and five, and at the end of season one and its rollover. `tests/season50-continuation.test.js` (3).
+- **Rule:** `src/world/fiba-ranking.ts` (`rankFibaTable`, `classificationPoints`) implements Appendix D.1.1-D.1.4 of the FIBA Official Basketball Rules 2026: classification points (2 a win, 1 a loss), the games between level clubs (points, difference, points scored), overall difference and points scored, restarting for clubs still level; final ties use the `lnb-2026-1` draw (`settleTie`, shared, unchanged), unfinished tables mark them "=". `competitionTable` accepts `fiba-2026-d`.
+- **Worlds:** `standingsRuleFor` / `standingsRuleAllowed` / `STANDINGS_RULE_FORMAT` in `src/domain/competition.ts`. `worldFromPack` gives France `lnb-2026-1` and every other league `fiba-2026-d`; IDs start `real-tiebreak-`. `validateWorld` refuses a rule from another country and a FIBA world with an unruled league.
+- **Format 51:** the generic rule-format guard (`requires format 51 or later`); parsing a format-50 save keeps its recorded divisions (only formats before 50 get opening divisions). No new top-level system, so no `ADDED_BY_FORMAT` row or strip step; checks version unchanged.
+- **Screen:** Competition shows a **Pts** column and "FIBA default · Classification points" with a short explanation behind "Table rules".
+- **Fix:** `validateCareer` checked a manager's club change against the built-in league's clubs, so a dismissal or job change in any carried world made the career unsaveable. It now uses the career's world (`isWorldClub`). Found by the new career test (seed 3141 dismisses the manager).
+- **Tests:** `tests/fiba-standings.test.js` (13: the seven Appendix D examples, points with games in hand, head-to-head restart, draw, rule choice, validation and the format guard, a two-league career with byes, strict saves, dismissal, rollover and archived table); `tests/real-world.test.ts` (FIBA default for other countries, new ID prefix); `tests/division-changes.test.js` uses the current format for its refusal check.
+- **Verification:** full serial suite **2,540 tests / 182 files passed** (573 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.4e-2, league-specific rules where a current official source exists.
+
 ## Current continuation: rest of 3.4, Claude taking over from Codex (15 November 2026)
 
 **Read this entry first.** The owner's Codex account ended after commit `7db0d89` (French standings, below); the owner asked Claude to continue the plan ("Please continue the work", 15 November 2026). Review at takeover: the worktree was clean, the typecheck passed, and Codex's final full regression for the standings increment had passed (**2,507 tests / 175 files**, `.artifacts/standings-full-tests.log`, finished 10:10) but was not yet recorded below. Codex used a Firecrawl web plugin only to read official rulebooks (31 searches, 26 page reads); all game data still comes from API-Sports. The owner approved real lower-division club names from API-Sports with generated squads for promotion into the full world.

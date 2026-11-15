@@ -1,11 +1,12 @@
 import type { CompetitionGame, CompetitionGameResult, CompetitionTableRow, DomesticStandingsRule } from '../domain/competition';
 import { validateCompetitionResult } from './competition-series';
 import { rankLnbTable } from './lnb-ranking';
+import { rankFibaTable } from './fiba-ranking';
 
 /** A table is scoped explicitly to one stage/group. Knockout games never leak into the league standings. */
 export function competitionTable(input: { competitionId: string; clubIds: readonly string[]; games: readonly CompetitionGame[]; results: readonly CompetitionGameResult[]; stage?: 'regular' | 'round-of-16'; groupId?: string | null; rule?: DomesticStandingsRule }): CompetitionTableRow[] {
   const { clubIds, results } = input;
-  if (input.rule !== undefined && input.rule !== 'lnb-2026-1') throw new Error('Unsupported standings rule.');
+  if (input.rule !== undefined && input.rule !== 'lnb-2026-1' && input.rule !== 'fiba-2026-d') throw new Error('Unsupported standings rule.');
   if (clubIds.length < 2 || new Set(clubIds).size !== clubIds.length || clubIds.some(id => !id)) throw new Error('A table needs distinct registered clubs.');
   const games = input.games.filter(game => game.competitionId === input.competitionId && game.stage === (input.stage ?? 'regular') && game.groupId === (input.groupId ?? null));
   if (new Set(games.map(game => game.id)).size !== games.length || games.some(game => game.homeClubId === game.awayClubId || !clubIds.includes(game.homeClubId) || !clubIds.includes(game.awayClubId))) throw new Error('Table fixtures must belong to its registered field.');
@@ -21,9 +22,9 @@ export function competitionTable(input: { competitionId: string; clubIds: readon
       row.played++; row.wins += Number(result.winnerClubId === id); row.losses += Number(result.winnerClubId !== id); row.pointsFor += pointsFor; row.pointsAgainst += pointsAgainst;
     }
   }
-  if (input.rule === 'lnb-2026-1') {
+  if (input.rule !== undefined) {
     const drawKey = games.length > 0 && played.length === games.length ? JSON.stringify([input.competitionId, games.map(game => game.id).sort()]) : null;
-    return rankLnbTable([...rows.values()], played.map(result => ({ ...byId.get(result.fixtureId)!, home: result.home, away: result.away, winnerClubId: result.winnerClubId })), drawKey);
+    return (input.rule === 'lnb-2026-1' ? rankLnbTable : rankFibaTable)([...rows.values()], played.map(result => ({ ...byId.get(result.fixtureId)!, home: result.home, away: result.away, winnerClubId: result.winnerClubId })), drawKey);
   }
   const partition = (ids: string[], measure: (id: string) => number): string[][] => {
     const values = ids.map(id => ({ id, value: measure(id) })).sort((a, b) => b.value - a.value || a.id.localeCompare(b.id));

@@ -258,6 +258,8 @@ export interface PostseasonInput {
   slotDay: (slot: number) => { round: number; date: string };
   /** Every fixture of the season so far (results decide which games exist). */
   fixtures: readonly GameRecord[];
+  /** A seed for each place's club, for formats seeded across groups (European competitions); the place itself otherwise. */
+  rankOf?: (clubId: string) => number;
 }
 
 export const postseasonFixtureId = (leagueId: string, seasonNumber: number, seriesId: string, game: number) => `${leagueId}-s${seasonNumber}-${seriesId}-g${game}`;
@@ -272,7 +274,7 @@ export function derivePostseason(input: PostseasonInput): { series: PostseasonSe
     if ('place' in ref) {
       const table = ref.otherTier ? input.otherOrder ?? null : order;
       const clubId = table?.[ref.place < 0 ? table.length + ref.place : ref.place - 1];
-      return clubId ? { clubId, rank: ref.rank ?? ref.place } : null;
+      return clubId ? { clubId, rank: ref.rank ?? input.rankOf?.(clubId) ?? ref.place } : null;
     }
     const source = states.get('winner' in ref ? ref.winner : ref.loser);
     const clubId = source ? ('winner' in ref ? source.winner : source.loser) : null;

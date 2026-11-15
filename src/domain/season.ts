@@ -119,7 +119,8 @@ export interface DomesticDivisions {
 /** Format 55 records exchanges with next divisions (`background.changesFrom`, `background.exchanges`) and contract departures. */
 /** Format 56 adds the European competitions and their entrants to new worlds (step 3.5a). */
 /** Format 57 plays European competitions in their real formats on midweek game days (steps 3.5b-c). */
-export const SEASON_SCHEMA_VERSION = 57;
+/** Format 58 adds the EuroCup format: four groups and best-of-three playoffs (step 3.5d). */
+export const SEASON_SCHEMA_VERSION = 58;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

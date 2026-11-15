@@ -1,5 +1,5 @@
 import type { CareerWorld, EuropeanCompetition, EuropeanCompetitionKind } from '../domain/world';
-import { EUROPEAN_FORMATS } from './european-formats';
+import { EUROPEAN_FORMATS, fieldFits } from './european-formats';
 import type { Team } from '../domain/types';
 import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPlayerProfile } from '../data/development-player-profiles';
@@ -122,11 +122,16 @@ export function worldFromPack(pack: DataPack, competitionId: string | readonly s
     const kind = europeanKind(item.name);
     if (!kind || kinds.has(kind)) return [];
     kinds.add(kind);
-    const entrantIds = [...new Set(item.clubIds)].filter(clubId => !seen.has(clubId) && (clubIds.includes(clubId) || (pack.clubs.find(club => club.id === clubId)?.playerIds.length ?? 0) >= 8));
+    const listed = [...new Set(item.clubIds)].filter(clubId => !seen.has(clubId) && (clubIds.includes(clubId) || (pack.clubs.find(club => club.id === clubId)?.playerIds.length ?? 0) >= 8));
+    // Steps 3.5b-d (formats 57-58): a competition is played in its real format when its field fits. A field larger than
+    // the format (or not dividing into its groups) keeps the chosen leagues' clubs and the strongest others, in listed order.
+    const format = Object.values(EUROPEAN_FORMATS).find(entry => entry.kind === kind && listed.length >= entry.clubs.min);
+    const size = format ? Array.from({ length: Math.min(listed.length, format.clubs.max) }, (_, index) => Math.min(listed.length, format.clubs.max) - index).find(count => fieldFits(format, count)) : undefined;
+    const strength = (clubId: string) => clubIds.includes(clubId) ? Infinity : bestEightStrength(clubTeam(pack, clubId).players);
+    const kept = size === undefined ? listed : new Set([...listed].sort((a, b) => strength(b) - strength(a) || listed.indexOf(a) - listed.indexOf(b)).slice(0, size));
+    const entrantIds = size === undefined ? listed : listed.filter(clubId => (kept as Set<string>).has(clubId));
     entrantIds.forEach(clubId => seen.add(clubId));
-    // Step 3.5b (format 57): a competition is played in its real format when its field fits that format.
-    const format = Object.values(EUROPEAN_FORMATS).find(entry => entry.kind === kind && entrantIds.length >= entry.clubs.min && entrantIds.length <= entry.clubs.max);
-    return entrantIds.length >= 2 ? [{ id: item.id, name: item.name, kind, season: item.season, clubIds: entrantIds, ...(format ? { format: format.id } : {}) }] : [];
+    return entrantIds.length >= 2 ? [{ id: item.id, name: item.name, kind, season: item.season, clubIds: entrantIds, ...(size !== undefined ? { format: format!.id } : {}) }] : [];
   });
   if (!european.length) return world;
   const entrants = [...seen].filter(clubId => !clubIds.includes(clubId)).map(clubId => {

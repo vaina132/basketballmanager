@@ -8,6 +8,17 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 # Project handover
 
+## Cloud continuation: step 3.5d, the EuroCup (15 November 2026)
+
+- **Fixtures first:** `tests/fixtures/season57-eurocup-legacy-*` (the EuroLeague playing under format 57) from unchanged commit `232e0a4` (126 modules); `tests/season57-continuation.test.js` (3).
+- **Format 58:** `eurocup-2026-1` (`EUROPEAN_FORMAT_VERSION` guards each format's first save format). Groups in `EuropeanFormat.regular.groups` (id and day); `knockout` may be built for the group size (`knockoutOf`); `fieldFits` (16-32, four equal groups of at least four).
+- **Engine:** `europeanGroups` (drawn field dealt into groups in turn), group round robins with group ids in fixture ids, `europeanTables` per group, the order group after group, cross-group seeds (`derivePostseason` `rankOf`: group place, wins, point difference, points scored). EuroLeague ids and order are unchanged.
+- **Dates** from the published schedule: weeks 4-19 (29 September to 13 January), A-B Tuesdays and C-D Wednesdays; eighth-finals 2/4/10 February, quarter-finals 9/11/17 March, semi-finals 31 March and 6/8 April, finals 21/27/29 April. Research by a fetch of the Eurohoops schedule page (pairings, home advantage and draw method not published: labelled assumptions in `competition-rules-2026.md`).
+- **Real worlds:** a listing longer than the format holds keeps the chosen leagues' clubs and the strongest others.
+- **Tests:** `tests/europe-cup.test.js` (6: groups and dates; pairings and knockout dates; field and format refusals; real-pack trimming; a season with a EuroLeague and a EuroCup to both champions with seeding and home advantage; rest days and strict saves through the rollover). Long `europe-play` tests now carry their own limits.
+- **Verification:** full serial suite **2,611 tests / 196 files passed** (671 s, Linux); `npm run build` passed (known chunk-size advisory).
+- **Next:** 3.5e, the BCL format.
+
 ## Cloud continuation: steps 3.5b-c, European games and the EuroLeague (15 November 2026)
 
 - **Fixtures first:** `tests/fixtures/season56-europlay-legacy-*` (`capture-format-baseline.mjs europlay-legacy --fiba --lower --europe`, new `--europe` option) from unchanged commit `34631a3` (124 modules); `tests/season56-continuation.test.js` (4: provenance; listed but unplayed, ten-week calendar, exact next week; exact rollover; format guard).

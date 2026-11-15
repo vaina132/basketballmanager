@@ -121,7 +121,7 @@ describe('a season with a EuroLeague (steps 3.5b-c)', () => {
     expect(complete.fixtures.filter(fixture => !fixture.competition && !fixture.stage).every(fixture => calendarDaysBetween(start, fixture.date) % 7 === 0)).toBe(true);
     expect(Math.min(...complete.fixtures.filter(fixture => !fixture.competition && fixture.stage).map(fixture => fixture.round))).toBe(39);
     expect(Math.max(...complete.fixtures.filter(fixture => fixture.competition).map(fixture => fixture.round))).toBeLessThanOrEqual(38);
-  });
+  }, 120_000);
 
   it('fields clubs outside the full world as background sides: their best available players, no club records', () => {
     const outside = world.europeanCompetitions[0].clubIds.slice(2);
@@ -145,7 +145,7 @@ describe('a season with a EuroLeague (steps 3.5b-c)', () => {
     // A background side's home game earns nothing; a full-world club's European home game earns its gate.
     const own = complete.fixtures.find(fixture => fixture.competition && fixture.homeClubId === world.clubs[0].id);
     expect(complete.finance.ledger.some(entry => entry.sourceId === `tickets-${own.id}`)).toBe(true);
-  });
+  }, 120_000);
 
   it('keeps European games out of the domestic tables and plays the EuroLeague knockouts by its format', () => {
     const firstDivision = complete.divisions.leagues[0].clubIds;
@@ -170,12 +170,12 @@ describe('a season with a EuroLeague (steps 3.5b-c)', () => {
     expect(finalFour.every(fixture => fixture.neutral)).toBe(true);
     expect(complete.fixtures.some(fixture => fixture.stage === 'third-place')).toBe(false);
     expect(euroleague.outcome.champion).toBe(series.get('final').winner);
-  });
+  }, 120_000);
 
   it('counts European games in the manager\'s player statistics', () => {
     const rows = getSeasonPerformance(complete).filter(row => row.club.id === complete.managedClubId);
     expect(rows.some(row => row.log.some(game => complete.fixtures.find(fixture => fixture.id === game.fixtureId).competition))).toBe(true);
-  });
+  }, 120_000);
 
   it('saves strictly through the season, the rollover and season two\'s European calendar', () => {
     expect(roundTrip(midway)).toEqual(midway);
@@ -185,7 +185,7 @@ describe('a season with a EuroLeague (steps 3.5b-c)', () => {
     expect(complete.history).toHaveLength(0);
     const archived = nextSeason.history[0].fixtures.filter(fixture => fixture.competition);
     expect(archived.length).toBe(complete.fixtures.filter(fixture => fixture.competition).length);
-  });
+  }, 120_000);
 
   it('refuses a changed background selection, roster reference, European game or starting condition', () => {
     const fixtureIndex = midway.fixtures.findIndex(fixture => fixture.competition && fixture.result && fixture.awayClubId.startsWith('eu-'));

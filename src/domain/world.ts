@@ -9,8 +9,8 @@ import type { PostseasonFormatId } from '../world/postseason';
 import type { LowerDivision } from './background';
 
 export type EuropeanCompetitionKind = 'euroleague' | 'eurocup' | 'bcl';
-/** Format 57 (step 3.5b): the real format a European competition is played in (src/world/europe.ts). */
-export type EuropeanFormatId = 'euroleague-2026-1';
+/** Format 57 (step 3.5b): the real format a European competition is played in (src/world/europe.ts); the EuroCup's from format 58. */
+export type EuropeanFormatId = 'euroleague-2026-1' | 'eurocup-2026-1';
 /** `format` (format 57) means the competition's games are played; without it the competition is listed only (format 56). */
 export interface EuropeanCompetition { id: string; name: string; kind: EuropeanCompetitionKind; season: string; clubIds: string[]; format?: EuropeanFormatId }
 

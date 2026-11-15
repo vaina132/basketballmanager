@@ -397,6 +397,13 @@ Reversible defaults (format 57; `src/world/europe.ts`, `src/world/european-forma
 - **Money:** a full-world club's European home game earns its gate at the week's ticket price; a background side's home game earns the full world nothing.
 - **Calendar order and empty weeks:** in worlds that play Europe all games of a season are kept in calendar order (date, then id). A week in which no club plays counts as committed once the calendar moves past it (`lastCommittedWeek`); in every earlier calendar each earlier week has results, so older saves are unaffected.
 
+### The EuroCup (step 3.5d, 15 November 2026)
+
+Reversible defaults (format 58; `eurocup-2026-1` in `src/world/european-formats.ts`), from the published 2026-27 schedule where it gives them:
+- **Groups:** the drawn field is dealt into four equal groups in turn (no pots or country protection: the draw method was not published); 16-32 clubs, at least four a group. Groups A and B play on Tuesdays, C and D on Wednesdays, fourteen rounds in weeks 4-19 (29 September 2026 to 13 January 2027, two weeks without a round spread evenly). Each group is ranked by the FIBA Appendix D default.
+- **Playoffs:** the top four of each group; eighth-finals A1-B4, B2-A3, B1-A4, A2-B3 (and C with D), quarter-finals and semi-finals within each half, then the final; every series best of three with games 1 and 3 at the better seed. The better seed across groups is the better group place, then more wins, a better point difference and more points scored. Dates: eighth-finals 2, 4 and 10 February 2027; quarter-finals 9, 11 and 17 March; semi-finals 31 March, 6 and 8 April; finals 21, 27 and 29 April (the real third game is Friday 30 April; Thursday keeps a day of rest before the domestic Saturday).
+- **Real worlds:** a listing longer than the format holds (or not dividing into four groups) keeps the chosen leagues' clubs and the strongest others by best-eight squad strength, in listed order; the clubs left out are not built into the world.
+
 ### Owner decisions for step 3.4d-2 (15 November 2026)
 
 The owner decided both open questions on 15 November 2026:

@@ -8,7 +8,7 @@ import { selectBackgroundMatchday, backgroundClubsIn } from './background';
 import { worldOf } from './career-world';
 import { addCalendarDays, calendarDaysBetween, firstSeasonSaturday, roundRobinGames, roundRobinRoundCount } from './competition-calendar';
 import { competitionTable } from './competition-table';
-import { EUROPEAN_FORMATS, playedEuropeanCompetitions, type EuropeanFormat } from './european-formats';
+import { EUROPEAN_FORMATS, knockoutOf, playedEuropeanCompetitions, type EuropeanFormat } from './european-formats';
 import { isRecovering } from './health';
 import { applyAgingAttributes, isPlayerRetired, type LifecycleContext } from './lifecycle-policy';
 import { derivePostseason, postseasonOutcome } from './postseason';
@@ -48,13 +48,13 @@ export function europeanDrawOrder(seed: number, seasonNumber: number, competitio
   return clubIds.map(id => ({ id, key: drawHash(seed, `draw:${competitionId}:s${seasonNumber}:${id}`) })).sort((a, b) => a.key - b.key || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map(entry => entry.id);
 }
 
-/** The regular season's round dates: one round a week on the format's day, or two in evenly spread weeks when rounds outnumber weeks. */
-export function europeanRoundDates(format: EuropeanFormat, seasonNumber: number, rounds: number): string[] {
-  const start = seasonStart(seasonNumber), { firstWeek, lastWeek, day, doubleDays } = format.regular, weeks = lastWeek - firstWeek + 1;
+/** The regular season's round dates on `day`: one round a week, or two in evenly spread weeks when rounds outnumber weeks. */
+export function europeanRoundDates(format: EuropeanFormat, seasonNumber: number, rounds: number, day = format.regular.day): string[] {
+  const start = seasonStart(seasonNumber), { firstWeek, lastWeek, doubleDays } = format.regular, weeks = lastWeek - firstWeek + 1;
   const date = (week: number, offset: number) => addCalendarDays(start, (week - 1) * 7 + offset);
   if (rounds <= weeks) return Array.from({ length: rounds }, (_, index) => date(firstWeek + (rounds === 1 ? 0 : Math.round(index * (weeks - 1) / (rounds - 1))), day));
   const doubles = rounds - weeks;
-  if (doubles > weeks) throw new Error(`The ${format.label} calendar has too few weeks for ${rounds} rounds.`);
+  if (!doubleDays || doubles > weeks) throw new Error(`The ${format.label} calendar has too few weeks for ${rounds} rounds.`);
   return Array.from({ length: weeks }, (_, index) => index).flatMap(index => Math.floor((index + 1) * doubles / weeks) > Math.floor(index * doubles / weeks) ? doubleDays.map(offset => date(firstWeek + index, offset)) : [date(firstWeek + index, day)]);
 }
 
@@ -63,29 +63,53 @@ export function europeanEntrants(competition: EuropeanCompetition): readonly str
   return competition.clubIds;
 }
 
-/** The regular-season games of every played competition, unplayed, in draw order. */
+/** A regular-season group: its id (null for a single table), its clubs in draw order and its day. */
+export interface EuropeanGroup { id: string | null; clubIds: string[]; day: number }
+
+/** The season's regular-season groups: the drawn entrants dealt into the format's groups in turn (one table without groups). */
+export function europeanGroups(seed: number, seasonNumber: number, competition: EuropeanCompetition): EuropeanGroup[] {
+  const format = EUROPEAN_FORMATS[competition.format!], order = europeanDrawOrder(seed, seasonNumber, competition.id, europeanEntrants(competition));
+  const groups = format.regular.groups;
+  if (!groups) return [{ id: null, clubIds: order, day: format.regular.day }];
+  return groups.map((group, index) => ({ id: group.id, clubIds: order.filter((_, position) => position % groups.length === index), day: group.day }));
+}
+
+const requireSeed = (context: { seed?: number }): number => {
+  if (context.seed === undefined) throw new Error('The European draw needs the career seed.');
+  return context.seed;
+};
+
+/** The regular-season games of every played competition, unplayed, group by group in draw order. */
 export function europeanRegularFixtures(context: EuropeContext, seasonNumber: number): SeasonFixture[] {
   const world = worldOf(context), competitions = playedEuropeanCompetitions(world);
   if (!competitions.length) return [];
-  if (context.seed === undefined) throw new Error('The European draw needs the career seed.');
-  const start = seasonStart(seasonNumber);
+  const seed = requireSeed(context), start = seasonStart(seasonNumber);
   return competitions.flatMap(competition => {
-    const format = EUROPEAN_FORMATS[competition.format!], order = europeanDrawOrder(context.seed!, seasonNumber, competition.id, europeanEntrants(competition));
-    return roundRobinGames({ competitionId: competition.id, clubIds: order, dates: europeanRoundDates(format, seasonNumber, roundRobinRoundCount(order.length)), season: seasonNumber })
-      .map(game => ({ id: game.id, round: weekOf(game.date, start), date: game.date, homeClubId: game.homeClubId, awayClubId: game.awayClubId, result: null, competition: competition.id }));
+    const format = EUROPEAN_FORMATS[competition.format!];
+    return europeanGroups(seed, seasonNumber, competition).flatMap(group => roundRobinGames({ competitionId: competition.id, clubIds: group.clubIds, dates: europeanRoundDates(format, seasonNumber, roundRobinRoundCount(group.clubIds.length), group.day), season: seasonNumber, groupId: group.id })
+      .map(game => ({ id: game.id, round: weekOf(game.date, start), date: game.date, homeClubId: game.homeClubId, awayClubId: game.awayClubId, result: null, competition: competition.id })));
   });
 }
 
 type GameRecord = SeasonFixture | ArchivedFixture;
-const asGame = (fixture: GameRecord, competitionId: string): CompetitionGame => ({ id: fixture.id, competitionId, stage: 'regular', stageRound: fixture.round, groupId: null, seriesId: null, date: fixture.date, homeClubId: fixture.homeClubId, awayClubId: fixture.awayClubId, neutral: false });
+const asGame = (fixture: GameRecord, competitionId: string, groupId: string | null): CompetitionGame => ({ id: fixture.id, competitionId, stage: 'regular', stageRound: fixture.round, groupId, seriesId: null, date: fixture.date, homeClubId: fixture.homeClubId, awayClubId: fixture.awayClubId, neutral: false });
 
-/** A competition's regular-season table so far, by its format's ranking. */
-export function europeanTable(competition: EuropeanCompetition, fixtures: readonly GameRecord[]): Standing[] {
+/** Each regular-season group's table so far, by the format's ranking. */
+export function europeanTables(context: { seed?: number }, competition: EuropeanCompetition, fixtures: readonly GameRecord[], seasonNumber: number): (EuropeanGroup & { rows: Standing[] })[] {
   const format = EUROPEAN_FORMATS[competition.format!], games = fixtures.filter(fixture => fixture.competition === competition.id && !fixture.stage);
-  return competitionTable({
-    competitionId: competition.id, clubIds: europeanEntrants(competition), rule: format.standingsRule, games: games.map(fixture => asGame(fixture, competition.id)),
-    results: games.flatMap(fixture => fixture.result ? [{ fixtureId: fixture.id, home: fixture.result.officialScore.home, away: fixture.result.officialScore.away, winnerClubId: fixture.result.winnerClubId }] : []),
-  }).map(row => ({ ...row, difference: row.pointsFor - row.pointsAgainst }));
+  const groups = format.regular.groups ? europeanGroups(requireSeed(context), seasonNumber, competition) : [{ id: null, clubIds: [...europeanEntrants(competition)], day: format.regular.day }];
+  return groups.map(group => {
+    const own = games.filter(fixture => group.clubIds.includes(fixture.homeClubId));
+    return { ...group, rows: competitionTable({
+      competitionId: competition.id, clubIds: group.clubIds, rule: format.standingsRule, groupId: group.id, games: own.map(fixture => asGame(fixture, competition.id, group.id)),
+      results: own.flatMap(fixture => fixture.result ? [{ fixtureId: fixture.id, home: fixture.result.officialScore.home, away: fixture.result.officialScore.away, winnerClubId: fixture.result.winnerClubId }] : []),
+    }).map(row => ({ ...row, difference: row.pointsFor - row.pointsAgainst })) };
+  });
+}
+
+/** A competition's single regular-season table (formats without groups). */
+export function europeanTable(competition: EuropeanCompetition, fixtures: readonly GameRecord[]): Standing[] {
+  return europeanTables({}, competition, fixtures, 1)[0]!.rows;
 }
 
 /** A knockout slot's week and date. */
@@ -95,15 +119,22 @@ export function europeanSlotDay(format: EuropeanFormat, seasonNumber: number, sl
   return { round: entry.week, date: addCalendarDays(seasonStart(seasonNumber), (entry.week - 1) * 7 + entry.day) };
 }
 
-/** Each played competition as far as results decide it: its table, its knockout series, the games that should exist and its champion. */
-export function getEuropeanCompetitions(context: WorldContext & { fixtures: readonly GameRecord[] }, seasonNumber: number) {
+/**
+ * Each played competition as far as results decide it: its group tables, its knockout series, the games that should
+ * exist and its champion. Across groups, home advantage goes to the better group place, then more wins, a better point
+ * difference and more points scored.
+ */
+export function getEuropeanCompetitions(context: WorldContext & { fixtures: readonly GameRecord[]; seed?: number }, seasonNumber: number) {
   return playedEuropeanCompetitions(worldOf(context)).map(competition => {
     const format = EUROPEAN_FORMATS[competition.format!], entrants = europeanEntrants(competition);
+    const tables = europeanTables(context, competition, context.fixtures, seasonNumber);
     const regular = context.fixtures.filter(fixture => fixture.competition === competition.id && !fixture.stage);
-    const table = europeanTable(competition, context.fixtures);
-    const order = regular.length === entrants.length * (entrants.length - 1) && regular.every(fixture => fixture.result) ? table.map(row => row.clubId) : null;
-    const derived = derivePostseason({ leagueId: competition.id, format: format.knockout, seasonNumber, order, slotDay: slot => europeanSlotDay(format, seasonNumber, slot), fixtures: context.fixtures });
-    return { competition, format, table, order, series: derived.series, fixtures: derived.fixtures.map(fixture => ({ ...fixture, competition: competition.id })), outcome: postseasonOutcome(format.knockout, order, derived.series) };
+    const expected = tables.reduce((sum, group) => sum + group.clubIds.length * (group.clubIds.length - 1), 0);
+    const order = regular.length === expected && regular.every(fixture => fixture.result) ? tables.flatMap(group => group.rows.map(row => row.clubId)) : null;
+    const seeds = new Map(tables.flatMap(group => group.rows).sort((a, b) => a.position - b.position || b.wins - a.wins || b.difference - a.difference || b.pointsFor - a.pointsFor || (a.clubId < b.clubId ? -1 : a.clubId > b.clubId ? 1 : 0)).map((row, index) => [row.clubId, index + 1]));
+    const knockout = knockoutOf(format, entrants.length);
+    const derived = derivePostseason({ leagueId: competition.id, format: knockout, seasonNumber, order, slotDay: slot => europeanSlotDay(format, seasonNumber, slot), fixtures: context.fixtures, ...(format.regular.groups ? { rankOf: (clubId: string) => seeds.get(clubId)! } : {}) });
+    return { competition, format, tables, table: tables.flatMap(group => group.rows), order, series: derived.series, fixtures: derived.fixtures.map(fixture => ({ ...fixture, competition: competition.id })), outcome: postseasonOutcome(knockout, order, derived.series) };
   });
 }
 

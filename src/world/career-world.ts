@@ -11,7 +11,7 @@ import { DEVELOPMENT_PLAYERS } from '../data/development-players';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { roundRobinRoundCount } from './competition-calendar';
 import { POSTSEASON_FORMATS, postseasonFormatAllowed, postseasonWeeks } from './postseason';
-import { EUROPEAN_FORMATS, europeanWeeks } from './european-formats';
+import { EUROPEAN_FORMATS, europeanWeeks, fieldFits } from './european-formats';
 
 /**
  * The world a career plays in. Careers in the built-in fictional league carry no world and use DEVELOPMENT_WORLD;
@@ -279,7 +279,7 @@ function checkEuropeanCompetitions(world: CareerWorld, clubIds: ReadonlySet<stri
     if (Object.hasOwn(entry, 'format')) {
       const format = Object.hasOwn(EUROPEAN_FORMATS, entry.format) ? EUROPEAN_FORMATS[entry.format as keyof typeof EUROPEAN_FORMATS] : undefined;
       if (!format || format.kind !== entry.kind) fail(`${path}.format`, 'must be a format of this competition');
-      if (entry.clubIds.length < format!.clubs.min || entry.clubIds.length > format!.clubs.max) fail(`${path}.clubIds`, `must list ${format!.clubs.min} to ${format!.clubs.max} entrants for its format`);
+      if (!fieldFits(format!, entry.clubIds.length)) fail(`${path}.clubIds`, `must list ${format!.clubs.min} to ${format!.clubs.max} entrants for its format${format!.regular.groups ? `, in ${format!.regular.groups.length} equal groups of at least four` : ''}`);
       if (world.rosterModel !== FULL_ROSTER_MODEL) fail(`${path}.format`, 'requires clubs with full rosters');
     }
     for (const id of entry.clubIds as unknown[]) {

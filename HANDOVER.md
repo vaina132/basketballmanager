@@ -4,7 +4,7 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Keeping this file short:** when a step is finished, update "Current state" and "Next steps" here, and add the step's detailed notes (what changed, tests, measurements) to the top of `docs/handover-history.md` under a dated heading. Keep this file under 20 KB, with exactly one current entry.
 
-## Current state (15 November 2026, after steps 3.5b-c)
+## Current state (15 November 2026, after step 3.5d)
 
 **Active level:** Sprint 3, the multi-league world ([docs/multi-league-world.md#steps](docs/multi-league-world.md#steps)).
 
@@ -15,11 +15,11 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 4. Release preparation
 5. Interface simplification (last)
 
-**Active step:** 3.5, European competitions. The next step is 3.5d, the EuroCup format (3.4d-4 is local-only; see "Next steps").
+**Active step:** 3.5, European competitions. The next step is 3.5e, the BCL format (3.4d-4 is local-only; see "Next steps").
 
 **Code baseline:**
-- Steps 3.5b-c commit on `main` (cloud session); save format **57** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
-- Last verification, on Linux (cloud): full serial suite **2,602 tests / 194 files passed** (631 s), and `npm run build` passed with the known chunk-size advisory.
+- Step 3.5d commit on `main` (cloud session); save format **58** (`SEASON_SCHEMA_VERSION`), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
+- Last verification, on Linux (cloud): full serial suite **2,611 tests / 196 files passed** (671 s), and `npm run build` passed with the known chunk-size advisory.
 - Cloud sessions: Node 24.22.3 is installed in `/opt/node24` (put it first in `PATH`).
 
 **Done in sprint 3** (details in the history, search for the step number):
@@ -33,18 +33,17 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
   - **3.4c** promotion and relegation between a country's two divisions. Each season records its divisions (format 50).
   - **3.4e-1** FIBA Official Basketball Rules 2026, Appendix D, as the labelled default standings rule for new worlds' leagues without a verified rule of their own (format 51). Also fixed: strict checks refused any manager club change in a carried world.
   - **3.4e-2** verified league rules for new worlds (format 52): ACB article 7 (Spain's top division), BBL § 20 (Germany), FIP article 62 (both Italian divisions). Greece and Turkey keep the FIBA default (no readable official rule).
-  - **3.5b-c** European games on the shared calendar and the EuroLeague format (format 57; `src/world/europe.ts`, `src/world/european-formats.ts`): a competition with `format` plays; EuroLeague Thursdays of weeks 3-32 (Tuesdays too in eight double weeks), Play-In, best-of-five playoffs, Final Four 25 and 27 May without a third-place game; seeded draw; the domestic regular season lasts until week 38. Clubs outside the full world play as background sides (best available twelve, condition and injuries from their European games, no club records). New real worlds give the EuroLeague its format (IDs `real-europlay-`); the EuroCup and BCL stay listed only.
+  - **3.5d** the EuroCup (format 58, `eurocup-2026-1`): four drawn groups (A-B Tuesdays, C-D Wednesdays, weeks 4-19), top four to best-of-three eighth-finals across paired groups, quarter-finals, semi-finals and finals on the published dates; real worlds keep the chosen leagues' clubs and the strongest others when the listing is too long.
+  - **3.5b-c** European games on the shared calendar and the EuroLeague format (format 57; `src/world/europe.ts`, `src/world/european-formats.ts`): a competition with `format` plays; EuroLeague Thursdays of weeks 3-32 (Tuesdays too in eight double weeks), Play-In, best-of-five playoffs, Final Four 25 and 27 May without a third-place game; seeded draw; the domestic regular season lasts until week 38. Clubs outside the full world play as background sides (best available twelve, condition and injuries from their European games, no club records). New real worlds give the EuroLeague its format (IDs `real-europlay-`).
   - **3.5a** European competitions in new worlds (format 56): `world.europeanCompetitions` from the pack; entrants outside the chosen leagues are background clubs with their real squads (`withEuropeanCompetitions`, `europeanOnlyClubIds`). They do not play yet.
-  - **3.4d-3** screens: the playoff panel lists clubs leaving to and joining from the next division (returning or with a generated squad); generated players carry a "Generated" label on Squad, the player profile and Scouting.
-  - **3.4d-2** clubs leave and join the full world at season ends (formats 54-55), wherever the world lists a country's next division (`withLowerDivisions`; real names need 3.4d-4). Decisions (a) and (b) implemented.
-  - **3.4d-1** background-club foundation (format 53): `world.lowerDivisions` (a country's real next division, identities only; never Italy or France) and `SeasonState.background` (clubs outside the full world with their squads; empty until 3.4d-2). `src/world/background.ts`: a background club from a full-world club, its squad aged to a date, a matchday selection and the save checks.
+  - **3.4d-1 to 3.4d-3** clubs leave and join the full world at season ends wherever the world lists a country's next division (formats 53-55; `withLowerDivisions`, `src/world/background.ts`, `src/world/exchanges.ts`; never Italy or France; real names need 3.4d-4), with the playoff panel's Leaving/Joining lists and "Generated" player labels. Owner decisions (a) and (b) implemented.
 - **3.6 so far:** country flags, multi-country selection, a league list filtered by country, roster counts, a squad-strength bar and a game-speed meter.
 - **Owner feedback round (15 November 2026)**, placements in `docs/decisions.md#owner-feedback-after-playing-15-november-2026`:
   - Setup screen fixed, and the injury and replay options removed.
   - "Preparing your career…" panel; careers are now built in the worker.
   - Opening contracts of 1-3 seasons (`world.playerContracts`).
 
-**Unfinished in sprint 3:** 3.4d-4 (local-only), 3.5d-g, the rest of 3.6, and 3.7 (local-only).
+**Unfinished in sprint 3:** 3.4d-4 (local-only), 3.5e-g, the rest of 3.6, and 3.7 (local-only).
 
 **Known open points:**
 - European games have no screen of their own until 3.5g: the manager's European games open on their match day and count in player statistics, but Competition lists domestic games only.
@@ -64,13 +63,11 @@ Since Level 7 was accepted, the levels are the owner's sprints, in this order:
 
 Each step below should fit one session. A step that needs private data, keys or Edge is marked **local-only**: a cloud session lists it under "Local-only work" and moves on to the next step that does not need them. Never start Sprint 4: after the last sprint-3 step a session can do, stop and write the sprint-3 summary here.
 
-**Order note:** the plan table ([docs/multi-league-world.md](docs/multi-league-world.md#plan-for-the-rest-of-34-15-november-2026-claude-continuing-after-codex)) lists 3.4d before 3.4e. The owner approved doing 3.4e first on 15 November 2026. Reasons: 3.4e needs no private data and has no open questions, while 3.4d has two owner questions (below) and a local-only data part. The plan table has been updated to match this order.
-
 1. **3.4d-4 (local-only): real lower-division names.**
    - Import the real names into a new private pack. API-Sports lists Turkey's TB2L, Spain's Segunda FEB, Germany's Pro A and Greece's A2. Then build them into new worlds with `withLowerDivisions` (in `worldFromPack`, for countries other than Italy and France).
    - Run a private real-data season across a season end.
    - Update the 3.4 rows in the plan tables.
-2. **3.5: European competitions.** The split below was checked and recorded on 15 November 2026 (`docs/multi-league-world.md#plan-for-step-35-checked-15-november-2026`); the open research is done (`docs/competition-rules-2026.md`: no EuroLeague third-place game; BCL 2026-27 regulations; licences and the EuroCup route). **(a)-(c) are done** (formats 56-57). Next: 3.5d.
+2. **3.5: European competitions.** The split below was checked and recorded on 15 November 2026 (`docs/multi-league-world.md#plan-for-step-35-checked-15-november-2026`); the open research is done (`docs/competition-rules-2026.md`: no EuroLeague third-place game; BCL 2026-27 regulations; licences and the EuroCup route). **(a)-(d) are done** (formats 56-58). Next: 3.5e.
    - **(a)** The three competitions and their entrants in the world. Entrants from leagues that were not chosen, and from countries outside the six, become background clubs.
    - **(b)** Midweek European game days on the shared calendar, with draws at the season start:
      - EuroCup and BCL on Tuesdays and Wednesdays;

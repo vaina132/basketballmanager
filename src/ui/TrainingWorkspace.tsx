@@ -109,7 +109,7 @@ export function TrainingWorkspace({ season, onEnable, onEnableLifecycle, onOpenF
             const availableDays = nextDate ? trainingAvailableDays(injuries, player.id, season.date, nextDate, season.physio) : null
             const basePlayer = baseClub.players.find(base => base.id === player.id)!
             const points = focus === 'balanced' ? null : season.training.points[player.id]![focus]
-            const cap = focus === 'balanced' ? null : trainingPointCap(basePlayer.attributes[focus])
+            const cap = focus === 'balanced' ? null : trainingPointCap(season, basePlayer, focus)
             const capped = points !== null && cap !== null && points >= cap
             const aging = getPlayerAging(season, player.id)
             return <tr key={player.id} data-player-id={player.id}>

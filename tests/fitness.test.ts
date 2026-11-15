@@ -17,7 +17,7 @@ const club = 'rhine-falcons', player = 'rhf-1';
 const create = (fitness = true) => createSeason(53, club, 'off', true, true, true, true, null, true, true, true, true, true, fitness);
 function freeze<T>(value: T): T { if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
 function input(state: SeasonState, intensity: TrainingIntensity = 'heavy', condition = 80): TrainingWeekInput {
-  return { training: { ...state.training, plans: Object.fromEntries(Object.entries(state.training.plans).map(([id, plan]) => [id, { ...plan, delegated: false, intensity, focus: 'passing' }])) }, clubs: state.clubs, rosters: state.rosters, fitness: state.fitness, conditions: Object.fromEntries(Object.keys(state.conditions).map(id => [id, condition])), injuries: [], seasonNumber: state.seasonNumber, afterRound: state.round, fromDate: dateForRound(state.round, state.seasonNumber), toDate: dateForRound(state.round + 1, state.seasonNumber) };
+  return { seed: state.seed, training: { ...state.training, plans: Object.fromEntries(Object.entries(state.training.plans).map(([id, plan]) => [id, { ...plan, delegated: false, intensity, focus: 'passing' }])) }, clubs: state.clubs, rosters: state.rosters, fitness: state.fitness, conditions: Object.fromEntries(Object.keys(state.conditions).map(id => [id, condition])), injuries: [], seasonNumber: state.seasonNumber, afterRound: state.round, fromDate: dateForRound(state.round, state.seasonNumber), toDate: dateForRound(state.round + 1, state.seasonNumber) };
 }
 /** Isolated cash positions exercise guards, not portable save history. */
 function expense(state: SeasonState, amount: number): SeasonState {

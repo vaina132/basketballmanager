@@ -5,11 +5,13 @@ import { DEVELOPMENT_CLUBS } from '../src/data/development-league';
 import { setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match';
 import { availableCoaches, coachingAssignments, coachingCommitted, coachingRatingForAttribute, COACHING_BUDGET, coachRating, createCoaching, enableCoaching, getClubCoaching, hireCoach, MAX_COACHES, recruitAiCoaches, releaseCoach, rolloverCoaching, setCoachAssignment, setCoachRenewal } from '../src/world/coaching';
 import { advanceSeason, createSeason, dateForRound, managedSide, rolloverSeason } from '../src/world/season';
-import { createTraining, processTrainingWeek, setTrainingPlan, TRAINING_ATTRIBUTES } from '../src/world/training';
+import { createTraining, processTrainingWeek, setTrainingPlan, TRAINING_ATTRIBUTES, trainingPointCap } from '../src/world/training';
+import { playerHeadroom } from '../src/world/potential';
 import type { TrainingWeekInput } from '../src/world/training';
 
 const clubId = DEVELOPMENT_CLUBS[0]!.id;
-const player = DEVELOPMENT_CLUBS[0]!.players[0]!;
+// A 19-year-old: hidden potential leaves him at least two rating points in every skill under any career seed.
+const player = DEVELOPMENT_CLUBS[0]!.players.find(member => member.id === 'rhf-10')!;
 const total = (values: Record<string, number>) => Object.values(values).reduce((sum, value) => sum + value, 0);
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -21,7 +23,7 @@ function finish(state: SeasonState): SeasonState {
 function trainingWeek(): TrainingWeekInput {
   const training = createTraining(DEVELOPMENT_CLUBS);
   for (const plan of Object.values(training.plans)) Object.assign(plan, { delegated: false, intensity: 'heavy', focus: 'freeThrow' });
-  return { training, clubs: DEVELOPMENT_CLUBS, conditions: Object.fromEntries(DEVELOPMENT_CLUBS.flatMap(club => club.players.map(player => [player.id, 100]))), injuries: [], seasonNumber: 1, afterRound: 1, fromDate: dateForRound(1), toDate: dateForRound(2), coaching: createCoaching(DEVELOPMENT_CLUBS) };
+  return { seed: 42, training, clubs: DEVELOPMENT_CLUBS, conditions: Object.fromEntries(DEVELOPMENT_CLUBS.flatMap(club => club.players.map(player => [player.id, 100]))), injuries: [], seasonNumber: 1, afterRound: 1, fromDate: dateForRound(1), toDate: dateForRound(2), coaching: createCoaching(DEVELOPMENT_CLUBS) };
 }
 
 describe('fictional coaches and contract decisions', () => {
@@ -120,6 +122,8 @@ describe('coaching contribution to authoritative training', () => {
       const expected = Math.floor(TRAINING_ATTRIBUTES.reduce((sum, attribute) => sum + 4 * coach.skills[attribute] / 2 / 40, 0));
       for (const player of club.players) {
         const report = result.training.lastWeek!.players[player.id]!;
+        // Without potential headroom a player keeps his skills, coached or not.
+        if (playerHeadroom(input, player.id) === 0) { expect(total(report.gains)).toBe(0); expect(total(report.coachingGains)).toBe(0); continue; }
         expect(total(report.coachingGains)).toBe(expected);
         expect(total(report.coachingGains)).toBeGreaterThan(0);
         expect(total(report.gains)).toBe(28 + expected);
@@ -131,9 +135,10 @@ describe('coaching contribution to authoritative training', () => {
   it('charges base headroom first, caps actual coaching gains, and grants nothing for recovery or absence', () => {
     const state = hireCoach(createSeason(), 'coach-09', 'freeThrow');
     const input = { ...trainingWeek(), coaching: state.coaching };
-    input.training.points[player.id]!.freeThrow = 160;
+    const cap = trainingPointCap(input, player, 'freeThrow');
+    input.training.points[player.id]!.freeThrow = cap - 40;
     const capped = processTrainingWeek(input);
-    expect(capped.training.points[player.id]!.freeThrow).toBe(200);
+    expect(capped.training.points[player.id]!.freeThrow).toBe(cap);
     expect(capped.training.lastWeek!.players[player.id]!.gains.freeThrow).toBe(40);
     expect(capped.training.lastWeek!.players[player.id]!.coachingGains.freeThrow).toBe(5);
     const resting = trainingWeek();

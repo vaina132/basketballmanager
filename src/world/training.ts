@@ -13,6 +13,7 @@ import { fitnessAssignments } from './fitness-policy';
 import { ageTrainingRate, applyAgingAttributes, type LifecycleContext } from './lifecycle-policy';
 import { seasonRounds } from './career-world';
 import type { CareerWorld } from '../domain/world';
+import { potentialPointCap, trainingHeadroom, type PotentialContext } from './potential';
 
 export const TRAINING_ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 export const TRAINING_FOCUSES = ['balanced', ...TRAINING_ATTRIBUTES] as const;
@@ -30,8 +31,13 @@ const WORKLOAD = {
 const emptyPoints = (): TrainingPoints => Object.fromEntries(TRAINING_ATTRIBUTES.map(key => [key, 0])) as TrainingPoints;
 const copyPlan = (plan: TrainingPlan): TrainingPlan => ({ ...plan, individual: { ...plan.individual } });
 
-/** The first development model permits two rating increases, never above 20. */
-export function trainingPointCap(baseRating: number): number { return Math.min(200, (20 - baseRating) * 100); }
+/**
+ * Training points one skill may hold: 100 per rating point of headroom, never above 20. New careers (`training-2`) use
+ * each player's hidden potential (sprint 4, `src/world/potential.ts`); older careers keep the fixed two rating points.
+ */
+export function trainingPointCap(context: PotentialContext & { training: Pick<SeasonTraining, 'model'> }, player: Pick<Player, 'id' | 'attributes'>, attribute: keyof PlayerAttributes): number {
+  return potentialPointCap(trainingHeadroom(context, player.id), player.attributes[attribute]);
+}
 
 function isFocus(value: unknown): value is TrainingFocus { return TRAINING_FOCUSES.includes(value as TrainingFocus); }
 function validatePlan(plan: TrainingPlan, club: Team): void {
@@ -41,7 +47,7 @@ function validatePlan(plan: TrainingPlan, club: Team): void {
 
 export function createTraining(clubs: readonly Team[], enabled = true): SeasonTraining {
   return {
-    model: 'training-1', enabledSince: enabled ? { seasonNumber: 1, round: 1 } : null,
+    model: 'training-2', enabledSince: enabled ? { seasonNumber: 1, round: 1 } : null,
     plans: Object.fromEntries(clubs.map(club => [club.id, { delegated: true, intensity: 'standard', focus: 'balanced', individual: Object.fromEntries(club.players.map(player => [player.id, 'team'])) }])),
     points: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, emptyPoints()]))), lastWeek: null,
   };
@@ -54,16 +60,19 @@ export function withTrainingPoints(training: SeasonTraining, players: readonly P
 }
 
 /** Project training progress into a new match squad; authored identities stay immutable. */
-export function developClub(club: Team, training: SeasonTraining, context: LifecycleContext = {}): Team {
+export function developClub(club: Team, training: SeasonTraining, context: PotentialContext & LifecycleContext): Team {
   return {
     ...club,
-    players: club.players.map(player => ({
-      ...player, attributes: applyAgingAttributes(context, player.id, Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => {
-        const points = training.points[player.id]?.[attribute];
-        if (!Number.isInteger(points) || points < 0 || points > trainingPointCap(player.attributes[attribute])) throw new Error('Training progress is outside its supported development limits.');
-        return [attribute, Math.min(20, player.attributes[attribute] + Math.floor(points / 100))];
-      })) as unknown as PlayerAttributes, context.date ?? ''),
-    })),
+    players: club.players.map(player => {
+      const headroom = trainingHeadroom({ ...context, training }, player.id);
+      return {
+        ...player, attributes: applyAgingAttributes(context, player.id, Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => {
+          const points = training.points[player.id]?.[attribute];
+          if (!Number.isInteger(points) || points < 0 || points > potentialPointCap(headroom, player.attributes[attribute])) throw new Error('Training progress is outside its supported development limits.');
+          return [attribute, Math.min(20, player.attributes[attribute] + Math.floor(points / 100))];
+        })) as unknown as PlayerAttributes, context.date ?? ''),
+      };
+    }),
   };
 }
 
@@ -102,6 +111,8 @@ export function trainingAvailableDays(injuries: readonly SeasonInjury[], playerI
 }
 
 export interface TrainingWeekInput {
+  /** The career seed: each player's hidden potential limits his progress (`src/world/potential.ts`). */
+  seed: number;
   training: SeasonTraining;
   clubs: readonly Team[];
   conditions: Record<string, number>;
@@ -189,9 +200,9 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
         for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = Math.floor(facilityPoints / TRAINING_ATTRIBUTES.length);
         for (let index = 0; index < facilityPoints % TRAINING_ATTRIBUTES.length; index += 1) facilityDesired[TRAINING_ATTRIBUTES[(afterRound - 1 + budget % TRAINING_ATTRIBUTES.length + index) % TRAINING_ATTRIBUTES.length]!] += 1;
       } else facilityDesired[focus] = facilityPoints;
-      const progress = emptyPoints();
+      const progress = emptyPoints(), headroom = trainingHeadroom(input, player.id);
       for (const attribute of TRAINING_ATTRIBUTES) {
-        const points = previous?.[attribute], cap = trainingPointCap(player.attributes[attribute]);
+        const points = previous?.[attribute], cap = potentialPointCap(headroom, player.attributes[attribute]);
         if (!Number.isInteger(points) || points < 0 || points > cap) throw new Error('Training progress is outside its supported development limits.');
         const baseProgress = Math.min(cap, points + desired[attribute]);
         const coached = Math.min(cap, baseProgress + bonusDesired[attribute]);

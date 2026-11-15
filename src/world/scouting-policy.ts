@@ -7,6 +7,7 @@ import { getCareerPlayer, getCareerPlayers, type CareerPlayerContext } from './p
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { getClubScouts, scoutEvidence } from './scout-policy';
 import { SCOUT_DIRECTORY } from '../data/staff-directory';
+import { potentialAttributes, trainingHeadroom } from './potential';
 
 export const SCOUTING_CAPACITY = 2;
 export const MAX_KNOWLEDGE_LEVEL = 3;
@@ -51,6 +52,37 @@ export function scoutingRanges(seed: number, clubId: string, playerId: string, a
     const center = Math.max(1, Math.min(20, attributes[attribute] + stableBias(seed, clubId, playerId, attribute)));
     return [attribute, { min: Math.max(1, center - width), max: Math.min(20, center + width) }];
   })) as ScoutingRanges;
+}
+
+function stablePotentialBias(seed: number, clubId: string, playerId: string, attribute: string): number {
+  let hash = (2166136261 ^ seed) >>> 0;
+  for (const character of `potential-scouting:${clubId}:${playerId}:${attribute}`) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
+  return hash % 3 - 1;
+}
+
+/**
+ * Hidden potential as far as this club knows it (sprint 4), as skill ranges for a star range. Potential is always an
+ * estimate, so the projection is report-kind even for the club's own players. Never-scouted outsiders stay unknown.
+ * Reports range one point wider than their ability ranges (narrowing with knowledge, widening with age), centred on
+ * the skills reachable at the observation with a stable observer bias, and never below the ability range. Own
+ * players get a narrow range: their exact current skills up to one point either side of the reachable skills.
+ */
+export function getPotentialKnowledge(state: SeasonState, playerId: string, clubId = state.managedClubId): PlayerKnowledge {
+  const knowledge = getPlayerKnowledge(state, playerId, clubId);
+  if (knowledge.kind === 'unknown') return knowledge;
+  const peak = potentialAttributes(state, getCareerPlayer(state, playerId), trainingHeadroom(state, playerId));
+  const reachableOn = (date: string | null) => date ? applyAgingAttributes(state, playerId, peak, date) : peak;
+  if (knowledge.kind === 'own') {
+    const current = knowledge.attributes!, reachable = reachableOn(state.date);
+    const ranges = Object.fromEntries(SCOUTING_ATTRIBUTES.map(attribute => [attribute, { min: Math.max(current[attribute], reachable[attribute] - 1), max: Math.min(20, Math.max(current[attribute], reachable[attribute]) + 1) }])) as ScoutingRanges;
+    return { ...knowledge, kind: 'report', attributes: null, ranges };
+  }
+  const reachable = reachableOn(knowledge.observedOn), width = 6 - knowledge.level + Math.floor(Math.max(0, knowledge.ageDays ?? 0) / 28);
+  const ranges = Object.fromEntries(SCOUTING_ATTRIBUTES.map(attribute => {
+    const center = Math.max(1, Math.min(20, reachable[attribute] + stablePotentialBias(state.seed, clubId, playerId, attribute))), ability = knowledge.ranges![attribute];
+    return [attribute, { min: Math.max(1, center - width, ability.min), max: Math.max(Math.min(20, center + width), ability.max) }];
+  })) as ScoutingRanges;
+  return { ...knowledge, ranges };
 }
 
 export function getPlayerKnowledge(state: SeasonState, playerId: string, clubId = state.managedClubId): PlayerKnowledge {

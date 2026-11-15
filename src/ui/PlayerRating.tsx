@@ -11,10 +11,12 @@ interface PlayerRatingProps {
   position?: Position | null;
   compact?: boolean;
   label?: string;
+  /** The explanation in the tooltip; the overall-ability scale by default (potential passes its own). */
+  description?: string;
 }
 
 /** Knowledge always wins if a caller also supplies attributes. */
-export function PlayerRating({ attributes, knowledge, attribute, position, compact = false, label = 'Ability' }: PlayerRatingProps) {
+export function PlayerRating({ attributes, knowledge, attribute, position, compact = false, label = 'Ability', description = ABILITY_RATING_DESCRIPTION }: PlayerRatingProps) {
   let rating: AbilityRating = { kind: 'unknown', min: null, max: null, low: null, high: null };
   if (knowledge) rating = abilityRating(knowledge, { position, attribute });
   else if (attributes) rating = exactAbilityRating(attributes, { position, attribute });
@@ -25,7 +27,7 @@ export function PlayerRating({ attributes, knowledge, attribute, position, compa
   const accessible = rating.kind === 'unknown' ? `${label}: unknown` : rating.kind === 'range'
     ? `${label}: estimated ${attribute ? '' : 'overall '}${rating.low} to ${rating.high}${scale}, ${rating.min} to ${rating.max} out of 5 stars`
     : `${label}: ${attribute ? '' : 'overall '}${rating.low}${scale}, ${rating.min} out of 5 stars`;
-  return <span className={`player-rating${compact ? ' player-rating--compact' : ''} player-rating--${rating.kind}`} role="img" aria-label={accessible} title={`${accessible}. ${ABILITY_RATING_DESCRIPTION}`}>
+  return <span className={`player-rating${compact ? ' player-rating--compact' : ''} player-rating--${rating.kind}`} role="img" aria-label={accessible} title={`${accessible}. ${description}`}>
     <span className="player-rating-stars" aria-hidden="true">{Array.from({ length: 5 }, (_, index) => <span className="player-rating-star" key={index}>
       <span>☆</span>
       {rating.kind === 'range' && <span className="player-rating-star-range" style={{ width: `${Math.max(0, Math.min(1, rating.max! - index)) * 100}%` }}>★</span>}

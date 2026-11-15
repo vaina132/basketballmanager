@@ -58,7 +58,7 @@ describe('training-aware season saves', () => {
   it('retains improved match attributes while keeping the authored club pack canonical', () => {
     const restored = restore(complete), club = restored.clubs.find(club => club.id === clubId)!;
     expect(restored).toEqual(complete);
-    const projected = developClub(club, restored.training);
+    const projected = developClub(club, restored.training, { seed: restored.seed });
     expect(projected.players.some((player, index) => player.attributes.freeThrow > club.players[index]!.attributes.freeThrow)).toBe(true);
     expect(restored.activeMatch![managedSide(restored)]).toEqual(projected);
     expect(restored.training.lastWeek!.afterRound).toBe(9);
@@ -135,7 +135,7 @@ describe('strict older format migration', () => {
 
 describe('training state and report tampering', () => {
   const cases: Array<[string, (season: SeasonState) => void]> = [
-    ['unknown training model', season => { Object.assign(season.training, { model: 'training-2' }); }],
+    ['unknown training model', season => { Object.assign(season.training, { model: 'training-99' }); }],
     ['unknown field', season => { Object.assign(season.training, { coachBonus: 1 }); }],
     ['missing club plan', season => { delete season.training.plans[clubId]; }],
     ['foreign player instruction', season => { season.training.plans[clubId]!.individual.missing = 'passing'; }],

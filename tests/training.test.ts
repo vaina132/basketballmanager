@@ -5,14 +5,16 @@ import { DEVELOPMENT_CLUBS } from '../src/data/development-league';
 import { createFixtureMatch, setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match';
 import { advanceSeason, createSeason, dateForRound, managedSide, rolloverSeason } from '../src/world/season';
 import { createTraining, developClub, enableTraining, processTrainingWeek, resolveTrainingPlan, setTrainingPlan, TRAINING_ATTRIBUTES, trainingAvailableDays, trainingPointCap } from '../src/world/training';
+import { playerHeadroom } from '../src/world/potential';
 import type { TrainingWeekInput } from '../src/world/training';
 
-const club = DEVELOPMENT_CLUBS[0]!, player = club.players[0]!;
+// A 19-year-old: hidden potential leaves him at least two rating points in every skill under any career seed.
+const club = DEVELOPMENT_CLUBS[0]!, player = club.players.find(member => member.id === 'rhf-10')!;
 const total = (values: Record<string, number>) => Object.values(values).reduce((sum, value) => sum + value, 0);
 function input(intensity: TrainingIntensity = 'standard', condition = 80): TrainingWeekInput {
   const training = createTraining(DEVELOPMENT_CLUBS);
   for (const plan of Object.values(training.plans)) Object.assign(plan, { delegated: false, intensity, focus: 'passing' });
-  return { training, clubs: DEVELOPMENT_CLUBS, conditions: Object.fromEntries(DEVELOPMENT_CLUBS.flatMap(team => team.players.map(player => [player.id, condition]))), injuries: [], seasonNumber: 1, afterRound: 1, fromDate: dateForRound(1), toDate: dateForRound(2) };
+  return { seed: 42, training, clubs: DEVELOPMENT_CLUBS, conditions: Object.fromEntries(DEVELOPMENT_CLUBS.flatMap(team => team.players.map(player => [player.id, condition]))), injuries: [], seasonNumber: 1, afterRound: 1, fromDate: dateForRound(1), toDate: dateForRound(2) };
 }
 function finish(state: SeasonState): SeasonState {
   return state.activeMatch!.status === 'finished' ? state : { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) };
@@ -91,7 +93,8 @@ describe('weekly training workload and development', () => {
       expect(next.training.lastWeek!.plans[team.id]).toMatchObject({ delegated: true, intensity: 'light', focus: 'balanced' });
       for (const individual of team.players) {
         expect(next.conditions[individual.id]).toBe(95);
-        expect(total(next.training.points[individual.id]!)).toBe(14);
+        // The same 14-point budget for everyone; a player without potential headroom keeps his skills.
+        expect(total(next.training.points[individual.id]!)).toBe(playerHeadroom(original, individual.id) > 0 ? 14 : 0);
       }
     }
     expect(next.training.points[player.id]!.passing).toBe(14);
@@ -100,19 +103,20 @@ describe('weekly training workload and development', () => {
     expect(original.training.plans[club.id]!.intensity).toBe('heavy');
   });
 
-  it('caps development and projects integer match abilities without changing authored data', () => {
+  it('caps development at hidden potential and projects integer match abilities without changing authored data', () => {
     const original = input();
-    for (const team of original.clubs) for (const individual of team.players) for (const attribute of TRAINING_ATTRIBUTES) original.training.points[individual.id]![attribute] = trainingPointCap(individual.attributes[attribute]);
+    for (const team of original.clubs) for (const individual of team.players) for (const attribute of TRAINING_ATTRIBUTES) original.training.points[individual.id]![attribute] = trainingPointCap(original, individual, attribute);
     const before = structuredClone(DEVELOPMENT_CLUBS), next = processTrainingWeek(original);
-    const developed = developClub(club, next.training);
+    const developed = developClub(club, next.training, original);
     expect(developed.id).toBe(club.id); expect(developed.players.map(player => player.id)).toEqual(club.players.map(player => player.id));
     for (const individual of developed.players) {
       const base = club.players.find(player => player.id === individual.id)!;
-      for (const attribute of TRAINING_ATTRIBUTES) expect(individual.attributes[attribute]).toBe(Math.min(20, base.attributes[attribute] + 2));
+      for (const attribute of TRAINING_ATTRIBUTES) expect(individual.attributes[attribute]).toBe(Math.min(20, base.attributes[attribute] + playerHeadroom(original, base.id)));
       expect(total(next.training.lastWeek!.players[individual.id]!.gains)).toBe(0);
     }
     expect(DEVELOPMENT_CLUBS).toEqual(before);
-    const bad = structuredClone(original); bad.training.points[player.id]!.passing = 201;
+    expect(developed.players.find(individual => individual.id === player.id)!.attributes.passing).toBeGreaterThanOrEqual(player.attributes.passing + 2);
+    const bad = structuredClone(original); bad.training.points[player.id]!.passing = trainingPointCap(original, player, 'passing') + 1;
     expect(() => processTrainingWeek(bad)).toThrow(/development limits/);
   });
 });
@@ -182,7 +186,7 @@ describe('training in the season loop', () => {
     expect(next.training.enabledSince).toEqual({ seasonNumber: 1, round: 1 });
     expect(next.training.lastWeek).toBeNull();
     expect(Object.values(next.conditions).every(value => value === 100)).toBe(true);
-    expect(next.activeMatch![managedSide(next)]).toEqual(developClub(club, next.training));
+    expect(next.activeMatch![managedSide(next)]).toEqual(developClub(club, next.training, { seed: next.seed }));
     expect(total(next.training.points[player.id]!)).toBeGreaterThan(0);
   }, 30_000);
 });

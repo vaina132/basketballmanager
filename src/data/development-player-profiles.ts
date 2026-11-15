@@ -23,6 +23,9 @@ export const DEVELOPMENT_PLAYER_PROFILES: Readonly<Record<string, DevelopmentPla
   Object.entries(birthDates).flatMap(([prefix, dates]) => dates.map((dateOfBirth, index) => [`${prefix}-${index + 1}`, Object.freeze({ dateOfBirth, source: 'fictional-development' as const })])),
 ));
 
+/** Players without a known age are assumed to be this old (real-world estimates and hidden potential). */
+export const DEFAULT_PLAYER_AGE = 26;
+
 function validCalendarDate(value: string | null | undefined): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000-')) return false;
   const timestamp = Date.parse(`${value}T00:00:00.000Z`);

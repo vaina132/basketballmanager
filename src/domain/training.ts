@@ -41,7 +41,11 @@ export interface TrainingWeekReport {
 }
 
 export interface SeasonTraining {
-  model: 'training-1';
+  /**
+   * `training-2` (sprint 4, new careers): each player's hidden potential limits his development (`src/world/potential.ts`).
+   * `training-1`: careers created before it keep the first model's fixed limit of two rating points per skill.
+   */
+  model: 'training-1' | 'training-2';
   /** Null retains the original recovery-only career model until explicitly enabled. */
   enabledSince: { seasonNumber: number; round: number } | null;
   plans: Record<string, TrainingPlan>;

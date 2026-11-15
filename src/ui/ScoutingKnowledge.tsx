@@ -1,6 +1,7 @@
 import type { PlayerKnowledge } from '../domain/scouting'
 import type { Position } from '../domain/types'
 import { SCOUTING_ATTRIBUTES } from '../world/scouting-policy'
+import { POTENTIAL_RATING_DESCRIPTION } from '../world/potential'
 import { PlayerRating } from './PlayerRating'
 import './scouting-knowledge.css'
 
@@ -14,10 +15,14 @@ export function knowledgeLabel(knowledge: PlayerKnowledge): string {
   return `${knowledge.level === 1 ? 'Initial' : knowledge.level === 2 ? 'Developing' : 'Detailed'} report · ${knowledge.level}/3`
 }
 
-/** Only safe knowledge projections enter this component; outsider base attributes are never accepted. */
-export function ScoutingKnowledge({ knowledge, position, compact = false }: { knowledge: PlayerKnowledge; position: Position; compact?: boolean }) {
+/**
+ * Only safe knowledge projections enter this component; outsider base attributes are never accepted. `potential` is
+ * the hidden potential's projection (`getPotentialKnowledge`), always a range.
+ */
+export function ScoutingKnowledge({ knowledge, potential, position, compact = false }: { knowledge: PlayerKnowledge; potential?: PlayerKnowledge; position: Position; compact?: boolean }) {
   return <div className={`scouting-knowledge${compact ? ' scouting-knowledge-compact' : ''}`} data-knowledge-kind={knowledge.kind}>
     <div className="scouting-knowledge-overall"><span>Overall ability</span><PlayerRating knowledge={knowledge} position={position} label="Overall ability" /></div>
+    {potential && <div className="scouting-knowledge-overall scouting-knowledge-potential" data-potential-kind={potential.kind}><span>Potential</span><PlayerRating knowledge={potential} position={position} label="Potential" description={POTENTIAL_RATING_DESCRIPTION} /></div>}
     <div className="scouting-knowledge-status"><strong>{knowledgeLabel(knowledge)}</strong><span>{knowledge.kind === 'own' ? 'Current squad assessment' : knowledge.kind === 'unknown' ? 'No skill assessment available' : `${knowledge.freshness === 'recent' ? 'Recent' : knowledge.freshness === 'aging' ? 'Aging' : 'Stale'} · ${knowledge.ageDays} ${knowledge.ageDays === 1 ? 'day' : 'days'} old`}</span></div>
     {knowledge.kind !== 'unknown' && <dl className="scouting-knowledge-ratings">{SCOUTING_ATTRIBUTES.map(attribute => {
       const exact = knowledge.kind === 'own' ? knowledge.attributes?.[attribute] : undefined

@@ -97,7 +97,7 @@ export function contractRequestsFromEvents(context: ContractRequestContext, even
 
 /**
  * The extra wage share (percent) a player asks to sign with this club after it refused his request (declined,
- * ignored, lapsed talks or a broken promise), for that season and the next. Zero outside `relationships-2`.
+ * ignored, lapsed talks or a broken promise), for that season and the next. Zero outside `relationships-2` and `relationships-3`.
  */
 // Step 3.7: each club's and player's recent requests and replies are collected once per event journal and first season
 // (journals are replaced, never edited; the length guards against an edited one), with the same backward scan as before.
@@ -128,7 +128,7 @@ function recentRequests(events: readonly RelationshipEvent[], earliest: number):
 }
 
 export function refusedContractPremium(context: ContractRequestContext, clubId: string, playerId: string): number {
-  if (context.relationships?.model !== 'relationships-2' || !context.relationships.enabledSince) return 0;
+  if (!context.relationships || context.relationships.model === 'relationships-1' || !context.relationships.enabledSince) return 0;
   const earliest = context.seasonNumber - RULES.premiumSeasons + 1;
   const mine = recentRequests(context.relationships.events, earliest).get(clubId)?.get(playerId);
   if (!mine?.requested) return 0;

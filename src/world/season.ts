@@ -469,8 +469,9 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const youthReady = youthCompetitionEnabled ? enableYouthCompetition(developed) : developed;
   const built = facilitiesEnabled ? enableFacilities(youthReady) : youthReady;
   const sponsored = commercialEnabled ? enableCommercial(built) : built;
-  // Format 66: new careers use squad-rank default roles and contract requests (`relationships-2`).
-  const related = relationshipsEnabled ? prepareRelationshipsRound(enableRelationships(sponsored, 'relationships-2')) : sponsored;
+  // Format 66: new careers use squad-rank default roles and contract requests (`relationships-2`); squad roles
+  // everywhere (`relationships-3`: five roles, the role as a contract term, requests for talks or to leave) follow.
+  const related = relationshipsEnabled ? prepareRelationshipsRound(enableRelationships(sponsored, 'relationships-3')) : sponsored;
   const boarded = boardEnabled ? enableBoard(related, 'career') : related;
   const capitalised = boardFundingEnabled ? enableBoardFunding(boarded) : boarded;
   const judged = boardConsequencesEnabled ? enableBoardConsequences(capitalised) : capitalised;

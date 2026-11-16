@@ -36,7 +36,7 @@ function answerAsAiClub(state: SeasonState, clubId: string, playerId: string, la
  * delegated recruitment the assistant answers the manager's players by the same rules, as it handles renewals.
  */
 export function processContractRequests(state: SeasonState): SeasonState {
-  if (state.relationships.model !== 'relationships-2' || !state.relationships.enabledSince || state.status !== 'active') return state;
+  if (state.relationships.model === 'relationships-1' || !state.relationships.enabledSince || state.status !== 'active') return state;
   let next = raiseContractRequests(state);
   // A player sold before an answer is not answered; his request lapses as ignored.
   const open = getSeasonContractRequests(next).filter(request => awaitsContractReply(next, request) && (request.clubId !== next.managedClubId || next.employment.delegated));

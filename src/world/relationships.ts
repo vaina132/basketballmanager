@@ -65,10 +65,10 @@ export function relationshipEventAnchor(state: SeasonState): RelationshipAnchor 
   const completed = lastCommittedWeek(state);
   return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), contractCount: state.employment.contracts.length, rosterCount: state.rosters.length };
 }
-/** New careers pass `relationships-2`; enabling squad dynamics in an older career keeps the original rules. */
+/** New careers pass `relationships-3` (squad roles everywhere); enabling squad dynamics in an older career keeps the original rules. */
 export function enableRelationships(state: SeasonState, model: RelationshipsModel = 'relationships-1'): SeasonState {
   if (state.relationships.enabledSince) return state;
-  return { ...state, relationships: { ...createRelationships(), model, enabledSince: relationshipEventAnchor(state), ...(model === 'relationships-2' ? { squadRanks: {} } : {}) } };
+  return { ...state, relationships: { ...createRelationships(), model, enabledSince: relationshipEventAnchor(state), ...(model !== 'relationships-1' ? { squadRanks: {} } : {}) } };
 }
 export function relationshipsAtEventCount(relationships: SeasonRelationships, eventCount: number): SeasonRelationships {
   if (!Number.isInteger(eventCount) || eventCount < 0 || eventCount > relationships.events.length) throw new Error('Choose an existing player-relationship history prefix.');
@@ -356,16 +356,14 @@ function playerRelationship(state: SeasonState, playerId: string, clubId: string
 /** relationships-3: the open escalation in the current stint, read from the journal (`settled` closes it). */
 function openRoleRequest(state: SeasonState, history: ClubHistory, playerId: string, stintStart: number): RoleRequest | null {
   const rounds = seasonRounds(state);
-  let open: RoleRequest | null = null, talksEvent: RoleRequestEvent | null = null;
-  for (const event of history.roleRequestsFor(playerId)) {
-    if (ordinal(event.seasonNumber, event.round, rounds) < stintStart) continue;
-    if (event.stage === 'talks') { talksEvent = event; open = { id: event.id, clubId: event.clubId, playerId, stage: 'talks', talksOn: event.date, leaveOn: null, answered: false, talksCompletedRounds: event.completedRounds }; }
-    else if (event.stage === 'leave' && open) open = { ...open, stage: 'leave', leaveOn: event.date };
-    else if (event.stage === 'settled') { open = null; talksEvent = null; }
-  }
-  if (!open || !talksEvent) return null;
-  const after = sequenceOf(talksEvent.id);
-  return { ...open, answered: history.eventsFor(playerId).some(event => sequenceOf(event.id) > after) };
+  const step = (open: RoleRequest | null, event: RoleRequestEvent): RoleRequest | null => event.stage === 'talks'
+    ? { id: event.id, clubId: event.clubId, playerId, stage: 'talks', talksOn: event.date, leaveOn: null, answered: false, talksCompletedRounds: event.completedRounds }
+    : event.stage === 'leave' ? open && { ...open, stage: 'leave', leaveOn: event.date } : null;
+  const found = history.roleRequestsFor(playerId).filter(event => ordinal(event.seasonNumber, event.round, rounds) >= stintStart).reduce(step, null);
+  if (!found) return null;
+  // A conversation or role change after he asked for talks answers him.
+  const after = sequenceOf(found.id);
+  return { ...found, answered: history.eventsFor(playerId).some(event => sequenceOf(event.id) > after) };
 }
 const ROLE_REQUEST_TEXT: Record<RoleRequestStage, { label: string; detail: string }> = {
   talks: { label: 'Asked for talks about his role', detail: 'His playing time has stayed below his role for several games. Promise playing time, explain the competition or agree a different role.' },

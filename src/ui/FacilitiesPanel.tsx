@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ClubFacilities, FacilityProject, FacilityType, MaintenancePlan } from '../domain/facilities'
 import type { SeasonState } from '../domain/season'
 import { facilityAutomationBuffer, FACILITY_CONSTRUCTION_CAPACITY_PERCENT, FACILITY_FUNDS_REASON, FACILITY_RECOVERY_PER_MATCHDAY, FACILITY_REDUCED_UPKEEP_PERCENT, FACILITY_WEAR_PER_MATCHDAY, getClubFacilities } from '../world/facilities-policy'
-import { BOARD_FUNDING_REFUSAL_COOLDOWN, quoteBoardFunding, type BoardFundingQuote } from '../world/board-funding-policy'
+import { quoteBoardFunding, type BoardFundingQuote } from '../world/board-funding-policy'
 import { focusWhenReady } from './focus-when-ready'
 import { Icon, type IconName } from './Icon'
 import { scoutingDate } from './ScoutingKnowledge'
@@ -34,7 +34,7 @@ function LevelBar({ level, maximum, name }: { level: number; maximum: number; na
 
 export function FacilityBoardFunding({ quote, enabled, busy, onRequest }: { quote: BoardFundingQuote; enabled: boolean; busy: boolean; onRequest: () => void }) {
   if (!enabled) return <section className="facility-board" data-board-funding="off" aria-labelledby="facility-board-title"><h4 id="facility-board-title"><Icon name="shield" size={15} />Ask the board</h4><p>Board funding requests are off in this career. You can turn them on under Club › Board.</p></section>
-  const outlook = !quote.eligible ? quote.reason : quote.approved ? 'On these figures the board approves. Its capital is recorded and construction starts at once.' : `${quote.refusal} If the board refuses, you can ask again after ${BOARD_FUNDING_REFUSAL_COOLDOWN} matchdays.`
+  const outlook = !quote.eligible ? quote.reason : quote.approved ? 'On these figures the board approves. Its capital is recorded and construction starts at once.' : `${quote.refusal} If the board refuses, you can ask again after ${quote.cooldown} ${quote.cooldown === 1 ? 'matchday' : 'matchdays'}.`
   return <section className="facility-board" data-board-funding={!quote.eligible ? 'unavailable' : quote.approved ? 'approve' : 'refuse'} aria-labelledby="facility-board-title">
     <h4 id="facility-board-title"><Icon name="shield" size={15} />Ask the board</h4>
     <dl className="facility-review-facts"><div><dt>Capital requested</dt><dd data-board-amount={quote.amount}>{money(quote.amount)}<small>{money(quote.cost)} cost − {money(quote.available)} available</small></dd></div><div><dt>Board confidence</dt><dd data-board-confidence-now={quote.confidence}>{quote.confidence} / 100<small>{quote.president.name} needs {quote.requiredConfidence}</small></dd></div><div><dt>Owner capital left this season</dt><dd data-board-capital-left={quote.capitalRemaining}>{money(quote.capitalRemaining)}<small>of {money(quote.seasonCapital)}</small></dd></div></dl>

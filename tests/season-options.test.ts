@@ -5,7 +5,7 @@ const manager = { name: 'Options Manager', dateOfBirth: '1984-03-17', nationalit
 
 describe('named career options', () => {
   it('lists every optional system once and cannot be changed at runtime', () => {
-    expect(Object.keys(NEW_CAREER_SYSTEMS)).toHaveLength(26);
+    expect(Object.keys(NEW_CAREER_SYSTEMS)).toHaveLength(27);
     expect(Object.values(NEW_CAREER_SYSTEMS).every(Boolean)).toBe(true);
     expect(Object.isFrozen(NEW_CAREER_SYSTEMS)).toBe(true);
   });
@@ -14,11 +14,12 @@ describe('named career options', () => {
     expect(createSeason({})).toEqual(createSeason());
     // The New career screen's former positional call: every flag after the manager enabled.
     const fullPositional = createSeason(227, 'rhine-falcons', 'standard', true, true, true, true, manager, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true);
-    // Sponsorship negotiations, board funding, board verdicts and (format 67) press and media postdate the positional form, so they are reachable only by name.
-    expect(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, commercial: false, boardFunding: false, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false, media: false })).toEqual(fullPositional);
+    // Sponsorship negotiations, board funding, board verdicts (format 67) press and media and (format 70) president personalities postdate the positional form, so they are reachable only by name.
+    expect(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, commercial: false, boardFunding: false, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false, media: false, presidents: false })).toEqual(fullPositional);
     const named = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS });
     expect([named.commercial.enabledSince, named.facilities.fundingSince, named.board.consequencesSince].every(anchor => anchor !== null)).toBe(true);
     expect(named.media).toEqual({ model: 'media-1', since: { seasonNumber: 1, round: 1, date: named.date } });
+    expect(named.board.model).toBe('board-2');
     expect(createSeason({ seed: 9, managedClubId: 'aegean-waves', injuryMode: 'off', training: false, coaching: false, employment: true, negotiations: true, board: true }))
       .toEqual(createSeason(9, 'aegean-waves', 'off', false, false, true, true, null, true, false, true, false, false, false, false, false, false, false, false, false, false, false, true));
   });

@@ -1,4 +1,5 @@
-import { clubRosterLimit, clubSalaryBudget, usesFullClubRoster } from '../world/club-roster-policy';
+import { clubRosterLimit, usesFullClubRoster } from '../world/club-roster-policy';
+import { seasonSalaryCeiling } from '../world/board-consequences';
 import { selectedTeam } from '../world/matchday-selection';
 import { createBoard } from '../world/board';
 import type { SeasonBoard } from '../domain/board';
@@ -117,7 +118,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -1348,7 +1349,7 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
   }
 }
 
-function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 30, context: CareerPlayerContext & Partial<Pick<SeasonState, 'seed' | 'career'>> = {}): SeasonEmployment {
+function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 30, context: CareerPlayerContext & Partial<Pick<SeasonState, 'seed' | 'career' | 'board'>> = {}): SeasonEmployment {
   const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market', ...(version >= 15 ? ['transfers'] : []), ...(version >= 17 ? ['buyouts'] : []), ...(version >= 55 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'departures') ? ['departures'] : [])]);
   const rawTransfers = version >= 15 ? fields.transfers : [];
   if (!Array.isArray(rawTransfers) || rawTransfers.length > 20_000) fail('employment.transfers', 'must retain at most 20000 completed transfers');
@@ -1547,7 +1548,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     if (index >= catalog.length && entry.kind !== 'joined') for (let year = startsSeason; year <= endsSeason; year += 1) {
       const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
-      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > clubSalaryBudget(context, entry.clubId as string)) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > seasonSalaryCeiling(context, entry.clubId as string, year)) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
   }
   const employment = normalized;
@@ -1556,7 +1557,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
   for (let year = firstYear; year <= seasonNumber; year += 1) for (const clubId of fullWorldClubsIn(context, year).map(club => club.id)) {
     for (let at = 1; at <= (year === seasonNumber ? round : seasonRounds(context)); at += 1) {
       const registrations = effectiveContractsForRound(employment, year, at).filter(contract => contract.clubId === clubId);
-      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > clubSalaryBudget(context, clubId)) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
+      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > seasonSalaryCeiling(context, clubId, year)) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
     }
   }
   // Clubs leaving the full world sit out the window; joining clubs' squads sign at the rollover (step 3.4d-2).
@@ -2773,7 +2774,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Every later replay attributes decisions through the validated moves.
   if (version >= 37) validateCareer(state.career, state as unknown as SeasonState, version);
   if (Object.hasOwn(state, 'background')) validateBackground(state.background, { ...(state as unknown as SeasonState), divisions: seasonDivisions }, version);
-  const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId, marketEnabled, version, careerContext) : undefined;
+  // Format 70: board-2 season verdicts change player salary budgets, so the salary checks read the board.
+  const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId, marketEnabled, version, (board as SeasonBoard | undefined)?.model === 'board-2' ? { ...careerContext, board } : careerContext) : undefined;
   if (!sameData(state.clubs, clubsForEmploymentYear(employment, seasonNumber, round, careerContext))) fail('clubs', 'must match the versioned player catalog and effective employment registrations');
   if (version >= 55 && Object.hasOwn(state, 'background')) validateBackgroundHistory(state as unknown as SeasonState, employment, careerContext);
   const clubs = state.clubs as readonly Team[], clubIds = clubs.map(club => club.id);
@@ -3011,6 +3013,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     if (version < 67) fail('media', 'requires format 67 or later');
     validateMediaShape(state.media, state as unknown as SeasonState);
   }
+  // Format 70 guard: careers created with president personalities (board-2) need format 70 or later.
+  if ((state.board as SeasonBoard | undefined)?.model === 'board-2' && version < 70) fail('board.model', 'requires format 70 or later');
 }
 
 /** Validate every reference and committed round before replacing any live season. */

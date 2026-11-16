@@ -14,6 +14,7 @@ import { POSTSEASON_FORMATS, postseasonFormatAllowed, postseasonWeeks } from './
 import { EUROPEAN_FORMATS, europeanWeeks, fieldFits } from './european-formats';
 import type { EconomyBand } from '../domain/world';
 import { CLUB_ECONOMY_KEYS, ECONOMY_BANDS, MAX_ECONOMY_AMOUNT, REAL_ECONOMY_RULES } from './economy';
+import { isPresidentTraits } from '../data/development-presidents';
 
 /**
  * The world a career plays in. Careers in the built-in fictional league carry no world and use DEVELOPMENT_WORLD;
@@ -453,7 +454,9 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
   }
   perClub(world.presidents, 'world.presidents');
   for (const president of world.presidents) {
-    if (!exactKeys(president, ['clubId', 'name', 'generosity', 'seasonCapital']) || !isText(president.name) || !isWhole(president.generosity, 1, 5) || !isWhole(president.seasonCapital, 0, MAX_ECONOMY_AMOUNT)) fail(`world.presidents.${president.clubId}`, 'needs a name, a generosity from 1 to 5 and a season capital');
+    if (!exactKeys(president, ['clubId', 'name', 'generosity', 'seasonCapital', ...(Object.hasOwn(president, 'traits') ? ['traits'] : [])]) || !isText(president.name) || !isWhole(president.generosity, 1, 5) || !isWhole(president.seasonCapital, 0, MAX_ECONOMY_AMOUNT)) fail(`world.presidents.${president.clubId}`, 'needs a name, a generosity from 1 to 5 and a season capital');
+    // Format 70: optional fictional personality traits (patience, ambition and interference 1-5, a negotiation style).
+    if (Object.hasOwn(president, 'traits') && !isPresidentTraits(president.traits)) fail(`world.presidents.${president.clubId}.traits`, 'needs patience, ambition and interference from 1 to 5 and a negotiation style');
   }
   if (!Array.isArray(world.rivalries)) fail('world.rivalries', 'must be a list');
   const rivals = new Set<string>(), rivalryIds = new Set<string>();

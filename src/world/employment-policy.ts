@@ -11,7 +11,8 @@ import { getInSeasonOffers } from './recruitment-policy';
 import { offerOptionsReason } from './release-clauses';
 import { retirementContractReason } from './lifecycle-policy';
 import type { WorldContext } from '../domain/world';
-import { clubRosterLimitText, clubRosterLimit, clubSalaryBudget } from './club-roster-policy';
+import { clubRosterLimitText, clubRosterLimit } from './club-roster-policy';
+import { seasonSalaryBudget } from './board-consequences';
 import { REAL_ECONOMY_RULES, worldEconomy } from './economy';
 
 export const EMPLOYMENT_BUDGET = 24_000_000;
@@ -63,7 +64,8 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
   const inSeasonReserved = getInSeasonOffers(state, clubId, true).filter(offer => offer.id !== excludeOfferId && offer.seasonNumber <= seasonNumber && offer.seasonNumber + offer.seasons - 1 >= seasonNumber);
   const reserved = [...getLiveMarketOffers(state).filter(offer => offer.clubId === clubId && offer.id !== excludeOfferId && offer.seasonNumber + 1 <= seasonNumber && offer.seasonNumber + offer.seasons >= seasonNumber), ...inSeasonReserved];
   const reservedWages = reserved.reduce((total, offer) => total + offer.seasonWage, 0), reservedRosterSize = reserved.length;
-  const budget = clubSalaryBudget(state, clubId), remainingBudget = budget - seasonWages - reservedWages;
+  // Format 70 (board-2): the season verdict changes the player salary budget (`seasonSalaryBudget`); otherwise the standard budget.
+  const budget = seasonSalaryBudget(state, clubId, seasonNumber), remainingBudget = budget - seasonWages - reservedWages;
   // A rival can win any pending player. Keep enough to replace a cheap held slot
   // until that player actually signs, so losing a bid cannot strand the club.
   const pendingShortfalls = (isCompetitiveMarket(state) ? reserved : inSeasonReserved).reduce((total, offer) => total + Math.max(0, MIN_ROSTER_WAGE_RESERVE - offer.seasonWage), 0);

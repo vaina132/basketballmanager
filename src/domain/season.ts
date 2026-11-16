@@ -131,7 +131,8 @@ export interface DomesticDivisions {
 /** Format 60 adds estimated tables for unchosen leagues and each season end's European places (`europe`, step 3.5f). */
 /** Format 61 records realistic injury kinds (sprint 4) and each career match's recurrence risk (`activeMatch.injuryRisk`). Format 62 (sprint 4) gives real-club worlds researched money: `world.economy` and each club's `finances[].economy` (`src/world/economy.ts`). */
 /** Format 67 (saved ideas level) adds richer press topics and the manager's media standing to new careers (`media`, `src/world/media.ts`). Format 68: new careers grow rivalries from results (`rivalries.model` 'rivalries-2' with each season's table, `src/world/rivalry-growth.ts`); older careers keep the world's fixed rivalries. */
-export const SEASON_SCHEMA_VERSION = 68;
+/** Format 70 (saved ideas level): new careers use the board-2 model: president personalities, season verdicts on the player salary budget, youth and culture objectives and the president's requests (`src/world/presidents.ts`). */
+export const SEASON_SCHEMA_VERSION = 70;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

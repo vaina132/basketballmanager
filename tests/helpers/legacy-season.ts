@@ -1,5 +1,16 @@
 import { financeAtLedgerBoundary, financeLedgerCount } from '../../src/world/finance-ledger';
 import type { SeasonState } from '../../src/domain/season';
+import { NEW_CAREER_SYSTEMS, type SeasonSystems } from '../../src/world/season';
+
+/**
+ * Saved ideas level systems that only careers of newer formats record (format 67 media, format 70 president
+ * personalities). Tests that write a new career as an older format switch these off; add later systems here.
+ */
+const SAVED_IDEAS_OFF = Object.freeze({ media: false, presidents: false } satisfies SeasonSystems);
+/** Every new-career system that existed before the saved ideas level. */
+export const BEFORE_SAVED_IDEAS: Readonly<Required<SeasonSystems>> = Object.freeze({ ...NEW_CAREER_SYSTEMS, ...SAVED_IDEAS_OFF });
+/** Career options without the saved ideas level's systems, for files written in an older format. */
+export function beforeSavedIdeas<T extends object>(options: T): T & typeof SAVED_IDEAS_OFF { return { ...options, ...SAVED_IDEAS_OFF }; }
 
 /** Recreate the actual pre-roster schema, including the archive data those versions discarded. */
 export function stripRosterHistory(state: Record<string, unknown>): void {

@@ -10,6 +10,7 @@ import { createSeason, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/s
 import { remainingStaffBudget, STAFF_BUDGET, staffCommitted } from '../src/world/staff-policy';
 import { playFirstSeason } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
+import { BEFORE_SAVED_IDEAS } from './helpers/legacy-season';
 
 const verdictOf = (state: SeasonState, clubId: string) => seasonVerdict(state.board, clubId, 1, 10)!.verdict;
 let complete: SeasonState, opening: SeasonState, legacyComplete: SeasonState, legacyOpening: SeasonState;
@@ -102,7 +103,7 @@ describe('board verdict validation', () => {
 
   it('rejects the switch in a format-32 file', () => {
     // A genuine format-32 career had neither season verdicts, rivalries, upkeep choices nor club changes.
-    const file = JSON.parse(serializeSeason(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false, media: false })));
+    const file = JSON.parse(serializeSeason(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...BEFORE_SAVED_IDEAS, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false, media: false })));
     file.formatVersion = 32; file.state.schemaVersion = 32;
     delete file.state.board.consequencesSince;
     delete file.state.rivalries;

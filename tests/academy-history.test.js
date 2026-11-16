@@ -89,7 +89,8 @@ describe('completed academy report retention', () => {
 
   it('rolls over a real accepted job offer and preserves the former club detailed academy history', () => {
     const from = 'rhine-falcons';
-    let state = createSeason({ seed: 10, managedClubId: from, injuryMode: 'standard',
+    // Seed re-chosen for the format-70 president boards (was 10): a season end with a job offer.
+    let state = createSeason({ seed: 2, managedClubId: from, injuryMode: 'standard',
       manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves: true });
     while (state.round < 10) state = advanceMatchday(state);
     const finished = { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };

@@ -14,6 +14,7 @@ import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { worldOf } from '../src/world/career-world';
 import { advanceMatchday } from './helpers/board-funding';
 import { currentSeasonFile, withFixedRivalries } from './helpers/season-format';
+import { BEFORE_SAVED_IDEAS } from './helpers/legacy-season';
 
 const CLUB = 'rhine-falcons';
 const manager = { name: 'Media Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
@@ -202,7 +203,7 @@ describe('media saves', () => {
 
 describe('older careers', () => {
   it('keep the format-34 press and boards without a media assessment, and load from format 62 unchanged', () => {
-    let plain = createSeason({ seed: 8, managedClubId: CLUB, injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, media: false });
+    let plain = createSeason({ seed: 8, managedClubId: CLUB, injuryMode: 'standard', manager, ...BEFORE_SAVED_IDEAS });
     for (let step = 0; step < 6; step += 1) plain = advanceMatchday(plain);
     expect(plain.media).toBeUndefined();
     expect(plain.board.reviews.every(review => Object.values(review.clubs).every(club => club.mediaImpact === undefined))).toBe(true);

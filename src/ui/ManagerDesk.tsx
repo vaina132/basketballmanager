@@ -6,6 +6,8 @@ import { FACILITY_TYPES, getFacilityCondition, getFacilityLevel } from '../world
 import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
 import { rivalryNote } from './rivalry-text'
 import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/board-consequences'
+import { PRESIDENT_RULES } from '../world/presidents'
+import { requestText } from './PresidentBoard'
 import { getClubSponsorship } from '../world/commercial'
 import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { getCareerPlayer } from '../world/player-catalog'
@@ -91,7 +93,9 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   const worn = season?.facilities.maintenanceSince ? FACILITY_TYPES.filter(type => getFacilityLevel(season, type, season.managedClubId) > 1).map(type => ({ type, condition: getFacilityCondition(season, type, season.managedClubId) })).filter(item => item.condition < 60) : []
   const move = season?.status === 'complete' ? season.career?.moves.find(item => item.seasonNumber === season.seasonNumber) : undefined
   const jobBoard = season?.status === 'active' && careerMovesGovern(season.career, season.seasonNumber) ? getBoardSummary(season) : null
-  if (season && jobBoard?.enabled && jobBoard.latest && jobBoard.confidence < 30) notices.push({ key: 'career-risk', title: 'Job at risk', detail: `Board confidence is ${jobBoard.confidence}/100. If the season ends Under pressure (below 30), the board will dismiss you; clubs that need a coach will then offer you a job.`, urgent: true, action: 'View board', open: onOpenBoard ?? onOpenClub })
+  // Format 70: the president's patience moves the line (`pressureBelow`); 30 otherwise.
+  const pressureLine = jobBoard?.objective?.pressureBelow ?? 30
+  if (season && jobBoard?.enabled && jobBoard.latest && jobBoard.confidence < pressureLine) notices.push({ key: 'career-risk', title: 'Job at risk', detail: `Board confidence is ${jobBoard.confidence}/100. If the season ends Under pressure (below ${pressureLine}), the board will dismiss you; clubs that need a coach will then offer you a job.`, urgent: true, action: 'View board', open: onOpenBoard ?? onOpenClub })
   if (season && move) { const text = careerMoveText(season, move); notices.push({ key: 'career', title: text.title, detail: text.detail, urgent: move.reason === 'dismissed', action: 'View board', open: onOpenBoard ?? onOpenClub }) }
   if (season && worn.length) notices.push({ key: 'facilities-worn', title: 'Facilities wearing', detail: `${worn.map(item => `${({ arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure' })[item.type]} ${item.condition}/100`).join(', ')}. Their benefit shrinks while condition is low; full upkeep restores it.`, action: 'Review facilities', open: onOpenClub })
   const press = season && onOpenInbox ? getPressQuestion(season) : null
@@ -106,6 +110,9 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
       notices.push({ key: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `Final confidence ${verdict.confidence}/100. ${seasonLabel(season.seasonNumber + 1)}: ${money(budgets.staff)} staff budget and ${money(budgets.capital)} owner capital for facility upgrades.`, urgent: verdict.verdict === 'concerned' || verdict.verdict === 'pressure', action: 'Review board', open: onOpenBoard })
     } else if (board.latest) notices.push({ key: 'board', title: `Board review · ${board.confidenceLabel}`, detail: `${medicalDate(board.latest.date)}: confidence ${board.confidence}/100. ${board.latest.club.wins} ${board.latest.club.wins === 1 ? 'win' : 'wins'} in ${board.latest.club.played} counted games.${board.financeStatus === 'behind' ? ' Unpaid costs are above the agreed starting balance.' : ''}`, urgent: board.confidence < 40 || board.financeStatus === 'behind', action: 'Review board', open: onOpenBoard })
     else if (board.objective && board.objective.games > 0) notices.push({ key: 'board', title: 'Board objectives set', detail: `Win ${board.objective.targetWins} of ${board.objective.games} counted games.${board.objective.startingUnpaid !== null ? ` Keep unpaid costs at or below ${money(board.objective.startingUnpaid)}.` : ''}`, action: 'View objectives', open: onOpenBoard })
+    // Format 70: an open request from the president stays visible until it is met or its deadline passes.
+    const request = (season.board.requests ?? []).find(item => item.outcome === 'open' && item.clubId === season.managedClubId)
+    if (request) notices.push({ key: 'president-request', title: "President's request", detail: `${requestText(season, request)} by the review after matchday ${request.deadlineRound}. Met: +${PRESIDENT_RULES.requests.met} confidence; ignored: ${PRESIDENT_RULES.requests.ignored}.`, urgent: true, action: 'Review board', open: onOpenBoard })
   }
 
   if (season?.commercial.enabledSince) {

@@ -17,6 +17,7 @@ import { getInboxItems } from '../src/ui/inbox-items';
 import { rivalryReasonText } from '../src/ui/rivalry-text';
 import { advanceMatchday, playFirstSeason } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
+import { BEFORE_SAVED_IDEAS } from './helpers/legacy-season';
 
 const RHINE = 'rhine-falcons', AEGEAN = 'aegean-waves', ALPINE = 'alpine-stags', PILOTS = 'atlantic-pilots';
 let serial = 0;
@@ -153,7 +154,7 @@ describe('grown rivalries in a career', () => {
 describe('older careers', () => {
   it('keep the fixed rivalries: a format-62 save loads and replays them, and rejects grown rivalries', () => {
     // A genuine format-62 career had no media record (format 67) either.
-    const state = createSeason({ seed: 227, managedClubId: RHINE, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, media: false });
+    const state = createSeason({ seed: 227, managedClubId: RHINE, injuryMode: 'standard', ...BEFORE_SAVED_IDEAS });
     const file = JSON.parse(serializeSeason(state));
     file.formatVersion = 62; file.state.schemaVersion = 62;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/requires format 68/);

@@ -63,7 +63,8 @@ describe('board funding in a career', () => {
     expect(quote.approved).toBe(true);
     const funded = requestBoardFunding(state, quote.facilityType);
     const [decision, start] = funded.facilities.events.slice(-2);
-    expect(decision).toMatchObject({ type: 'funding', clubId: 'aegean-waves', facilityType: quote.facilityType, amount: quote.amount, mode: 'manager', approved: true, confidence: quote.confidence, requiredConfidence: 45 });
+    // Format 70: Aegean Waves' flexible president needs 5 less than generosity 4 alone (45).
+    expect(decision).toMatchObject({ type: 'funding', clubId: 'aegean-waves', facilityType: quote.facilityType, amount: quote.amount, mode: 'manager', approved: true, confidence: quote.confidence, requiredConfidence: 40 });
     expect(start).toMatchObject({ type: 'start', clubId: 'aegean-waves', facilityType: quote.facilityType });
     const [capital, payment] = funded.finance.ledger.slice(-2);
     expect(capital).toMatchObject({ kind: 'board-capital', amount: quote.amount, boardCapital: { facilityType: quote.facilityType } });
@@ -76,11 +77,12 @@ describe('board funding in a career', () => {
   it('records a refusal with its reason and makes the club wait before asking again', () => {
     const { state, quote } = cautious;
     expect(quote.approved).toBe(false);
-    expect(quote.refusal).toMatch(/confidence of at least 55/);
+    // Format 70: Alpine Stags' hard-bargaining president needs 5 more than generosity 2 alone (55) and waits 3 matchdays.
+    expect(quote.refusal).toMatch(/confidence of at least 60/);
     const refused = requestBoardFunding(state, quote.facilityType);
     expect(refused.facilities.events.at(-1)).toMatchObject({ type: 'funding', approved: false, amount: quote.amount });
     expect(refused.finance.ledger).toEqual(state.finance.ledger);
-    expect(() => requestBoardFunding(refused, quote.facilityType)).toThrow(/reconsider after 2 more matchdays/);
+    expect(() => requestBoardFunding(refused, quote.facilityType)).toThrow(/reconsider after 3 more matchdays/);
     expect(parseSeason(serializeSeason(refused))).toEqual(refused);
   });
 

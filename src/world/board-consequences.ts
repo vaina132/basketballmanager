@@ -4,6 +4,8 @@ import type { CareerWorld, WorldContext } from '../domain/world';
 import { clubPresident, seasonRounds, worldOf } from './career-world';
 import { STAFF_BUDGET } from './staff-constants';
 import { scaledMoney } from './economy';
+import { clubSalaryBudget } from './club-roster-policy';
+import { salaryVerdictPercent, usesPresidentBoard } from './presidents';
 
 /** The board's end-of-season judgement, named after the confidence labels shown throughout the game. */
 export type BoardVerdict = 'confident' | 'steady' | 'concerned' | 'pressure';
@@ -20,7 +22,12 @@ export const BOARD_VERDICT_EFFECTS: Readonly<Record<BoardVerdict, { label: strin
 });
 
 export function verdictForConfidence(confidence: number): BoardVerdict {
-  return confidence >= 65 ? 'confident' : confidence >= 45 ? 'steady' : confidence >= 30 ? 'concerned' : 'pressure';
+  return verdictOnLine(confidence, undefined);
+}
+
+/** Format 70: the verdict on a club's own scale; board-2 careers move the Under pressure line with the president's patience. */
+export function verdictOnLine(confidence: number, pressureBelow: number | undefined): BoardVerdict {
+  return confidence >= 65 ? 'confident' : confidence >= 45 ? 'steady' : confidence >= (pressureBelow ?? 30) ? 'concerned' : 'pressure';
 }
 
 export interface SeasonVerdict {
@@ -33,11 +40,13 @@ export interface SeasonVerdict {
 }
 
 /** The verdict recorded by a season's final review (after its last matchday, `rounds`); null when the club had no final review that season. */
-export function seasonVerdict(board: Pick<SeasonBoard, 'reviews'>, clubId: string, seasonNumber: number, rounds: number): SeasonVerdict | null {
+export function seasonVerdict(board: Pick<SeasonBoard, 'reviews'> & Partial<Pick<SeasonBoard, 'mandates'>>, clubId: string, seasonNumber: number, rounds: number): SeasonVerdict | null {
   const review = board.reviews.filter(item => item.seasonNumber === seasonNumber && item.round === rounds).at(-1);
   const club = review?.clubs[clubId];
   if (!review || !club) return null;
-  return { clubId, seasonNumber, reviewId: review.id, date: review.date, confidence: club.confidence, verdict: verdictForConfidence(club.confidence) };
+  // Format 70: the dismissal line frozen in that season's objectives (the president's patience); 30 otherwise.
+  const pressureBelow = board.mandates?.find(mandate => mandate.id === review.mandateId)?.clubs[clubId]?.pressureBelow;
+  return { clubId, seasonNumber, reviewId: review.id, date: review.date, confidence: club.confidence, verdict: verdictOnLine(club.confidence, pressureBelow) };
 }
 
 /** Consequences govern only seasons that begin after they were switched on. */
@@ -59,6 +68,53 @@ export function verdictBudgets(clubId: string, verdict: BoardVerdict | null, wor
   const effect = BOARD_VERDICT_EFFECTS[verdict ?? 'steady'];
   return { staff: scaled(scaledMoney({ world }, clubId, STAFF_BUDGET), effect.staffPercent), capital: scaled(clubPresident(world, clubId).seasonCapital, effect.capitalPercent) };
 }
+
+/** Format 70 (board-2): the player salary budget percent change a verdict brings, scaled by the president's generosity. */
+export function verdictSalaryPercent(world: CareerWorld, clubId: string, verdict: BoardVerdict | null): number {
+  return verdict ? salaryVerdictPercent(clubPresident(world, clubId).generosity, verdict) : 0;
+}
+
+/**
+ * Format 70 (board-2): a club's player salary budget for a season. From the second season the previous season's
+ * verdict changes the standard budget (`PRESIDENT_RULES.salary`). Until that verdict is given, contracts for the
+ * season must fit the budget the worst verdict would leave, so a later verdict never puts signed terms over budget.
+ * Older careers and clubs without a verdict keep the standard budget. AI clubs use the same guards.
+ */
+export function seasonSalaryBudget(context: SalaryBudgetContext, clubId: string, seasonNumber: number): number {
+  return salaryBudgetBasis(context, clubId, seasonNumber).budget;
+}
+
+export interface SalaryBudgetBasis {
+  standard: number;
+  budget: number;
+  /** Percent change from the standard budget. */
+  percent: number;
+  /** The previous season's verdict that set it; null for the standard budget or while provisional. */
+  verdict: SeasonVerdict | null;
+  /** Board-2 careers before the previous season's verdict: the budget the worst verdict would leave. */
+  provisional: boolean;
+  /** Whether season verdicts change this season's salary budget at all (board-2 careers from the second season). */
+  governed: boolean;
+}
+
+/** How a season's player salary budget is set: the standard budget, a verdict's change, or the provisional figure. */
+export function salaryBudgetBasis(context: SalaryBudgetContext, clubId: string, seasonNumber: number): SalaryBudgetBasis {
+  const standard = clubSalaryBudget(context, clubId);
+  const board = context.board;
+  if (!board || !usesPresidentBoard(board) || !boardConsequencesGovern(board, seasonNumber)) return { standard, budget: standard, percent: 0, verdict: null, provisional: false, governed: false };
+  // The verdict is known after the previous season's final review: later seasons, or that season once complete.
+  const known = context.seasonNumber === undefined || context.seasonNumber >= seasonNumber || context.seasonNumber === seasonNumber - 1 && context.status === 'complete';
+  const verdict = known ? seasonVerdict(board, clubId, seasonNumber - 1, seasonRounds(context)) : null;
+  const percent = verdictSalaryPercent(worldOf(context), clubId, known ? verdict?.verdict ?? null : 'pressure');
+  return { standard, budget: scaled(standard, 100 + percent), percent, verdict, provisional: !known, governed: true };
+}
+
+/** The most a season's salary budget can be under any verdict: the save check's bound for terms signed before a verdict. */
+export function seasonSalaryCeiling(context: SalaryBudgetContext, clubId: string, seasonNumber: number): number {
+  return Math.max(clubSalaryBudget(context, clubId), seasonSalaryBudget({ ...context, seasonNumber: undefined, status: undefined }, clubId, seasonNumber));
+}
+
+export type SalaryBudgetContext = WorldContext & { board?: Pick<SeasonBoard, 'model' | 'reviews' | 'consequencesSince'> & Partial<Pick<SeasonBoard, 'mandates'>>; seasonNumber?: number; status?: SeasonState['status'] };
 
 /** The shared annual staff allocation for a club and season, in euro cents. */
 export function staffAllocation(state: Partial<Pick<SeasonState, 'board'>> & Pick<SeasonState, 'seasonNumber'> & WorldContext, clubId: string, seasonNumber = state.seasonNumber): number {

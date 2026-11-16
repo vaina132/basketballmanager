@@ -358,11 +358,11 @@ export default function App() {
   }
   // Owner feedback (16 November 2026): closing or reloading during "Saving..." returned the career to the previous week.
   useEffect(() => {
-    if (!saving) return
+    if (!saving && !savingInBackground) return
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [saving])
+  }, [saving, savingInBackground])
   /** A page that could not be opened offers a reload; a career is saved first so that nothing is lost. */
   async function saveAndReload() {
     const current = sessionRef.current

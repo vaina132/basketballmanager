@@ -39,8 +39,9 @@ describe('step 3.7 acceptance careers in the strict save check', () => {
   it('accepts sponsor exits and second-round offers when the final was settled before the last reserved week', () => {
     const world = greekWorld();
     expect(() => validateWorld(world)).not.toThrow();
-    // Seed 11: the final ends in a sweep, so the season's last week has no game; sponsors leave at the season end.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 11, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    // Seed 5 (11 before the planned starting five of 16 November 2026): the final ends in a sweep, so the season's last
+    // week has no game; sponsors leave at the season end.
+    let state = setEmploymentDelegation(createSeason({ world, seed: 5, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
     while (state.status === 'active') state = play(state);
     const rounds = seasonRounds(state);
     expect(state.fixtures.some(fixture => fixture.round === rounds)).toBe(false);
@@ -56,8 +57,8 @@ describe('step 3.7 acceptance careers in the strict save check', () => {
 
   it('lets a club whose agreed wages exceed a fallen allocation complete eight players, so the offseason closes', () => {
     // Format 72 lowers a club's allocation at a rollover while wages agreed earlier stay (real-data acceptance: two clubs
-    // with 3 and 7 players over their new allocation, and the season-four offseason never closed). In this world the
-    // manager's (delegated) club starts season two's offseason with five players over its fallen allocation.
+    // with 3 and 7 players over their new allocation, and the season-four offseason never closed). In this world clubs
+    // start season two's offseason short of eight players and over their fallen allocation.
     const world = moneyWorld();
     let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
     while (state.status === 'active') state = play(state);
@@ -66,14 +67,16 @@ describe('step 3.7 acceptance careers in the strict save check', () => {
     while (state.status === 'active') state = play(state);
     const leaving = leavingClubIds(state);
     const short = state.clubs.filter(club => !leaving.has(club.id)).map(club => getClubContractSummary(state, club.id)).filter(summary => summary.rosterSize < MIN_ROSTER_SIZE && summary.seasonWages > summary.budget);
-    expect(short.map(summary => summary.clubId)).toEqual([world.clubs[0].id]);
-    const agreed = new Set(short[0].contracts.map(contract => contract.id));
+    expect(short.length).toBeGreaterThan(0);
     for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
     expect(getMarketStartReason(state)).toBeNull();
-    const after = getClubContractSummary(state, short[0].clubId);
-    expect(after.rosterSize).toBeGreaterThanOrEqual(MIN_ROSTER_SIZE);
-    // Only cheap players needed for the minimum squad were added over the fallen allocation, and the save check agrees.
-    expect(after.contracts.filter(contract => !agreed.has(contract.id)).every(contract => contract.seasonWage <= short[0].reserveWage)).toBe(true);
+    for (const before of short) {
+      const after = getClubContractSummary(state, before.clubId);
+      expect(after.rosterSize).toBeGreaterThanOrEqual(MIN_ROSTER_SIZE);
+      // Only cheap players needed for the minimum squad were added over the fallen allocation.
+      expect(after.contracts.filter(contract => !before.contracts.some(item => item.id === contract.id)).every(contract => contract.seasonWage <= before.reserveWage)).toBe(true);
+    }
+    // And the save check agrees.
     expect(roundTrip(state)).toEqual(state);
   }, 900_000);
   it('keeps a president\'s requests to the manager\'s club after the manager leaves it mid-season', () => {

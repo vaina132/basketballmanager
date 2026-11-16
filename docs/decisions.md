@@ -483,6 +483,11 @@ Computer-run clubs follow the human club's rules (gaps closed before the play te
 - **Youth injury recurrence:** careers that start with youth matches use the senior recurrence rule in youth games (`youth-competition-2`); older careers keep `-1`.
 - **Rivalry through unemployment:** an appointment after unemployment records the club last left (`formerClubId`) and adds the same +15 manager-move points as a direct move.
 
+## Job offers and starting five (16 November 2026, reversible)
+
+- **Job offers:** at most five (`CAREER_RULES.maxJobOffers`), highest league tier first, then the highest requirement within reach; reserve sides (names ending " II", " III", " B" or " 2"; the data has no reserve flag) never offer. The same rule covers season ends, mid-season dismissals, resignations and the unemployed job market.
+- **Starting five:** the managed club's next game starts from its planned five, as computer clubs do; a change made before tip-off becomes the plan. Absent starters are filled in roster order, as before.
+
 ## Owner feedback after playing, 15 November 2026
 
 The owner started a career and asked for these (verbatim points summarised), "Either do these or be sure that you put them into their respective places in the development plan":

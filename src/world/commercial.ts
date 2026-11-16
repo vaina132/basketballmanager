@@ -124,10 +124,12 @@ export function openSponsorshipWindows(state: SeasonState, window: SponsorshipWi
 }
 
 /** Format 64: arena seats against the league's average venue, league level and the sponsorship benchmark. */
-function namingBasis(state: SeasonState, league: SponsorLeague, clubId: string): NamingRightsOffer['basis'] {
+function namingBasis(state: SeasonState, league: SponsorLeague, clubId: string, window: SponsorshipWindow): NamingRightsOffer['basis'] {
   const world = worldOf(state);
   const leagueCapacity = Math.round(league.clubIds.reduce((sum, id) => sum + clubFinanceDefinition(world, id).capacity, 0) / Math.max(1, league.clubIds.length));
-  return { benchmark: sponsorshipReferenceFee(world, clubId, state), capacity: getArenaFullCapacity(state, clubId), leagueCapacity, tier: league.tier };
+  // Format 72: second-round offers follow the money the complete season decided for the next one, as sponsorship offers do.
+  const at = window === 'second-round' ? { seasonNumber: state.seasonNumber + 1, ...(state.economySeasons ? { economySeasons: state.economySeasons } : {}) } : state;
+  return { benchmark: sponsorshipReferenceFee(world, clubId, at), capacity: getArenaFullCapacity(state, clubId), leagueCapacity, tier: league.tier };
 }
 
 /** Format 64: every club whose arena has no naming partner for next season and no open naming offers receives offers. */
@@ -140,7 +142,7 @@ function openNamingWindows(state: SeasonState, window: SponsorshipWindow): Seaso
     if (!needsNamingOffers(naming, club.id, state.seasonNumber)) continue;
     ledger ??= financeLedgerSlice(state.finance);
     const appeal = sponsorAppeal({ clubs: state.clubs, fixtures: state.fixtures, ledger, seasonNumber: state.seasonNumber, completedRounds, world }, club.id).appeal;
-    const offers = buildNamingOffers({ seed: state.seed, naming, clubId: club.id, window, anchor, appeal, world, basis: namingBasis(state, leagues(club.id), club.id) });
+    const offers = buildNamingOffers({ seed: state.seed, naming, clubId: club.id, window, anchor, appeal, world, basis: namingBasis(state, leagues(club.id), club.id, window) });
     if (!offers.length) continue;
     naming = { ...naming, offers: [...naming.offers, ...offers], events: [...naming.events, { ...anchor, type: 'offers', clubId: club.id, window, completedRounds, offerIds: offers.map(offer => offer.id) }] };
   }

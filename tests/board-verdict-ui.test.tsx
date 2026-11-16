@@ -41,7 +41,7 @@ describe('board page: season verdict and budgets', () => {
 
   it('shows the final verdict and the budgets it sets for next season', () => {
     const verdict = seasonVerdict(complete.board, club, 1, 10)!;
-    const budgets = verdictBudgets(club, verdict.verdict, DEVELOPMENT_WORLD);
+    const budgets = verdictBudgets({ world: DEVELOPMENT_WORLD }, club, verdict.verdict);
     const html = board(complete);
     expect(html).toContain(`data-board-verdict="${verdict.verdict}"`);
     expect(html).toContain('Verdict for 2027/28');
@@ -56,9 +56,9 @@ describe('board page: season verdict and budgets', () => {
     const html = board(opening);
     expect(html).toContain(`data-board-verdict-current="${verdict.verdict}"`);
     expect(html).toContain(`Set by the 2026/27 verdict: ${BOARD_VERDICT_EFFECTS[verdict.verdict].label} (confidence ${verdict.confidence})`);
-    expect(html).toContain(`${money(verdictBudgets(club, verdict.verdict, DEVELOPMENT_WORLD).staff)} staff budget`);
+    expect(html).toContain(`${money(verdictBudgets({ world: DEVELOPMENT_WORLD }, club, verdict.verdict).staff)} staff budget`);
     const bar = renderToStaticMarkup(<ClubBudgetBar season={opening} onOpenClub={noop} onOpenStaff={noop} onOpenTransfers={noop} />);
-    expect(bar).toContain(`data-budget-staff-total="${verdictBudgets(club, verdict.verdict, DEVELOPMENT_WORLD).staff}"`);
+    expect(bar).toContain(`data-budget-staff-total="${verdictBudgets({ world: DEVELOPMENT_WORLD }, club, verdict.verdict).staff}"`);
     expect(bar).toContain(`${BOARD_VERDICT_EFFECTS[verdict.verdict].label} verdict, 2026/27`);
   });
 });

@@ -6,7 +6,7 @@ import { summarizeYouthHistory } from './youth-history';
 import { fixturePlayerEvidence, summarizeSeniorHistory } from './senior-history';
 import { createRivalries, enableRivalries } from './rivalries';
 import { createGrownRivalries, growRivalries } from './rivalry-growth';
-import { createEconomySeasons, growEconomy } from './economy';
+import { computeEconomySeasons, createEconomySeasons, growEconomy, type EconomyForesight } from './economy';
 import { appointFromUnemployment, appointManager, createCareer, enableCareerMoves, lastManagedClub, leaveClub, matchClubFor, restartBoard, transferManager, currentMovePhase } from './career';
 import { jobOfferRefusal, jobRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, unemployedSeasonEndVacancies, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
 import { allowsUnemployment, CAREER_RULES, coachProtected, isUnemployed, NO_CLUB, startingConfidence, usesCareerRules } from './career-rules';
@@ -545,6 +545,8 @@ export function advanceSeason(state: SeasonState, decision?: SeasonEndDecision):
     // Step 3.4d-2: clubs leaving and joining the full world are decided now, before the manager's season-end decision.
     const exchanges = computeExchanges(next, getPostseasons(next, next.seasonNumber), dateForRound(1, next.seasonNumber + 1));
     if (exchanges.length) next = { ...next, background: { ...next.background!, exchanges: [...next.background!.exchanges!, ...exchanges] } };
+    // Format 72: the divisions, European places and exchanges just decided set next season's club money; offseason offers use it.
+    next = foreseeEconomy(next);
     const outlook = seasonEndOutlook(next);
     if (decision) { const refusal = jobOfferRefusal(outlook, decision.moveTo); if (refusal) throw new Error(refusal); }
     // Career-3: a dismissed manager without offers leaves without a club.
@@ -785,6 +787,21 @@ export function europeanPlacesAfter(state: Pick<SeasonState, 'seed' | 'seasonNum
   const topDivisions = seasonLeagues(world, state.divisions).filter(league => league.tier === 1);
   const domesticOrders = new Map(topDivisions.map(league => [league.id, standings.filter(row => league.clubIds.includes(row.clubId)).sort((a, b) => a.position - b.position).map(row => row.clubId)]));
   return nextEuropeanPlaces({ context: { ...state, europe: state.europe! }, seasonNumber: state.seasonNumber, domesticOrders, topDivisions, oneYearSeasons: clubId => oneYearSeasons(state, clubId) });
+}
+
+/**
+ * Format 72: what a complete season has decided for next season's club money (its divisions and European places), or
+ * undefined when the career has no per-season figures, the season is not complete or no season follows.
+ */
+export function economyForesight(state: SeasonState): EconomyForesight | undefined {
+  if (!state.economySeasons || state.status !== 'complete' || state.seasonNumber >= MAX_SEASON_NUMBER) return undefined;
+  return { divisions: nextSeasonDivisions(state), europe: state.europe ? europeanPlacesAfter(state) : undefined };
+}
+
+/** Format 72: a complete season adds the next season's club money figures, exactly as the rollover will compute them. */
+export function foreseeEconomy(state: SeasonState): SeasonState {
+  const next = economyForesight(state);
+  return next ? { ...state, economySeasons: { ...state.economySeasons!, seasons: computeEconomySeasons(state, next) } } : state;
 }
 
 /** Archive the completed competition and prepare the same club's next opening day. */

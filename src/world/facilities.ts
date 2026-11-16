@@ -3,7 +3,8 @@ import type { FacilityAnchor, FacilityDebt, FacilityEvent, FacilityProject, Faci
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { clubFinanceDefinition, worldOf } from './career-world';
-import { facilityAutomationBuffer, facilityTypes, FACILITY_RULES_2, getActiveFacilityProject, getFacilityCondition, getFacilityLevel, hasFacilityCondition, maintenancePlanOn, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs } from './facilities-policy';
+import { worldEconomy } from './economy';
+import { facilityAutomationBuffer, upgradeAutomationCushion, upkeepAllowsAutomaticUpgrade, facilityTypes, FACILITY_RULES_2, getActiveFacilityProject, getFacilityCondition, getFacilityLevel, hasFacilityCondition, maintenancePlanOn, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs } from './facilities-policy';
 import { getSpendableCash, getSpendablePosition } from './payroll-policy';
 import { getFinanceBalance, recordBoardCapital, recordDebtEntry, recordFacilityInvestment } from './finance';
 import { quoteBoardFunding, type BoardFundingQuote } from './board-funding-policy';
@@ -277,7 +278,7 @@ function arenaSoldOut(state: SeasonState, clubId: string): boolean {
 function automaticLoan(state: SeasonState, clubId: string, type: FacilityType, project: 'upgrade' | 'repair'): SeasonState | null {
   if (!usesFacilityFinancing(state.facilities)) return null;
   const rules = FACILITY_FINANCING_RULES;
-  if (project === 'upgrade' && (type !== 'arena' || !arenaSoldOut(state, clubId))) return null;
+  if (project === 'upgrade' && (type !== 'arena' || !arenaSoldOut(state, clubId) || !upkeepAllowsAutomaticUpgrade(state, clubId, quoteFacilityUpgrade(state, type, clubId).totalUpkeepAfter))) return null;
   if (clubDebts(state, clubId).some(debt => debt.kind === 'loan' && debtPosition(state, debt).outstanding > 0)) return null;
   const room = Math.floor(borrowingLimit(state, clubId) * rules.automaticMaxDebtPercent / 100) - outstandingDebt(state, clubId);
   const probe = quoteFacilityLoan(state, type, clubId, project, rules.automaticTermSeasons);
@@ -285,7 +286,10 @@ function automaticLoan(state: SeasonState, clubId: string, type: FacilityType, p
   // Borrowing less than the most never helps: the larger part paid now outweighs the smaller repayments.
   if (probe.reason || principal < probe.minimumPrincipal) return null;
   const quote = quoteFacilityLoan(state, type, clubId, project, rules.automaticTermSeasons, principal);
-  if (!quote.canBorrow || quote.available - quote.downPayment - quote.dueThisSeason < facilityAutomationBuffer(state, clubId) / 2) return null;
+  // With an economy, an upgrade keeps the same season-aware cushion as one paid in cash (money gaps fix); otherwise, and
+  // for a repair, half the automation cushion.
+  const cushion = project === 'upgrade' && worldEconomy(state) ? upgradeAutomationCushion(state, clubId) : facilityAutomationBuffer(state, clubId) / 2;
+  if (!quote.canBorrow || quote.available - quote.downPayment - quote.dueThisSeason < cushion) return null;
   return takeFacilityLoan(state, type, project, rules.automaticTermSeasons, principal, clubId);
 }
 
@@ -313,10 +317,12 @@ export function automateFacilities(state: SeasonState): SeasonState {
       const repaired = automateRepair(next, club.id);
       if (repaired.state !== next || repaired.waiting) { next = repaired.state; continue; }
     }
-    const quote = types.map(type => quoteFacilityUpgrade(next, type, club.id)).filter(quote => quote.canStart && quote.remainingBudgetAfter >= facilityAutomationBuffer(next, club.id)).sort((left, right) => left.cost - right.cost || types.indexOf(left.type) - types.indexOf(right.type))[0];
+    const cushion = upgradeAutomationCushion(next, club.id);
+    const quotes = types.map(type => quoteFacilityUpgrade(next, type, club.id)).filter(quote => upkeepAllowsAutomaticUpgrade(next, club.id, quote.totalUpkeepAfter));
+    const quote = quotes.filter(quote => quote.canStart && quote.remainingBudgetAfter >= cushion).sort((left, right) => left.cost - right.cost || types.indexOf(left.type) - types.indexOf(right.type))[0];
     if (quote) { next = startFacilityUpgrade(next, quote.type, club.id); continue; }
     if (next.facilities.fundingSince) {
-      const funded = types.map(type => quoteBoardFunding(next, type, club.id, 'automatic')).filter(item => item.approved).sort((left, right) => left.cost - right.cost || types.indexOf(left.facilityType) - types.indexOf(right.facilityType))[0];
+      const funded = quotes.map(quote => quoteBoardFunding(next, quote.type, club.id, 'automatic')).filter(item => item.approved).sort((left, right) => left.cost - right.cost || types.indexOf(left.facilityType) - types.indexOf(right.facilityType))[0];
       if (funded) { next = startFacilityUpgrade(applyFacilityEvent(next, { ...facilityEventAnchor(next), ...fundingDecision(funded) }), funded.facilityType, club.id); continue; }
     }
     // Format 71: a sold-out arena is worth a prudent loan when cash and board capital cannot pay for more seats.

@@ -179,9 +179,10 @@ export function needsSponsorshipOffers(commercial: SeasonCommercial, clubId: str
 /** Deterministic offers for one club: the incumbent's renewal first, then other available sponsors in seeded order. */
 export function buildSponsorshipOffers(input: { seed: number; commercial: SeasonCommercial; clubId: string; window: SponsorshipWindow; anchor: CommercialAnchor; appeal: number; world: CareerWorld; league?: Pick<SponsorLeague, 'id' | 'clubIds'>; economySeasons?: SeasonEconomy }): SponsorshipOffer[] {
   const { seed, commercial, clubId, window, anchor, appeal, world } = input;
-  // Format 72: offers value the club at the money level of the season in which they are made.
-  const at = { seasonNumber: anchor.seasonNumber, ...(input.economySeasons ? { economySeasons: input.economySeasons } : {}) };
+  // Format 72: offers value the club at the money level of the season in which they are made; second-round offers come
+  // after the season is complete, when its divisions and places have decided the next season's money, and use that.
   const forSeason = anchor.seasonNumber + 1, clauses = usesCommercialClauses(commercial);
+  const at = { seasonNumber: window === 'second-round' ? forSeason : anchor.seasonNumber, ...(input.economySeasons ? { economySeasons: input.economySeasons } : {}) };
   const current = agreementFor(commercial, clubId, anchor.seasonNumber);
   // Format 64: a sponsor that left early, or was ended early, makes no new offer to that club the same season.
   const incumbent = window === 'renewal' && current && !current.exit && sponsorAvailable(commercial, current.sponsorId, clubId, forSeason) ? current.sponsorId : null;

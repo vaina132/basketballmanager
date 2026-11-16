@@ -3,7 +3,7 @@ import type { FacilityFundingDecision, FacilityType, SeasonFacilities } from '..
 import type { SeasonState } from '../domain/season';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import { clubPresident, roundOrdinal, seasonRounds, worldOf } from './career-world';
-import { facilityAutomationBuffer, FACILITY_FUNDS_REASON, FACILITY_REPAIR_FUNDS_REASON, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs } from './facilities-policy';
+import { facilityAutomationBuffer, upgradeAutomationCushion, FACILITY_FUNDS_REASON, FACILITY_REPAIR_FUNDS_REASON, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
 import { ownerCapital } from './board-consequences';
 import { boardCapitalSurcharge } from './facility-debt';
@@ -89,7 +89,7 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   const cost = repair ? repair.cost : upgrade!.cost, blocked = repair ? repair.reason : upgrade!.reason, fundsReason = repair ? FACILITY_REPAIR_FUNDS_REASON : FACILITY_FUNDS_REASON;
   // A negative position means wages and fees already exceed cash; capital is never a back door for those.
   const position = getSpendablePosition(state, clubId), available = Math.max(0, position);
-  const cushion = mode === 'automatic' ? repair ? facilityAutomationBuffer(state, clubId) / 2 : facilityAutomationBuffer(state, clubId) : 0;
+  const cushion = mode === 'automatic' ? repair ? facilityAutomationBuffer(state, clubId) / 2 : upgradeAutomationCushion(state, clubId) : 0;
   const amount = Math.max(0, cost + cushion - available);
   // Format 70: the president's negotiation style sets the confidence needed and the wait after a refusal; format 71: a
   // heavily indebted club needs more confidence for capital.

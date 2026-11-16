@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { createSeason, advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
-import { agreeSquadRole, enableRelationships, getPlayerRelationship, getPreparedRelationshipMorale, getSquadRelationships, quoteRelationshipTalk, talkToPlayer } from '../src/world/relationships';
+import { agreeSquadRole, enableRelationships, getPlayerRelationship, getPreparedRelationshipMorale, getSquadRelationships, quoteRelationshipTalk, quoteSquadRole, talkToPlayer } from '../src/world/relationships';
+import { offeredContractRole } from '../src/world/contract-roles';
+import { contractForSeason } from '../src/world/employment-policy';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { getSeasonWage } from '../src/data/development-wages';
@@ -15,7 +17,11 @@ const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(s
 const advance = (state: SeasonState) => advanceSeason(finish(state));
 function careerWithConcern() {
   let state = initial();
-  for (const player of state.clubs.find(club => club.id === state.managedClubId)!.players.slice(0, 5)) state = agreeSquadRole(state, player.id, 'starter');
+  // Squad roles everywhere (new careers): defaults follow the automatic rotation, so bigger roles create the concern.
+  for (const player of state.clubs.find(club => club.id === state.managedClubId)!.players.slice(0, 5)) {
+    const role = (['star', 'starter'] as const).find(role => quoteSquadRole(state, player.id, role).canAgree);
+    if (role) state = agreeSquadRole(state, player.id, role);
+  }
   let row = getSquadRelationships(state).find(row => row.concern && row.canTalk);
   for (let round = 0; !row && round < 6; round += 1) { state = advance(state); row = getSquadRelationships(state).find(row => row.concern && row.canTalk); }
   if (!row) throw new Error('The actual fixture sequence must create a playing-time concern.');
@@ -83,7 +89,8 @@ describe('career relationships and match preparation boundaries', () => {
   it('closes a real sold player promise without penalty and resets the role on return', () => {
     const { state, row } = careerWithConcern(), id = row.player.id, buyer = 'aegean-waves';
     const promised = talkToPlayer(state, id, 'minutes-promise');
-    const offered = submitInSeasonTransferOffer(promised, id, requiredNegotiationWage(id, 2), 2, requiredInSeasonTransferFee(promised, id), buyer);
+    // The buyer offers his natural role there, at the asking wage for it; the role becomes a contract term.
+    const offered = submitInSeasonTransferOffer(promised, id, requiredNegotiationWage(id, 2, undefined, promised, offeredContractRole(promised, buyer, id)), 2, requiredInSeasonTransferFee(promised, id), buyer);
     const offer = getInSeasonOffers(offered, buyer, true).find(offer => offer.playerId === id)!;
     const agreed = decideInSeasonTransfer(offered, offer.id, 'accept');
     const departed = advance(agreed);
@@ -91,16 +98,19 @@ describe('career relationships and match preparation boundaries', () => {
     const prior = getPlayerRelationship(departed, id);
     expect(prior.promises.at(-1)!.status).toBe('departed');
     expect(prior.reasons.find(reason => reason.label === 'Playing-time promises')!.impact).toBe(0);
-    expect(getPlayerRelationship(departed, id, buyer).role).toBe('rotation');
+    const term = contractForSeason(departed.employment, id, departed.seasonNumber)!;
+    expect(term).toMatchObject({ clubId: buyer, role: offeredContractRole(promised, buyer, id) });
+    expect(getPlayerRelationship(departed, id, buyer)).toMatchObject({ role: term.role, roleSource: 'contract', contractRole: term.role });
     expect(parseSeason(serializeSeason(departed))).toEqual(departed);
     let nextYear = setEmploymentDelegation(departed, true);
     while (nextYear.status === 'active') nextYear = advance(nextYear);
     nextYear = rolloverSeason(nextYear);
-    const returnOffer = submitInSeasonTransferOffer(nextYear, id, getSeasonWage(id), 1, requiredInSeasonTransferFee(nextYear, id));
+    const returnRole = offeredContractRole(nextYear, nextYear.managedClubId, id);
+    const returnOffer = submitInSeasonTransferOffer(nextYear, id, Math.max(getSeasonWage(id), requiredNegotiationWage(id, 1, undefined, nextYear, returnRole)), 1, requiredInSeasonTransferFee(nextYear, id));
     const returned = advance(returnOffer);
     expect(returned.clubs.find(club => club.id === returned.managedClubId)!.players.some(player => player.id === id)).toBe(true);
     const current = getPlayerRelationship(returned, id);
-    expect(current.role).toBe('rotation');
+    expect(current).toMatchObject({ role: returnRole, roleSource: 'contract' });
     expect(current.promises.at(-1)!.status).toBe('departed');
     expect(current.promise).toBeNull();
     expect(parseSeason(serializeSeason(returned))).toEqual(returned);

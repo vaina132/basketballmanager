@@ -2034,7 +2034,8 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
       recruitment: { ...createRecruitment(), offers: recruitmentHolds.filter(hold => hold.negotiationCount <= index && (hold.seasonNumber < year || hold.seasonNumber === year && hold.round <= round)).at(-1)?.offers ?? [] },
     };
     replay.clubs = getContractedClubsForRound(replay, year, round);
-    const quote = quotePlayerContract(replay, entry.playerId, offeredWage, offeredSeasons, entry.clubId, undefined, undefined, 'upfront', { ...(releaseFee === undefined ? {} : { releaseFee }), ...(role === undefined ? {} : { role }) });
+    // A dated offseason reply keeps the role checked when the offer was made (the market replay checks it there).
+    const quote = quotePlayerContract(replay, entry.playerId, offeredWage, offeredSeasons, entry.clubId, undefined, undefined, 'upfront', { ...(releaseFee === undefined ? {} : { releaseFee }), ...(role === undefined || linkedOffer ? {} : { role }) });
     if (!inSeasonOffer && !linkedOffer?.transfer && !quote.canOffer) fail(path, 'must satisfy ownership, signing-window, overlap, roster and budget rules when submitted');
     if (contractRolesApply(state) && role === undefined) fail(`${path}.role`, 'must record the squad role offered with these terms');
     const expected = evaluateNegotiation(entry.playerId, offeredWage, offeredSeasons, releaseFee, replay, role);

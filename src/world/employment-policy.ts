@@ -215,8 +215,9 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
     else if (retirementContractReason(state, playerId, endsSeason)) reason = retirementContractReason(state, playerId, endsSeason);
     else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > maxContractWage(state) || seasonWage % WAGE_STEP !== 0) reason = contractWageRuleText(state);
     else if (seasonWage < askingWage && !state.negotiations.enabledSince) reason = 'The player will not accept less than his asking wage.';
-    // relationships-3: a player refuses a role below his standing at this club.
-    else if (contractRoleReason(state, clubId, playerId, options.role)) reason = contractRoleReason(state, clubId, playerId, options.role);
+    // relationships-3: a player refuses a role below his standing at this club (checked when the offer is made; a dated
+    // offseason reply keeps the role he was offered).
+    else if (!resolvingOfferId && contractRoleReason(state, clubId, playerId, options.role)) reason = contractRoleReason(state, clubId, playerId, options.role);
     // Format 66: a player whose contract request this club refused asks more to sign with it (relationships-2).
     else if (refusedContractPremium(state, clubId, playerId) && seasonWage < refusedContractMinimum(state, clubId, playerId, askingWage, WAGE_STEP)) reason = refusedContractText(refusedContractMinimum(state, clubId, playerId, askingWage, WAGE_STEP));
     else if ((state.employment.buyouts ?? []).some(buyout => buyout.playerId === playerId && buyout.clubId === clubId && buyout.seasonNumber === state.seasonNumber)) reason = 'A player you buy out cannot rejoin your club during the same offseason.';

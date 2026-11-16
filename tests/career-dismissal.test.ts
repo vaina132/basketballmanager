@@ -8,7 +8,7 @@ import { setEmploymentDelegation } from '../src/world/employment';
 import { setFacilityDelegation } from '../src/world/facilities';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, previewSeasonEnd } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
-import { currentSeasonFile } from './helpers/season-format';
+import { currentSeasonFile, withFixedRivalries } from './helpers/season-format';
 import { getInboxItems } from '../src/ui/inbox-items';
 
 const CLUB = 'rhine-falcons';
@@ -102,12 +102,13 @@ describe('careers saved in format 37, before dismissal existed', () => {
     // A genuine format-37 career had no press and media record (format 67): the same season without it.
     const legacyDay = finalMatchday(SACKED_SEED, true, undefined, false), legacySacked = advanceSeason(legacyDay);
     // The format-37 runtime recorded the switch but never dismissed: the same season end, without a move.
-    const stayed = { ...advanceSeason({ ...legacyDay, career: { ...legacyDay.career, enabledSince: null } }), career: legacyDay.career };
+    // Format 68: files older than 68 hold the fixed rivalries (identical derbies in season one).
+    const stayed = withFixedRivalries({ ...advanceSeason({ ...legacyDay, career: { ...legacyDay.career, enabledSince: null } }), career: legacyDay.career });
     const file = (version: number) => JSON.stringify({ format: 'basketball-manager-season', formatVersion: version, engineVersion: 'possession-3', state: { ...stayed, schemaVersion: version } });
     expect(() => parseSeason(file(38))).toThrow(/joined after the dismissal/);
     const migrated = parseSeason(file(37));
     expect([migrated.managedClubId, migrated.career.moves, migrated.career.enabledSince!.effectiveFrom]).toEqual([CLUB, [], 2]);
-    const dismissal = JSON.parse(serializeSeason(legacySacked));
+    const dismissal = JSON.parse(serializeSeason(withFixedRivalries(legacySacked)));
     dismissal.formatVersion = 37; dismissal.state.schemaVersion = 37;
     expect(() => parseSeason(JSON.stringify(dismissal))).toThrow(/supported reason/);
   }, 120_000);

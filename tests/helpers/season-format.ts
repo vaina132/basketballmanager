@@ -1,6 +1,7 @@
 import { archiveFinancialHistory } from '../../src/world/finance-archives';
 import { summarizeSeniorHistory } from '../../src/world/senior-history';
 import type { SeasonState } from '../../src/domain/season';
+import type { SeasonRivalries } from '../../src/domain/rivalries';
 import type { Team } from '../../src/domain/types';
 import { SEASON_SCHEMA_VERSION } from '../../src/domain/season';
 import { createScouts } from '../../src/world/scouts';
@@ -70,4 +71,12 @@ export function expectedMigration<T extends LegacyIdentity>(raw: T, fromFormat: 
 /** A current-format season file around any state, typically a deliberately damaged copy for rejection tests. */
 export function currentSeasonFile(state: unknown): string {
   return JSON.stringify({ format: 'basketball-manager-season', formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', state });
+}
+
+/**
+ * Files older than format 68 hold the fixed rivalries. A new career's grown rivalries start from the same fictional
+ * rivalries, so its season-one derbies are identical when a test writes it as an older file.
+ */
+export function withFixedRivalries<T extends { rivalries: SeasonRivalries }>(state: T): T {
+  return { ...state, rivalries: { model: 'rivalries-1', enabledSince: state.rivalries.enabledSince } };
 }

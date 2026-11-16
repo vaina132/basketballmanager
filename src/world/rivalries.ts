@@ -2,6 +2,7 @@ import type { Rivalry, RivalryAnchor, SeasonRivalries } from '../domain/rivalrie
 import type { SeasonState } from '../domain/season';
 import type { CareerWorld, WorldContext } from '../domain/world';
 import { ordinalRound, roundOrdinal, seasonRounds, worldRivalryBetween, worldRivalryFor, worldRounds, lastCommittedWeek } from './career-world';
+import { grownRivalryBetween } from './rivalry-growth';
 
 /** Derby crowds grow by this percentage per point of rivalry intensity (5% to 15%). */
 export const RIVALRY_CROWD_PERCENT = 5;
@@ -14,6 +15,7 @@ export const RIVALRY_MORALE_WEIGHT = 2;
 /** Matchdays as one sequence across seasons; stored in anchors and counted forward, so it uses the season length. */
 const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
 
+/** Careers saved before format 68 (and their migrations) keep the world's fixed rivalries; new careers use `createGrownRivalries`. */
 export function createRivalries(): SeasonRivalries { return { model: 'rivalries-1', enabledSince: null }; }
 
 export function rivalryBetween(firstClubId: string, secondClubId: string, world: CareerWorld): Rivalry | null {
@@ -24,10 +26,14 @@ export function rivalryFor(clubId: string, world: CareerWorld): { rivalry: Rival
   return worldRivalryFor(world, clubId);
 }
 
-/** The rivalry a fixture belongs to when rivalries govern that matchday; earlier matchdays never become derbies. */
+/**
+ * The rivalry a fixture belongs to when rivalries govern that matchday; earlier matchdays never become derbies.
+ * Format 68 careers ('rivalries-2') read the season's grown table, whose intensity sets the derby effects' 1-3 scale.
+ */
 export function governingDerby(rivalries: SeasonRivalries | undefined, homeClubId: string, awayClubId: string, seasonNumber: number, round: number, world: CareerWorld): Rivalry | null {
   const from = rivalries?.enabledSince?.effectiveFrom;
   if (!from || ordinal(seasonNumber, round, worldRounds(world)) < ordinal(from.seasonNumber, from.round, worldRounds(world))) return null;
+  if (rivalries!.model === 'rivalries-2') return grownRivalryBetween(rivalries, homeClubId, awayClubId, seasonNumber, world)?.rivalry ?? null;
   return rivalryBetween(homeClubId, awayClubId, world);
 }
 
@@ -42,5 +48,5 @@ export function rivalryEventAnchor(state: Pick<SeasonState, 'seasonNumber' | 'ro
 export function enableRivalries(state: SeasonState, mode: 'career' | 'prospective' = 'prospective'): SeasonState {
   if (state.rivalries?.enabledSince) return state;
   if (mode === 'career' && (state.seasonNumber !== 1 || state.round !== 1 || state.fixtures.some(fixture => fixture.result))) throw new Error('Rivalries can include the opening matchday only at the start of a new career.');
-  return { ...state, rivalries: { ...createRivalries(), enabledSince: rivalryEventAnchor(state, mode) } };
+  return { ...state, rivalries: { ...(state.rivalries ?? createRivalries()), enabledSince: rivalryEventAnchor(state, mode) } };
 }

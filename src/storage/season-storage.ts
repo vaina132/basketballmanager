@@ -86,7 +86,7 @@ import { MAX_SCOUTS, scoutEvidence } from '../world/scout-policy';
 import { staffAllocation } from '../world/staff-policy';
 import type { SeasonRivalries } from '../domain/rivalries';
 import { createRivalries } from '../world/rivalries';
-import { validateRivalries } from './rivalries-validation';
+import { validateRivalries, validateRivalryGrowth } from './rivalries-validation';
 import type { SeasonCareer } from '../domain/career';
 import { createCareer, deferCareerDecisions, managedClubAtLedger, managedClubFor, matchClubFor, releaseAcademyFocus } from '../world/career';
 import { validateCareer, validateCareerDecisions } from './career-validation';
@@ -117,7 +117,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -2765,7 +2765,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const relationships = version >= 29 ? state.relationships as unknown as SeasonRelationships : createRelationships();
   const board = version >= 30 ? state.board as unknown as SeasonBoard : createBoard();
   const commercial = version >= 31 ? state.commercial as unknown as SeasonCommercial : createCommercial(fullWorldClubs(world), state.managedClubId as string);
-  if (version >= 35) validateRivalries(state.rivalries, state as unknown as SeasonState);
+  if (version >= 35) validateRivalries(state.rivalries, state as unknown as SeasonState, version);
   const rivalries = version >= 35 ? state.rivalries as unknown as SeasonRivalries : createRivalries();
   const careerRecord = version >= 37 ? state.career as unknown as SeasonCareer : undefined;
   const careerContext: CareerPlayerContext & Pick<SeasonState, 'seed'> & Partial<Pick<SeasonState, 'career'>> = { world, academy, lifecycle, seasonNumber, round, date: state.date as string, seed, ...(version >= 37 ? { career: state.career as SeasonCareer } : {}), ...(Object.hasOwn(state, 'background') ? { background: state.background as SeasonBackground } : {}) };
@@ -2899,6 +2899,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (seasonDivisions) validateDivisionHistory(state as unknown as SeasonState);
   // Step 3.5f: each season's European places follow from the opening lists and every completed season.
   if (seasonEurope) validateEuropeHistory(state as unknown as SeasonState, careerContext);
+  // Format 68: grown rivalries are re-derived from the validated history before any replay reads their derbies.
+  if (version >= 68) validateRivalryGrowth(state as unknown as SeasonState);
   if (!legacy) {
     const injuries = state.injuries as unknown[];
     for (const [index, injury] of injuries.entries()) record(injury, `injuries[${index}]`, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);

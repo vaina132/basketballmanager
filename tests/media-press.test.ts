@@ -13,7 +13,7 @@ import { governingDerby } from '../src/world/rivalries';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { worldOf } from '../src/world/career-world';
 import { advanceMatchday } from './helpers/board-funding';
-import { currentSeasonFile } from './helpers/season-format';
+import { currentSeasonFile, withFixedRivalries } from './helpers/season-format';
 
 const CLUB = 'rhine-falcons';
 const manager = { name: 'Media Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
@@ -193,7 +193,8 @@ describe('media saves', () => {
     const file = JSON.parse(serializeSeason(continued));
     file.formatVersion = 62; file.state.schemaVersion = 62;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/Invalid season save/);
-    const opening = JSON.parse(serializeSeason(start));
+    // Format 68 rivalries are older-format safe only as fixed rivalries; the media guard is the one under test.
+    const opening = JSON.parse(serializeSeason(withFixedRivalries(start)));
     opening.formatVersion = 62; opening.state.schemaVersion = 62;
     expect(() => parseSeason(JSON.stringify(opening))).toThrow(/media requires format 67/);
   });
@@ -208,8 +209,9 @@ describe('older careers', () => {
     const question = getPressQuestion(plain);
     if (question) { expect(['winning-run', 'losing-run']).toContain(question.topic); expect(question.subjectIds).toBeUndefined(); expect(question.answers).toHaveLength(3); }
     expect(mediaReputation(plain)).toEqual({ value: 50, label: 'Neutral', history: [] });
-    const file = JSON.parse(serializeSeason(plain));
+    // A genuine format-62 career also had the fixed rivalries (format 68).
+    const fixed = withFixedRivalries(plain), file = JSON.parse(serializeSeason(fixed));
     file.formatVersion = 62; file.state.schemaVersion = 62;
-    expect(parseSeason(JSON.stringify(file))).toEqual(plain);
+    expect(parseSeason(JSON.stringify(file))).toEqual(fixed);
   });
 });

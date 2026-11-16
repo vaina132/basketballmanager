@@ -10,6 +10,7 @@ import { PRESS_TOPIC_TITLES } from '../world/media'
 import { getSquadRelationships } from '../world/relationships'
 import { seasonLabel } from '../world/season'
 import { governingDerby } from '../world/rivalries'
+import { rivalClubName, rivalryInboxItems } from './rivalry-text'
 import { FACILITY_TYPES, getFacilityCondition, getFacilityLevel, maintenancePlanOn } from '../world/facilities-policy'
 import { clubRetirementsThisSeason } from './PlayerLifecycle'
 import { careerMoveText } from './career-text'
@@ -82,8 +83,9 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     const derby = fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(clubId) ? governingDerby(season.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round, worldOf(season)) : null
     if (!derby || !fixture.result) continue
     const home = fixture.homeClubId === clubId, won = fixture.result.winnerClubId === clubId
-    items.push({ id: `derby-${fixture.id}`, date: fixture.date, category: 'board', title: `${derby.name} ${won ? 'won' : 'lost'}`, detail: `${fixture.result.score[home ? 'home' : 'away']}–${fixture.result.score[home ? 'away' : 'home']} ${home ? 'at home' : 'away'}. The board and the squad weigh this result more than usual.`, needsAction: false, target: 'board' })
+    items.push({ id: `derby-${fixture.id}`, date: fixture.date, category: 'board', title: derby.origin === 'results' ? `Rivalry game ${won ? 'won' : 'lost'} · ${rivalClubName(season, home ? fixture.awayClubId : fixture.homeClubId)}` : `${derby.name} ${won ? 'won' : 'lost'}`, detail: `${fixture.result.score[home ? 'home' : 'away']}–${fixture.result.score[home ? 'away' : 'home']} ${home ? 'at home' : 'away'}. The board and the squad weigh this result more than usual.`, needsAction: false, target: 'board' })
   }
+  items.push(...rivalryInboxItems(season))
   if (season.facilities.maintenanceSince) for (const type of FACILITY_TYPES) {
     if (getFacilityLevel(season, type, clubId) === 1) continue
     const condition = getFacilityCondition(season, type, clubId)

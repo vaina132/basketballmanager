@@ -1,0 +1,6 @@
+.rivalry-meter{width:100%;max-width:220px;height:10px}
+.rivalry-reasons{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:4px;font-size:13px;line-height:1.45}
+.rivalry-reasons li{display:flex;justify-content:space-between;gap:10px}
+.rivalry-reasons small{flex:none;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.board-rivalry-none{border-bottom:1px solid var(--border)}
+.rivalry-rules{border-bottom:1px solid var(--border)}

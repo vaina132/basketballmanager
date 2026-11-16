@@ -161,7 +161,9 @@ function applySubstitution(state: MatchState, side: Side, outId: string, inId: s
   passCircle(state, side, outId, inId);
   if (automatic) rearrangeCircles(state, side);
   if (mandatory && state.freeThrows?.shooterId === outId) state.freeThrows.shooterId = inId;
-  state.substitutionLocks = [...new Set([...state.substitutionLocks, outId, inId])];
+  // Before tip-off the starting five is still being chosen (court picture, format 74): a change then locks nobody, so
+  // a player brought in can be moved out again at once. Locks apply from the first live action.
+  if (state.stepCount > 0) state.substitutionLocks = [...new Set([...state.substitutionLocks, outId, inId])];
   const scene = state.engineVersion === 'possession-3' ? lineupScene(state, outId, inId) : setupScene(state, state.possession, state.lineups[state.possession][0]!);
   emit(state, { type: 'substitution', side, playerId: inId, outgoingPlayerId: outId, text: `${incoming.name} replaces ${outgoing.name}${mandatory ? ' after becoming ineligible' : ''}.`, scene });
 }
@@ -882,6 +884,23 @@ export function setCourtPosition(state: MatchState, side: Side, playerId: string
   if (occupant) return swapActivePlayers(state, side, playerId, occupant);
   const next = copy(state); next.slots![side]![playerId] = position;
   emit(next, { type: 'command', side, text: `${player(next, side, playerId).name} moves to ${position}.` }); return next;
+}
+/**
+ * The court picture (format 74): a player is put in a circle. A player on court moves there (`setCourtPosition`: the
+ * circle's player takes his circle). A reserve replaces the circle's player through the normal substitution queue and
+ * takes his circle: at once before tip-off, otherwise at the next legal stoppage. A reserve already queued for another
+ * player is re-queued for this circle.
+ */
+export function placeInCircle(state: MatchState, side: Side, playerId: string, position: Position): MatchState {
+  assertSide(side); assertOpen(state); assertBoundary(state);
+  const circles = state.slots?.[side];
+  if (!circles) throw new Error('This team plays its listed positions.');
+  if (!isCourtPosition(position)) throw new Error('Choose a court position.');
+  if (state.lineups[side].includes(playerId)) return setCourtPosition(state, side, playerId, position);
+  const occupant = Object.keys(circles).find(id => circles[id] === position);
+  if (!occupant) throw new Error('Bring a reserve on for a player on the court.');
+  const earlier = state.pendingSubstitutions[side].find(request => request.inId === playerId && request.outId !== occupant);
+  return substitutePlayer(earlier ? cancelSubstitution(state, side, earlier.outId) : state, side, occupant, playerId);
 }
 /**
  * The court picture's "Best five" (format 74): one healthy, eligible player for each circle, the highest total of

@@ -53,6 +53,35 @@ export interface ClubEconomy {
 }
 
 /**
+ * Format 72: why a club's money level changed from the previous season. Division moves (`promoted`, `relegated`,
+ * including moves into and out of the full world), a European competition entered or left, or a move between bands of
+ * the same competition by squad strength (`band`, for example a top division's upper and lower halves).
+ */
+export type EconomyChangeReason = 'promoted' | 'relegated' | 'joined-euroleague' | 'left-euroleague' | 'joined-eurocup' | 'left-eurocup' | 'joined-bcl' | 'left-bcl' | 'band';
+
+/**
+ * Format 72: a club's money figures for one season after the first, moved part of the way from last season's figures
+ * towards the target its new band and standing give (`REAL_ECONOMY_RULES.seasons`).
+ */
+export interface SeasonClubEconomy extends ClubEconomy {
+  /** The player wage bill (gross, cents) these figures fund; the player salary budget follows its ratio to the opening bill. */
+  playerBill: number;
+  /** The budget the club's band and standing give this season (cents); `budget` moves towards it season by season. */
+  target: number;
+  /** Why the band changed from last season; empty when only the standing within the band (or the smoothing) moved the figures. */
+  reasons: EconomyChangeReason[];
+}
+
+/** Format 72: every full-world club's figures for one season (the world's own figures are season one's). */
+export interface SeasonEconomyTable { seasonNumber: number; clubs: Record<string, SeasonClubEconomy> }
+
+/**
+ * Format 72 (saved ideas level): club money follows promotion, relegation and European places in new careers of
+ * real-data worlds. One table for each season from the second; older careers keep their opening figures.
+ */
+export interface SeasonEconomy { model: 'economy-seasons-1'; seasons: SeasonEconomyTable[] }
+
+/**
  * Everything a career's league is made of at its start: clubs and squads, player birth dates and wages, venues,
  * presidents, sponsors and rivalries. The built-in fictional league is one world (`DEVELOPMENT_WORLD`, never stored
  * in saves); any other world travels inside its career's save, so a career never depends on files outside it.
@@ -110,4 +139,10 @@ export interface CareerWorld {
 export interface WorldContext {
   dataPackId?: string;
   world?: CareerWorld;
+  /**
+   * Format 72: the season whose money figures apply, with the career's per-season figures (`economySeasons`). Without
+   * both, money helpers read the world's opening figures, as every older career does.
+   */
+  seasonNumber?: number;
+  economySeasons?: SeasonEconomy;
 }

@@ -98,7 +98,7 @@ export function enableCommercial(state: SeasonState): SeasonState {
   const world = worldOf(state), clauses = usesCommercialClauses(state.commercial);
   const agreements: SponsorshipAgreement[] = state.clubs.map((club, index) => ({
     id: `sponsorship-agreement-${index + 1}`, clubId: club.id, sponsorId: incumbentSponsorId(world, club.id), source: 'inherited', offerId: null,
-    startsSeason: state.seasonNumber, endsSeason: state.seasonNumber, annualFee: sponsorshipReferenceFee(world, club.id), bonus: 0, signedOn: state.date, automatic: false, prepaidSeasons: [state.seasonNumber],
+    startsSeason: state.seasonNumber, endsSeason: state.seasonNumber, annualFee: sponsorshipReferenceFee(world, club.id, state), bonus: 0, signedOn: state.date, automatic: false, prepaidSeasons: [state.seasonNumber],
     ...(clauses ? { clause: null, exit: null } : {}),
   }));
   const enabled: SeasonState = { ...state, commercial: { ...state.commercial, enabledSince: commercialAnchor(state), agreements } };
@@ -116,7 +116,7 @@ export function openSponsorshipWindows(state: SeasonState, window: SponsorshipWi
     if (!needsSponsorshipOffers(commercial, club.id, state.seasonNumber)) continue;
     ledger ??= financeLedgerSlice(state.finance);
     const appeal = sponsorAppeal({ clubs: state.clubs, fixtures: state.fixtures, ledger, seasonNumber: state.seasonNumber, completedRounds, world: worldOf(state) }, club.id).appeal;
-    const offers = buildSponsorshipOffers({ seed: state.seed, commercial, clubId: club.id, window, anchor, appeal, world: worldOf(state), ...(leagues ? { league: leagues(club.id) } : {}) });
+    const offers = buildSponsorshipOffers({ seed: state.seed, commercial, clubId: club.id, window, anchor, appeal, world: worldOf(state), ...(leagues ? { league: leagues(club.id) } : {}), ...(state.economySeasons ? { economySeasons: state.economySeasons } : {}) });
     if (!offers.length) continue;
     commercial = { ...commercial, offers: [...commercial.offers, ...offers], events: [...commercial.events, { ...anchor, type: 'offers', clubId: club.id, window, completedRounds, offerIds: offers.map(offer => offer.id) }] };
   }
@@ -127,7 +127,7 @@ export function openSponsorshipWindows(state: SeasonState, window: SponsorshipWi
 function namingBasis(state: SeasonState, league: SponsorLeague, clubId: string): NamingRightsOffer['basis'] {
   const world = worldOf(state);
   const leagueCapacity = Math.round(league.clubIds.reduce((sum, id) => sum + clubFinanceDefinition(world, id).capacity, 0) / Math.max(1, league.clubIds.length));
-  return { benchmark: sponsorshipReferenceFee(world, clubId), capacity: getArenaFullCapacity(state, clubId), leagueCapacity, tier: league.tier };
+  return { benchmark: sponsorshipReferenceFee(world, clubId, state), capacity: getArenaFullCapacity(state, clubId), leagueCapacity, tier: league.tier };
 }
 
 /** Format 64: every club whose arena has no naming partner for next season and no open naming offers receives offers. */

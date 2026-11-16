@@ -172,10 +172,17 @@ export function stripBackground(value: object): void {
 export const BEFORE_SAVED_IDEAS = { media: false, namingRights: false } as const;
 
 /**
- * An untouched new career on the rules saved before the saved ideas level: Level 7 career rules (`career-1`) and the
- * three original facilities (`facilities-1`). Create it with `BEFORE_SAVED_IDEAS`; grown rivalries are converted after
- * play with `withFixedRivalries`.
+ * An untouched new career on the rules saved before the saved ideas level: Level 7 career rules (`career-1`), the
+ * three original facilities (`facilities-1`) and, in real-data worlds, the world's opening club money in every season
+ * (no format-72 `economySeasons`; season one is identical either way). Create it with `BEFORE_SAVED_IDEAS`; grown
+ * rivalries are converted after play with `withFixedRivalries`.
  */
 export function beforeSavedIdeas(state: SeasonState): SeasonState {
-  return withLegacyFacilities(asCareer1(state));
+  return withOpeningMoney(withLegacyFacilities(asCareer1(state)));
+}
+
+/** Format 72: a career that keeps the world's opening club money, as every career created before format 72. */
+export function withOpeningMoney<T extends Partial<Pick<SeasonState, 'economySeasons'>>>(state: T): T {
+  const { economySeasons: _records, ...older } = state;
+  return older as T;
 }

@@ -18,6 +18,7 @@ import { Icon } from './Icon'
 import { FACILITY_LABELS, FacilitiesPanel, type FacilitiesActions } from './FacilitiesPanel'
 import { SponsorshipPanel, type SponsorshipActions } from './SponsorshipPanel'
 import { NamingRightsPanel } from './NamingRightsPanel'
+import { ClubMoneyPanel } from './ClubMoneyPanel'
 import { arenaNameFor } from '../world/commercial'
 import { arenaComfortPercent, getClubFacilities } from '../world/facilities-policy'
 import { getDevelopmentSponsor } from '../data/development-sponsors'
@@ -130,6 +131,8 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
         <header className="club-heading"><h2 id="club-venue-title">Venue</h2></header>
         <dl>{arenaName && arenaName !== definition.venue ? <><div><dt>Arena name</dt><dd data-arena-name={arenaName}>{arenaName}</dd></div><div><dt>Official venue</dt><dd>{definition.venue}</dd></div></> : <div><dt>Venue</dt><dd data-arena-name={definition.venue}>{definition.venue}</dd></div>}<div><dt>{facilities.arenaCapacity === facilities.arenaFullCapacity ? 'Capacity' : 'Capacity this matchday'}</dt><dd>{count(facilities.arenaCapacity)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{money(roundOperatingCostFor(season, club.id) + facilities.upkeepPerRound)}</dd></div></dl>
       </section>
+
+      <ClubMoneyPanel season={season} />
 
       <SponsorshipPanel season={season} busy={busy} onEnableSponsorship={onEnableSponsorship} onAcceptSponsorship={onAcceptSponsorship} onDeclineSponsorship={onDeclineSponsorship} onRequestSponsorship={onRequestSponsorship} onSponsorshipDelegation={onSponsorshipDelegation} onTerminateSponsorship={onTerminateSponsorship} />
       <NamingRightsPanel season={season} busy={busy} onAcceptNaming={onAcceptNaming} onDeclineNaming={onDeclineNaming} onRequestNaming={onRequestNaming} onNamingDelegation={onNamingDelegation} onTerminateSponsorship={onTerminateSponsorship} />

@@ -88,7 +88,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
 
   const inherited: SponsorshipAgreement[] = fullWorldClubsIn(state, activation.seasonNumber).map((club, index) => ({
     id: `sponsorship-agreement-${index + 1}`, clubId: club.id, sponsorId: incumbentSponsorId(worldOf(state), club.id), source: 'inherited', offerId: null,
-    startsSeason: activation.seasonNumber, endsSeason: activation.seasonNumber, annualFee: sponsorshipReferenceFee(worldOf(state), club.id), bonus: 0, signedOn: activation.date, automatic: false, prepaidSeasons: [activation.seasonNumber],
+    startsSeason: activation.seasonNumber, endsSeason: activation.seasonNumber, annualFee: sponsorshipReferenceFee(worldOf(state), club.id, { seasonNumber: activation.seasonNumber, economySeasons: state.economySeasons }), bonus: 0, signedOn: activation.date, automatic: false, prepaidSeasons: [activation.seasonNumber],
     ...(clauses ? { clause: null, exit: null } : {}),
   }));
   let replay: SeasonCommercial = { ...defaults, plans: createCommercial([...planClubs], managedClubAtLedger(state, activation.ledgerCount)).plans, enabledSince: activation, agreements: inherited };
@@ -162,14 +162,14 @@ export function validateCommercial(state: SeasonState, version: number): void {
       if (!needsSponsorshipOffers(replay, club.id, boundary.seasonNumber) || boundary.seasonNumber >= MAX_SEASON_NUMBER) continue;
       const appeal = sponsorAppeal({ world: worldOf(state), clubs: seasonClubs, fixtures: seasonFixtures(boundary.seasonNumber), ledger, seasonNumber: boundary.seasonNumber, completedRounds: boundary.completedRounds }, club.id).appeal;
       // Availability, not the boundary's ledger position, decides whether any offer exists; no offer means no event.
-      if (!buildSponsorshipOffers({ world: worldOf(state), seed: state.seed, commercial: replay, clubId: club.id, window: boundary.window, anchor: at ?? { seasonNumber: boundary.seasonNumber, round: boundary.round, date: boundary.date, ledgerCount: 0 }, appeal, ...leagueOf(club.id) }).length) continue;
+      if (!buildSponsorshipOffers({ world: worldOf(state), seed: state.seed, commercial: replay, clubId: club.id, window: boundary.window, anchor: at ?? { seasonNumber: boundary.seasonNumber, round: boundary.round, date: boundary.date, ledgerCount: 0 }, appeal, ...leagueOf(club.id), ...(state.economySeasons ? { economySeasons: state.economySeasons } : {}) }).length) continue;
       if (!at) {
         const first = index < events.length ? eventAt(index) : null;
         if (first?.type !== 'offers') fail(`commercial.events[${index}]`, 'is missing sponsorship offers owed at a calendar boundary');
         at = anchorOfEvent(first);
         if (at.seasonNumber !== boundary.seasonNumber || at.round !== boundary.round || at.date !== boundary.date || boundary.window === 'second-round' && at.ledgerCount < completionStart(boundary.seasonNumber)) fail(`commercial.events[${index}]`, 'must occur at its sponsorship calendar boundary');
       }
-      const expected = buildSponsorshipOffers({ world: worldOf(state), seed: state.seed, commercial: replay, clubId: club.id, window: boundary.window, anchor: at, appeal, ...leagueOf(club.id) });
+      const expected = buildSponsorshipOffers({ world: worldOf(state), seed: state.seed, commercial: replay, clubId: club.id, window: boundary.window, anchor: at, appeal, ...leagueOf(club.id), ...(state.economySeasons ? { economySeasons: state.economySeasons } : {}) });
       const path = `commercial.events[${index}]`;
       if (index >= events.length) fail('commercial.events', 'is missing sponsorship offers owed at a calendar boundary');
       const event = eventAt(index);

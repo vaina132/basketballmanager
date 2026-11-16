@@ -188,7 +188,12 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
       const pendingShortfalls = pendingShortfallsFor(year, openOffer?.id);
       const proposalShortfall = competitive() && !resolving ? Math.max(0, MIN_ROSTER_WAGE_RESERVE - seasonWage) : 0;
       const reserve = Math.max(0, MIN_ROSTER_SIZE - size) * MIN_ROSTER_WAGE_RESERVE + pendingShortfalls + proposalShortfall + outgoingFor(year);
-      if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > summary.budget) { reason = `This offer exceeds the season ${year} wage budget after protecting space for eight players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
+      // Step 3.7: a format 72 allocation can fall below wages agreed earlier (agreed wages stay, `clubSalaryCeiling`). A club
+      // then short of eight players could sign no one and the offseason could never close (real-data acceptance, season
+      // four). While the squad is short, a player at no more than the protected reserve wage still fits: those wages were
+      // agreed with that reserve kept. Where the reserve held, the usual rule already allows such a player.
+      const minimumSquadSigning = size <= MIN_ROSTER_SIZE && seasonWage <= MIN_ROSTER_WAGE_RESERVE;
+      if (!minimumSquadSigning && summary.seasonWages + summary.reservedWages + seasonWage + reserve > summary.budget) { reason =`This offer exceeds the season ${year} wage budget after protecting space for eight players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
     }
     return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
   };

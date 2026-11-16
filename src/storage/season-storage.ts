@@ -1590,8 +1590,10 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     if (index >= catalog.length && entry.kind !== 'joined') for (let year = startsSeason; year <= endsSeason; year += 1) {
       const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
-      // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow.
-      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+      // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow. Step 3.7: as in
+      // the contract guard, a squad short of eight may always sign a player at no more than the protected reserve wage.
+      const minimumSquadSigning = annual.length <= MIN_ROSTER_SIZE && contract.seasonWage <= MIN_ROSTER_WAGE_RESERVE;
+      if (annual.length > clubRosterLimit(context) || !minimumSquadSigning && wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
   }
   const employment = normalized;

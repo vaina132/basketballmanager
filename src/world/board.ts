@@ -1,12 +1,12 @@
 import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
-import type { BoardAnchor, BoardClubReview, BoardMandate, BoardReview, BoardSummary, SeasonBoard } from '../domain/board';
+import type { BoardAnchor, BoardClubReview, BoardMandate, BoardRequest, BoardReview, BoardSummary, SeasonBoard } from '../domain/board';
 import type { SeasonState } from '../domain/season';
 import { getFinanceBalance } from './finance';
 import { isRecovering } from './health';
 import { rosterForRound } from './rosters';
 import { dateForRound, isRegularFixture } from './season';
 import { getTransferPaymentSummary } from './transfer-payments';
-import { BOARD_VERDICT_EFFECTS, verdictForConfidence } from './board-consequences';
+import { BOARD_VERDICT_EFFECTS, verdictForConfidence, verdictOnLine } from './board-consequences';
 import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS } from './rivalries';
 import { roundKey, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
 import { seasonLeagues } from './divisions';
@@ -14,6 +14,8 @@ import { scaledMoney } from './economy';
 import { boardMediaEvidence, type BoardMediaEvidence } from './media';
 import { startingConfidence } from './career-rules';
 import { boardDebtImpacts } from './facility-debt';
+import { ambitionWinRate, assessCultureObjective, assessYouthObjective, clubTier, playerSeconds, PRESIDENT_RULES, presidentMandate, presidentTraits, requestImpactAt, usesPresidentBoard, type PresidentContext } from './presidents';
+import { issueBoardRequest, resolveBoardRequests } from './board-requests';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
@@ -30,9 +32,13 @@ export type BoardCalculationContext = Pick<SeasonState, 'world' | 'dataPackId' |
   pressMedia?: BoardMediaEvidence;
   /** Format 71, careers with facility financing: each club's debt effect at this review (nonzero only, `facility-debt.ts`). */
   debtImpacts?: Readonly<Record<string, number>>;
-};
+  /** Format 70, board-2: the president's requests with their outcomes settled at this review. */
+  boardRequests?: readonly BoardRequest[];
+} & PresidentContext;
 
-export function createBoard(): SeasonBoard { return { model: 'board-1', enabledSince: null, mandates: [], reviews: [], consequencesSince: null }; }
+export function createBoard(model: SeasonBoard['model'] = 'board-1'): SeasonBoard {
+  return { model, enabledSince: null, mandates: [], reviews: [], consequencesSince: null, ...(model === 'board-2' ? { requests: [] } : {}) };
+}
 
 export function boardEventAnchor(state: Pick<BoardCalculationContext, 'world' | 'dataPackId' | 'fixtures' | 'seasonNumber' | 'round' | 'date' | 'finance' | 'rosters'>): BoardAnchor {
   const completed = lastCommittedWeek(state);
@@ -66,8 +72,13 @@ export function buildBoardMandate<T extends BoardCalculationContext>(state: T, s
     const rivals = league ? resources.filter(other => league.clubIds.includes(other.clubId)) : resources;
     const games = league ? state.fixtures.filter(fixture => isRegularFixture(fixture) && fixture.round >= startsRound && [fixture.homeClubId, fixture.awayClubId].includes(resource.clubId)).length : legacyGames;
     const resourceRank = 1 + rivals.filter(other => other.strength > resource.strength).length;
-    const rate = resourceRank <= Math.ceil(rivals.length / 3) ? 0.6 : resourceRank <= Math.ceil(rivals.length * 2 / 3) ? 0.5 : 0.4;
-    return [resource.clubId, { rosterId: resource.rosterId, resourceRank, targetWins: Math.ceil(games * rate), games, startingUnpaid: boardUnpaidCosts(state, resource.clubId) }];
+    const baseRate = resourceRank <= Math.ceil(rivals.length / 3) ? 0.6 : resourceRank <= Math.ceil(rivals.length * 2 / 3) ? 0.5 : 0.4;
+    const mandate = { rosterId: resource.rosterId, resourceRank, targetWins: Math.ceil(games * baseRate), games, startingUnpaid: boardUnpaidCosts(state, resource.clubId) };
+    if (!usesPresidentBoard(state.board)) return [resource.clubId, mandate];
+    // Format 70: the president's ambition moves the results target; patience and the youth and culture objectives are frozen here.
+    const rate = ambitionWinRate(baseRate, presidentTraits(worldOf(state), resource.clubId));
+    const playerIds = rosterForRound(state.rosters, resource.clubId, state.round).players.map(player => player.id);
+    return [resource.clubId, { ...mandate, targetWins: Math.ceil(games * rate), ...presidentMandate(state, { clubId: resource.clubId, seasonNumber: state.seasonNumber, date: state.date, games, tier: clubTier(resourceRank, rivals.length), playerIds }) }];
   })) };
 }
 
@@ -130,14 +141,42 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     const rivalryImpact = clamp(derbyBalance * RIVALRY_BOARD_POINTS, -RIVALRY_BOARD_CAP, RIVALRY_BOARD_CAP) || 0;
     const mediaImpact = state.pressMedia?.clubId === club.id ? state.pressMedia.impact : undefined;
     const debtImpact = state.debtImpacts?.[club.id] || undefined;
-    const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact + rivalryImpact + (mediaImpact ?? 0) + (debtImpact ?? 0), 0, 100);
+    // Format 70, board-2: youth and culture objectives count in the assessment; met or ignored requests move confidence.
+    const president = usesPresidentBoard(state.board) ? presidentReview(state, mandate, club.id, games, played) : null;
+    const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact + rivalryImpact + (mediaImpact ?? 0) + (debtImpact ?? 0) + (president?.youth?.impact ?? 0) + (president?.culture?.impact ?? 0), 0, 100);
     // Format 63: a new coach's board starts from the fresh confidence recorded after the latest review.
     const previousConfidence = startingConfidence(state.board, club.id);
-    const confidence = previousConfidence + clamp(assessment - previousConfidence, -BOARD_REVIEW_STEP, BOARD_REVIEW_STEP);
-    clubs[club.id] = { fixtureIds: games.map(fixture => fixture.id), played, wins, targetPace: rounded(targetPace), carriedAbsences, rosterPlaces, unpaid, resultsImpact, injuryRelief, financeImpact, ...(rivalriesCount ? { rivalryImpact } : {}), ...(mediaImpact !== undefined ? { mediaImpact } : {}), ...(debtImpact !== undefined ? { debtImpact } : {}), assessment, previousConfidence, confidence };
+    // Format 70: the president's patience sets the most confidence can move in one review.
+    const step = objective.reviewStep ?? BOARD_REVIEW_STEP;
+    const moved = previousConfidence + clamp(assessment - previousConfidence, -step, step);
+    const confidence = president && president.requestImpact !== null ? clamp(moved + president.requestImpact, 0, 100) : moved;
+    clubs[club.id] = { fixtureIds: games.map(fixture => fixture.id), played, wins, targetPace: rounded(targetPace), carriedAbsences, rosterPlaces, unpaid, resultsImpact, injuryRelief, financeImpact, ...(rivalriesCount ? { rivalryImpact } : {}), ...(mediaImpact !== undefined ? { mediaImpact } : {}), ...(debtImpact !== undefined ? { debtImpact } : {}),
+      ...(president?.youth ? { youthProgress: president.youth.progress, youthImpact: president.youth.impact } : {}), ...(president?.culture ? { cultureProgress: president.culture.progress, cultureImpact: president.culture.impact } : {}), ...(president && president.requestImpact !== null ? { requestImpact: president.requestImpact } : {}),
+      assessment, previousConfidence, confidence };
   }
   // A review follows its week's commit, so that week counts as completed even when it had no game (format 57).
   return { ...boardEventAnchor(state), completedRounds: roundOrdinal(state.seasonNumber, state.round, seasonRounds(state)), id: `board-review-${state.board.reviews.length + 1}`, mandateId: mandate.id, clubs };
+}
+
+/** Format 70: one club's youth and culture progress and its settled requests at a review. */
+function presidentReview(state: BoardCalculationContext, mandate: BoardMandate, clubId: string, games: readonly BoardCalculationContext['fixtures'][number][], played: number) {
+  const objective = mandate.clubs[clubId]!;
+  const seconds = objective.youth || objective.culture ? playerSeconds(games.map(fixture => ({ fixture, players: new Set(rosterForRound(state.rosters, clubId, fixture.round).players.map(player => player.id)) }))) : new Map<string, { seconds: number; rotationGames: number }>();
+  const common = { clubId, mandateDate: mandate.date, played, seconds };
+  return {
+    youth: objective.youth ? assessYouthObjective(state, objective.youth, { ...common, seasonNumber: state.seasonNumber, startsRound: mandate.startsRound, round: state.round, games: objective.games }) : null,
+    culture: objective.culture ? assessCultureObjective(state, objective.culture, common) : null,
+    requestImpact: requestImpactAt(state.boardRequests, clubId, state.seasonNumber, state.round),
+  };
+}
+
+/** Format 70: switch a brand-new career's board to president personalities before its first matchday. */
+export function enablePresidentBoard(state: SeasonState): SeasonState {
+  if (usesPresidentBoard(state.board)) return state;
+  if (!state.board.enabledSince || state.board.reviews.length || state.seasonNumber !== 1 || state.round !== 1 || state.history.length || state.fixtures.some(fixture => fixture.result)) throw new Error('President personalities start with a new career board, before its first matchday.');
+  const board: SeasonBoard = { ...state.board, model: PRESIDENT_RULES.model, mandates: [], requests: [] };
+  const opened = { ...state, board };
+  return { ...opened, board: { ...board, mandates: state.board.mandates.map(mandate => buildBoardMandate(opened, mandate.startsRound)) } };
 }
 
 /** One automatic dated review follows each eligible complete league matchday. */
@@ -148,12 +187,26 @@ export function processBoardRound(state: SeasonState): SeasonState {
   const pressMedia = boardMediaEvidence(state, state.seasonNumber, state.round, state.date);
   // Format 71: each club's debt at this review, in careers with facility financing.
   const debtImpacts = boardDebtImpacts(state);
-  const review = buildBoardReview({ ...state, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}) }, mandate);
-  return { ...state, board: { ...state.board, reviews: [...state.board.reviews, review] } };
+  if (!usesPresidentBoard(state.board)) {
+    const review = buildBoardReview({ ...state, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}) }, mandate);
+    return { ...state, board: { ...state.board, reviews: [...state.board.reviews, review] } };
+  }
+  // Format 70: settle the president's open requests, review, then perhaps raise a new request for the manager's club.
+  const requests = resolveBoardRequests(state);
+  const review = buildBoardReview({ ...state, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}), boardRequests: requests }, mandate);
+  const reviewed = { ...state, board: { ...state.board, reviews: [...state.board.reviews, review], requests } };
+  const clubId = state.managedClubId;
+  if (!mandate.clubs[clubId]?.games) return reviewed;
+  return { ...reviewed, board: { ...reviewed.board, requests: issueBoardRequest(reviewed, clubId, presidentTraits(worldOf(state), clubId).interference) } };
 }
 
 export function boardConfidenceLabel(confidence: number): string {
   return BOARD_VERDICT_EFFECTS[verdictForConfidence(confidence)].label;
+}
+
+/** Format 70: the label on a club's own scale, whose Under pressure line follows the president's patience. */
+export function clubConfidenceLabel(confidence: number, pressureBelow: number | undefined): string {
+  return BOARD_VERDICT_EFFECTS[verdictOnLine(confidence, pressureBelow)].label;
 }
 
 export function getBoardSummary(state: SeasonState, clubId = state.managedClubId): BoardSummary {
@@ -171,5 +224,5 @@ export function getBoardSummary(state: SeasonState, clubId = state.managedClubId
   }
   const financeStatus: BoardSummary['financeStatus'] = !objective || objective.startingUnpaid === null ? 'unassessed' : !latest ? 'waiting' : latest.club.unpaid !== null && latest.club.unpaid > objective.startingUnpaid ? 'behind' : 'on-track';
   const restarts = (state.board.restarts ?? []).filter(restart => restart.clubId === clubId);
-  return { enabled: state.board.enabledSince !== null, confidence, confidenceLabel: boardConfidenceLabel(confidence), mandate, objective, latest, history, nextReviewDate: nextFixture?.date ?? null, sportingStatus, financeStatus, restarts };
+  return { enabled: state.board.enabledSince !== null, confidence, confidenceLabel: clubConfidenceLabel(confidence, objective?.pressureBelow), mandate, objective, latest, history, nextReviewDate: nextFixture?.date ?? null, sportingStatus, financeStatus, restarts };
 }

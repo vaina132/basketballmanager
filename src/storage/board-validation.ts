@@ -1,4 +1,4 @@
-import type { BoardAnchor, BoardMandate, BoardRestart, SeasonBoard } from '../domain/board';
+import type { BoardAnchor, BoardMandate, BoardRequest, BoardRestart, SeasonBoard } from '../domain/board';
 import { usesCareerRules } from '../world/career-rules';
 import type { SeasonFixture, SeasonState } from '../domain/season';
 import { buildBoardMandate, buildBoardReview, createBoard, type BoardCalculationContext } from '../world/board';
@@ -10,6 +10,10 @@ import { fundingSourceId } from '../world/finance';
 import { fullWorldClubsIn, roundOrdinal, seasonRounds } from '../world/career-world';
 import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
 import { boardDebtImpacts } from '../world/facility-debt';
+import { PRESIDENT_RULES, usesPresidentBoard } from '../world/presidents';
+import { REQUEST_KINDS } from '../world/board-requests';
+import { managedClubFor } from '../world/career';
+import { maxTicketPriceFor, TICKET_PRICE_STEP } from '../world/finance';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'ledgerCount', 'rosterCount'] as const;
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
@@ -56,7 +60,54 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard):
     clubs: fullWorldClubsIn(state, anchor.seasonNumber).map(({ id }) => ({ id })),
     injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
     finance: { ...finance, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
+    // Format 70 (board-2): the academy, the previous season's squads, the managed club and the president's requests.
+    ...(usesPresidentBoard(board) ? { academy: state.academy, history: history.filter(archive => archive.seasonNumber === anchor.seasonNumber - 1), managedClubId: managedClubFor(state, anchor.seasonNumber, false), boardRequests: (state.board.requests ?? []) as BoardRequest[] } : {}),
   };
+}
+
+const REQUEST_KEYS = ['id', 'clubId', 'kind', 'seasonNumber', 'round', 'date', 'deadlineRound', 'outcome', 'resolvedRound'] as const;
+const REQUEST_TERMS: Readonly<Record<BoardRequest['kind'], readonly string[]>> = { 'raise-ticket-price': ['ticketPrice'], 'sign-player': ['position'], 'play-player': ['playerId', 'minutes'] };
+
+/** Format 70 (board-2): basic checks of the president's requests; review replays then apply their recorded outcomes. */
+function validateBoardRequests(state: SeasonState, raw: unknown): BoardRequest[] {
+  if (!Array.isArray(raw) || raw.length > PRESIDENT_RULES.requests.maxPerSeason * state.seasonNumber) fail('board.requests', 'must be a bounded list');
+  const rules = PRESIDENT_RULES.requests, rounds = seasonRounds(state);
+  const lastReview = state.board.reviews.at(-1);
+  let previous = 0, open = 0;
+  const perSeason = new Map<string, number>();
+  for (const [index, value] of raw.entries()) {
+    const path = `board.requests[${index}]`;
+    const kind = (value as { kind?: unknown } | null)?.kind as BoardRequest['kind'];
+    if (!REQUEST_KINDS.includes(kind)) fail(`${path}.kind`, 'is unsupported');
+    const entry = record(value, path, [...REQUEST_KEYS, ...REQUEST_TERMS[kind]]);
+    if (entry.id !== `board-request-${index + 1}`) fail(`${path}.id`, 'must use sequential request identities');
+    const year = integer(entry.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber);
+    const round = integer(entry.round, `${path}.round`, rules.firstRound, rounds - rules.deadlineWeeks);
+    if (entry.date !== dateForRound(round, year) || entry.deadlineRound !== round + rules.deadlineWeeks) fail(path, 'must record its review date and deadline');
+    if (entry.clubId !== managedClubFor(state, year, false)) fail(`${path}.clubId`, 'must be the club the manager ran that season');
+    const at = ordinal(year, round, rounds);
+    if (at < previous) fail(path, 'must keep chronological order');
+    previous = at;
+    const key = `${year}`;
+    perSeason.set(key, (perSeason.get(key) ?? 0) + 1);
+    if (perSeason.get(key)! > rules.maxPerSeason) fail(path, 'exceeds the requests allowed in a season');
+    if (kind === 'raise-ticket-price') { const price = integer(entry.ticketPrice, `${path}.ticketPrice`, TICKET_PRICE_STEP, maxTicketPriceFor(state, entry.clubId as string)); if (price % TICKET_PRICE_STEP) fail(`${path}.ticketPrice`, 'must be whole euros'); }
+    if (kind === 'sign-player' && !['PG', 'SG', 'SF', 'PF', 'C'].includes(entry.position as string)) fail(`${path}.position`, 'is unsupported');
+    if (kind === 'play-player' && (typeof entry.playerId !== 'string' || entry.minutes !== rules.playMinutes)) fail(path, 'must name a player and the minutes asked');
+    const deadline = entry.deadlineRound as number;
+    if (entry.outcome === 'open') {
+      open += 1;
+      const reviewedDeadline = year < state.seasonNumber || !!lastReview && lastReview.seasonNumber === year && lastReview.round >= deadline;
+      if (entry.resolvedRound !== null || reviewedDeadline) fail(path, 'must be settled by its deadline review');
+    } else if (!['met', 'ignored', 'withdrawn'].includes(entry.outcome as string)) fail(`${path}.outcome`, 'is unsupported');
+    else {
+      const resolved = integer(entry.resolvedRound, `${path}.resolvedRound`, round + 1, deadline);
+      if (entry.outcome === 'ignored' && resolved !== deadline) fail(path, 'is ignored only at its deadline review');
+      if (!state.board.reviews.some(review => review.seasonNumber === year && review.round === resolved)) fail(path, 'must be settled at a recorded review');
+    }
+  }
+  if (open > 1) fail('board.requests', 'can hold one open request at a time');
+  return raw as BoardRequest[];
 }
 
 /** The review follows mandatory costs and due fees, before later AI hires or offseason decisions. */
@@ -82,14 +133,18 @@ export function validateBoard(state: SeasonState, version: number): void {
   if (version < 30) return;
   // Format 33 adds the anchor from which season verdicts set later budgets.
   const consequences = version >= 33;
+  // Format 70: careers created with president personalities use board-2 and record the president's requests (format guard in season-storage).
+  const presidents = (state.board as { model?: unknown } | null)?.model === PRESIDENT_RULES.model;
   const { consequencesSince: _unused, ...legacyEmpty } = createBoard();
-  const empty: SeasonBoard = consequences ? createBoard() : legacyEmpty;
+  const empty: SeasonBoard = presidents ? createBoard(PRESIDENT_RULES.model) : consequences ? createBoard() : legacyEmpty;
   // Format 63: career-2 careers record each new coach's fresh start (checked against the career's decisions later).
   const fresh = version >= 63 && usesCareerRules(state.career);
-  const fields = record(state.board, 'board', ['model', 'enabledSince', 'mandates', 'reviews', ...(consequences ? ['consequencesSince'] : []), ...(fresh ? ['restarts'] : [])]);
-  if (fields.model !== 'board-1') fail('board.model', 'is unsupported');
+  const fields = record(state.board, 'board', ['model', 'enabledSince', 'mandates', 'reviews', ...(consequences ? ['consequencesSince'] : []), ...(fresh ? ['restarts'] : []), ...(presidents ? ['requests'] : [])]);
+  if (fields.model !== 'board-1' && !presidents) fail('board.model', 'is unsupported');
+  if (presidents && fields.enabledSince === null) fail('board', 'president personalities require board reviews');
   if (fresh && (!Array.isArray(fields.restarts) || fields.restarts.length > state.clubs.length * (seasonRounds(state) + 2) * state.seasonNumber + 1)) fail('board.restarts', 'must be a bounded list of fresh starts');
   const restarts = fresh ? fields.restarts as BoardRestart[] : undefined;
+  const requests = presidents ? validateBoardRequests(state, fields.requests) : undefined;
   if (!Array.isArray(fields.mandates) || fields.mandates.length > state.seasonNumber || !Array.isArray(fields.reviews) || fields.reviews.length > seasonRounds(state) * state.seasonNumber) fail('board', 'must retain bounded chronological objectives and reviews');
   if (fields.enabledSince === null) {
     if (fresh || !equal(fields, empty)) fail('board', 'must remain empty while disabled');
@@ -131,6 +186,7 @@ export function validateBoard(state: SeasonState, version: number): void {
   if (activation.includeCurrentRound && (enabled.seasonNumber !== 1 || enabled.round !== 1 || enabled.completedRounds !== 0 || enabled.date !== dateForRound(1, 1))) fail('board.enabledSince', 'can include the current matchday only at initial career creation');
   const source = fields as unknown as SeasonBoard;
   let board: SeasonBoard = { ...empty, enabledSince: source.enabledSince };
+  if (requests && activation.includeCurrentRound !== true) fail('board', 'president personalities start at the career opening');
   let mandateIndex = 0, reviewIndex = 0, previous = enabled;
   const chronological = (anchor: BoardAnchor, path: string) => {
     if (anchor.date < previous.date || anchor.completedRounds < previous.completedRounds || anchor.ledgerCount < previous.ledgerCount || ordinal(anchor.seasonNumber, anchor.round, seasonRounds(state)) < ordinal(previous.seasonNumber, previous.round, seasonRounds(state))) fail(path, 'must preserve chronological results and cash evidence');
@@ -182,5 +238,6 @@ export function validateBoard(state: SeasonState, version: number): void {
     board = { ...board, consequencesSince: since };
   }
   if (restarts) board = { ...board, restarts };
+  if (requests) board = { ...board, requests };
   if (!equal(board, source)) fail('board', 'must retain exactly the complete objective and review history without added or missing records');
 }

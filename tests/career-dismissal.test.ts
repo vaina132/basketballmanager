@@ -11,6 +11,7 @@ import { setFacilityDelegation } from '../src/world/facilities';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, previewSeasonEnd } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
 import { currentSeasonFile, withFixedRivalries } from './helpers/season-format';
+import { BEFORE_SAVED_IDEAS } from './helpers/legacy-season';
 import { getInboxItems } from '../src/ui/inbox-items';
 import { asCareer1 } from './helpers/career-rules';
 import { withLegacyFacilities } from './helpers/legacy-season';
@@ -19,8 +20,9 @@ const CLUB = 'rhine-falcons';
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 // These scenarios check the Level 7 rules that careers created before format 63 keep (`career-1`: no protected first
 // season); tests/career-board-rules.test.ts covers the rules of new careers. They are also relabelled as format-37 saves
-// below, so they keep the sponsorship model from before format 64 (naming rights and exits pay nothing in a first season).
-const start = (seed: number, careerMoves = true, media = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, media, namingRights: false }), true), true));
+// below, so they keep the sponsorship model from before format 64 (naming rights and exits pay nothing in a first season)
+// and the board from before format 70 (president patience would move the Under pressure line).
+const start = (seed: number, careerMoves = true, media = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, media, namingRights: false, presidents: false }), true), true));
 /** An all-automatic Rhine Falcons season, played to the finished final match. */
 function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number, legacy = false): SeasonState {
   // `legacy`: a career as saved before formats 65-71: no media record, `facilities-1` paid upfront and `relationships-1`.

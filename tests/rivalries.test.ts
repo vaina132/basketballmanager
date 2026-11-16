@@ -13,9 +13,9 @@ import { asCareer1 } from './helpers/career-rules';
 import { DEVELOPMENT_WORLD } from '../src/data/development-world';
 
 const manager = { name: 'Derby Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-// The career without rivalries stands for an older save, so it also has no press and media record (format 67) and keeps
-// the sponsorship model from before format 64.
-const career = (rivalries: boolean) => createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, rivalries, media: rivalries, namingRights: rivalries });
+// The career without rivalries stands for an older save, so it also has no press and media record (format 67) keeps
+// the sponsorship model from before format 64 and has no president board (format 70).
+const career = (rivalries: boolean) => createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, rivalries, media: rivalries, namingRights: rivalries, presidents: rivalries });
 const resultsReason = (state: SeasonState, playerId: string) => getPlayerRelationship(state, playerId).reasons.find(reason => reason.label === 'Recent team results')!.impact;
 let derbyWeek: SeasonState, legacy: SeasonState, switched: SeasonState;
 

@@ -7,6 +7,7 @@ import { facilityAutomationBuffer, FACILITY_FUNDS_REASON, FACILITY_REPAIR_FUNDS_
 import { getSpendablePosition } from './payroll-policy';
 import { ownerCapital } from './board-consequences';
 import { boardCapitalSurcharge } from './facility-debt';
+import { PRESIDENT_RULES, presidentTraits, usesPresidentBoard } from './presidents';
 
 /** Confidence the board requires is 65 minus five per point of presidential generosity (60 to 40). */
 export const BOARD_FUNDING_BASE_CONFIDENCE = 65;
@@ -20,6 +21,17 @@ const euros = (cents: number) => eurosFormat.format(cents / 100);
 
 export function requiredBoardConfidence(president: Pick<DevelopmentPresident, 'generosity'>): number {
   return BOARD_FUNDING_BASE_CONFIDENCE - BOARD_FUNDING_GENEROSITY_STEP * president.generosity;
+}
+
+/**
+ * The confidence a club's board needs for capital and the matchdays to wait after a refusal. Format 70 (board-2): the
+ * president's negotiation style adds to the generosity threshold and sets the wait (`PRESIDENT_RULES.negotiation`).
+ */
+export function boardFundingTerms(state: Pick<SeasonState, 'board'> & Partial<Pick<SeasonState, 'world' | 'dataPackId'>>, clubId: string): { requiredConfidence: number; cooldown: number } {
+  const president = clubPresident(worldOf(state), clubId), required = requiredBoardConfidence(president);
+  if (!usesPresidentBoard(state.board)) return { requiredConfidence: required, cooldown: BOARD_FUNDING_REFUSAL_COOLDOWN };
+  const style = PRESIDENT_RULES.negotiation[presidentTraits(worldOf(state), clubId).negotiation];
+  return { requiredConfidence: required + style.confidence, cooldown: style.cooldown };
 }
 
 /** The latest board confidence already reviewed at this boundary; 50 before the first review. */
@@ -60,6 +72,8 @@ export interface BoardFundingQuote {
   /** The board's answer to an eligible request, and its explanation when refused. */
   approved: boolean;
   refusal: string | null;
+  /** Matchdays to wait after a refusal (format 70: the president's negotiation style). */
+  cooldown: number;
 }
 
 /**
@@ -77,14 +91,16 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   const position = getSpendablePosition(state, clubId), available = Math.max(0, position);
   const cushion = mode === 'automatic' ? repair ? facilityAutomationBuffer(state, clubId) / 2 : facilityAutomationBuffer(state, clubId) : 0;
   const amount = Math.max(0, cost + cushion - available);
-  // Format 71: a heavily indebted club needs more confidence for capital.
+  // Format 70: the president's negotiation style sets the confidence needed and the wait after a refusal; format 71: a
+  // heavily indebted club needs more confidence for capital.
   const debtSurcharge = boardCapitalSurcharge(state, clubId);
-  const confidence = boardConfidenceNow(state, clubId), requiredConfidence = requiredBoardConfidence(president) + debtSurcharge;
+  const terms = boardFundingTerms(state, clubId), cooldown = terms.cooldown;
+  const confidence = boardConfidenceNow(state, clubId), requiredConfidence = terms.requiredConfidence + debtSurcharge;
   // The previous season's board verdict can raise, halve or withhold the owner's capital (see board-consequences).
   const seasonCapital = ownerCapital(state, clubId);
   const capitalRemaining = Math.max(0, seasonCapital - boardCapitalGranted(state.facilities, clubId, state.seasonNumber));
   const refused = [...state.facilities.events].reverse().find(event => event.type === 'funding' && !event.approved && event.clubId === clubId);
-  const wait = refused ? ordinal(refused.seasonNumber, refused.round, seasonRounds(state)) + BOARD_FUNDING_REFUSAL_COOLDOWN - ordinal(state.seasonNumber, state.round, seasonRounds(state)) : 0;
+  const wait = refused ? ordinal(refused.seasonNumber, refused.round, seasonRounds(state)) + cooldown - ordinal(state.seasonNumber, state.round, seasonRounds(state)) : 0;
   let reason: string | null = null;
   if (!state.facilities.fundingSince) reason = 'Enable board funding requests first.';
   else if (!state.board.enabledSince) reason = 'Enable board reviews before asking for capital.';
@@ -96,5 +112,5 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   else if (wait > 0) reason = `The board will reconsider after ${wait} more ${wait === 1 ? 'matchday' : 'matchdays'}.`;
   const approved = reason === null && confidence >= requiredConfidence && amount <= capitalRemaining;
   const refusal = reason === null ? boardFundingRefusal({ approved, confidence, requiredConfidence, capitalRemaining }) : null;
-  return { clubId, facilityType: type, mode, project, president, cost, available, amount, confidence, requiredConfidence, debtSurcharge, seasonCapital, capitalRemaining, eligible: reason === null, reason, approved, refusal };
+  return { clubId, facilityType: type, mode, project, president, cost, available, amount, confidence, requiredConfidence, debtSurcharge, seasonCapital, capitalRemaining, eligible: reason === null, reason, approved, refusal, cooldown };
 }

@@ -3,6 +3,7 @@ import type { Player, PlayerAttributes, Position, Team } from '../domain/types';
 import type { CareerWorld } from '../domain/world';
 import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPresident } from '../data/development-presidents';
+import { derivePresidentTraits } from './presidents';
 import type { DevelopmentPlayerProfile } from '../data/development-player-profiles';
 import { NO_LOWER_DIVISION_COUNTRIES, validateWorld } from './career-world';
 import type { DomesticLeague } from './divisions';
@@ -184,7 +185,7 @@ export function withLowerDivisions(world: CareerWorld, lists: readonly LowerDivi
       Object.assign(profiles, squad.profiles); Object.assign(wages, squad.wages); Object.assign(contracts, squad.contracts);
       const capacity = arena.smallest, h = hash(seed, `club:${identity.id}`);
       finances.push({ clubId: identity.id, venue: `${identity.name} Arena`, sponsor: world.sponsors[h % world.sponsors.length]!.name, capacity, referenceDemand: Math.round(capacity * arena.fillFrom / arena.step) * arena.step });
-      presidents.push({ clubId: identity.id, name: `${FIRST[(h >>> 4) % FIRST.length]} ${LAST[(h >>> 12) % LAST.length]}`, generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital });
+      presidents.push({ clubId: identity.id, name: `${FIRST[(h >>> 4) % FIRST.length]} ${LAST[(h >>> 12) % LAST.length]}`, generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital, traits: derivePresidentTraits(identity.id) });
     }
     return { country: list.country, tier: list.tier, name: list.name, clubIds: list.clubs.map(club => club.id) };
   });

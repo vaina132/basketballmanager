@@ -8,6 +8,8 @@ import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
 import { rivalryNote } from './rivalry-text'
 import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/board-consequences'
 import { getClubNamingRights, getClubSponsorship } from '../world/commercial'
+import { PRESIDENT_RULES } from '../world/presidents'
+import { requestText } from './PresidentBoard'
 import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { getCareerPlayer } from '../world/player-catalog'
 import { recentClubRetirements } from './PlayerLifecycle'
@@ -106,6 +108,9 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
       notices.push({ key: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `Final confidence ${verdict.confidence}/100. ${seasonLabel(season.seasonNumber + 1)}: ${money(budgets.staff)} staff budget and ${money(budgets.capital)} owner capital for facility upgrades.`, urgent: verdict.verdict === 'concerned' || verdict.verdict === 'pressure', action: 'Review board', open: onOpenBoard })
     } else if (board.latest) notices.push({ key: 'board', title: `Board review · ${board.confidenceLabel}`, detail: `${medicalDate(board.latest.date)}: confidence ${board.confidence}/100. ${board.latest.club.wins} ${board.latest.club.wins === 1 ? 'win' : 'wins'} in ${board.latest.club.played} counted games.${board.financeStatus === 'behind' ? ' Unpaid costs are above the agreed starting balance.' : ''}`, urgent: board.confidence < 40 || board.financeStatus === 'behind', action: 'Review board', open: onOpenBoard })
     else if (board.objective && board.objective.games > 0) notices.push({ key: 'board', title: 'Board objectives set', detail: `Win ${board.objective.targetWins} of ${board.objective.games} counted games.${board.objective.startingUnpaid !== null ? ` Keep unpaid costs at or below ${money(board.objective.startingUnpaid)}.` : ''}`, action: 'View objectives', open: onOpenBoard })
+    // Format 70: an open request from the president stays visible until it is met or its deadline passes.
+    const request = (season.board.requests ?? []).find(item => item.outcome === 'open' && item.clubId === season.managedClubId)
+    if (request) notices.push({ key: 'president-request', title: "President's request", detail: `${requestText(season, request)} by the review after matchday ${request.deadlineRound}. Met: +${PRESIDENT_RULES.requests.met} confidence; ignored: ${PRESIDENT_RULES.requests.ignored}.`, urgent: true, action: 'Review board', open: onOpenBoard })
   }
 
   if (season?.commercial.enabledSince) {

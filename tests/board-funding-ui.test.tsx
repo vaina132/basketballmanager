@@ -59,7 +59,7 @@ describe('board panel: president and capital', () => {
     expect(boardCapitalGranted(funded.facilities, 'aegean-waves', funded.seasonNumber)).toBeGreaterThanOrEqual(generous.quote.amount);
     const declined = board(refused);
     expect(declined).toContain('data-board-funding-request="refused"');
-    expect(declined).toContain(`The board needs confidence of at least 55; it is ${cautious.quote.confidence}.`);
+    expect(declined).toContain(`The board needs confidence of at least 60; it is ${cautious.quote.confidence}.`);
     expect(declined).toContain('Not met · current confidence');
   });
 });
@@ -70,7 +70,7 @@ describe('facility review: asking the board', () => {
     expect(html).toContain('data-board-funding="approve"');
     expect(html).toContain(`data-board-amount="${generous.quote.amount}"`);
     expect(html).toContain(`${money(generous.quote.cost)} cost − ${money(generous.quote.available)} available`);
-    expect(html).toContain('Nikos Thalassinos needs 45');
+    expect(html).toContain('Nikos Thalassinos needs 40');
     expect(html).toContain('On these figures the board approves.');
     expect(html).toMatch(new RegExp(`id="facility-board-request"[^>]*>.*Ask for ${money(generous.quote.amount)}`));
     expect(html).not.toMatch(/id="facility-board-request"[^>]*disabled/);
@@ -79,11 +79,11 @@ describe('facility review: asking the board', () => {
   it('warns that a refusal is expected and what it costs, then blocks a repeat request during the wait', () => {
     const html = ask(cautious.quote);
     expect(html).toContain('data-board-funding="refuse"');
-    expect(html).toContain('The board needs confidence of at least 55');
-    expect(html).toContain('you can ask again after 2 matchdays');
+    expect(html).toContain('The board needs confidence of at least 60');
+    expect(html).toContain('you can ask again after 3 matchdays');
     const waiting = ask(quoteBoardFunding(refused, cautious.quote.facilityType));
     expect(waiting).toContain('data-board-funding="unavailable"');
-    expect(waiting).toContain('The board will reconsider after 2 more matchdays.');
+    expect(waiting).toContain('The board will reconsider after 3 more matchdays.');
     expect(waiting).toMatch(/id="facility-board-request"[^>]*disabled/);
   });
 

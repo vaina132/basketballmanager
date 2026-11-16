@@ -1,4 +1,5 @@
 import { clubRosterLimit, clubSalaryBudget, clubSalaryCeiling, usesFullClubRoster } from '../world/club-roster-policy';
+import { seasonSalaryCeiling } from '../world/board-consequences';
 import { selectedTeam } from '../world/matchday-selection';
 import { createBoard } from '../world/board';
 import type { SeasonBoard } from '../domain/board';
@@ -1387,7 +1388,7 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
   }
 }
 
-function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 30, context: CareerPlayerContext & Partial<Pick<SeasonState, 'seed' | 'career'>> = {}): SeasonEmployment {
+function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 30, context: CareerPlayerContext & Partial<Pick<SeasonState, 'seed' | 'career' | 'board'>> = {}): SeasonEmployment {
   const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market', ...(version >= 15 ? ['transfers'] : []), ...(version >= 17 ? ['buyouts'] : []), ...(version >= 55 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'departures') ? ['departures'] : [])]);
   const rawTransfers = version >= 15 ? fields.transfers : [];
   if (!Array.isArray(rawTransfers) || rawTransfers.length > 20_000) fail('employment.transfers', 'must retain at most 20000 completed transfers');
@@ -1586,7 +1587,8 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     if (index >= catalog.length && entry.kind !== 'joined') for (let year = startsSeason; year <= endsSeason; year += 1) {
       const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
-      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > clubSalaryBudget(context, entry.clubId as string, year, signedSeason)) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+      // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow.
+      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
   }
   const employment = normalized;
@@ -1597,7 +1599,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     const ceiling = clubSalaryCeiling(context, clubId, year);
     for (let at = 1; at <= (year === seasonNumber ? round : seasonRounds(context)); at += 1) {
       const registrations = effectiveContractsForRound(employment, year, at).filter(contract => contract.clubId === clubId);
-      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > ceiling) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
+      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > Math.max(ceiling, seasonSalaryCeiling(context, clubId, year))) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
     }
   }
   // Clubs leaving the full world sit out the window; joining clubs' squads sign at the rollover (step 3.4d-2).
@@ -2850,7 +2852,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Every later replay attributes decisions through the validated moves.
   if (version >= 37) validateCareer(state.career, state as unknown as SeasonState, version);
   if (Object.hasOwn(state, 'background')) validateBackground(state.background, { ...(state as unknown as SeasonState), divisions: seasonDivisions }, version);
-  const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId, marketEnabled, version, careerContext) : undefined;
+  // Format 70: board-2 season verdicts change player salary budgets, so the salary checks read the board.
+  const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId, marketEnabled, version, (board as SeasonBoard | undefined)?.model === 'board-2' ? { ...careerContext, board } : careerContext) : undefined;
   if (!sameData(state.clubs, clubsForEmploymentYear(employment, seasonNumber, round, careerContext))) fail('clubs', 'must match the versioned player catalog and effective employment registrations');
   if (version >= 55 && Object.hasOwn(state, 'background')) validateBackgroundHistory(state as unknown as SeasonState, employment, careerContext);
   const clubs = state.clubs as readonly Team[], clubIds = clubs.map(club => club.id);
@@ -3090,6 +3093,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     if (version < 67) fail('media', 'requires format 67 or later');
     validateMediaShape(state.media, state as unknown as SeasonState);
   }
+  // Format 70 guard: careers created with president personalities (board-2) need format 70 or later.
+  if ((state.board as SeasonBoard | undefined)?.model === 'board-2' && version < 70) fail('board.model', 'requires format 70 or later');
 }
 
 /** Validate every reference and committed round before replacing any live season. */

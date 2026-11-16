@@ -1,4 +1,5 @@
-import { clubRosterLimitText, clubRosterLimit, clubSalaryBudget } from './club-roster-policy';
+import { clubRosterLimitText, clubRosterLimit } from './club-roster-policy';
+import { seasonSalaryBudget } from './board-consequences';
 import type { InSeasonBudget, InSeasonOffer, InSeasonOfferQuote } from '../domain/recruitment';
 import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
@@ -41,7 +42,7 @@ export function getInSeasonBudget(state: SeasonState, clubId = state.managedClub
   const offers = getInSeasonOffers(state, clubId, true).filter(offer => offer.id !== excludeOfferId);
   const seasonWages = contracts.reduce((sum, contract) => sum + contract.seasonWage, 0);
   const reservedWages = offers.reduce((sum, offer) => sum + offer.seasonWage, 0);
-  const allocation = clubSalaryBudget(state, clubId);
+  const allocation = seasonSalaryBudget(state, clubId, state.seasonNumber);
   return { budget: allocation, seasonWages, reservedWages, remainingBudget: Math.max(0, allocation - seasonWages - reservedWages), rosterSize: contracts.length, reservedRosterSize: offers.length, remainingWagesReserved: offers.reduce((sum, offer) => sum + offer.remainingWages, 0), spendableCash: getSpendableCash(state, clubId, undefined, undefined, excludeOfferId) };
 }
 

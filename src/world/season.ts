@@ -1,6 +1,6 @@
 import { requireCalendarWeek } from './calendar-boundary';
 import { competitionTable } from './competition-table';
-import { BOARD_REVIEW_STEP, createBoard, enableBoard, enableBoardConsequences, prepareBoardSeason, processBoardRound } from './board';
+import { BOARD_REVIEW_STEP, createBoard, enableBoard, enableBoardConsequences, enablePresidentBoard, prepareBoardSeason, processBoardRound } from './board';
 import { summarizeAcademyHistory } from './academy-history';
 import { summarizeYouthHistory } from './youth-history';
 import { fixturePlayerEvidence, summarizeSeniorHistory } from './senior-history';
@@ -344,6 +344,11 @@ export interface SeasonSystems {
   media?: boolean;
   /** Format 64: sponsorship agreements with exit clauses and arena naming rights (the `commercial-2` model), whenever negotiations are enabled. */
   namingRights?: boolean;
+  /**
+   * Format 70: president personalities, season verdicts on the player salary budget (with season verdicts on), youth and
+   * culture objectives and the president's requests (board model 'board-2'; new careers only; requires board reviews).
+   */
+  presidents?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -356,7 +361,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true,
+  media: true, presidents: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -370,9 +375,13 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   const options = first, finance = options.finance ?? true;
   if (options.media !== undefined && typeof options.media !== 'boolean') throw new Error('Choose a valid press and media setting.');
   if (options.media && !options.relationships) throw new Error('Press topics and media standing require squad relationships.');
+  if (options.presidents !== undefined && typeof options.presidents !== 'boolean') throw new Error('Choose a valid president personalities setting.');
+  if (options.presidents && !options.board) throw new Error('President personalities require board reviews.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
   const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false);
-  return options.media ? enableMedia(created) : created;
+  const pressed = options.media ? enableMedia(created) : created;
+  // Format 70: the board's president personalities and objectives apply from the opening; the opening match is unchanged.
+  return options.presidents ? enablePresidentBoard(pressed) : pressed;
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.

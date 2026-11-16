@@ -25,8 +25,9 @@ const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(s
 // Seed 2 (8 before the relationships-2 rules of format 66, 6 before the match calibration of sprint 4): Rhine Falcons
 // keep their job and Aegean Waves' season ends Under pressure, so Aegean Waves offer their job.
 const OFFER_SEED = 2;
-// The Level 7 move rules that careers created before format 63 keep (`career-1`); tests/career-board-rules.test.ts covers new careers.
-const career = (careerMoves = true, seed = OFFER_SEED) => asCareer1(createSeason({ seed, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves }));
+// The Level 7 move rules that careers created before format 63 keep (`career-1`, and the board before format 70's
+// presidents); tests/career-board-rules.test.ts covers new careers.
+const career = (careerMoves = true, seed = OFFER_SEED) => asCareer1(createSeason({ seed, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves, presidents: false }));
 /** Take the best job offered at the end of the season being finished; the test fails if nobody offers one. */
 function takeBestOffer(finished: SeasonState): SeasonState {
   const offer = previewSeasonEnd(finished)?.offers[0];

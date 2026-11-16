@@ -7,6 +7,7 @@ import { DEFAULT_PLAYER_AGE, playerAgeOnDate } from '../data/development-player-
 import { standingsRuleFor } from '../domain/competition';
 import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { DevelopmentPresident } from '../data/development-presidents';
+import { derivePresidentTraits } from './presidents';
 import { sponsorMarket } from '../data/development-sponsors';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { MIN_WORLD_CLUBS, validateWorld } from './career-world';
@@ -126,7 +127,7 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   const capitals = DEVELOPMENT_WORLD.presidents.map(president => president.seasonCapital);
   const presidents: DevelopmentPresident[] = teams.map((team, index) => {
     const h = hash(team.id);
-    return { clubId: team.id, name: `${PRESIDENT_FIRST[h % PRESIDENT_FIRST.length]} ${PRESIDENT_LAST[Math.floor(h / PRESIDENT_FIRST.length) % PRESIDENT_LAST.length]}`, generosity: (1 + (h >>> 8) % 5) as DevelopmentPresident['generosity'], seasonCapital: capitals[index % capitals.length]! };
+    return { clubId: team.id, name: `${PRESIDENT_FIRST[h % PRESIDENT_FIRST.length]} ${PRESIDENT_LAST[Math.floor(h / PRESIDENT_FIRST.length) % PRESIDENT_LAST.length]}`, generosity: (1 + (h >>> 8) % 5) as DevelopmentPresident['generosity'], seasonCapital: capitals[index % capitals.length]!, traits: derivePresidentTraits(team.id) };
   });
   // Step 3.4b: each league's real postseason, when every chosen league's size fits its format (all or none).
   const formats = competitions.map(item => [item.id, postseasonFormatFor(item.country ?? 'Other', item.tier)] as const);
@@ -258,7 +259,7 @@ export function withEuropeanCompetitions(world: CareerWorld, competitions: reado
     const t = strongest > weakest ? Math.max(0, Math.min(1, (bestEightStrength(team.players) - weakest) / (strongest - weakest))) : 0.5;
     const capacity = Math.round((arena.smallest + t * (arena.largest - arena.smallest)) / arena.step) * arena.step, h = hash(team.id);
     finances.push({ clubId: team.id, venue: venue ?? `${team.name} Arena`, sponsor: world.sponsors[h % world.sponsors.length]!.name, capacity, referenceDemand: Math.round(capacity * (arena.fillFrom + arena.fillRange * t) / arena.step) * arena.step });
-    presidents.push({ clubId: team.id, name: `${FIRST[(h >>> 4) % FIRST.length]} ${LAST[(h >>> 12) % LAST.length]}`, generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital });
+    presidents.push({ clubId: team.id, name: `${FIRST[(h >>> 4) % FIRST.length]} ${LAST[(h >>> 12) % LAST.length]}`, generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital, traits: derivePresidentTraits(team.id) });
     for (const player of team.players) {
       profiles[player.id] = own[player.id]!;
       wages[player.id] = realWorldWage(overallRating(player.attributes, player.position));

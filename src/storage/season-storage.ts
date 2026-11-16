@@ -100,7 +100,7 @@ import { applyInSeasonEvent, createInSeasonRecruitment as createRecruitment } fr
 import { getTransferPaymentSchedule, processTransferPayments } from '../world/transfer-payments';
 import { addMarketDays, MARKET_MAX_EVENTS, MARKET_WINDOW_DAYS, isLiveMarketOffer } from '../world/market-policy';
 import { evaluateNegotiation } from '../world/negotiations-policy';
-import { contractForSeason, contractForRound, effectiveContractsForSeason, effectiveContractsForRound, getContractedClubs, getContractedClubsForRound, registrationChangeRounds, quotePlayerContract, MIN_ROSTER_SIZE, MIN_CONTRACT_WAGE, maxContractWage, MAX_CONTRACT_SEASONS, WAGE_STEP, MIN_ROSTER_WAGE_RESERVE } from '../world/employment-policy';
+import { contractForSeason, contractForRound, effectiveContractsForSeason, effectiveContractsForRound, getContractedClubs, getContractedClubsForRound, registrationChangeRounds, quotePlayerContract, MIN_ROSTER_SIZE, MIN_CONTRACT_WAGE, maxContractWage, MAX_CONTRACT_SEASONS, WAGE_STEP, lowestMinimumSquadWage } from '../world/employment-policy';
 import { maxTransferFee } from '../world/transfers-policy';
 import { maxReleaseFee } from '../world/release-clauses';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
@@ -1591,7 +1591,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
       const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
       // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow.
-      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * MIN_ROSTER_WAGE_RESERVE > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
   }
   const employment = normalized;

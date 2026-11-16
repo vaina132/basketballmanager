@@ -92,6 +92,14 @@ export interface ClubContractSummary {
   minimumReserve: number;
   spendableBudget: number;
   contracts: EmploymentContract[];
+  /** The wage kept free for each missing place of the eight-player minimum squad (a cheap player at the club's level). */
+  reserveWage: number;
+  /**
+   * The most the season's wages may reach with a cheap signing (at most `reserveWage`) still needed for the eight-player
+   * minimum squad: the budget, or the highest allocation the club has had for the season when its money has since
+   * fallen (format 72).
+   */
+  minimumSquadBudget: number;
 }
 
 export interface PlayerContractQuote {

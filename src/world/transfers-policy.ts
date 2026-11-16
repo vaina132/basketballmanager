@@ -7,7 +7,7 @@ import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import { getActiveCareerPlayers } from './player-catalog';
-import { contractForSeason, effectiveContractsForSeason, getClubContractSummary, MIN_ROSTER_SIZE, MIN_ROSTER_WAGE_RESERVE, quotePlayerContract } from './employment-policy';
+import { contractForSeason, effectiveContractsForSeason, getClubContractSummary, MIN_ROSTER_SIZE, quotePlayerContract } from './employment-policy';
 import { getFinanceBalance } from './finance';
 import { addMarketDays, getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { getSpendableCash } from './payroll-policy';
@@ -94,8 +94,8 @@ export function sellerReplacementReason(state: SeasonState, offer: Pick<MarketOf
     const remainingSize = summary.rosterSize - removed.length;
     const remainingWages = summary.seasonWages - removed.reduce((sum, contract) => sum + contract.seasonWage, 0);
     const live = getLiveMarketOffers(state).filter(item => item.clubId === transfer.sellerClubId && item.seasonNumber + 1 <= year && item.seasonNumber + item.seasons >= year);
-    const shortfalls = live.reduce((sum, item) => sum + Math.max(0, MIN_ROSTER_WAGE_RESERVE - item.seasonWage), 0);
-    const minimum = Math.max(0, MIN_ROSTER_SIZE - remainingSize - summary.reservedRosterSize) * MIN_ROSTER_WAGE_RESERVE + shortfalls;
+    const shortfalls = live.reduce((sum, item) => sum + Math.max(0, summary.reserveWage - item.seasonWage), 0);
+    const minimum = Math.max(0, MIN_ROSTER_SIZE - remainingSize - summary.reservedRosterSize) * summary.reserveWage + shortfalls;
     if (remainingWages + summary.reservedWages + minimum > summary.budget) return 'The selling club needs salary budget to replace its departing players.';
     if (year === state.seasonNumber + 1 && remainingSize < MIN_ROSTER_SIZE) {
       const playerReplyOn = transfer.clubStatus === 'accepted' ? offer.responseOn : addMarketDays(state.date, 1);

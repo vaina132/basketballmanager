@@ -11,7 +11,7 @@ import { staffCommitted } from './staff-policy';
 import { STAFF_BUDGET } from './staff-constants';
 import { staffAllocation } from './board-consequences';
 import { MAX_SEASON_ROUNDS, seasonRounds } from './career-world';
-import { COACH_DIRECTORY, staffMarket } from '../data/staff-directory';
+import { COACH_DIRECTORY, staffMarket, staffMember } from '../data/staff-directory';
 import type { CareerWorld } from '../domain/world';
 import { staffFee } from './economy';
 
@@ -21,7 +21,7 @@ const ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense',
 const FOCUSES: readonly TrainingFocus[] = ['balanced', ...ATTRIBUTES];
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
 const coachById = (id: string): Coach => {
-  const coach = COACH_DIRECTORY.find(coach => coach.id === id);
+  const coach = staffMember(COACH_DIRECTORY, id);
   if (!coach) throw new Error('Choose a coach from the development staff pool.');
   return coach;
 };

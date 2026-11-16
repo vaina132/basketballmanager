@@ -9,25 +9,37 @@ import { getFinanceBalance } from './finance';
 import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { staffAllocation } from './board-consequences';
-import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
+import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
 import type { WorldContext } from '../domain/world';
 import { staffFee } from './economy';
+import { usesClubLevelStaff } from './staff-levels';
 
 export { STAFF_BUDGET } from './staff-constants';
 export { staffAllocation } from './board-consequences';
 
-/** Released appointments keep their full fee in the same annual staff allocation (fees at the club's money level, format 62). */
+/**
+ * The season's staff fees counted against the club's staff budget (fees at the club's money level, format 62).
+ * Earlier careers keep released appointments' full fees in it; format 74 careers (`coaching-2`) count the staff the
+ * club employs now: a sacked person's paid fee is not refunded but no longer uses the budget.
+ */
 export function staffCommitmentsByRole(state: Pick<SeasonState, 'coaching' | 'seasonNumber'> & Partial<Pick<SeasonState, 'scouts' | 'fitness' | 'physio' | 'assistant' | 'youth'>> & WorldContext, clubId: string): { coaches: number; scouts: number; fitness: number; physio: number; assistant: number; youth: number; total: number } {
-  const coaches = state.coaching.contracts.filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, clubId, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)?.fee ?? 0), 0);
-  const scouts = (state.scouts?.contracts ?? []).filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, clubId, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)?.fee ?? 0), 0);
-  const fitness = (state.fitness?.contracts ?? []).filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, clubId, FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId)?.fee ?? 0), 0);
-  const physio = (state.physio?.contracts ?? []).filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, clubId, PHYSIO_DIRECTORY.find(physio => physio.id === contract.physioId)?.fee ?? 0), 0);
-  const assistant = (state.assistant?.contracts ?? []).filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, clubId, ASSISTANT_DIRECTORY.find(coach => coach.id === contract.assistantId)?.fee ?? 0), 0);
-  const youth = (state.youth?.contracts ?? []).filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, clubId, YOUTH_COACH_DIRECTORY.find(coach => coach.id === contract.coachId)?.fee ?? 0), 0);
+  const current = usesClubLevelStaff(state);
+  const counts = (contract: { releasedRound: number | null }) => !current || contract.releasedRound === null;
+  const coaches = state.coaching.contracts.filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && counts(contract)).reduce((sum, contract) => sum + staffFee(state, clubId, staffMember(COACH_DIRECTORY, contract.coachId)?.fee ?? 0), 0);
+  const scouts = (state.scouts?.contracts ?? []).filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && counts(contract)).reduce((sum, contract) => sum + staffFee(state, clubId, staffMember(SCOUT_DIRECTORY, contract.scoutId)?.fee ?? 0), 0);
+  const fitness = (state.fitness?.contracts ?? []).filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && counts(contract)).reduce((sum, contract) => sum + staffFee(state, clubId, staffMember(FITNESS_DIRECTORY, contract.coachId)?.fee ?? 0), 0);
+  const physio = (state.physio?.contracts ?? []).filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && counts(contract)).reduce((sum, contract) => sum + staffFee(state, clubId, staffMember(PHYSIO_DIRECTORY, contract.physioId)?.fee ?? 0), 0);
+  const assistant = (state.assistant?.contracts ?? []).filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && counts(contract)).reduce((sum, contract) => sum + staffFee(state, clubId, staffMember(ASSISTANT_DIRECTORY, contract.assistantId)?.fee ?? 0), 0);
+  const youth = (state.youth?.contracts ?? []).filter(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && counts(contract)).reduce((sum, contract) => sum + staffFee(state, clubId, staffMember(YOUTH_COACH_DIRECTORY, contract.coachId)?.fee ?? 0), 0);
   return { coaches, scouts, fitness, physio, assistant, youth, total: coaches + scouts + fitness + physio + assistant + youth };
 }
 
 export function staffCommitted(state: Pick<SeasonState, 'coaching' | 'seasonNumber'> & Partial<Pick<SeasonState, 'scouts' | 'fitness' | 'physio' | 'assistant' | 'youth'>> & WorldContext, clubId: string): number { return staffCommitmentsByRole(state, clubId).total; }
+
+/** Why an appointment does not fit the season's staff budget, in the career's own budget rule. */
+export function staffAllocationShortfall(state: Pick<SeasonState, 'coaching'>): string {
+  return usesClubLevelStaff(state) ? 'This appointment costs more than the remaining staff budget for this season.' : 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
+}
 
 /** Matches cash, salary/transfer reservations and arrears guards used by all staff roles. */
 export function remainingStaffBudget(state: SeasonState, clubId = state.managedClubId): number {

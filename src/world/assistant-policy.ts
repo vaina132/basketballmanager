@@ -2,10 +2,11 @@ import type { AssistantCoach, AssistantContract, AssistantHireQuote } from '../d
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { getFinanceBalance } from './finance';
-import { remainingStaffBudget, staffAllocation, staffCommitted } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffAllocationShortfall, staffCommitted } from './staff-policy';
+import { staffMarketWorld } from './staff-levels';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { seasonRounds, worldOf } from './career-world';
-import { ASSISTANT_DIRECTORY, staffMarket } from '../data/staff-directory';
+import { ASSISTANT_DIRECTORY, staffMarket, staffMember } from '../data/staff-directory';
 import type { WorldContext } from '../domain/world';
 import { staffFee } from './economy';
 
@@ -19,12 +20,12 @@ export function getClubAssistant(state: Pick<SeasonState, 'assistant' | 'seasonN
   return state.assistant.contracts.find(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null) ?? null;
 }
 /** The league's market (sized to its clubs) without this season's employed staff. */
-export function availableAssistants(state: Pick<SeasonState, 'assistant' | 'seasonNumber'> & WorldContext): AssistantCoach[] {
+export function availableAssistants(state: Pick<SeasonState, 'assistant' | 'seasonNumber'> & Partial<Pick<SeasonState, 'clubs'>> & WorldContext): AssistantCoach[] {
   const employed = new Set(state.assistant.contracts.filter(contract => contract.seasonNumber === state.seasonNumber && contract.releasedRound === null).map(contract => contract.assistantId));
-  return staffMarket(ASSISTANT_DIRECTORY, worldOf(state)).filter(coach => !employed.has(coach.id));
+  return staffMarket(ASSISTANT_DIRECTORY, staffMarketWorld(state)).filter(coach => !employed.has(coach.id));
 }
 export function quoteAssistantHire(state: SeasonState, assistantId: string, clubId = state.managedClubId): AssistantHireQuote {
-  const coach = ASSISTANT_DIRECTORY.find(coach => coach.id === assistantId);
+  const coach = staffMember(ASSISTANT_DIRECTORY, assistantId);
   const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
@@ -36,7 +37,7 @@ export function quoteAssistantHire(state: SeasonState, assistantId: string, club
   else if (!availableAssistants(state).some(available => available.id === assistantId)) reason = 'This assistant coach already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring an assistant coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring an assistant coach.';
-  else if (staffFee(state, clubId, coach.fee) > remainingAllocation) reason = 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
+  else if (staffFee(state, clubId, coach.fee) > remainingAllocation) reason = staffAllocationShortfall(state);
   else if (staffFee(state, clubId, coach.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
   return { assistantId, clubId, fee: staffFee(state, clubId, coach?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

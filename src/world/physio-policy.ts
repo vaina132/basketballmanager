@@ -3,10 +3,11 @@ import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { getFinanceBalance } from './finance';
 import { MAX_REHABILITATION_REDUCTION_PERCENT } from './rehabilitation-policy';
-import { remainingStaffBudget, staffAllocation, staffCommitted } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffAllocationShortfall, staffCommitted } from './staff-policy';
+import { staffMarketWorld } from './staff-levels';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { seasonRounds, worldOf } from './career-world';
-import { PHYSIO_DIRECTORY, staffMarket } from '../data/staff-directory';
+import { PHYSIO_DIRECTORY, staffMarket, staffMember } from '../data/staff-directory';
 import type { WorldContext } from '../domain/world';
 import { staffFee } from './economy';
 
@@ -17,12 +18,12 @@ export function getClubPhysio(state: Pick<SeasonState, 'physio' | 'seasonNumber'
   return state.physio.contracts.find(contract => contract.clubId === clubId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null) ?? null;
 }
 /** The league's market (sized to its clubs) without this season's employed staff. */
-export function availablePhysios(state: Pick<SeasonState, 'physio' | 'seasonNumber'> & WorldContext): Physio[] {
+export function availablePhysios(state: Pick<SeasonState, 'physio' | 'seasonNumber'> & Partial<Pick<SeasonState, 'clubs'>> & WorldContext): Physio[] {
   const employed = new Set(state.physio.contracts.filter(contract => contract.seasonNumber === state.seasonNumber && contract.releasedRound === null).map(contract => contract.physioId));
-  return staffMarket(PHYSIO_DIRECTORY, worldOf(state)).filter(physio => !employed.has(physio.id));
+  return staffMarket(PHYSIO_DIRECTORY, staffMarketWorld(state)).filter(physio => !employed.has(physio.id));
 }
 export function quotePhysioHire(state: SeasonState, physioId: string, clubId = state.managedClubId): PhysioHireQuote {
-  const physio = PHYSIO_DIRECTORY.find(physio => physio.id === physioId);
+  const physio = staffMember(PHYSIO_DIRECTORY, physioId);
   const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
@@ -34,7 +35,7 @@ export function quotePhysioHire(state: SeasonState, physioId: string, clubId = s
   else if (!availablePhysios(state).some(available => available.id === physioId)) reason = 'This physio already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a physio.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a physio.';
-  else if (staffFee(state, clubId, physio.fee) > remainingAllocation) reason = 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
+  else if (staffFee(state, clubId, physio.fee) > remainingAllocation) reason = staffAllocationShortfall(state);
   else if (staffFee(state, clubId, physio.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
   return { physioId, clubId, fee: staffFee(state, clubId, physio?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

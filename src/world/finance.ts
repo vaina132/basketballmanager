@@ -28,7 +28,7 @@ import { staffAllocation, staffCommitted } from './staff-policy';
 import { arenaComfortPercent, getArenaCapacity, getFacilityUpkeepBreakdown, quoteFacilityRepair, quoteFacilityUpgrade } from './facilities-policy';
 import { governingDerby, RIVALRY_CROWD_PERCENT } from './rivalries';
 import { agreementFor, commercialGovernsSeason, openingSponsorshipClubs, sponsorshipInstallment, sponsorshipSourceId, type DueSponsorshipPayment } from './commercial-policy';
-import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
+import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
 import { appendFinanceLedgerEntry, financeLedgerCount, financeLedgerEntries, financeLedgerTicket } from './finance-ledger';
 import { clubEconomy, REAL_ECONOMY_RULES, staffFee } from './economy';
 import { ledgerClubBalance } from './finance-ledger-index';
@@ -197,7 +197,7 @@ export function recordTransferPayment(state: SeasonState, transfer: EmploymentTr
 
 /** The coach's catalog fee at the club's money level (format 62). */
 function coachFee(context: WorldContext, contract: CoachingContract): number {
-  const coach = COACH_DIRECTORY.find(coach => coach.id === contract.coachId);
+  const coach = staffMember(COACH_DIRECTORY, contract.coachId);
   if (!coach) throw new Error('The coaching fee needs a coach from the development catalog.');
   return staffFee(context, contract.clubId, coach.fee);
 }
@@ -216,7 +216,7 @@ export function recordCoachFee(state: SeasonState, contract: CoachingContract): 
 
 /** A scout appointment and its full-season charge form one immutable transaction. */
 export function recordScoutFee(state: SeasonState, contract: ScoutContract): SeasonState {
-  const scout = SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId);
+  const scout = staffMember(SCOUT_DIRECTORY, contract.scoutId);
   const stored = state.scouts.contracts.at(-1);
   if (!state.finance.enabledSince || !state.scouts.enabledSince || !state.scouting.enabledSince || state.status !== 'active' || !scout || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `scout-contract-${state.scouts.contracts.length}`) throw new Error('Pay only the exact newly appointed scout contract.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
@@ -226,7 +226,7 @@ export function recordScoutFee(state: SeasonState, contract: ScoutContract): Sea
 }
 
 export function recordFitnessFee(state: SeasonState, contract: FitnessContract): SeasonState {
-  const coach = FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId);
+  const coach = staffMember(FITNESS_DIRECTORY, contract.coachId);
   const stored = state.fitness.contracts.at(-1);
   if (!state.finance.enabledSince || !state.fitness.enabledSince || !state.training.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `fitness-contract-${state.fitness.contracts.length}`) throw new Error('Pay only the exact newly appointed fitness coach contract.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
@@ -236,7 +236,7 @@ export function recordFitnessFee(state: SeasonState, contract: FitnessContract):
 }
 
 export function recordPhysioFee(state: SeasonState, contract: PhysioContract): SeasonState {
-  const staff = PHYSIO_DIRECTORY.find(staff => staff.id === contract.physioId);
+  const staff = staffMember(PHYSIO_DIRECTORY, contract.physioId);
   const stored = state.physio.contracts.at(-1);
   if (!state.finance.enabledSince || !state.physio.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !staff || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `physio-contract-${state.physio.contracts.length}`) throw new Error('Pay only the exact newly appointed physio contract.');
   if (staffCommitted(state, contract.clubId) > staffAllocation(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff allocation.');
@@ -247,7 +247,7 @@ export function recordPhysioFee(state: SeasonState, contract: PhysioContract): S
 
 /** A full-season assistant appointment is charged once and never refunded on release. */
 export function recordAssistantFee(state: SeasonState, contract: AssistantContract): SeasonState {
-  const coach = ASSISTANT_DIRECTORY.find(coach => coach.id === contract.assistantId);
+  const coach = staffMember(ASSISTANT_DIRECTORY, contract.assistantId);
   const stored = state.assistant.contracts.at(-1);
   if (!state.finance.enabledSince || !state.assistant.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch?.status === 'finished' || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `assistant-contract-${state.assistant.contracts.length}`) throw new Error('Pay only the exact newly appointed assistant-coach contract.');
   const active = state.assistant.contracts.filter(item => item.seasonNumber === state.seasonNumber && item.releasedRound === null);
@@ -259,7 +259,7 @@ export function recordAssistantFee(state: SeasonState, contract: AssistantContra
 }
 
 export function recordYouthFee(state: SeasonState, contract: YouthCoachContract): SeasonState {
-  const coach = YOUTH_COACH_DIRECTORY.find(coach => coach.id === contract.coachId), stored = state.youth.contracts.at(-1);
+  const coach = staffMember(YOUTH_COACH_DIRECTORY, contract.coachId), stored = state.youth.contracts.at(-1);
   if (!state.finance.enabledSince || !state.youth.enabledSince || !state.academy.enabledSince || state.status !== 'active' || state.round === seasonRounds(state) || !coach || contract.seasonNumber !== state.seasonNumber || contract.startedRound !== state.round || contract.hiredLedgerIndex !== financeLedgerCount(state.finance) || contract.releasedRound !== null || contract.releasedLedgerIndex !== null || JSON.stringify(stored) !== JSON.stringify(contract) || contract.id !== `youth-contract-${state.youth.contracts.length}`) throw new Error('Pay only the exact newly appointed youth-coach contract.');
   const active = state.youth.contracts.filter(item => item.seasonNumber === state.seasonNumber && item.releasedRound === null);
   if (!state.clubs.some(club => club.id === contract.clubId) || active.filter(item => item.clubId === contract.clubId).length !== 1 || active.filter(item => item.coachId === contract.coachId).length !== 1) throw new Error('Only one active youth coach is allowed per club and person.');

@@ -106,7 +106,7 @@ import { maxReleaseFee } from '../world/release-clauses';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
 import { MAX_SEASON_COLLECTION_ENTRIES, MAX_SEASON_SAVE_BYTES, MAX_SEASON_SAVE_VALUES } from './season-limits';
-import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
+import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
 import { COMPACT_JSON_3_ENCODING, COMPACT_JSON_ENCODING, LEGACY_COMPACT_JSON_ENCODING, compactJson3, expandJson, expandJson3 } from './compact-json';
 import { cachedCalculation, withCalculationCache } from '../world/pure-cache';
 import { ledgerBoundaryIndex } from './ledger-boundaries';
@@ -471,7 +471,7 @@ function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: 
     const path = `coaching.contracts[${index}]`;
     const contract = record(value, path, ['id', 'coachId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'focus', 'renew']);
     if (contract.id !== `coach-s${seasonNumber}-c${index + 1}` || contract.seasonNumber !== seasonNumber) fail(path, 'must use sequential identities in the current season');
-    const coach = COACH_DIRECTORY.find(coach => coach.id === contract.coachId);
+    const coach = staffMember(COACH_DIRECTORY, contract.coachId);
     if (!coach) fail(`${path}.coachId`, 'must identify a coach in the development catalog');
     if (typeof contract.clubId !== 'string' || !expenses.has(contract.clubId)) fail(`${path}.clubId`, 'must identify a club in this league');
     const startedRound = number(contract.startedRound, `${path}.startedRound`, earliestRound, round);
@@ -536,12 +536,12 @@ function validateScouts(value: unknown, state: SeasonState, coaching: SeasonCoac
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'scouts.enabledSince.ledgerIndex');
   const contracts: ScoutContract[] = [];
   let previousLedger = firstLedger - 1, previousBoundary = firstBoundary;
-  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0)]));
+  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(COACH_DIRECTORY, contract.coachId)!.fee), 0)]));
   for (const [index, value] of fields.contracts.entries()) {
     const path = `scouts.contracts[${index}]`;
     const entry = record(value, path, ['id', 'scoutId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'renew', 'hiredLedgerIndex', 'releasedLedgerIndex']);
     if (entry.id !== `scout-contract-${index + 1}`) fail(`${path}.id`, 'must retain career-wide sequential appointment identities');
-    const scout = SCOUT_DIRECTORY.find(scout => scout.id === entry.scoutId);
+    const scout = staffMember(SCOUT_DIRECTORY, entry.scoutId);
     if (!scout || typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(path, 'must identify a catalog scout and club');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? state.round : seasonRounds(state));
@@ -592,12 +592,12 @@ function validateFitness(value: unknown, state: SeasonState, coaching: SeasonCoa
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'fitness.enabledSince.ledgerIndex');
   const contracts: FitnessContract[] = [];
   let previousLedger = firstLedger - 1, previousBoundary = firstBoundary;
-  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!.fee), 0)]));
+  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(COACH_DIRECTORY, contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(SCOUT_DIRECTORY, contract.scoutId)!.fee), 0)]));
   for (const [index, value] of fields.contracts.entries()) {
     const path = `fitness.contracts[${index}]`;
     const entry = record(value, path, ['id', 'coachId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'renew', 'hiredLedgerIndex', 'releasedLedgerIndex']);
     if (entry.id !== `fitness-contract-${index + 1}`) fail(`${path}.id`, 'must retain career-wide sequential appointment identities');
-    const coach = FITNESS_DIRECTORY.find(coach => coach.id === entry.coachId);
+    const coach = staffMember(FITNESS_DIRECTORY, entry.coachId);
     if (!coach || typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(path, 'must identify a catalog fitness coach and club');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? Math.min((seasonRounds(state) - 1), state.round) : (seasonRounds(state) - 1));
@@ -648,12 +648,12 @@ function validatePhysio(value: unknown, state: SeasonState, coaching: SeasonCoac
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'physio.enabledSince.ledgerIndex');
   const contracts: PhysioContract[] = [];
   let previousLedger = firstLedger - 1, previousBoundary = firstBoundary;
-  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0)]));
+  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(COACH_DIRECTORY, contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(SCOUT_DIRECTORY, contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(FITNESS_DIRECTORY, contract.coachId)!.fee), 0)]));
   for (const [index, value] of fields.contracts.entries()) {
     const path = `physio.contracts[${index}]`;
     const entry = record(value, path, ['id', 'physioId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'renew', 'hiredLedgerIndex', 'releasedLedgerIndex']);
     if (entry.id !== `physio-contract-${index + 1}`) fail(`${path}.id`, 'must retain career-wide sequential appointment identities');
-    const coach = PHYSIO_DIRECTORY.find(coach => coach.id === entry.physioId);
+    const coach = staffMember(PHYSIO_DIRECTORY, entry.physioId);
     if (!coach || typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(path, 'must identify a catalog physiotherapist and club');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? Math.min((seasonRounds(state) - 1), state.round) : (seasonRounds(state) - 1));
@@ -706,12 +706,12 @@ function validateAssistant(value: unknown, state: SeasonState, coaching: SeasonC
   if (firstRound === seasonRounds(state) && finalRoundCommitted(firstYear, firstLedger)) fail('assistant.enabledSince', 'must precede the final matchday financial commit');
   const contracts: AssistantContract[] = [];
   let previousLedger = firstLedger - 1, previousBoundary = firstBoundary;
-  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + physio.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, PHYSIO_DIRECTORY.find(staff => staff.id === contract.physioId)!.fee), 0)]));
+  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(COACH_DIRECTORY, contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(SCOUT_DIRECTORY, contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(FITNESS_DIRECTORY, contract.coachId)!.fee), 0) + physio.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(PHYSIO_DIRECTORY, contract.physioId)!.fee), 0)]));
   for (const [index, value] of fields.contracts.entries()) {
     const path = `assistant.contracts[${index}]`;
     const entry = record(value, path, ['id', 'assistantId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'renew', 'hiredLedgerIndex', 'releasedLedgerIndex']);
     if (entry.id !== `assistant-contract-${index + 1}`) fail(`${path}.id`, 'must retain career-wide sequential appointment identities');
-    const coach = ASSISTANT_DIRECTORY.find(coach => coach.id === entry.assistantId);
+    const coach = staffMember(ASSISTANT_DIRECTORY, entry.assistantId);
     if (!coach || typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(path, 'must identify a catalog assistant coach and club');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? state.round : seasonRounds(state));
@@ -764,12 +764,12 @@ function validateYouth(value: unknown, state: SeasonState, coaching: SeasonCoach
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'youth.enabledSince.ledgerIndex');
   const contracts: YouthCoachContract[] = [];
   let previousLedger = firstLedger - 1, previousBoundary = firstBoundary;
-  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + physio.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, PHYSIO_DIRECTORY.find(staff => staff.id === contract.physioId)!.fee), 0) + assistant.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, ASSISTANT_DIRECTORY.find(staff => staff.id === contract.assistantId)!.fee), 0)]));
+  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(COACH_DIRECTORY, contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(SCOUT_DIRECTORY, contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(FITNESS_DIRECTORY, contract.coachId)!.fee), 0) + physio.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(PHYSIO_DIRECTORY, contract.physioId)!.fee), 0) + assistant.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(ASSISTANT_DIRECTORY, contract.assistantId)!.fee), 0)]));
   for (const [index, value] of fields.contracts.entries()) {
     const path = `youth.contracts[${index}]`;
     const entry = record(value, path, ['id', 'coachId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'renew', 'hiredLedgerIndex', 'releasedLedgerIndex']);
     if (entry.id !== `youth-contract-${index + 1}`) fail(`${path}.id`, 'must retain career-wide sequential appointment identities');
-    const coach = YOUTH_COACH_DIRECTORY.find(coach => coach.id === entry.coachId);
+    const coach = staffMember(YOUTH_COACH_DIRECTORY, entry.coachId);
     if (!coach || typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(path, 'must identify a catalog youth coach and club');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? Math.min(state.round, (seasonRounds(state) - 1)) : (seasonRounds(state) - 1));
@@ -2071,7 +2071,7 @@ function validateScouting(value: unknown, state: SeasonState, version: number): 
     if (sealedReport) {
       const source = record(entry.observer, `${path}.observer`, ['contractId', 'scoutId', 'evidence']);
       if (source.contractId === null) { if (source.scoutId !== null || source.evidence !== 100) fail(`${path}.observer`, 'must preserve the baseline observation source and evidence'); return null; }
-      const contract = state.scouts.contracts.find(contract => contract.id === source.contractId), scout = SCOUT_DIRECTORY.find(scout => scout.id === source.scoutId);
+      const contract = state.scouts.contracts.find(contract => contract.id === source.contractId), scout = staffMember(SCOUT_DIRECTORY, source.scoutId);
       if (!contract || !scout || contract.scoutId !== scout.id || contract.clubId !== clubId || contract.seasonNumber !== year || contract.startedRound > round || source.evidence !== scoutEvidence(scout)) fail(`${path}.observer`, 'must preserve the appointed scout and catalog evidence');
       const mission = `${year}/${round}/${scout.id}`;
       if (scoutMissions.has(mission)) fail(`${path}.observer`, 'cannot assign one named scout to multiple players on the same matchday');
@@ -2088,7 +2088,7 @@ function validateScouting(value: unknown, state: SeasonState, version: number): 
       return null;
     }
     const contract = state.scouts.contracts.find(contract => contract.id === source.contractId);
-    const scout = SCOUT_DIRECTORY.find(scout => scout.id === source.scoutId);
+    const scout = staffMember(SCOUT_DIRECTORY, source.scoutId);
     if (!contract || !scout || contract.scoutId !== scout.id || contract.clubId !== clubId || contract.seasonNumber !== year || contract.startedRound > round || contract.hiredLedgerIndex >= assigned || source.evidence !== scoutEvidence(scout)) fail(`${path}.observer`, 'must preserve the appointed scout and catalog evidence at the actual assignment boundary');
     if (contract.releasedRound !== null && (contract.releasedRound < round || !completed || assigned >= contract.releasedLedgerIndex! || !commit || contract.releasedLedgerIndex! <= commit.last)) fail(`${path}.observer`, 'cannot retain work cancelled before the observation was completed');
     const mission = `${year}/${round}/${scout.id}`;
@@ -2381,15 +2381,15 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   const buyoutRecords = new Map((employment?.buyouts ?? []).map(buyout => [buyout.id, buyout]));
   for (const buyout of buyoutRecords.values()) add({ clubId: buyout.clubId, seasonNumber: buyout.seasonNumber, round: seasonLength, kind: 'buyout', sourceId: buyout.id, amount: -buyout.amount });
   const scoutContracts = new Map(scouts.contracts.map(contract => [contract.id, contract]));
-  for (const contract of scouts.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'scouting', sourceId: `scouting-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!.fee) });
+  for (const contract of scouts.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'scouting', sourceId: `scouting-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, staffMember(SCOUT_DIRECTORY, contract.scoutId)!.fee) });
   const fitnessContracts = new Map(fitness.contracts.map(contract => [contract.id, contract]));
-  for (const contract of fitness.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'fitness', sourceId: `fitness-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee) });
+  for (const contract of fitness.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'fitness', sourceId: `fitness-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, staffMember(FITNESS_DIRECTORY, contract.coachId)!.fee) });
   const physioContracts = new Map(physio.contracts.map(contract => [contract.id, contract]));
-  for (const contract of physio.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'physio', sourceId: `physio-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, PHYSIO_DIRECTORY.find(coach => coach.id === contract.physioId)!.fee) });
+  for (const contract of physio.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'physio', sourceId: `physio-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, staffMember(PHYSIO_DIRECTORY, contract.physioId)!.fee) });
   const assistantContracts = new Map(assistant.contracts.map(contract => [contract.id, contract]));
-  for (const contract of assistant.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'assistant', sourceId: `assistant-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, ASSISTANT_DIRECTORY.find(coach => coach.id === contract.assistantId)!.fee) });
+  for (const contract of assistant.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'assistant', sourceId: `assistant-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, staffMember(ASSISTANT_DIRECTORY, contract.assistantId)!.fee) });
   const youthContracts = new Map(youth.contracts.map(contract => [contract.id, contract]));
-  for (const contract of youth.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'youth', sourceId: `youth-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, YOUTH_COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee) });
+  for (const contract of youth.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'youth', sourceId: `youth-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, staffMember(YOUTH_COACH_DIRECTORY, contract.coachId)!.fee) });
 
   const wageGroups = new Map<string, PlayerWageAgreement[]>(), remainingWages = new Map<string, number>(), prepaid = new Set<string>();
   const wageGroup = (year: number, clubId: string) => `${year}/${clubId}`;
@@ -2631,7 +2631,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     } else if (kind === 'coaching') {
       if (entry.ticket !== null) fail(`${path}.ticket`, 'must be empty for a coaching fee');
       const details = record(entry.coach, `${path}.coach`, ['contractId', 'coachId']);
-      const coach = COACH_DIRECTORY.find(coach => coach.id === details.coachId);
+      const coach = staffMember(COACH_DIRECTORY, details.coachId);
       if (!coach || amount !== -staffFee(yearContext(year), entry.clubId, coach.fee)) fail(path, 'must record the full catalog coaching fee');
       const contractMatch = typeof details.contractId === 'string' ? /^coach-s([1-9]\d*)-c([1-9]\d*)$/.exec(details.contractId) : null;
       if (!contractMatch || Number(contractMatch[1]) !== year || Number(contractMatch[2]) > maximumContracts || entry.sourceId !== `coaching-${details.contractId}`) fail(`${path}.coach.contractId`, 'must identify a supported contract in this season');

@@ -63,7 +63,7 @@ import { createNegotiations, enableNegotiations } from './negotiations';
 import { createMarket, enableMarket } from './market';
 import { getMarketStartReason, getMarketWindow } from './market-policy';
 import { memoizePure } from './pure-cache';
-import { ASSISTANT_DIRECTORY } from '../data/staff-directory';
+import { ASSISTANT_DIRECTORY, staffMember } from '../data/staff-directory';
 import { usesFullClubRoster } from './club-roster-policy';
 import { canSelectMatchday, captureMatchdaySelection, reconcileMatchdayPlan, selectedTeam, teamForMatchday } from './matchday-selection';
 import type { WorldContext } from '../domain/world';
@@ -328,7 +328,7 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   if (season.assistant?.enabledSince) for (const side of SIDES) {
     if (match[side].id === season.managedClubId) continue;
     const contract = season.assistant.contracts.find(contract => contract.clubId === match[side].id && contract.seasonNumber === season.seasonNumber && contract.startedRound <= fixture.round && contract.releasedRound === null);
-    const coach = contract && ASSISTANT_DIRECTORY.find(coach => coach.id === contract.assistantId);
+    const coach = contract && staffMember(ASSISTANT_DIRECTORY, contract.assistantId);
     if (coach && match.status !== 'finished') match = applyAssistantTactics(match, side, coach);
   }
   return match;

@@ -6,7 +6,7 @@ import { getActiveCareerPlayers } from './player-catalog';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { getClubScouts } from './scout-policy';
 import { abilityRating } from './performance-rating';
-import { SCOUT_DIRECTORY } from '../data/staff-directory';
+import { SCOUT_DIRECTORY, staffMember } from '../data/staff-directory';
 import { scoutingDiscoveryPercent } from './facilities-policy';
 
 export const BASE_SCOUTING_DISCOVERY = 20;
@@ -43,7 +43,7 @@ export function getScoutingDiscovery(state: SeasonState, clubId = state.managedC
   const outsiders = outsiderIds(state, clubId);
   const scouts = state.scouts.enabledSince ? getClubScouts(state, clubId) : [];
   // Format 65: the club's scouting office widens the pool by a condition-scaled share.
-  const staffed = BASE_SCOUTING_DISCOVERY + scouts.reduce((sum, contract) => sum + scoutDiscoveryContribution(SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!), 0);
+  const staffed = BASE_SCOUTING_DISCOVERY + scouts.reduce((sum, contract) => sum + scoutDiscoveryContribution(staffMember(SCOUT_DIRECTORY, contract.scoutId)!), 0);
   const capacity = Math.floor(staffed * (100 + scoutingDiscoveryPercent(state, clubId)) / 100);
   const networkPlayerIds = outsiders.slice(0, capacity);
   const visible = new Set(networkPlayerIds);

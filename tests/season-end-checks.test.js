@@ -8,11 +8,23 @@ import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
 import { seasonRounds, validateWorld } from '../src/world/career-world';
 import { withLowerDivisions } from '../src/world/lower-division';
-import { contractForSeason, getClubContractSummary, MIN_ROSTER_WAGE_RESERVE, WAGE_STEP } from '../src/world/employment-policy';
+import { getClubContractSummary, MIN_ROSTER_SIZE } from '../src/world/employment-policy';
+import { withRealEconomy } from '../src/world/economy';
+import { leavingClubIds } from '../src/world/background';
 
 // Step 3.7 acceptance regressions: season ends that live play reaches and the strict save check must accept.
 const play = state => advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
 const roundTrip = state => parseSeason(serializeSeasonCompact(state));
+
+/** Two divisions with researched money and a next division (as in economy-seasons-career.test.ts). */
+function moneyWorld() {
+  const base = testWorld(12);
+  const playerContracts = Object.fromEntries(base.clubs.flatMap(club => club.players.map((player, index) => [player.id, 1 + (index % 3)])));
+  return withRealEconomy(withLowerDivisions({ ...base, id: 'economy-seasons-test', rosterModel: 'club-roster-1', playerContracts, domesticLeagues: [
+    { id: 'first', name: 'First division', country: 'Testland', tier: 1, clubIds: base.clubs.slice(0, 6).map(club => club.id), postseason: 'test-tier1-1', standingsRule: 'fiba-2026-d' },
+    { id: 'second', name: 'Second division', country: 'Testland', tier: 2, clubIds: base.clubs.slice(6).map(club => club.id), postseason: 'test-tier2-2', standingsRule: 'fiba-2026-d' },
+  ] }, [{ country: 'Testland', tier: 3, name: 'Third division', clubs: Array.from({ length: 4 }, (_, index) => ({ id: `third-${index + 1}`, name: `Third Club ${index + 1}`, shortName: `TC${index + 1}`, color: '#336699' })) }]));
+}
 
 /** Fourteen Greek clubs (final best of five, so a sweep leaves the reserved last week empty) and a next division. */
 function greekWorld() {
@@ -42,31 +54,25 @@ describe('season ends in the strict save check (step 3.7)', () => {
   }, 600_000);
 
   it('lets a club whose agreed wages exceed a fallen allocation complete eight players, so the offseason closes', () => {
-    // Format 72 can lower a club's allocation below wages it agreed earlier (in the real-data acceptance career two
-    // clubs were left with 3 and 7 players over budget and the offseason never closed). Only the large run reaches that
-    // by play, so the agreed wages are raised here: three players whose wages exceed the whole allocation, nobody else.
-    const world = { ...testWorld(6), rosterModel: 'club-roster-1' };
-    let state = setEmploymentDelegation(createSeason({ world, seed: 5, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
-    // Before the final matchday, so the offseason opens on these terms.
-    while (state.round < seasonRounds(state)) state = play(state);
-    const clubId = world.clubs[3].id, next = state.seasonNumber + 1;
-    const budget = getClubContractSummary(state, clubId).budget;
-    const kept = state.employment.contracts.filter(contract => contract.clubId === clubId && contractForSeason(state.employment, contract.playerId, state.seasonNumber)?.id === contract.id && [undefined, clubId].includes(contractForSeason(state.employment, contract.playerId, next)?.clubId)).slice(0, 3);
-    const wage = (Math.floor(budget / 2 / WAGE_STEP) + 1) * WAGE_STEP;
-    const agreed = kept.map((contract, index) => ({ ...contract, id: `employment-contract-agreed-${index + 1}`, startsSeason: next, startsRound: 1, endsSeason: next, seasonWage: wage, signedSeason: state.seasonNumber, signedRound: 1, kind: 'renewal' }));
-    state = { ...state, employment: { ...state.employment, contracts: [
-      ...state.employment.contracts.filter(contract => contract.clubId !== clubId || contract.startsSeason <= state.seasonNumber).map(contract => contract.clubId === clubId ? { ...contract, endsSeason: state.seasonNumber } : contract),
-      ...agreed,
-    ] } };
+    // Format 72 lowers a club's allocation at a rollover while wages agreed earlier stay (real-data acceptance: two clubs
+    // with 3 and 7 players over their new allocation, and the season-four offseason never closed). In this world the
+    // manager's (delegated) club starts season two's offseason with five players over its fallen allocation.
+    const world = moneyWorld();
+    let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
     while (state.status === 'active') state = play(state);
-    const before = getClubContractSummary(state, clubId);
-    expect(before.rosterSize).toBeLessThan(8);
-    expect(before.seasonWages).toBeGreaterThan(before.budget);
+    for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
+    state = rolloverSeason(state);
+    while (state.status === 'active') state = play(state);
+    const leaving = leavingClubIds(state);
+    const short = state.clubs.filter(club => !leaving.has(club.id)).map(club => getClubContractSummary(state, club.id)).filter(summary => summary.rosterSize < MIN_ROSTER_SIZE && summary.seasonWages > summary.budget);
+    expect(short.map(summary => summary.clubId)).toEqual([world.clubs[0].id]);
+    const agreed = new Set(short[0].contracts.map(contract => contract.id));
     for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
     expect(getMarketStartReason(state)).toBeNull();
-    const after = getClubContractSummary(state, clubId);
-    expect(after.rosterSize).toBeGreaterThanOrEqual(8);
-    // Only players at no more than the protected reserve wage were added over the allocation.
-    expect(after.contracts.filter(contract => !agreed.some(item => item.id === contract.id)).every(contract => contract.seasonWage <= MIN_ROSTER_WAGE_RESERVE)).toBe(true);
-  }, 600_000);
+    const after = getClubContractSummary(state, short[0].clubId);
+    expect(after.rosterSize).toBeGreaterThanOrEqual(MIN_ROSTER_SIZE);
+    // Only cheap players needed for the minimum squad were added over the fallen allocation, and the save check agrees.
+    expect(after.contracts.filter(contract => !agreed.has(contract.id)).every(contract => contract.seasonWage <= short[0].reserveWage)).toBe(true);
+    expect(roundTrip(state)).toEqual(state);
+  }, 900_000);
 });

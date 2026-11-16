@@ -447,7 +447,7 @@ function automateEarlyExits(state: SeasonState): SeasonState {
     }
     const naming = namingOf(next.commercial), arena = namingAgreementFor(naming, club.id, next.seasonNumber);
     if (naming.plans[club.id]?.delegated && leaving(next, arena)) {
-      const best = bestNamingOfferAfterExit({ seed: next.seed, naming, agreement: arena, window: 'renewal', anchor: commercialAnchor(next), appeal: appeal(club.id), world, basis: namingBasis(next, leagues(club.id), club.id) });
+      const best = bestNamingOfferAfterExit({ seed: next.seed, naming, agreement: arena, window: 'renewal', anchor: commercialAnchor(next), appeal: appeal(club.id), world, basis: namingBasis(next, leagues(club.id), club.id, 'renewal') });
       if (best && clearlyBetterFee(arena.annualFee, best.annualFee)) next = end(next, 'naming', arena);
     }
   }

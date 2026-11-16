@@ -99,7 +99,10 @@ export function validateCommercial(state: SeasonState, version: number): void {
   // Format 64: objectives are set within the club's league that season.
   const seasonDivisions = (seasonNumber: number) => seasonNumber === state.seasonNumber ? state.divisions : state.history.find(archive => archive.seasonNumber === seasonNumber)?.divisions;
   const setExit = (agreementId: string, exit: CommercialExit) => { replay = { ...replay, agreements: replay.agreements.map(item => item.id === agreementId ? { ...item, exit } : item) }; };
-  const completionStart = (seasonNumber: number) => { const first = ledger.findIndex(entry => entry.seasonNumber === seasonNumber && entry.round === seasonRounds(state) && entry.kind === 'tickets'); return first < 0 ? financeLedgerCount({ ledger }) : first; };
+  // The final matchday's commit starts with its gates, or with its operating costs when no game is left that week (step
+  // 3.7: a postseason final settled early leaves the reserved last week empty; reading only gates then put the season-end
+  // exits and offers before the season's completion, and refused the career). Same boundary as career moves.
+  const completionStart = (seasonNumber: number) => { const first = ledger.findIndex(entry => entry.seasonNumber === seasonNumber && entry.round === seasonRounds(state) && (entry.kind === 'tickets' || entry.kind === 'operations')); return first < 0 ? financeLedgerCount({ ledger }) : first; };
   const eventAt = (position: number): CommercialEvent => {
     const path = `commercial.events[${position}]`;
     const raw = events[position];

@@ -55,7 +55,7 @@ export function offeredContractRole(context: ContractRoleContext, clubId: string
 }
 
 /** The role's effect on a wage: a percentage of it, in contract wage steps, within the contract wage limits. */
-export function roleWage(base: number, role: SquadRole | undefined, context?: CareerPlayerContext): number {
+export function roleWage(base: number, role: SquadRole | undefined, context: CareerPlayerContext): number {
   const percent = role ? RULES.wagePercent[role] : 0;
   if (!percent) return base;
   return Math.min(maxContractWage(context), Math.max(MIN_CONTRACT_WAGE, Math.ceil(base * (100 + percent) / (100 * WAGE_STEP)) * WAGE_STEP));

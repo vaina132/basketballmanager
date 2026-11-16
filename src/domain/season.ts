@@ -1,6 +1,6 @@
 import type { SeasonBackground } from './background';
 import type { CompetitionStage } from './competition';
-import type { CareerWorld } from './world';
+import type { CareerWorld, SeasonEconomy } from './world';
 import type { SeasonBoard } from './board';
 import type { SeasonCommercial } from './commercial';
 import type { SeasonRivalries } from './rivalries';
@@ -130,8 +130,8 @@ export interface DomesticDivisions {
 /** Format 59 adds the BCL format: qualification, a protected draw, play-ins, Round of 16 groups and a Final Four (step 3.5e). */
 /** Format 60 adds estimated tables for unchosen leagues and each season end's European places (`europe`, step 3.5f). */
 /** Format 61 records realistic injury kinds (sprint 4) and each career match's recurrence risk (`activeMatch.injuryRisk`). Format 62 (sprint 4) gives real-club worlds researched money: `world.economy` and each club's `finances[].economy` (`src/world/economy.ts`). */
-/** Format 63 (saved ideas: career and board) adds the `career-2` rules for new careers: a protected first season, fresh board confidence for a new coach (`board.restarts`), mid-season dismissals and resignations (`CAREER_RULES`, `src/world/career-rules.ts`). Format 64 gives new careers sponsorship exit clauses and arena naming rights (`commercial.model` 'commercial-2', `commercial.naming`, ledger kinds 'naming-rights' and 'sponsor-exit'). Format 65: new careers use the `facilities-2` model: medical and scouting facilities, seasonal wear and repair projects (`FACILITY_RULES_2`, `src/world/facilities-policy.ts`). Format 66 gives new careers the `relationships-2` model: default roles by recorded squad rank (`relationships.squadRanks`) and players' contract requests with the club's replies. Format 67 adds richer press topics and the manager's media standing (`media`, `src/world/media.ts`). Format 68: new careers grow rivalries from results (`rivalries.model` 'rivalries-2', `src/world/rivalry-growth.ts`); older careers keep the world's fixed rivalries. Format 71: new careers can finance facility projects with bank loans and leases (`facilities.financing` 'loans-1', `facilities.debts`, ledger kinds 'loan', 'loan-repayment' and 'lease'; `FACILITY_FINANCING_RULES`, `src/world/facility-debt.ts`); older careers pay upfront. */
-export const SEASON_SCHEMA_VERSION = 71;
+/** Format 63 (saved ideas: career and board) adds the `career-2` rules for new careers: a protected first season, fresh board confidence for a new coach (`board.restarts`), mid-season dismissals and resignations (`CAREER_RULES`, `src/world/career-rules.ts`). Format 64 gives new careers sponsorship exit clauses and arena naming rights (`commercial.model` 'commercial-2', `commercial.naming`, ledger kinds 'naming-rights' and 'sponsor-exit'). Format 65: new careers use the `facilities-2` model: medical and scouting facilities, seasonal wear and repair projects (`FACILITY_RULES_2`, `src/world/facilities-policy.ts`). Format 66 gives new careers the `relationships-2` model: default roles by recorded squad rank (`relationships.squadRanks`) and players' contract requests with the club's replies. Format 67 adds richer press topics and the manager's media standing (`media`, `src/world/media.ts`). Format 68: new careers grow rivalries from results (`rivalries.model` 'rivalries-2', `src/world/rivalry-growth.ts`); older careers keep the world's fixed rivalries. Format 71: new careers can finance facility projects with bank loans and leases (`facilities.financing` 'loans-1', `facilities.debts`, ledger kinds 'loan', 'loan-repayment' and 'lease'; `FACILITY_FINANCING_RULES`, `src/world/facility-debt.ts`); older careers pay upfront.  Format 72 (club money follows promotion and relegation): new careers of real-data worlds record each season's club money figures (`economySeasons`, `src/world/economy.ts`); older careers keep their opening figures. */
+export const SEASON_SCHEMA_VERSION = 72;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -190,6 +190,8 @@ export interface SeasonState {
   europe?: SeasonEurope;
   /** Format 67: richer press topics and media standing, in careers created with them; absent careers keep the format-34 press. */
   media?: SeasonMedia;
+  /** Format 72: each season's club money figures, in new careers of real-data worlds; absent careers keep the world's opening figures. */
+  economySeasons?: SeasonEconomy;
   activeFixtureId: string | null;
   activeMatch: MatchState | null;
 }

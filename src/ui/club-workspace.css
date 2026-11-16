@@ -31,6 +31,10 @@
 .club-venue>dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 24px;margin:0;padding:12px 14px}
 .club-venue dt{font-size:12px;color:var(--muted);line-height:1.4}
 .club-venue dd{margin:4px 0 0;font-size:12px;line-height:1.5;font-weight:500}
+.club-money>dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 24px;margin:0;padding:12px 14px;font-variant-numeric:tabular-nums}
+.club-money dt{font-size:12px;color:var(--muted);line-height:1.4}
+.club-money dd{margin:4px 0 0;font-size:14px;line-height:1.5;font-weight:500;overflow-wrap:anywhere}
+.club-money dd small{display:block;font-size:12px;font-weight:400;color:var(--muted)}
 .club-ticket-controls{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:32px;padding:14px}
 .club-ticket-control{display:flex;flex-direction:column;gap:7px;min-width:0}
 .club-ticket-control>div{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -83,3 +87,4 @@
 @media(max-width:900px){.club-venue>dl{grid-template-columns:repeat(2,minmax(0,1fr))}.club-ticket-controls{gap:22px}}
 @media(max-width:650px){.club-heading{align-items:flex-start;flex-wrap:wrap;padding:10px;gap:8px}.club-finance-summary{padding:12px 10px;gap:12px}.club-finance-summary dd{font-size:14px}.club-venue>dl{padding:12px 10px;gap:12px}.club-ticket-controls{grid-template-columns:1fr;gap:20px;padding:12px 10px}.club-gate-fixture{padding:10px 10px 0}.club-gate-values{padding:12px 10px;gap:12px}.club-gate-values dd{font-size:13px}.club-ledger-filters{padding:10px;gap:10px}.club-ledger-filters label{width:100%;justify-content:space-between}.club-ledger-filters select{width:72%}.club-note,.club-model-note{padding-inline:10px}.club-finance-enable>div{padding:12px 10px}.club-unpaid-note{padding:10px}}
 .club-derby{color:var(--accent);font-weight:500}
+@media(max-width:650px){.club-money>dl{grid-template-columns:1fr;padding:12px 10px;gap:10px}}

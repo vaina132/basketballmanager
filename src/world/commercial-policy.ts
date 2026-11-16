@@ -2,7 +2,7 @@ import type { CommercialAnchor, CommercialExit, CommercialExitReason, NamingRigh
 import type { FinanceEntry } from '../domain/finance';
 import type { ArchivedFixture, DomesticDivisions, SeasonFixture } from '../domain/season';
 import type { Team } from '../domain/types';
-import type { CareerWorld } from '../domain/world';
+import type { CareerWorld, SeasonEconomy, WorldContext } from '../domain/world';
 import { clubFinanceDefinition } from './career-world';
 import { seasonLeagues } from './divisions';
 import { clubEconomy } from './economy';
@@ -10,8 +10,11 @@ import { seasonStartDate } from './season';
 
 /** The fixed sponsorship that negotiations replace: EUR 200,000 a season, in euro cents. */
 export const SPONSORSHIP_REFERENCE_FEE = 20_000_000;
-/** A club's sponsorship benchmark: its researched main sponsorship in worlds with an economy (format 62), otherwise EUR 200,000. */
-export const sponsorshipReferenceFee = (world: CareerWorld, clubId: string): number => clubEconomy({ world }, clubId)?.sponsorship ?? SPONSORSHIP_REFERENCE_FEE;
+/**
+ * A club's sponsorship benchmark: its researched main sponsorship in worlds with an economy (format 62), otherwise EUR
+ * 200,000. Format 72: `at` names the season (and carries the career's per-season figures) whose sponsorship applies.
+ */
+export const sponsorshipReferenceFee = (world: CareerWorld, clubId: string, at?: Pick<WorldContext, 'seasonNumber' | 'economySeasons'>): number => clubEconomy({ world, ...(at?.economySeasons ? { seasonNumber: at.seasonNumber, economySeasons: at.economySeasons } : {}) }, clubId)?.sponsorship ?? SPONSORSHIP_REFERENCE_FEE;
 export const SPONSORSHIP_MIN_APPEAL = 0.75;
 export const SPONSORSHIP_MAX_APPEAL = 1.25;
 export const SPONSORSHIP_OFFERS_PER_WINDOW = 3;
@@ -174,14 +177,16 @@ export function needsSponsorshipOffers(commercial: SeasonCommercial, clubId: str
 }
 
 /** Deterministic offers for one club: the incumbent's renewal first, then other available sponsors in seeded order. */
-export function buildSponsorshipOffers(input: { seed: number; commercial: SeasonCommercial; clubId: string; window: SponsorshipWindow; anchor: CommercialAnchor; appeal: number; world: CareerWorld; league?: Pick<SponsorLeague, 'id' | 'clubIds'> }): SponsorshipOffer[] {
+export function buildSponsorshipOffers(input: { seed: number; commercial: SeasonCommercial; clubId: string; window: SponsorshipWindow; anchor: CommercialAnchor; appeal: number; world: CareerWorld; league?: Pick<SponsorLeague, 'id' | 'clubIds'>; economySeasons?: SeasonEconomy }): SponsorshipOffer[] {
   const { seed, commercial, clubId, window, anchor, appeal, world } = input;
+  // Format 72: offers value the club at the money level of the season in which they are made.
+  const at = { seasonNumber: anchor.seasonNumber, ...(input.economySeasons ? { economySeasons: input.economySeasons } : {}) };
   const forSeason = anchor.seasonNumber + 1, clauses = usesCommercialClauses(commercial);
   const current = agreementFor(commercial, clubId, anchor.seasonNumber);
   // Format 64: a sponsor that left early, or was ended early, makes no new offer to that club the same season.
   const incumbent = window === 'renewal' && current && !current.exit && sponsorAvailable(commercial, current.sponsorId, clubId, forSeason) ? current.sponsorId : null;
   const ended = clauses ? new Set(commercial.agreements.filter(agreement => agreement.clubId === clubId && agreement.exit && agreement.exit.seasonNumber === anchor.seasonNumber).map(agreement => agreement.sponsorId)) : null;
-  const objective = clauses && input.league ? sponsorObjective(world, input.league, clubId) : null;
+  const objective = clauses && input.league ? sponsorObjective(world, input.league, clubId, at) : null;
   const pool = world.sponsors.map(sponsor => sponsor.id).filter(id => id !== incumbent && !ended?.has(id) && sponsorAvailable(commercial, id, clubId, forSeason))
     .sort((left, right) => hash(seed, `${clubId}|${forSeason}|${window}|${left}`) - hash(seed, `${clubId}|${forSeason}|${window}|${right}`) || (left < right ? -1 : left > right ? 1 : 0));
   const chosen = [...(incumbent ? [incumbent] : []), ...pool].slice(0, SPONSORSHIP_OFFERS_PER_WINDOW);
@@ -190,7 +195,7 @@ export function buildSponsorshipOffers(input: { seed: number; commercial: Season
     const h = hash(seed, `sponsor-offer|${clubId}|${forSeason}|${window}|${sponsorId}`);
     const seasons = sponsorId === incumbent ? 2 : 1 + h % 3;
     const variation = 0.95 + Math.floor(h / 3) % 11 / 100;
-    const annualFee = roundFee(sponsorshipReferenceFee(world, clubId) * appeal * variation * (1 - SPONSORSHIP_TERM_DISCOUNT * (seasons - 1)));
+    const annualFee = roundFee(sponsorshipReferenceFee(world, clubId, at) * appeal * variation * (1 - SPONSORSHIP_TERM_DISCOUNT * (seasons - 1)));
     const bonus = Math.floor(h / 33) % 2 === 0 ? roundFee(annualFee * SPONSORSHIP_BONUS_PERCENT / 100) : 0;
     return { id: `sponsorship-offer-${commercial.offers.length + index + 1}`, clubId, sponsorId, window, madeAt: { ...anchor }, appeal, forSeason, seasons, initialAnnualFee: annualFee, annualFee, bonus, expiresOn, status: 'open' as const, closedOn: null, request: null, ...(clauses ? { objective: objective && { ...objective } } : {}) };
   });
@@ -229,9 +234,9 @@ export function sponsorLeague(world: CareerWorld, divisions: DomesticDivisions |
  * The sponsor's stated objective: clubs are ranked by commercial size (sponsorship benchmark times usual crowd); the
  * objective lies a sixth of the league below that rank, so a large club is expected to finish high.
  */
-export function sponsorObjective(world: CareerWorld, league: Pick<SponsorLeague, 'id' | 'clubIds'>, clubId: string): SponsorObjective {
+export function sponsorObjective(world: CareerWorld, league: Pick<SponsorLeague, 'id' | 'clubIds'>, clubId: string, at?: Pick<WorldContext, 'seasonNumber' | 'economySeasons'>): SponsorObjective {
   const size = league.clubIds.length;
-  const value = (id: string) => sponsorshipReferenceFee(world, id) * clubFinanceDefinition(world, id).referenceDemand;
+  const value = (id: string) => sponsorshipReferenceFee(world, id, at) * clubFinanceDefinition(world, id).referenceDemand;
   const ranked = [...league.clubIds].sort((left, right) => value(right) - value(left) || (left < right ? -1 : left > right ? 1 : 0));
   const rank = Math.max(1, ranked.indexOf(clubId) + 1);
   return { leagueId: league.id, position: Math.min(size, rank + Math.max(1, Math.ceil(size * COMMERCIAL_CLAUSE_RULES.objectiveMarginShare))), leagueSize: size };

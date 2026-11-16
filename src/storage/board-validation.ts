@@ -47,6 +47,8 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard):
   const finance = financeAtLedgerBoundary(state.finance, anchor.ledgerCount), ledger = finance.ledger;
   return {
     ...(state.world ? { world: state.world } : {}), dataPackId: state.dataPackId, seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
+    // Format 72: that season's club money figures.
+    ...(state.economySeasons ? { economySeasons: state.economySeasons } : {}),
     // That season's own divisions (step 3.4c).
     ...({ divisions: anchor.seasonNumber === state.seasonNumber ? state.divisions : state.history.find(archive => archive.seasonNumber === anchor.seasonNumber)?.divisions } as object),
     rosters, fixtures, board, employment: { transfers: state.employment.transfers }, physio: state.physio, rivalries: state.rivalries,

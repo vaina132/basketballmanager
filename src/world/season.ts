@@ -6,6 +6,7 @@ import { summarizeYouthHistory } from './youth-history';
 import { fixturePlayerEvidence, summarizeSeniorHistory } from './senior-history';
 import { createRivalries, enableRivalries } from './rivalries';
 import { createGrownRivalries, growRivalries } from './rivalry-growth';
+import { createEconomySeasons, growEconomy } from './economy';
 import { appointManager, createCareer, enableCareerMoves, matchClubFor, restartBoard, transferManager, currentMovePhase } from './career';
 import { jobOfferRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
 import { CAREER_RULES, coachProtected, startingConfidence, usesCareerRules } from './career-rules';
@@ -424,6 +425,8 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const state: SeasonState = {
     schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId, { world }), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), facilities: createFacilities(clubs, managedClubId, facilitiesEnabled ? 'facilities-2' : 'facilities-1', facilitiesEnabled ? 'loans-1' : undefined), relationships: createRelationships(), board: createBoard(), rivalries: rivalriesEnabled ? createGrownRivalries(world) : createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId, namingRightsEnabled ? 'commercial-2' : 'commercial-1'), negotiations: createNegotiations(), market: createMarket(),
     ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), ...(europe ? { europe } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
+    // Format 72: club money follows promotion and relegation in new careers of real-data worlds that start with finances.
+    ...(world.economy && financeEnabled ? { economySeasons: createEconomySeasons() } : {}),
     activeFixtureId: first?.id ?? null, activeMatch: first ? prepareMatch({ ...preparation, dataPackId: world.id }, first) : null,
   };
   const funded = financeEnabled ? enableFinance(state) : state;
@@ -824,6 +827,8 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   };
   // Format 68: the new season's rivalries grow from the completed season, before any system reads its derbies.
   next = growRivalries(next);
+  // Format 72: the new season's club money follows its divisions and European places, before any of it moves.
+  next = growEconomy(next);
   // Step 3.4d-2: clubs joining the full world get each system's opening records.
   const joining = exchanges.flatMap(exchange => exchange.joining);
   if (joining.length) {

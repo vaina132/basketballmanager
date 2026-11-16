@@ -1,10 +1,14 @@
 import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPresident } from '../data/development-presidents';
-import type { CareerWorld, ClubEconomy, EconomyBand, WorldContext, WorldEconomyId } from '../domain/world';
+import type { BackgroundLeague, CareerWorld, ClubEconomy, EconomyBand, EconomyChangeReason, EuropeanCompetition, EuropeanCompetitionKind, SeasonClubEconomy, SeasonEconomy, SeasonEconomyTable, WorldContext, WorldEconomyId } from '../domain/world';
+import type { DomesticDivisions, SeasonEurope, SeasonState } from '../domain/season';
+import type { RosterSnapshot } from '../domain/roster';
 import type { Team } from '../domain/types';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { overallRating } from './overall-rating';
 import { STAFF_BUDGET } from './staff-constants';
+import { clubCountry, fullWorldClubsIn, worldOf } from './career-world';
+import { seasonLeagues } from './divisions';
 
 /**
  * Realistic money for real-club worlds (sprint 4, format 62). Every number below is a rule the owner can adjust; the
@@ -150,6 +154,20 @@ export const REAL_ECONOMY_RULES = Object.freeze({
   operatingCushionShare: 0.5,
   /** Contract and fee limits of worlds with this economy (euros): far above any researched salary or fee. */
   limits: Object.freeze({ maxContractWage: 15_000_000, maxTransferFee: 50_000_000, maxReleaseFee: 50_000_000 }),
+  /**
+   * Format 72 (saved ideas level, new careers only): club money follows promotion, relegation and European places.
+   * At every rollover each full-world club's target figures are worked out by the rules above from its new band
+   * (its division and tier, the European competition it enters, its country) and its squad strength among the clubs
+   * of that band and country (last season's latest registrations), exactly as at world creation; a published budget
+   * (`knownBudgets`) is the target while the club plays in the band it had at world creation. Bands overlap, so
+   * moving down a band never raises the target budget above last season's and moving up never lowers it. The club's
+   * arena and usual crowd stay its own. Every amount then moves `share` of the way from last season's figure to the
+   * target (rounded on the change): half the gap in the first season, three quarters after two, so relegation hurts
+   * but not overnight. Agreed contracts keep their wages; the player salary budget follows the season's player wage
+   * bill (`playerBill`) against the opening one. New figures apply from the rollover: offseason offers are planned
+   * with the completed season's figures. Older careers keep the world's opening figures.
+   */
+  seasons: Object.freeze({ share: 0.5 }),
 });
 
 type RevenueMix = { tickets: number; sponsorship: number; central: number; public: number; owner: number; other: number };
@@ -166,13 +184,40 @@ export function worldEconomy(context: WorldContext | undefined): WorldEconomyId 
 }
 
 const economyIndexes = new WeakMap<CareerWorld, Map<string, ClubEconomy>>();
-/** A club's economy figures, or null in worlds without an economy (the development constants apply). */
-export function clubEconomy(context: WorldContext | undefined, clubId: string): ClubEconomy | null {
-  const world = context?.world;
-  if (!world?.economy) return null;
+/** A club's opening figures (the world's, season one), or null in worlds without an economy. */
+function openingEconomy(world: CareerWorld, clubId: string): ClubEconomy | null {
+  if (!world.economy) return null;
   let index = economyIndexes.get(world);
   if (!index) { index = new Map(world.finances.flatMap(item => item.economy ? [[item.clubId, item.economy] as const] : [])); economyIndexes.set(world, index); }
   return index.get(clubId) ?? null;
+}
+
+/**
+ * Format 72: a club's stored figures for a season after the first: the latest table up to that season that lists it
+ * (a later season than the last table reads the last one; a club outside the full world keeps its last figures).
+ */
+function seasonEconomyEntry(seasons: SeasonEconomy, clubId: string, seasonNumber: number): SeasonClubEconomy | null {
+  for (let index = Math.min(seasonNumber - 2, seasons.seasons.length - 1); index >= 0; index -= 1) {
+    const entry = seasons.seasons[index]?.clubs[clubId];
+    if (entry) return entry;
+  }
+  return null;
+}
+
+/**
+ * A club's economy figures, or null in worlds without an economy (the development constants apply). Format 72: a
+ * context naming its season and carrying the career's per-season figures reads that season's; any other context (and
+ * every older career) reads the world's opening figures.
+ */
+export function clubEconomy(context: WorldContext | undefined, clubId: string): ClubEconomy | null {
+  const world = context?.world;
+  if (!context || !world?.economy) return null;
+  const seasons = context.economySeasons, year = context.seasonNumber;
+  if (seasons && year !== undefined && year > 1) {
+    const entry = seasonEconomyEntry(seasons, clubId, year);
+    if (entry) return entry;
+  }
+  return openingEconomy(world, clubId);
 }
 
 /**
@@ -284,33 +329,53 @@ export function shareWageBill(players: readonly Team['players'][number][], bill:
   }));
 }
 
+/** Where a club plays in a season, for its money: country, division tier, league (null outside any) and league size. */
+interface EconomyPlace { country: string; tier: number; league: string | null; size: number }
+/** Every club's place, band, European competition and placements within its band and gate groups. */
+interface EconomyLayout {
+  place: Map<string, EconomyPlace>;
+  band: Map<string, EconomyBand>;
+  competition: Map<string, EuropeanCompetition>;
+  budgetT: Map<string, number>;
+  gateT: Map<string, number>;
+}
+interface EconomyLayoutInput {
+  leagues: readonly { id: string; country: string; tier: number; clubIds: readonly string[] }[];
+  /** Next-division members (the world's lists at its creation, each season's members later). */
+  lower: readonly { country: string; tier: number; clubIds: readonly string[] }[];
+  background: readonly BackgroundLeague[];
+  /** European competitions with this season's entrants. */
+  competitions: readonly EuropeanCompetition[];
+  /** Every club of the world, in world order. */
+  clubIds: readonly string[];
+  strength: ReadonlyMap<string, number>;
+  countryOf: (clubId: string) => string | null;
+}
+
 /**
- * Format 62: a real-club world whose money follows researched club budgets. Every club (chosen leagues, next
- * divisions, unchosen top divisions and European-only entrants) gets a band, a budget placed by squad strength, player
- * wages sharing the band's wage bill, a gate (seats, usual crowd, default ticket price), sponsorship and season
- * funding that balance the budget, operating costs, opening cash and a scale for catalog amounts. `countryOf` names a
- * European-only entrant's country when the world does not record it.
+ * Bands and placements (format 62, reused by format 72 each season): the EuroLeague's strongest share is its top group;
+ * other top-division clubs are upper half when they play the EuroCup or BCL, have no domestic league in the world, or
+ * rank in the upper half of their league by strength. Budgets are placed within band and country, gates within league
+ * (EuroLeague clubs among themselves).
  */
-export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) => string | null = () => null): CareerWorld {
-  const rules = REAL_ECONOMY_RULES;
-  const strength = new Map(world.clubs.map(club => [club.id, strengthOf(club.players)]));
-  const leagues = world.domesticLeagues ?? [];
+function economyLayout(input: EconomyLayoutInput): EconomyLayout {
+  const rules = REAL_ECONOMY_RULES, { leagues, strength } = input;
   const lowest = (country: string) => { const own = leagues.filter(league => league.country === country); return own.find(league => league.tier === Math.max(...own.map(item => item.tier))); };
   // Each club's country, tier and the league it plays (or would join) in.
-  const place = new Map<string, { country: string; tier: number; league: string | null; size: number }>();
+  const place = new Map<string, EconomyPlace>();
   for (const league of leagues) for (const clubId of league.clubIds) place.set(clubId, { country: league.country, tier: league.tier, league: league.id, size: league.clubIds.length });
-  for (const list of world.lowerDivisions ?? []) if ('clubIds' in list) for (const clubId of list.clubIds) place.set(clubId, { country: list.country, tier: list.tier, league: `lower-${list.country}`, size: lowest(list.country)?.clubIds.length ?? list.clubIds.length });
-  for (const league of world.backgroundLeagues ?? []) for (const clubId of league.clubIds) if (!place.has(clubId)) place.set(clubId, { country: league.country, tier: 1, league: league.id, size: league.clubIds.length });
-  const competitions = world.europeanCompetitions ?? [];
-  for (const competition of competitions) for (const clubId of competition.clubIds) if (!place.has(clubId)) place.set(clubId, { country: competition.countries?.[clubId] ?? countryOf(clubId) ?? 'Other', tier: 1, league: null, size: 1 });
-  for (const club of world.clubs) if (!place.has(club.id)) place.set(club.id, { country: countryOf(club.id) ?? 'Other', tier: 1, league: null, size: 1 });
+  for (const list of input.lower) for (const clubId of list.clubIds) place.set(clubId, { country: list.country, tier: list.tier, league: `lower-${list.country}`, size: lowest(list.country)?.clubIds.length ?? list.clubIds.length });
+  for (const league of input.background) for (const clubId of league.clubIds) if (!place.has(clubId)) place.set(clubId, { country: league.country, tier: 1, league: league.id, size: league.clubIds.length });
+  for (const competition of input.competitions) for (const clubId of competition.clubIds) if (!place.has(clubId)) place.set(clubId, { country: competition.countries?.[clubId] ?? input.countryOf(clubId) ?? 'Other', tier: 1, league: null, size: 1 });
+  for (const clubId of input.clubIds) if (!place.has(clubId)) place.set(clubId, { country: input.countryOf(clubId) ?? 'Other', tier: 1, league: null, size: 1 });
   for (const item of place.values()) item.country = rules.countryAliases[item.country] ?? item.country;
-  const kindOf = (clubId: string) => competitions.find(competition => competition.clubIds.includes(clubId))?.kind ?? null;
+  // A club's European competition: the first that lists it.
+  const competition = new Map<string, EuropeanCompetition>();
+  for (const entry of input.competitions) for (const clubId of entry.clubIds) if (!competition.has(clubId)) competition.set(clubId, entry);
+  const kindOf = (clubId: string) => competition.get(clubId)?.kind ?? null;
 
-  // Bands: the EuroLeague's strongest share is its top group; other top-division clubs are upper half when they play
-  // the EuroCup or BCL, have no domestic league in the world, or rank in the upper half of their league by strength.
   const band = new Map<string, EconomyBand>();
-  const euroleague = world.clubs.map(club => club.id).filter(clubId => kindOf(clubId) === 'euroleague').sort((a, b) => strength.get(b)! - strength.get(a)! || (a < b ? -1 : 1));
+  const euroleague = input.clubIds.filter(clubId => kindOf(clubId) === 'euroleague').sort((a, b) => strength.get(b)! - strength.get(a)! || (a < b ? -1 : 1));
   euroleague.forEach((clubId, index) => band.set(clubId, index < Math.round(euroleague.length * rules.euroleagueTopShare) ? 'euroleague-top' : 'euroleague'));
   const byLeague = new Map<string, string[]>();
   for (const [clubId, item] of place) if (item.league) addTo(byLeague, item.league, clubId);
@@ -322,7 +387,6 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
     band.set(clubId, !item.league || kindOf(clubId) || members.indexOf(clubId) < members.length / 2 ? 'top-upper' : 'top-lower');
   }
 
-  // Budget placement within band and country; gate placement within league (EuroLeague clubs among themselves).
   const budgetGroups = new Map<string, string[]>(), gateGroups = new Map<string, string[]>();
   for (const [clubId, item] of place) {
     const own = band.get(clubId)!, euro = own === 'euroleague-top' || own === 'euroleague';
@@ -331,47 +395,234 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
     addTo(budgetGroups, `${own}/${euro ? '' : country}`, clubId);
     addTo(gateGroups, euro ? 'euroleague' : item.league ?? `${item.country}-${item.tier}`, clubId);
   }
-  const budgetT = percentiles(budgetGroups, strength), gateT = percentiles(gateGroups, strength);
+  return { place, band, competition, budgetT: percentiles(budgetGroups, strength), gateT: percentiles(gateGroups, strength) };
+}
+
+/** A budget in euros placed by strength within its band and country (`t` from 0, the weakest, to 1, the strongest). */
+function placedBudget(band: EconomyBand, country: string, t: number): number {
+  const [low, typical, high] = bandFor(REAL_ECONOMY_RULES.budgets[band], country);
+  return t < 0.5 ? lerp(low, typical, t * 2) : lerp(typical, high, t * 2 - 1);
+}
+/** A budget in euros as stored: rounded to EUR 10,000, in cents. */
+const budgetCents = (euros: number): number => Math.round(euros / 10_000) * 10_000 * CENTS;
+
+/** Gate: seats around the league's average by strength, a usual crowd within them, and the league's ticket yield. */
+function gateFor(place: EconomyPlace, band: EconomyBand, g: number): { capacity: number; referenceDemand: number; ticketPrice: number } {
+  const rules = REAL_ECONOMY_RULES, euro = band === 'euroleague-top' || band === 'euroleague';
+  const gate = euro ? rules.gates.euroleague : bandFor(place.tier >= 3 ? rules.gates.third : place.tier === 2 ? rules.gates.second : rules.gates.top, place.country);
+  const [small, middle, large] = rules.seatSpread;
+  const capacity = clamp(Math.round(gate.seats * (g < 0.5 ? lerp(small, middle, g * 2) : lerp(middle, large, g * 2 - 1)) / 100) * 100, 500, 60_000);
+  const referenceDemand = clamp(Math.round(capacity * clamp(gate.fill + rules.fillSpread * (g - 0.5), 0.2, 0.98) / 100) * 100, 100, capacity);
+  const ticketPrice = Math.max(3, Math.round(euro ? lerp(rules.euroleaguePrice[0], rules.euroleaguePrice[1], g) : gate.price * lerp(rules.priceSpread[0], rules.priceSpread[1], g))) * CENTS;
+  return { capacity, referenceDemand, ticketPrice };
+}
+
+/**
+ * A club's season figures from its budget (cents), band, place, European competition and gate: sponsorship and season
+ * funding that balance the budget with the expected gate, the player wage bill, operating costs, opening cash and the
+ * scale for catalog amounts.
+ */
+function clubFigures(band: EconomyBand, place: EconomyPlace, competition: EuropeanCompetition | undefined, budget: number, gate: { capacity: number; referenceDemand: number; ticketPrice: number }): { economy: ClubEconomy; playerBill: number } {
+  const rules = REAL_ECONOMY_RULES, { capacity, referenceDemand, ticketPrice } = gate;
+  // Expected gate income: delegated pricing sells out at the price where the usual crowd fills the arena.
+  const kind = competition?.kind ?? null;
+  const european = !competition?.format ? 0 : kind === 'euroleague' ? competition.clubIds.length - 1 : kind === 'eurocup' ? Math.max(1, competition.clubIds.length / rules.europeanHomeGames.eurocupGroups - 1) : rules.europeanHomeGames.bcl;
+  const homeGames = (place.league ? place.size - 1 + rules.playoffHomeGames : 0) + european;
+  const tickets = Math.round(homeGames * capacity * ticketPrice * (referenceDemand / capacity) ** (1 / 1.4));
+  const mix = revenueMixFor(band, place.country);
+  const sponsorship = Math.round(budget * mix.sponsorship / 100 / 10_000) * 10_000;
+  const funding = Math.max(0, Math.round((budget - sponsorship - tickets) / 10_000) * 10_000);
+  // Costs: player wages, the staff allocation (head coach and support staff), a reserve and operating costs.
+  const wageBill = budget * rules.wageShare[band] / 100;
+  const playerBill = Math.round(wageBill * (100 - rules.headCoachPercent) / 100);
+  const staff = wageBill * rules.headCoachPercent / 100 + budget * rules.supportStaffPercent / 100;
+  const operatingCost = Math.max(0, Math.round((budget - playerBill - staff - budget * rules.reservePercent / 100) / 10_000) * 10_000);
+  return {
+    economy: { band, budget, sponsorship, funding, openingCash: Math.round(budget * rules.openingCashPercent / 100 / 10_000) * 10_000, ticketPrice, operatingCost, scale: Math.max(1, Math.round(staff / STAFF_BUDGET * PER_MILLE)) },
+    playerBill,
+  };
+}
+
+/** The player wage bill (cents) a club's figures fund, as `withRealEconomy` sets it from the budget and band. */
+export function playerBillOf(economy: ClubEconomy): number {
+  const wageBill = economy.budget * REAL_ECONOMY_RULES.wageShare[economy.band] / 100;
+  return Math.round(wageBill * (100 - REAL_ECONOMY_RULES.headCoachPercent) / 100);
+}
+
+/**
+ * Format 62: a real-club world whose money follows researched club budgets. Every club (chosen leagues, next
+ * divisions, unchosen top divisions and European-only entrants) gets a band, a budget placed by squad strength, player
+ * wages sharing the band's wage bill, a gate (seats, usual crowd, default ticket price), sponsorship and season
+ * funding that balance the budget, operating costs, opening cash and a scale for catalog amounts. `countryOf` names a
+ * European-only entrant's country when the world does not record it.
+ */
+export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) => string | null = () => null): CareerWorld {
+  const rules = REAL_ECONOMY_RULES;
+  const strength = new Map(world.clubs.map(club => [club.id, strengthOf(club.players)]));
+  const layout = economyLayout({
+    leagues: world.domesticLeagues ?? [], lower: (world.lowerDivisions ?? []).flatMap(list => 'clubIds' in list ? [list] : []), background: world.backgroundLeagues ?? [],
+    competitions: world.europeanCompetitions ?? [], clubIds: world.clubs.map(club => club.id), strength, countryOf,
+  });
   const capitals = DEVELOPMENT_WORLD.presidents.map(president => president.seasonCapital);
 
   const wages: Record<string, number> = {};
   const finances: ClubFinanceDefinition[] = world.finances.map(definition => {
-    const clubId = definition.clubId, item = place.get(clubId)!, own = band.get(clubId)!, t = budgetT.get(clubId)!, g = gateT.get(clubId)!;
-    const euro = own === 'euroleague-top' || own === 'euroleague';
-    const [low, typical, high] = bandFor(rules.budgets[own], item.country);
+    const clubId = definition.clubId, item = layout.place.get(clubId)!, own = layout.band.get(clubId)!;
     const club = world.clubs.find(entry => entry.id === clubId)!;
     // A published budget replaces the strength placement (the band stays the competition's).
-    const budget = Math.round((knownClubBudget(club.name) ?? (t < 0.5 ? lerp(low, typical, t * 2) : lerp(typical, high, t * 2 - 1))) / 10_000) * 10_000 * CENTS;
-    // Gate: seats around the league's average by strength, a usual crowd within them, and the league's ticket yield.
-    const gate = euro ? rules.gates.euroleague : bandFor(item.tier >= 3 ? rules.gates.third : item.tier === 2 ? rules.gates.second : rules.gates.top, item.country);
-    const [small, middle, large] = rules.seatSpread;
-    const capacity = clamp(Math.round(gate.seats * (g < 0.5 ? lerp(small, middle, g * 2) : lerp(middle, large, g * 2 - 1)) / 100) * 100, 500, 60_000);
-    const referenceDemand = clamp(Math.round(capacity * clamp(gate.fill + rules.fillSpread * (g - 0.5), 0.2, 0.98) / 100) * 100, 100, capacity);
-    const ticketPrice = Math.max(3, Math.round(euro ? lerp(rules.euroleaguePrice[0], rules.euroleaguePrice[1], g) : gate.price * lerp(rules.priceSpread[0], rules.priceSpread[1], g))) * CENTS;
-    // Expected gate income: delegated pricing sells out at the price where the usual crowd fills the arena.
-    const kind = kindOf(clubId), competition = competitions.find(entry => entry.clubIds.includes(clubId));
-    const european = !competition?.format ? 0 : kind === 'euroleague' ? competition.clubIds.length - 1 : kind === 'eurocup' ? Math.max(1, competition.clubIds.length / rules.europeanHomeGames.eurocupGroups - 1) : rules.europeanHomeGames.bcl;
-    const homeGames = (item.league ? item.size - 1 + rules.playoffHomeGames : 0) + european;
-    const tickets = Math.round(homeGames * capacity * ticketPrice * (referenceDemand / capacity) ** (1 / 1.4));
-    const mix = revenueMixFor(own, item.country);
-    const sponsorship = Math.round(budget * mix.sponsorship / 100 / 10_000) * 10_000;
-    const funding = Math.max(0, Math.round((budget - sponsorship - tickets) / 10_000) * 10_000);
-    // Costs: player wages, the staff allocation (head coach and support staff), a reserve and operating costs.
-    const wageBill = budget * rules.wageShare[own] / 100;
-    const playerBill = Math.round(wageBill * (100 - rules.headCoachPercent) / 100);
-    const staff = wageBill * rules.headCoachPercent / 100 + budget * rules.supportStaffPercent / 100;
-    const operatingCost = Math.max(0, Math.round((budget - playerBill - staff - budget * rules.reservePercent / 100) / 10_000) * 10_000);
+    const budget = budgetCents(knownClubBudget(club.name) ?? placedBudget(own, item.country, layout.budgetT.get(clubId)!));
+    const gate = gateFor(item, own, layout.gateT.get(clubId)!);
+    const { economy, playerBill } = clubFigures(own, item, layout.competition.get(clubId), budget, gate);
     const floor = rules.benchFloor[own] * bandFor(rules.costPerNet, item.country) * CENTS;
     Object.assign(wages, shareWageBill(club.players, playerBill, floor, new Set(club.players.filter(player => world.playerProfiles[player.id]?.source === 'generated').map(player => player.id))));
-    const economy: ClubEconomy = {
-      band: own, budget, sponsorship, funding, openingCash: Math.round(budget * rules.openingCashPercent / 100 / 10_000) * 10_000, ticketPrice, operatingCost,
-      scale: Math.max(1, Math.round(staff / STAFF_BUDGET * PER_MILLE)),
-    };
-    return { ...definition, capacity, referenceDemand, economy };
+    return { ...definition, capacity: gate.capacity, referenceDemand: gate.referenceDemand, economy };
   });
   const scaleOf = new Map(finances.map(item => [item.clubId, item.economy!.scale]));
   const presidents: DevelopmentPresident[] = world.presidents.map((president, index) => ({ ...president, seasonCapital: Math.max(10_000, Math.round(capitals[index % capitals.length]! * scaleOf.get(president.clubId)! / PER_MILLE / 10_000) * 10_000) }));
   return { ...world, economy: rules.id, wages: { ...world.wages, ...wages }, finances, presidents };
+}
+
+/** Bands from the smallest to the largest money level: the direction of a change between seasons. */
+const BAND_RANK: Readonly<Record<EconomyBand, number>> = Object.freeze({ third: 0, second: 1, 'top-lower': 2, 'top-upper': 3, euroleague: 4, 'euroleague-top': 5 });
+const strengthCache = new WeakMap<readonly Team['players'][number][], number>();
+const cachedStrength = (players: readonly Team['players'][number][]): number => {
+  let value = strengthCache.get(players);
+  if (value === undefined) { value = strengthOf(players); strengthCache.set(players, value); }
+  return value;
+};
+
+/** Each club's squad strength after a season: its latest registration that season, else its world squad. */
+function strengthAfter(world: CareerWorld, rosters: readonly RosterSnapshot[] | undefined): Map<string, number> {
+  const latest = new Map<string, RosterSnapshot>();
+  for (const roster of rosters ?? []) { const last = latest.get(roster.clubId); if (!last || roster.fromRound >= last.fromRound) latest.set(roster.clubId, roster); }
+  return new Map(world.clubs.map(club => [club.id, cachedStrength(latest.get(club.id)?.players ?? club.players)]));
+}
+
+/**
+ * A season's layout: the season's divisions, next-division members (each list's clubs and the country's clubs that
+ * dropped out of the full world, less those now in a division), unchosen top divisions and the season's European entrants.
+ */
+function seasonLayout(world: CareerWorld, divisions: DomesticDivisions | undefined, europe: SeasonEurope | undefined, strength: ReadonlyMap<string, number>): EconomyLayout {
+  const leagues = seasonLeagues(world, divisions), inLeague = new Set(leagues.flatMap(league => league.clubIds));
+  const opening = world.domesticLeagues ?? [];
+  const lower = (world.lowerDivisions ?? []).flatMap(list => 'clubIds' in list ? [{ country: list.country, tier: list.tier, clubIds: [...new Set([...list.clubIds, ...opening.filter(league => league.country === list.country).flatMap(league => league.clubIds)])].filter(clubId => !inLeague.has(clubId)) }] : []);
+  const competitions = (world.europeanCompetitions ?? []).map(competition => { const entry = europe?.entrants.find(item => item.competitionId === competition.id); return entry ? { ...competition, clubIds: entry.clubIds } : competition; });
+  return economyLayout({ leagues, lower, background: world.backgroundLeagues ?? [], competitions, clubIds: world.clubs.map(club => club.id), strength, countryOf: clubId => clubCountry(world, clubId) });
+}
+
+/** Why a club's band changed between two seasons' places. */
+function changeReasons(before: { tier: number; kind: EuropeanCompetitionKind | null; band: EconomyBand }, after: { tier: number; kind: EuropeanCompetitionKind | null; band: EconomyBand }): EconomyChangeReason[] {
+  const reasons: EconomyChangeReason[] = [];
+  if (after.tier < before.tier) reasons.push('promoted');
+  else if (after.tier > before.tier) reasons.push('relegated');
+  if (before.kind !== after.kind) {
+    if (before.kind) reasons.push(`left-${before.kind}`);
+    if (after.kind) reasons.push(`joined-${after.kind}`);
+  }
+  if (!reasons.length && before.band !== after.band) reasons.push('band');
+  return reasons;
+}
+
+/** What a season's figures are computed from: the world, every completed season and this season's divisions, places and exchanges. */
+export type EconomySeasonsContext = WorldContext & Pick<SeasonState, 'seasonNumber' | 'history'> & Partial<Pick<SeasonState, 'divisions' | 'europe' | 'background'>>;
+
+/**
+ * Format 72: every season's club figures from the second season to the current one, derived only from recorded
+ * evidence (the world, each season's divisions and European entrants, the clubs joining or leaving the full world and
+ * each completed season's latest registrations), so a save re-derives them exactly. See `REAL_ECONOMY_RULES.seasons`.
+ */
+export function computeEconomySeasons(context: EconomySeasonsContext): SeasonEconomyTable[] {
+  const world = worldOf(context);
+  if (!world.economy || context.seasonNumber < 2) return [];
+  const share = REAL_ECONOMY_RULES.seasons.share;
+  const divisionsOf = (year: number) => year === context.seasonNumber ? context.divisions : context.history[year - 1]?.divisions;
+  const europeOf = (year: number) => year === context.seasonNumber ? context.europe : context.history[year - 1]?.europe;
+  const definitions = new Map(world.finances.map(definition => [definition.clubId, definition]));
+  const names = new Map(world.clubs.map(club => [club.id, club.name]));
+  // The figures each club moves from: its latest stored season, else the world's opening figures.
+  const latest = new Map<string, ClubEconomy & { playerBill?: number }>(world.finances.flatMap(definition => definition.economy ? [[definition.clubId, definition.economy] as const] : []));
+  let previous = seasonLayout(world, divisionsOf(1), europeOf(1), strengthAfter(world, undefined));
+  const tables: SeasonEconomyTable[] = [];
+  const move = (from: number, to: number, step: number) => from + Math.round((to - from) * share / step) * step;
+  for (let year = 2; year <= context.seasonNumber; year += 1) {
+    const archive = context.history[year - 2];
+    if (!archive) throw new Error('Club money needs every completed season.');
+    const layout = seasonLayout(world, divisionsOf(year), europeOf(year), strengthAfter(world, archive.rosters));
+    const clubs: Record<string, SeasonClubEconomy> = {};
+    for (const club of fullWorldClubsIn(context, year)) {
+      const clubId = club.id, item = layout.place.get(clubId)!, band = layout.band.get(clubId)!, prior = latest.get(clubId)!;
+      const opening = openingEconomy(world, clubId)!, known = knownClubBudget(names.get(clubId)!);
+      // A published budget describes the club at its opening level; elsewhere the strength placement applies.
+      let budget = budgetCents(known !== null && band === opening.band ? known : placedBudget(band, item.country, layout.budgetT.get(clubId)!));
+      if (BAND_RANK[band] < BAND_RANK[prior.band]) budget = Math.min(budget, prior.budget);
+      else if (BAND_RANK[band] > BAND_RANK[prior.band]) budget = Math.max(budget, prior.budget);
+      // The club's own arena and usual crowd, at its new league's ticket yield.
+      const definition = definitions.get(clubId)!;
+      const gate = { capacity: definition.capacity, referenceDemand: definition.referenceDemand, ticketPrice: gateFor(item, band, layout.gateT.get(clubId)!).ticketPrice };
+      const target = clubFigures(band, item, layout.competition.get(clubId), budget, gate);
+      const before = previous.place.get(clubId)!;
+      clubs[clubId] = {
+        band,
+        budget: Math.max(1_000_000, move(prior.budget, target.economy.budget, 1_000_000)),
+        sponsorship: Math.max(0, move(prior.sponsorship, target.economy.sponsorship, 10_000)),
+        funding: Math.max(0, move(prior.funding, target.economy.funding, 10_000)),
+        openingCash: Math.max(0, move(prior.openingCash, target.economy.openingCash, 10_000)),
+        ticketPrice: Math.max(100, move(prior.ticketPrice, target.economy.ticketPrice, 100)),
+        operatingCost: Math.max(0, move(prior.operatingCost, target.economy.operatingCost, 10_000)),
+        scale: Math.max(1, move(prior.scale, target.economy.scale, 1)),
+        playerBill: Math.max(0, move(prior.playerBill ?? playerBillOf(prior), target.playerBill, 10_000)),
+        target: target.economy.budget,
+        reasons: changeReasons({ tier: before.tier, kind: previous.competition.get(clubId)?.kind ?? null, band: previous.band.get(clubId)! }, { tier: item.tier, kind: layout.competition.get(clubId)?.kind ?? null, band }),
+      };
+    }
+    for (const [clubId, entry] of Object.entries(clubs)) latest.set(clubId, entry);
+    tables.push({ seasonNumber: year, clubs });
+    previous = layout;
+  }
+  return tables;
+}
+
+/** Format 72: a new career's per-season figures, in real-data worlds whose career starts with club finances. */
+export function createEconomySeasons(): SeasonEconomy {
+  return { model: 'economy-seasons-1', seasons: [] };
+}
+
+/**
+ * At a rollover (format 72 careers): the new season's figures, before any money of the new season moves. Ticket plans
+ * stay within the new price range (three times the club's new default price).
+ */
+export function growEconomy(state: SeasonState): SeasonState {
+  if (!state.economySeasons) return state;
+  const next: SeasonState = { ...state, economySeasons: { ...state.economySeasons, seasons: computeEconomySeasons(state) } };
+  if (!next.finance.enabledSince) return next;
+  const limit = (clubId: string) => (clubEconomy(next, clubId)?.ticketPrice ?? 0) * REAL_ECONOMY_RULES.maxPriceMultiple;
+  const plans = Object.fromEntries(Object.entries(next.finance.plans).map(([clubId, plan]) => [clubId, plan.price > limit(clubId) ? { ...plan, price: limit(clubId) } : plan]));
+  const roundPrices = Object.fromEntries(Object.entries(next.finance.roundPrices).map(([clubId, price]) => [clubId, Math.min(price, limit(clubId))]));
+  return { ...next, finance: { ...next.finance, plans, roundPrices } };
+}
+
+/**
+ * Format 72: the player salary budget's multiple of its opening amount for contracts of `seasonNumber`: that season's
+ * player wage bill against the opening one, from the figures known by `knownThrough` (a later season reads the latest
+ * known figures). 1 for every career without per-season figures.
+ */
+export function salaryBudgetRatio(context: WorldContext, clubId: string, seasonNumber: number, knownThrough = context.seasonNumber ?? seasonNumber): number {
+  const world = context.world;
+  if (!world?.economy || !context.economySeasons) return 1;
+  const year = Math.min(seasonNumber, knownThrough);
+  const entry = year > 1 ? seasonEconomyEntry(context.economySeasons, clubId, year) : null, opening = openingEconomy(world, clubId);
+  return entry && opening ? entry.playerBill / playerBillOf(opening) : 1;
+}
+
+/** Format 72: a club's band and budget this season and last, with the reasons for the change (null without per-season figures). */
+export function economyChange(context: WorldContext & { seasonNumber: number }, clubId: string): { band: EconomyBand; budget: number; target: number; previous: ClubEconomy | null; reasons: readonly EconomyChangeReason[] } | null {
+  const world = context.world;
+  if (!world?.economy || !context.economySeasons) return null;
+  const current = clubEconomy(context, clubId);
+  if (!current) return null;
+  const entry = context.seasonNumber > 1 ? context.economySeasons.seasons[context.seasonNumber - 2]?.clubs[clubId] ?? null : null;
+  const previous = context.seasonNumber > 1 ? clubEconomy({ ...context, seasonNumber: context.seasonNumber - 1 }, clubId) : null;
+  return { band: current.band, budget: current.budget, target: entry?.target ?? current.budget, previous, reasons: entry?.reasons ?? [] };
 }
 
 /** The money fields a world with an economy carries on each club's finance definition. */

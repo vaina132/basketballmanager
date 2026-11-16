@@ -7,7 +7,8 @@ import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason, getNextMarketDate } from '../src/world/market-policy';
 import { advanceSeason, createSeason, dateForRound, managedSide, midSeasonDismissalPossible, NEW_CAREER_SYSTEMS, previewSeasonEnd, rolloverSeason } from '../src/world/season';
 import { continueAction } from '../src/world/continue-step';
-import { continueNotice, continueProgress, continueStepView, continueUntilStop, type ContinueRun } from '../src/ui/continue-run';
+import { gameDate } from '../src/ui/career-text';
+import { continueNotice, continueProgress, continueStepView, continueUntilStop, stoppedRun, type ContinueRun } from '../src/ui/continue-run';
 // @ts-expect-error: a plain JavaScript helper shared with the European competition tests (no type declarations).
 import { placesWorld } from './helpers/europe-worlds.js';
 
@@ -79,6 +80,9 @@ describe('the one Continue (owner request, 16 November 2026)', () => {
       const next = continueStepView(state);
       expect(next.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(next.label).toMatch(/^\d+ (European )?games?( · weekly club business)?$|^Weekly club business$/);
+      // Stopped by the manager after this day: where the career stands and what Continue does next.
+      expect(stoppedRun(state)).toEqual({ kind: 'stopped', message: `Stopped. Next: ${next.label.charAt(0).toLowerCase()}${next.label.slice(1)} on ${gameDate(next.day)}.` });
+      expect(stoppedRun(state).message).toMatch(/^Stopped\. Next: \d+ (European )?games?( · weekly club business)? on (Tue|Wed|Thu) \d+ \w+\.$/);
       const progress = continueProgress(state, 1);
       expect(progress).toBeGreaterThan(0);
       expect(progress).toBeLessThan(1);

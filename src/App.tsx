@@ -691,7 +691,7 @@ export default function App() {
       else setNotice({ message: start.activeMatch?.requiredSubstitutions.length ? 'Make the required substitution, then Continue.' : 'Watch or simulate your match, then Continue.' })
       return
     }
-    if (action.kind === 'blocked') { setNotice({ message: action.reason }); if (!isUnemployed(start)) navigate('transfers'); return }
+    if (action.kind === 'blocked') { setNotice({ message: action.reason }); return }
     replacementRequest.current += 1
     setPlaying(false); settlePlayback()
     let worker: Worker

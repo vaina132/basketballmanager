@@ -191,10 +191,16 @@ export function trustedPrefixMismatch(trusted: CheckRecord, state: SeasonState):
     for (let index = 0; index < count; index += 1) if (!sameJson(old[index], next[index])) return `${name}[${index}]`;
     for (let index = count; index < next.length; index += 1) if (next[index] !== null && typeof next[index] === 'object' && at(next[index]) < limit) return `${name}[${index}] back-dated`;
   }
-  if (!Array.isArray(state.fixtures) || state.fixtures.length !== before.fixtures.length) return 'fixtures';
-  for (let index = 0; index < before.fixtures.length; index += 1) {
-    const fixture = before.fixtures[index]!;
-    if (fixture.round < cut.round && !sameJson(fixture, state.fixtures[index])) return `fixtures[${index}]`;
+  // Games of earlier weeks are unchanged. Postseason and knockout games are added as results make them due, in calendar
+  // order, so they are matched by identity; an added game must belong to the cut's week or later.
+  if (!Array.isArray(state.fixtures)) return 'fixtures';
+  const games = new Map<unknown, unknown>();
+  for (const fixture of state.fixtures) if (fixture !== null && typeof fixture === 'object') games.set(fixture.id, fixture);
+  const known = new Set<string>();
+  for (const fixture of before.fixtures) {
+    known.add(fixture.id);
+    if (fixture.round < cut.round && !sameJson(fixture, games.get(fixture.id))) return `fixtures.${fixture.id}`;
   }
+  for (const fixture of state.fixtures) if (fixture !== null && typeof fixture === 'object' && !known.has(fixture.id) && !(fixture.round >= cut.round)) return `fixtures.${fixture.id} back-dated`;
   return null;
 }

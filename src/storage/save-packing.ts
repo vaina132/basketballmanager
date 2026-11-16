@@ -20,7 +20,9 @@ import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES } from '../world/training';
  *   `rehab-<position + 1>`, its matchday dates, its roster identity and its credit after;
  * - a youth fixture's identity `youth-s<season>-r<round>-<senior fixture>` keeps only the senior fixture, and its
  *   diagnoses drop what the fixture says (identity, fixture, date);
- * - an academy outcome report becomes `[focus, ...points]` when its club is the prospect's.
+ * - an academy outcome report becomes `[focus, ...points]` when its club is the prospect's;
+ * - a game's player statistics (senior and youth box scores) and a summarized game's appearances, maps keyed by player,
+ *   become one flat list `[playerId, ...values, playerId, ...values]` in the usual field order.
  * Packing happens only where unpacking gives back exactly the same text (same values, same key order); any other
  * record is written as it is. The game, its checks and plain (`serializeSeason`) files never see the packed form.
  */
@@ -217,13 +219,58 @@ function unpackRehab(packed: unknown, index: number): unknown {
   };
 }
 
+const STAT_FIELDS = ['secondsPlayed', 'points', 'fieldGoalsMade', 'fieldGoalsAttempted', 'threePointersMade', 'threePointersAttempted', 'freeThrowsMade', 'freeThrowsAttempted', 'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls', 'condition'] as const;
+const APPEARANCE_FIELDS = ['secondsPlayed', 'fouls', 'appeared'] as const;
+const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+/** A nonempty map of records with exactly these fields, in this order, as `[key, ...values, key, ...values]`. */
+function flatten(map: unknown, fields: readonly string[]): unknown {
+  if (!isObject(map)) return map;
+  const entries = Object.entries(map), flat: unknown[] = [];
+  if (!entries.length) return map;
+  for (const [key, value] of entries) {
+    if (!isObject(value)) return map;
+    const keys = Object.keys(value);
+    if (keys.length !== fields.length || keys.some((name, index) => name !== fields[index])) return map;
+    flat.push(key, ...fields.map(name => value[name]));
+  }
+  return flat;
+}
+function unflatten(flat: unknown, fields: readonly string[], what: string): unknown {
+  if (!Array.isArray(flat)) return flat;
+  const width = fields.length + 1, map: Json = {};
+  if (flat.length % width) fail(`has invalid ${what}`);
+  for (let index = 0; index < flat.length; index += width) {
+    const key = flat[index];
+    if (typeof key !== 'string' || UNSAFE_KEYS.has(key) || Object.hasOwn(map, key)) fail(`has invalid ${what}`);
+    map[key] = Object.fromEntries(fields.map((name, offset) => [name, flat[index + 1 + offset]]));
+  }
+  return map;
+}
+
+/** A senior result with its box score and appearances flattened. */
+function packResult(result: unknown): unknown {
+  if (!isObject(result)) return result;
+  return exact(result, () => {
+    const stats = flatten(result.stats, STAT_FIELDS), appearances = Object.hasOwn(result, 'appearances') ? flatten(result.appearances, APPEARANCE_FIELDS) : undefined;
+    if (stats === result.stats && appearances === result.appearances) return undefined;
+    return { ...result, stats, ...(Object.hasOwn(result, 'appearances') ? { appearances } : {}) };
+  }, unpackResult);
+}
+function unpackResult(result: unknown): unknown {
+  if (!isObject(result) || !Array.isArray(result.stats) && !Array.isArray(result.appearances)) return result;
+  return { ...result, stats: unflatten(result.stats, STAT_FIELDS, 'player statistics'), ...(Object.hasOwn(result, 'appearances') ? { appearances: unflatten(result.appearances, APPEARANCE_FIELDS, 'appearances') } : {}) };
+}
+const packFixtureResults = (fixtures: unknown) => mapArray(fixtures, fixture => isObject(fixture) && isObject(fixture.result) ? { ...fixture, result: cached(fixture.result, () => packResult(fixture.result)) } : fixture);
+const unpackFixtureResults = (fixtures: unknown) => mapArray(fixtures, fixture => isObject(fixture) && isObject(fixture.result) ? { ...fixture, result: unpackResult(fixture.result) } : fixture);
+
 function packYouthFixture(fixture: unknown): unknown {
   if (!isObject(fixture)) return fixture;
   return exact(fixture, () => {
     const prefix = `youth-s${fixture.seasonNumber}-r${fixture.round}-`;
     if (typeof fixture.id !== 'string' || !fixture.id.startsWith(prefix)) return undefined;
     const result = isObject(fixture.result) && Array.isArray(fixture.result.injuries)
-      ? { ...fixture.result, injuries: fixture.result.injuries.map(injury => isObject(injury) && injury.id === `${fixture.id}:${injury.playerId}` && injury.fixtureId === fixture.id && injury.occurredOn === fixture.date ? [injury.playerId, injury.clubId, injury.kind, injury.returnOn] : injury) }
+      ? { ...fixture.result, stats: flatten(fixture.result.stats, STAT_FIELDS), injuries: fixture.result.injuries.map(injury => isObject(injury) && injury.id === `${fixture.id}:${injury.playerId}` && injury.fixtureId === fixture.id && injury.occurredOn === fixture.date ? [injury.playerId, injury.clubId, injury.kind, injury.returnOn] : injury) }
       : fixture.result;
     return { ...fixture, id: [fixture.id.slice(prefix.length)], result };
   }, unpackYouthFixture);
@@ -232,7 +279,7 @@ function unpackYouthFixture(packed: unknown): unknown {
   if (!isObject(packed) || !Array.isArray(packed.id)) return packed;
   if (packed.id.length !== 1 || typeof packed.id[0] !== 'string') fail('has an invalid youth fixture');
   const id = `youth-s${packed.seasonNumber}-r${packed.round}-${packed.id[0]}`;
-  const result = isObject(packed.result) && Array.isArray(packed.result.injuries) ? { ...packed.result, injuries: packed.result.injuries.map(injury => {
+  const result = isObject(packed.result) && Array.isArray(packed.result.injuries) ? { ...packed.result, stats: unflatten(packed.result.stats, STAT_FIELDS, 'youth statistics'), injuries: packed.result.injuries.map(injury => {
     if (!Array.isArray(injury)) return injury;
     if (injury.length !== 4) fail('has an invalid youth diagnosis');
     const [playerId, clubId, kind, returnOn] = injury;
@@ -282,6 +329,8 @@ function packRecords(state: Json): Json {
   if (isObject(state.physio) && Array.isArray(state.physio.rehabilitation)) next.physio = { ...state.physio, rehabilitation: state.physio.rehabilitation.map((entry, index) => isObject(entry) && entry.id === `rehab-${index + 1}` ? cached(entry, () => packRehab(entry, index)) : entry) };
   if (isObject(state.youthCompetition) && Array.isArray(state.youthCompetition.seasons)) next.youthCompetition = { ...state.youthCompetition, seasons: state.youthCompetition.seasons.map(season => isObject(season) ? { ...season, fixtures: mapArray(season.fixtures, fixture => cached(fixture, () => packYouthFixture(fixture))) } : season) };
   if (isObject(state.academy) && Array.isArray(state.academy.weeks)) { const clubOf = prospectClubs(state.academy); next.academy = { ...state.academy, weeks: state.academy.weeks.map(week => packAcademyWeek(week, clubOf)) }; }
+  next.fixtures = packFixtureResults(state.fixtures);
+  if (Array.isArray(state.history)) next.history = state.history.map(archive => isObject(archive) ? { ...archive, fixtures: packFixtureResults(archive.fixtures) } : archive);
   return next;
 }
 
@@ -292,6 +341,8 @@ function unpackRecords(state: Json): Json {
   if (isObject(state.physio) && Array.isArray(state.physio.rehabilitation)) next.physio = { ...state.physio, rehabilitation: state.physio.rehabilitation.map(unpackRehab) };
   if (isObject(state.youthCompetition) && Array.isArray(state.youthCompetition.seasons)) next.youthCompetition = { ...state.youthCompetition, seasons: state.youthCompetition.seasons.map(season => isObject(season) ? { ...season, fixtures: mapArray(season.fixtures, unpackYouthFixture) } : season) };
   if (isObject(state.academy) && Array.isArray(state.academy.weeks)) { const clubOf = prospectClubs(state.academy); next.academy = { ...state.academy, weeks: state.academy.weeks.map(week => unpackAcademyWeek(week, clubOf)) }; }
+  next.fixtures = unpackFixtureResults(state.fixtures);
+  if (Array.isArray(state.history)) next.history = state.history.map(archive => isObject(archive) ? { ...archive, fixtures: unpackFixtureResults(archive.fixtures) } : archive);
   return next;
 }
 

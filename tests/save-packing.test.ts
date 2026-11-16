@@ -11,7 +11,7 @@ import { createSeason, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/s
 import { advanceMatchday } from './helpers/board-funding';
 
 // Format 73 (step 3.7): compact saves pack the bulkiest records losslessly; the game and its checks never see the packing.
-type Packed = { packing: string; finance: { ledger: unknown[]; archives: { seasonNumber: number; rows: unknown[][] }[] }; injuries: unknown[]; physio: { rehabilitation: unknown[] }; scouting: { clubs: Record<string, { reviews: unknown[] }> }; youthCompetition: { seasons: { fixtures: { id: unknown }[] }[] }; academy: { weeks: { players: Record<string, unknown> }[] } };
+type Packed = { packing: string; finance: { ledger: unknown[]; archives: { seasonNumber: number; rows: unknown[][] }[] }; injuries: unknown[]; physio: { rehabilitation: unknown[] }; scouting: { clubs: Record<string, { reviews: unknown[] }> }; youthCompetition: { seasons: { fixtures: { id: unknown }[] }[] }; academy: { weeks: { players: Record<string, unknown> }[] }; fixtures: { result: { stats: unknown } | null }[]; history: { fixtures: { result: { stats: unknown; appearances?: unknown } }[] }[] };
 const text = (value: unknown) => JSON.stringify(value);
 const compactLength = (value: unknown) => { const { strings, shapes, nodes, value: encoded } = compactJson2(value); return text({ strings, shapes, nodes, encoded }).length; };
 
@@ -44,6 +44,11 @@ describe('record packing in compact saves (format 73)', () => {
     if (packed.physio.rehabilitation.length) expect(packed.physio.rehabilitation.every(Array.isArray)).toBe(true);
     expect(packed.youthCompetition.seasons.flatMap(season => season.fixtures).every(fixture => Array.isArray(fixture.id))).toBe(true);
     expect(packed.academy.weeks.some(week => Object.values(week.players).some(Array.isArray))).toBe(true);
+    // Box scores and a summarized season's appearances become flat lists keyed by player.
+    expect(packed.fixtures.filter(fixture => fixture.result).every(fixture => Array.isArray(fixture.result!.stats))).toBe(true);
+    const archived = packed.history[0]!.fixtures;
+    expect(archived.some(fixture => Array.isArray(fixture.result.stats))).toBe(true);
+    expect(archived.some(fixture => Array.isArray(fixture.result.appearances))).toBe(true);
     const restored = unpackSavedSeason(JSON.parse(text(packed)));
     expect(text(restored)).toBe(text(state));
     expect(compactLength(packed)).toBeLessThan(compactLength(state));

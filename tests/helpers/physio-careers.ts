@@ -18,8 +18,11 @@ export const advancePhysioCareer = (state: SeasonState): SeasonState => advanceS
 
 /** Seed 172 (match calibration, sprint 4): rhf-4 strains a calf in the first match and is out until 25 September. */
 export const PHYSIO_CAREER_INJURED = 'rhf-4';
-/** Seed 225 (match calibration, sprint 4): aeg-5 strains a calf in the round-2 match and is out until 28 September. */
-export const PHYSIO_ELIGIBILITY_INJURED = 'aeg-5';
+/**
+ * Seed 285 (225 before the manager's next game started from the planned five, 16 November 2026): aeg-10 hurts a knee in
+ * the round-2 match and is out until 27 September.
+ */
+export const PHYSIO_ELIGIBILITY_INJURED = 'aeg-10';
 
 /** Genuine first-match injury, paired care, retained history and two complete seasons. */
 export function createPhysioCareers() {
@@ -50,7 +53,7 @@ export function createPhysioCareers() {
 
 /** This seed produces a naturally occurring injury that can cross a fixture boundary. */
 export function createPhysioEligibilityCareers() {
-  const opening = createSeason(225, 'aegean-waves', 'standard', false, false, true, true);
+  const opening = createSeason(285, 'aegean-waves', 'standard', false, false, true, true);
   const initial = enablePhysio(advancePhysioCareer(opening));
   const hired = hirePhysio(initial, 'physio-12');
   const fulltime = finishPhysioMatch(hired);

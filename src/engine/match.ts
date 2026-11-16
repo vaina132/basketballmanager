@@ -157,6 +157,16 @@ function startingFive(state: MatchState, side: Side): Set<string> {
   return new Set(starters);
 }
 /**
+ * The five a side started the game with (`startingFive`: the tip-off five and each change made before the clock first
+ * ran, in place) and whether such a change was made, for example a substitution chosen before tip-off. Reads events only.
+ */
+export function preTipoffLineup(state: MatchState, side: Side): { five: string[]; changed: boolean } {
+  const roster = new Set(state[side].players.map(p => p.id)), tip = state.events[0];
+  const opening = tip?.type === 'tipoff' && tip.scene ? tip.scene.start.map(point => point.playerId).filter(id => roster.has(id)) : state[side].players.slice(0, 5).map(p => p.id);
+  const five = [...startingFive(state, side)];
+  return { five, changed: five.length !== opening.length || five.some(id => !opening.includes(id)) };
+}
+/**
  * The automatic rotation's need for each player to be on court, in minutes (calibration.ts, ROTATION). Players are
  * ranked by overall rating with the starters ahead; each rank plans a share of the team's minutes. Need is the planned
  * time not yet played, less fatigue and foul trouble; the best five close tight games and the deep bench plays out

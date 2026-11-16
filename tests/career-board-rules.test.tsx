@@ -41,9 +41,10 @@ const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={
 // Danube Lynx below 20 after week 6 of its second season. Re-seeded after the facilities-2 merge (AI clubs now build
 // medical and scouting facilities and repair, which changes their seasons): seed 14 dismissed at week 7; with format 66's
 // squad-rank roles and contract requests, seed 17 dismisses at week 9; with recurring youth injuries (format 72, which
-// change academy development and so later seasons), seed 19 dismisses at week 7.
+// change academy development and so later seasons), seed 19 dismisses at week 7; once the manager's next game started
+// from the planned five instead of the closing five (16 November 2026), seed 35 dismisses at week 9.
 const WARNING_SEED = 4;
-const MID_SEASON_SEED = 19, MID_SEASON_CLUB = 'danube-lynx', DISMISSAL_WEEK = 7;
+const MID_SEASON_SEED = 35, MID_SEASON_CLUB = 'danube-lynx', DISMISSAL_WEEK = 9;
 let warningDay: SeasonState, warned: SeasonState, beforeDismissal: SeasonState, dismissed: SeasonState;
 
 beforeAll(() => {

@@ -44,6 +44,14 @@ export const CAREER_RULES = Object.freeze({
    * open through that offseason.
    */
   vacancyOpenWeeks: 3,
+  /**
+   * At most this many clubs offer the manager their job at one point (a season end, a dismissal, a resignation or the
+   * job market): among the vacancies whose requirement the reputation reaches, the best fits, by club level (league
+   * tier, top division first) and then by the reputation each looks for. Reserve and B teams never offer it. Browser
+   * play-through, 16 November 2026: a Confident coach of a top club received 24 offers, second divisions and a reserve
+   * team among them. A reversible default.
+   */
+  maxJobOffers: 5,
 });
 
 /** The rules of new careers: `career-3` (format 69). */
@@ -132,5 +140,7 @@ export const CAREER_RULES_TEXT = {
   resignation3: `You can resign at any time between matches. It costs ${CAREER_RULES.resignationReputationCost} reputation points for three seasons. Clubs whose board is Under pressure may offer you their job at once; you can also leave without a new job and wait for one.`,
   unemployed: `Without a club, the career goes on: every club, including your last one, is run automatically and every competition keeps playing. Boards that change coach during a season keep the job open to you for ${CAREER_RULES.vacancyOpenWeeks} weeks, and jobs opened at a season end stay open through the offseason. A club offers you its job when your reputation reaches what it looks for.`,
   fade: `While you are without a club, your reputation moves ${CAREER_RULES.unemployedFadePoints} point every ${CAREER_RULES.unemployedFadeDays / 7} weeks towards ${CAREER_RULES.unemployedReputationLevel}: a good name fades, a poor one is slowly forgotten.`,
+  /** Who offers a job (browser play-through, 16 November 2026). */
+  offers: `At most ${CAREER_RULES.maxJobOffers} clubs offer you their job at a time: those in the highest division first, then those looking for the strongest reputation. Reserve and B teams never offer it.`,
   dismissal3: 'After a dismissal, only clubs that are replacing their own coach can offer you a job. You may take one or decline them all and wait without a club.',
 };

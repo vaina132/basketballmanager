@@ -4,18 +4,16 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Keeping this file short:** after each push, update "Current state" here and add two or three lines to the top of `docs/handover-history.md`. Record decisions only when a rule or default is decided. Keep this file under 20 KB.
 
-## Current state (16 November 2026, saved ideas level complete, waiting for the owner's feedback)
+## Current state (16 November 2026, late: step 3.7 and the play-test fixes going live)
 
-**Active level:** Step 3.7, then the safety-check restoration and gap closing (owner, 16 November 2026: "complete the step 3.7 and then the restoration of the safety checks and closing the gaps ... the selling side ... we can postpone ... the interface simplification will only come after the playtests"). The saved ideas level is complete. Level order: sprint 3 (3.7 active), sprint 4 (done), saved ideas (done), **safety and gaps (next)**, owner play test, interface simplification, player data, release preparation. Selling and marketing are off the roadmap (owner, 16 November 2026) until the game is playable and enjoyable.
+**Active level:** safety and gaps, finished for the play test; the owner's play test starts once this update is live. Order (owner, 16 November 2026): step 3.7 (done), safety and gaps (done for the play test), owner play test, interface simplification, player data, release preparation. **Alongside the play test** (owner decision): an incremental checkpoint check (today it replays the whole career, so saves slow as careers grow) and exact recomputation of the saved ideas' plausibility checks. Selling and marketing are off the roadmap until the game is playable and enjoyable.
 
-**Saved ideas level (done, 16 November 2026):** formats 63-72 (career and board rules, sponsor exits and naming rights, medical and scouting facilities, squad-rank roles and contract requests, press, rivalries, unemployed seasons, presidents with salary verdicts and youth and culture objectives, loans and leases, club money after promotion and relegation). Defaults in `docs/decisions.md`, "Saved ideas level defaults". Old-format tests build careers with `beforeSavedIdeas`/`BEFORE_SAVED_IDEAS` (`tests/helpers/legacy-season.ts`); career and history scenario tests run without presidents (`presidents: false`).
+**Step 3.7 result (16 November 2026):** three countries plus Europe (70 weekly clubs, 211 world clubs), every system on: career creation 5-9 s; a delegated season 12-26 min in the browser (about 4 min in tests on a quiet machine); offseason about 1 min, rollover 20-25 s; five seasons end at **18.0 MiB** (format 73: completed seasons sealed at rollover, packed records, `compact-3`), +2.3 MiB a season instead of +7.5; sealed reload 1-3 s; strict load 23-82 s, growing with career length; every season boundary passes the strict check.
 
-**Owner feedback after a first play (16 November 2026; "not to tackle immediately ... in the rightful time"):**
-- Safety and gaps level (before the play test):
-  - **Done (16 November):** (3) the black Inbox screen (most likely a page file removed by a new deploy while the game was open; every page now shows a plain message with Save and reload instead of going blank, `src/ui/PageErrorBoundary.tsx`); (1) no "est." next to OVR on the club step; (2) "Not played · table simulated" with a one-line explanation; (9) dragging or selecting two players on the court swaps them at once (`swapActivePlayers`); a warning when closing the page while saving.
-  - **Done (16 November):** (10) without an assistant coach the match and squad controls read Automatic / Auto-pick / Automatic selection (a hired assistant only adds match advice; automatic choices follow the same rules either way); (11) facility projects show the weeks left and the finish Saturday (`src/world/facility-schedule.ts`).
-  - (6) Money realism: some staff earn a lot. The owner's sentence was cut off; ask for the rest. Fits the economy gaps.
-  - **Done (16 November), from the browser cycle:** truthful Continue messages on midweek European days (one day label for top bar, heading and panel); the next game starts from the planned five (`preTipoffLineup`); clear offseason start reasons with a primary "Continue offseason"; a failed worker download offers Save and reload; a save status ("Saved · Matchday 14"); current-season world label, readable dates, fixtures open on a played matchday; at most five job offers, none from reserve teams. Alongside the play test (owner, 16 November): make the checkpoint check incremental (it replays the whole career, so it slows as careers grow) and recompute the saved ideas' plausibility checks exactly.
+**Done for the play test (16 November 2026; details in `docs/handover-history.md`):** owner feedback fixes (no blank screen when a page or the season worker cannot be downloaded after a deploy, plain "Not played · table simulated" wording, no OVR "est." on the club step, court swaps, close warning, Automatic labels without an assistant coach, facility time left); every checkpoint fully checked in the background before it is written; old-save tests restored; computer clubs on the human club's rules (leases, sponsor exits, youth objectives, youth injury recurrence, rivalry through unemployment); money gaps (season money for capital and staff budgets, foreseen next-season money in the offseason, club-scaled reserves and academy wages, arena seats by the club's arena, staff pay on a square-root scale, automatic spending cushions, solvent weak clubs); browser-cycle fixes (truthful Continue messages on midweek days, the planned five starts the next game, clear offseason reasons, a save status, current-season labels and readable dates, at most five job offers and none from reserve teams).
+
+**Owner feedback still to build** (numbers from the owner's messages):
+- (6) Money realism: some staff earn a lot (staff pay now scales by the square root of club money); the owner's sentence was cut off, ask for the rest.
 - Interface simplification (after the play test):
   - **Aim of this level (owner, 16 November):** "the game is too detailed to be played swiftly, this can make a lot of potential players escape the game in the first few minutes": fewer decisions and screens in the first minutes, sensible defaults, details only on request.
   - (15) Every club starts with staff in every area (coaches, assistant, scouts, physio, fitness, youth), rated to the club's level; the manager can sack and hire; hiring for a filled role warns first and the replacement can still be accepted. New format; AI clubs on the same rules.
@@ -30,7 +28,7 @@ This file holds only the current state, the next steps and the rules that must n
 **Development mode** applies (see "Rules and conventions"): build features first; full suite at sprint end.
 
 **Code baseline:**
-- Save format **72** (`SEASON_SCHEMA_VERSION`; saved ideas formats 63-72), `compact-2` encoding, `SAVE_CHECKS_VERSION` 4.
+- Save format **73** (`SEASON_SCHEMA_VERSION`; older real-club careers are refused with a start-a-new-career message), `compact-3` encoding, `SAVE_CHECKS_VERSION` 4.
 - Last verification (cloud, Linux, end of the saved ideas level, 16 November 2026): full suite **2,724 passed / 30 skipped, 209 files** (371 s, `--maxWorkers=4`; its one failure, `lower-division-world`, was re-seeded and passes); `npm run build` passes with the known chunk-size advisory. The 30 skipped tests are listed under "Before release".
 - Cloud sessions: Node 24.22.3 in `/opt/node24` (put it first in `PATH`).
 
@@ -43,39 +41,13 @@ This file holds only the current state, the next steps and the rules that must n
 - The Turkish TBL postseason is a labelled default; its statute has not been found.
 - Without a next-division list (every real world until 3.4d-4, and always Italy and France), relegated clubs of the lowest division stay; the playoff panel says so.
 - New worlds rank Greece's, Turkey's and Spain's second division by the labelled FIBA default (no readable official rule). Worlds created before format 51 keep the prototype order outside France; format-51 worlds keep the FIBA default.
-- **Large worlds are slow** (address at 3.7):
-  - a 36-club season with every system takes 341 s;
-  - the strict check of its season-two opening save takes 18 s;
-  - the all-countries world (173 clubs) took about ten minutes to create and check.
-- Strict validation of long careers grows with career length. The academy and relationship replays are the main costs; a performance step is needed before release.
+- Strict checks grow with career length (23 s at a season-2 opening, 82 s at a season-5 end in the 3.7 world); checkpoints check in the background, so the save status can trail play by a minute or more in long careers. Incremental checks run alongside the play test.
 - The private data still has unresolved records: 263 club assignments, 169 official identities, 17 extra provider IDs and 2,811 estimated precise positions. See `docs/player-data-quality.md`.
 
-## Sprint 4 summary (15 November 2026): realism complete
+## Levels and real data
 
-Match calibration to 2025-26 averages of nine competitions (`src/engine/calibration.ts`), realistic injuries (format 61), hidden potential (`training-2`), rating fairness on position scales, researched club money (format 62, `src/world/economy.ts`), calibrated opening contract lengths, real next divisions (3.4d-4) and measured setup-screen estimates (3.6). Details, figures and the Beşiktaş/Fenerbahçe audit are in `docs/handover-history.md` ("Sprint 4 summary, archived").
-
-## Real clubs on every device (owner request, 15 November 2026)
-
-The game reads real club data from the owner's Supabase project (public storage bucket `game-data`, `real-pack.json`; `src/world/built-in-pack.ts`), so careers start with real clubs on any device without choosing a file. **Live now:** a pack built in Supabase from the database (dataset 2026.11-world-1, 13 competitions, 223 clubs, 3,087 players) by the Edge Function `publish-starter-pack` (source in `supabase/functions/`; it never replaces an existing pack). **To publish the newer corrected pack** (world-3, only on the owner's computer): `npm.cmd run data:publish -- --file .local-data/real-2026.11-world-3.json` (uses `supabase-key.local`; checks the file with the game's parser first). Choosing a file stays possible. The owner asked for this Supabase work on 15 November 2026; the cloud rule against calling Supabase otherwise still stands.
-
-## Levels after sprint 4 (each needs the owner's approval)
-
-- **Saved ideas** (the owner calls them essential; place each into a level when planning it):
-  - unemployed seasons (approved, in the saved ideas level);
-  - a protected first season and fresh board confidence for a new coach;
-  - mid-season dismissals and resignations;
-  - more president personalities;
-  - verdicts affecting the player salary budget;
-  - youth and culture objectives;
-  - players asking about new contracts;
-  - richer press topics and media reputation;
-  - rivalries that grow from results;
-  - loans and leases;
-  - medical and scouting facilities and repair projects;
-  - early sponsor exits and naming rights.
-- **Order decided by the owner (16 November 2026), before the play test:** (1) finish step 3.7 (multi-league season with Europe, speed and save size, browser check); (2) restore the safety checks paused in development mode and close the known gaps ("Before release" list); then the owner play-tests. Interface simplification comes after the play tests.
-- **Selling and marketing: off the roadmap** (owner, 16 November 2026: "Let's remove the selling and marketing related work. We'll come to this later, after making the game a playable and enjoyable one."). The earlier ideas (free first season, EUR 15 unlock, Steam, data-rights review) wait until the owner brings them back.
-- **Interface simplification,** after the owner has played with real data.
+- **Roadmap (owner, 16 November 2026):** step 3.7 and safety and gaps (done for the play test), owner play test, interface simplification (aim: a swifter game), player data, release preparation. Selling and marketing are off the roadmap until the game is playable and enjoyable (`docs/decisions.md`).
+- **Real clubs on every device:** the game reads the real pack from the owner's Supabase storage (`game-data/real-pack.json`, `src/world/built-in-pack.ts`; `public/data/real-pack.json` is a fallback). The live pack is world-1; the corrected world-3 pack is only on the owner's computer (`npm.cmd run data:publish -- --file .local-data/real-2026.11-world-3.json`). Never call Supabase from a cloud session unless the owner asks; browser checks serve the pack locally and block the Supabase request.
 
 ## Rules and conventions that must not be broken
 
@@ -116,6 +88,7 @@ The game reads real club data from the owner's Supabase project (public storage 
 - Old-save support: capture fixtures, continuation and migration tests for the formats released to players.
 - Full save replay checks for features added in development mode.
 - Skipped (16 November 2026): `career-unemployment` "declining an offer at a season end" has no seed under the planned-five and five-offer rules; find a scenario before release.
+- Format 73 (16 November 2026): real-club careers of format 72 and earlier are refused; bring back old-save support for them if they reach players. Sealed seasons are checked by shape and totals only; add full replay checks for them. In sealed seasons "games" in season totals counts games played (squad games in the latest completed season); morale searches cannot see per-game minutes in sealed seasons.
 - Old-save tests restored (16 November 2026) as "continues a valid week" checks (`tests/helpers/old-save-week.ts`: strict check, one week, the career's rules and every past event kept, the captured next week's schedule); exact comparisons stay where no match is simulated.
 - Saved ideas gaps (development mode): naming-rights offers and sponsor exit decisions are checked for plausibility, not recomputed; president requests and resignation offers get shape checks only; owner capital and the verdict's staff-budget preview still use opening money; offseason offers use the completed season's money figures. Closed 16 November (`docs/decisions.md`, "Safety and gaps level defaults"): AI leases, early sponsor exits and youth/culture objectives, youth injury recurrence, rivalry through unemployment; automatic exits' cash condition, naming exits, AI contract replies and AI lineups are checked for plausibility only.
 - Economy gaps (format 62; promotion and relegation money fixed by format 72): consistently weak clubs end seasons with little cash (2-4% of budget) and may drift into unpaid costs in long careers; the empty-roster wage reserve, academy prospects' wages and added arena seats are not rescaled; staff fees and facility costs follow one per-club scale.
@@ -163,4 +136,3 @@ Browser checks still to do locally (by the owner, or by a local Claude session w
 - Pre-existing layout points found on 16 November: on a phone, the Competitions table heading's picker is unstyled and "0 / 24 fixtures complete" is cut off; on the desktop club step the "Playable countries" and "Game speed" boxes are wider than their column; dragging needs a mouse (tapping two players works on phones).
 - Play Primera FEB's one-venue final stage without home advantage.
 - Optionally copy the two older fixture capture scripts from `.artifacts` (`capture-postseason-baseline.mjs`, `capture-divisions-baseline.mjs`) into `scripts/` for the record. Cloud sessions now use the committed `scripts/capture-format-baseline.mjs`.
-- Make creating and checking large worlds faster before 3.7, because large worlds are slow today (see "Known open points").

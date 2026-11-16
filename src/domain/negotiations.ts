@@ -1,3 +1,4 @@
+import type { SquadRole } from './relationships';
 export interface NegotiationTerms { seasonWage: number; seasons: number; releaseFee?: number }
 export interface NegotiationDecision {
   outcome: 'accepted' | 'countered' | 'rejected';
@@ -18,6 +19,8 @@ export interface NegotiationRecord extends NegotiationDecision {
   offeredWage: number;
   offeredSeasons: number;
   releaseFee?: number;
+  /** `relationships-3`: the squad role offered with these terms. */
+  role?: SquadRole;
   contractCountBefore: number;
   contractId: string | null;
 }

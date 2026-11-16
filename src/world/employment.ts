@@ -4,7 +4,7 @@ import { clubRosterLimitText, clubRosterLimit, clubRosterTarget } from './club-r
 import type { ContractOfferOptions, EmploymentContract, EmploymentTransfer, SeasonEmployment } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
-import { getCareerPlayer, getCareerWage } from './player-catalog';
+import { getCareerPlayer } from './player-catalog';
 import { contractForSeason, effectiveContractsForSeason, getAvailablePlayers, getClubContractSummary, getContractedClubs, MIN_ROSTER_SIZE, quotePlayerContract } from './employment-policy';
 import { scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
 import { evaluateNegotiation } from './negotiations-policy';
@@ -15,6 +15,7 @@ import { recordTransferFee } from './finance';
 import { sellerReplacementReason } from './transfers-policy';
 import { getTransferPaymentSchedule } from './transfer-payments';
 import { scheduleInSeasonRecruitment } from './recruitment';
+import { contractAskingWage, offeredContractRole } from './contract-roles';
 
 export function createEmployment(): SeasonEmployment {
   return { model: 'employment-1', enabledSince: null, delegated: false, contracts: [], transfers: [], buyouts: [], market: null };
@@ -37,21 +38,23 @@ export function enableEmployment(state: SeasonState): SeasonState {
 /** Internal immediate response used by legacy/active renewals and the dated market resolver. */
 export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: string, seasonWage: number, seasons: number, resolvingOfferId?: string, options: ContractOfferOptions = {}): SeasonState {
   const scheduled = getLiveMarketOffers(state).find(offer => offer.id === resolvingOfferId && offer.clubId === clubId && offer.playerId === playerId && offer.seasonWage === seasonWage && offer.seasons === seasons && offer.status === 'pending' && offer.responseOn === state.date);
-  if (scheduled) options = { ...(scheduled.releaseFee === undefined ? {} : { releaseFee: scheduled.releaseFee }), ...(scheduled.transfer?.mode ? { transferMode: scheduled.transfer.mode } : {}) };
+  if (scheduled) options = { ...(scheduled.releaseFee === undefined ? {} : { releaseFee: scheduled.releaseFee }), ...(scheduled.transfer?.mode ? { transferMode: scheduled.transfer.mode } : {}), ...(scheduled.role === undefined ? {} : { role: scheduled.role }) };
   if (state.market?.enabledSince && state.status === 'complete' && !scheduled) throw new Error('Send an offer and continue to its scheduled response before signing.');
   const enabled = state.negotiations.enabledSince !== null;
+  // relationships-3: every offer carries a squad role, the chosen one or the player's natural role at this club.
+  const role = offeredContractRole(state, clubId, playerId, options);
   const latest = enabled ? getLatestNegotiation(state, playerId, clubId) : null;
-  const duplicate = latest && latest.seasonNumber === state.seasonNumber && latest.round === state.round && latest.status === state.status && latest.date === state.date && latest.offeredWage === seasonWage && latest.offeredSeasons === seasons && latest.releaseFee === options.releaseFee;
+  const duplicate = latest && latest.seasonNumber === state.seasonNumber && latest.round === state.round && latest.status === state.status && latest.date === state.date && latest.offeredWage === seasonWage && latest.offeredSeasons === seasons && latest.releaseFee === options.releaseFee && latest.role === role;
   if (duplicate && latest.outcome === 'accepted') {
     const signed = state.employment.contracts.find(contract => contract.id === latest.contractId);
-    if (signed && signed.playerId === playerId && signed.clubId === clubId && signed.startsSeason === state.seasonNumber + 1 && signed.endsSeason === state.seasonNumber + seasons && signed.seasonWage === seasonWage && signed.releaseFee === options.releaseFee && contractForSeason(state.employment, playerId, state.seasonNumber + 1)?.id === signed.id) return state;
+    if (signed && signed.playerId === playerId && signed.clubId === clubId && signed.startsSeason === state.seasonNumber + 1 && signed.endsSeason === state.seasonNumber + seasons && signed.seasonWage === seasonWage && signed.releaseFee === options.releaseFee && signed.role === role && contractForSeason(state.employment, playerId, state.seasonNumber + 1)?.id === signed.id) return state;
   }
   const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId, resolvingOfferId, scheduled?.transfer?.fee, scheduled?.transfer?.paymentPlan ?? 'upfront', options);
   if (!quote.canOffer) throw new Error(quote.reason!);
   if (duplicate) return state;
-  const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons, options.releaseFee, state) : null;
+  const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons, options.releaseFee, state, role) : null;
   const contractCountBefore = state.employment.contracts.length;
-  if (decision && decision.outcome !== 'accepted') return appendNegotiationResponse(state, clubId, playerId, seasonWage, seasons, decision, null, contractCountBefore, quote.startsSeason, options.releaseFee);
+  if (decision && decision.outcome !== 'accepted') return appendNegotiationResponse(state, clubId, playerId, seasonWage, seasons, decision, null, contractCountBefore, quote.startsSeason, options.releaseFee, role);
   if (scheduled?.transfer) {
     const saleReason = sellerReplacementReason(state, scheduled);
     if (saleReason) throw new Error(saleReason);
@@ -63,6 +66,7 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
     signedSeason: state.seasonNumber, signedRound: state.round,
     kind: scheduled?.transfer ? 'transfer' : current?.clubId === clubId && current.endsSeason === state.seasonNumber ? 'renewal' : 'free-agent',
     ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }),
+    ...(role === undefined ? {} : { role }),
   };
   let next = { ...state, employment: { ...state.employment, contracts: [...state.employment.contracts, contract] } };
   if (scheduled?.transfer) {
@@ -82,7 +86,7 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
     };
     next = recordTransferFee({ ...next, employment: { ...next.employment, transfers: [...(state.employment.transfers ?? []), transfer] } }, transfer);
   }
-  return decision ? appendNegotiationResponse(next, clubId, playerId, seasonWage, seasons, decision, contract.id, contractCountBefore, quote.startsSeason, options.releaseFee) : next;
+  return decision ? appendNegotiationResponse(next, clubId, playerId, seasonWage, seasons, decision, contract.id, contractCountBefore, quote.startsSeason, options.releaseFee, role) : next;
 }
 
 export function offerPlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number, options: ContractOfferOptions = {}): SeasonState {
@@ -104,9 +108,9 @@ function retainPlayers(state: SeasonState, clubId: string, target: number): Seas
   const club = state.clubs.find(club => club.id === clubId)!;
   while (getClubContractSummary(next, clubId).rosterSize < target) {
     const candidates = rankCandidates(next, clubId, club.players.filter(player => !contractForSeason(next.employment, player.id, next.seasonNumber + 1)));
-    const player = candidates.find(player => quotePlayerContract(next, player.id, getCareerWage(state, player.id), 1, clubId).canOffer);
+    const player = candidates.find(player => quotePlayerContract(next, player.id, contractAskingWage(next, clubId, player.id), 1, clubId).canOffer);
     if (!player) break;
-    next = commitPlayerOffer(next, clubId, player.id, getCareerWage(state, player.id), 1);
+    next = commitPlayerOffer(next, clubId, player.id, contractAskingWage(next, clubId, player.id), 1);
   }
   return next;
 }
@@ -114,9 +118,9 @@ function retainPlayers(state: SeasonState, clubId: string, target: number): Seas
 function recruitPlayers(state: SeasonState, clubId: string, target: number): SeasonState {
   let next = state;
   while (getClubContractSummary(next, clubId).rosterSize < target) {
-    const player = rankCandidates(next, clubId, getAvailablePlayers(next)).find(player => quotePlayerContract(next, player.id, getCareerWage(state, player.id), 1, clubId).canOffer);
+    const player = rankCandidates(next, clubId, getAvailablePlayers(next)).find(player => quotePlayerContract(next, player.id, contractAskingWage(next, clubId, player.id), 1, clubId).canOffer);
     if (!player) break;
-    next = commitPlayerOffer(next, clubId, player.id, getCareerWage(state, player.id), 1);
+    next = commitPlayerOffer(next, clubId, player.id, contractAskingWage(next, clubId, player.id), 1);
   }
   return next;
 }

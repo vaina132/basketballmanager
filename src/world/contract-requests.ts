@@ -6,6 +6,7 @@ import { requiredNegotiationWage } from './negotiations-policy';
 import { getInSeasonOffers } from './recruitment-policy';
 import { RELATIONSHIP_RULES } from './relationship-rules';
 import { countsTowardsObjectives, PRESIDENT_RULES } from './presidents';
+import { offeredContractRole } from './contract-roles';
 
 const RULES = RELATIONSHIP_RULES.contractRequests;
 
@@ -19,9 +20,11 @@ function answerAsAiClub(state: SeasonState, clubId: string, playerId: string, la
   const rank = getSquadRank(state, playerId, clubId);
   const maxRank = rank !== null && rank > RULES.ai.renewMaxRank && countsTowardsObjectives(state, clubId, state.seasonNumber, playerId) ? PRESIDENT_RULES.objectives.aiRenewMaxRank : RULES.ai.renewMaxRank;
   if (rank === null || rank > maxRank) return replyToContractRequest(state, playerId, 'decline', clubId);
+  // relationships-3: the renewal offers his natural role at the club, at the asking wage for it.
+  const role = offeredContractRole(state, clubId, playerId);
   for (const seasons of [...new Set([RULES.ai.renewalSeasons, 1])]) {
     let wage: number;
-    try { wage = requiredNegotiationWage(playerId, seasons, undefined, state); } catch { break; } // No wage terms: let him go.
+    try { wage = requiredNegotiationWage(playerId, seasons, undefined, state, role); } catch { break; } // No wage terms: let him go.
     if (quotePlayerContract(state, playerId, wage, seasons, clubId).canOffer) return commitPlayerOffer(replyToContractRequest(state, playerId, 'talks', clubId), clubId, playerId, wage, seasons);
   }
   const saleOpen = getInSeasonOffers(state, undefined, true).some(offer => offer.playerId === playerId && offer.transfer?.sellerClubId === clubId);

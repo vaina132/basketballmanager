@@ -1,3 +1,4 @@
+import type { SquadRole } from './relationships';
 import type { TransferPaymentPlan } from './transfer-payments';
 
 export interface TransferProposal {
@@ -26,6 +27,8 @@ export interface MarketOffer {
   expiresOn: string;
   seasonWage: number;
   releaseFee?: number;
+  /** `relationships-3`: the squad role offered. */
+  role?: SquadRole;
   seasons: number;
   status: 'pending' | 'countered' | 'accepted' | 'rejected' | 'withdrawn' | 'expired' | 'replaced' | 'lost' | 'club-review';
   respondedOn: string | null;
@@ -37,7 +40,7 @@ export interface MarketOffer {
 }
 
 export type MarketEvent =
-  | { type: 'offer'; id: string; date: string; clubId: string; playerId: string; seasonWage: number; seasons: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan; releaseFee?: number; transferMode?: 'release-clause' }
+  | { type: 'offer'; id: string; date: string; clubId: string; playerId: string; seasonWage: number; seasons: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan; releaseFee?: number; transferMode?: 'release-clause'; role?: SquadRole }
   | { type: 'buyout'; id: string; date: string; clubId: string; playerId: string }
   | { type: 'withdraw'; date: string; offerId: string }
   | { type: 'club-decision'; date: string; offerId: string; response: 'accept' | 'reject' | 'counter' }

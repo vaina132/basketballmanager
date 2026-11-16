@@ -4,7 +4,8 @@ import type { SeasonEndOutlook } from '../world/career-policy'
 import { isUnemployed } from '../world/career-rules'
 import { regularWorldRounds, seasonRounds, worldOf } from '../world/career-world'
 import { continueAction, runContinueStep } from '../world/continue-step'
-import { getMarketWindow, isLiveMarketOffer } from '../world/market-policy'
+import { getClubContractSummary, MIN_ROSTER_SIZE } from '../world/employment-policy'
+import { getMarketWindow, isLiveMarketOffer, isMarketActive } from '../world/market-policy'
 import { currentGameDay, seasonLabel } from '../world/season'
 import { careerDay, careerToday, gameDate, gamesText, nextGameText, seasonChangeText } from './career-text'
 import { getInboxItems } from './inbox-items'
@@ -66,23 +67,34 @@ export function continueStop(before: SeasonState, after: SeasonState): ContinueS
   const moved = (after.career?.moves.length ?? 0) > (before.career?.moves.length ?? 0)
   if (moved || after.status === 'complete' && before.status === 'active') {
     const text = seasonChangeText(before, after)
-    return { kind: moved ? 'career' : 'season-end', message: after.status === 'complete' ? `Season complete. ${text}` : text, page: moved ? 'home' : to('season') }
+    // With the dated offseason market, the season's end opens recruitment for next season (as "Review offseason" did).
+    const recruitment = !unemployed && isMarketActive(after) ? ' Make offers for next season in Transfers; Continue moves through the offseason.' : ''
+    return { kind: moved ? 'career' : 'season-end', message: `${after.status === 'complete' ? `Season complete. ${text}` : text}${recruitment}`, page: moved ? 'home' : recruitment ? 'transfers' : to('season') }
   }
   if (after.status === 'active' && after.activeMatch && (after.activeMatch.status !== 'finished' || after.activeMatch.result?.kind === 'default')) {
     const fixture = after.fixtures.find(item => item.id === after.activeFixtureId)
     return { kind: 'match', message: `Your next game is ready${fixture ? `: ${nextGameText(after, fixture)}` : ''}.`, page: 'match' }
   }
+  // The offseason's last recruitment day can also bring news; its stop then says that the season can start.
+  const ready = after.status === 'complete' && before.status === 'complete' && continueAction(after).kind === 'rollover'
+  const withStart = (stop: ContinueStop): ContinueStop => ready ? { ...stop, message: `${stop.message} Recruitment is complete: ${seasonLabel(after.seasonNumber + 1)} can start. Continue starts it.` } : stop
   const items = newActionItems(before, after)
-  if (items.length) return { kind: 'inbox', message: `New in your inbox: ${items[0]!.title}${items.length > 1 ? ` and ${plural(items.length - 1, 'more message', 'more messages')}` : ''}.`, page: to('inbox') }
+  if (items.length) return withStart({ kind: 'inbox', message: `New in your inbox: ${items[0]!.title}${items.length > 1 ? ` and ${plural(items.length - 1, 'more message', 'more messages')}` : ''}.`, page: to('inbox') })
+  // Delegated recruitment answers its own offers; replies stop the run only when the manager makes the offers.
   const offers = unemployed ? { replies: 0, incoming: 0 } : offerNews(before, after)
+  if (after.employment?.delegated) offers.replies = 0
   if (offers.replies || offers.incoming) {
     const said = [offers.replies ? `${plural(offers.replies, 'reply', 'replies')} to your offers` : '', offers.incoming ? `${plural(offers.incoming, 'new offer', 'new offers')} for your players` : ''].filter(Boolean).join(' and ')
-    return { kind: 'offers', message: `${said[0]!.toUpperCase()}${said.slice(1)}. Review ${offers.replies + offers.incoming === 1 ? 'it' : 'them'} in Transfers.`, page: 'transfers' }
+    return withStart({ kind: 'offers', message: `${said[0]!.toUpperCase()}${said.slice(1)}. Review ${offers.replies + offers.incoming === 1 ? 'it' : 'them'} in Transfers.`, page: 'transfers' })
   }
-  if (!unemployed && newPresidentRequest(before, after)) return { kind: 'board', message: 'The president has a new request. Its deadline and reward are on the board.', page: 'home' }
+  if (!unemployed && newPresidentRequest(before, after)) return withStart({ kind: 'board', message: 'The president has a new request. Its deadline and reward are on the board.', page: 'home' })
   if (after.status === 'complete') {
+    // A squad short of next season's minimum needs the manager's offers: each Continue then moves one recruitment day.
+    const short = !unemployed && before.status === 'complete' && isMarketActive(after) && !after.employment.delegated
+      ? MIN_ROSTER_SIZE - getClubContractSummary(after, after.managedClubId).rosterSize : 0
+    if (short > 0) return { kind: 'decision', message: `Your squad needs ${plural(short, 'more signed player', 'more signed players')} for next season. Make offers in Transfers; each Continue moves one recruitment day while the squad is short.`, page: 'transfers' }
+    if (ready) return { kind: 'start-ready', message: `Recruitment is complete: ${seasonLabel(after.seasonNumber + 1)} can start. Continue starts it.`, page: to('transfers') }
     const next = continueAction(after)
-    if (next.kind === 'rollover' && before.status === 'complete') return { kind: 'start-ready', message: `Recruitment is complete: ${seasonLabel(after.seasonNumber + 1)} can start. Continue starts it.`, page: to('transfers') }
     if (next.kind === 'blocked') return { kind: 'blocked', message: next.reason, page: to('transfers') }
   }
   return null
@@ -142,18 +154,24 @@ export function continueProgress(state: SeasonState, steps: number): number {
   return steps / (steps + remainingSteps(state))
 }
 
-/** The one notice of a stop: what was played or recorded during the run, then why it stopped. */
+/** The one notice of a stop: what the run recorded (completed matchdays, or the offseason days passed), then why it stopped. */
 export function continueNotice(start: SeasonState, end: SeasonState, stop: ContinueStop): string {
   const parts: string[] = []
-  if (start.seasonNumber === end.seasonNumber && start.status === 'active') {
-    const before = new Map(start.fixtures.map(fixture => [fixture.id, !!fixture.result]))
-    const days = end.fixtures.filter(fixture => fixture.result && !before.get(fixture.id)).map(fixture => fixture.date).sort()
-    if (days.length) parts.push(`${plural(days.length, 'game', 'games')} played (${gameDate(days[0]!)}${days.at(-1) !== days[0] ? ` – ${gameDate(days.at(-1)!)}` : ''}).`)
+  if (start.seasonNumber === end.seasonNumber && start.status === 'active' && stop.kind !== 'season-end' && stop.kind !== 'career') {
     const last = end.status === 'complete' ? end.round : end.round - 1
-    if (last >= start.round && stop.kind !== 'season-end' && stop.kind !== 'career') parts.push(last === start.round ? `Matchday ${start.round} recorded.` : `Matchdays ${start.round}–${last} recorded.`)
-  } else if (start.seasonNumber === end.seasonNumber && end.date !== start.date) parts.push(`Offseason recruitment up to ${gameDate(end.date)}.`)
+    if (last >= start.round) parts.push(last === start.round ? `Matchday ${start.round} recorded.` : `Matchdays ${start.round}–${last} recorded.`)
+    else if (end.date !== start.date || careerToday(end) !== careerToday(start)) parts.push(`Games played up to ${gameDate(lastPlayedDay(start, end) ?? careerToday(start))}.`)
+  } else if (start.seasonNumber === end.seasonNumber && start.status === 'complete' && end.date !== start.date) parts.push(`Offseason recruitment up to ${gameDate(end.date)}.`)
   parts.push(stop.message)
   return parts.join(' ')
+}
+
+/** The latest day with a game recorded between two states of one season. */
+function lastPlayedDay(start: SeasonState, end: SeasonState): string | undefined {
+  const before = new Set(start.fixtures.filter(fixture => fixture.result).map(fixture => fixture.id))
+  let last: string | undefined
+  for (const fixture of end.fixtures) if (fixture.result && !before.has(fixture.id) && (!last || fixture.date > last)) last = fixture.date
+  return last
 }
 
 /** A stop at the manager's request: where the career stands and what Continue does next. */
@@ -174,7 +192,9 @@ export function continueUntilStop(state: SeasonState, options: { decided?: boole
   if (action.kind === 'blocked') return { state, steps: 0, stop: { kind: 'blocked', message: action.reason } }
   let current = state, steps = 0, choice: { decided?: boolean; decision?: SeasonEndDecision } = { decided: options.decided, decision: options.decision }
   for (;;) {
-    const result = runContinueStep(current, choice)
+    let result: ReturnType<typeof runContinueStep>
+    try { result = runContinueStep(current, choice) }
+    catch (error) { return { state: current, steps, stop: { kind: 'error', message: error instanceof Error ? error.message : 'Could not continue.' } } }
     choice = {}
     if ('outlook' in result) return { state: current, steps, stop: { kind: 'decision', message: 'The board has decided about your job.' }, outlook: result.outlook }
     steps += 1

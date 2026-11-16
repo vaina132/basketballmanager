@@ -93,6 +93,7 @@ import { validateEconomyHistory, validateEconomySeasonsShape } from './economy-v
 import type { SeasonCareer } from '../domain/career';
 import { createCareer, deferCareerDecisions, managedClubAtLedger, managedClubAtRound, managedClubFor, matchClubFor, releaseAcademyFocus } from '../world/career';
 import { validateCareer, validateCareerDecisions } from './career-validation';
+import { NO_CLUB } from '../world/career-rules';
 import { createNegotiations } from '../world/negotiations';
 import { applyMarketEvent, createMarket } from '../world/market';
 import { applyInSeasonEvent, createInSeasonRecruitment as createRecruitment } from '../world/recruitment';
@@ -2813,6 +2814,11 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Format 63: the career-2 rules (protected first season, fresh confidence, mid-season moves, resignations) need it.
   const careerModel = state.career !== null && typeof state.career === 'object' ? (state.career as { model?: unknown }).model : undefined;
   if (version < 63 && (careerModel === 'career-2' || state.board !== null && typeof state.board === 'object' && Object.hasOwn(state.board, 'restarts'))) fail('career.model', 'requires format 63 or later');
+  // Format 69: careers with unemployed seasons (`career-3`); an unemployed manager has no managed club (empty id).
+  if (version < 69 && careerModel === 'career-3') fail('career.model', 'requires format 69 or later');
+  const careerMoves = careerModel === 'career-3' && Array.isArray((state.career as { moves?: unknown }).moves) ? (state.career as { moves: unknown[] }).moves : [];
+  const lastMove = careerMoves.at(-1) as { toClubId?: unknown } | undefined;
+  const unemployed = careerModel === 'career-3' && state.managedClubId === NO_CLUB && !!lastMove && typeof lastMove === 'object' && lastMove.toClubId === NO_CLUB;
   // Format 72: per-season club money, shape first; it is re-derived exactly once the history is validated.
   validateEconomySeasonsShape(state, version);
   const economySeasons = Object.hasOwn(state, 'economySeasons') ? state.economySeasons as SeasonEconomy : undefined;
@@ -2836,7 +2842,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (!legacy && (!Array.isArray(state.injuries) || state.injuries.length > 600 * seasonNumber)) fail('injuries', 'must be a bounded injury history');
   if (state.status !== 'active' && state.status !== 'complete') fail('status', 'must be active or complete');
   if (state.status === 'complete' && round !== worldRounds(world)) fail('round', 'must reach the final matchday before completion');
-  if (!isWorldClub(world, state.managedClubId)) fail('managedClubId', 'must identify a club in this league');
+  if (typeof state.managedClubId !== 'string' || !unemployed && !isWorldClub(world, state.managedClubId)) fail('managedClubId', 'must identify a club in this league');
   const academy = version >= 25 ? validateAcademyShape(state.academy, state as unknown as SeasonState, version) : createAcademy();
   const lifecycle = version >= 26 ? validateLifecycleShape(state.lifecycle, state as unknown as SeasonState) : createLifecycle();
   const youthCompetition = version >= 27 ? validateYouthCompetitionShape(state.youthCompetition, state as unknown as SeasonState, version) : createYouthCompetition();
@@ -2858,7 +2864,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version >= 55 && Object.hasOwn(state, 'background')) validateBackgroundHistory(state as unknown as SeasonState, employment, careerContext);
   const clubs = state.clubs as readonly Team[], clubIds = clubs.map(club => club.id);
   const rosters = version >= 9 ? validateRosters(state.rosters, 'rosters', clubs, seasonNumber, employment, round, careerContext) : undefined;
-  if (typeof state.managedClubId !== 'string' || !clubIds.includes(state.managedClubId)) fail('managedClubId', 'must identify a club in this league');
+  if (typeof state.managedClubId !== 'string' || !unemployed && !clubIds.includes(state.managedClubId)) fail('managedClubId', 'must identify a club in this league');
   const plans = record(state.plans, 'plans', clubIds);
   const playerIds = getCareerPlayers(careerContext, seasonNumber, round).map(player => player.id);
   const conditions = record(state.conditions, 'conditions', playerIds);
@@ -3024,7 +3030,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     validateTransferPaymentBoundaries(normalizedState);
   }
   if (!active) {
-    if (!world.domesticLeagues || state.activeMatch !== null) fail('activeMatch', 'must be null during a calendar rest week');
+    // Format 69: a season (or its end) without a club (career-3) has no managed match.
+    if (!world.domesticLeagues && matchClub !== NO_CLUB || state.activeMatch !== null) fail('activeMatch', 'must be null during a calendar rest week');
   } else validateMatchState(state.activeMatch);
   validateRelationships(normalizedState, version);
   validateCommercial(normalizedState, version);

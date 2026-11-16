@@ -13,7 +13,7 @@ import { RelationshipsPanel } from './ui/RelationshipsPanel'
 import { enableBoardFunding, enableFacilities, enableFacilityMaintenance, endFacilityLease, leaseFacility, repayFacilityLoan, requestBoardFunding, setMaintenancePlan, startFacilityRepair, startFacilityUpgrade, takeFacilityLoan, cancelFacilityUpgrade, setFacilityDelegation } from './world/facilities'
 import { PRESS_ANSWER_TEXT } from './world/press-policy'
 import { enableRivalries } from './world/rivalries'
-import { careerMovesGovern, enableCareerMoves } from './world/career'
+import { careerMovesGovern, enableCareerMoves, managedClubLabel } from './world/career'
 import type { SeasonEndOutlook } from './world/career-policy'
 import type { SeasonEndDecision } from './domain/career'
 import { boardFundingRefusal } from './world/board-funding-policy'
@@ -57,7 +57,9 @@ import { StaminaMeter } from './ui/StaminaMeter'
 import { ManagerDesk } from './ui/ManagerDesk'
 import type { SeasonState } from './domain/season'
 import { RestWeek } from './ui/RestWeek'
-import { careerPresentationMatch, createSeason, getStandings, managedSide as seasonManagedSide, midSeasonDismissalPossible, NEW_CAREER_SYSTEMS, resignManager, seasonLabel } from './world/season'
+import { acceptJob, careerPresentationMatch, createSeason, getStandings, managedSide as seasonManagedSide, midSeasonDismissalPossible, NEW_CAREER_SYSTEMS, resignManager, seasonLabel } from './world/season'
+import { isUnemployed } from './world/career-rules'
+import { roundNotice } from './ui/career-text'
 import { MAX_SEASON_SAVE_BYTES } from './storage/season-storage'
 import { readCareerSaves, readCurrentCareer, loadCareerCheckpoint, saveCareerCheckpoint } from './storage/career-saves'
 import type { CareerSaveList } from './storage/career-saves'
@@ -80,7 +82,7 @@ import { enableNegotiations } from './world/negotiations'
 import { buyoutPlayerContract, decideClubTransfer, enableMarket, submitTransferOffer, withdrawMarketOffer } from './world/market'
 import { contractForSeason } from './world/employment-policy'
 import { decideInSeasonTransfer, enableInSeasonRecruitment, enableInSeasonTransfers, submitInSeasonOffer, submitInSeasonTransferOffer, withdrawInSeasonOffer } from './world/recruitment'
-import { getMarketOffers, isMarketActive } from './world/market-policy'
+import { getMarketOffers, getMarketStartReason, getNextMarketDate, isMarketActive } from './world/market-policy'
 import { assignScouting, cancelScoutingAssignment, enableScouting, setScoutingDelegation, setShortlisted } from './world/scouting'
 import { enableFinance, setTicketPlan } from './world/finance'
 import { enableScouts, hireScout, releaseScout, setScoutRenewal } from './world/scouts'
@@ -107,6 +109,7 @@ const PayrollWorkspace = lazy(() => import('./ui/PayrollWorkspace').then(module 
 const TransfersWorkspace = lazy(() => import('./ui/TransfersWorkspace').then(module => ({ default: module.TransfersWorkspace })))
 const ScoutingWorkspace = lazy(() => import('./ui/ScoutingWorkspace').then(module => ({ default: module.ScoutingWorkspace })))
 const CareerStart = lazy(() => import('./ui/CareerStart').then(module => ({ default: module.CareerStart })))
+const UnemployedDesk = lazy(() => import('./ui/UnemployedDesk').then(module => ({ default: module.UnemployedDesk })))
 
 type Page = 'home' | 'inbox' | 'squad' | 'match' | 'season' | 'training' | 'staff' | 'club' | 'transfers' | 'scouting' | 'medical' | 'academy' | 'calendar' | 'europe'
 type GameSession = { kind: 'exhibition'; match: MatchState } | { kind: 'season'; season: SeasonState }
@@ -138,7 +141,8 @@ export default function App() {
   const matchRef = useRef(match)
   const managedSide = season ? restWeek ? match.home.id === season.managedClubId ? 'home' : 'away' : seasonManagedSide(season) : 'home'
   // After a move at a season end, the final match still belongs to the former club; identity and squad follow the new one.
-  const managedTeam = season && match[managedSide].id !== season.managedClubId ? season.clubs.find(club => club.id === season.managedClubId)! : match[managedSide]
+  // Format 69: without a club (career-3), the presentation match's side stands in; those screens are not shown then.
+  const managedTeam = season && match[managedSide].id !== season.managedClubId ? season.clubs.find(club => club.id === season.managedClubId) ?? match[managedSide] : match[managedSide]
   // Format 64: the home arena's name this season (a naming partner's name while its agreement runs).
   const matchVenue = season ? arenaNameFor(season, match.home.id) : null
   const [advancing, setAdvancing] = useState(false)
@@ -605,14 +609,29 @@ export default function App() {
     seasonJob.current += 1; seasonWorker.current?.terminate(); seasonWorker.current = null; setAdvancing(false)
     setNotice({ message: seasonOperation === 'market' ? 'Recruitment processing cancelled. Your offers and date are preserved.' : seasonOperation === 'rollover' ? 'Season transition cancelled. Your completed season is preserved.' : 'Matchday processing cancelled. Your finished match is preserved.' })
   }
-  /** Format 63: resign and take over the chosen club at once; its match this week, if any, is prepared for the manager. */
+  /**
+   * Format 63: resign and take over the chosen club at once; its match this week, if any, is prepared for the manager.
+   * Format 69 (career-3): an empty club id resigns without a new job.
+   */
   async function resign(clubId: string) {
     const current = sessionRef.current
     if (seasonWorker.current || persistenceBusy.current || current.kind !== 'season') return
     try {
       const next = resignManager(current.season, clubId)
       install({ kind: 'season', season: next })
-      setNotice({ message: `You resigned and now manage ${next.clubs.find(club => club.id === clubId)!.name}. Its board starts afresh, and your first season there is protected.` })
+      setNotice({ message: clubId ? `You resigned and now manage ${next.clubs.find(club => club.id === clubId)!.name}. Its board starts afresh, and your first season there is protected.` : 'You resigned and are now without a club. Every club is run automatically; jobs that open appear on your desk.' })
+      navigate('home')
+      await persistSeason(next, 'manual')
+    } catch (error) { setNotice({ message: messageOf(error), error: true }) }
+  }
+  /** Format 69 (career-3): a manager without a club takes a job from the job market; the club starts afresh. */
+  async function takeJob(clubId: string) {
+    const current = sessionRef.current
+    if (seasonWorker.current || persistenceBusy.current || current.kind !== 'season') return
+    try {
+      const next = acceptJob(current.season, clubId)
+      install({ kind: 'season', season: next })
+      setNotice({ message: `You are the new coach of ${next.clubs.find(club => club.id === clubId)!.name}. Its board starts afresh at confidence 57, and your first season there is protected.` })
       navigate('home')
       await persistSeason(next, 'manual')
     } catch (error) { setNotice({ message: messageOf(error), error: true }) }
@@ -631,7 +650,7 @@ export default function App() {
     if (action !== 'round' ? current.season.status !== 'complete' : current.season.status === 'complete') return
     if (current.season.activeMatch && current.season.activeMatch.status !== 'finished') { navigate('match'); return }
     // Format 63: a week whose review could dismiss the manager mid-season is previewed too, so the manager chooses a club first.
-    const preview = action === 'round' && !choice && (current.season.round === seasonRounds(current.season) && careerMovesGovern(current.season.career, current.season.seasonNumber) || midSeasonDismissalPossible(current.season))
+    const preview = action === 'round' && !choice && !isUnemployed(current.season) && (current.season.round === seasonRounds(current.season) && careerMovesGovern(current.season.career, current.season.seasonNumber) || midSeasonDismissalPossible(current.season))
     replacementRequest.current += 1
     setPlaying(false); settlePlayback()
     try {
@@ -649,11 +668,10 @@ export default function App() {
           return
         }
         install({ kind: 'season', season: data.state })
-        const newMove = action === 'round' && data.state.career.moves.length > current.season.career.moves.length ? data.state.career.moves.at(-1) : undefined
-        const move = data.state.status === 'complete' ? newMove : undefined
-        const dismissed = data.state.status !== 'complete' ? newMove : undefined
-        setNotice({ message: action === 'market' ? 'Recruitment advanced. Review player replies and your squad.' : action === 'rollover' ? `Season ${data.state.seasonNumber} ready. Your previous results are in Competitions.` : move ? `Season complete. You now manage ${data.state.clubs.find(club => club.id === move.toClubId)!.name}, including its offseason.` : dismissed ? `Week ${data.state.round - 1} recorded. The board dismissed you; you now manage ${data.state.clubs.find(club => club.id === dismissed.toClubId)!.name}.` : data.state.status === 'complete' ? 'Season complete. Final standings and all results are available.' : data.state.activeMatch ? `Week ${data.state.round - 1} recorded. Your next fixture is ready.` : `Week ${data.state.round - 1} recorded. Your club has a rest week.` })
-        navigate(action === 'market' || data.state.status === 'complete' && data.state.market.enabledSince ? 'transfers' : data.state.status === 'complete' ? 'season' : 'home')
+        // Format 69: without a club, every step returns to the unemployed desk.
+        const unemployed = isUnemployed(data.state)
+        setNotice({ message: action === 'market' ? unemployed ? 'Recruitment day recorded. Every club signs players automatically.' : 'Recruitment advanced. Review player replies and your squad.' : action === 'rollover' ? `Season ${data.state.seasonNumber} ready. Your previous results are in Competitions.` : roundNotice(current.season, data.state) })
+        navigate(unemployed ? 'home' : action === 'market' || data.state.status === 'complete' && data.state.market.enabledSince ? 'transfers' : data.state.status === 'complete' ? 'season' : 'home')
         await persistSeason(data.state, action === 'market' ? 'manual' : action === 'rollover' ? 'rollover' : 'matchday')
       }
       worker.onerror = () => { if (seasonWorker.current !== worker) return; finish(); setNotice({ message: action === 'market' ? 'Could not process recruitment. Your offers and date are preserved; try Continue again.' : action === 'rollover' ? 'Could not start the next season. Your completed season is preserved; try again.' : 'Could not process the matchday. Your match is preserved; try Continue again.', error: true }) }
@@ -663,16 +681,50 @@ export default function App() {
   useEffect(() => () => { seasonWorker.current?.terminate() }, [])
 
   const savedCareer = saveHistory?.current
-  const careerSummary = (state: SeasonState) => ({ managerName: state.manager?.name ?? 'Manager profile not set', clubName: state.clubs.find(club => club.id === state.managedClubId)!.name, date: state.date })
+  const careerSummary = (state: SeasonState) => ({ managerName: state.manager?.name ?? 'Manager profile not set', clubName: managedClubLabel(state), date: state.date })
   const overlays = <>
     <input ref={importRef} type="file" accept=".json,application/json,text/plain,application/octet-stream" onChange={importSave} className="visually-hidden" aria-label="Import game save" />
     {friendlyOpen && !season && <Suspense fallback={null}><RealClubFriendly pack={realPack} busy={saving || advancing} onPackLoaded={setRealPack} onStart={startFriendly} onClose={() => setFriendlyOpen(false)} /></Suspense>}
-    {seasonEnd && season && <SeasonEndChoice season={season} outlook={seasonEnd} busy={advancing || saving} onChoose={clubId => { setSeasonEnd(null); processSeason('round', { decision: clubId ? { moveTo: clubId } : undefined }) }} onClose={() => setSeasonEnd(null)} />}
+    {seasonEnd && season && <SeasonEndChoice season={season} outlook={seasonEnd} busy={advancing || saving} onChoose={clubId => { setSeasonEnd(null); processSeason('round', { decision: clubId !== null ? { moveTo: clubId } : undefined }) }} onClose={() => setSeasonEnd(null)} />}
     {saveHistoryOpen && <CareerSaveHistory entries={saveHistory?.entries ?? []} loading={historyLoading} error={historyError} busy={saving} onRefresh={() => { void refreshSaveHistory() }} onRestore={revision => { void restoreCheckpoint(revision) }} onClose={closeSaveHistory} />}
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
   </>
   if (entryView) return <><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing || creatingCareer} starting={creatingCareer} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} packSource={packSource} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense>{overlays}</>
 
+  // Format 69 (career-3): a manager without a club sees the unemployed desk, the inbox and the world's competitions only.
+  if (season && isUnemployed(season)) {
+    const unemployedPages = [{ id: 'home', label: 'Overview', icon: 'home' }, { id: 'inbox', label: 'Inbox', icon: 'mail' }, { id: 'season', label: 'Competitions', icon: 'ball' }, { id: 'calendar', label: 'Calendar', icon: 'calendar' }, ...(playsEurope(worldOf(season)) || worldOf(season).backgroundLeagues?.length ? [{ id: 'europe', label: 'Europe', icon: 'star' }] : [])] as { id: Page; label: string; icon: IconName }[]
+    const view: Page = unemployedPages.some(item => item.id === page) ? page : 'home'
+    const offseasonStep = () => processSeason(getMarketStartReason(season) && getNextMarketDate(season) ? 'market' : 'rollover')
+    return <div className="app-shell game-shell" data-unemployed>
+      <aside className="sidebar">
+        <a href="#main" className="skip-link">Skip to content</a>
+        <div className="brand"><div className="brand-symbol"><Icon name="ball" size={29} /></div><div>COURTSIDE<small>BASKETBALL MANAGER</small></div></div>
+        <div className="club-context"><div className="club-mark" aria-hidden="true"><Icon name="shield" size={21} /></div><div><strong>Without a club</strong><span>Head coach · available</span></div></div>
+        <nav aria-label="Main navigation" className="main-nav">
+          {unemployedPages.map(item => <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} onClick={() => navigate(item.id)} disabled={saving || leavingSeason} aria-label={item.label} title={item.label} aria-current={view === item.id ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span>{view === item.id && <span className="nav-current-dot" />}</button>)}
+        </nav>
+        <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />Season</div><p>{worldOf(season).source === 'real-data-pack' ? 'Real clubs' : 'Fictional squads'}</p><button id="manager-profile" className="manager manager-profile-button" onClick={openManagerProfile} disabled={saving || advancing} aria-label={season.manager ? 'Edit manager profile' : 'Set manager profile'}><span className="manager-avatar">{season.manager ? season.manager.name.split(/\s+/u).map(part => Array.from(part)[0]).slice(0, 2).join('').toUpperCase() : 'YOU'}</span><span className="manager-identity"><strong data-manager-name>{season.manager?.name ?? 'Set manager profile'}</strong><small>Without a club</small></span></button></div>
+      </aside>
+      <div className="main-shell">
+        <header className="topbar"><div className="game-context"><strong>Without a club</strong><span>/</span><span>{view === 'home' ? 'Unemployed desk' : pageNames[view]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{season.status === 'complete' ? isMarketActive(season) ? 'Recruitment' : 'Season complete' : 'Between jobs'}</span><button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : 'Save season'}</button></div></header>
+        {advancing && <div className="season-processing" role="status"><span>{seasonOperation === 'market' ? 'Processing the recruitment day...' : seasonOperation === 'rollover' ? 'Preparing next season...' : 'Playing this week\'s games...'}</span><button className="text-button" onClick={cancelAdvance}>Cancel</button></div>}
+        {checkpointIssue && <div className="career-save-issue" role="alert"><span>{checkpointIssue}</span><button className="text-button" onClick={openSaveHistory} disabled={saving || advancing}>Save history</button><button className="text-button" onClick={exportSave} disabled={saving || advancing}>Export current</button></div>}
+        <main id="main" tabIndex={-1} inert={advancing || leavingSeason || saving}>
+          <div className="page-heading"><h1>{view === 'home' ? 'Unemployed desk' : pageNames[view]}</h1><div className="heading-meta"><span className="pill">{worldOf(season).name.toUpperCase()}</span><span className="muted">{season.date}</span></div></div>
+          <Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
+            {view === 'home' && <UnemployedDesk season={season} busy={advancing || saving} onContinue={advance} onNextDay={() => processSeason('market')} onStartSeason={rollover} onAccept={clubId => { void takeJob(clubId) }} onOpenCompetitions={() => navigate('season')} onOpenCalendar={() => navigate('calendar')} />}
+            {view === 'inbox' && <InboxWorkspace season={season} busy={advancing || saving} onAnswerPress={() => {}} onOpen={() => navigate('home')} />}
+            {view === 'season' && <SeasonWorkspace season={season} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('home')} onAdvance={advance} onRollover={offseasonStep} onLoad={loadSeason} busy={advancing || saving} />}
+            {view === 'calendar' && <SeasonCalendar season={season} />}
+            {view === 'europe' && <EuropeWorkspace season={season} />}
+          </Suspense>
+          <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />Save &amp; open exhibition</button><button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
+        </main>
+      </div>
+      {overlays}
+    </div>
+  }
   return <div className={`app-shell game-shell ${page === 'match' ? 'match-screen' : ''}`}>
     <aside className="sidebar">
       <a href="#main" className="skip-link">Skip to content</a>
@@ -713,7 +765,8 @@ export default function App() {
         {page === 'club' && season && <><div className="squad-view-controls"><div className="segmented" role="group" aria-label="Club view"><button aria-pressed={clubView === 'operations'} className={clubView === 'operations' ? 'selected' : ''} onClick={() => setClubView('operations')}>Operations</button><button aria-pressed={clubView === 'board'} className={clubView === 'board' ? 'selected' : ''} onClick={() => setClubView('board')}>Board</button></div></div>{clubView === 'board' ? <><BoardPanel key={`${season.seed}:${season.managedClubId}`} season={season} busy={advancing || saving} onEnable={() => updateCareer(enableBoard, 'Board expectations enabled. Review your objectives and when assessment begins.', true)} onEnableRivalries={() => updateCareer(state => enableRivalries(state), 'Rivalries enabled. Derbies count from the next matchday.', true)} onEnableCareerMoves={() => updateCareer(state => enableCareerMoves(state), 'Dismissal and job offers enabled. They apply from the end of next season.', true)} onResign={clubId => { void resign(clubId) }} onEnableConsequences={() => updateCareer(enableBoardConsequences, 'Season verdicts enabled. From next season, the board\'s final confidence sets your staff budget and the owner\'s capital.', true)} onEnableFunding={() => updateCareer(enableBoardFunding, 'Board funding requests enabled. When an upgrade costs more than your club can spend, you can ask the board for the difference.', true)} /><MediaStanding season={season} /></> : <ClubWorkspace key={`${season.seed}:${season.managedClubId}`} onEnableFacilities={() => updateCareer(enableFacilities, 'Club facilities enabled. Review upgrades and choose manual or automatic management.', true)} onFacilityUpgrade={type => updateCareer(state => startFacilityUpgrade(state, type), 'Construction funded. Track its completion date in Club.', true)} onCancelFacilityUpgrade={projectId => updateCareer(state => cancelFacilityUpgrade(state, projectId), 'Construction cancelled. The money already paid remains spent.', true)} onFacilityDelegation={delegated => updateCareer(state => setFacilityDelegation(state, delegated), delegated ? 'Automatic facilities management enabled. Affordable projects may start within the cash reserve policy.' : 'You now choose facility upgrades. Existing construction continues.', true)} onEnableMaintenance={() => updateCareer(enableFacilityMaintenance, 'Upkeep choices enabled. Facilities stay on full upkeep until you choose otherwise.', true)} onMaintenancePlan={plan => updateCareer(state => setMaintenancePlan(state, plan), plan === 'reduced' ? 'Reduced upkeep from the next matchday: half the cost, and upgraded facilities will wear.' : 'Full upkeep from the next matchday: facilities recover condition.', true)} onFacilityRepair={type => updateCareer(state => startFacilityRepair(state, type), 'Repair funded. Track its completion date in Club.', true)} onFacilityLoan={(type, project, seasons, principal) => updateCareer(state => takeFacilityLoan(state, type, project, seasons, principal), project === 'repair' ? 'Loan received and the repair has started. Repayments are listed under Loans & leases.' : 'Loan received and construction has started. Repayments are listed under Loans & leases.', true)} onFacilityLease={(type, seasons) => updateCareer(state => leaseFacility(state, type, seasons), 'Lease signed. The new level is installed for the next matchday; payments are listed under Loans & leases.', true)} onRepayLoan={debtId => updateCareer(state => repayFacilityLoan(state, debtId), 'Loan repaid early. No further payments are due.', true)} onEndLease={debtId => updateCareer(state => endFacilityLease(state, debtId), 'Lease ended. The penalty is paid and the level is handed back after today.', true)} onRequestBoardFunding={(type, project) => updateCareer(state => requestBoardFunding(state, type, project), next => { const decision = [...next.facilities.events].reverse().find(event => event.type === 'funding'); return decision?.type === 'funding' && decision.approved ? project === 'repair' ? 'The board approved the capital. The repair has started.' : 'The board approved the capital. Construction has started.' : `Request refused. ${decision?.type === 'funding' ? boardFundingRefusal(decision) : ''} You can ask again after two matchdays.` }, true)} onEnableSponsorship={() => updateCareer(enableCommercial, 'Sponsorship negotiations enabled. This season stays as it is; offers for next season arrive on matchday 6.', true)} onAcceptSponsorship={offerId => updateCareer(state => acceptSponsorshipOffer(state, offerId), next => `${getDevelopmentSponsor(next.commercial.agreements.at(-1)!.sponsorId).name} signed as your main sponsor.`, true)} onDeclineSponsorship={offerId => updateCareer(state => declineSponsorshipOffer(state, offerId), 'Offer declined.', true)} onRequestSponsorship={offerId => updateCareer(state => requestSponsorshipImprovement(state, offerId), next => { const offer = next.commercial.offers.find(item => item.id === offerId)!; return offer.request?.response === 'accepted' ? 'The sponsor agreed to your request.' : offer.request?.response === 'withdrawn' ? 'The sponsor withdrew its offer.' : 'The sponsor answered with its final terms.' }, true)} onSponsorshipDelegation={delegated => updateCareer(state => setSponsorshipDelegation(state, delegated), delegated ? 'Automatic sponsorship enabled. The best guaranteed offer is signed when offers arrive.' : 'You now choose sponsor offers.', true)} onAcceptNaming={offerId => updateCareer(state => acceptNamingOffer(state, offerId), next => `Naming rights signed: the arena becomes ${next.commercial.naming!.agreements.at(-1)!.arenaName} from ${seasonLabel(next.commercial.naming!.agreements.at(-1)!.startsSeason)}.`, true)} onDeclineNaming={offerId => updateCareer(state => declineNamingOffer(state, offerId), 'Naming offer declined.', true)} onRequestNaming={offerId => updateCareer(state => requestNamingImprovement(state, offerId), next => { const offer = next.commercial.naming!.offers.find(item => item.id === offerId)!; return offer.request?.response === 'accepted' ? 'The sponsor agreed to your request.' : offer.request?.response === 'withdrawn' ? 'The sponsor withdrew its naming offer.' : 'The sponsor answered with its final terms.' }, true)} onNamingDelegation={delegated => updateCareer(state => setNamingDelegation(state, delegated), delegated ? 'Automatic naming rights enabled. The best guaranteed naming offer is signed when offers arrive.' : 'You now choose naming-rights offers.', true)} onTerminateSponsorship={(contract, agreementId) => updateCareer(state => terminateSponsorship(state, contract, agreementId), 'Agreement ended early. The termination fee is paid and new offers arrive at the next sponsorship window.', true)} season={season} busy={advancing || saving} onEnable={() => updateCareer(enableFinance, 'Club finances enabled. Opening funds and existing coaching fees are recorded in the ledger.')} onPlanChange={plan => updateCareer(state => setTicketPlan(state, plan))} />}</>}
 
         {page === 'inbox' && season && <InboxWorkspace season={season} busy={advancing || saving} onAnswerPress={answer => updateCareer(state => answerPress(state, answer), `Press answer given: ${PRESS_ANSWER_TEXT[answer].label}. Morale effects apply from the next prepared match.`, true)} onOpen={(target, playerId) => {
-          if (target === 'board') { setClubView('board'); navigate('club') }
+          if (target === 'jobs') navigate('home')
+          else if (target === 'board') { setClubView('board'); navigate('club') }
           else if (target === 'club') { setClubView('operations'); navigate('club') }
           else if (target === 'dynamics') { setRelationshipPlayer(playerId ?? null); setSquadView('relationships'); navigate('squad') }
           else if (target === 'contract' && playerId) openTransfers(playerId)

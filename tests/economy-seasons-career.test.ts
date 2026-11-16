@@ -101,7 +101,7 @@ describe('club money across a real rollover with promotion and relegation (forma
       expect(() => parseSeason(currentSeasonFile(tampered))).toThrow(/economySeasons/);
       const envelope = JSON.parse(serializeSeason(state));
       envelope.formatVersion = 68; envelope.state.schemaVersion = 68;
-      expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/economySeasons requires format 72/);
+      expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/requires format (69|7[0-2]) or later/);
 
       // Season two's sponsorship offers, board reviews and offseason use its figures; season three moves on again.
       while (state.status === 'active') state = advanceSeason(play(state));

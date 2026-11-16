@@ -10,3 +10,14 @@ export function asCareer1(state: SeasonState): SeasonState {
   const { restarts: _restarts, ...board } = state.board;
   return { ...state, career: { ...state.career, model: 'career-1' }, board };
 }
+
+/**
+ * A new career on the format-63 career rules (`career-2`), as careers created before format 69 are: the protected first
+ * season, fresh board confidence, mid-season dismissals and resignations, but no unemployment (a dismissed or resigning
+ * manager always receives an offer). Call it on an untouched new career.
+ */
+export function asCareer2(state: SeasonState): SeasonState {
+  if (state.career.model !== 'career-3') return state;
+  if (state.board.reviews.length || state.career.moves.length) throw new Error('Convert only an untouched new career.');
+  return { ...state, career: { ...state.career, model: 'career-2' } };
+}

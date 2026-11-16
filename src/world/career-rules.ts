@@ -5,6 +5,9 @@ import type { CareerMove, CareerMovePhase, SeasonCareer } from '../domain/career
  * Career and board rules for new careers (`career-2`, save format 63; saved ideas level, approved by the owner on
  * 15 November 2026). Every number lives here. Careers started earlier keep `career-1`: boards decide only at season
  * ends, Under pressure dismisses even in the first season, and a new coach inherits the board's confidence.
+ * Unemployed seasons (`career-3`, save format 69; owner decision 16 November 2026) add the last four rules: a manager may
+ * decline every offer after a dismissal or resign without a new job; the career then continues with every club run
+ * automatically, and boards that change coach offer their job to the unemployed manager by reputation.
  */
 export const CAREER_RULES = Object.freeze({
   /**
@@ -23,13 +26,55 @@ export const CAREER_RULES = Object.freeze({
   resignationReputationCost: 5,
   /** ...in the season of the resignation and the next two, the same three seasons that make up reputation. */
   resignationSeasons: 3,
+  /**
+   * Career-3: while unemployed, reputation moves this many points towards `unemployedReputationLevel`... (one point
+   * every five weeks is about ten points a year: a season out costs a good name little, two or three seasons a lot).
+   */
+  unemployedFadePoints: 1,
+  /** ...every this many days without a club, counted from the day the manager left... */
+  unemployedFadeDays: 35,
+  /**
+   * ...and stops there. A better name fades down to it; a poorer one is slowly forgotten up to it. 30 is just above
+   * the 25 a last-placed club asks for, so a long wait always leads back to the bottom of a table.
+   */
+  unemployedReputationLevel: 30,
+  /**
+   * Career-3: a club whose board replaces its coach at an in-season review keeps the job open to an unemployed manager
+   * before the games of this many weeks (an interim coach takes the team meanwhile). Jobs opened at a season end stay
+   * open through that offseason.
+   */
+  vacancyOpenWeeks: 3,
 });
 
-export const CAREER_MODEL = 'career-2' as const;
+/** The rules of new careers: `career-3` (format 69). */
+export const CAREER_MODEL = 'career-3' as const;
+/** Format 63 careers: the same rules without unemployment; a dismissed or resigning manager always receives an offer. */
+export const CAREER_2_MODEL = 'career-2' as const;
+/** Format 69 (`career-3`): the club id of no club, while the manager is unemployed. */
+export const NO_CLUB = '' as const;
 
-/** Whether a career follows the format-63 rules above. */
+/** Whether a career follows the format-63 rules above (`career-2`, and `career-3` which adds unemployment). */
 export function usesCareerRules(career: Pick<SeasonCareer, 'model'> | null | undefined): boolean {
+  return career?.model === CAREER_2_MODEL || career?.model === CAREER_MODEL;
+}
+
+/** Whether a career may sit out periods without a club (`career-3`, format 69). */
+export function allowsUnemployment(career: Pick<SeasonCareer, 'model'> | null | undefined): boolean {
   return career?.model === CAREER_MODEL;
+}
+
+/** Whether the manager is between jobs now (`career-3` careers only). */
+export function isUnemployed(state: { managedClubId: string; career?: Pick<SeasonCareer, 'model'> | null }): boolean {
+  return state.managedClubId === NO_CLUB && allowsUnemployment(state.career);
+}
+
+/**
+ * Career-3: reputation after `days` without a club, from the reputation the manager left with. It moves
+ * `unemployedFadePoints` every `unemployedFadeDays` towards `unemployedReputationLevel` and never passes it.
+ */
+export function fadedReputation(base: number, days: number): number {
+  const level = CAREER_RULES.unemployedReputationLevel, steps = Math.floor(Math.max(0, days) / CAREER_RULES.unemployedFadeDays) * CAREER_RULES.unemployedFadePoints;
+  return base > level ? Math.max(level, base - steps) : Math.min(level, base + steps);
 }
 
 /** Regular-season games a club must have played before an in-season review can end its coach's job. */
@@ -83,4 +128,9 @@ export const CAREER_RULES_TEXT = {
   midSeason: `After a third of the regular season, a board whose confidence falls below ${CAREER_RULES.midSeasonDismissalBelow} at a review dismisses its coach at once (never in a protected first season). Rival clubs follow the same rule.`,
   seasonEnd: `A season that ends Under pressure (final confidence below ${CAREER_RULES.seasonDismissalBelow}) ends your job, unless it was your protected first season.`,
   resignation: `You can resign at any time between matches. It costs ${CAREER_RULES.resignationReputationCost} reputation points for three seasons, and you choose your next club from the jobs offered at once; there is always at least one.`,
+  /** Career-3 careers (format 69). */
+  resignation3: `You can resign at any time between matches. It costs ${CAREER_RULES.resignationReputationCost} reputation points for three seasons. Clubs whose board is Under pressure may offer you their job at once; you can also leave without a new job and wait for one.`,
+  unemployed: `Without a club, the career goes on: every club, including your last one, is run automatically and every competition keeps playing. Boards that change coach during a season keep the job open to you for ${CAREER_RULES.vacancyOpenWeeks} weeks, and jobs opened at a season end stay open through the offseason. A club offers you its job when your reputation reaches what it looks for.`,
+  fade: `While you are without a club, your reputation moves ${CAREER_RULES.unemployedFadePoints} point every ${CAREER_RULES.unemployedFadeDays / 7} weeks towards ${CAREER_RULES.unemployedReputationLevel}: a good name fades, a poor one is slowly forgotten.`,
+  dismissal3: 'After a dismissal, only clubs that are replacing their own coach can offer you a job. You may take one or decline them all and wait without a club.',
 };

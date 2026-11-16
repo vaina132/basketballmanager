@@ -7,9 +7,9 @@ import { fixturePlayerEvidence, summarizeSeniorHistory } from './senior-history'
 import { createRivalries, enableRivalries } from './rivalries';
 import { createGrownRivalries, growRivalries } from './rivalry-growth';
 import { createEconomySeasons, growEconomy } from './economy';
-import { appointManager, createCareer, enableCareerMoves, matchClubFor, restartBoard, transferManager, currentMovePhase } from './career';
-import { jobOfferRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
-import { CAREER_RULES, coachProtected, startingConfidence, usesCareerRules } from './career-rules';
+import { appointFromUnemployment, appointManager, createCareer, enableCareerMoves, lastManagedClub, leaveClub, matchClubFor, restartBoard, transferManager, currentMovePhase } from './career';
+import { jobOfferRefusal, jobRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, unemployedSeasonEndVacancies, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
+import { allowsUnemployment, CAREER_RULES, coachProtected, isUnemployed, NO_CLUB, startingConfidence, usesCareerRules } from './career-rules';
 import { addCalendarDays, domesticRoundDates, roundRobinGames, roundRobinRoundCount, calendarDaysBetween } from './competition-calendar';
 import { derivePostseason, POSTSEASON_FORMATS, POSTSEASON_SLOT_OFFSETS, postseasonOutcome } from './postseason';
 import { divisionChanges, openingDivisions, seasonLeagues } from './divisions';
@@ -264,11 +264,15 @@ export function getActiveFixture(season: SeasonState): SeasonFixture {
   return fixture;
 }
 
-/** UI squad adapter on rest weeks. Never saved, played or displayed as a current match. */
+/**
+ * UI squad adapter on rest weeks. Never saved, played or displayed as a current match. Career-3: without a club, the
+ * last club's calendar (or any club's) serves the screens that still need a match shape.
+ */
 export function careerPresentationMatch(season: SeasonState): MatchState {
   if (season.activeMatch) return season.activeMatch;
-  const own = season.fixtures.filter(fixture => [fixture.homeClubId, fixture.awayClubId].includes(season.managedClubId));
-  const fixture = own.find(fixture => !fixture.result) ?? own.at(-1);
+  const clubId = isUnemployed(season) ? lastManagedClub(season) : season.managedClubId;
+  const own = season.fixtures.filter(fixture => [fixture.homeClubId, fixture.awayClubId].includes(clubId));
+  const fixture = own.find(fixture => !fixture.result) ?? own.at(-1) ?? (isUnemployed(season) ? season.fixtures.find(fixture => !fixture.result && season.clubs.some(club => club.id === fixture.homeClubId) && season.clubs.some(club => club.id === fixture.awayClubId)) ?? season.fixtures.filter(fixture => !fixture.competition).at(-1) : undefined);
   if (!fixture) throw new Error('The managed club has no fixtures in its calendar.');
   return prepareMatch(season, { ...fixture, round: season.round, date: season.date });
 }
@@ -519,13 +523,17 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
  * review and before the offseason opens, so the new club runs that offseason. Without a decision the manager stays,
  * unless the board dismissed them: they then join the best club that offered its job. Career-2 careers (format 63)
  * also apply in-season board decisions: rival clubs replacing their coach and a mid-season dismissal, after which the
- * manager takes the chosen offer (or the best one) before the next week's games.
+ * manager takes the chosen offer (or the best one) before the next week's games. Career-3 careers (format 69): a
+ * dismissed manager without offers, or one who declines them all (`moveTo` empty), becomes unemployed; while
+ * unemployed, every club is automatic and a call plays the whole week, since there is no managed match to stop for.
  */
 export function advanceSeason(state: SeasonState, decision?: SeasonEndDecision): SeasonState {
   const rounds = seasonRounds(state);
   if (decision !== undefined && (!decision || typeof decision !== 'object' || typeof decision.moveTo !== 'string' || Object.keys(decision).length !== 1)) throw new Error('A club change can only be decided when the final matchday is committed.');
   if (decision !== undefined && state.round !== rounds && !usesCareerRules(state.career)) throw new Error('A club change can only be decided when the final matchday is committed.');
-  const committed = commitMatchday(state);
+  if (decision !== undefined && isUnemployed(state)) throw new Error('Without a club, take a job from the job market instead.');
+  let committed = commitMatchday(state);
+  while (!committed.weekDone && isUnemployed(committed.next)) committed = commitMatchday(prepareGameDay(committed.next));
   let next = committed.next;
   // Step 3.4a: more games this week (a postseason game day), so the week's management waits for its last game day.
   if (!committed.weekDone) {
@@ -539,25 +547,32 @@ export function advanceSeason(state: SeasonState, decision?: SeasonEndDecision):
     if (exchanges.length) next = { ...next, background: { ...next.background!, exchanges: [...next.background!.exchanges!, ...exchanges] } };
     const outlook = seasonEndOutlook(next);
     if (decision) { const refusal = jobOfferRefusal(outlook, decision.moveTo); if (refusal) throw new Error(refusal); }
-    const moveTo = decision?.moveTo ?? (outlook?.dismissed ? outlook.offers[0]?.clubId : undefined);
+    // Career-3: a dismissed manager without offers leaves without a club.
+    const moveTo = decision?.moveTo ?? (outlook?.dismissed ? outlook.offers[0]?.clubId ?? (outlook.unemployment ? NO_CLUB : undefined) : undefined);
     const from = next.managedClubId;
-    if (moveTo) next = appointManager(next, moveTo, outlook!.dismissed ? 'dismissed' : 'moved');
+    if (moveTo === NO_CLUB) next = leaveClub(next, 'dismissed', 'end');
+    else if (moveTo) next = appointManager(next, moveTo, outlook!.dismissed ? 'dismissed' : 'moved');
     // Career-2: every club with a new coach starts the next season from a fresh board confidence.
     if (outlook && usesCareerRules(next.career)) next = recordSeasonEndCoaches(next, outlook, from, moveTo);
+    // Career-3: a season ended without a club still sees every board Under pressure replace its coach.
+    else if (!outlook) for (const vacancy of unemployedSeasonEndVacancies(next)) next = restartBoard(next, vacancy.clubId, 'ai', 'end');
     // Earned sponsor bonuses follow the final review; clubs still without a sponsor receive a second round of offers.
     next = completeCommercialSeason(next);
     return automateFacilities(prepareEmploymentMarket(next));
   }
   const changes = midSeasonChanges(next);
   if (decision) { const refusal = changes?.outlook ? jobOfferRefusal(changes.outlook, decision.moveTo) : 'A club change can only be decided after a board dismissal or when the final matchday is committed.'; if (refusal) throw new Error(refusal); }
-  return prepareNextMatchday(state, next, changes ? { changes, moveTo: decision?.moveTo ?? changes.outlook?.offers[0]?.clubId } : undefined);
+  const moveTo = changes?.outlook ? decision?.moveTo ?? changes.outlook.offers[0]?.clubId ?? (changes.outlook.unemployment ? NO_CLUB : undefined) : undefined;
+  return prepareNextMatchday(state, next, changes ? { changes, moveTo } : undefined);
 }
 
 /** Career-2 season end: clubs whose board replaced the coach, and the manager's former and new clubs, start afresh. */
 function recordSeasonEndCoaches(state: SeasonState, outlook: SeasonEndOutlook, from: string, moveTo: string | undefined): SeasonState {
   let next = state;
   for (const vacancy of outlook.vacancies) if (vacancy.clubId !== moveTo) next = restartBoard(next, vacancy.clubId, 'ai', 'end');
-  if (moveTo) next = restartBoard(restartBoard(next, from, 'ai', 'end'), moveTo, 'manager', 'end');
+  // Career-3: a manager leaving without a club leaves the former club to a new coach of its own.
+  if (moveTo === NO_CLUB) next = restartBoard(next, from, 'ai', 'end');
+  else if (moveTo) next = restartBoard(restartBoard(next, from, 'ai', 'end'), moveTo, 'manager', 'end');
   return next;
 }
 
@@ -565,7 +580,11 @@ function recordSeasonEndCoaches(state: SeasonState, outlook: SeasonEndOutlook, f
 function applyMidSeasonChanges(state: SeasonState, changes: MidSeasonChanges, moveTo: string | undefined): SeasonState {
   let next = state;
   for (const clubId of changes.replaced) if (clubId !== moveTo) next = restartBoard(next, clubId, 'ai', 'season');
-  if (changes.outlook && moveTo) {
+  if (changes.outlook && moveTo === NO_CLUB) {
+    // Career-3: the dismissed manager declined every offer (or had none) and leaves without a club.
+    const from = next.managedClubId;
+    next = restartBoard(leaveClub(next, 'dismissed', 'season'), from, 'ai', 'season');
+  } else if (changes.outlook && moveTo) {
     const from = next.managedClubId;
     next = transferManager(next, moveTo, 'dismissed', 'season');
     next = restartBoard(restartBoard(next, from, 'ai', 'season'), moveTo, 'manager', 'season');
@@ -599,6 +618,7 @@ export function midSeasonDismissalPossible(state: SeasonState): boolean {
 /**
  * Career-2: resign and take one of the jobs offered at once (`resignationOutlook`). It costs reputation; the new club
  * starts from a fresh board confidence and, during a season, its match this week is prepared for the manager.
+ * Career-3 (format 69): an empty `toClubId` resigns without a new job, and the manager becomes unemployed.
  */
 export function resignManager(state: SeasonState, toClubId: string): SeasonState {
   const refusal = resignationRefusal(state);
@@ -606,8 +626,23 @@ export function resignManager(state: SeasonState, toClubId: string): SeasonState
   const offerRefusal = jobOfferRefusal(resignationOutlook(state), toClubId);
   if (offerRefusal) throw new Error(offerRefusal);
   const phase = currentMovePhase(state, false), from = state.managedClubId;
-  let next = transferManager(state, toClubId, 'resigned', phase);
-  next = restartBoard(restartBoard(next, from, 'ai', phase), toClubId, 'manager', phase);
+  let next = toClubId === NO_CLUB ? leaveClub(state, 'resigned', phase) : transferManager(state, toClubId, 'resigned', phase);
+  next = restartBoard(next, from, 'ai', phase);
+  if (toClubId !== NO_CLUB) next = restartBoard(next, toClubId, 'manager', phase);
+  return next.status === 'complete' ? next : prepareGameDay(next);
+}
+
+/**
+ * Career-3 (format 69): an unemployed manager takes a job open on the job market (`jobMarket`), before this week's
+ * games or on a day of the offseason. The club starts like a new career with a fresh board confidence and a protected
+ * first season; during a season its match this week is prepared for the manager.
+ */
+export function acceptJob(state: SeasonState, clubId: string): SeasonState {
+  if (!allowsUnemployment(state.career)) throw new Error('Unemployed seasons are part of careers started in this version.');
+  const refusal = jobRefusal(state, clubId);
+  if (refusal) throw new Error(refusal);
+  const phase = state.status === 'complete' ? 'offseason' : 'season';
+  const next = restartBoard(appointFromUnemployment(state, clubId, phase), clubId, 'manager', phase);
   return next.status === 'complete' ? next : prepareGameDay(next);
 }
 

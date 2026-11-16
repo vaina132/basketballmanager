@@ -4,6 +4,7 @@ import { sealMatches, saveSeal } from './save-seal';
 import { directSeasonCodec, type SeasonCodec } from './season-codec';
 import { readSeasonJournal, writeSeasonCheckpoint } from './season-indexed-db';
 import type { CheckpointReason, SeasonCheckpoint, SeasonJournal } from './season-indexed-db';
+import { managedClubLabel } from '../world/career';
 
 export type { CheckpointReason, SeasonCheckpoint } from './season-indexed-db';
 
@@ -87,7 +88,7 @@ async function describeCheckpoint(checkpoint: SeasonCheckpoint, parse: StoredPar
     const state = await parse(checkpoint.serialized);
     return {
       ...metadata, valid: true,
-      clubName: state.clubs.find(club => club.id === state.managedClubId)!.name,
+      clubName: managedClubLabel(state),
       managerName: state.manager?.name ?? null,
       seasonNumber: state.seasonNumber, date: state.date, round: state.round,
       status: state.status, matchStatus: state.activeMatch?.status ?? 'rest',

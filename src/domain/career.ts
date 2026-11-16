@@ -9,8 +9,11 @@ export interface CareerAnchor {
   effectiveFrom: number;
 }
 
-/** `resigned` (format 63, `career-2` careers only): the manager left of their own accord and took a job offered then. */
-export type CareerMoveReason = 'dismissed' | 'moved' | 'resigned';
+/**
+ * `resigned` (format 63, `career-2` careers onwards): the manager left of their own accord and took a job offered then
+ * (`career-3`: or became unemployed). `appointed` (format 69, `career-3` careers only): an unemployed manager took a job.
+ */
+export type CareerMoveReason = 'dismissed' | 'moved' | 'resigned' | 'appointed';
 
 /**
  * When a `career-2` move happened: `season` before the games of week `round` (the new club manages that week onwards),
@@ -21,6 +24,8 @@ export type CareerMovePhase = 'season' | 'end' | 'offseason';
 /**
  * The manager changed clubs at the end of `seasonNumber`: after that season's final board review and before its
  * offseason opened. The former club managed the season itself; the new club manages its offseason and later seasons.
+ * Format 69 (`career-3` careers): an empty club id (`NO_CLUB`) is no club. A dismissal or resignation to no club starts
+ * a period of unemployment, which an `appointed` move from no club ends; `managedClubId` is empty in between.
  */
 export interface CareerMove {
   seasonNumber: number;
@@ -43,12 +48,16 @@ export interface CareerMove {
  * so a season can hold several moves.
  */
 export interface SeasonCareer {
-  model: 'career-1' | 'career-2';
+  /** `career-3` (format 69, new careers): `career-2` rules plus unemployed seasons. */
+  model: 'career-1' | 'career-2' | 'career-3';
   enabledSince: CareerAnchor | null;
   moves: CareerMove[];
 }
 
-/** The manager's choice when a season ends, or after a mid-season dismissal: stay (no decision) or take over another club. */
+/**
+ * The manager's choice when a season ends, or after a mid-season dismissal: stay (no decision) or take over another club.
+ * `career-3` careers: an empty `moveTo` declines every offer after a dismissal, and the manager becomes unemployed.
+ */
 export interface SeasonEndDecision {
   moveTo: string;
 }

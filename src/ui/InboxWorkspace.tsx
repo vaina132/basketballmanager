@@ -21,7 +21,7 @@ export interface InboxActions {
 type Filter = 'all' | 'action' | InboxCategory
 const FILTERS: { id: Filter; label: string }[] = [{ id: 'all', label: 'All' }, { id: 'action', label: 'Needs action' }, { id: 'press', label: 'Press' }, { id: 'board', label: 'Board' }, { id: 'players', label: 'Players' }, { id: 'club', label: 'Club' }]
 const ICONS: Record<InboxCategory, IconName> = { press: 'mail', board: 'shield', club: 'building', players: 'people' }
-const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad', contract: 'Open contract offer' }
+const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad', contract: 'Open contract offer', jobs: 'Open job market' }
 const signed = (value: number) => `${value > 0 ? '+' : '−'}${Math.abs(value)}`
 
 export function pressEffectText(answer: PressAnswer, topic?: PressTopic, subject?: string): string {

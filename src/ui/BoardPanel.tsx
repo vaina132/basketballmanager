@@ -14,7 +14,7 @@ import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS, RIVALRY_CROWD_PERCENT, rivalryFor } from '../world/rivalries'
 import { careerMovesGovern, managedClubFor } from '../world/career'
 import { managerReputation, resignationOutlook, resignationRefusal, seasonEndOutlook, VACANCY_BASE_REQUIREMENT, VACANCY_STEP } from '../world/career-policy'
-import { CAREER_RULES, CAREER_RULES_TEXT, careerPointKey, coachProtected, midSeasonMinimumGames, startingConfidence, usesCareerRules } from '../world/career-rules'
+import { allowsUnemployment, CAREER_RULES, CAREER_RULES_TEXT, careerPointKey, coachProtected, midSeasonMinimumGames, NO_CLUB, startingConfidence, usesCareerRules } from '../world/career-rules'
 import { SeasonEndChoice } from './SeasonEndChoice'
 import { careerMoveOutcome } from './career-text'
 import { FACILITY_LABELS } from './FacilitiesPanel'
@@ -125,13 +125,16 @@ function RivalrySection({ season, busy, onEnableRivalries }: { season: SeasonSta
 export const CAREER_RULE = `A season that ends Under pressure (final board confidence below 30) ends your job. Clubs whose own season ends Under pressure offer you their job when your reputation reaches what they look for: ${VACANCY_BASE_REQUIREMENT} for last place and ${VACANCY_STEP} more for each place higher. Your reputation is your last three final board ratings, the most recent counting most. After a dismissal you always receive at least one offer.`
 /** Career-2 careers (format 63): the same offers and reputation, with the new protections, mid-season reviews and resignations. */
 export const CAREER_RULE_2 = `${CAREER_RULES_TEXT.protectedSeason} ${CAREER_RULES_TEXT.midSeason} ${CAREER_RULES_TEXT.freshStart} Clubs that replace their coach offer you their job when your reputation reaches what they look for: ${VACANCY_BASE_REQUIREMENT} for last place and ${VACANCY_STEP} more for each place higher. Your reputation is your last three final board ratings, the most recent counting most. After a dismissal you always receive at least one offer.`
+/** Career-3 careers (format 69): the same rules, with offers no longer guaranteed and seasons without a club. */
+export const CAREER_RULE_3 = `${CAREER_RULES_TEXT.protectedSeason} ${CAREER_RULES_TEXT.midSeason} ${CAREER_RULES_TEXT.freshStart} Clubs that replace their coach offer you their job when your reputation reaches what they look for: ${VACANCY_BASE_REQUIREMENT} for last place and ${VACANCY_STEP} more for each place higher. Your reputation is your last three final board ratings, the most recent counting most. ${CAREER_RULES_TEXT.dismissal3} ${CAREER_RULES_TEXT.unemployed} ${CAREER_RULES_TEXT.fade}`
 
 /** The manager's employment: reputation, the dismissal rules, today's outlook, resigning and the clubs managed so far. */
 function CareerSection({ season, busy, onEnableCareerMoves, onResign }: { season: SeasonState; busy: boolean; onEnableCareerMoves: () => void; onResign?: (clubId: string) => void }) {
   const [resigning, setResigning] = useState(false)
   const career = season.career
   const heading = <h3 className="board-section-heading"><Icon name="shield" size={16} />Your job</h3>
-  const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? id
+  // Format 69: a season the manager finished without a club names no club.
+  const name = (id: string) => id === NO_CLUB ? 'No club' : season.clubs.find(club => club.id === id)?.name ?? id
   if (!career?.enabledSince) return <>
     {heading}
     <div className="board-enable board-career-enable"><Icon name="shield" size={24} /><div><strong>Play with dismissal and job offers</strong><p>{CAREER_RULE} The current season is never judged: this applies from the end of {seasonLabel(season.seasonNumber + 1)}.</p></div><button id="enable-career-moves" className="button" onClick={onEnableCareerMoves} disabled={busy || !season.board.enabledSince}>Enable dismissal and job offers</button></div>
@@ -176,11 +179,11 @@ function CareerSection({ season, busy, onEnableCareerMoves, onResign }: { season
       <td>{row.moves.length ? row.moves.map(item => careerMoveOutcome(season, item)).join(' · ') : row.warning ? 'Final warning · stayed' : row.final ? 'Stayed' : '—'}</td>
     </tr>)}</tbody></table></div>
     {rules && onResign && <details className="board-resign" id="board-resign"><summary><Icon name="shield" size={15} />Resign</summary>
-      <p>{CAREER_RULES_TEXT.resignation} {season.status === 'complete' ? 'The new club runs the rest of this offseason.' : 'The new club\'s games are yours from this week.'}</p>
+      <p>{allowsUnemployment(career) ? CAREER_RULES_TEXT.resignation3 : CAREER_RULES_TEXT.resignation} {season.status === 'complete' ? 'A new club runs the rest of this offseason.' : 'A new club\'s games are yours from this week.'}</p>
       {refusal ? <p className="board-resign-refusal" role="status">{refusal}</p> : <button id="board-resign-button" className="button" onClick={() => setResigning(true)} disabled={busy}>See the jobs on offer</button>}
     </details>}
-    {offers && <SeasonEndChoice season={season} outlook={offers} busy={busy} onChoose={clubId => { setResigning(false); if (clubId) onResign!(clubId) }} onClose={() => setResigning(false)} />}
-    <p className="board-empty board-career-rule">{pressureBelow !== undefined && pressureBelow !== 30 ? (rules ? CAREER_RULE_2 : CAREER_RULE).replace('below 30', `below ${pressureBelow}, this president's line`) : rules ? CAREER_RULE_2 : CAREER_RULE}</p>
+    {offers && <SeasonEndChoice season={season} outlook={offers} busy={busy} onChoose={clubId => { setResigning(false); if (clubId !== null) onResign!(clubId) }} onClose={() => setResigning(false)} />}
+    <p className="board-empty board-career-rule">{(() => { const text = allowsUnemployment(career) ? CAREER_RULE_3 : rules ? CAREER_RULE_2 : CAREER_RULE; return pressureBelow !== undefined && pressureBelow !== 30 ? text.replace('below 30', `below ${pressureBelow}, this president's line`) : text })()}</p>
   </>
 }
 

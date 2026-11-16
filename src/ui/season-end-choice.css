@@ -23,4 +23,4 @@
 .season-end-offers .button{flex:none;white-space:nowrap}
 .season-end-choice-note{color:var(--muted);line-height:1.5}
 .season-end-choice-actions{display:flex;justify-content:flex-end;align-items:center;gap:16px;padding:10px 14px;border-top:1px solid var(--border);background:var(--surface-2);flex:none}
-@media(max-width:600px){.season-end-choice{width:calc(100vw - 20px);max-height:calc(100dvh - 20px)}.season-end-choice-heading{flex-wrap:wrap;gap:4px;padding:10px}.season-end-choice-body{padding:10px}.season-end-offers li{flex-direction:column;align-items:stretch}.season-end-offers .button{width:100%}.season-end-choice-actions{padding:10px}}
+@media(max-width:600px){.season-end-choice{width:calc(100vw - 20px);max-height:calc(100dvh - 20px)}.season-end-choice-actions{flex-wrap:wrap}.season-end-choice-actions .button{flex:1 1 100%}.season-end-choice-heading{flex-wrap:wrap;gap:4px;padding:10px}.season-end-choice-body{padding:10px}.season-end-offers li{flex-direction:column;align-items:stretch}.season-end-offers .button{width:100%}.season-end-choice-actions{padding:10px}}

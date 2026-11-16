@@ -190,8 +190,8 @@ function seasonReasons(world: CareerWorld, season: SeasonRecord, next: Omit<Seas
       race('promotion-race', worst(promoted), best(stayed));
     }
   }
-  // The manager's move at this season's end.
-  for (const move of moves) if (move.seasonNumber === year) add(move.fromClubId, move.toClubId, { kind: 'manager-move', seasonNumber: year, fromClubId: move.fromClubId, toClubId: move.toClubId, points: rules.managerMove });
+  // The manager's move at this season's end (format 69: a period without a club links no clubs).
+  for (const move of moves) if (move.seasonNumber === year && move.fromClubId && move.toClubId) add(move.fromClubId, move.toClubId, { kind: 'manager-move', seasonNumber: year, fromClubId: move.fromClubId, toClubId: move.toClubId, points: rules.managerMove });
   // Star players joining another club of the full world during this season or before the next.
   const now = registrations(season.rosters), later = registrations(next?.rosters);
   const opening = playerClubs(now.opening), latest = playerClubs(now.latest), following = playerClubs(later.opening);

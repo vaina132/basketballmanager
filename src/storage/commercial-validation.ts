@@ -182,7 +182,8 @@ export function validateCommercial(state: SeasonState, version: number): void {
   /** A season-end move: the former club turns automatic and takes its best acceptable offer at once; the new club is manual. */
   const consumeMove = (boundary: Extract<Boundary, { kind: 'move' }>) => {
     const { move } = boundary;
-    replay = { ...replay, plans: { ...replay.plans, [move.fromClubId]: { delegated: true }, [move.toClubId]: { delegated: false } } };
+    // Format 69: a period without a club (an empty club id) hands no club to the manager, and takes none from them.
+    replay = { ...replay, plans: { ...replay.plans, ...(move.fromClubId ? { [move.fromClubId]: { delegated: true } } : {}), ...(move.toClubId ? { [move.toClubId]: { delegated: false } } : {}) } };
     consumeAutomation({ seasonNumber: move.seasonNumber, round: move.round ?? seasonRounds(state), date: move.date, ledgerCount: move.ledgerCount });
   };
   const consumeExpiry = (boundary: Extract<Boundary, { kind: 'expire' }>) => {

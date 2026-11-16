@@ -146,6 +146,8 @@ describe('facilities-2 in a career', () => {
     for (const state of [worn, repairing, repaired]) expect(parseSeason(serializeSeason(state))).toEqual(state);
     const file = JSON.parse(serializeSeason(repairing));
     file.formatVersion = 64; file.state.schemaVersion = 64;
+    // Format 69 careers (`career-3`, unemployed seasons) are refused before format 69 first; keep this check on facilities.
+    file.state.career.model = 'career-2';
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/facilities\.model requires format 65/);
   });
 

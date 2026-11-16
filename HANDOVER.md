@@ -13,8 +13,7 @@ This file holds only the current state, the next steps and the rules that must n
 **Owner feedback after a first play (16 November 2026; "not to tackle immediately ... in the rightful time"):**
 - Safety and gaps level (before the play test):
   - **Done (16 November):** (3) the black Inbox screen (most likely a page file removed by a new deploy while the game was open; every page now shows a plain message with Save and reload instead of going blank, `src/ui/PageErrorBoundary.tsx`); (1) no "est." next to OVR on the club step; (2) "Not played · table simulated" with a one-line explanation; (9) dragging or selecting two players on the court swaps them at once (`swapActivePlayers`); a warning when closing the page while saving.
-  - (10) Without an assistant coach, "Ask assistant" still picks the squad: label it as the manager's own automatic choice; a hired assistant's skill improves it (default, reversible).
-  - (11) A facility upgrade under construction shows no time left: show the weeks left and the finish date.
+  - **Done (16 November):** (10) without an assistant coach the match and squad controls read Automatic / Auto-pick / Automatic selection (a hired assistant only adds match advice; automatic choices follow the same rules either way); (11) facility projects show the weeks left and the finish Saturday (`src/world/facility-schedule.ts`).
   - (6) Money realism: some staff earn a lot. The owner's sentence was cut off; ask for the rest. Fits the economy gaps.
 - Interface simplification (after the play test):
   - (12) Easier squad and starting-five selection: a small court picture with PG/SG/SF/PF/C circles, filled by drag and drop or by tapping a player then a circle. Playing someone out of position is a new game rule (today each player plays his own position).
@@ -155,6 +154,7 @@ Browser checks still to do locally (by the owner, or by a local Claude session w
 
 - Show regular-season and playoff player statistics separately on the Competition screen.
 - Vercel's protection against missing page files after a deploy ("skew protection") would stop the download failure behind the black screen; the game now recovers with Save and reload. It may be a paid option, so it needs the owner's decision.
+- "Assistant" still names general staff tasks without an assistant coach (training control, contract handling, scouting assignments, press notes) and the play-by-play line "assistant substitutions enabled"; these could read "Automatic" too. A hired assistant making better automatic choices would be a new rule.
 - Pre-existing layout points found on 16 November: on a phone, the Competitions table heading's picker is unstyled and "0 / 24 fixtures complete" is cut off; on the desktop club step the "Playable countries" and "Game speed" boxes are wider than their column; dragging needs a mouse (tapping two players works on phones).
 - Play Primera FEB's one-venue final stage without home advantage.
 - Optionally copy the two older fixture capture scripts from `.artifacts` (`capture-postseason-baseline.mjs`, `capture-divisions-baseline.mjs`) into `scripts/` for the record. Cloud sessions now use the committed `scripts/capture-format-baseline.mjs`.

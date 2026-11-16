@@ -466,6 +466,10 @@ Chosen as recommended defaults under the owner's instruction to finish the level
 
 "Before we start the playing test, I would like you to complete the step 3.7 and then the restoration of the safety checks and closing the gaps ... the selling side doesn't have to be implemented now, so we can postpone it for the future phases ... the interface simplification will only come after the playtests." Order: step 3.7, then safety checks and gaps (the "Before release" list in HANDOVER.md), then the owner's play test, then interface simplification. Selling (free first season, EUR 15 unlock, Steam) is postponed. Development mode continues until the safety-check restoration begins.
 
+## Selling and marketing off the roadmap (owner decision, 16 November 2026)
+
+"Let's remove the selling and marketing related work. We'll come to this later, after making the game a playable and enjoyable one." Roadmap: step 3.7, safety checks and gaps, the owner's play test, interface simplification, player data, release preparation (old-save support and a final full check). The selling ideas (free first season, EUR 15 unlock, Steam, data-rights review) are not planned until the owner brings them back.
+
 ## Safety and gaps level defaults (16 November 2026, reversible)
 
 Computer-run clubs follow the human club's rules (gaps closed before the play test):

@@ -6,7 +6,7 @@ This file holds only the current state, the next steps and the rules that must n
 
 ## Current state (16 November 2026, saved ideas level complete, waiting for the owner's feedback)
 
-**Active level:** Step 3.7, then the safety-check restoration and gap closing (owner, 16 November 2026: "complete the step 3.7 and then the restoration of the safety checks and closing the gaps ... the selling side ... we can postpone ... the interface simplification will only come after the playtests"). The saved ideas level is complete. Level order: sprint 3 (3.7 active), sprint 4 (done), saved ideas (done), **safety and gaps (next)**, owner play test, interface simplification; selling postponed.
+**Active level:** Step 3.7, then the safety-check restoration and gap closing (owner, 16 November 2026: "complete the step 3.7 and then the restoration of the safety checks and closing the gaps ... the selling side ... we can postpone ... the interface simplification will only come after the playtests"). The saved ideas level is complete. Level order: sprint 3 (3.7 active), sprint 4 (done), saved ideas (done), **safety and gaps (next)**, owner play test, interface simplification, player data, release preparation. Selling and marketing are off the roadmap (owner, 16 November 2026) until the game is playable and enjoyable.
 
 **Saved ideas level (done, 16 November 2026):** formats 63-72 (career and board rules, sponsor exits and naming rights, medical and scouting facilities, squad-rank roles and contract requests, press, rivalries, unemployed seasons, presidents with salary verdicts and youth and culture objectives, loans and leases, club money after promotion and relegation). Defaults in `docs/decisions.md`, "Saved ideas level defaults". Old-format tests build careers with `beforeSavedIdeas`/`BEFORE_SAVED_IDEAS` (`tests/helpers/legacy-season.ts`); career and history scenario tests run without presidents (`presidents: false`).
 
@@ -71,8 +71,8 @@ The game reads real club data from the owner's Supabase project (public storage 
   - loans and leases;
   - medical and scouting facilities and repair projects;
   - early sponsor exits and naming rights.
-- **Order decided by the owner (16 November 2026), before the play test:** (1) finish step 3.7 (multi-league season with Europe, speed and save size, browser check); (2) restore the safety checks paused in development mode and close the known gaps ("Before release" list); then the owner play-tests. **The selling side (free first season, EUR 15 unlock, Steam) is postponed to a later phase.** Interface simplification comes after the play tests.
-- **Release preparation (selling, postponed):** free first season, then a EUR 15 unlock, later Steam; data-rights review.
+- **Order decided by the owner (16 November 2026), before the play test:** (1) finish step 3.7 (multi-league season with Europe, speed and save size, browser check); (2) restore the safety checks paused in development mode and close the known gaps ("Before release" list); then the owner play-tests. Interface simplification comes after the play tests.
+- **Selling and marketing: off the roadmap** (owner, 16 November 2026: "Let's remove the selling and marketing related work. We'll come to this later, after making the game a playable and enjoyable one."). The earlier ideas (free first season, EUR 15 unlock, Steam, data-rights review) wait until the owner brings them back.
 - **Interface simplification,** after the owner has played with real data.
 
 ## Rules and conventions that must not be broken

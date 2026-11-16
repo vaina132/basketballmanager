@@ -16,6 +16,7 @@ This file holds only the current state, the next steps and the rules that must n
   - (1) Remove "est." after the OVR figure (owner decision; the club step shows "79 est.").
   - (2) "Estimated table" means nothing to the owner: reword the countries that are not played game by game. The owner chose only Turkey and saw five other leagues plus three European competitions.
   - (6) Money realism: some staff earn a lot. The owner's sentence was cut off; ask for the rest. Fits the economy gaps.
+  - (9) Match lineup: drag and drop also between two players on the court, to swap them (today only bench-court swaps work).
 - Interface simplification (after the play test):
   - (4) Facilities: six levels for every facility (Very Poor, Poor, Average, Good, Very Good, Excellent) instead of four. The arena becomes a seat capacity, expanded for a fee over several weeks depending on the size. Loans become a simple bank loan usable for anything. Replace the Full/Reduced and automatic/manual controls with something simpler. This changes game rules and needs a new format.
   - (5) Board gets its own left menu item.

@@ -10,7 +10,10 @@ import { BOARD_VERDICT_EFFECTS, governingVerdict, ownerCapital, seasonVerdict, s
 import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS, RIVALRY_CROWD_PERCENT, rivalryFor } from '../world/rivalries'
 import { careerMovesGovern, managedClubFor } from '../world/career'
-import { managerReputation, VACANCY_BASE_REQUIREMENT, VACANCY_STEP } from '../world/career-policy'
+import { managerReputation, resignationOutlook, resignationRefusal, seasonEndOutlook, VACANCY_BASE_REQUIREMENT, VACANCY_STEP } from '../world/career-policy'
+import { CAREER_RULES, CAREER_RULES_TEXT, careerPointKey, coachProtected, midSeasonMinimumGames, startingConfidence, usesCareerRules } from '../world/career-rules'
+import { SeasonEndChoice } from './SeasonEndChoice'
+import { careerMoveOutcome } from './career-text'
 import { FACILITY_LABELS } from './FacilitiesPanel'
 import { GrownRivalrySection } from './GrownRivalrySection'
 import { Icon, type IconName } from './Icon'
@@ -26,6 +29,8 @@ interface BoardPanelProps {
   onEnableConsequences: () => void
   onEnableRivalries: () => void
   onEnableCareerMoves: () => void
+  /** Career-2: resign and join the chosen club (one of the jobs offered at once). */
+  onResign?: (clubId: string) => void
 }
 
 const money = (cents: number) => formatEuros(cents, true)
@@ -45,11 +50,18 @@ function ReviewHistory({ summary, season }: { summary: BoardSummary; season: Sea
   const years = [...new Set(summary.history.map(review => review.seasonNumber))].sort((a, b) => b - a)
   const year = years.includes(selectedSeason) ? selectedSeason : years[0]
   const reviews = summary.history.filter(review => review.seasonNumber === year)
+  // Format 63: a new coach's fresh start sits between the reviews it follows and precedes (latest first).
+  const position = (id: string) => season.board.reviews.findIndex(review => review.id === id)
+  const rows: ({ kind: 'review'; key: number; review: BoardSummary['history'][number] } | { kind: 'restart'; key: number; restart: BoardSummary['restarts'][number] })[] = [
+    ...reviews.map(review => ({ kind: 'review' as const, key: position(review.id) * 2 + 1, review })),
+    ...summary.restarts.filter(restart => restart.seasonNumber === year).map(restart => ({ kind: 'restart' as const, key: restart.reviewCount * 2, restart })),
+  ].sort((a, b) => b.key - a.key)
+  const clubName = season.clubs.find(club => club.id === season.managedClubId)?.name ?? season.managedClubId
   return <details className="board-history" id="board-review-history">
     <summary><Icon name="calendar" size={15} />Review history · {summary.history.length}</summary>
     {!reviews.length ? <p className="board-empty">The first review will appear after a counted matchday.</p> : <>
       <div className="board-history-filter"><label htmlFor="board-history-season">Season<select id="board-history-season" value={year} onChange={event => setSelectedSeason(Number(event.target.value))}>{years.map(value => <option key={value} value={value}>{seasonLabel(value)}</option>)}</select></label><span>{reviews.length} recorded {reviews.length === 1 ? 'review' : 'reviews'}</span></div>
-      <div className="board-history-scroll" tabIndex={0} role="region" aria-label="Dated board reviews"><table><thead><tr><th scope="col">Review</th><th scope="col">Results</th><th scope="col">Unpaid costs</th><th scope="col">Confidence</th></tr></thead><tbody>{reviews.map(review => <tr key={review.id} data-board-review={review.id}><th scope="row"><time dateTime={review.date}>{medicalDate(review.date)}</time><small>Matchday {review.round}</small></th><td>{review.club.wins} {review.club.wins === 1 ? 'win' : 'wins'} / {review.club.played} games<small>{review.club.carriedAbsences ? `${review.club.carriedAbsences} recorded injury absences` : 'No carried injury absences'}</small></td><td>{review.club.unpaid === null ? 'Not assessed' : money(review.club.unpaid)}</td><td><strong>{review.club.confidence} / 100</strong><small>{signed(review.club.confidence - review.club.previousConfidence)} this review</small><details className="board-review-reasons"><summary>Reasons</summary><p>Results {signed(review.club.resultsImpact)} · Injury allowance {signed(review.club.injuryRelief)} · Finances {review.club.unpaid === null ? 'not assessed' : signed(review.club.financeImpact)}{review.club.rivalryImpact !== undefined ? ` · Derbies ${signed(review.club.rivalryImpact)}` : ''}{review.club.mediaImpact !== undefined ? ` · Press and media ${signed(review.club.mediaImpact)}` : ''}. Assessment: {review.club.assessment} / 100.</p><p>Season target: {season.board.mandates.find(mandate => mandate.id === review.mandateId)?.clubs[season.managedClubId]?.targetWins} wins.</p></details></td></tr>)}</tbody></table></div>
+      <div className="board-history-scroll" tabIndex={0} role="region" aria-label="Dated board reviews"><table><thead><tr><th scope="col">Review</th><th scope="col">Results</th><th scope="col">Unpaid costs</th><th scope="col">Confidence</th></tr></thead><tbody>{rows.map(row => row.kind === 'restart' ? <tr key={`restart-${row.restart.seasonNumber}-${row.restart.round}-${row.restart.phase}-${row.restart.date}`} className="board-history-restart" data-board-restart={row.restart.coach}><th scope="row"><time dateTime={row.restart.date}>{medicalDate(row.restart.date)}</time><small>{row.restart.phase === 'season' ? `Before matchday ${row.restart.round}` : row.restart.phase === 'end' ? 'Season end' : 'Offseason'}</small></th><td colSpan={2}>{row.restart.coach === 'manager' ? 'You took over' : `${clubName} appointed a new coach`}<small>A new coach starts afresh; the previous confidence no longer counts</small></td><td><strong>{row.restart.confidence} / 100</strong><small>Fresh start</small></td></tr> : (review => <tr key={review.id} data-board-review={review.id}><th scope="row"><time dateTime={review.date}>{medicalDate(review.date)}</time><small>Matchday {review.round}</small></th><td>{review.club.wins} {review.club.wins === 1 ? 'win' : 'wins'} / {review.club.played} games<small>{review.club.carriedAbsences ? `${review.club.carriedAbsences} recorded injury absences` : 'No carried injury absences'}</small></td><td>{review.club.unpaid === null ? 'Not assessed' : money(review.club.unpaid)}</td><td><strong>{review.club.confidence} / 100</strong><small>{signed(review.club.confidence - review.club.previousConfidence)} this review</small><details className="board-review-reasons"><summary>Reasons</summary><p>Results {signed(review.club.resultsImpact)} · Injury allowance {signed(review.club.injuryRelief)} · Finances {review.club.unpaid === null ? 'not assessed' : signed(review.club.financeImpact)}{review.club.rivalryImpact !== undefined ? ` · Derbies ${signed(review.club.rivalryImpact)}` : ''}{review.club.mediaImpact !== undefined ? ` · Press and media ${signed(review.club.mediaImpact)}` : ''}. Assessment: {review.club.assessment} / 100.</p><p>Season target: {season.board.mandates.find(mandate => mandate.id === review.mandateId)?.clubs[season.managedClubId]?.targetWins} wins.</p></details></td></tr>)(row.review))}</tbody></table></div>
     </>}
   </details>
 }
@@ -106,9 +118,12 @@ function RivalrySection({ season, busy, onEnableRivalries }: { season: SeasonSta
 }
 
 export const CAREER_RULE = `A season that ends Under pressure (final board confidence below 30) ends your job. Clubs whose own season ends Under pressure offer you their job when your reputation reaches what they look for: ${VACANCY_BASE_REQUIREMENT} for last place and ${VACANCY_STEP} more for each place higher. Your reputation is your last three final board ratings, the most recent counting most. After a dismissal you always receive at least one offer.`
+/** Career-2 careers (format 63): the same offers and reputation, with the new protections, mid-season reviews and resignations. */
+export const CAREER_RULE_2 = `${CAREER_RULES_TEXT.protectedSeason} ${CAREER_RULES_TEXT.midSeason} ${CAREER_RULES_TEXT.freshStart} Clubs that replace their coach offer you their job when your reputation reaches what they look for: ${VACANCY_BASE_REQUIREMENT} for last place and ${VACANCY_STEP} more for each place higher. Your reputation is your last three final board ratings, the most recent counting most. After a dismissal you always receive at least one offer.`
 
-/** The manager's employment: reputation, the season-end rule, today's outlook and the clubs managed so far. */
-function CareerSection({ season, busy, onEnableCareerMoves }: { season: SeasonState; busy: boolean; onEnableCareerMoves: () => void }) {
+/** The manager's employment: reputation, the dismissal rules, today's outlook, resigning and the clubs managed so far. */
+function CareerSection({ season, busy, onEnableCareerMoves, onResign }: { season: SeasonState; busy: boolean; onEnableCareerMoves: () => void; onResign?: (clubId: string) => void }) {
+  const [resigning, setResigning] = useState(false)
   const career = season.career
   const heading = <h3 className="board-section-heading"><Icon name="shield" size={16} />Your job</h3>
   const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? id
@@ -116,31 +131,49 @@ function CareerSection({ season, busy, onEnableCareerMoves }: { season: SeasonSt
     {heading}
     <div className="board-enable board-career-enable"><Icon name="shield" size={24} /><div><strong>Play with dismissal and job offers</strong><p>{CAREER_RULE} The current season is never judged: this applies from the end of {seasonLabel(season.seasonNumber + 1)}.</p></div><button id="enable-career-moves" className="button" onClick={onEnableCareerMoves} disabled={busy || !season.board.enabledSince}>Enable dismissal and job offers</button></div>
   </>
+  const rules = usesCareerRules(career)
   const lastEnded = season.status === 'complete' ? season.seasonNumber : season.seasonNumber - 1
-  const reputation = managerReputation(season, Math.max(lastEnded, 0))
+  const reputation = managerReputation(season, Math.max(lastEnded, 0), rules ? { seasonNumber: season.seasonNumber, before: Infinity } : undefined)
   const governs = careerMovesGovern(career, season.seasonNumber)
-  const confidence = boardConfidenceNow(season, season.managedClubId), outlook = verdictForConfidence(confidence)
-  const move = career.moves.find(item => item.seasonNumber === season.seasonNumber)
-  const status = !governs ? 'not-yet' : season.status === 'complete' ? 'decided' : outlook === 'pressure' ? 'at-risk' : 'safe'
+  const confidence = rules ? startingConfidence(season.board, season.managedClubId) : boardConfidenceNow(season, season.managedClubId), outlook = verdictForConfidence(confidence)
+  // Career-1 moves once a season; career-2 shows the move made at this season's end or in its offseason.
+  const move = rules ? [...career.moves].reverse().find(item => item.seasonNumber === season.seasonNumber && item.phase !== 'season') : career.moves.find(item => item.seasonNumber === season.seasonNumber)
+  const judged = season.status === 'complete' ? season.seasonNumber + 1 : season.seasonNumber
+  const protectedNow = rules && coachProtected(season.board.restarts ?? [], season.managedClubId, judged)
+  // A final warning: the last season ended Under pressure in a protected first season, and the manager stayed.
+  const lastOutlook = rules && lastEnded >= 1 ? seasonEndOutlook(season, lastEnded) : null
+  const warned = !!lastOutlook?.warning && lastOutlook.clubId === season.managedClubId && !career.moves.some(item => careerPointKey(item.seasonNumber, item.round ?? 0, item.phase ?? 'end') >= careerPointKey(lastEnded, seasonRounds(season), 'end'))
+  const objectiveGames = season.board.mandates.find(mandate => mandate.seasonNumber === season.seasonNumber)?.clubs[season.managedClubId]?.games ?? 0
+  const status = !governs ? 'not-yet' : season.status === 'complete' ? 'decided' : protectedNow ? 'protected' : outlook === 'pressure' ? 'at-risk' : 'safe'
+  const midSeasonText = rules && objectiveGames ? ` During the season, a review below ${CAREER_RULES.midSeasonDismissalBelow} after ${midSeasonMinimumGames(objectiveGames)} of your ${objectiveGames} league games ends your job at once.` : ''
   const statusText = status === 'not-yet' ? `Dismissal and job offers start at the end of ${seasonLabel(career.enabledSince.effectiveFrom)}.`
-    : status === 'decided' ? (move ? `You joined ${name(move.toClubId)} at the end of this season.` : 'The board has decided: you stay for next season.')
-    : `If the season ended today: ${BOARD_VERDICT_EFFECTS[outlook].label} (${confidence}/100) — ${status === 'at-risk' ? 'the board would dismiss you' : 'your job is safe'}.`
+    : status === 'decided' ? (move ? `You ${move.reason === 'resigned' ? 'resigned and joined' : 'joined'} ${name(move.toClubId)} ${move.phase === 'offseason' ? 'this offseason' : 'at the end of this season'}.` : protectedNow ? `The board has decided: you stay. ${seasonLabel(judged)} is your protected first season here.` : warned ? `Final warning: you stay, but ${seasonLabel(judged)} counts. The board can dismiss you during it or at its end.` : 'The board has decided: you stay for next season.')
+    : status === 'protected' ? `Protected first season: the board will not dismiss you in ${seasonLabel(season.seasonNumber)}. If it ends Under pressure (below ${CAREER_RULES.seasonDismissalBelow}), you get a final warning instead. Today: ${BOARD_VERDICT_EFFECTS[outlook].label} (${confidence}/100).`
+    : `If the season ended today: ${BOARD_VERDICT_EFFECTS[outlook].label} (${confidence}/100) — ${status === 'at-risk' ? 'the board would dismiss you' : 'your job is safe'}.${warned ? ' You are on a final warning from last season.' : ''}${midSeasonText}`
   const seasons = Array.from({ length: season.seasonNumber }, (_, index) => index + 1).map(year => {
     const clubId = managedClubFor(season, year, false), final = seasonVerdict(season.board, clubId, year, seasonRounds(season))
-    const moved = career.moves.find(item => item.seasonNumber === year)
-    return { year, clubId, final, moved }
-  }).filter(row => row.final || row.year === season.seasonNumber).reverse()
+    const moves = career.moves.filter(item => item.seasonNumber === year)
+    const warning = rules && final ? seasonEndOutlook(season, year)?.warning : undefined
+    return { year, clubId, final, moves, warning }
+  }).filter(row => row.final || row.moves.length || row.year === season.seasonNumber).reverse()
+  const refusal = rules && onResign ? resignationRefusal(season) : null
+  const offers = resigning && !refusal ? resignationOutlook(season) : null
   return <>
     {heading}
     <div className="board-verdict board-career" data-career-status={status}>
-      <div className="board-verdict-season" data-career-reputation={reputation.value}><span>Reputation</span><strong>{reputation.value} / 100</strong><small>{reputation.seasons.length ? reputation.seasons.map(item => `${seasonLabel(item.seasonNumber)}: ${item.confidence}`).join(' · ') : 'No final board review yet'}</small></div>
-      <div className="board-verdict-season"><span>{seasonLabel(season.seasonNumber)} · {name(season.managedClubId)}</span><strong>{status === 'at-risk' ? 'Job at risk' : status === 'safe' ? 'Job safe' : status === 'decided' ? 'Season decided' : 'Not judged yet'}</strong><small>{statusText}</small></div>
+      <div className="board-verdict-season" data-career-reputation={reputation.value}><span>Reputation</span><strong>{reputation.value} / 100</strong><small>{reputation.seasons.length ? reputation.seasons.map(item => `${seasonLabel(item.seasonNumber)}: ${item.confidence}`).join(' · ') : 'No final board review yet'}{reputation.resignations ? ` · −${reputation.resignations * CAREER_RULES.resignationReputationCost} for ${reputation.resignations === 1 ? 'a resignation' : `${reputation.resignations} resignations`}` : ''}</small></div>
+      <div className="board-verdict-season"><span>{seasonLabel(season.seasonNumber)} · {name(season.managedClubId)}</span><strong>{status === 'at-risk' ? 'Job at risk' : status === 'safe' ? (warned ? 'Final warning' : 'Job safe') : status === 'protected' ? 'Protected first season' : status === 'decided' ? 'Season decided' : 'Not judged yet'}</strong><small>{statusText}</small></div>
     </div>
     <div className="board-history-scroll board-career-history" tabIndex={0} role="region" aria-label="Clubs managed"><table><thead><tr><th scope="col">Season</th><th scope="col">Club</th><th scope="col">Final confidence</th><th scope="col">Outcome</th></tr></thead><tbody>{seasons.map(row => <tr key={row.year} data-career-season={row.year}>
       <td>{seasonLabel(row.year)}</td><td>{name(row.clubId)}</td><td>{row.final ? `${row.final.confidence} · ${BOARD_VERDICT_EFFECTS[row.final.verdict].label}` : 'In progress'}</td>
-      <td>{row.moved ? (row.moved.reason === 'dismissed' ? `Dismissed · joined ${name(row.moved.toClubId)}` : `Moved to ${name(row.moved.toClubId)}`) : row.final ? 'Stayed' : '—'}</td>
+      <td>{row.moves.length ? row.moves.map(item => careerMoveOutcome(season, item)).join(' · ') : row.warning ? 'Final warning · stayed' : row.final ? 'Stayed' : '—'}</td>
     </tr>)}</tbody></table></div>
-    <p className="board-empty board-career-rule">{CAREER_RULE}</p>
+    {rules && onResign && <details className="board-resign" id="board-resign"><summary><Icon name="shield" size={15} />Resign</summary>
+      <p>{CAREER_RULES_TEXT.resignation} {season.status === 'complete' ? 'The new club runs the rest of this offseason.' : 'The new club\'s games are yours from this week.'}</p>
+      {refusal ? <p className="board-resign-refusal" role="status">{refusal}</p> : <button id="board-resign-button" className="button" onClick={() => setResigning(true)} disabled={busy}>See the jobs on offer</button>}
+    </details>}
+    {offers && <SeasonEndChoice season={season} outlook={offers} busy={busy} onChoose={clubId => { setResigning(false); if (clubId) onResign!(clubId) }} onClose={() => setResigning(false)} />}
+    <p className="board-empty board-career-rule">{rules ? CAREER_RULE_2 : CAREER_RULE}</p>
   </>
 }
 
@@ -165,7 +198,7 @@ function VerdictSection({ season, busy, onEnableConsequences }: { season: Season
   </>
 }
 
-export function BoardPanel({ season, busy = false, onEnable, onEnableFunding, onEnableConsequences, onEnableRivalries, onEnableCareerMoves }: BoardPanelProps) {
+export function BoardPanel({ season, busy = false, onEnable, onEnableFunding, onEnableConsequences, onEnableRivalries, onEnableCareerMoves, onResign }: BoardPanelProps) {
   const summary = getBoardSummary(season)
   const { mandate, objective, latest } = summary
   const review = latest?.club
@@ -192,7 +225,7 @@ export function BoardPanel({ season, busy = false, onEnable, onEnableFunding, on
           <p>The review assessment starts at 50, then adds the results, injury and financial contributions above. Confidence moves towards it by no more than 8 points per review. {season.facilities.fundingSince ? 'It records the board\'s view and decides capital requests; it does not change match performance, budget limits or your job.' : 'It records the board\'s view; it does not change match performance, budget limits or your job.'}</p>
         </details>
       </> : <p className="board-empty">Objectives start next season. The completed season will not be reviewed retroactively.</p>}
-      <CareerSection season={season} busy={busy} onEnableCareerMoves={onEnableCareerMoves} />
+      <CareerSection season={season} busy={busy} onEnableCareerMoves={onEnableCareerMoves} onResign={onResign} />
       <VerdictSection season={season} busy={busy} onEnableConsequences={onEnableConsequences} />
       <RivalrySection season={season} busy={busy} onEnableRivalries={onEnableRivalries} />
       <PresidentSection season={season} busy={busy} onEnableFunding={onEnableFunding} />

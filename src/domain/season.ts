@@ -130,7 +130,7 @@ export interface DomesticDivisions {
 /** Format 59 adds the BCL format: qualification, a protected draw, play-ins, Round of 16 groups and a Final Four (step 3.5e). */
 /** Format 60 adds estimated tables for unchosen leagues and each season end's European places (`europe`, step 3.5f). */
 /** Format 61 records realistic injury kinds (sprint 4) and each career match's recurrence risk (`activeMatch.injuryRisk`). Format 62 (sprint 4) gives real-club worlds researched money: `world.economy` and each club's `finances[].economy` (`src/world/economy.ts`). */
-/** Format 67 (saved ideas level) adds richer press topics and the manager's media standing to new careers (`media`, `src/world/media.ts`). Format 68: new careers grow rivalries from results (`rivalries.model` 'rivalries-2' with each season's table, `src/world/rivalry-growth.ts`); older careers keep the world's fixed rivalries. */
+/** Format 63 (saved ideas: career and board) adds the `career-2` rules for new careers: a protected first season, fresh board confidence for a new coach (`board.restarts`), mid-season dismissals and resignations (`CAREER_RULES`, `src/world/career-rules.ts`). Format 67 adds richer press topics and the manager's media standing (`media`, `src/world/media.ts`). Format 68: new careers grow rivalries from results (`rivalries.model` 'rivalries-2', `src/world/rivalry-growth.ts`); older careers keep the world's fixed rivalries. */
 export const SEASON_SCHEMA_VERSION = 68;
 
 export interface SeasonState {

@@ -10,8 +10,7 @@ import { getClubSponsorship } from '../world/commercial'
 import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { getCareerPlayer } from '../world/player-catalog'
 import { recentClubRetirements } from './PlayerLifecycle'
-import { careerMoveText } from './career-text'
-import { careerMovesGovern } from '../world/career'
+import { careerNotices } from './career-text'
 import type { AssistantCoach } from '../domain/assistant'
 import { AssistantPortrait } from './AssistantPortrait'
 import type { SeasonState } from '../domain/season'
@@ -89,10 +88,8 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     notices.push({ key: 'derby', title: `Derby next · ${derby.name}`, detail: `${home ? 'Home' : 'Away'} against ${rival.name}. ${home ? `Crowd demand +${RIVALRY_CROWD_PERCENT * derby.intensity}%. ` : ''}The board and the squad weigh this result more than usual.${rivalryNote(season, rival.id)}`, action: 'View rivalry', open: onOpenBoard })
   }
   const worn = season?.facilities.maintenanceSince ? FACILITY_TYPES.filter(type => getFacilityLevel(season, type, season.managedClubId) > 1).map(type => ({ type, condition: getFacilityCondition(season, type, season.managedClubId) })).filter(item => item.condition < 60) : []
-  const move = season?.status === 'complete' ? season.career?.moves.find(item => item.seasonNumber === season.seasonNumber) : undefined
-  const jobBoard = season?.status === 'active' && careerMovesGovern(season.career, season.seasonNumber) ? getBoardSummary(season) : null
-  if (season && jobBoard?.enabled && jobBoard.latest && jobBoard.confidence < 30) notices.push({ key: 'career-risk', title: 'Job at risk', detail: `Board confidence is ${jobBoard.confidence}/100. If the season ends Under pressure (below 30), the board will dismiss you; clubs that need a coach will then offer you a job.`, urgent: true, action: 'View board', open: onOpenBoard ?? onOpenClub })
-  if (season && move) { const text = careerMoveText(season, move); notices.push({ key: 'career', title: text.title, detail: text.detail, urgent: move.reason === 'dismissed', action: 'View board', open: onOpenBoard ?? onOpenClub }) }
+  // Job notices: the current risk (or a protected first season), a recent club change and a standing final warning.
+  if (season) for (const notice of careerNotices(season)) notices.push({ ...notice, action: 'View board', open: onOpenBoard ?? onOpenClub })
   if (season && worn.length) notices.push({ key: 'facilities-worn', title: 'Facilities wearing', detail: `${worn.map(item => `${({ arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure' })[item.type]} ${item.condition}/100`).join(', ')}. Their benefit shrinks while condition is low; full upkeep restores it.`, action: 'Review facilities', open: onOpenClub })
   const press = season && onOpenInbox ? getPressQuestion(season) : null
   if (press && !press.answered && onOpenInbox) notices.push({ key: 'press', title: 'Press conference', detail: `${press.question} Answer in the Inbox before the next match, or your assistant ${press.subjectIds ? 'gives no comment' : 'keeps it routine'}.`, action: 'Open inbox', open: onOpenInbox })

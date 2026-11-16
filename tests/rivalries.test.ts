@@ -8,6 +8,7 @@ import { createRivalries, enableRivalries, governingDerby, rivalryFor } from '..
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
+import { asCareer1 } from './helpers/career-rules';
 import { DEVELOPMENT_WORLD } from '../src/data/development-world';
 
 const manager = { name: 'Derby Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
@@ -20,7 +21,8 @@ beforeAll(() => {
   // Seed 227: Rhine Falcons win the river derby away at Danube Lynx on matchday 2.
   derbyWeek = career(true);
   while (derbyWeek.round <= 3) derbyWeek = advanceMatchday(derbyWeek);
-  legacy = career(false);
+  // An older career (before rivalries, and before the format-63 career rules).
+  legacy = asCareer1(career(false));
   while (legacy.round < 4) legacy = advanceMatchday(legacy);
   switched = enableRivalries(legacy);
   for (let step = 0; step < 4; step += 1) switched = advanceMatchday(switched);

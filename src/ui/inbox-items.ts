@@ -94,11 +94,19 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   // Offers turned down: rebuilt from each governed season end at which the manager stayed.
   const lastEnded = season.status === 'complete' ? season.seasonNumber : season.seasonNumber - 1
   if (season.career?.enabledSince) for (let year = season.career.enabledSince.effectiveFrom; year <= lastEnded && careerMovesGovern(season.career, year); year += 1) {
-    if (season.career.moves.some(move => move.seasonNumber === year)) continue
     const outlook = seasonEndOutlook(season, year)
+    // Career-2 (format 63): a protected first season that ended Under pressure brings a final warning.
+    if (outlook?.warning) items.push({ id: `final-warning-${year}`, date: outlook.verdict.date, category: 'board', title: 'Final warning from the board', detail: `${seasonLabel(year)} ended Under pressure (confidence ${outlook.verdict.confidence}/100) in your protected first season at ${season.clubs.find(club => club.id === outlook.clubId)!.name}. The board kept you, but the next season counts.`, needsAction: false, target: 'board' })
+    // Only a season-end move answers that season's offers (career-2 seasons can also hold mid-season moves).
+    if (season.career.moves.some(move => move.seasonNumber === year && (move.phase ?? 'end') === 'end')) continue
     if (outlook?.offers.length && !outlook.dismissed) items.push({ id: `offers-declined-${year}`, date: outlook.verdict.date, category: 'board', title: outlook.offers.length === 1 ? 'Job offer declined' : 'Job offers declined', detail: `You stayed at ${season.clubs.find(club => club.id === outlook.clubId)!.name} after ${seasonLabel(year)}; ${outlook.offers.map(offer => season.clubs.find(club => club.id === offer.clubId)!.name).join(' and ')} had offered you ${outlook.offers.length === 1 ? 'its job' : 'their jobs'}.`, needsAction: false, target: 'board' })
   }
-  for (const move of season.career?.moves ?? []) { const text = careerMoveText(season, move); items.push({ id: `career-move-${move.seasonNumber}`, date: move.date, category: 'board', title: text.title, detail: text.detail, needsAction: false, target: 'board' }) }
+  const moves = season.career?.moves ?? []
+  for (const move of moves) {
+    // Career-2 seasons can hold several moves; each keeps its own message.
+    const text = careerMoveText(season, move), sameSeason = moves.filter(item => item.seasonNumber === move.seasonNumber)
+    items.push({ id: sameSeason.length > 1 ? `career-move-${move.seasonNumber}-${sameSeason.indexOf(move) + 1}` : `career-move-${move.seasonNumber}`, date: move.date, category: 'board', title: text.title, detail: text.detail, needsAction: false, target: 'board' })
+  }
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })
 
   return items.sort((a, b) => Number(b.needsAction) - Number(a.needsAction) || compare(b.date, a.date) || compare(a.id, b.id))

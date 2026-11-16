@@ -2,7 +2,7 @@ import type { MediaMove, MediaReputation, PressStyle, SeasonMedia } from '../dom
 import type { PressTopic, RelationshipEvent } from '../domain/relationships';
 import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/season';
 import type { WorldContext } from '../domain/world';
-import { managedClubFor } from './career';
+import { managedClubAtRound } from './career';
 import { roundOrdinal, seasonRounds, worldOf } from './career-world';
 import { governingDerby } from './rivalries';
 import { dateForRound } from './season';
@@ -136,14 +136,15 @@ export function mediaReputation(state: MediaContext, through = Infinity): MediaR
   const seasons: { seasonNumber: number; fixtures: readonly (SeasonFixture | ArchivedFixture)[] }[] = [...state.history.filter(archive => archive.seasonNumber < state.seasonNumber), { seasonNumber: state.seasonNumber, fixtures: state.fixtures }];
   for (const season of seasons) {
     if (season.seasonNumber < since.seasonNumber) continue;
-    const clubId = managedClubFor(state, season.seasonNumber, false);
-    const games = season.fixtures.filter(fixture => fixture.result && (fixture.homeClubId === clubId || fixture.awayClubId === clubId))
+    // The club managed in each week (a mid-season move, format 63, hands the later weeks to the new club).
+    const clubAt = (round: number) => managedClubAtRound(state, season.seasonNumber, round);
+    const games = season.fixtures.filter(fixture => fixture.result && (fixture.homeClubId === clubAt(fixture.round) || fixture.awayClubId === clubAt(fixture.round)))
       .map(fixture => ({ fixture, at: roundOrdinal(season.seasonNumber, fixture.round, rounds) }))
       .filter(game => game.at >= first && game.at <= through)
       .sort((a, b) => a.at - b.at || compareText(a.fixture.date, b.fixture.date) || compareText(a.fixture.id, b.fixture.id));
     let streak = 0, lastWon: boolean | null = null;
     for (const { fixture, at } of games) {
-      const result = fixture.result!, won = result.winnerClubId === clubId;
+      const clubId = clubAt(fixture.round), result = fixture.result!, won = result.winnerClubId === clubId;
       streak = won === lastWon ? streak + 1 : 1; lastWon = won;
       const opponent = clubName(state, fixture.homeClubId === clubId ? fixture.awayClubId : fixture.homeClubId);
       const margin = Math.abs(result.officialScore.home - result.officialScore.away);
@@ -194,7 +195,7 @@ export interface BoardMediaEvidence { clubId: string; impact: number }
 export function boardMediaEvidence(state: MediaContext, seasonNumber: number, round: number, date: string): BoardMediaEvidence | undefined {
   if (!state.media) return undefined;
   const at = roundOrdinal(seasonNumber, round, seasonRounds(state)), rules = MEDIA_RULES.board;
-  const clubId = managedClubFor(state, seasonNumber, false);
+  const clubId = managedClubAtRound(state, seasonNumber, round);
   const standing = clamp(Math.trunc((mediaReputation(state, at).value - MEDIA_RULES.start) / rules.standingStep), -rules.standingCap, rules.standingCap);
   const press = fadedPress(state.relationships, clubId, at, date, 'board', rules.pressHalfLifeDays);
   return { clubId, impact: clamp(roundHalfAway(standing + press), -rules.cap, rules.cap) };

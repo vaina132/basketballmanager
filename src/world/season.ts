@@ -1,13 +1,14 @@
 import { requireCalendarWeek } from './calendar-boundary';
 import { competitionTable } from './competition-table';
-import { createBoard, enableBoard, enableBoardConsequences, prepareBoardSeason, processBoardRound } from './board';
+import { BOARD_REVIEW_STEP, createBoard, enableBoard, enableBoardConsequences, prepareBoardSeason, processBoardRound } from './board';
 import { summarizeAcademyHistory } from './academy-history';
 import { summarizeYouthHistory } from './youth-history';
 import { fixturePlayerEvidence, summarizeSeniorHistory } from './senior-history';
 import { createRivalries, enableRivalries } from './rivalries';
 import { createGrownRivalries, growRivalries } from './rivalry-growth';
-import { appointManager, createCareer, enableCareerMoves, matchClubFor } from './career';
-import { jobOfferRefusal, seasonEndOutlook, type SeasonEndOutlook } from './career-policy';
+import { appointManager, createCareer, enableCareerMoves, matchClubFor, restartBoard, transferManager, currentMovePhase } from './career';
+import { jobOfferRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
+import { CAREER_RULES, coachProtected, startingConfidence, usesCareerRules } from './career-rules';
 import { addCalendarDays, domesticRoundDates, roundRobinGames, roundRobinRoundCount, calendarDaysBetween } from './competition-calendar';
 import { derivePostseason, POSTSEASON_FORMATS, POSTSEASON_SLOT_OFFSETS, postseasonOutcome } from './postseason';
 import { divisionChanges, openingDivisions, seasonLeagues } from './divisions';
@@ -497,11 +498,14 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
 /**
  * Commit the current matchday. On the final matchday the manager's season-end decision applies after the final board
  * review and before the offseason opens, so the new club runs that offseason. Without a decision the manager stays,
- * unless the board dismissed them: they then join the best club that offered its job.
+ * unless the board dismissed them: they then join the best club that offered its job. Career-2 careers (format 63)
+ * also apply in-season board decisions: rival clubs replacing their coach and a mid-season dismissal, after which the
+ * manager takes the chosen offer (or the best one) before the next week's games.
  */
 export function advanceSeason(state: SeasonState, decision?: SeasonEndDecision): SeasonState {
   const rounds = seasonRounds(state);
-  if (decision !== undefined && (state.round !== rounds || !decision || typeof decision !== 'object' || typeof decision.moveTo !== 'string' || Object.keys(decision).length !== 1)) throw new Error('A club change can only be decided when the final matchday is committed.');
+  if (decision !== undefined && (!decision || typeof decision !== 'object' || typeof decision.moveTo !== 'string' || Object.keys(decision).length !== 1)) throw new Error('A club change can only be decided when the final matchday is committed.');
+  if (decision !== undefined && state.round !== rounds && !usesCareerRules(state.career)) throw new Error('A club change can only be decided when the final matchday is committed.');
   const committed = commitMatchday(state);
   let next = committed.next;
   // Step 3.4a: more games this week (a postseason game day), so the week's management waits for its last game day.
@@ -517,22 +521,75 @@ export function advanceSeason(state: SeasonState, decision?: SeasonEndDecision):
     const outlook = seasonEndOutlook(next);
     if (decision) { const refusal = jobOfferRefusal(outlook, decision.moveTo); if (refusal) throw new Error(refusal); }
     const moveTo = decision?.moveTo ?? (outlook?.dismissed ? outlook.offers[0]?.clubId : undefined);
+    const from = next.managedClubId;
     if (moveTo) next = appointManager(next, moveTo, outlook!.dismissed ? 'dismissed' : 'moved');
+    // Career-2: every club with a new coach starts the next season from a fresh board confidence.
+    if (outlook && usesCareerRules(next.career)) next = recordSeasonEndCoaches(next, outlook, from, moveTo);
     // Earned sponsor bonuses follow the final review; clubs still without a sponsor receive a second round of offers.
     next = completeCommercialSeason(next);
     return automateFacilities(prepareEmploymentMarket(next));
   }
-  return prepareNextMatchday(state, next);
+  const changes = midSeasonChanges(next);
+  if (decision) { const refusal = changes?.outlook ? jobOfferRefusal(changes.outlook, decision.moveTo) : 'A club change can only be decided after a board dismissal or when the final matchday is committed.'; if (refusal) throw new Error(refusal); }
+  return prepareNextMatchday(state, next, changes ? { changes, moveTo: decision?.moveTo ?? changes.outlook?.offers[0]?.clubId } : undefined);
+}
+
+/** Career-2 season end: clubs whose board replaced the coach, and the manager's former and new clubs, start afresh. */
+function recordSeasonEndCoaches(state: SeasonState, outlook: SeasonEndOutlook, from: string, moveTo: string | undefined): SeasonState {
+  let next = state;
+  for (const vacancy of outlook.vacancies) if (vacancy.clubId !== moveTo) next = restartBoard(next, vacancy.clubId, 'ai', 'end');
+  if (moveTo) next = restartBoard(restartBoard(next, from, 'ai', 'end'), moveTo, 'manager', 'end');
+  return next;
+}
+
+/** Career-2: apply an in-season review's coach changes before the next week's games (and before its match is prepared). */
+function applyMidSeasonChanges(state: SeasonState, changes: MidSeasonChanges, moveTo: string | undefined): SeasonState {
+  let next = state;
+  for (const clubId of changes.replaced) if (clubId !== moveTo) next = restartBoard(next, clubId, 'ai', 'season');
+  if (changes.outlook && moveTo) {
+    const from = next.managedClubId;
+    next = transferManager(next, moveTo, 'dismissed', 'season');
+    next = restartBoard(restartBoard(next, from, 'ai', 'season'), moveTo, 'manager', 'season');
+  }
+  return next;
 }
 
 /**
- * The board's verdict and the job offers that committing the final matchday would bring, without committing it; the
- * manager decides from this before the offseason opens. Null before the final matchday or while job changes are off.
+ * The board's verdict and the job offers that committing this matchday would bring, without committing it; the
+ * manager decides from this first. At the final matchday, the season-end outlook (null while job changes are off);
+ * in career-2 careers, a mid-season dismissal and its offers (null when the manager keeps the job).
  */
 export function previewSeasonEnd(state: SeasonState): SeasonEndOutlook | null {
-  if (state.status !== 'active' || state.round !== seasonRounds(state)) return null;
+  if (state.status !== 'active') return null;
+  if (state.round !== seasonRounds(state) && !usesCareerRules(state.career)) return null;
   const committed = commitMatchday(state);
-  return committed.weekDone ? seasonEndOutlook(committed.next) : null;
+  if (!committed.weekDone) return null;
+  return state.round === seasonRounds(state) ? seasonEndOutlook(committed.next) : midSeasonChanges(committed.next)?.outlook ?? null;
+}
+
+/**
+ * Career-2: whether this week's review could dismiss the manager, so the game previews it before committing. Board
+ * confidence moves at most 8 points per review, so only a confidence within reach of the threshold can fall below it.
+ */
+export function midSeasonDismissalPossible(state: SeasonState): boolean {
+  if (!usesCareerRules(state.career) || state.status !== 'active' || state.round >= seasonRounds(state) || !state.board.enabledSince) return false;
+  // A coach in his protected first season cannot be dismissed, so no preview is needed then.
+  return startingConfidence(state.board, state.managedClubId) - BOARD_REVIEW_STEP < CAREER_RULES.midSeasonDismissalBelow && !coachProtected(state.board.restarts ?? [], state.managedClubId, state.seasonNumber);
+}
+
+/**
+ * Career-2: resign and take one of the jobs offered at once (`resignationOutlook`). It costs reputation; the new club
+ * starts from a fresh board confidence and, during a season, its match this week is prepared for the manager.
+ */
+export function resignManager(state: SeasonState, toClubId: string): SeasonState {
+  const refusal = resignationRefusal(state);
+  if (refusal) throw new Error(refusal);
+  const offerRefusal = jobOfferRefusal(resignationOutlook(state), toClubId);
+  if (offerRefusal) throw new Error(offerRefusal);
+  const phase = currentMovePhase(state, false), from = state.managedClubId;
+  let next = transferManager(state, toClubId, 'resigned', phase);
+  next = restartBoard(restartBoard(next, from, 'ai', phase), toClubId, 'manager', phase);
+  return next.status === 'complete' ? next : prepareGameDay(next);
 }
 
 /** The prepared match of the week's next game day, when the managed club plays on it (step 3.4a). */
@@ -593,7 +650,7 @@ function commitMatchday(state: SeasonState): { next: SeasonState; weekDone: bool
 }
 
 /** After an ordinary matchday: staff hiring, the calendar step and the next prepared match. */
-function prepareNextMatchday(state: SeasonState, committed: SeasonState): SeasonState {
+function prepareNextMatchday(state: SeasonState, committed: SeasonState, coachChanges?: { changes: MidSeasonChanges; moveTo: string | undefined }): SeasonState {
   // Training and recovery start from the week's last game day (step 3.4a), read before the week moves on.
   const trainedFrom = weekLastGameDate(committed.fixtures, committed.round, committed.seasonNumber);
   let next = recruitAiScouts(committed);
@@ -624,6 +681,8 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState): Season
   next = scheduleInSeasonRecruitment(next);
   next = automateFacilities(next);
   next = automateRelationships(prepareRelationshipsRound(next));
+  // Career-2: an in-season review's coach changes take effect before this week's games, like a resignation would.
+  if (coachChanges) next = applyMidSeasonChanges(next, coachChanges.changes, coachChanges.moveTo);
   // Step 3.4a: a week whose first game day falls after its Saturday rests until then; the manager's match is that day's.
   const firstDay = currentGameDay(next);
   if (!firstDay) return { ...next, activeFixtureId: null, activeMatch: null };

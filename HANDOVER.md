@@ -18,8 +18,8 @@ This file holds only the current state, the next steps and the rules that must n
 **Development mode** applies (see "Rules and conventions"): build features first; full suite at sprint end.
 
 **Code baseline:**
-- Save format **62** (`SEASON_SCHEMA_VERSION`; 61 injuries, 62 real economy), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
-- Last verification (cloud, Linux, end of sprint 4): full suite **2,604 passed / 30 skipped, 195 files** (302 s, `--maxWorkers=4`); `npm run build` passes with the known chunk-size advisory. The 30 skipped tests are listed under "Before release".
+- Save format **72** (`SEASON_SCHEMA_VERSION`; saved ideas formats 63-72), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
+- Last verification (cloud, Linux, end of the saved ideas level, 16 November 2026): full suite **2,724 passed / 30 skipped, 209 files** (371 s, `--maxWorkers=4`; its one failure, `lower-division-world`, was re-seeded and passes); `npm run build` passes with the known chunk-size advisory. The 30 skipped tests are listed under "Before release".
 - Cloud sessions: Node 24.22.3 in `/opt/node24` (put it first in `PATH`).
 
 **Sprint 3 in short** (details in `docs/handover-history.md`, search the step number): all 13 competitions imported and rated (3.1); save scaling (3.2); one shared calendar with byes and gates (3.3); each league's ranking rule, postseason, promotion and relegation, next divisions with real names (3.4); the EuroLeague, EuroCup and BCL in their real formats with background sides, estimated tables and European places (3.5); setup screen with flags, strength, Europe lists and measured speed and save size (3.6).

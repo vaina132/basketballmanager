@@ -142,10 +142,12 @@ describe('club changes after manual decisions at both clubs', () => {
   let secondMove: SeasonState, thirdSeason: SeasonState;
 
   beforeAll(() => {
-    // With these decisions, seed 4 (14 before the planned starting five of 16 November 2026, 20 with format 66 alone, 8
-    // before it) brings a job offer at both season ends. Since the planned starters start every game, no player had a
-    // playing-time concern to talk about in the seeds tried (1-40), so a talk is credited only when one happens.
-    let state = setTicketPlan(career(true, 4), { delegated: false, price: 2200 });
+    // With these decisions, seed 1 (4 before step 3.7's sponsor-exit check fix; 14 before the planned starting five of
+    // 16 November 2026, 20 with format 66 alone, 8 before it) brings a job offer at both season ends. Season one ends
+    // with no sponsorship event and season two has none until a sponsor leaves at its end, the case that check fix covers.
+    // Since the planned starters start every game, no player had a playing-time concern to talk about in the seeds tried
+    // (1-40), so a talk is credited only when one happens.
+    let state = setTicketPlan(career(true, 1), { delegated: false, price: 2200 });
     while (state.round < 10) state = advanceMatchday(manage(state, FROM, log));
     state = takeBestOffer(finish(manage(state, FROM, log)));
     const firstClub = state.managedClubId;

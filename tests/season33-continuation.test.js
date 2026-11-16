@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 import { staffAllocation, staffCommitted } from '../src/world/staff-policy';
 
 // Genuine format-33 saves from scripts/capture-season-fixtures.mjs; see tests/fixtures/README.md.
@@ -28,9 +29,10 @@ describe('genuine format-33 careers', () => {
     for (const club of opening.clubs) expect(staffCommitted(opening, club.id)).toBeLessThanOrEqual(staffAllocation(opening, club.id));
   });
 
-  // Development mode: paused by the sprint-4 match calibration (simulated results after this old save now differ). Recapture before release.
-  it.skip('continues the mid-season career into the next matchday exactly as recorded', () => {
-    expect(advance(career)).toEqual(careerNext);
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts).
+  it('continues the mid-season career for a valid week that follows the recorded matchday', () => {
+    expectValidOldSaveWeek(career, advance(career), careerNext);
   }, 120_000);
 
   it('rolls the completed offseason into the recorded opening under the season verdicts', () => {

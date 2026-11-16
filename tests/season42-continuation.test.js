@@ -8,6 +8,7 @@ import { parseSealedSeason, parseSeason, serializeSeasonCompact } from '../src/s
 import { saveSeal, sealMatches } from '../src/storage/save-seal';
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 // Captured at unchanged 76fa3bd before youth summaries existed. Never rewrite these old envelopes.
 const names = ['career', 'career-next', 'complete', 'opening'];
@@ -55,11 +56,14 @@ describe('genuine format-42 youth fixture history', () => {
     }
   });
 
-  // Development mode: paused by the sprint-4 match calibration (simulated results after this old save now differ). Recapture before release.
-  it.skip('continues and rolls over exactly as the independently captured previous runtime', () => {
-    expect(fullReference(advance(states.career), originals['career-next'])).toEqual(originals['career-next']);
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts). The rollover plays no games.
+  it('continues the old career for a valid week that follows the independently recorded one', () => {
+    expectValidOldSaveWeek(states.career, advance(states.career), states['career-next']);
+  }, 120_000);
+
+  it('rolls over exactly as the prior implementation independently recorded', () => {
     expect(fullReference(rolloverSeason(states.complete), originals.opening)).toEqual(originals.opening);
-    expect(advance(states.career)).toEqual(states['career-next']);
     expect(rolloverSeason(states.complete)).toEqual(states.opening);
   }, 120_000);
 

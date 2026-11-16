@@ -8,6 +8,7 @@ import { parseSealedSeason, parseSeason, serializeSeasonCompact } from '../src/s
 import { saveSeal, sealMatches } from '../src/storage/save-seal';
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 // Captured at unchanged commit 11a02a9, before academy outcomes existed. Never relabel or forge their versions.
 const names = ['career', 'career-next', 'complete', 'opening'];
@@ -66,11 +67,14 @@ describe('genuine format-41 academy history', () => {
     expect(count).toBeGreaterThan(0);
   });
 
-  // Development mode: paused by the sprint-4 match calibration (simulated results after this old save now differ). Recapture before release.
-  it.skip('continues the old career and rolls over exactly as the prior implementation independently recorded', () => {
-    expect(fullReference(advance(states.career), originals['career-next'])).toEqual(originals['career-next']);
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts). The rollover plays no games.
+  it('continues the old career for a valid week that follows the independently recorded one', () => {
+    expectValidOldSaveWeek(states.career, advance(states.career), states['career-next']);
+  }, 120_000);
+
+  it('rolls over exactly as the prior implementation independently recorded', () => {
     expect(fullReference(rolloverSeason(states.complete), originals.opening)).toEqual(originals.opening);
-    expect(advance(states.career)).toEqual(states['career-next']);
     expect(rolloverSeason(states.complete)).toEqual(states.opening);
   }, 120_000);
 

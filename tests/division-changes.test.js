@@ -14,6 +14,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { PostseasonPanel } from '../src/ui/PostseasonPanel';
 import { currentSeasonFile } from './helpers/season-format';
+import { expectValidOldSaveWeek, parseCapturedState } from './helpers/old-save-week';
 
 /** One test country with two divisions: six clubs (last two relegated) and five (first and the playoff winner promoted). */
 function twoDivisionWorld() {
@@ -86,8 +87,9 @@ describe('promotion and relegation between a country\'s divisions (step 3.4c)', 
     expect(() => divisionChanges([top, lower], [entry(top, [{ clubId: null, unlessWinsLowerFinal: false }], [], null), entry(lower, [], ['s1'], 's1')])).toThrow(/Complete both/);
   });
 
-  // Development mode: paused by the sprint-4 match calibration (simulated results after this old save now differ). Recapture before release.
-  it.skip('upgrade a genuine format-49 career: seasons already played keep their divisions, changes begin at the current season\'s end', () => {
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts).
+  it('upgrade a genuine format-49 career: seasons already played keep their divisions, changes begin at the current season\'s end', () => {
     const root = new URL('./fixtures/', import.meta.url);
     const manifest = JSON.parse(readFileSync(new URL('season49-divisions-legacy-manifest.json', root), 'utf8'));
     const bytes = readFileSync(new URL('season49-divisions-legacy.json.gz', root)), nextBytes = readFileSync(new URL('season49-divisions-legacy-next.json.gz', root));
@@ -103,8 +105,10 @@ describe('promotion and relegation between a country\'s divisions (step 3.4c)', 
     const { divisions, background, ...rest } = next;
     expect(divisions).toEqual(state.divisions);
     expect(background).toEqual({ model: 'background-1', clubs: [], changesFrom: 3, exchanges: [] });
-    // Development mode (sprint 4 injuries): the captured next week no longer matches; the week must still save strictly.
-    expect(Object.keys(rest).sort()).toEqual(Object.keys({ ...JSON.parse(gunzipSync(nextBytes).toString('utf8')), schemaVersion: next.schemaVersion }).sort());
+    const captured = JSON.parse(gunzipSync(nextBytes).toString('utf8'));
+    expect(captured.schemaVersion).toBe(49);
+    expect(Object.keys(rest).sort()).toEqual(Object.keys({ ...captured, schemaVersion: next.schemaVersion }).sort());
+    expectValidOldSaveWeek(state, next, parseCapturedState(captured));
     expect(roundTrip(next)).toEqual(next);
   }, 300_000);
 });

@@ -11,6 +11,7 @@ import { getCareerPlayers } from '../src/world/player-catalog';
 import { DEVELOPMENT_YOUTH_COACHES } from '../src/data/development-youth';
 import { advanceAcademyCareer, academyClub as club, createAcademyCareers, createAcademyAgeOutCareers } from './helpers/academy-careers';
 import { expectedMigration } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
 const restore = state => parseSeason(serializeSeason(state));
@@ -34,15 +35,18 @@ beforeAll(() => {
 }, 60_000);
 
 describe('academy persistence, generated identities and historical development', () => {
-  // Development mode (sprint 4 injuries): the captured next week no longer matches, so only the migration and a valid next week are checked.
-  it('migrates genuine format24 with all five original roles and continues a valid week', () => {
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts).
+  it('migrates genuine format24 with all five original roles and continues a valid week that follows the independently recorded one', () => {
     expect(original.formatVersion).toBe(24);
     expect(original.state.assistant.contracts.length).toBeGreaterThan(0);
     expect(original.state.physio.rehabilitation.length).toBeGreaterThan(0);
     expect(migrated).toEqual(upgrade(original.state));
     expect(stepMatch(migrated.activeMatch)).toEqual(stepMatch(original.state.activeMatch));
     const next = advanceAcademyCareer(migrated);
-    expect(restore(next)).toEqual(next);
+    expectValidOldSaveWeek(migrated, next, parseSeason(fixture('season24-assistant-rehabilitation-transfer-next')));
+    // The academy stays switched off in the old career: no prospects or youth weeks appear.
+    expect([next.academy, next.youth]).toEqual([migrated.academy, migrated.youth]);
   });
 
   it('activates prospectively without changing senior players, contracts, injuries, finances or match state', () => {

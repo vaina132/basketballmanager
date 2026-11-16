@@ -9,6 +9,7 @@ import { enableYouthCompetition, getYouthFixtures, getYouthFixtureTeams, getYout
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
 import { advanceYouthCareer as advance, createYouthCompetitionCareers, createYouthInjuryCareers, createYouthShortageCareers, createManagedYouthShortageCareers } from './helpers/youth-competition-careers';
 import { currentSeasonFile, expectedMigration } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
 const upgrade = state => expectedMigration(state, 26);
@@ -42,9 +43,15 @@ describe('youth competition persistence and chronological academy replay', () =>
     expect(restore(legacy)).toEqual(legacy);
   });
 
-  // Development mode: paused by the sprint-4 match calibration (simulated results after this old save now differ). Recapture before release.
-  it.skip('reproduces the independently recorded old next week and season opening exactly', () => {
-    expect(advance(legacy)).toEqual(upgrade(JSON.parse(fixture('season26-lifecycle-career-next')).state));
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts). The rollover plays no games.
+  it('continues the old career for a valid week that follows the independently recorded one, without youth fixtures', () => {
+    const next = advance(legacy);
+    expectValidOldSaveWeek(legacy, next, parseSeason(fixture('season26-lifecycle-career-next')));
+    expect(getYouthFixtures(next)).toEqual([]);
+  });
+
+  it('reproduces the independently recorded old season opening exactly', () => {
     const complete = parseSeason(fixture('season26-lifecycle-complete'));
     const expected = upgrade(JSON.parse(fixture('season26-lifecycle-opening')).state);
     expect(rolloverSeason(complete)).toEqual(expected);

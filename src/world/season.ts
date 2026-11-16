@@ -1,6 +1,7 @@
 import { requireCalendarWeek } from './calendar-boundary';
 import { competitionTable } from './competition-table';
 import { BOARD_REVIEW_STEP, createBoard, enableBoard, enableBoardConsequences, enablePresidentBoard, prepareBoardSeason, processBoardRound } from './board';
+import { objectiveStartingFive } from './presidents';
 import { summarizeAcademyHistory } from './academy-history';
 import { summarizeYouthHistory } from './youth-history';
 import { sealCompletedHistory } from './sealed-history';
@@ -56,7 +57,7 @@ import { applyAssistantTactics } from './assistant-advice';
 import { createAcademy, enableAcademy, prepareAcademySeason, processAcademyWeek } from './academy';
 import { createYouth, enableYouth, recruitAiYouthCoaches, renewSeasonYouth } from './youth';
 import { createLifecycle, enableLifecycle, prepareLifecycleSeason } from './lifecycle';
-import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, processYouthRound } from './youth-competition';
+import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, processYouthRound, YOUTH_RECURRENCE_MODEL } from './youth-competition';
 import { processRehabilitationWeek } from './rehabilitation';
 import { createNegotiations, enableNegotiations } from './negotiations';
 import { createMarket, enableMarket } from './market';
@@ -286,7 +287,7 @@ export function managedSide(season: SeasonState): Side {
   throw new Error('The active fixture must include the managed club.');
 }
 
-function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background' | 'facilities'>> & WorldContext, fixture: SeasonFixture): MatchState {
+function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background' | 'facilities' | 'board'>> & WorldContext, fixture: SeasonFixture): MatchState {
   const homeClub = season.clubs.find(club => club.id === fixture.homeClubId);
   const awayClub = season.clubs.find(club => club.id === fixture.awayClubId);
   // Step 3.5b: a European game's club outside the full world plays as a background side.
@@ -306,14 +307,22 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   // Sprint 4: earlier injuries raise the risk of the same kind again (recurrence), for every club alike.
   // Format 65: a club's medical centre removes part of the extra recurrence risk of its players.
   const injuryRisk = season.injuryMode === 'off' ? {} : withMedicalRecurrence(injuryRiskMap(season.injuries, registeredPlayers, fixture.date), [home, away].map(team => ({ playerIds: team.players.map(player => player.id), percent: medicalRecurrencePercent(season, team.id, fixture.date) })));
-  let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), develop(home, !!homeClub), develop(away, !!awayClub), {
+  const preExistingInjuries = Object.fromEntries(season.injuries.filter(injury => registeredPlayers.has(injury.playerId) && isRecovering(injury, fixture.date, season.physio)).map(injury => [injury.playerId, injury.kind]));
+  const developedHome = develop(home, !!homeClub), developedAway = develop(away, !!awayClub);
+  // Format 70: an automatically run club follows its president's youth objectives in regular-season games.
+  const unavailable = new Set(Object.keys(preExistingInjuries));
+  const startingFive = (club: Team, developed: Team, plan: ClubPlan, full: boolean) => {
+    const planned = lineup(club, plan);
+    return full && club.id !== season.managedClubId && isRegularFixture(fixture) ? objectiveStartingFive(season, { clubId: club.id, seasonNumber: season.seasonNumber ?? 1, players: developed.players, planned, unavailable }) : planned;
+  };
+  let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), developedHome, developedAway, {
     ...(morale ? { morale } : {}),
-    lineups: { home: lineup(home, homePlan), away: lineup(away, awayPlan) },
+    lineups: { home: startingFive(home, developedHome, homePlan, !!homeClub), away: startingFive(away, developedAway, awayPlan, !!awayClub) },
     tactics: { home: homePlan.tactics, away: awayPlan.tactics },
     autoSubstitutions: { home: home.id === season.managedClubId ? homePlan.autoSubstitutions : true, away: away.id === season.managedClubId ? awayPlan.autoSubstitutions : true },
     conditions,
     injuryMode: season.injuryMode,
-    preExistingInjuries: Object.fromEntries(season.injuries.filter(injury => registeredPlayers.has(injury.playerId) && isRecovering(injury, fixture.date, season.physio)).map(injury => [injury.playerId, injury.kind])),
+    preExistingInjuries,
     ...(Object.keys(injuryRisk).length ? { injuryRisk } : {}),
   });
   if (season.assistant?.enabledSince) for (const side of SIDES) {
@@ -437,7 +446,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId, { world }), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), facilities: createFacilities(clubs, managedClubId, facilitiesEnabled ? 'facilities-2' : 'facilities-1', facilitiesEnabled ? 'loans-1' : undefined), relationships: createRelationships(), board: createBoard(), rivalries: rivalriesEnabled ? createGrownRivalries(world) : createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId, namingRightsEnabled ? 'commercial-2' : 'commercial-1'), negotiations: createNegotiations(), market: createMarket(),
+    schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId, { world }), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(youthCompetitionEnabled ? YOUTH_RECURRENCE_MODEL : 'youth-competition-1'), facilities: createFacilities(clubs, managedClubId, facilitiesEnabled ? 'facilities-2' : 'facilities-1', facilitiesEnabled ? 'loans-1' : undefined), relationships: createRelationships(), board: createBoard(), rivalries: rivalriesEnabled ? createGrownRivalries(world) : createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId, namingRightsEnabled ? 'commercial-2' : 'commercial-1'), negotiations: createNegotiations(), market: createMarket(),
     ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), ...(europe ? { europe } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
     // Format 72: club money follows promotion and relegation in new careers of real-data worlds that start with finances.
     ...(world.economy && financeEnabled ? { economySeasons: createEconomySeasons() } : {}),

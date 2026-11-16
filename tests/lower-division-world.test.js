@@ -4,7 +4,9 @@ import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverS
 import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { setEmploymentDelegation } from '../src/world/employment';
-import { advanceMarket } from '../src/world/market';
+import { advanceMarket, submitMarketOffer } from '../src/world/market';
+import { contractForSeason } from '../src/world/employment-policy';
+import { requiredNegotiationWage } from '../src/world/negotiations-policy';
 import { getMarketStartReason } from '../src/world/market-policy';
 import { fullWorldClubs, validateWorld, worldPlayers } from '../src/world/career-world';
 import { getActiveCareerPlayers } from '../src/world/player-catalog';
@@ -54,9 +56,10 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
 
   it('exchanges clubs with the next division at each season end: leaving, returning and first-time clubs, with strict saves', () => {
     const world = lowerWorld();
-    // Seed 2 (31 before the saved ideas level): a first-time club joins in season one, the relegated club returns in
-    // season two and another first-time club comes up in season three.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 2, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    // Seed 23 (2 before AI clubs followed their president's youth objectives and youth injuries recurred, 31 before the
+    // saved ideas level): a first-time club joins in season one, the relegated club returns in season two and another
+    // first-time club comes up in season three.
+    let state = setEmploymentDelegation(createSeason({ world, seed: 23, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
     const generated = new Set(world.clubs.filter(club => club.id.startsWith('third-')).flatMap(club => club.players.map(player => player.id)));
     const finishSeason = () => {
       while (state.status === 'active') { state = play(state); if (state.round === 5) expect(roundTrip(state)).toEqual(state); }
@@ -129,6 +132,28 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
     tamper(copy => { delete copy.employment.departures; });
     tamper(copy => { const contract = copy.employment.contracts.find(item => item.kind === 'joined'); contract.seasonWage += 50_000; });
   }, 900_000);
+
+  it('lets a club back from a season away forget players who left before it went (step 3.7 acceptance)', () => {
+    const world = lowerWorld();
+    let state = setEmploymentDelegation(createSeason({ world, seed: 2, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    const finish = () => { while (state.status === 'active') state = play(state); for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state); };
+    while (state.status === 'active') state = play(state);
+    expect(state.background.exchanges[0].leaving).toEqual(['w1-alpine-stags']);
+    // The managed club signs one of the leaving club's free agents; with seed 2 the club then returns after one season.
+    state = advanceMarket(state);
+    expect(contractForSeason(state.employment, 'w1-alp-7', 2)).toBeNull();
+    state = submitMarketOffer(state, 'w1-alp-7', requiredNegotiationWage('w1-alp-7', 1, undefined, state) + 100_000, 1);
+    finish();
+    expect(contractForSeason(state.employment, 'w1-alp-7', 2).clubId).toBe(state.managedClubId);
+    state = rolloverSeason(state);
+    finish();
+    expect(state.background.exchanges.at(-1).joining).toEqual(['w1-alpine-stags']);
+    state = rolloverSeason(state);
+    // The returning club's scouting office is new: it knows its current squad, not the player who left two seasons ago.
+    expect(state.history[0].rosters.find(roster => roster.clubId === 'w1-alpine-stags').players.map(player => player.id)).toContain('w1-alp-7');
+    expect(Object.keys(state.scouting.clubs['w1-alpine-stags'].squadKnowledge).sort()).toEqual(state.clubs.find(club => club.id === 'w1-alpine-stags').players.map(player => player.id).sort());
+    expect(roundTrip(state)).toEqual(state);
+  }, 600_000);
 
   it('treats a manager whose club leaves the full world as dismissed, with a job offer at a full-world club (owner decision a)', () => {
     const world = lowerWorld();

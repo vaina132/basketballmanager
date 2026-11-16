@@ -185,7 +185,12 @@ export const BEFORE_SAVED_IDEAS = { media: false, namingRights: false, president
  * converted after play with `withFixedRivalries`.
  */
 export function beforeSavedIdeas(state: SeasonState): SeasonState {
-  return withOpeningMoney(withLegacyRelationships(withLegacyFacilities(asCareer1(state))));
+  return withLegacyYouthCompetition(withOpeningMoney(withLegacyRelationships(withLegacyFacilities(asCareer1(state)))));
+}
+
+/** Youth injuries that never recur (`youth-competition-1`), as in every career created before youth recurrence (format 72). */
+export function withLegacyYouthCompetition<T extends Pick<SeasonState, 'youthCompetition'>>(state: T): T {
+  return state.youthCompetition.model === 'youth-competition-1' ? state : { ...state, youthCompetition: { ...state.youthCompetition, model: 'youth-competition-1' } };
 }
 
 /** Format 72: a career that keeps the world's opening club money, as every career created before format 72. */

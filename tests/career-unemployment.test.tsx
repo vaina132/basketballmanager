@@ -18,6 +18,7 @@ import { getInboxItems } from '../src/ui/inbox-items';
 import { SeasonEndChoice } from '../src/ui/SeasonEndChoice';
 import { UnemployedDesk } from '../src/ui/UnemployedDesk';
 import { asCareer1, asCareer2 } from './helpers/career-rules';
+import { withLegacyYouthCompetition } from './helpers/legacy-season';
 // @ts-expect-error: a plain JavaScript helper shared with the European competition tests (no type declarations).
 import { placesWorld } from './helpers/europe-worlds.js';
 
@@ -32,11 +33,12 @@ const desk = (season: SeasonState) => renderToStaticMarkup(<UnemployedDesk seaso
 /** A new career whose manager resigns without a new job before the games of week `week`. */
 const resignedAt = (seed: number, week: number) => { let state = start(seed); while (state.round < week) state = step(state); return resignManager(state, NO_CLUB); };
 
-// Seeds found with this feature (format 69, after format 66). Seed 17: Danube Lynx's board dismisses the manager after
-// week 9 of season 2 (as in tests/career-board-rules.test.tsx), and no club is replacing its coach then, so there is no
-// offer. After resigning in week 3 of season 1: seed 5 ends Danube Lynx's season Under pressure (a job open in that
-// offseason); seed 27 sees Danube Lynx's board replace its coach after week 7 (open before the games of weeks 8-10).
-const DISMISSAL_SEED = 17, DISMISSAL_CLUB = 'danube-lynx', DISMISSAL_WEEK = 9;
+// Seeds found with this feature (format 69, after format 66). Seed 19 (seed 17 before recurring youth injuries, format
+// 72): Danube Lynx's board dismisses the manager after week 7 of season 2 (as in tests/career-board-rules.test.tsx), and
+// no club is replacing its coach then, so there is no offer. After resigning in week 3 of season 1: seed 5 ends Danube
+// Lynx's season Under pressure (a job open in that offseason); seed 27 sees Danube Lynx's board replace its coach after
+// week 7 (open before the games of weeks 8-10).
+const DISMISSAL_SEED = 19, DISMISSAL_CLUB = 'danube-lynx', DISMISSAL_WEEK = 7;
 const RESIGN_WEEK = 3, SEASON_END_SEED = 5, SEASON_END_JOB = 'danube-lynx', MID_SEASON_SEED = 27, MID_SEASON_JOB = 'danube-lynx', JOB_WEEK = 8;
 let beforeDismissal: SeasonState, unemployed: SeasonState, seasonEnd: SeasonState, offseason: SeasonState;
 
@@ -93,7 +95,9 @@ describe('declining every offer', () => {
 describe('declining an offer at a season end', () => {
   // Seed 14 (Aegean Waves): season 2 ends Under pressure (29) and Alpine Stags, also replacing their coach, offer their job.
   it('leaves the manager without a club for the offseason, with the declined job still open', () => {
-    let state = start(14, 'aegean-waves');
+    // Seed 14 was found before recurring youth injuries (format 72), which change academy development and so later
+    // seasons; this career-rules scenario keeps the original youth model (tests/youth-competition.test.ts covers recurrence).
+    let state = withLegacyYouthCompetition(start(14, 'aegean-waves'));
     while (state.status === 'active') state = step(state);
     state = rolloverSeason(throughMarket(state));
     while (state.round < 10) state = step(state);
@@ -170,7 +174,8 @@ describe('taking a job', () => {
     roundTrip(state);
     const appointed = acceptJob(state, SEASON_END_JOB);
     expect(appointed.managedClubId).toBe(SEASON_END_JOB);
-    expect(appointed.career.moves.at(-1)).toMatchObject({ reason: 'appointed', fromClubId: NO_CLUB, toClubId: SEASON_END_JOB, phase: 'offseason', seasonNumber: 1 });
+    // Format 72: the appointment records the club left before unemployment, for rivalries (saved and checked below).
+    expect(appointed.career.moves.at(-1)).toMatchObject({ reason: 'appointed', fromClubId: NO_CLUB, toClubId: SEASON_END_JOB, phase: 'offseason', seasonNumber: 1, formerClubId: 'rhine-falcons' });
     expect(appointed.board.restarts!.at(-1)).toMatchObject({ clubId: SEASON_END_JOB, coach: 'manager', phase: 'offseason', confidence: CAREER_RULES.freshConfidence });
     expect(coachProtected(appointed.board.restarts!, SEASON_END_JOB, 2)).toBe(true);
     expect(startingConfidence(appointed.board, SEASON_END_JOB)).toBe(CAREER_RULES.freshConfidence);
@@ -178,6 +183,9 @@ describe('taking a job', () => {
     expect(getInboxItems(appointed).some(item => item.title === 'New job · Danube Lynx')).toBe(true);
     expect(() => acceptJob(appointed, SEASON_END_JOB)).toThrow(/already manage/);
     roundTrip(appointed);
+    const tampered = JSON.parse(serializeSeason(appointed));
+    tampered.state.career.moves.at(-1).formerClubId = 'alpine-stags';
+    expect(() => parseSeason(JSON.stringify(tampered))).toThrow(/formerClubId must be the club the manager last left/);
     let next = rolloverSeason(throughMarket(setEmploymentDelegation(appointed, true)));
     expect([next.activeMatch!.home.id, next.activeMatch!.away.id]).toContain(SEASON_END_JOB);
     expect(getBoardSummary(next).confidence).toBe(CAREER_RULES.freshConfidence);
@@ -203,7 +211,7 @@ describe('taking a job', () => {
     expect(market.vacancies).toEqual([expect.objectContaining({ clubId: MID_SEASON_JOB, opened: 'season', offered: true, round: JOB_WEEK - 1 })]);
     expect(market.vacancies[0]!.openUntil).toBe(state.fixtures.find(fixture => fixture.round === JOB_WEEK - 1 + CAREER_RULES.vacancyOpenWeeks && !fixture.competition)!.date);
     const appointed = acceptJob(state, MID_SEASON_JOB);
-    expect(appointed.career.moves.at(-1)).toMatchObject({ reason: 'appointed', toClubId: MID_SEASON_JOB, phase: 'season', round: JOB_WEEK });
+    expect(appointed.career.moves.at(-1)).toMatchObject({ reason: 'appointed', toClubId: MID_SEASON_JOB, phase: 'season', round: JOB_WEEK, formerClubId: 'rhine-falcons' });
     expect(appointed.board.restarts!.at(-1)).toMatchObject({ clubId: MID_SEASON_JOB, coach: 'manager', phase: 'season', round: JOB_WEEK });
     expect(coachProtected(appointed.board.restarts!, MID_SEASON_JOB, 1)).toBe(true);
     expect([appointed.activeMatch!.home.id, appointed.activeMatch!.away.id]).toContain(MID_SEASON_JOB);

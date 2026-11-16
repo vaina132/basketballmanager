@@ -27,16 +27,18 @@ describe('European competition screens and the season calendar (step 3.5g)', () 
     expect(markup).toContain('Games &amp; results');
     expect(markup).toMatch(/\d+–\d+/);
     expect(markup).toContain('Test eurocup');
-    expect(markup).toContain('Otherland League · estimated');
+    expect(markup).toContain('Otherland League · not played');
     const cup = renderToStaticMarkup(createElement(EuropeWorkspace, { season: state, initialCompetition: 'eurocup' }));
     expect(cup).toContain('Group A');
     expect(cup).toContain('Group D');
   });
 
-  it('shows an unchosen league\'s estimated table, labelled as estimated', () => {
+  it('shows an unchosen league\'s simulated final table, labelled as not played', () => {
     const markup = renderToStaticMarkup(createElement(EuropeWorkspace, { season: state, initialCompetition: 'otherland' }));
-    expect(markup).toContain('Otherland League · Estimated table');
-    expect(markup).toContain('Estimated, not played');
+    expect(markup).toContain('Otherland League · Simulated final table');
+    expect(markup).toContain('Otherland League is not played game by game in this career: its final table is simulated');
+    expect(markup).toContain('Not played game by game');
+    expect(markup).not.toMatch(/[Ee]stimated table/);
     const first = world.clubs.find(club => club.id === estimatedTable(state, world.backgroundLeagues[0], 1)[0].clubId);
     expect(markup.indexOf(first.name)).toBeGreaterThan(-1);
   });

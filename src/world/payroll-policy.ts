@@ -32,9 +32,23 @@ export function agreementCommitted(agreement: PlayerWageAgreement, ledger: reado
 
 /** The same obligation calculation when a caller already owns a reader for this exact ledger boundary. */
 export function agreementCommittedFromLedger(agreement: PlayerWageAgreement, throughRound: number, installments: number, readPayroll: PayrollLedgerReader): number {
-  const gross = Array.from({ length: Math.max(0, throughRound - agreement.startsRound + 1) }, (_, index) => payrollInstallment(agreement.seasonWage, agreement.startsRound + index, installments)).reduce((sum, amount) => sum + amount, 0);
+  const gross = installmentsBetween(agreement.seasonWage, agreement.startsRound, Math.max(0, throughRound - agreement.startsRound + 1), installments);
   const recorded = readPayroll(agreement.id).gross;
   return Math.max(0, gross - recorded);
+}
+
+/**
+ * The sum of `count` consecutive installments from `first` (step 3.7: in closed form, since the installments' prefix
+ * differences telescope; it was summed round by round for every agreement many times a week). The first and last rounds
+ * are checked like every round, so invalid terms fail exactly as before; whole cents keep the sum exact.
+ */
+function installmentsBetween(seasonWage: number, first: number, rounds: number, installments: number): number {
+  const count = Math.trunc(Math.min(rounds, Number.MAX_SAFE_INTEGER));
+  if (!(count > 0)) return 0;
+  const last = first + count - 1;
+  payrollInstallment(seasonWage, first, installments); payrollInstallment(seasonWage, last, installments);
+  const base = Math.floor(seasonWage / installments), remainder = seasonWage % installments;
+  return count * base + Math.floor(last * remainder / installments) - Math.floor((first - 1) * remainder / installments);
 }
 
 /** Original wage terms and prepaid charges remain intact; a sale ends unposted liability. */

@@ -276,7 +276,25 @@ function winShare(state: FinanceContext, clubId: string, beforeRound: number): n
 
 /** Attendance is a deterministic development estimate from prior results and the chosen price. */
 export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'> & { date?: string }, price: number): GateForecast {
-  validatePrice(price, maxTicketPriceFor(state, fixture.homeClubId));
+  return gateForecaster(state, fixture)(price);
+}
+
+/**
+ * Forecasts for one fixture at several prices (step 3.7): capacity and demand do not depend on the price, so they are
+ * worked out once, after the first price is checked, instead of for every candidate price. The arithmetic is unchanged.
+ */
+function gateForecaster(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'> & { date?: string }): (price: number) => GateForecast {
+  let shared: { capacity: number; demand: number } | undefined, defaultPrice: number | undefined;
+  return price => {
+    validatePrice(price, maxTicketPriceFor(state, fixture.homeClubId));
+    shared ??= gateDemand(state, fixture);
+    const { capacity, demand } = shared;
+    const attendance = price === 0 ? capacity : Math.min(capacity, Math.floor(demand * ((defaultPrice ??= defaultTicketPriceFor(state, fixture.homeClubId)) / price) ** 1.4));
+    return { fixtureId: fixture.id, clubId: fixture.homeClubId, opponentClubId: fixture.awayClubId, price, attendance, capacity, revenue: attendance * price };
+  };
+}
+
+function gateDemand(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'> & { date?: string }): { capacity: number; demand: number } {
   const venue = clubFinanceDefinition(worldOf(state), fixture.homeClubId);
   const recorded = state.finance ? financeLedgerTicket(state.finance, fixture.id)?.capacity : undefined;
   // The week's locked capacity applies to games on its Saturday; a midweek game day (step 3.4a) uses that day's capacity.
@@ -288,15 +306,14 @@ export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture
   // Format 65 (`facilities-2`): a worn arena draws fewer spectators; older careers keep 100.
   const comfort = arenaComfortPercent(state, fixture.homeClubId, fixture.date ?? state.date);
   const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent) * (derby ? 1 + RIVALRY_CROWD_PERCENT * derby.intensity / 100 : 1) * (supporters ? 1 + supporters / 100 : 1) * (comfort === 100 ? 1 : comfort / 100);
-  const attendance = price === 0 ? capacity : Math.min(capacity, Math.floor(demand * (defaultTicketPriceFor(state, fixture.homeClubId) / price) ** 1.4));
-  return { fixtureId: fixture.id, clubId: fixture.homeClubId, opponentClubId: fixture.awayClubId, price, attendance, capacity, revenue: attendance * price };
+  return { capacity, demand };
 }
 
 export function recommendTicketPrice(state: FinanceContext, fixture: Pick<FinanceFixture, 'id' | 'round' | 'homeClubId' | 'awayClubId'>): number {
   let price = 0, bestRevenue = 0;
-  const maximum = maxTicketPriceFor(state, fixture.homeClubId);
+  const maximum = maxTicketPriceFor(state, fixture.homeClubId), forecast = gateForecaster(state, fixture);
   for (let candidate = TICKET_PRICE_STEP; candidate <= maximum; candidate += TICKET_PRICE_STEP) {
-    const revenue = forecastGate(state, fixture, candidate).revenue;
+    const revenue = forecast(candidate).revenue;
     if (revenue > bestRevenue) { price = candidate; bestRevenue = revenue; }
   }
   return price;

@@ -3,7 +3,7 @@ import type { ClubContractSummary, ContractOfferOptions, EmploymentContract, Pla
 import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
-import { fullWorldClubsIn, MAX_SEASON_ROUNDS, seasonRounds, worldOf } from './career-world';
+import { fullWorldClubsIn, MAX_SEASON_ROUNDS, playerInList, seasonRounds, worldOf } from './career-world';
 import { getCareerPlayers, getActiveCareerPlayers, getCareerWage, type CareerPlayerContext } from './player-catalog';
 import { getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { transferOfferReason } from './transfers-policy';
@@ -58,6 +58,21 @@ function contractsAt(employment: SeasonEmployment, seasonNumber: number, round: 
   return contracts;
 }
 
+const contractsByClubCache = new WeakMap<readonly EmploymentContract[], Map<string, readonly EmploymentContract[]>>();
+const NO_CONTRACTS: readonly EmploymentContract[] = Object.freeze([]);
+/** One club's contracts in force at the end of a season, in journal order (shared: callers must copy before changing). */
+function clubContractsForSeason(employment: SeasonEmployment, clubId: string, seasonNumber: number): readonly EmploymentContract[] {
+  const contracts = contractsAt(employment, seasonNumber, MAX_SEASON_ROUNDS);
+  let byClub = contractsByClubCache.get(contracts);
+  if (!byClub) {
+    const groups = new Map<string, EmploymentContract[]>();
+    for (const contract of contracts) { const list = groups.get(contract.clubId); if (list) list.push(contract); else groups.set(contract.clubId, [contract]); }
+    byClub = groups;
+    contractsByClubCache.set(contracts, byClub);
+  }
+  return byClub.get(clubId) ?? NO_CONTRACTS;
+}
+
 /** Registration at one matchday, without applying a later arrival to earlier fixtures. */
 export function effectiveContractsForRound(employment: SeasonEmployment, seasonNumber: number, round: number): EmploymentContract[] {
   return [...contractsAt(employment, seasonNumber, round)];
@@ -77,11 +92,12 @@ export function contractForRound(employment: SeasonEmployment, playerId: string,
 /** Approved sales cannot spend the cheap departing player's replacement allowance elsewhere. */
 export function outgoingReplacementReserve(state: Pick<SeasonState, 'employment' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'recruitment'>>, clubId: string, year: number): number {
   const outgoing = new Set([...getLiveMarketOffers(state).filter(offer => offer.transfer?.sellerClubId === clubId && offer.transfer.clubStatus === 'accepted' && offer.seasonNumber + 1 <= year), ...getInSeasonOffers(state, undefined, true).filter(offer => offer.transfer?.sellerClubId === clubId && offer.transfer.clubStatus === 'accepted' && offer.seasonNumber <= year)].map(offer => offer.playerId));
-  return effectiveContractsForSeason(state.employment, year).filter(contract => contract.clubId === clubId && outgoing.has(contract.playerId)).reduce((total, contract) => total + Math.max(0, MIN_ROSTER_WAGE_RESERVE - contract.seasonWage), 0);
+  if (!outgoing.size) return 0;
+  return clubContractsForSeason(state.employment, clubId, year).filter(contract => outgoing.has(contract.playerId)).reduce((total, contract) => total + Math.max(0, MIN_ROSTER_WAGE_RESERVE - contract.seasonWage), 0);
 }
 
 export function getClubContractSummary(state: Pick<SeasonState, 'employment' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'recruitment'>> & WorldContext, clubId: string, seasonNumber = state.seasonNumber + 1, excludeOfferId?: string): ClubContractSummary {
-  const contracts = effectiveContractsForSeason(state.employment, seasonNumber).filter(contract => contract.clubId === clubId);
+  const contracts = [...clubContractsForSeason(state.employment, clubId, seasonNumber)];
   const rosterSize = contracts.length, seasonWages = contracts.reduce((total, contract) => total + contract.seasonWage, 0);
   const inSeasonReserved = getInSeasonOffers(state, clubId, true).filter(offer => offer.id !== excludeOfferId && offer.seasonNumber <= seasonNumber && offer.seasonNumber + offer.seasons - 1 >= seasonNumber);
   const reserved = [...getLiveMarketOffers(state).filter(offer => offer.clubId === clubId && offer.id !== excludeOfferId && offer.seasonNumber + 1 <= seasonNumber && offer.seasonNumber + offer.seasons >= seasonNumber), ...inSeasonReserved];
@@ -97,47 +113,91 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
 
 /** Public offers and automation share ownership, term, roster and annual-budget guards. */
 export function quotePlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number, clubId = state.managedClubId, resolvingOfferId?: string, transferFee?: number, transferPaymentPlan: TransferPaymentPlan = 'upfront', options: ContractOfferOptions = {}): PlayerContractQuote {
-  const player = getCareerPlayers(state).find(candidate => candidate.id === playerId);
-  const startsSeason = state.seasonNumber + 1, endsSeason = startsSeason + seasons - 1;
-  const askingWage = player ? getCareerWage(state, playerId) : 0;
-  const current = contractForSeason(state.employment, playerId, state.seasonNumber);
+  return playerContractQuoter(state, clubId)(playerId, seasonWage, seasons, resolvingOfferId, transferFee, transferPaymentPlan, options);
+}
+
+export type PlayerContractQuoter = (playerId: string, seasonWage: number, seasons: number, resolvingOfferId?: string, transferFee?: number, transferPaymentPlan?: TransferPaymentPlan, options?: ContractOfferOptions) => PlayerContractQuote;
+
+/**
+ * The contract guard for many players of one club at one unchanged moment (step 3.7): club figures that do not depend on
+ * the player (season summaries, pending reserves, replacement reserves, live and in-season offers) are worked out once,
+ * on first use, in the same order of checks as a single quote. Automatic recruitment asks it for every candidate.
+ */
+export function playerContractQuoter(state: SeasonState, clubId = state.managedClubId): PlayerContractQuoter {
   const liveOffers = getLiveMarketOffers(state);
-  const openOffer = liveOffers.find(offer => offer.playerId === playerId && offer.clubId === clubId);
-  const rivalOffer = liveOffers.find(offer => offer.playerId === playerId && offer.clubId !== clubId);
   const window = getMarketWindow(state);
-  const resolving = !!resolvingOfferId && openOffer?.id === resolvingOfferId && openOffer.clubId === clubId && openOffer.status === 'pending' && openOffer.seasonWage === seasonWage && openOffer.seasons === seasons && openOffer.responseOn === state.date && !!window && state.date <= window.closesOn;
-  const paidTransfer = transferFee !== undefined;
-  const overlaps = Number.isInteger(seasons) && seasons >= 1 && seasons <= MAX_CONTRACT_SEASONS && Array.from({ length: seasons }, (_, index) => contractForSeason(state.employment, playerId, startsSeason + index)).some(Boolean);
-  let reason: string | null = null;
-  if (!state.employment.enabledSince) reason = 'Enable player contracts before negotiating.';
-  else if (!state.finance.enabledSince || !state.payroll.enabledSince) reason = 'Enable finances and player payroll before negotiating contracts.';
-  else if (!player || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a development player and a club in this league.';
-  else if (leavingClubIds(state).has(clubId)) reason = 'This club is leaving the game\'s leagues and signs no one for next season.';
-  else if (offerOptionsReason(state, options, paidTransfer)) reason = offerOptionsReason(state, options, paidTransfer);
-  else if (!Number.isInteger(seasons) || seasons < 1 || seasons > MAX_CONTRACT_SEASONS || endsSeason > 7974) reason = 'Choose a contract lasting one to three supported seasons.';
-  else if (retirementContractReason(state, playerId, endsSeason)) reason = retirementContractReason(state, playerId, endsSeason);
-  else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > maxContractWage(state) || seasonWage % WAGE_STEP !== 0) reason = contractWageRuleText(state);
-  else if (seasonWage < askingWage && !state.negotiations.enabledSince) reason = 'The player will not accept less than his asking wage.';
-  // Format 66: a player whose contract request this club refused asks more to sign with it (relationships-2).
-  else if (refusedContractPremium(state, clubId, playerId) && seasonWage < refusedContractMinimum(state, clubId, playerId, askingWage, WAGE_STEP)) reason = refusedContractText(refusedContractMinimum(state, clubId, playerId, askingWage, WAGE_STEP));
-  else if ((state.employment.buyouts ?? []).some(buyout => buyout.playerId === playerId && buyout.clubId === clubId && buyout.seasonNumber === state.seasonNumber)) reason = 'A player you buy out cannot rejoin your club during the same offseason.';
-  else if (state.status === 'active' && getInSeasonOffers(state, undefined, true).some(offer => offer.playerId === playerId && offer.transfer?.sellerClubId === clubId)) reason = 'Resolve the current transfer proposals before renewing this player.';
-  else if (paidTransfer) reason = transferOfferReason(state, playerId, transferFee, clubId, resolvingOfferId, transferPaymentPlan, options);
-  else if (overlaps) reason = 'This player already has a contract covering the proposed seasons.';
-  else if (state.status === 'active' && (current?.clubId !== clubId || current.endsSeason !== state.seasonNumber)) reason = 'During the season, renew only your own players whose contracts expire this year.';
-  else if (state.status === 'complete' && state.employment.market?.seasonNumber !== startsSeason) reason = 'Open the offseason recruitment window before offering contracts.';
-  else if (state.status === 'complete' && state.market?.enabledSince && (!isMarketActive(state) || !window)) reason = 'Open the offseason decision calendar before sending offers.';
-  else if (state.status === 'complete' && state.market?.enabledSince && window && state.date >= window.closesOn && !resolving) reason = 'The recruitment period has closed.';
-  else if (rivalOffer && !isCompetitiveMarket(state)) reason = `This player is considering an offer from ${state.clubs.find(club => club.id === rivalOffer.clubId)?.name ?? 'another club'}.`;
-  if (reason === null) for (let year = startsSeason; year <= endsSeason; year += 1) {
-    const summary = getClubContractSummary(state, clubId, year, openOffer?.clubId === clubId ? openOffer.id : undefined), size = summary.rosterSize + summary.reservedRosterSize + 1;
-    if (size > clubRosterLimit(state)) { reason = `The squad already has ${clubRosterLimitText(state)} contracted players for season ${year}.`; break; }
-    const pendingShortfalls = (isCompetitiveMarket(state) ? liveOffers.filter(offer => offer.clubId === clubId && offer.id !== openOffer?.id && offer.seasonNumber + 1 <= year && offer.seasonNumber + offer.seasons >= year) : []).reduce((total, offer) => total + Math.max(0, MIN_ROSTER_WAGE_RESERVE - offer.seasonWage), 0) + getInSeasonOffers(state, clubId, true).filter(offer => offer.seasonNumber <= year && offer.seasonNumber + offer.seasons - 1 >= year).reduce((total, offer) => total + Math.max(0, MIN_ROSTER_WAGE_RESERVE - offer.seasonWage), 0);
-    const proposalShortfall = isCompetitiveMarket(state) && !resolving ? Math.max(0, MIN_ROSTER_WAGE_RESERVE - seasonWage) : 0;
-    const reserve = Math.max(0, MIN_ROSTER_SIZE - size) * MIN_ROSTER_WAGE_RESERVE + pendingShortfalls + proposalShortfall + outgoingReplacementReserve(state, clubId, year);
-    if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > summary.budget) { reason = `This offer exceeds the season ${year} wage budget after protecting space for eight players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
-  }
-  return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
+  const competitive = once(() => isCompetitiveMarket(state));
+  const leaving = once(() => leavingClubIds(state).has(clubId));
+  const inSeasonOffers = once(() => getInSeasonOffers(state, undefined, true));
+  const clubInSeasonOffers = once(() => getInSeasonOffers(state, clubId, true));
+  const summaries = new Map<string, ClubContractSummary>(), shortfalls = new Map<string, number>(), outgoing = new Map<number, number>();
+  const summaryFor = (year: number, excludeOfferId: string | undefined) => {
+    const key = `${year}|${excludeOfferId ?? ''}`;
+    let summary = summaries.get(key);
+    if (!summary) { summary = getClubContractSummary(state, clubId, year, excludeOfferId); summaries.set(key, summary); }
+    return summary;
+  };
+  const pendingShortfallsFor = (year: number, openOfferId: string | undefined) => {
+    const key = `${year}|${openOfferId ?? ''}`;
+    let total = shortfalls.get(key);
+    if (total === undefined) {
+      total = (competitive() ? liveOffers.filter(offer => offer.clubId === clubId && offer.id !== openOfferId && offer.seasonNumber + 1 <= year && offer.seasonNumber + offer.seasons >= year) : []).reduce((sum, offer) => sum + Math.max(0, MIN_ROSTER_WAGE_RESERVE - offer.seasonWage), 0) + clubInSeasonOffers().filter(offer => offer.seasonNumber <= year && offer.seasonNumber + offer.seasons - 1 >= year).reduce((sum, offer) => sum + Math.max(0, MIN_ROSTER_WAGE_RESERVE - offer.seasonWage), 0);
+      shortfalls.set(key, total);
+    }
+    return total;
+  };
+  const outgoingFor = (year: number) => {
+    let reserve = outgoing.get(year);
+    if (reserve === undefined) { reserve = outgoingReplacementReserve(state, clubId, year); outgoing.set(year, reserve); }
+    return reserve;
+  };
+  return (playerId, seasonWage, seasons, resolvingOfferId, transferFee, transferPaymentPlan = 'upfront', options = {}) => {
+    const player = playerInList(getCareerPlayers(state), playerId);
+    const startsSeason = state.seasonNumber + 1, endsSeason = startsSeason + seasons - 1;
+    const askingWage = player ? getCareerWage(state, playerId) : 0;
+    const current = contractForSeason(state.employment, playerId, state.seasonNumber);
+    const openOffer = liveOffers.find(offer => offer.playerId === playerId && offer.clubId === clubId);
+    const rivalOffer = liveOffers.find(offer => offer.playerId === playerId && offer.clubId !== clubId);
+    const resolving = !!resolvingOfferId && openOffer?.id === resolvingOfferId && openOffer.clubId === clubId && openOffer.status === 'pending' && openOffer.seasonWage === seasonWage && openOffer.seasons === seasons && openOffer.responseOn === state.date && !!window && state.date <= window.closesOn;
+    const paidTransfer = transferFee !== undefined;
+    const overlaps = Number.isInteger(seasons) && seasons >= 1 && seasons <= MAX_CONTRACT_SEASONS && Array.from({ length: seasons }, (_, index) => contractForSeason(state.employment, playerId, startsSeason + index)).some(Boolean);
+    let reason: string | null = null;
+    if (!state.employment.enabledSince) reason = 'Enable player contracts before negotiating.';
+    else if (!state.finance.enabledSince || !state.payroll.enabledSince) reason = 'Enable finances and player payroll before negotiating contracts.';
+    else if (!player || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a development player and a club in this league.';
+    else if (leaving()) reason = 'This club is leaving the game\'s leagues and signs no one for next season.';
+    else if (offerOptionsReason(state, options, paidTransfer)) reason = offerOptionsReason(state, options, paidTransfer);
+    else if (!Number.isInteger(seasons) || seasons < 1 || seasons > MAX_CONTRACT_SEASONS || endsSeason > 7974) reason = 'Choose a contract lasting one to three supported seasons.';
+    else if (retirementContractReason(state, playerId, endsSeason)) reason = retirementContractReason(state, playerId, endsSeason);
+    else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > maxContractWage(state) || seasonWage % WAGE_STEP !== 0) reason = contractWageRuleText(state);
+    else if (seasonWage < askingWage && !state.negotiations.enabledSince) reason = 'The player will not accept less than his asking wage.';
+    // Format 66: a player whose contract request this club refused asks more to sign with it (relationships-2).
+    else if (refusedContractPremium(state, clubId, playerId) && seasonWage < refusedContractMinimum(state, clubId, playerId, askingWage, WAGE_STEP)) reason = refusedContractText(refusedContractMinimum(state, clubId, playerId, askingWage, WAGE_STEP));
+    else if ((state.employment.buyouts ?? []).some(buyout => buyout.playerId === playerId && buyout.clubId === clubId && buyout.seasonNumber === state.seasonNumber)) reason = 'A player you buy out cannot rejoin your club during the same offseason.';
+    else if (state.status === 'active' && inSeasonOffers().some(offer => offer.playerId === playerId && offer.transfer?.sellerClubId === clubId)) reason = 'Resolve the current transfer proposals before renewing this player.';
+    else if (paidTransfer) reason = transferOfferReason(state, playerId, transferFee, clubId, resolvingOfferId, transferPaymentPlan, options);
+    else if (overlaps) reason = 'This player already has a contract covering the proposed seasons.';
+    else if (state.status === 'active' && (current?.clubId !== clubId || current.endsSeason !== state.seasonNumber)) reason = 'During the season, renew only your own players whose contracts expire this year.';
+    else if (state.status === 'complete' && state.employment.market?.seasonNumber !== startsSeason) reason = 'Open the offseason recruitment window before offering contracts.';
+    else if (state.status === 'complete' && state.market?.enabledSince && (!isMarketActive(state) || !window)) reason = 'Open the offseason decision calendar before sending offers.';
+    else if (state.status === 'complete' && state.market?.enabledSince && window && state.date >= window.closesOn && !resolving) reason = 'The recruitment period has closed.';
+    else if (rivalOffer && !competitive()) reason = `This player is considering an offer from ${state.clubs.find(club => club.id === rivalOffer.clubId)?.name ?? 'another club'}.`;
+    if (reason === null) for (let year = startsSeason; year <= endsSeason; year += 1) {
+      const summary = summaryFor(year, openOffer?.clubId === clubId ? openOffer.id : undefined), size = summary.rosterSize + summary.reservedRosterSize + 1;
+      if (size > clubRosterLimit(state)) { reason = `The squad already has ${clubRosterLimitText(state)} contracted players for season ${year}.`; break; }
+      const pendingShortfalls = pendingShortfallsFor(year, openOffer?.id);
+      const proposalShortfall = competitive() && !resolving ? Math.max(0, MIN_ROSTER_WAGE_RESERVE - seasonWage) : 0;
+      const reserve = Math.max(0, MIN_ROSTER_SIZE - size) * MIN_ROSTER_WAGE_RESERVE + pendingShortfalls + proposalShortfall + outgoingFor(year);
+      if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > summary.budget) { reason = `This offer exceeds the season ${year} wage budget after protecting space for eight players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
+    }
+    return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
+  };
+}
+
+/** A lazily computed value, worked out at most once. */
+function once<T>(compute: () => T): () => T {
+  let known = false, value: T | undefined;
+  return () => { if (!known) { value = compute(); known = true; } return value as T; };
 }
 
 /** The guard text when a player who remembers a refused contract request asks more of this club. */

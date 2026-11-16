@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 // Genuine format-31 saves from scripts/capture-season-fixtures.mjs; see tests/fixtures/README.md.
 const NAMES = ['career', 'career-next', 'complete', 'opening'];
@@ -29,9 +30,15 @@ describe('genuine format-31 careers', () => {
     expect([career.round, careerNext.round, complete.status, opening.seasonNumber]).toEqual([5, 6, 'complete', 2]);
   });
 
-  // Development mode: paused by the sprint-4 match calibration (simulated results after this old save now differ). Recapture before release.
-  it.skip('continues the mid-season career into the matchday-six offers exactly as recorded', () => {
-    expect(advance(career)).toEqual(careerNext);
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts).
+  it('continues the mid-season career into the matchday-six offers, recorded except for result-dependent amounts', () => {
+    const next = advance(career);
+    expectValidOldSaveWeek(career, next, careerNext);
+    // The same three sponsors make the same offers at matchday six; appeal and fees follow the simulated results.
+    const terms = state => state.commercial.offers.filter(offer => offer.clubId === 'rhine-falcons').map(({ appeal, initialAnnualFee, annualFee, bonus, ...offer }) => offer);
+    expect(terms(next)).toHaveLength(3);
+    expect(terms(next)).toEqual(terms(careerNext));
   }, 120_000);
 
   it('rolls the completed offseason into the recorded opening, expiring unsigned offers', () => {

@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { DragEvent, RefObject } from 'react'
 import type { MatchState, Player, Side } from '../domain/types'
 import type { PlayerKnowledge } from '../domain/scouting'
-import { cancelSubstitution, isPlayerEligible, substitutePlayer } from '../engine/match'
+import { cancelSubstitution, isPlayerEligible, substitutePlayer, swapActivePlayers } from '../engine/match'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { StaminaMeter } from './StaminaMeter'
@@ -27,9 +27,15 @@ interface LineupPlayerProps {
   match: MatchState
   side: Side
   active: boolean
-  selectable: boolean
+  /** The accessible name of the card's action; without one the card is not interactive. */
+  pickLabel: string | null
+  /** Pressed state for a player who can be selected (not for a target). */
+  pressed?: boolean
   selected: boolean
-  target: boolean
+  selectedHint: string | null
+  /** Shown on a card that completes the selected change. */
+  targetHint: string | null
+  draggable: boolean
   dragOver: boolean
   pending: string | null
   onSelect: (keyboard: boolean) => void
@@ -38,27 +44,30 @@ interface LineupPlayerProps {
   onDragOver?: (event: DragEvent<HTMLElement>) => void
   onDragLeave?: (event: DragEvent<HTMLElement>) => void
   onDrop?: (event: DragEvent<HTMLElement>) => void
-  incomingName?: string
   knowledge?: PlayerKnowledge
 }
 
-function LineupPlayer({ player, match, side, active, selectable, selected, target, dragOver, pending, onSelect, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, incomingName, knowledge }: LineupPlayerProps) {
+function LineupPlayer({ player, match, side, active, pickLabel, pressed, selected, selectedHint, targetHint, draggable, dragOver, pending, onSelect, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, knowledge }: LineupPlayerProps) {
   const stats = match.stats[player.id]
   const unavailable = match.injuries[player.id] ? 'Injured' : stats.fouls >= 5 ? 'Fouled out' : null
   const identity = <><span aria-hidden="true"><Avatar player={player} color={match[side].color} size={34} /></span><span className="lineup-player-identity"><strong>{player.name}</strong><span>#{player.number} <i /> {player.position}<span className={stats.fouls >= 4 ? 'lineup-foul-trouble' : ''}> {stats.fouls} {stats.fouls === 1 ? 'foul' : 'fouls'}</span></span></span></>
 
-  return <article className={`lineup-player${unavailable ? ' lineup-player-unavailable' : ''}${selected ? ' lineup-player-selected' : ''}${target ? ' lineup-player-target' : ''}${dragOver ? ' lineup-player-drop' : ''}`} data-player-id={player.id} data-roster-status={unavailable ?? (active ? 'active' : 'bench')} tabIndex={-1} aria-label={`${player.name}, ${unavailable ?? (active ? 'on court' : 'bench')}`} draggable={!active && selectable} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
-    {selectable || target ? <button className="lineup-player-heading lineup-player-pick" type="button" data-sub-in={!active ? player.id : undefined} data-sub-out={active ? player.id : undefined} aria-pressed={!active ? selected : undefined} aria-label={active ? `Replace ${player.name} with ${incomingName}` : `${selected ? 'Deselect' : 'Select'} ${player.name} for substitution, ${Math.round(stats.condition)}% stamina`} onClick={event => onSelect(event.detail === 0)}>{identity}</button> : <div className="lineup-player-heading">{identity}</div>}
+  return <article className={`lineup-player${unavailable ? ' lineup-player-unavailable' : ''}${selected ? ' lineup-player-selected' : ''}${targetHint ? ' lineup-player-target' : ''}${dragOver ? ' lineup-player-drop' : ''}`} data-player-id={player.id} data-roster-status={unavailable ?? (active ? 'active' : 'bench')} tabIndex={-1} aria-label={`${player.name}, ${unavailable ?? (active ? 'on court' : 'bench')}`} draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+    {pickLabel ? <button className="lineup-player-heading lineup-player-pick" type="button" data-sub-in={!active ? player.id : undefined} data-sub-out={active ? player.id : undefined} data-lineup-target={targetHint ? player.id : undefined} aria-pressed={pressed} aria-label={pickLabel} onClick={event => onSelect(event.detail === 0)}>{identity}</button> : <div className="lineup-player-heading">{identity}</div>}
     <div className="lineup-player-ratings"><div><span>Ability</span><PlayerRating attributes={player.attributes} position={player.position} knowledge={knowledge} compact label={`${player.name} ability`} /></div><div className="lineup-match-rating"><span>Match</span><MatchRating stats={stats} compact /></div></div>
     <StaminaMeter value={stats.condition} label={`${player.name} stamina`} />
     {unavailable && <span className="lineup-unavailable-label">{unavailable}</span>}
     {pending && <span className="lineup-pending-label">{pending}</span>}
-    {selected && <span className="lineup-selection-label">Selected · choose who comes off</span>}
-    {target && <span className="lineup-drop-label">Drop or select to replace</span>}
+    {selected && selectedHint && <span className="lineup-selection-label">{selectedHint}</span>}
+    {targetHint && <span className="lineup-drop-label">{targetHint}</span>}
   </article>
 }
 
-/** Selection is presentation state; the shared engine owns every queued or legal substitution. */
+/**
+ * Selection is presentation state; the shared engine owns every queued or legal substitution and every swap.
+ * Pairs: a reserve and an on-court player make a substitution (it waits for a legal stoppage); two on-court players
+ * swap places at once (owner feedback, 16 November 2026: nobody enters or leaves, so no stoppage is needed).
+ */
 export function MatchLineup({ match, displayMatch = match, managedSide = 'home', disabled = false, apply, onInteractionStart, knowledgeForPlayer }: MatchLineupProps) {
   const [showOpponent, setShowOpponent] = useState(false)
   const [benchOpen, setBenchOpen] = useState(true)
@@ -73,10 +82,15 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
   const side: Side = showOpponent ? managedSide === 'home' ? 'away' : 'home' : managedSide
   const own = side === managedSide
   const complete = match.status === 'finished'
+  const editable = !disabled && !complete && own
   const currentTeam = match[managedSide]
-  const usableBench = currentTeam.players.filter(player => !match.lineups[managedSide].includes(player.id) && isPlayerEligible(match, player.id) && !match.pendingSubstitutions[managedSide].some(request => request.inId === player.id))
-  const selected = !disabled && !complete && own ? usableBench.find(player => player.id === selectedId) ?? null : null
-  const shownMatch = selected || draggedId ? match : displayMatch
+  const onCourt = match.lineups[managedSide]
+  const usableBench = currentTeam.players.filter(player => !onCourt.includes(player.id) && isPlayerEligible(match, player.id) && !match.pendingSubstitutions[managedSide].some(request => request.inId === player.id))
+  const isUsableBench = (id: string) => usableBench.some(player => player.id === id)
+  // A selected reserve waits for an on-court player to replace; a selected on-court player waits for a teammate to swap with or a reserve.
+  const selected = editable ? usableBench.find(player => player.id === selectedId) ?? null : null
+  const selectedActive = editable && selectedId && onCourt.includes(selectedId) ? currentTeam.players.find(player => player.id === selectedId) ?? null : null
+  const shownMatch = selected || selectedActive || draggedId ? match : displayMatch
   const team = shownMatch[side]
   const active = shownMatch.lineups[side].flatMap(id => team.players.filter(player => player.id === id))
   const bench = team.players.filter(player => !shownMatch.lineups[side].includes(player.id))
@@ -88,29 +102,35 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
   }, [identity])
 
   useEffect(() => {
-    if (selectedId && !selected) { setSelectedId(null); setDraggedId(null); setDropId(null) }
-  }, [selectedId, selected])
+    if (selectedId && !selected && !selectedActive) { setSelectedId(null); setDraggedId(null); setDropId(null) }
+  }, [selectedId, selected, selectedActive])
 
   useEffect(() => {
-    if (!focusTargets || !selected) return
+    if (!focusTargets || !selected && !selectedActive) return
     const required = match.requiredSubstitutions.find(request => request.side === managedSide)
-    const targets = container.current?.querySelectorAll<HTMLButtonElement>('[data-sub-out]')
-    const target = Array.from(targets ?? []).find(button => button.dataset.subOut === required?.playerId) ?? targets?.[0]
+    const targets = container.current?.querySelectorAll<HTMLButtonElement>('[data-lineup-target]')
+    const target = Array.from(targets ?? []).find(button => !!selected && !!required && button.dataset.subOut === required.playerId) ?? targets?.[0]
     target?.focus({ preventScroll: true })
     setFocusTargets(false)
-  }, [focusTargets, selected, managedSide, match.requiredSubstitutions])
+  }, [focusTargets, selected, selectedActive, managedSide, match.requiredSubstitutions])
 
-  function chooseIncoming(playerId: string, keyboard = false) {
-    if (disabled || complete || !own) return
+  function choose(playerId: string, keyboard = false) {
+    if (!editable) return
     onInteractionStart()
-    if (!usableBench.some(player => player.id === playerId)) { setAnnouncement('The lineup changed. Choose an eligible player from the current bench.'); return }
+    if (!isUsableBench(playerId) && !onCourt.includes(playerId)) { setAnnouncement('The lineup changed. Choose an eligible player from the current bench or the court.'); return }
     setSelectedId(previous => previous === playerId ? null : playerId)
     setFocusTargets(keyboard)
     setAnnouncement('')
   }
 
+  function settle(message: string) {
+    setDraggedId(null); setDropId(null); setSelectedId(null)
+    setAnnouncement(message)
+    requestAnimationFrame(() => status.current?.focus({ preventScroll: true }))
+  }
+
   function makeChange(outId: string, inId: string) {
-    if (disabled || complete || !own) return
+    if (!editable) return
     onInteractionStart()
     const applied: { state: MatchState | null } = { state: null }
     apply(current => {
@@ -118,30 +138,56 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
       applied.state = next
       return next
     })
-    setDraggedId(null); setDropId(null)
-    if (!applied.state) return
+    if (!applied.state) { setDraggedId(null); setDropId(null); return }
     const queued = applied.state.pendingSubstitutions[managedSide].some(request => request.inId === inId && request.outId === outId)
-    setSelectedId(null)
-    setAnnouncement(queued ? `${playerName(inId)} is queued for ${playerName(outId)} at the next legal stoppage.` : `${playerName(inId)} replaces ${playerName(outId)}.`)
-    requestAnimationFrame(() => status.current?.focus({ preventScroll: true }))
+    settle(queued ? `${playerName(inId)} is queued for ${playerName(outId)} at the next legal stoppage.` : `${playerName(inId)} replaces ${playerName(outId)}.`)
+  }
+
+  function makeSwap(firstId: string, secondId: string) {
+    if (!editable || firstId === secondId) return
+    onInteractionStart()
+    let applied = false
+    apply(current => {
+      const next = swapActivePlayers(current, managedSide, firstId, secondId)
+      applied = true
+      return next
+    })
+    if (!applied) { setDraggedId(null); setDropId(null); return }
+    settle(`${playerName(firstId)} and ${playerName(secondId)} swapped places on the floor.`)
+  }
+
+  /** Completes the selected pair: on-court with on-court swaps; a reserve with an on-court player substitutes. */
+  function pair(firstId: string, secondId: string) {
+    const firstOnCourt = onCourt.includes(firstId), secondOnCourt = onCourt.includes(secondId)
+    if (firstOnCourt && secondOnCourt) makeSwap(firstId, secondId)
+    else if (firstOnCourt && isUsableBench(secondId)) makeChange(firstId, secondId)
+    else if (secondOnCourt && isUsableBench(firstId)) makeChange(secondId, firstId)
   }
 
   function beginDrag(event: DragEvent<HTMLElement>, playerId: string) {
-    if (disabled || complete || !own || !usableBench.some(player => player.id === playerId)) { event.preventDefault(); return }
+    if (!editable || !isUsableBench(playerId) && !onCourt.includes(playerId)) { event.preventDefault(); return }
     onInteractionStart()
     setSelectedId(playerId); setDraggedId(playerId); setAnnouncement('')
     event.dataTransfer.setData(PLAYER_DRAG_TYPE, JSON.stringify({ playerId, identity, side: managedSide }))
     event.dataTransfer.effectAllowed = 'move'
   }
 
-  function dropPlayer(event: DragEvent<HTMLElement>, outId: string) {
-    if (disabled || complete || !own) return
+  /** A drop completes a pair with the dragged player: onto an on-court player, or (from the court) onto a reserve. */
+  const canDrop = (targetId: string) => editable && !!draggedId && draggedId !== targetId && (onCourt.includes(targetId) ? onCourt.includes(draggedId) || isUsableBench(draggedId) : onCourt.includes(draggedId) && isUsableBench(targetId))
+
+  function dragOver(event: DragEvent<HTMLElement>, targetId: string) {
+    if (!canDrop(targetId)) return
+    event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropId(targetId)
+  }
+
+  function dropPlayer(event: DragEvent<HTMLElement>, targetId: string) {
+    if (!editable) return
     event.preventDefault()
     try {
       const data: unknown = JSON.parse(event.dataTransfer.getData(PLAYER_DRAG_TYPE))
-      if (!data || typeof data !== 'object' || !('playerId' in data) || !('identity' in data) || !('side' in data) || typeof data.playerId !== 'string' || data.identity !== identity || data.side !== managedSide || !usableBench.some(player => player.id === data.playerId)) return
-      makeChange(outId, data.playerId)
-    } catch { setAnnouncement('Choose a bench player from this match to make a substitution.') }
+      if (!data || typeof data !== 'object' || !('playerId' in data) || !('identity' in data) || !('side' in data) || typeof data.playerId !== 'string' || data.identity !== identity || data.side !== managedSide || data.playerId === targetId) return
+      pair(data.playerId, targetId)
+    } catch { setAnnouncement('Drag a player from this match onto another one to make a change.') }
     finally { setDraggedId(null); setDropId(null) }
   }
 
@@ -161,9 +207,17 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
 
   function clearSelection() {
     setSelectedId(null); setDraggedId(null); setDropId(null); setFocusTargets(false)
-    setAnnouncement('Substitution selection cleared.')
+    setAnnouncement('Selection cleared.')
     requestAnimationFrame(() => status.current?.focus({ preventScroll: true }))
   }
+
+  const stamina = (player: Player) => `${Math.round(match.stats[player.id]?.condition ?? 0)}% stamina`
+  const dragHandlers = (targetId: string) => ({
+    onDragOver: (event: DragEvent<HTMLElement>) => dragOver(event, targetId),
+    onDragLeave: (event: DragEvent<HTMLElement>) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropId(null) },
+    onDrop: (event: DragEvent<HTMLElement>) => dropPlayer(event, targetId),
+    onDragEnd: () => { setDraggedId(null); setDropId(null) },
+  })
 
   return <section ref={container} id="match-rotation" className="match-lineup" tabIndex={-1} aria-label="Players, ratings and substitutions" onKeyDown={event => { if (event.key === 'Escape' && selectedId) { event.preventDefault(); clearSelection() } }}>
     <div className="lineup-toolbar">
@@ -171,29 +225,34 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
       <div className="lineup-team-switch" role="group" aria-label="Lineup team">{(['home', 'away'] as const).map(value => <button key={value} type="button" onClick={() => { setShowOpponent(value !== managedSide); setSelectedId(null); setDraggedId(null); setDropId(null) }} aria-pressed={side === value} className={side === value ? 'selected' : ''}><span style={{ backgroundColor: match[value].color }} />{match[value].shortName}<small>{value === managedSide ? 'Your team' : 'Opponent'}</small></button>)}</div>
       <button className="lineup-bench-toggle" type="button" aria-expanded={benchOpen} aria-controls={benchId} onClick={() => setBenchOpen(value => !value)}>{benchOpen ? 'Hide bench' : 'Show bench'} <span>{bench.length}</span><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
     </div>
-    {own && <MatchRotationControls match={match} side={managedSide} selected={selected} helpId={helpId} statusRef={status} announcement={announcement} disabled={disabled} onClear={clearSelection} onCancel={cancelChange} />}
+    {own && <MatchRotationControls match={match} side={managedSide} selected={selected} selectedActive={selectedActive} helpId={helpId} statusRef={status} announcement={announcement} disabled={disabled} onClear={clearSelection} onCancel={cancelChange} />}
     <div className="lineup-grid" aria-label={`${team.name} on court`} aria-describedby={own ? helpId : undefined}>{active.map(player => {
       const pending = match.pendingSubstitutions[side].find(request => request.outId === player.id)
-      const target = !!selected && match.lineups[managedSide].includes(player.id)
-      return <LineupPlayer key={player.id} player={player} knowledge={knowledgeForPlayer?.(player.id)} match={shownMatch} side={side} active selectable={false} selected={false} target={target} dragOver={dropId === player.id} pending={pending ? `Queued off · ${match[side].players.find(member => member.id === pending.inId)!.name} coming on` : null} incomingName={selected?.name} onSelect={() => { if (selected) makeChange(player.id, selected.id) }} onDragOver={event => { if (own && !disabled && !complete && draggedId && match.lineups[managedSide].includes(player.id)) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropId(player.id) } }} onDragLeave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropId(null) }} onDrop={event => dropPlayer(event, player.id)} />
+      const live = editable && onCourt.includes(player.id)
+      const isSelected = selectedActive?.id === player.id
+      const target = live && !isSelected && (!!selected || !!selectedActive)
+      const pickLabel = !live ? null : selected ? `Replace ${player.name} with ${selected.name}` : selectedActive && !isSelected ? `Swap places: ${player.name} and ${selectedActive.name}` : `${isSelected ? 'Deselect' : 'Select'} ${player.name} on court, ${stamina(player)}`
+      return <LineupPlayer key={player.id} player={player} knowledge={knowledgeForPlayer?.(player.id)} match={shownMatch} side={side} active pickLabel={pickLabel} pressed={live && !target ? isSelected : undefined} selected={isSelected} selectedHint="Selected · choose a teammate to swap with or a reserve to bring on" targetHint={target ? selected ? 'Drop or select to replace' : 'Drop or select to swap places' : null} draggable={live} dragOver={dropId === player.id} pending={pending ? `Queued off · ${match[side].players.find(member => member.id === pending.inId)!.name} coming on` : null} onSelect={keyboard => { if (selected || selectedActive && !isSelected) pair(selectedId!, player.id); else choose(player.id, keyboard) }} onDragStart={event => beginDrag(event, player.id)} {...(live ? dragHandlers(player.id) : {})} />
     })}</div>
     {active.length === 0 && <p className="lineup-empty">No players on court.</p>}
     <div id={benchId} className="lineup-bench" hidden={!benchOpen}>
       <div className="lineup-bench-heading"><h3>On the bench</h3><span>Stamina recovers while resting</span></div>
       {bench.length ? <div className="lineup-grid" aria-label={`${team.name} bench`}>{bench.map(player => {
         const pending = match.pendingSubstitutions[side].find(request => request.inId === player.id)
-        const selectable = own && !disabled && !complete && usableBench.some(member => member.id === player.id)
-        return <LineupPlayer key={player.id} player={player} knowledge={knowledgeForPlayer?.(player.id)} match={shownMatch} side={side} active={false} selectable={selectable} selected={selected?.id === player.id} target={false} dragOver={false} pending={pending ? `Queued on · replacing ${match[side].players.find(member => member.id === pending.outId)!.name}` : null} onSelect={keyboard => chooseIncoming(player.id, keyboard)} onDragStart={event => beginDrag(event, player.id)} onDragEnd={() => { setDraggedId(null); setDropId(null) }} />
+        const selectable = editable && isUsableBench(player.id)
+        const target = selectable && !!selectedActive
+        const pickLabel = !selectable ? null : selectedActive ? `Bring on ${player.name} for ${selectedActive.name}` : `${selected?.id === player.id ? 'Deselect' : 'Select'} ${player.name} for substitution, ${stamina(player)}`
+        return <LineupPlayer key={player.id} player={player} knowledge={knowledgeForPlayer?.(player.id)} match={shownMatch} side={side} active={false} pickLabel={pickLabel} pressed={selectable && !target ? selected?.id === player.id : undefined} selected={selected?.id === player.id} selectedHint="Selected · choose who comes off" targetHint={target ? 'Drop or select to bring on' : null} draggable={selectable} dragOver={dropId === player.id} pending={pending ? `Queued on · replacing ${match[side].players.find(member => member.id === pending.outId)!.name}` : null} onSelect={keyboard => { if (selectedActive) pair(selectedActive.id, player.id); else choose(player.id, keyboard) }} onDragStart={event => beginDrag(event, player.id)} {...(selectable ? dragHandlers(player.id) : {})} />
       })}</div> : <p className="lineup-empty">No reserves available.</p>}
     </div>
   </section>
 }
 
-function MatchRotationControls({ match, side, selected, helpId, statusRef, announcement, disabled, onClear, onCancel }: { match: MatchState; side: Side; selected: Player | null; helpId: string; statusRef: RefObject<HTMLParagraphElement | null>; announcement: string; disabled: boolean; onClear: () => void; onCancel: (outId: string) => void }) {
+function MatchRotationControls({ match, side, selected, selectedActive, helpId, statusRef, announcement, disabled, onClear, onCancel }: { match: MatchState; side: Side; selected: Player | null; selectedActive: Player | null; helpId: string; statusRef: RefObject<HTMLParagraphElement | null>; announcement: string; disabled: boolean; onClear: () => void; onCancel: (outId: string) => void }) {
   const finished = match.status === 'finished'
   const playerName = (id: string) => match[side].players.find(player => player.id === id)?.name ?? id
   return <div className="lineup-rotation-controls">
-    <div className="lineup-rotation-help"><p id={helpId}>{finished ? 'Match finished · substitutions closed.' : selected ? `${selected.name} selected. Choose an on-court player to replace.` : 'Drag a reserve onto an active player, or select both. Changes wait for a legal stoppage.'}</p>{selected && <button type="button" className="text-button" onClick={onClear} disabled={disabled}><Icon name="close" size={13} />Clear selection</button>}</div>
+    <div className="lineup-rotation-help"><p id={helpId}>{finished ? 'Match finished · substitutions closed.' : selected ? `${selected.name} selected. Choose an on-court player to replace.` : selectedActive ? `${selectedActive.name} selected. Choose another on-court player to swap places, or a reserve to bring on.` : 'Drag a reserve onto an on-court player, or select both: substitutions wait for a legal stoppage. Drag or select two on-court players to swap their places at once.'}</p>{(selected || selectedActive) && <button type="button" className="text-button" onClick={onClear} disabled={disabled}><Icon name="close" size={13} />Clear selection</button>}</div>
     <p ref={statusRef} className={`lineup-rotation-status${announcement ? '' : ' visually-hidden'}`} tabIndex={-1} role="status" aria-live="polite">{announcement}</p>
     {match.pendingSubstitutions[side].length > 0 && <ul className="lineup-queued-changes" aria-label="Pending substitutions">{match.pendingSubstitutions[side].map(request => <li key={request.outId}><span><strong>Queued</strong> {playerName(request.inId)} for {playerName(request.outId)}</span><button type="button" className="text-button" data-cancel-lineup-sub={request.outId} aria-label={`Cancel substitution of ${playerName(request.inId)} for ${playerName(request.outId)}`} onClick={() => onCancel(request.outId)} disabled={disabled || finished}>Cancel</button></li>)}</ul>}
   </div>

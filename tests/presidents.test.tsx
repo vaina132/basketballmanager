@@ -13,7 +13,8 @@ import { boardFundingTerms, quoteBoardFunding } from '../src/world/board-funding
 import { clubSalaryBudget } from '../src/world/club-roster-policy';
 import { getClubContractSummary } from '../src/world/employment-policy';
 import { setTicketPlan } from '../src/world/finance';
-import { ambitionWinRate, derivePresidentTraits, gameSeconds, isYouthPlayer, PRESIDENT_RULES, presidentTraits, salaryVerdictPercent } from '../src/world/presidents';
+import { ambitionWinRate, countsTowardsObjectives, derivePresidentTraits, gameSeconds, isYouthPlayer, objectiveStartingFive, PRESIDENT_RULES, presidentTraits, salaryVerdictPercent } from '../src/world/presidents';
+import { overallRating } from '../src/world/overall-rating';
 import { worldFromPack } from '../src/world/real-world';
 import { rosterForRound } from '../src/world/rosters';
 import { getInSeasonBudget } from '../src/world/recruitment-policy';
@@ -218,12 +219,50 @@ describe('youth and culture objectives', () => {
   });
 });
 
+describe('automatically run clubs and their objectives', () => {
+  it('start a young player under a youth objective when he is close enough to the starter he replaces', () => {
+    const mandate = complete.board.mandates[0]!, maxAge = PRESIDENT_RULES.objectives.maxAge;
+    const [clubId] = Object.entries(mandate.clubs).find(([id, objective]) => id !== complete.managedClubId && objective.youth?.kind === 'youth-minutes')!;
+    const team = complete.clubs.find(club => club.id === clubId)!, young = (id: string) => isYouthPlayer(complete, clubId, id, mandate.date, maxAge);
+    // A young player, and five planned starters who are not young, exactly one of them at his position.
+    const prospect = team.players.find(player => young(player.id) && team.players.some(other => !young(other.id) && other.position === player.position))!;
+    const rival = team.players.find(player => !young(player.id) && player.position === prospect.position)!;
+    const planned = [rival.id, ...team.players.filter(player => !young(player.id) && player.position !== prospect.position).slice(0, 4).map(player => player.id)];
+    expect(planned).toHaveLength(5);
+    const squad = (candidate: typeof prospect) => [...team.players.filter(player => planned.includes(player.id)), candidate];
+    const five = (candidate: typeof prospect, unavailable: string[] = [], board = complete.board) => objectiveStartingFive({ ...complete, board }, { clubId, seasonNumber: 1, players: squad(candidate), planned, unavailable: new Set(unavailable) });
+    const swapped = planned.map(id => id === rival.id ? prospect.id : id);
+    // As good as the starter at his position: he starts; far weaker: the planned five stays, unless that starter is out.
+    expect(five({ ...prospect, attributes: { ...rival.attributes } })).toEqual(swapped);
+    const weak = { ...prospect, attributes: Object.fromEntries(Object.keys(prospect.attributes).map(key => [key, 1])) as unknown as typeof prospect.attributes };
+    expect(overallRating(weak.attributes, weak.position)).toBeLessThan(overallRating(rival.attributes, rival.position) - PRESIDENT_RULES.objectives.aiStarterGap);
+    expect(five(weak)).toEqual(planned);
+    expect(five(weak, [rival.id])).toEqual(swapped);
+    // Without president objectives (board-1) nothing changes.
+    expect(five({ ...prospect, attributes: { ...rival.attributes } }, [], { ...complete.board, model: 'board-1' })).toEqual(planned);
+  });
+
+  it('count young and own players towards the objectives that ask for them, for automatic contract renewals', () => {
+    const mandate = complete.board.mandates[0]!, maxAge = PRESIDENT_RULES.objectives.maxAge;
+    let checked = 0;
+    for (const [clubId, objective] of Object.entries(mandate.clubs)) for (const player of complete.clubs.find(club => club.id === clubId)!.players) {
+      const youth = (objective.youth?.kind === 'youth-minutes' || objective.culture?.kind === 'young-rotation') && isYouthPlayer(complete, clubId, player.id, mandate.date, maxAge);
+      const core = objective.culture?.kind === 'established-core' && objective.culture.playerIds.includes(player.id);
+      expect(countsTowardsObjectives(complete, clubId, 1, player.id)).toBe(youth || core);
+      expect(countsTowardsObjectives({ ...complete, board: { ...complete.board, model: 'board-1' } }, clubId, 1, player.id)).toBe(false);
+      checked += Number(youth || core);
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+});
+
 describe('saves and older careers', () => {
   it('round-trips new careers in format 70 and refuses the president board in older formats', () => {
     expect(complete.board.model).toBe('board-2');
     expect(parseSeason(serializeSeason(opening))).toEqual(opening);
     const file = JSON.parse(serializeSeason(opening));
-    file.formatVersion = 69; file.state.schemaVersion = 69;
+    // Recurring youth injuries (format 72) would be refused first; this check is about the president board.
+    file.formatVersion = 69; file.state.schemaVersion = 69; file.state.youthCompetition.model = 'youth-competition-1';
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/requires format 7[0-9] or later/);
   });
 

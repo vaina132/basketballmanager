@@ -169,9 +169,9 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
       </> : <p>Ranked by wins, overall point difference, points scored, then club ID. This career retains its original ranking rules.</p>}</details>
     </section>
 
-    {league?.postseason && <PostseasonPanel key={`${selectedNumber}:${leagueId}`} season={season} seasonNumber={selectedNumber} leagueId={league.id} managedId={managedId} />}
+    {league?.postseason && <PostseasonPanel key={`postseason:${selectedNumber}:${leagueId}`} season={season} seasonNumber={selectedNumber} leagueId={league.id} managedId={managedId} />}
 
-    <SeasonLeaders key={`${selectedNumber}:${leagueId}`} season={season} seasonNumber={selectedNumber} clubIds={league?.clubIds} busy={busy} onReviewFixture={openFixtureReview} />
+    <SeasonLeaders key={`leaders:${selectedNumber}:${leagueId}`} season={season} seasonNumber={selectedNumber} clubIds={league?.clubIds} busy={busy} onReviewFixture={openFixtureReview} />
 
     <section className="season-fixtures panel" aria-labelledby="season-fixtures-title">
       <header className="season-panel-heading season-fixtures-heading"><h2 id="season-fixtures-title">Fixtures &amp; results</h2><div className="season-fixture-filters"><label htmlFor="season-matchday">Matchday</label><select id="season-matchday" value={round} onChange={event => setRound(event.target.value)}><option value="all">All matchdays</option>{Array.from({ length: totalRounds }, (_, index) => <option key={index + 1} value={index + 1}>Matchday {index + 1}</option>)}</select><div className="segmented" aria-label="Fixture clubs"><button aria-pressed={!ownFixtures} className={!ownFixtures ? 'selected' : ''} onClick={() => setOwnFixtures(false)}>All clubs</button><button aria-pressed={ownFixtures} className={ownFixtures ? 'selected' : ''} onClick={() => setOwnFixtures(true)}>Your club</button></div></div></header>

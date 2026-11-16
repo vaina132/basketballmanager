@@ -7,6 +7,16 @@ import { getBoardSummary } from '../world/board'
 import { seasonRounds } from '../world/career-world'
 import { seasonLabel } from '../world/season'
 
+/**
+ * Leagues of countries not chosen at career start (owner feedback, 16 November 2026: "Estimated table" meant nothing).
+ * They play no games; a final table is simulated from squad strength only to decide next season's European places.
+ */
+export const NOT_PLAYED_LEAGUE = {
+  tag: 'Not played · table simulated',
+  note: 'Countries you did not choose are not played game by game; their final tables are simulated from squad strength to decide who plays in Europe.',
+  table: 'its final table is simulated from squad strength to decide who plays in Europe next season.',
+} as const
+
 /** Plain wording for a recorded club change, shared by the manager's desk, Club > Board and the Inbox. */
 export function careerMoveText(season: Pick<SeasonState, 'clubs'>, move: CareerMove): { title: string; detail: string } {
   const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? id

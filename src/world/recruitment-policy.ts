@@ -15,7 +15,7 @@ import { getSpendableCash, payrollInstallment } from './payroll-policy';
 import { dateForRound } from './season';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { offerOptionsReason } from './release-clauses';
-import { seasonRounds } from './career-world';
+import { playerInList, seasonRounds } from './career-world';
 
 export const IN_SEASON_EVENT_LIMIT = 20_000;
 
@@ -49,7 +49,7 @@ export function getInSeasonBudget(state: SeasonState, clubId = state.managedClub
 /** One rest-of-season proposal; the current prepared match remains unchanged. */
 export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonWage: number, clubId = state.managedClubId, resolvingOfferId?: string, options: ContractOfferOptions = {}, academyProspectId?: string): InSeasonOfferQuote {
   const prospect = academyProspectId ? getAcademyProspect(state, academyProspectId) : null;
-  const player = academyProspectId ? prospect?.player : getCareerPlayers(state).find(candidate => candidate.id === playerId);
+  const player = academyProspectId ? prospect?.player : playerInList(getCareerPlayers(state), playerId);
   const own = getInSeasonOffers(state, clubId, true).find(offer => offer.playerId === playerId);
   const resolving = !!resolvingOfferId && own?.id === resolvingOfferId && own.responseRound === state.round && own.responseOn === state.date;
   const rounds = seasonRounds(state), responseRound = resolving ? state.round : Math.min(rounds, state.round + 1);

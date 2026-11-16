@@ -6,6 +6,7 @@ import { managedClubFor } from '../world/career'
 import { getEuropeanCompetitions } from '../world/europe'
 import { estimatedTable } from '../world/european-places'
 import { seasonLabel } from '../world/season'
+import { NOT_PLAYED_LEAGUE } from './career-text'
 import './season-workspace.css'
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -19,7 +20,8 @@ function ClubName({ club, yours = false }: { club: Team; yours?: boolean }) {
 
 /**
  * European competitions (step 3.5g): each competition's tables, knockout series and games for a season, and the
- * estimated tables of the top divisions not chosen. Everything shown comes from the career's games and records.
+ * simulated final tables of the top divisions not chosen (not played game by game). Everything shown comes from the
+ * career's games and records.
  */
 export function EuropeWorkspace({ season, initialCompetition }: { season: SeasonState; initialCompetition?: string }) {
   const world = worldOf(season)
@@ -49,14 +51,14 @@ export function EuropeWorkspace({ season, initialCompetition }: { season: Season
       <div className="season-matchday-identity">
         <div className="season-year-filter"><label htmlFor="europe-competition">Competition</label><select id="europe-competition" aria-label="European competition" value={selected} onChange={event => setSelected(event.target.value)}>
           {competitions.map(item => <option key={item.competition.id} value={item.competition.id}>{item.competition.name}</option>)}
-          {backgroundLeagues.map(item => <option key={item.id} value={item.id}>{item.name} · estimated</option>)}
+          {backgroundLeagues.map(item => <option key={item.id} value={item.id}>{item.name} · not played</option>)}
         </select></div>
         <div className="season-year-filter"><label htmlFor="europe-season">Season</label><select id="europe-season" aria-label="Season" value={selectedSeason} onChange={event => setSelectedSeason(Number(event.target.value))}>
           <option value={season.seasonNumber}>{seasonLabel(season.seasonNumber)} · Current</option>
           {[...season.history].reverse().map(item => <option key={item.seasonNumber} value={item.seasonNumber}>{seasonLabel(item.seasonNumber)} · Archived</option>)}
         </select></div>
       </div>
-      <div className="season-matchday-action"><p>{entry ? champion ? <><strong>{champion.name}</strong> win the {entry.competition.name}.</> : `${entry.format.label}: ${entry.table.length || entry.competition.clubIds.length} clubs.` : league ? `${league.name} plays no games in this career. Its final table is estimated from squad strength with a seeded random element, and it decides only European places.` : 'No European competition is played in this career.'}</p></div>
+      <div className="season-matchday-action"><p>{entry ? champion ? <><strong>{champion.name}</strong> win the {entry.competition.name}.</> : `${entry.format.label}: ${entry.table.length || entry.competition.clubIds.length} clubs.` : league ? `${league.name} is not played game by game in this career: ${NOT_PLAYED_LEAGUE.table}` : 'No European competition is played in this career.'}</p></div>
     </section>
 
     {entry && <>
@@ -88,10 +90,10 @@ export function EuropeWorkspace({ season, initialCompetition }: { season: Season
     </>}
 
     {league && <section className="season-standings panel" aria-labelledby="europe-estimated-title">
-      <header className="season-panel-heading"><h2 id="europe-estimated-title">{league.name} · Estimated table</h2></header>
-      <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Squad strength with the season's random element">Estimate</th></tr></thead>
+      <header className="season-panel-heading"><h2 id="europe-estimated-title">{league.name} · Simulated final table</h2></header>
+      <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Strength of the best eight players plus the season's random element">Strength</th></tr></thead>
         <tbody>{estimatedTable(season, league, selectedSeason).map((row, index) => <tr key={row.clubId}><td>{index + 1}</td><th scope="row"><ClubName club={club(row.clubId)} /></th><td>{row.estimate.toFixed(1)}</td></tr>)}</tbody></table></div>
-      <p className="muted">Estimated, not played: clubs are ranked by the strength of their best eight players with a seeded random element. The order decides only next season's European places.</p>
+      <p className="muted">Not played game by game: clubs are ranked by the strength of their best eight players plus a random element. The order only decides who plays in Europe next season.</p>
     </section>}
   </div>
 }

@@ -46,6 +46,48 @@ export function financeLedgerEntries(finance: FinanceLedgerSource, from = 0, to 
   })();
 }
 
+// Step 3.7: completed seasons never change once archived (archive lists are replaced, never edited), so lookups over
+// them are built once per archive list instead of reading every archived row again on each question; later seasons
+// used to slow down with every season of history. The archived row and block counts guard against an edited list.
+interface ArchiveIndexes { blocks: number; rows: number; values: Map<symbol, unknown> }
+const archiveIndexes = new WeakMap<readonly FinanceArchiveBlock[], ArchiveIndexes>();
+
+/**
+ * A lookup over the archived seasons only (`build` receives a source holding just the archives), built once per archive
+ * list and namespace. Undefined when nothing is archived. Callers treat the result as immutable.
+ */
+export function archivedFinanceIndex<T>(finance: FinanceLedgerSource, namespace: symbol, build: (archived: FinanceLedgerSource) => T): T | undefined {
+  const blocks = finance.archives;
+  if (!blocks?.length) return undefined;
+  const rows = archivedCount(finance);
+  let known = archiveIndexes.get(blocks);
+  if (!known || known.blocks !== blocks.length || known.rows !== rows) { known = { blocks: blocks.length, rows, values: new Map() }; archiveIndexes.set(blocks, known); }
+  if (!known.values.has(namespace)) known.values.set(namespace, build({ ledger: [], archives: blocks }));
+  return known.values.get(namespace) as T;
+}
+
+const ARCHIVED_EVENTS = Symbol('archived financial events');
+function archivedEvents(finance: FinanceLedgerSource): Map<string, Map<string, Set<string>>> | undefined {
+  return archivedFinanceIndex(finance, ARCHIVED_EVENTS, archived => {
+    const events = new Map<string, Map<string, Set<string>>>();
+    for (const entry of financeLedgerEntries(archived)) {
+      let kinds = events.get(entry.clubId);
+      if (!kinds) { kinds = new Map(); events.set(entry.clubId, kinds); }
+      let sources = kinds.get(entry.kind);
+      if (!sources) { sources = new Set(); kinds.set(entry.kind, sources); }
+      sources.add(entry.sourceId);
+    }
+    return events;
+  });
+}
+
+/** Whether the club's event of this kind and source is already recorded anywhere in the logical ledger. */
+export function financeLedgerHasEvent(finance: FinanceLedgerSource, clubId: string, kind: FinanceEntry['kind'], sourceId: string): boolean {
+  if (archivedEvents(finance)?.get(clubId)?.get(kind)?.has(sourceId)) return true;
+  for (const entry of finance.ledger) if (entry.clubId === clubId && entry.kind === kind && entry.sourceId === sourceId) return true;
+  return false;
+}
+
 /** Hot accounting reads borrow the retained values directly; they need no reconstructed transaction objects. */
 export function* financeLedgerAmounts(finance: FinanceLedgerSource, clubId: string): IterableIterator<number> {
   for (const block of finance.archives ?? []) for (const row of block.rows) if (row[0] === clubId) yield row[3];
@@ -59,11 +101,19 @@ export function* financeLedgerPayrollCharges(finance: FinanceLedgerSource): Iter
 }
 
 /** Ticket-price previews repeatedly ask for the same fixture; scan retained payloads without expanding rows. */
+const ARCHIVED_TICKETS = Symbol('archived tickets');
 export function financeLedgerTicket(finance: FinanceLedgerSource, fixtureId: string): FinanceEntry['ticket'] {
-  for (const block of finance.archives ?? []) for (const row of block.rows) {
-    const ticket = row[5].ticket;
-    if (ticket?.fixtureId === fixtureId) return ticket;
-  }
+  // The first archived ticket of each fixture, as the full scan found it.
+  const archived = archivedFinanceIndex(finance, ARCHIVED_TICKETS, source => {
+    const tickets = new Map<string, NonNullable<FinanceEntry['ticket']>>();
+    for (const block of source.archives ?? []) for (const row of block.rows) {
+      const ticket = row[5].ticket;
+      if (ticket && !tickets.has(ticket.fixtureId)) tickets.set(ticket.fixtureId, ticket);
+    }
+    return tickets;
+  });
+  const ticket = archived?.get(fixtureId);
+  if (ticket) return ticket;
   for (const row of finance.ledger) if (row.ticket?.fixtureId === fixtureId) return row.ticket;
   return null;
 }
@@ -103,9 +153,7 @@ export function appendFinanceLedgerEntry(finance: SeasonFinance, entry: Omit<Fin
   if (seasonEntries >= MAX_FINANCE_SEGMENT_ENTRIES || financeLedgerCount(finance) >= MAX_FINANCE_LOGICAL_ENTRIES) throw new Error('This career has reached the supported financial history limit.');
   const last = finance.archives?.at(-1);
   if (last && entry.seasonNumber <= last.seasonNumber) throw new Error('Completed financial seasons cannot receive new transactions.');
-  for (const block of finance.archives ?? []) for (const row of block.rows) {
-    if (row[0] === entry.clubId && row[2] === entry.kind && row[4] === entry.sourceId) throw new Error('This financial event has already been recorded.');
-  }
+  if (archivedEvents(finance)?.get(entry.clubId)?.get(entry.kind)?.has(entry.sourceId)) throw new Error('This financial event has already been recorded.');
   for (const previous of finance.ledger) {
     if (previous.clubId === entry.clubId && previous.kind === entry.kind && previous.sourceId === entry.sourceId) {
       throw new Error('This financial event has already been recorded.');
@@ -118,9 +166,12 @@ export function appendFinanceLedgerEntry(finance: SeasonFinance, entry: Omit<Fin
  * Read indexes may share the original log across fresh prefix arrays within one synchronous validation only.
  * The index is derived evidence, never an acceptance verdict; callers cannot retain a cached proof between loads.
  */
-export function scopedFinanceLedgerIndex<T>(finance: FinanceLedgerSource, namespace: symbol, build: (source: FinanceLedgerSource) => T): { index: T; through: number } | undefined {
+export function scopedFinanceLedgerIndex<T>(finance: FinanceLedgerSource, namespace: symbol, build: (source: FinanceLedgerSource) => T, prefixesOnly = false): { index: T; through: number } | undefined {
   const origin = originInScope(finance);
   if (!origin) return undefined;
+  // Step 3.7: with `prefixesOnly`, a ledger that is its origin's whole log needs no prefix index: the caller's own reading of
+  // it gives the same values (simulation scopes, one per club decision, used to rebuild the index every time).
+  if (prefixesOnly && origin.through === financeLedgerCount(origin.source)) return undefined;
   const index = scopedCalculation(origin.source.archives?.length ? origin.source : origin.source.ledger, namespace, String(financeLedgerCount(origin.source)), () => build(origin.source));
   return index === undefined ? undefined : { index, through: origin.through };
 }

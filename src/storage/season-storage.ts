@@ -77,6 +77,7 @@ import { createPhysio } from '../world/physio';
 import { createAssistant } from '../world/assistant';
 import { academyAtBoundary, buildAcademyWeek, createAcademy, enableAcademy, graduateAcademyProspect, prepareAcademySeason, processAcademyWeek } from '../world/academy';
 import { validationReplayCache } from './replay-cache';
+import { matchesTrustedPrefix, prefixPlan, recall, remember, trustedCutKey, withPrefixCheck, type CheckRecord } from './trusted-prefix';
 import { canSummarizeAcademyReport, createAcademyHistoryContext, isAcademyOutcome, summarizeAcademyHistory, summarizeAcademyPlayer } from '../world/academy-history';
 import { createYouth } from '../world/youth';
 import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, prepareYouthFixture, settleYouthFixture, getYouthPlayerStatus, youthCompetitionAtBoundary, youthInjuryHistory, YOUTH_RECURRENCE_MODEL } from '../world/youth-competition';
@@ -1616,7 +1617,11 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     if (!sameData(fields.departures ?? [], expected) || Object.hasOwn(fields, 'departures') !== expected.length > 0) fail('employment.departures', 'must end exactly the terms of each club that left the full world');
   }
   let previousBoundary = roundKey(firstYear, firstRound);
+  // Incremental checkpoint checks (`trusted-prefix.ts`): agreements signed before the trusted checkpoint's week are
+  // unchanged and were checked by it; only their place in the replayed prefix is kept.
+  const contractPlan = version === SEASON_SCHEMA_VERSION ? prefixPlan('employment.contracts', fields.contracts as EmploymentContract[], contract => roundKey(contract.signedSeason, contract.signedRound)) : { skip: 0 };
   for (const [index, value] of fields.contracts.entries()) {
+    if (index < contractPlan.skip) { const trusted = value as EmploymentContract; previousBoundary = roundKey(trusted.signedSeason, trusted.signedRound); validated.push(trusted); continue; }
     const path = `employment.contracts[${index}]`;
     const raw = record(value, path, ['id', 'playerId', 'clubId', 'startsSeason', 'endsSeason', 'seasonWage', 'signedSeason', 'signedRound', 'kind', ...(version >= 18 ? ['startsRound'] : []), ...optionalClauseKeys(value, version, ['releaseFee'])]);
     const entry = version < 18 ? { ...raw, startsRound: 1 } : raw;
@@ -1688,10 +1693,14 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
   const employment = normalized;
   if ((transfers as EmploymentTransfer[]).some(transfer => !validated.some(contract => contract.id === transfer.contractId && contract.kind === (transfer.startsRound > 1 ? 'midseason-transfer' : 'transfer')))) fail('employment.transfers', 'must link every transfer to one retained transfer contract');
   // Each season's own full-world clubs (step 3.4d-2): clubs outside the full world that season hold no registrations.
+  // Registration rounds before the trusted checkpoint's week were checked by it; no later agreement or release reaches them.
+  const checkedBefore = trustedCutKey();
   for (let year = firstYear; year <= seasonNumber; year += 1) for (const clubId of fullWorldClubsIn(context, year).map(club => club.id)) {
+    if (roundKey(year, year === seasonNumber ? round : seasonRounds(context)) < checkedBefore) continue;
     // Format 72: agreed wages stay when a club's allocation falls, so registrations meet its highest allocation for the season.
     const ceiling = clubSalaryCeiling(context, clubId, year);
     for (let at = 1; at <= (year === seasonNumber ? round : seasonRounds(context)); at += 1) {
+      if (roundKey(year, at) < checkedBefore) continue;
       const registrations = effectiveContractsForRound(employment, year, at).filter(contract => contract.clubId === clubId);
       if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > Math.max(ceiling, seasonSalaryCeiling(context, clubId, year))) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
     }
@@ -1976,7 +1985,20 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
   const conversations = new Map<string, { offeredWage: number; offeredSeasons: number; releaseFee?: number; boundary: number; date: string }>();
   let previousBoundary = roundKey(firstYear, firstRound) * 2;
   let previousDate = dateForRound(firstRound, firstYear);
+  // Incremental checkpoint checks (`trusted-prefix.ts`): offers made before the trusted checkpoint's week are unchanged and
+  // were checked by it; only the contract prefix, conversations and chronology they leave behind are rebuilt.
+  const plan = prefixPlan('negotiations.records', fields.records as SeasonNegotiations['records'], record => roundKey(record.seasonNumber, record.round));
   for (const [index, value] of fields.records.entries()) {
+    if (index < plan.skip) {
+      const entry = value as SeasonNegotiations['records'][number], year = entry.seasonNumber;
+      while (contracts[prefix.length]?.kind === 'joined' && contracts[prefix.length]!.signedSeason < year) prefix = [...prefix, contracts[prefix.length]!];
+      previousBoundary = roundKey(year, entry.round) * 2 + (entry.status === 'complete' ? 1 : 0);
+      previousDate = entry.date;
+      if (entry.outcome === 'accepted') prefix = [...prefix, contracts[prefix.length]!];
+      conversations.set(`${entry.clubId}/${entry.playerId}/${entry.startsSeason}`, { offeredWage: entry.offeredWage, offeredSeasons: entry.offeredSeasons, releaseFee: entry.releaseFee, boundary: previousBoundary, date: entry.date });
+      entries.push(entry);
+      continue;
+    }
     const path = `negotiations.records[${index}]`;
     const entry = record(value, path, ['id', 'clubId', 'playerId', 'seasonNumber', 'round', 'date', 'status', 'startsSeason', 'offeredWage', 'offeredSeasons', 'outcome', 'reason', 'requiredWage', 'counterOffer', 'alternativeOffer', 'contractId', 'contractCountBefore', ...optionalClauseKeys(value, version, ['releaseFee'])]);
     if (entry.id !== `negotiation-${index + 1}`) fail(`${path}.id`, 'must use sequential negotiation identities');
@@ -3286,6 +3308,43 @@ export function serializeSeasonCompact(state: SeasonState, options: { check?: bo
   const text = JSON.stringify(envelope);
   checkSize(text);
   return text;
+}
+
+// Incremental checkpoint checks (`trusted-prefix.ts`): the last checkpoint this worker accepted, with its replay values.
+let lastCheckpoint: CheckRecord | null = null;
+
+/**
+ * The career check of one incremental checkpoint, without the full-check fallback: throws when it refuses. `trusted` must
+ * have been matched by `matchesTrustedPrefix`. Returns what this check recorded for the next checkpoint.
+ */
+export function checkAgainstTrustedPrefix(state: SeasonState, trusted: CheckRecord): CheckRecord {
+  return withPrefixCheck(state, trusted, true, () => validateSeasonState(state))!;
+}
+
+/**
+ * The checkpoint queue's career check (`createCheckpointQueue`). A state that keeps the previous accepted checkpoint's past
+ * exactly is checked incrementally; anything else, an incremental refusal or error included, gets the full check, which
+ * decides. Throws exactly when the full check would refuse the state. Imports and loads never come here.
+ */
+export function checkCheckpointState(state: SeasonState): 'incremental' | 'full' {
+  const previous = lastCheckpoint;
+  let trusted: CheckRecord | null = null;
+  try { trusted = previous && matchesTrustedPrefix(previous, state) ? previous : null; } catch { trusted = null; }
+  if (trusted) {
+    try { lastCheckpoint = checkAgainstTrustedPrefix(state, trusted); return 'incremental'; }
+    catch { /* The full check below decides: an incremental refusal or error never refuses a checkpoint on its own. */ }
+  }
+  lastCheckpoint = withPrefixCheck(state, null, true, () => validateSeasonState(state)) ?? previous;
+  return 'full';
+}
+
+/** Forget the trusted checkpoint (a new career, or tests). */
+export function resetCheckpointTrust(): void { lastCheckpoint = null; }
+
+/** Check a checkpoint of the game's own state (incrementally when possible), then encode it like `serializeSeasonCompact`. */
+export function serializeCheckpoint(state: SeasonState): string {
+  checkCheckpointState(state);
+  return serializeSeasonCompact(state, { check: false });
 }
 
 /** Old schemas had immutable pack rosters; ownership is recoverable, discarded box scores are not. */

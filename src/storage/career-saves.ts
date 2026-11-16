@@ -143,9 +143,12 @@ export async function loadCareerCheckpoint(revision: number, codec: SeasonCodec 
   catch (error) { throw new Error(`This checkpoint cannot be loaded. ${errorMessage(error)}`); }
 }
 
-/** The full career check runs before anything is written: a refused state leaves the previous checkpoint in place. */
-async function writeCheckedCheckpoint(state: SeasonState, revision: () => number | Promise<number>, reason: CheckpointReason, codec: SeasonCodec): Promise<SeasonCheckpoint> {
-  const serialized = await codec.serialize(state);
+/**
+ * The career check runs before anything is written: a refused state leaves the previous checkpoint in place. The queue's
+ * states use the codec's incremental checkpoint check (as strict as the full check); a direct save uses the full check.
+ */
+async function writeCheckedCheckpoint(state: SeasonState, revision: () => number | Promise<number>, reason: CheckpointReason, codec: SeasonCodec, incremental = false): Promise<SeasonCheckpoint> {
+  const serialized = await (incremental && codec.checkpoint ? codec.checkpoint(state) : codec.serialize(state));
   // Only text the check accepted is fingerprinted; an unavailable fingerprint costs a full check on the next load.
   const seal = await saveSeal(serialized);
   return writeSeasonCheckpoint(serialized, await revision(), reason, seal);
@@ -205,7 +208,7 @@ export function createCheckpointQueue(options: {
         const job = current = waiting;
         waiting = null;
         try {
-          const checkpoint = await writeCheckedCheckpoint(job.state, options.revision, job.reason, codec);
+          const checkpoint = await writeCheckedCheckpoint(job.state, options.revision, job.reason, codec, true);
           options.written?.(checkpoint, job.state);
           job.resolve(checkpoint);
         } catch (error) { job.reject(error); }

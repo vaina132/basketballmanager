@@ -4,9 +4,10 @@ import { applyRelationshipEvent, createRelationships, enableRelationships, getPr
 import { dateForRound } from '../world/season';
 import { rosterForRound } from '../world/rosters';
 import { managedClubAtRound, managedClubFor } from '../world/career';
-import { fullWorldClubsIn, roundOrdinal, seasonRounds } from '../world/career-world';
+import { fullWorldClubsIn, roundKey, roundOrdinal, seasonRounds } from '../world/career-world';
 import { SEALED_HISTORY_FORMAT } from '../world/sealed-history';
 import type { RelationshipEvent as Command } from '../domain/relationships';
+import { prefixPlan, recall, remember } from './trusted-prefix';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'contractCount', 'rosterCount'] as const;
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
@@ -125,6 +126,21 @@ export function validateRelationships(state: SeasonState, version: number): void
   // Format 73: only the latest morale snapshot frozen before a matchday keeps its values; nothing reads earlier ones.
   let lastPrepare = -1;
   for (let index = fields.events.length - 1; index >= 0; index -= 1) if ((fields.events[index] as Command | null)?.type === 'prepare') { lastPrepare = index; break; }
+  // Incremental checkpoint checks (`trusted-prefix.ts`): the commands an accepted checkpoint held before its week are
+  // unchanged, so the replay resumes from the values that check reached there. Every later command is replayed in full.
+  // Only the latest morale snapshot is stored in full, so both states' latest snapshots must come after that point.
+  const journal = 'relationships.events', plan = prefixPlan(journal, fields.events as RelationshipEvent[], event => roundKey(event.seasonNumber, event.round));
+  interface Resume { relationships: SeasonRelationships; previous: RelationshipAnchor; negotiationCount: number; prepared: [number, number][]; kept: RelationshipEvent[]; emptied: number[]; lastPrepare: number }
+  const resume = plan.skip > 0 && lastPrepare >= plan.skip ? recall<Resume>(journal, 'replay') : undefined;
+  const start = resume && resume.lastPrepare >= plan.skip ? plan.skip : 0;
+  if (start) {
+    // The resumed journal keeps this state's recorded squad ranks, as a full replay would read them.
+    replay = { ...replay, relationships: second ? { ...resume!.relationships, squadRanks: source.squadRanks! } : resume!.relationships };
+    previous = resume!.previous; negotiationCount = resume!.negotiationCount;
+    for (const [boundary, index] of resume!.prepared) prepared.set(boundary, index);
+    kept = resume!.kept.slice(); for (const index of resume!.emptied) emptiedEvents.add(index);
+  }
+  const rememberReplay = () => remember(journal, 'replay', { relationships: replay.relationships, previous, negotiationCount, prepared: [...prepared], kept: kept.slice(), emptied: [...emptiedEvents], lastPrepare } satisfies Resume);
   const keepRecorded = () => { if (kept.length) { replay = { ...replay, relationships: { ...replay.relationships, events: [...replay.relationships.events, ...kept.map(item => structuredClone(item))] } }; kept = []; } };
   const recordedAnchor = (event: RelationshipEvent, path: string): RelationshipAnchor => {
     integer(event.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber);
@@ -136,6 +152,8 @@ export function validateRelationships(state: SeasonState, version: number): void
     return Object.fromEntries(ANCHOR_KEYS.map(key => [key, event[key]])) as unknown as RelationshipAnchor;
   };
   for (const [index, raw] of fields.events.entries()) {
+    if (index < start) continue;
+    if (index === plan.record) rememberReplay();
     const path = `relationships.events[${index}]`, type = raw && typeof raw === 'object' ? raw.type : undefined;
     // Format 34 adds press answers to the same chronological journal; format 67 (careers with media) names players and the standing.
     const extra = type === 'role' ? ['clubId', 'playerId', 'role'] : type === 'talk' ? ['clubId', 'playerId', 'choice'] : type === 'prepare' ? ['rosterIds', 'values'] : type === 'press' && version >= 34 ? ['clubId', 'topic', 'triggerRound', 'answer', 'playerIds', 'coreIds', ...(version >= 67 && Object.hasOwn(raw, 'subjectIds') ? ['subjectIds', 'standing'] : [])]
@@ -177,6 +195,7 @@ export function validateRelationships(state: SeasonState, version: number): void
     try { replay = applyRelationshipEvent(replay, applied); } catch (error) { fail(path, `does not follow the relationship rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     previous = current;
   }
+  if (plan.record === fields.events.length) rememberReplay();
   keepRecorded();
   const replayed = emptiedEvents.size ? { ...replay.relationships, events: replay.relationships.events.map((item, index) => emptiedEvents.has(index) && item.type === 'prepare' ? { ...item, rosterIds: {}, values: {} } : item) } : replay.relationships;
   if (!equal(replayed, source)) fail('relationships', 'must exactly preserve the validated player command history');

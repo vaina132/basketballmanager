@@ -3374,8 +3374,15 @@ function decodeSeasonText(text: string): { version: SeasonFormatVersion; state: 
   return { version: envelope.formatVersion as SeasonFormatVersion, state: envelope.state };
 }
 
+/** Format 73: careers of real-data worlds follow the closed money gaps (staff pay, reserves, capital and offers by season money). */
+export const REAL_WORLD_MONEY_FORMAT = 73;
+export const OLDER_REAL_CAREER_MESSAGE = 'This career was saved by an earlier version of the game, before club money changed for real-club careers. It cannot be continued: please start a new career.';
+
 export function parseSeason(text: string): SeasonState {
   const { version, state } = decodeSeasonText(text);
+  // Development mode (owner, 15 November 2026): older real-club careers are refused rather than migrated; their money
+  // records follow the earlier rules. The development world keeps its constants, so its older careers still load.
+  if (version < REAL_WORLD_MONEY_FORMAT && state !== null && typeof state === 'object' && Object.hasOwn(state, 'world')) throw new Error(OLDER_REAL_CAREER_MESSAGE);
   const envelope = { state };
   // Validate the original shape and accounting before adding any recoverable metadata.
   validateState(envelope.state, version);

@@ -27,7 +27,7 @@ This file holds only the current state, the next steps and the rules that must n
 **Development mode** applies (see "Rules and conventions"): build features first; full suite at sprint end.
 
 **Code baseline:**
-- Save format **72** (`SEASON_SCHEMA_VERSION`; saved ideas formats 63-72), `compact-2` encoding, `SAVE_CHECKS_VERSION` 3.
+- Save format **72** (`SEASON_SCHEMA_VERSION`; saved ideas formats 63-72), `compact-2` encoding, `SAVE_CHECKS_VERSION` 4.
 - Last verification (cloud, Linux, end of the saved ideas level, 16 November 2026): full suite **2,724 passed / 30 skipped, 209 files** (371 s, `--maxWorkers=4`; its one failure, `lower-division-world`, was re-seeded and passes); `npm run build` passes with the known chunk-size advisory. The 30 skipped tests are listed under "Before release".
 - Cloud sessions: Node 24.22.3 in `/opt/node24` (put it first in `PATH`).
 
@@ -115,7 +115,7 @@ The game reads real club data from the owner's Supabase project (public storage 
 - Old-save tests restored (16 November 2026) as "continues a valid week" checks (`tests/helpers/old-save-week.ts`: strict check, one week, the career's rules and every past event kept, the captured next week's schedule); exact comparisons stay where no match is simulated.
 - Saved ideas gaps (development mode): naming-rights offers and sponsor exit decisions are checked for plausibility, not recomputed; president requests and resignation offers get shape checks only; youth matches have no injury recurrence; owner capital and the verdict's staff-budget preview still use opening money; offseason offers use the completed season's money figures; a move through unemployment adds no rivalry; AI clubs never lease, end sponsor deals early or chase youth/culture objectives.
 - Economy gaps (format 62; promotion and relegation money fixed by format 72): consistently weak clubs end seasons with little cash (2-4% of budget) and may drift into unpaid costs in long careers; the empty-roster wage reserve, academy prospects' wages and added arena seats are not rescaled; staff fees and facility costs follow one per-club scale.
-- Paused tests (`it.skip`, development mode): `tests/save-seal.test.js` (checkpoints validated before writing, no unchecked shortcut, strict saving without crypto) and `tests/career-saves.test.ts` (malformed state refused before writing). Checkpoints skip the full career check (`serializeSeasonCompact(state, { check: false })`), which took 17 s a matchday in a 36-club world with Europe.
+- Checkpoint checks restored (16 November 2026): every checkpoint gets the full career check in the save worker before it is written and sealed; saves coalesce so play never waits (`createCheckpointQueue`, `src/storage/career-saves.ts`); `SAVE_CHECKS_VERSION` 4 re-checks older seals once. Still to remove: the unused `check` option of `serializeSeasonCompact`.
 
 ## Local-only work
 

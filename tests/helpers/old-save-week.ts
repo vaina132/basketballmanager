@@ -4,6 +4,11 @@ import { setAutoSubstitutions, simulateToEnd } from '../../src/engine/match';
 import { parseSeason, serializeSeason } from '../../src/storage/season-storage';
 import { financeLedgerCount, financeLedgerSlice } from '../../src/world/finance-ledger';
 import { advanceSeason, managedSide } from '../../src/world/season';
+import { isAcademyOutcome, summarizeAcademyPlayer } from '../../src/world/academy-history';
+import { withoutCountedGames } from '../../src/world/sealed-history';
+import type { AcademyWeek } from '../../src/domain/academy';
+import type { BoardReview } from '../../src/domain/board';
+import type { RelationshipEvent } from '../../src/domain/relationships';
 
 /**
  * Old-save continuation checks that hold under intended rule changes (development mode, sprint 4 onwards).
@@ -54,6 +59,17 @@ const HISTORY = [
   'career.moves', 'commercial.events',
 ] as const;
 
+/**
+ * Format 73 (step 3.7, save size) lightens three kinds of record every week: an earlier academy report of a club keeps
+ * only its outcome, only the latest board review lists each club's counted games, and only the latest morale snapshot
+ * keeps its values. These records are compared in their lightened form; everything else they hold must be unchanged.
+ */
+const LIGHTENED: Partial<Record<(typeof HISTORY)[number], (items: unknown[]) => unknown[]>> = {
+  'academy.weeks': weeks => (weeks as AcademyWeek[]).map(week => ({ ...week, players: Object.fromEntries(Object.entries(week.players).map(([id, player]) => [id, isAcademyOutcome(player) ? player : summarizeAcademyPlayer(player)])) })),
+  'board.reviews': reviews => withoutCountedGames(reviews as BoardReview[]),
+  'relationships.events': events => (events as RelationshipEvent[]).map(event => event.type === 'prepare' ? { ...event, rosterIds: {}, values: {} } : event),
+};
+
 function arraysAt(state: unknown, path: string): [string, unknown[] | undefined][] {
   let found: [string, unknown][] = [['', state]];
   for (const part of path.split('.')) {
@@ -90,7 +106,8 @@ export function expectPastKept(before: SeasonState, after: SeasonState): void {
       if (!recorded) continue;
       const kept = later.get(at);
       expect(kept, at).toBeDefined();
-      expect(kept!.slice(0, recorded.length), at).toEqual(recorded);
+      const lighten = LIGHTENED[path] ?? (items => items);
+      expect(lighten(kept!.slice(0, recorded.length)), at).toEqual(lighten(recorded));
     }
   }
   const youth = new Map(after.youthCompetition.seasons.flatMap(season => season.fixtures).map(fixture => [fixture.id, fixture]));

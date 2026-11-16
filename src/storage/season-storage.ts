@@ -3138,7 +3138,11 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   }
   if (career) {
     const archives = array(state.history, 'history', seasonNumber - 1);
-    for (const [archiveIndex, value] of archives.entries()) {
+    // Incremental checkpoint checks (`trusted-prefix.ts`): completed seasons equal the trusted checkpoint's, whose check
+    // validated them; resume with the injury history their games left.
+    const archived = recall<{ history: SeasonInjury[]; latest: [string, SeasonInjury][] }>('history', 'injuries');
+    if (archived) { history.push(...archived.history); for (const [playerId, injury] of archived.latest) latestInjuries.set(playerId, injury); }
+    if (!archived) for (const [archiveIndex, value] of archives.entries()) {
       const path = `history[${archiveIndex}]`, summarized = version >= 45 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'summary');
       const archive = record(value, path, ['seasonNumber', 'fixtures', ...(version >= 9 ? ['rosters'] : []), ...(summarized ? ['summary'] : []), ...(usesDivisions && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(usesEurope ? ['europe'] : [])]);
       const archiveDivisions = archive.divisions === undefined ? undefined : validateDivisionShape(archive.divisions, world, `${path}.divisions`, archiveIndex + 1);
@@ -3183,6 +3187,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       if (version >= SEALED_HISTORY_FORMAT && (archive.fixtures as ArchivedFixture[]).some(fixture => isSealedSeniorResult(fixture.result))) validateSealedSeniorSummary(archive as unknown as SeasonState['history'][number], path, clubId => fullWorldClubsIn(careerContext, archiveIndex + 1).some(club => club.id === clubId) ? null : backgroundSide(careerContext, clubId, archiveIndex + 1).players.map(player => player.id));
       else if (version >= 45) validateSeniorSummary(archive as unknown as SeasonState['history'][number], managedClubFor(state as unknown as SeasonState, archiveIndex + 1, false), path);
     }
+    remember('history', 'injuries', { history: history.slice(), latest: [...latestInjuries] });
   }
   const schedule = canonicalFixtures({ clubs, fixtures: state.fixtures, world, divisions: seasonDivisions, seed, ...(seasonEurope ? { europe: seasonEurope } : {}) }, seasonNumber, 'fixtures'), fixtures = array(state.fixtures, 'fixtures', schedule.length);
   const committedRound = state.status === 'complete' ? round : round - 1;

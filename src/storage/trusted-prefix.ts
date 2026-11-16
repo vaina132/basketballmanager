@@ -29,9 +29,14 @@ interface ActiveCheck {
   trusted: CheckRecord | null;
   counts: Map<string, number> | null;
   values: Map<string, unknown> | null;
+  skipped: Record<string, number>;
 }
 
 let active: ActiveCheck | null = null;
+let lastSkipped: Record<string, number> = {};
+
+/** The trusted records the last check skipped, by journal (for tests and measurements). */
+export function lastPrefixSkips(): Readonly<Record<string, number>> { return lastSkipped; }
 
 /** The week of a state: records dated in it or later are never trusted. */
 export const cutOf = (state: Pick<SeasonState, 'seasonNumber' | 'round'>): PrefixCut => ({ seasonNumber: state.seasonNumber, round: state.round });
@@ -52,10 +57,10 @@ function leadingBefore<T>(items: readonly T[], at: (item: T) => number, cut: Pre
  */
 export function withPrefixCheck(state: SeasonState, trusted: CheckRecord | null, record: boolean, run: () => void): CheckRecord | null {
   const previous = active;
-  const check: ActiveCheck = { cut: cutOf(state), trusted, counts: record ? new Map() : null, values: record ? new Map() : null };
+  const check: ActiveCheck = { cut: cutOf(state), trusted, counts: record ? new Map() : null, values: record ? new Map() : null, skipped: {} };
   active = check;
   try { run(); }
-  finally { active = previous; }
+  finally { active = previous; lastSkipped = check.skipped; }
   return record ? { state, cut: check.cut, counts: check.counts!, values: check.values! } : null;
 }
 
@@ -78,6 +83,7 @@ export function prefixPlan<T>(name: string, items: readonly T[], at: (item: T) =
   if (trusted && JOURNALS.has(name)) {
     const count = trusted.counts.get(name);
     if (count !== undefined && count <= items.length && count === leadingBefore(items, at, trusted.cut)) skip = count;
+    if (skip) active.skipped[name] = skip;
   }
   let record = -1;
   if (active.counts) { record = leadingBefore(items, at, active.cut); active.counts.set(name, record); }

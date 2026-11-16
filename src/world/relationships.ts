@@ -427,7 +427,7 @@ function contractRequestCheck(state: SeasonState, clubId: string, playerId: stri
     const games = history.gamesFor(playerId, { after: Math.max(state.relationships.enabledSince.completedRounds, history.stintStart(playerId) - 1), eligibleOnly: true, limit: 4 });
     isValued = games.length >= 3 && games.reduce((sum, game) => sum + game.minutes, 0) / games.length + 1e-9 >= valued.minMinutes;
   }
-  if (!isValued) isValued = (getPreparedRelationshipMorale(state)?.values[playerId] ?? 0) >= valued.minMorale;
+  if (!isValued) isValued = (preparedMoraleOf(state, playerId) ?? 0) >= valued.minMorale;
   if (!isValued) return fail('Only valued players ask: a high squad rank, regular minutes or good morale.');
   return { reason: null, triggers, rank };
 }
@@ -508,9 +508,34 @@ export function replyToContractRequest(state: SeasonState, playerId: string, rep
   return applyRelationshipEvent(state, { ...relationshipEventAnchor(state), id: eventId(state), type: 'contract-reply', clubId, playerId, requestId: quote.requestId!, reply, negotiationCount: state.negotiations.records.length });
 }
 export function getPreparedRelationshipMorale(state: SeasonState, round = state.round, seasonNumber = state.seasonNumber): { model: 'morale-1'; eventCount: number; values: Record<string, number> } | undefined {
-  const index = state.relationships.events.findIndex(event => event.type === 'prepare' && event.seasonNumber === seasonNumber && event.round === round);
+  const index = preparedEventIndex(state.relationships.events, seasonNumber, round);
   const event = state.relationships.events[index];
   return event?.type === 'prepare' ? { model: 'morale-1', eventCount: index + 1, values: { ...event.values } } : undefined;
+}
+// Step 3.7: the first preparation of each week is found once per event journal (journals are replaced, never edited; the
+// length guards against an edited one). Every fixture and contract check searched the whole career's journal again.
+const preparedIndexes = new WeakMap<readonly RelationshipEvent[], { length: number; bySeason: Map<unknown, Map<unknown, number>> }>();
+function preparedEventIndex(events: readonly RelationshipEvent[], seasonNumber: number, round: number): number {
+  // Map keys match like `===` except that NaN would find NaN; a NaN week never matched any event.
+  if (Number.isNaN(seasonNumber) || Number.isNaN(round)) return -1;
+  let known = preparedIndexes.get(events);
+  if (!known || known.length !== events.length) {
+    const bySeason = new Map<unknown, Map<unknown, number>>();
+    events.forEach((event, index) => {
+      if (event.type !== 'prepare') return;
+      let byRound = bySeason.get(event.seasonNumber);
+      if (!byRound) { byRound = new Map(); bySeason.set(event.seasonNumber, byRound); }
+      if (!byRound.has(event.round)) byRound.set(event.round, index);
+    });
+    known = { length: events.length, bySeason };
+    preparedIndexes.set(events, known);
+  }
+  return known.bySeason.get(seasonNumber)?.get(round) ?? -1;
+}
+/** One player's prepared morale this week, read without copying the whole week's values. */
+function preparedMoraleOf(state: SeasonState, playerId: string): number | undefined {
+  const event = state.relationships.events[preparedEventIndex(state.relationships.events, state.seasonNumber, state.round)];
+  return event?.type === 'prepare' ? event.values[playerId] : undefined;
 }
 /** One meaningful conversation per AI club at an actual calendar boundary, through normal guards. */
 export function automateRelationships(state: SeasonState): SeasonState {

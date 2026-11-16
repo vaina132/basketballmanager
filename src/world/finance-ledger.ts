@@ -166,9 +166,12 @@ export function appendFinanceLedgerEntry(finance: SeasonFinance, entry: Omit<Fin
  * Read indexes may share the original log across fresh prefix arrays within one synchronous validation only.
  * The index is derived evidence, never an acceptance verdict; callers cannot retain a cached proof between loads.
  */
-export function scopedFinanceLedgerIndex<T>(finance: FinanceLedgerSource, namespace: symbol, build: (source: FinanceLedgerSource) => T): { index: T; through: number } | undefined {
+export function scopedFinanceLedgerIndex<T>(finance: FinanceLedgerSource, namespace: symbol, build: (source: FinanceLedgerSource) => T, prefixesOnly = false): { index: T; through: number } | undefined {
   const origin = originInScope(finance);
   if (!origin) return undefined;
+  // Step 3.7: with `prefixesOnly`, a ledger that is its origin's whole log needs no prefix index: the caller's own reading of
+  // it gives the same values (simulation scopes, one per club decision, used to rebuild the index every time).
+  if (prefixesOnly && origin.through === financeLedgerCount(origin.source)) return undefined;
   const index = scopedCalculation(origin.source.archives?.length ? origin.source : origin.source.ledger, namespace, String(financeLedgerCount(origin.source)), () => build(origin.source));
   return index === undefined ? undefined : { index, through: origin.through };
 }

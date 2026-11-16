@@ -95,7 +95,7 @@ const activeClubTotals = ledgerFold<ClubTotals>((values, row, archived) => {
 });
 
 function clubTotals(finance: FinanceLedgerSource, clubId: string): ClubTotals {
-  const scoped = scopedFinanceLedgerIndex(finance, CLUB_TOTALS, clubIndex);
+  const scoped = scopedFinanceLedgerIndex(finance, CLUB_TOTALS, clubIndex, true);
   if (scoped) return prefixValue(scoped.index, clubId, scoped.through) ?? emptyClub();
   // Each club's active totals continue from its last archived value (archived seasons come first in ledger order).
   const archived = archivedClubPoints(finance);
@@ -146,7 +146,7 @@ function wageIndex(finance: FinanceLedgerSource): PrefixIndex<LedgerPayrollTotal
 
 /** One local reader can serve all players in a squad; only validation scopes retain reusable prefix indexes. */
 export function payrollLedgerReader(finance: FinanceLedgerSource): PayrollLedgerReader {
-  const scoped = scopedFinanceLedgerIndex(finance, WAGE_TOTALS, wageIndex);
+  const scoped = scopedFinanceLedgerIndex(finance, WAGE_TOTALS, wageIndex, true);
   if (scoped) return id => ({ ...(prefixValue(scoped.index, id, scoped.through) ?? emptyWage()) });
   // Step 3.7: wage totals are summed once per ledger (they were summed again for every club and agreement asked about,
   // many times a week in large worlds). Archived seasons' totals come from their last points; sums and the prepaid flag

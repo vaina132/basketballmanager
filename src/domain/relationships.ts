@@ -1,9 +1,13 @@
 import type { Player } from './types';
+import type { PressStyle } from './media';
 
 export type SquadRole = 'development' | 'rotation' | 'starter';
 export type RelationshipTalk = 'explain' | 'minutes-promise';
-export type PressTopic = 'losing-run' | 'winning-run';
-export type PressAnswer = 'back' | 'demand' | 'credit' | 'leaders' | 'routine';
+/** Format 34: runs of three results. Format 67 (careers with media) adds topics chosen from what happened. */
+export type PressTopic = 'losing-run' | 'winning-run' | RichPressTopic;
+export type RichPressTopic = 'big-win' | 'heavy-defeat' | 'derby-win' | 'derby-defeat' | 'playing-time' | 'injury' | 'signing' | 'sale' | 'board-pressure' | 'europe' | 'promotion-race' | 'relegation-battle' | 'rival-comments';
+/** Format 34 answers, then (format 67) the four answer styles of the richer press conferences. */
+export type PressAnswer = 'back' | 'demand' | 'credit' | 'leaders' | 'routine' | PressStyle;
 export interface RelationshipAnchor {
   seasonNumber: number;
   round: number;
@@ -18,7 +22,8 @@ export type RelationshipEvent = RelationshipAnchor & { id: string } & (
   | { type: 'role'; clubId: string; playerId: string; role: SquadRole }
   | { type: 'talk'; clubId: string; playerId: string; choice: RelationshipTalk }
   /** Format 34: a press answer after a run of results, with the squad and most-used players it addressed. */
-  | { type: 'press'; clubId: string; topic: PressTopic; triggerRound: number; answer: PressAnswer; playerIds: string[]; coreIds: string[] }
+  /** Format 67 (careers with media) adds the named players (`subjectIds`) and the media standing before the answer. */
+  | { type: 'press'; clubId: string; topic: PressTopic; triggerRound: number; answer: PressAnswer; playerIds: string[]; coreIds: string[]; subjectIds?: string[]; standing?: number }
   | { type: 'prepare'; rosterIds: Record<string, string>; values: Record<string, number> }
 );
 export interface SeasonRelationships {
@@ -40,6 +45,10 @@ export interface PressQuestion {
   playerIds: string[];
   coreIds: string[];
   answered: PressAnswer | null;
+  /** Format 67 (careers with media): the named players, the club the question is about and the standing before answering. */
+  subjectIds?: string[];
+  opponentId?: string;
+  standing?: number;
 }
 export interface PlayingTimePromise {
   id: string;

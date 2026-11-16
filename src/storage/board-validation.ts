@@ -1,6 +1,7 @@
 import type { BoardAnchor, BoardMandate, SeasonBoard } from '../domain/board';
 import type { SeasonFixture, SeasonState } from '../domain/season';
 import { buildBoardMandate, buildBoardReview, createBoard, type BoardCalculationContext } from '../world/board';
+import { boardMediaEvidence } from '../world/media';
 import { validationReplayCache } from './replay-cache';
 import { dateForRound } from '../world/season';
 import { openingSponsorshipClubs } from '../world/commercial-policy';
@@ -154,7 +155,9 @@ export function validateBoard(state: SeasonState, version: number): void {
       if (reviewAnchor.seasonNumber !== year || reviewAnchor.round !== round) fail(reviewPath, 'must retain one review after every eligible committed matchday');
       chronological(reviewAnchor, reviewPath);
       let review;
-      try { review = validationReplayCache.calculate('board-review', { state: contextAt(state, reviewAnchor, board), mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
+      // Format 67, careers with media: the media assessment from results and press answers before this review.
+      const pressMedia = boardMediaEvidence(state, reviewAnchor.seasonNumber, reviewAnchor.round, reviewAnchor.date);
+      try { review = validationReplayCache.calculate('board-review', { state: { ...contextAt(state, reviewAnchor, board), ...(pressMedia ? { pressMedia } : {}) }, mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
       if (!equal(reviewRaw, review)) fail(reviewPath, 'must exactly reproduce results, inherited costs, injury context and bounded confidence');
       board = { ...board, reviews: [...board.reviews, review] }; reviewIndex += 1;
     }

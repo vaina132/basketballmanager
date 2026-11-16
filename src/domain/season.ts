@@ -28,6 +28,7 @@ import type { SeasonYouth } from './youth';
 import type { SeasonLifecycle } from './lifecycle';
 import type { SeasonYouthCompetition } from './youth-competition';
 import type { SeasonFacilities } from './facilities';
+import type { SeasonMedia } from './media';
 
 export interface ClubPlan {
   tactics: Tactics;
@@ -129,7 +130,8 @@ export interface DomesticDivisions {
 /** Format 59 adds the BCL format: qualification, a protected draw, play-ins, Round of 16 groups and a Final Four (step 3.5e). */
 /** Format 60 adds estimated tables for unchosen leagues and each season end's European places (`europe`, step 3.5f). */
 /** Format 61 records realistic injury kinds (sprint 4) and each career match's recurrence risk (`activeMatch.injuryRisk`). Format 62 (sprint 4) gives real-club worlds researched money: `world.economy` and each club's `finances[].economy` (`src/world/economy.ts`). */
-export const SEASON_SCHEMA_VERSION = 62;
+/** Format 67 (saved ideas level) adds richer press topics and the manager's media standing to new careers (`media`, `src/world/media.ts`). */
+export const SEASON_SCHEMA_VERSION = 67;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -186,6 +188,8 @@ export interface SeasonState {
   background?: SeasonBackground;
   /** Format 60: this season's European entrants, exactly in worlds with European places (step 3.5f). */
   europe?: SeasonEurope;
+  /** Format 67: richer press topics and media standing, in careers created with them; absent careers keep the format-34 press. */
+  media?: SeasonMedia;
   activeFixtureId: string | null;
   activeMatch: MatchState | null;
 }

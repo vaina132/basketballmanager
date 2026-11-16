@@ -37,6 +37,8 @@ export interface BoardClubReview {
   financeImpact: number;
   /** Format 35, once rivalries govern the review: derby wins and losses in the counted games. */
   rivalryImpact?: number;
+  /** Format 67, the manager's club in careers with media: media standing and recent press answers (`src/world/media.ts`). */
+  mediaImpact?: number;
   assessment: number;
   previousConfidence: number;
   confidence: number;

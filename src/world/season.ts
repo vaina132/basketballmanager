@@ -17,6 +17,7 @@ import { computeExchanges, departureFor, joinedContracts, leavingRecord } from '
 import type { SeasonEndDecision } from '../domain/career';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
 import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
+import { enableMedia } from './media';
 import { createFacilities, enableBoardFunding, enableFacilities, enableFacilityMaintenance, processFacilityProjects, automateFacilities } from './facilities';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonEurope, SeasonFixture, SeasonState, Standing } from '../domain/season';
 import { nextEuropeanPlaces, openingEurope } from './european-places';
@@ -333,6 +334,8 @@ export interface SeasonSystems {
   negotiations?: boolean; market?: boolean; scouts?: boolean; fitness?: boolean; physio?: boolean; assistant?: boolean;
   academy?: boolean; youth?: boolean; lifecycle?: boolean; youthCompetition?: boolean; facilities?: boolean;
   relationships?: boolean; board?: boolean; commercial?: boolean; boardFunding?: boolean; boardConsequences?: boolean; rivalries?: boolean; facilityMaintenance?: boolean; careerMoves?: boolean;
+  /** Format 67: richer press topics and the manager's media standing (new careers only; requires relationships). */
+  media?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -345,6 +348,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true,
+  media: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -356,7 +360,11 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   const unknown = Object.keys(first).filter(key => !SEASON_OPTION_KEYS.has(key));
   if (unknown.length || positional.length) throw new Error(`Unsupported career options: ${unknown.join(', ') || 'extra positional arguments'}.`);
   const options = first, finance = options.finance ?? true;
-  return createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD);
+  if (options.media !== undefined && typeof options.media !== 'boolean') throw new Error('Choose a valid press and media setting.');
+  if (options.media && !options.relationships) throw new Error('Press topics and media standing require squad relationships.');
+  // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
+  const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD);
+  return options.media ? enableMedia(created) : created;
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.

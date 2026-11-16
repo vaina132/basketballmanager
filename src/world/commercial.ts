@@ -8,6 +8,7 @@ import { recordSponsorshipPayment } from './finance';
 import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, commercialGovernsSeason, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorshipPaymentsDue, sponsorshipSourceId, sponsorshipInstallment, sponsorshipReferenceFee, SPONSORSHIP_RENEWAL_ROUND, SPONSORSHIP_SECOND_INSTALLMENT_ROUND, type DueSponsorshipPayment } from './commercial-policy';
 import { dateForRound, getStandings, MAX_SEASON_NUMBER } from './season';
 import type { WorldContext } from '../domain/world';
+import { mediaSponsorBonus } from './media';
 
 export { createCommercial } from './commercial-policy';
 
@@ -142,7 +143,7 @@ export function declineSponsorshipOffer(state: SeasonState, offerId: string): Se
 export function requestSponsorshipImprovement(state: SeasonState, offerId: string): SeasonState {
   const offer = managedOpenOffer(state, offerId);
   if (offer.request) throw new Error('You have already asked this sponsor for better terms.');
-  const response = respondToSponsorshipRequest(state.seed, offer);
+  const response = respondToSponsorshipRequest(state.seed, offer, mediaSponsorBonus(state, offer.id));
   const offers = state.commercial.offers.map(item => item.id === offerId ? { ...item, request: response.request, annualFee: response.annualFee, status: response.status, closedOn: response.status === 'open' ? null : state.date } : item);
   return withEvent(state, { ...state.commercial, offers }, { ...commercialAnchor(state), type: 'request', offerId });
 }

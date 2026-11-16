@@ -155,10 +155,13 @@ export function sponsorshipFlexibility(seed: number, offer: Pick<SponsorshipOffe
   return hash(seed, `sponsor-flex|${offer.id}|${offer.sponsorId}|${offer.clubId}`) % 13;
 }
 
-/** One request for 10% more: accepted with enough flexibility, otherwise a smaller counter, or a rare withdrawal. */
-export function respondToSponsorshipRequest(seed: number, offer: SponsorshipOffer): { request: SponsorshipRequest; annualFee: number; status: SponsorshipOffer['status'] } {
+/**
+ * One request for 10% more: accepted with enough flexibility, otherwise a smaller counter, or a rare withdrawal.
+ * Format 67: `mediaBonus` (-2 to +2, careers with media) shifts the sponsor's flexibility by the manager's media standing.
+ */
+export function respondToSponsorshipRequest(seed: number, offer: SponsorshipOffer, mediaBonus = 0): { request: SponsorshipRequest; annualFee: number; status: SponsorshipOffer['status'] } {
   const askedAnnualFee = roundFee(offer.annualFee * (100 + SPONSORSHIP_REQUEST_PERCENT) / 100);
-  const flexibility = sponsorshipFlexibility(seed, offer);
+  const flexibility = Math.max(0, sponsorshipFlexibility(seed, offer) + mediaBonus);
   if (flexibility >= SPONSORSHIP_REQUEST_PERCENT) return { request: { askedAnnualFee, response: 'accepted' }, annualFee: askedAnnualFee, status: 'open' };
   if (flexibility < 3 && offer.appeal < 0.9) return { request: { askedAnnualFee, response: 'withdrawn' }, annualFee: offer.annualFee, status: 'withdrawn' };
   return { request: { askedAnnualFee, response: 'countered' }, annualFee: Math.max(offer.annualFee, roundFee(offer.annualFee * (100 + flexibility) / 100)), status: 'open' };

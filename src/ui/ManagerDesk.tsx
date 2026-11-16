@@ -94,7 +94,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   if (season && move) { const text = careerMoveText(season, move); notices.push({ key: 'career', title: text.title, detail: text.detail, urgent: move.reason === 'dismissed', action: 'View board', open: onOpenBoard ?? onOpenClub }) }
   if (season && worn.length) notices.push({ key: 'facilities-worn', title: 'Facilities wearing', detail: `${worn.map(item => `${({ arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure' })[item.type]} ${item.condition}/100`).join(', ')}. Their benefit shrinks while condition is low; full upkeep restores it.`, action: 'Review facilities', open: onOpenClub })
   const press = season && onOpenInbox ? getPressQuestion(season) : null
-  if (press && !press.answered && onOpenInbox) notices.push({ key: 'press', title: 'Press conference', detail: `${press.question} Answer in the Inbox before the next match, or your assistant keeps it routine.`, action: 'Open inbox', open: onOpenInbox })
+  if (press && !press.answered && onOpenInbox) notices.push({ key: 'press', title: 'Press conference', detail: `${press.question} Answer in the Inbox before the next match, or your assistant ${press.subjectIds ? 'gives no comment' : 'keeps it routine'}.`, action: 'Open inbox', open: onOpenInbox })
 
   if (season?.board.enabledSince && onOpenBoard) {
     const board = getBoardSummary(season)

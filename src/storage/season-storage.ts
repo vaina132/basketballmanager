@@ -2072,12 +2072,15 @@ function validateScouting(value: unknown, state: SeasonState, version: number): 
     const lastOwned = new Map<string, { year: number; round: number }>();
     for (let year = firstYear; year <= state.seasonNumber; year += 1) {
       const snapshots = registrations.get(year);
+      // A club only has registrations in seasons it spent in the full world (step 3.4d-2). A club that leaves loses its
+      // scouting office at that rollover and a returning club starts a new one (season.ts keeps only the full world's
+      // offices), so memories of players who left before a season away must not be expected (step 3.7 acceptance: a
+      // relegated club's player signed elsewhere in the offseason market was still demanded after the club came back).
+      if (!snapshots?.some(roster => roster.clubId === club.id)) { lastOwned.clear(); continue; }
       const arrivalRefresh = state.rosters.some(roster => roster.fromRound === state.round && roster.fromRound > 1) ? state.round : 1;
       const through = year === state.seasonNumber ? Math.max(1, committedRound, firstYear === year ? firstRound : 1, arrivalRefresh) : seasonRounds(state);
       for (let observedRound = year === firstYear ? firstRound : 1; observedRound <= through; observedRound += 1) {
-        // A club only has registrations in seasons it spent in the full world (step 3.4d-2).
-        const snapshot = snapshots?.some(roster => roster.clubId === club.id) ? rosterForRound(snapshots, club.id, observedRound) : undefined;
-        for (const player of snapshot?.players ?? []) lastOwned.set(player.id, { year, round: observedRound });
+        for (const player of rosterForRound(snapshots, club.id, observedRound).players) lastOwned.set(player.id, { year, round: observedRound });
       }
     }
     const knowledge = record(office.squadKnowledge, `${path}.squadKnowledge`, [...lastOwned.keys()]);

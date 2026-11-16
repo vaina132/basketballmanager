@@ -12,6 +12,7 @@ import { submitInSeasonTransferOffer, withdrawInSeasonOffer } from '../src/world
 import { rolloverSeason } from '../src/world/season';
 import { advanceAcademyCareer as advance } from './helpers/academy-careers';
 import { currentSeasonFile, expectedMigration } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
 const restore = state => parseSeason(serializeSeason(state));
@@ -45,11 +46,16 @@ describe('dated senior development and retirement persistence', () => {
     expect(restore(migrated)).toEqual(migrated);
   });
 
-  // Development mode (sprint 4 injuries): the captured next week no longer matches, so only a valid next week is checked.
-  it('continues a migrated format25 career for a valid week while disabled', () => {
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts).
+  it('continues a migrated format25 career while disabled for a valid week that follows the independently captured one', () => {
     const next = advance(migrated);
-    expect(restore(next)).toEqual(next);
-    expect(Object.values(migrated.training.lastWeek.players).every(player => !Object.hasOwn(player, 'aging'))).toBe(true);
+    const expected = JSON.parse(fixture('season25-academy-career-next'));
+    expect(expected.formatVersion).toBe(25);
+    expectValidOldSaveWeek(migrated, next, parseSeason(JSON.stringify(expected)));
+    // Senior aging and retirement stay switched off: neither week records aging or a notice.
+    for (const state of [migrated, next]) expect(Object.values(state.training.lastWeek.players).every(player => !Object.hasOwn(player, 'aging'))).toBe(true);
+    expect(next.lifecycle).toEqual(migrated.lifecycle);
   });
 
   it('reproduces the independently captured format25 rollover without new notices or altered registration', () => {

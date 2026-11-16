@@ -13,6 +13,9 @@
 .club-context strong { display: block; font-size: 12px; font-weight: 600; line-height: 1.35; }
 .club-context > div > span { display: block; color: var(--muted); font-size: 10px; margin-top: 3px; }
 .game-shell .main-nav { gap: 2px; }
+/* Menu groups (owner, 16 November 2026: a short menu ordered by use). The sidebar scrolls on short screens. */
+.game-shell .sidebar { overflow-y: auto; scrollbar-width: none; }
+.nav-divider { display: block; flex: none; height: 1px; margin: 4px 8px; background: var(--border); }
 .game-shell .nav-item { font-size: 12px; min-height: 38px; padding: 8px; border-radius: 1px; }
 .game-shell .nav-item > svg { width: 18px; height: 18px; }
 .game-shell .sidebar-bottom { padding: 14px 5px 0; }

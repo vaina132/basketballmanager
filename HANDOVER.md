@@ -6,7 +6,7 @@ This file holds only the current state, the next steps and the rules that must n
 
 ## Current state (16 November 2026, saved ideas level complete, waiting for the owner's feedback)
 
-**Active level:** Saved ideas (complete in the cloud, waiting for the owner to play and give feedback) (owner, 15 November 2026: "Go ahead dont stop, i want you to implement according to the plan and dont stop just tell me where we are and i will tell you until where u need to implement"). Then (15 November 2026): "Please go ahead and dont stop until you are done with what was planned only after that i will play and test and will provide you feedback." Finish the saved ideas level without stopping, then hand over for the owner to play. Level order: sprint 3 (multi-league world; 3.7 browser acceptance local-only), sprint 4 (realism, done), **saved ideas (active)**, release preparation, interface simplification (last).
+**Active level:** Step 3.7, then the safety-check restoration and gap closing (owner, 16 November 2026: "complete the step 3.7 and then the restoration of the safety checks and closing the gaps ... the selling side ... we can postpone ... the interface simplification will only come after the playtests"). The saved ideas level is complete. Level order: sprint 3 (3.7 active), sprint 4 (done), saved ideas (done), **safety and gaps (next)**, owner play test, interface simplification; selling postponed.
 
 **Saved ideas plan** (defaults reversible, recorded in `docs/decisions.md` as each lands; new careers only, older careers keep their rules through model fields):
 - Round 1 (parallel agents, formats 63-66): (a) protected first season, fresh board confidence for a new coach, mid-season dismissals and resignations; (b) early sponsor exits and arena naming rights; (c) medical and scouting facilities and repair projects; (d) default squad roles by squad rank (fix for deep-bench concerns) and players asking about new contracts.
@@ -61,7 +61,8 @@ The game reads real club data from the owner's Supabase project (public storage 
   - loans and leases;
   - medical and scouting facilities and repair projects;
   - early sponsor exits and naming rights.
-- **Release preparation:** free first season, then a EUR 15 unlock, later Steam; data-rights review.
+- **Order decided by the owner (16 November 2026), before the play test:** (1) finish step 3.7 (multi-league season with Europe, speed and save size, browser check); (2) restore the safety checks paused in development mode and close the known gaps ("Before release" list); then the owner play-tests. **The selling side (free first season, EUR 15 unlock, Steam) is postponed to a later phase.** Interface simplification comes after the play tests.
+- **Release preparation (selling, postponed):** free first season, then a EUR 15 unlock, later Steam; data-rights review.
 - **Interface simplification,** after the owner has played with real data.
 
 ## Rules and conventions that must not be broken

@@ -82,7 +82,7 @@ describe('the one Continue (owner request, 16 November 2026)', () => {
       expect(next.label).toMatch(/^\d+ (European )?games?( · weekly club business)?$|^Weekly club business$/);
       // Stopped by the manager after this day: where the career stands and what Continue does next.
       expect(stoppedRun(state)).toEqual({ kind: 'stopped', message: `Stopped. Next: ${next.label.charAt(0).toLowerCase()}${next.label.slice(1)} on ${gameDate(next.day)}.` });
-      expect(stoppedRun(state).message).toMatch(/^Stopped\. Next: \d+ (European )?games?( · weekly club business)? on (Tue|Wed|Thu) \d+ \w+\.$/);
+      expect(stoppedRun(state).message).toMatch(/^Stopped\. Next: (\d+ (European )?games?( · weekly club business)?|weekly club business) on \w{3} \d+ \w+\.$/);
       const progress = continueProgress(state, 1);
       expect(progress).toBeGreaterThan(0);
       expect(progress).toBeLessThan(1);

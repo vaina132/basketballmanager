@@ -6,7 +6,7 @@ import { parseSealedSeason, parseSeason, serializeCheckpoint, serializeSeasonCom
  * historical validation never freezes the interface; tests and fallbacks use the same functions directly.
  */
 export interface SeasonCodec {
-  /** Always runs the full career check first: checkpoints and exports alike are written only when it accepts the career. */
+  /** Always runs the full career check first: exports and direct saves are written only when it accepts the career. */
   serialize(state: SeasonState): Promise<string>;
   /**
    * Like `serialize`, for the checkpoint queue's own states: as strict, but incremental when the state keeps the past of

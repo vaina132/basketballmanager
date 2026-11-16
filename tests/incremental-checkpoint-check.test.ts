@@ -15,6 +15,8 @@ vi.mock('../src/storage/season-indexed-db', () => storage);
 const play = (state: SeasonState): SeasonState => advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
 /** The save worker checks a structured clone of the game's state. */
 const clone = (state: SeasonState): SeasonState => structuredClone(state);
+/** The newest ticket receipt of the ledger. */
+const latestTickets = (state: SeasonState): number => { let index = state.finance.ledger.length - 1; while (index >= 0 && state.finance.ledger[index]!.kind !== 'tickets') index -= 1; return index; };
 
 // One career with every system, delegated: a checkpoint a few weeks in (trusted) and the next week's checkpoint.
 let trusted: SeasonState, next: SeasonState;
@@ -59,7 +61,7 @@ describe('incremental checkpoint checks', () => {
 
   it('refuses an edited new week on its own, without the full check', () => {
     const record = trustedRecord();
-    const edited = clone(next), latest = edited.finance.ledger.findLastIndex(entry => entry.kind === 'tickets');
+    const edited = clone(next), latest = latestTickets(edited);
     expect(edited.finance.ledger[latest]!.round).toBeGreaterThanOrEqual(trusted.round);
     edited.finance.ledger[latest] = { ...edited.finance.ledger[latest]!, amount: edited.finance.ledger[latest]!.amount + 100 };
     expect(matchesTrustedPrefix(record, edited)).toBe(true);
@@ -89,7 +91,7 @@ describe('incremental checkpoint checks', () => {
     expect(lastPrefixSkips()['finance.ledger']).toBeGreaterThan(0);
     expect(storage.writeSeasonCheckpoint).toHaveBeenCalledTimes(2);
     // A refused new week writes nothing.
-    const refused = clone(next), latest = refused.finance.ledger.findLastIndex(entry => entry.kind === 'tickets');
+    const refused = clone(next), latest = latestTickets(refused);
     refused.finance.ledger[latest] = { ...refused.finance.ledger[latest]!, amount: refused.finance.ledger[latest]!.amount + 100 };
     await expect(queue.save(refused, 'matchday')).rejects.toThrow(/Invalid season save/);
     expect(storage.writeSeasonCheckpoint).toHaveBeenCalledTimes(2);

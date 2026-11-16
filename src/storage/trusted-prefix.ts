@@ -172,24 +172,29 @@ const SEASON_CONSTANTS = ['schemaVersion', 'engineVersion', 'dataPackId', 'seed'
  * records dated at or after the cut (nothing back-dated). Current-season games of earlier weeks must be unchanged too.
  */
 export function matchesTrustedPrefix(trusted: CheckRecord, state: SeasonState): boolean {
+  return trustedPrefixMismatch(trusted, state) === null;
+}
+
+/** Why `state` does not keep the trusted state's past (`matchesTrustedPrefix`), or null when it does. */
+export function trustedPrefixMismatch(trusted: CheckRecord, state: SeasonState): string | null {
   const before = trusted.state, cut = trusted.cut, limit = cutKey(cut);
-  if (!state || typeof state !== 'object' || state.seasonNumber !== before.seasonNumber || typeof state.round !== 'number' || state.round < before.round) return false;
-  if (typeof state.date !== 'string' || state.date < before.date || state.round === before.round && before.status === 'complete' && state.status !== 'complete') return false;
-  for (const key of SEASON_CONSTANTS) if (Object.hasOwn(before, key) !== Object.hasOwn(state, key) || !sameJson(before[key], state[key])) return false;
-  if (!sameJson((before.finance as { archives?: unknown })?.archives, (state.finance as { archives?: unknown })?.archives)) return false;
-  for (const [, journal] of JOURNALS) {
+  if (!state || typeof state !== 'object' || state.seasonNumber !== before.seasonNumber || typeof state.round !== 'number' || state.round < before.round) return 'season or matchday';
+  if (typeof state.date !== 'string' || state.date < before.date || state.round === before.round && before.status === 'complete' && state.status !== 'complete') return 'calendar';
+  for (const key of SEASON_CONSTANTS) if (Object.hasOwn(before, key) !== Object.hasOwn(state, key) || !sameJson(before[key], state[key])) return key;
+  if (!sameJson((before.finance as { archives?: unknown })?.archives, (state.finance as { archives?: unknown })?.archives)) return 'finance.archives';
+  for (const [name, journal] of JOURNALS) {
     const old = journal.items(before), next = journal.items(state);
-    if (!Array.isArray(old) || !Array.isArray(next)) return false;
+    if (!Array.isArray(old) || !Array.isArray(next)) return name;
     const at = journal.at as (item: unknown) => number;
     const count = leadingBefore(old, at, cut);
-    if (next.length < count) return false;
-    for (let index = 0; index < count; index += 1) if (!sameJson(old[index], next[index])) return false;
-    for (let index = count; index < next.length; index += 1) if (next[index] !== null && typeof next[index] === 'object' && at(next[index]) < limit) return false;
+    if (next.length < count) return name;
+    for (let index = 0; index < count; index += 1) if (!sameJson(old[index], next[index])) return `${name}[${index}]`;
+    for (let index = count; index < next.length; index += 1) if (next[index] !== null && typeof next[index] === 'object' && at(next[index]) < limit) return `${name}[${index}] back-dated`;
   }
-  if (!Array.isArray(state.fixtures) || state.fixtures.length !== before.fixtures.length) return false;
+  if (!Array.isArray(state.fixtures) || state.fixtures.length !== before.fixtures.length) return 'fixtures';
   for (let index = 0; index < before.fixtures.length; index += 1) {
     const fixture = before.fixtures[index]!;
-    if (fixture.round < cut.round && !sameJson(fixture, state.fixtures[index])) return false;
+    if (fixture.round < cut.round && !sameJson(fixture, state.fixtures[index])) return `fixtures[${index}]`;
   }
-  return true;
+  return null;
 }

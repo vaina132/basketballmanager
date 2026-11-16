@@ -74,17 +74,20 @@ describe('save seals (step 3.2)', () => {
 
   it('never uses an unchecked serialization shortcut, including codecs from the unfinished implementation', async () => {
     const serialize = vi.fn(value => directSeasonCodec.serialize(value));
+    // The queue's checkpoint check (incremental when it can be) is as strict as the full check.
+    const checkpoint = vi.fn(value => directSeasonCodec.checkpoint(value));
     const unchecked = vi.fn(async () => tampered());
-    const codec = { ...directSeasonCodec, serialize, serializeCheckpoint: unchecked };
+    const codec = { ...directSeasonCodec, serialize, checkpoint, serializeCheckpoint: unchecked };
     await expect(saveCareerCheckpoint(invalidState(), 0, 'manual', codec)).rejects.toThrow(/Invalid season save/);
     expect(serialize).toHaveBeenCalledExactlyOnceWith(invalidState());
     await expect(createCheckpointQueue({ revision: () => 0, codec }).save(invalidState(), 'matchday')).rejects.toThrow(/Invalid season save/);
-    expect(serialize).toHaveBeenCalledTimes(2);
-    expect(serialize).toHaveBeenLastCalledWith(invalidState());
+    expect(checkpoint).toHaveBeenCalledExactlyOnceWith(invalidState());
+    expect(serialize).toHaveBeenCalledTimes(1);
     expect(unchecked).not.toHaveBeenCalled();
     expect(storage.writeSeasonCheckpoint).not.toHaveBeenCalled();
     // Neither the save worker nor the direct codec accepts a request to skip the check.
     expect(handleSeasonCodecRequest({ requestId: 1, kind: 'serialize', state: invalidState(), check: false })).toEqual({ requestId: 1, error: expect.stringMatching(/Invalid season save/) });
+    expect(handleSeasonCodecRequest({ requestId: 2, kind: 'checkpoint', state: invalidState(), check: false })).toEqual({ requestId: 2, error: expect.stringMatching(/Invalid season save/) });
     await expect(directSeasonCodec.serialize(invalidState(), { check: false })).rejects.toThrow(/Invalid season save/);
   });
 

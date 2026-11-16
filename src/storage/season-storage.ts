@@ -77,7 +77,7 @@ import { createPhysio } from '../world/physio';
 import { createAssistant } from '../world/assistant';
 import { academyAtBoundary, buildAcademyWeek, createAcademy, enableAcademy, graduateAcademyProspect, prepareAcademySeason, processAcademyWeek } from '../world/academy';
 import { validationReplayCache } from './replay-cache';
-import { matchesTrustedPrefix, prefixPlan, recall, remember, trustedCutKey, withPrefixCheck, type CheckRecord } from './trusted-prefix';
+import { prefixPlan, recall, remember, trustedCutKey, trustedPrefixMismatch, withPrefixCheck, type CheckRecord } from './trusted-prefix';
 import { canSummarizeAcademyReport, createAcademyHistoryContext, isAcademyOutcome, summarizeAcademyHistory, summarizeAcademyPlayer } from '../world/academy-history';
 import { createYouth } from '../world/youth';
 import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, prepareYouthFixture, settleYouthFixture, getYouthPlayerStatus, youthCompetitionAtBoundary, youthInjuryHistory, YOUTH_RECURRENCE_MODEL } from '../world/youth-competition';
@@ -3394,14 +3394,23 @@ export function checkAgainstTrustedPrefix(state: SeasonState, trusted: CheckReco
 export function checkCheckpointState(state: SeasonState): 'incremental' | 'full' {
   const previous = lastCheckpoint;
   let trusted: CheckRecord | null = null;
-  try { trusted = previous && matchesTrustedPrefix(previous, state) ? previous : null; } catch { trusted = null; }
+  try {
+    const mismatch = previous ? trustedPrefixMismatch(previous, state) : 'no trusted checkpoint';
+    trusted = mismatch === null ? previous : null;
+    lastFallback = mismatch;
+  } catch (error) { trusted = null; lastFallback = `prefix comparison failed: ${error instanceof Error ? error.message : 'unknown error'}`; }
   if (trusted) {
     try { lastCheckpoint = checkAgainstTrustedPrefix(state, trusted); return 'incremental'; }
-    catch { /* The full check below decides: an incremental refusal or error never refuses a checkpoint on its own. */ }
+    // The full check below decides: an incremental refusal or error never refuses a checkpoint on its own.
+    catch (error) { lastFallback = `incremental check: ${error instanceof Error ? error.message : 'unknown error'}`; }
   }
   lastCheckpoint = withPrefixCheck(state, null, true, () => validateSeasonState(state)) ?? previous;
   return 'full';
 }
+
+let lastFallback: string | null = null;
+/** Why the last checkpoint check was a full one (null after an incremental check), for tests and measurements. */
+export function lastCheckpointFallback(): string | null { return lastFallback; }
 
 /** Forget the trusted checkpoint (a new career, or tests). */
 export function resetCheckpointTrust(): void { lastCheckpoint = null; }

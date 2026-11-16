@@ -114,13 +114,14 @@ describe('assistant appointments and shared five-role staff allocation', () => {
     // The normal manager club has a vacancy. Let AI manage it for this isolated funding boundary.
     const poor = expense({ ...initial, managedClubId: initial.clubs.find(team => team.id !== club)!.id }, getSpendableCash(initial, club) - 1_000_000);
     expect(recruitAiAssistants(poor)).toBe(poor);
-    // A caller changing this input must not inherit accounting from the completed candidate-search scope.
-    poor.finance.ledger.at(-1)!.amount = 0;
-    const before = structuredClone(poor), hired = recruitAiAssistants(poor);
+    // A changed input must not inherit accounting from the completed candidate search. Career state is replaced, never
+    // edited (step 3.7 caches per ledger rely on it), so the changed input carries a new ledger.
+    const ledger = poor.finance.ledger, funded = { ...poor, finance: { ...poor.finance, ledger: [...ledger.slice(0, -1), { ...ledger.at(-1)!, amount: 0 }] } };
+    const before = structuredClone(funded), hired = recruitAiAssistants(funded);
     expect(getClubAssistant(hired, club)).not.toBeNull();
     expect(staffCommitted(hired, club)).toBeLessThanOrEqual(STAFF_BUDGET);
-    expect(hired.finance.ledger.length).toBe(poor.finance.ledger.length + 1);
-    expect(poor).toEqual(before);
+    expect(hired.finance.ledger.length).toBe(funded.finance.ledger.length + 1);
+    expect(funded).toEqual(before);
   });
 
   it('permits advice for the final game but closes new appointments after its final whistle', () => {

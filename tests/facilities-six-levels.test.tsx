@@ -196,6 +196,10 @@ describe('repayments and season ends', () => {
     expect(parseSeason(serializeSeason(offseasonExpansion)).facilities).toEqual(offseasonExpansion.facilities);
     expect(parseSeason(serializeSeason(nextSeason)).facilities).toEqual(nextSeason.facilities);
     expect(parseSeason(serializeSeason(paid)).facilities.debts).toEqual(paid.facilities.debts);
+    // The compact save seals the completed season; the loan, its payments and the seats survive it.
+    const sealed = parseSeason(serializeSeasonCompact(paid));
+    expect(sealed.facilities.debts).toEqual(paid.facilities.debts);
+    expect(getArenaCapacity(sealed, club)).toBe(capacity + 500);
   });
 
   it('repays a loan early for what is left plus the fee', () => {

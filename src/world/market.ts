@@ -6,7 +6,7 @@ import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import { getActiveCareerPlayers, getCareerPlayers, getCareerWage } from './player-catalog';
-import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE, quotePlayerContract } from './employment-policy';
+import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE, playerContractQuoter, quotePlayerContract } from './employment-policy';
 import { commitPlayerOffer } from './employment';
 import { commitContractBuyout } from './buyouts';
 import { scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
@@ -233,12 +233,22 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
         const position = playerInList(getCareerPlayers(next), id)!.position;
         positions.set(position, (positions.get(position) ?? 0) + 1);
       }
+      // Step 3.7: each candidate's rating and the club's own players are worked out once, not in every comparison, and one
+      // club quoter serves every candidate of this unchanged state (same values, same order, same first offerable player).
+      const own = new Set(club.players.map(player => player.id)), ratings = new Map<string, number>();
+      const rating = (id: string) => {
+        const known = ratings.get(id);
+        if (known !== undefined) return known;
+        const value: number = next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, id) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, id) : playerInList(getCareerPlayers(next), id)!.attributes).reduce((total, skill) => total + skill, 0);
+        ratings.set(id, value);
+        return value;
+      };
       const ranked = getActiveCareerPlayers(next, next.seasonNumber + 1, 1).filter(player => !contractForSeason(next.employment, player.id, next.seasonNumber + 1) && !live.some(item => item.playerId === player.id && (!isCompetitiveMarket(next) || finalProposalDay || item.clubId === club.id))).sort((left, right) => {
-        const retained = Number(club.players.some(player => player.id === right.id)) - Number(club.players.some(player => player.id === left.id));
-        const rating = (id: string) => next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, id) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, id) : playerInList(getCareerPlayers(next), id)!.attributes).reduce((total, skill) => total + skill, 0);
+        const retained = Number(own.has(right.id)) - Number(own.has(left.id));
         return retained || (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || rating(right.id) - rating(left.id) || left.id.localeCompare(right.id, 'en');
       });
-      const player = ranked.find(player => quotePlayerContract(next, player.id, getCareerWage(next, player.id), 1, club.id).canOffer);
+      const quote = playerContractQuoter(next, club.id);
+      const player = ranked.find(player => quote(player.id, getCareerWage(next, player.id), 1).canOffer);
       // A club that has sold a player can buy a stronger, known replacement.
       // Retain/free recruitment remains the default, with identical fee guards.
       const sold = next.employment.transfers.some(transfer => transfer.seasonNumber === next.seasonNumber && transfer.fromClubId === club.id);

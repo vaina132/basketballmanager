@@ -56,8 +56,15 @@ export function getMarketOffers(state: SeasonState, clubId = state.managedClubId
   return (getMarketWindow(state)?.offers ?? []).filter(offer => offer.clubId === clubId && (!liveOnly || isLiveMarketOffer(offer)));
 }
 
+// Step 3.7: live offers are picked out once per offer list (lists and offers are replaced, never edited; the length guards
+// against an edited list). Contract and spending guards ask for them many times per decision. Each caller gets a copy.
+const liveOffersCache = new WeakMap<readonly MarketOffer[], { length: number; live: readonly MarketOffer[] }>();
 export function getLiveMarketOffers(state: { market?: SeasonState['market']; seasonNumber: number }): MarketOffer[] {
-  return state.market?.windows.find(window => window.seasonNumber === state.seasonNumber && !window.closed)?.offers.filter(isLiveMarketOffer) ?? [];
+  const offers = state.market?.windows.find(window => window.seasonNumber === state.seasonNumber && !window.closed)?.offers;
+  if (!offers) return [];
+  let known = liveOffersCache.get(offers);
+  if (!known || known.length !== offers.length) { known = { length: offers.length, live: offers.filter(isLiveMarketOffer) }; liveOffersCache.set(offers, known); }
+  return [...known.live];
 }
 
 /** Advancing stops at the first response or expiry, so a decision cannot silently be skipped. */

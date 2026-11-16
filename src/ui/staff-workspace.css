@@ -167,3 +167,7 @@
 .staff-replacement-warning svg{flex:none;margin-top:2px;color:var(--accent)}
 @media(max-width:800px){.staff-overview-row{grid-template-columns:minmax(0,1fr) auto}.staff-overview-role{grid-column:1/-1}.staff-overview-name{grid-column:1}.staff-overview-fee{grid-column:2;grid-row:2;text-align:right}.staff-overview-actions{grid-column:1/-1;justify-content:flex-start}.staff-overview-row.vacant .staff-overview-actions{grid-column:1/-1}.staff-overview-confirm{flex-direction:column;align-items:flex-start}}
 @media(max-width:650px){.staff-overview-row{padding:8px 10px}.staff-overview-budget{white-space:normal}}
+.staff-hire-controls:has(.staff-replacement-offer) .staff-after-hire{display:none}
+.staff-after-replacement{display:flex;justify-content:space-between;gap:10px;font-size:12px}
+.staff-after-replacement>span{color:var(--muted)}
+.staff-after-replacement>strong{font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}

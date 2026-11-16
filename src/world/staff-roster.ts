@@ -12,6 +12,7 @@ import { releaseAssistant, replaceAssistant } from './assistant';
 import { getClubYouthCoach, youthCoachRating } from './youth-policy';
 import { releaseYouthCoach, replaceYouthCoach } from './youth';
 import { staffFee } from './economy';
+import { remainingStaffBudget } from './staff-policy';
 import { STAFF_ROLES, usesClubLevelStaff, type StaffRole } from './staff-levels';
 
 export { STAFF_ROLES, type StaffRole } from './staff-levels';
@@ -70,9 +71,9 @@ export function replaceStaff(state: SeasonState, role: StaffRole, contractId: st
 }
 
 /** Whether a replacement can be accepted now, and why not: the same guards as sacking and then hiring. */
-export function quoteStaffReplacement(state: SeasonState, role: StaffRole, contractId: string, personId: string): { canReplace: boolean; reason: string | null } {
-  try { replaceStaff(state, role, contractId, personId); return { canReplace: true, reason: null }; }
-  catch (error) { return { canReplace: false, reason: error instanceof Error ? error.message : 'This replacement is not possible now.' }; }
+export function quoteStaffReplacement(state: SeasonState, role: StaffRole, contractId: string, personId: string): { canReplace: boolean; reason: string | null; remainingAfter: number | null } {
+  try { return { canReplace: true, reason: null, remainingAfter: remainingStaffBudget(replaceStaff(state, role, contractId, personId), state.managedClubId) }; }
+  catch (error) { return { canReplace: false, reason: error instanceof Error ? error.message : 'This replacement is not possible now.', remainingAfter: null }; }
 }
 
 const roleName = (role: StaffRole) => STAFF_ROLE_LABELS[role].toLowerCase();

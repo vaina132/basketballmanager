@@ -24,6 +24,9 @@ import { getApplicableReleaseClause, releaseFeeReason } from '../world/release-c
 import { ReleaseClauseFields, ReleaseClauseValue, TransferApproach } from './ReleaseClause'
 import './in-season-recruitment.css'
 import { seasonRounds } from '../world/career-world'
+import { ContractRoleChoice, initialContractRole } from './ContractRoleChoice'
+import { roleWage } from '../world/contract-roles'
+import type { SquadRole } from '../domain/relationships'
 
 export const inSeasonOfferStatus = (offer: InSeasonOffer) => {
   if (offer.status === 'club-review') return 'Awaiting club decision'
@@ -96,7 +99,9 @@ export function InSeasonOfferDialog({ season, player, disabled, onClose, onOffer
   const response = current?.negotiationId ? season.negotiations.records.find(record => record.id === current.negotiationId) : null
   const contract = contractForSeason(season.employment, player.id, season.seasonNumber)
   const paid = current?.status === 'accepted' ? !!current.transfer : !!current?.transfer || !!contract && contract.clubId !== season.managedClubId
-  const [wage, setWage] = useState(String((current?.seasonWage ?? getCareerWage(season, player.id)) / 100))
+  // relationships-3: the squad role offered, starting from the one already offered or his natural role here.
+  const [role, setRole] = useState<SquadRole | undefined>(() => initialContractRole(season, player.id, current?.role))
+  const [wage, setWage] = useState(String((current?.seasonWage ?? roleWage(getCareerWage(season, player.id), role, season)) / 100))
   const [years, setYears] = useState(paid ? current?.seasons ?? 1 : 1)
   const [fee, setFee] = useState(String((current?.transfer?.fee ?? requiredInSeasonTransferFee(season, player.id)) / 100))
   const [paymentPlan, setPaymentPlan] = useState<TransferPaymentPlan>(current?.transfer?.paymentPlan ?? 'upfront')
@@ -106,13 +111,13 @@ export function InSeasonOfferDialog({ season, player, disabled, onClose, onOffer
   const demandReleaseFee = releaseFeeReason(releaseFee, season) ? undefined : releaseFee
   const usingClause = paid && transferMode === 'release-clause'
   const effectivePlan = usingClause ? 'upfront' : paymentPlan
-  const options: ContractOfferOptions = { ...(releaseFee !== undefined ? { releaseFee } : {}), ...(usingClause ? { transferMode } : {}) }
+  const options: ContractOfferOptions = { ...(releaseFee !== undefined ? { releaseFee } : {}), ...(usingClause ? { transferMode } : {}), ...(role !== undefined ? { role } : {}) }
   const annual = wage.trim() ? Math.round(Number(wage) * 100) : 0
   const transferFee = usingClause ? clause.fee ?? current?.transfer?.fee ?? 0 : fee.trim() ? Math.round(Number(fee) * 100) : 0
   const transferQuote = paid ? quoteInSeasonTransferOffer(season, player.id, annual, years, transferFee, season.managedClubId, effectivePlan, undefined, options) : null
   const quote = transferQuote ?? quoteInSeasonOffer(season, player.id, annual, season.managedClubId, undefined, options)
   const signed = current?.status === 'accepted'
-  const unchanged = !!pending && pending.seasonWage === annual && pending.releaseFee === releaseFee && (!paid || pending.seasons === years && pending.transfer?.fee === transferFee && pending.transfer.paymentPlan === effectivePlan && (pending.transfer.mode ?? 'negotiated') === transferMode)
+  const unchanged = !!pending && pending.seasonWage === annual && pending.releaseFee === releaseFee && pending.role === role && (!paid || pending.seasons === years && pending.transfer?.fee === transferFee && pending.transfer.paymentPlan === effectivePlan && (pending.transfer.mode ?? 'negotiated') === transferMode)
   const reason = quote.reason ?? (unchanged ? 'Awaiting a reply. Change the terms to replace this offer.' : null)
   const lastStatus = useRef(current ? `${current.id}:${current.status}:${current.transfer?.clubStatus ?? ''}` : '')
   const owner = season.clubs.find(club => club.players.some(item => item.id === player.id))
@@ -127,7 +132,7 @@ export function InSeasonOfferDialog({ season, player, disabled, onClose, onOffer
   const endsSeason = transferQuote?.endsSeason ?? season.seasonNumber
   const firstPayment = transferQuote?.installments[0]?.amount ?? 0
   const validYears = Number.isInteger(years) && years >= 1 && years <= MAX_CONTRACT_SEASONS
-  const demand = requiredNegotiationWage(player.id, validYears ? years : 1, demandReleaseFee, season)
+  const demand = requiredNegotiationWage(player.id, validYears ? years : 1, demandReleaseFee, season, role)
 
   useEffect(() => {
     const element = dialog.current!
@@ -159,6 +164,7 @@ export function InSeasonOfferDialog({ season, player, disabled, onClose, onOffer
         {current.status === 'countered' && response?.counterOffer && <div className="contract-response-option"><span>Requested annual salary<strong>{money(response.counterOffer.seasonWage)}</strong></span><button id="use-in-season-counter" className="button small" onClick={() => { setWage(String(response.counterOffer!.seasonWage / 100)); setReleaseFee(response.counterOffer!.releaseFee); if (paid) setYears(response.counterOffer!.seasons); wageInput.current?.focus() }} disabled={disabled}>Use counteroffer</button></div>}
       </section>}
       {signed && current ? <><dl className="contract-offer-facts"><div><dt>Annual salary</dt><dd>{money(current.seasonWage)}</dd></div><div><dt>Salary for this season's remaining matchdays</dt><dd>{money(current.remainingWages)}</dd></div><div><dt>Contract through</dt><dd>{seasonLabel(current.seasonNumber + current.seasons - 1)}</dd></div></dl><ReleaseClauseValue fee={current.releaseFee} />{completedTransfer && <section className="contract-transfer-completed"><strong>Transfer fee to {seller?.name}</strong><TransferPaymentRecord transfer={completedTransfer} date={season.date} /></section>}</> : <>
+        <ContractRoleChoice season={season} playerId={player.id} id="in-season-role" value={role} onChange={setRole} disabled={disabled} />
         <dl className="contract-offer-facts"><div><dt>Contract ends</dt><dd>{endsSeason <= MAX_SEASON_NUMBER ? `End of ${seasonLabel(endsSeason)}` : 'Calendar limit'}</dd></div><div><dt>Annual salary demand</dt><dd>{money(demand)}</dd></div><div><dt>Player reply &amp; earliest arrival</dt><dd>{canRegister ? <><time dateTime={quote.responseOn}>{scoutingDate(quote.responseOn)}</time> &middot; Matchday {quote.responseRound}</> : 'No registration date'}</dd></div></dl>
         {paid && <section className="in-season-fee-fields" aria-labelledby="in-season-fee-title"><div className="in-season-fee-heading"><h3 id="in-season-fee-title">Transfer fee</h3><span>Club asks <strong data-in-season-asking-fee={transferQuote!.requiredFee}>{money(transferQuote!.requiredFee)}</strong></span></div><TransferApproach season={season} playerId={player.id} id="in-season-transfer-mode" mode={transferMode} onChange={setTransferMode} disabled={disabled} />{usingClause ? <div className="release-clause-fixed"><span>Release clause<small>Paid in full on signing</small></span><strong data-clause-trigger-fee={transferFee}>{money(transferFee)}</strong></div> : <><div className="contract-offer-field"><label htmlFor="in-season-transfer-fee">Your fee offer (EUR)</label><input ref={feeInput} id="in-season-transfer-fee" type="number" min={MIN_TRANSFER_FEE / 100} max={maxTransferFee(season) / 100} step={TRANSFER_FEE_STEP / 100} value={fee} onChange={event => setFee(event.target.value)} disabled={disabled} /><input id="in-season-transfer-fee-slider" aria-label="Transfer fee slider" type="range" min={MIN_TRANSFER_FEE / 100} max={maxTransferFee(season) / 100} step={TRANSFER_FEE_STEP / 100} value={Math.max(MIN_TRANSFER_FEE / 100, Math.min(maxTransferFee(season) / 100, Number(fee) || 0))} aria-valuetext={money(transferFee)} onChange={event => setFee(event.target.value)} disabled={disabled} /></div><fieldset className="transfer-payment-plan" disabled={disabled}><legend>When to pay</legend><div className="transfer-payment-choices">{TRANSFER_PAYMENT_PLANS.map(plan => <label key={plan}><input type="radio" name="in-season-payment-plan" value={plan} checked={paymentPlan === plan} onChange={() => setPaymentPlan(plan)} />{plan === 'upfront' ? 'All on signing' : plan === 'two-payments' ? 'Two payments' : 'Three payments'}</label>)}</div></fieldset></>}<details className="in-season-payment-disclosure"><summary>Payment dates &amp; amounts</summary><TransferPaymentTerms fee={transferFee} plan={effectivePlan} startsSeason={season.seasonNumber} startsRound={quote.responseRound} installments={transferQuote!.installments} earliestSigning={canRegister ? quote.responseOn : undefined} /></details></section>}
         <div className={paid ? 'in-season-contract-fields' : ''}><div className="contract-offer-field"><label htmlFor="in-season-wage">Annual salary offer (EUR)</label><input ref={wageInput} id="in-season-wage" type="number" min={MIN_CONTRACT_WAGE / 100} max={maxContractWage(season) / 100} step={WAGE_STEP / 100} value={wage} onChange={event => setWage(event.target.value)} disabled={disabled} /><input id="in-season-wage-slider" aria-label="Annual salary offer slider" type="range" min={MIN_CONTRACT_WAGE / 100} max={maxContractWage(season) / 100} step={WAGE_STEP / 100} value={Math.max(MIN_CONTRACT_WAGE / 100, Math.min(maxContractWage(season) / 100, Number(wage) || 0))} aria-valuetext={money(annual)} onChange={event => setWage(event.target.value)} disabled={disabled} /></div>{paid && <div className="contract-offer-field"><label htmlFor="in-season-years">Contract length</label><select id="in-season-years" value={years} onChange={event => setYears(Number(event.target.value))} disabled={disabled}><option value={1}>Rest of this season</option><option value={2}>This season + 1 year</option><option value={3}>This season + 2 years</option></select><input id="in-season-years-slider" aria-label="Contract length slider" type="range" min={1} max={MAX_CONTRACT_SEASONS} step={1} value={years} aria-valuetext={years === 1 ? 'Rest of this season' : `Rest of this season plus ${years - 1} more ${years === 2 ? 'year' : 'years'}`} onChange={event => setYears(Number(event.target.value))} disabled={disabled} /></div>}</div>

@@ -5,17 +5,20 @@ import { quotePlayerContract } from './employment-policy';
 import { requiredNegotiationWage } from './negotiations-policy';
 import { getInSeasonOffers } from './recruitment-policy';
 import { RELATIONSHIP_RULES } from './relationship-rules';
+import { countsTowardsObjectives, PRESIDENT_RULES } from './presidents';
 
 const RULES = RELATIONSHIP_RULES.contractRequests;
 
 /**
  * An AI club answers its player's open request by the same rules as the manager: it renews a player ranked within
  * `ai.renewMaxRank` when an ordinary renewal at his demand fits its budget (opening talks and signing at once), waits
- * while another club's transfer proposal for him is unresolved, and otherwise lets him go by declining.
+ * while another club's transfer proposal for him is unresolved, and otherwise lets him go by declining. Format 70: a
+ * player who counts towards its president's youth or culture objective is kept up to `aiRenewMaxRank`.
  */
 function answerAsAiClub(state: SeasonState, clubId: string, playerId: string, lastChance: boolean): SeasonState {
   const rank = getSquadRank(state, playerId, clubId);
-  if (rank === null || rank > RULES.ai.renewMaxRank) return replyToContractRequest(state, playerId, 'decline', clubId);
+  const maxRank = rank !== null && rank > RULES.ai.renewMaxRank && countsTowardsObjectives(state, clubId, state.seasonNumber, playerId) ? PRESIDENT_RULES.objectives.aiRenewMaxRank : RULES.ai.renewMaxRank;
+  if (rank === null || rank > maxRank) return replyToContractRequest(state, playerId, 'decline', clubId);
   for (const seasons of [...new Set([RULES.ai.renewalSeasons, 1])]) {
     let wage: number;
     try { wage = requiredNegotiationWage(playerId, seasons, undefined, state); } catch { break; } // No wage terms: let him go.

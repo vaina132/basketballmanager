@@ -207,6 +207,14 @@ export function getFacilityLevel(state: FacilitiesContext, type: FacilityType, c
   return state.facilities.projects.filter(project => project.clubId === clubId && project.type === type && project.completedOn !== null && project.completedOn <= onDate && inPlace(project, onDate)).reduce((level, project) => Math.max(level, project.toLevel), 1);
 }
 
+/** Every club's level of one facility on a date, as `getFacilityLevel` gives it, read in one pass (clubs without an upgrade are absent: level 1). */
+export function facilityLevelsByClub(state: FacilitiesContext, type: FacilityType, onDate = state.date ?? '9999-12-31'): Map<string, number> {
+  const levels = new Map<string, number>();
+  if (!state.facilities?.enabledSince || state.facilities.enabledSince.date > onDate) return levels;
+  for (const project of state.facilities.projects) if (project.type === type && project.completedOn !== null && project.completedOn <= onDate && inPlace(project, onDate)) levels.set(project.clubId, Math.max(levels.get(project.clubId) ?? 1, project.toLevel));
+  return levels;
+}
+
 export function getActiveFacilityProject(state: FacilitiesContext, clubId: string): FacilityProject | null {
   return state.facilities?.projects.find(project => project.clubId === clubId && project.completedOn === null && project.cancelledOn === null) ?? null;
 }

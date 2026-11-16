@@ -136,7 +136,8 @@ describe('a loan-financed upgrade', () => {
     const repaid = repayFacilityLoan(paid, 'facility-debt-1');
     for (const state of [borrowed, paid, repaid]) expect(parseSeason(serializeSeason(state))).toEqual(state);
     const file = JSON.parse(serializeSeason(paid));
-    file.formatVersion = 70; file.state.schemaVersion = 70;
+    // Recurring youth injuries (format 72) would be refused first; this check is about loans and leases.
+    file.formatVersion = 70; file.state.schemaVersion = 70; file.state.youthCompetition.model = 'youth-competition-1';
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/facilities\.financing requires format 71/);
   });
 });
@@ -278,6 +279,49 @@ describe('automatic borrowing', () => {
     const debt = automated.facilities.debts!.find(item => item.clubId === rival)!;
     expect(debt).toMatchObject({ kind: 'loan', facilityType: 'arena', principal: 10_000_000 });
     expect(automated.facilities.projects.find(item => item.id === debt.projectId)).toMatchObject({ type: 'arena', fromLevel: 1, toLevel: 2 });
+  });
+
+  const soldOutArena = (state: SeasonState) => {
+    const capacity = getArenaFullCapacity(state, rival);
+    let soldOut = state;
+    for (const fixtureId of ['test-home-1', 'test-home-2']) soldOut = { ...soldOut, finance: { ...soldOut.finance, ledger: [...soldOut.finance.ledger, { id: `finance-${soldOut.finance.ledger.length + 1}`, clubId: rival, seasonNumber: 1, round: 1, kind: 'tickets', amount: capacity * 1800, sourceId: `tickets-${fixtureId}`, ticket: { fixtureId, price: 1800, attendance: capacity, capacity }, coach: null, payroll: null }] } };
+    return soldOut;
+  };
+  const leases = (state: SeasonState) => state.facilities.debts!.filter(item => item.clubId === rival && item.kind === 'lease');
+
+  it('leases more seats after sold-out games when a loan cannot pay, within half the limit and half the cushion', { timeout: 60_000 }, () => {
+    const opening = later(), cushion = facilityAutomationBuffer(opening, rival), term = FACILITY_FINANCING_RULES.automaticTermSeasons;
+    // A small loan already runs for a finished youth upgrade, and automatic control takes one loan at a time.
+    const borrowed = takeFacilityLoan(withCash(opening, rival, 20_000_000), 'youth', 'upgrade', 3, 1_000_000, rival);
+    const soldOut = soldOutArena(processFacilityProjects({ ...borrowed, date: borrowed.facilities.projects.at(-1)!.dueOn }));
+    const quote = quoteFacilityLease(soldOut, 'arena', rival, term);
+    expect(quote.debtAfter).toBeLessThanOrEqual(borrowingLimit(soldOut, rival) * FACILITY_FINANCING_RULES.automaticMaxDebtPercent / 100);
+    const automated = automateFacilities(withCash(soldOut, rival, cushion + 1_000_000));
+    const [lease] = leases(automated);
+    expect(lease).toMatchObject({ facilityType: 'arena', seasons: term, principal: quote.price, total: quote.total });
+    expect(automated.facilities.projects.find(item => item.id === lease!.projectId)).toMatchObject({ kind: 'lease', type: 'arena', fromLevel: 1, toLevel: 2, cost: 0 });
+    // Not with less than half the cushion left after this season's payments, nor without a full house.
+    expect(leases(automateFacilities(withCash(soldOut, rival, cushion / 2 + quote.dueThisSeason - 10_000)))).toEqual([]);
+    expect(leases(automateFacilities(withCash(processFacilityProjects({ ...borrowed, date: borrowed.facilities.projects.at(-1)!.dueOn }), rival, cushion + 1_000_000)))).toEqual([]);
+  });
+
+  it('leases training equipment that has fallen behind the league, only without debt and keeping its whole cushion', { timeout: 60_000 }, () => {
+    const opening = later(), term = FACILITY_FINANCING_RULES.automaticTermSeasons;
+    expect(opening.clubs.map(club => getFacilityLevel(opening, 'training', club.id))).toEqual(opening.clubs.map(() => 1));
+    // Three clubs' training equipment is a level up, so Alpine Stags' is below the league's average.
+    let ahead = opening;
+    for (const clubId of ['rhine-falcons', 'aegean-waves', 'danube-lynx']) ahead = { ...ahead, facilities: { ...ahead.facilities, projects: [...ahead.facilities.projects, { id: `facility-project-${ahead.facilities.projects.length + 1}`, clubId, type: 'training', fromLevel: 1, toLevel: 2, cost: 0, startedOn: ahead.date, dueOn: ahead.date, completedOn: ahead.date, cancelledOn: null, startEventIndex: 0 }] } };
+    const cushion = facilityAutomationBuffer(ahead, rival), quote = quoteFacilityLease(ahead, 'training', rival, term);
+    expect(quote.canLease).toBe(true);
+    const automated = automateFacilities(withCash(ahead, rival, cushion + quote.dueThisSeason + 10_000));
+    expect(leases(automated)).toEqual([expect.objectContaining({ facilityType: 'training', seasons: term, principal: quote.price })]);
+    // Not when the payments would cut into the cushion, nor while the club keeps up with its league.
+    expect(leases(automateFacilities(withCash(ahead, rival, cushion + quote.dueThisSeason - 10_000)))).toEqual([]);
+    expect(leases(automateFacilities(withCash(opening, rival, cushion + quote.dueThisSeason + 10_000)))).toEqual([]);
+    // Nor with another debt running.
+    const indebted = takeFacilityLoan(withCash(ahead, rival, 20_000_000), 'youth', 'upgrade', 3, 1_000_000, rival);
+    const finished = processFacilityProjects({ ...indebted, date: indebted.facilities.projects.at(-1)!.dueOn });
+    expect(leases(automateFacilities(withCash(finished, rival, cushion + quote.dueThisSeason + 2_000_000)))).toEqual([]);
   });
 });
 

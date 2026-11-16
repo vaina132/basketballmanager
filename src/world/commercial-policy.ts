@@ -60,6 +60,16 @@ export const COMMERCIAL_CLAUSE_RULES = Object.freeze({
   declineDrop: 0.15,
   /** Chance in percent that a sponsor uses the clause after a season with each trigger, drawn from the career seed. */
   exitChance: Object.freeze({ relegation: 75, objective: 50, decline: 30 } as Readonly<Record<Exclude<CommercialExitReason, 'club'>, number>>),
+  /**
+   * Automatic control (every rival club, and the manager's club when delegated) ends an agreement early with the
+   * manager's clause and fee, only at matchday six before that season's renewal offers, and only when a clearly better
+   * offer is available: the best offer it would then receive pays at least the current annual fee times one plus the
+   * termination fee share plus this margin (1.75 times), so each cancelled season still gains a quarter of the old fee
+   * after the fee. The fee must leave half of this automatic cash cushion (EUR 150,000 in the development economy,
+   * scaled like the other automation cushions; half, as for automatic loans and repairs) and no unpaid costs.
+   */
+  automaticExitMargin: 0.25,
+  automaticExitCushion: 15_000_000,
 });
 const EXIT_REASONS = ['relegation', 'objective', 'decline'] as const;
 const roundEuro = (value: number) => Math.max(0, Math.round(value / 100) * 100);
@@ -255,6 +265,33 @@ export function terminationTerms(agreement: { startsSeason: number; endsSeason: 
   const lastSeason = agreement.startsSeason <= seasonNumber ? seasonNumber : agreement.startsSeason - 1;
   const cancelledSeasons = Math.max(0, agreementLastSeason(agreement) - lastSeason);
   return { lastSeason, cancelledSeasons, fee: cancelledSeasons * (agreement.clause?.terminationFee ?? 0) };
+}
+
+/** Format 64: whether an offered annual fee is clearly better than an agreement's, so automatic control would leave it. */
+export function clearlyBetterFee(currentFee: number, offeredFee: number): boolean {
+  const rules = COMMERCIAL_CLAUSE_RULES;
+  return offeredFee * 100 >= currentFee * Math.round((1 + rules.terminationFeeShare + rules.automaticExitMargin) * 100);
+}
+
+/** The agreements with this one ended by its club now (its notice runs to the end of the anchor's season). */
+function endedNow<T extends { id: string; exit?: CommercialExit | null }>(agreements: readonly T[], agreementId: string, anchor: CommercialAnchor): T[] {
+  const exit: CommercialExit = { by: 'club', reason: 'club', seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date, lastSeason: anchor.seasonNumber, amount: 0 };
+  return agreements.map(item => item.id === agreementId ? { ...item, exit } : item);
+}
+
+/**
+ * Format 64: the best main-sponsor offer a club would receive in this window once it ended `agreement` now (the
+ * departing sponsor makes none). Automatic early exits and the save check both read it.
+ */
+export function bestOfferAfterExit(input: Omit<Parameters<typeof buildSponsorshipOffers>[0], 'clubId'> & { agreement: SponsorshipAgreement }): SponsorshipOffer | undefined {
+  const { agreement, ...rest } = input;
+  return bestSponsorshipOffer(buildSponsorshipOffers({ ...rest, clubId: agreement.clubId, commercial: { ...rest.commercial, agreements: endedNow(rest.commercial.agreements, agreement.id, rest.anchor) } }));
+}
+
+/** Format 64: the best naming offer a club would receive in this window once it ended `agreement` now. */
+export function bestNamingOfferAfterExit(input: Omit<Parameters<typeof buildNamingOffers>[0], 'clubId'> & { agreement: NamingRightsAgreement }): NamingRightsOffer | undefined {
+  const { agreement, ...rest } = input;
+  return bestNamingOffer(buildNamingOffers({ ...rest, clubId: agreement.clubId, naming: { ...rest.naming, agreements: endedNow(rest.naming.agreements, agreement.id, rest.anchor) } }));
 }
 
 /** What a sponsor sees after a season: relegation, the final position in the club's league and appeal. */

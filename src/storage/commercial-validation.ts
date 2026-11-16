@@ -3,7 +3,7 @@ import type { SeasonState } from '../domain/season';
 import type { CareerMove } from '../domain/career';
 import { managedClubAtLedger } from '../world/career';
 import { clubsEverInFullWorld, fullWorldClubsIn, incumbentSponsorId, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
-import { agreementFor, agreementLastSeason, bestSponsorshipOffer, buildSponsorshipOffers, createCommercial, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorClause, sponsorLeague, sponsorshipReferenceFee, terminationTerms, SPONSORSHIP_RENEWAL_ROUND } from '../world/commercial-policy';
+import { agreementFor, agreementLastSeason, bestOfferAfterExit, bestSponsorshipOffer, buildSponsorshipOffers, clearlyBetterFee, createCommercial, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorClause, sponsorLeague, sponsorshipReferenceFee, terminationTerms, SPONSORSHIP_RENEWAL_ROUND } from '../world/commercial-policy';
 import { validateNamingRights } from './naming-rights-validation';
 import { dateForRound, MAX_SEASON_NUMBER, nextSeasonDivisions, seasonStartDate } from '../world/season';
 import { seasonLeagues } from '../world/divisions';
@@ -147,6 +147,29 @@ export function validateCommercial(state: SeasonState, version: number): void {
       previous = anchorOfEvent(event); index += 1;
     }
   };
+  /**
+   * Format 64: automatic control's early exits at matchday six, a run of club terminations right before that window's
+   * offers. Each must end an automatically managed club's current agreement for a clearly better offer, rebuilt here;
+   * the cash cushion is checked only through the fee in the ledger (development mode).
+   */
+  const consumeAutomaticExits = (boundary: Extract<Boundary, { kind: 'window' }>, seasonClubs: ReturnType<typeof fullWorldClubsIn>, leagueOf: (clubId: string) => { league?: ReturnType<typeof sponsorLeague> }) => {
+    let end = index;
+    while (end < events.length && (events[end] as { type?: unknown } | null)?.type === 'terminate') end += 1;
+    const atBoundary = (event: CommercialEvent) => event.seasonNumber === boundary.seasonNumber && event.round === boundary.round && event.date === boundary.date;
+    const following = end > index && end < events.length ? eventAt(end) : null;
+    if (!following || following.type !== 'offers' || !atBoundary(following)) return;
+    while (index < end) {
+      const path = `commercial.events[${index}]`, event = eventAt(index) as Extract<CommercialEvent, { type: 'terminate' }>, at = anchorOfEvent(event);
+      const agreement = replay.agreements.find(item => item.id === event.agreementId);
+      const terms = agreement && terminationTerms(agreement, at.seasonNumber);
+      if (!atBoundary(event) || !agreement?.clause || agreement.exit || !replay.plans[agreement.clubId]?.delegated || agreement.startsSeason > at.seasonNumber || !terms || terms.cancelledSeasons < 1 || !seasonClubs.some(club => club.id === agreement.clubId)) fail(path, 'must end an automatically managed club\'s current agreement with later seasons, before the matchday-six offers');
+      const appeal = sponsorAppeal({ world: worldOf(state), clubs: seasonClubs, fixtures: seasonFixtures(at.seasonNumber), ledger, seasonNumber: at.seasonNumber, completedRounds: boundary.completedRounds }, agreement.clubId).appeal;
+      const best = bestOfferAfterExit({ world: worldOf(state), seed: state.seed, commercial: replay, agreement, window: 'renewal', anchor: at, appeal, ...leagueOf(agreement.clubId), ...(state.economySeasons ? { economySeasons: state.economySeasons } : {}) });
+      if (!best || !clearlyBetterFee(agreement.annualFee, best.annualFee)) fail(path, 'must leave an agreement only for a clearly better offer');
+      setExit(agreement.id, { by: 'club', reason: 'club', seasonNumber: at.seasonNumber, round: at.round, date: at.date, lastSeason: terms.lastSeason, amount: terms.fee });
+      previous = at; index += 1;
+    }
+  };
   const consumeWindow = (boundary: Extract<Boundary, { kind: 'window' }>) => {
     if (clauses && boundary.window === 'second-round') consumeExits(boundary);
     let at: CommercialAnchor | null = boundary.activation ? activation : null;
@@ -158,6 +181,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
       const ids = seasonClubs.map(club => club.id), next = nextDivisions && seasonLeagues(worldOf(state), nextDivisions).some(league => league.clubIds.includes(clubId));
       return { league: next ? sponsorLeague(worldOf(state), nextDivisions, ids, clubId) : sponsorLeague(worldOf(state), seasonDivisions(boundary.seasonNumber), ids, clubId) };
     };
+    if (clauses && boundary.window === 'renewal' && !boundary.activation) consumeAutomaticExits(boundary, seasonClubs, leagueOf);
     for (const club of seasonClubs) {
       if (!needsSponsorshipOffers(replay, club.id, boundary.seasonNumber) || boundary.seasonNumber >= MAX_SEASON_NUMBER) continue;
       const appeal = sponsorAppeal({ world: worldOf(state), clubs: seasonClubs, fixtures: seasonFixtures(boundary.seasonNumber), ledger, seasonNumber: boundary.seasonNumber, completedRounds: boundary.completedRounds }, club.id).appeal;

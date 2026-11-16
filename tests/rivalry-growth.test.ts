@@ -1,3 +1,4 @@
+import type { CareerMove } from '../src/domain/career';
 import { BEFORE_SAVED_IDEAS, beforeSavedIdeas } from './helpers/legacy-season';
 import { withLegacyFacilities } from './helpers/legacy-season';
 import { asCareer1 } from './helpers/career-rules';
@@ -64,6 +65,20 @@ describe('rivalries grown from results', () => {
     expect(tables.map(table => pair(table, RHINE, AEGEAN)?.intensity ?? null)).toEqual([null, 40, 34, null, null]);
     const repeated = computeRivalryTables(context([final(RHINE, AEGEAN, [true, true]), final(AEGEAN, RHINE, [true, true])]));
     expect(pair(repeated[2]!, RHINE, AEGEAN)!.intensity).toBe(Math.floor(30 * 85 / 100) + 30);
+  });
+
+  it('links the club left before unemployment to the next club, as a direct move does (format 72)', () => {
+    const left = { seasonNumber: 1, date: '2026-11-28', fromClubId: ALPINE, toClubId: '', reason: 'dismissed' as const, ledgerCount: 0, round: 9, phase: 'season' as const };
+    const joined = { seasonNumber: 2, date: '2027-10-02', fromClubId: '', toClubId: PILOTS, reason: 'appointed' as const, ledgerCount: 0, round: 2, phase: 'season' as const };
+    const tables = (moves: CareerMove[]) => computeRivalryTables({ ...context([[], []]), career: { model: 'career-3', enabledSince: null, moves } });
+    // Leaving for unemployment links nothing; the appointment a season later strengthens the designed Summit rivalry.
+    const linked = tables([left, { ...joined, formerClubId: ALPINE }]);
+    expect(pair(linked[1]!, ALPINE, PILOTS)!.intensity).toBe(35);
+    expect(pair(linked[2]!, ALPINE, PILOTS)).toMatchObject({ intensity: 35 + RIVALRY_GROWTH_RULES.managerMove, reasons: expect.arrayContaining([expect.objectContaining({ kind: 'manager-move', seasonNumber: 2, fromClubId: ALPINE, toClubId: PILOTS, points: RIVALRY_GROWTH_RULES.managerMove })]) });
+    // The same table as a direct move between the two clubs in that season.
+    expect(linked).toEqual(tables([{ ...joined, fromClubId: ALPINE, reason: 'moved' }]));
+    // Appointments recorded before format 72 carry no former club and keep the original rule.
+    expect(pair(tables([left, joined])[2]!, ALPINE, PILOTS)!.intensity).toBe(35);
   });
 
   it('counts the manager and star players moving between clubs, and same-country European meetings', () => {

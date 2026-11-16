@@ -11,7 +11,7 @@ import { developAcademyPlayer, emptyAcademyPoints, getAcademyProspect } from './
 import { academyAtBoundary } from './academy';
 import { isYouthOutcome } from './youth-history';
 import { generateYouthSquadProspects } from './academy-generation';
-import { injuriesFromMatch, isRecovering } from './health';
+import { injuriesFromMatch, injuryRiskMap, isRecovering } from './health';
 import { memoizePure } from './pure-cache';
 import { roundKey } from './career-world';
 
@@ -26,7 +26,22 @@ const calendarNumber = memoizePure((date: string): number => {
 });
 const isoDay = memoizePure((time: number): string => new Date(time).toISOString().slice(0, 10));
 
-export function createYouthCompetition(): SeasonYouthCompetition { return { model: 'youth-competition-1', enabledSince: null, seasons: [] }; }
+/**
+ * New careers that start with youth matches (format 72) use `youth-competition-2`: a youth player's earlier youth
+ * injuries raise the risk of the same kind again and lengthen a recurrence, by the senior recurrence rule
+ * (`injuryRiskFor`, `injuryDays`). Older careers, and careers that opt in later, keep `youth-competition-1`, whose
+ * youth injuries never recur.
+ */
+export const YOUTH_RECURRENCE_MODEL = 'youth-competition-2';
+export function createYouthCompetition(model: SeasonYouthCompetition['model'] = 'youth-competition-1'): SeasonYouthCompetition { return { model, enabledSince: null, seasons: [] }; }
+
+/** `youth-competition-2`: the recorded youth injuries of these players before a date (their recurrence history). */
+export function youthInjuryHistory(competition: SeasonYouthCompetition, playerIds: Iterable<string>, beforeDate: string): SeasonInjury[] {
+  if (competition.model !== YOUTH_RECURRENCE_MODEL || !competition.enabledSince) return [];
+  const index = playerIndex(competition), history: SeasonInjury[] = [];
+  for (const playerId of playerIds) for (const { episode } of index.injuries.get(playerId) ?? []) if (episode.occurredOn < beforeDate) history.push(episode);
+  return history;
+}
 
 export function getYouthFixtures(state: Pick<SeasonState, 'youthCompetition' | 'seasonNumber'>, seasonNumber = state.seasonNumber): YouthFixture[] {
   return state.youthCompetition.seasons.find(season => season.seasonNumber === seasonNumber)?.fixtures ?? [];
@@ -174,9 +189,12 @@ export function settleYouthFixture(state: SeasonState, fixture: YouthFixture): Y
     const both = homeShort && awayShort, score = both ? { home: 0, away: 0 } : { home: homeShort ? 0 : 20, away: awayShort ? 0 : 20 };
     return { ...fixture, home, away, startingConditions, result: { kind: both ? 'no-contest' : 'default', played: false, score, officialScore: { ...score }, winnerClubId: both ? null : homeShort ? away.id : home.id, periods: 0, stats: {}, injuries: [], reason: both ? 'Both academies have fewer than five available players; no contest.' : `${homeShort ? home.name : away.name} have fewer than five available players; 20–0 forfeit.` } };
   }
-  const match = simulateToEnd(createFixtureMatch(youthFixtureSeed(state.seed, fixture.id), home, away, { lineups, conditions: startingConditions, preExistingInjuries: unavailable, injuryMode: state.injuryMode, autoSubstitutions: { home: true, away: true } }));
+  // `youth-competition-2`: earlier youth injuries raise the risk of the same kind again and lengthen a recurrence.
+  const playerIds = [...home.players, ...away.players].map(player => player.id), earlier = youthInjuryHistory(state.youthCompetition, playerIds, fixture.date);
+  const injuryRisk = state.injuryMode === 'off' ? {} : injuryRiskMap(earlier, playerIds, fixture.date);
+  const match = simulateToEnd(createFixtureMatch(youthFixtureSeed(state.seed, fixture.id), home, away, { lineups, conditions: startingConditions, preExistingInjuries: unavailable, injuryMode: state.injuryMode, autoSubstitutions: { home: true, away: true }, ...(Object.keys(injuryRisk).length ? { injuryRisk } : {}) }));
   if (!match.result || match.status !== 'finished') throw new Error('The youth match must complete before its result is recorded.');
-  return { ...fixture, home, away, startingConditions, result: { kind: match.result.kind === 'default' ? 'default' : 'played', played: true, score: { ...match.score }, officialScore: { ...match.result.officialScore }, winnerClubId: match[match.result.winner].id, periods: match.period, stats: Object.fromEntries(Object.entries(match.stats).map(([id, stats]) => [id, { ...stats }])), injuries: injuriesFromMatch(state.seed, fixture, match), reason: match.result.kind === 'default' ? 'The match ended after a team had fewer than two eligible players.' : null } };
+  return { ...fixture, home, away, startingConditions, result: { kind: match.result.kind === 'default' ? 'default' : 'played', played: true, score: { ...match.score }, officialScore: { ...match.result.officialScore }, winnerClubId: match[match.result.winner].id, periods: match.period, stats: Object.fromEntries(Object.entries(match.stats).map(([id, stats]) => [id, { ...stats }])), injuries: injuriesFromMatch(state.seed, fixture, match, earlier), reason: match.result.kind === 'default' ? 'The match ended after a team had fewer than two eligible players.' : null } };
 }
 
 export function processYouthRound(state: SeasonState): SeasonState {
@@ -193,7 +211,7 @@ export function processYouthRound(state: SeasonState): SeasonState {
 
 /** Strip future results for historical practice, injury and promotion replay. */
 export function youthCompetitionAtBoundary(competition: SeasonYouthCompetition, seasonNumber: number, round: number, includeCurrentRound = false): SeasonYouthCompetition {
-  if (!competition.enabledSince || roundKey(competition.enabledSince.seasonNumber, competition.enabledSince.round) > roundKey(seasonNumber, round)) return createYouthCompetition();
+  if (!competition.enabledSince || roundKey(competition.enabledSince.seasonNumber, competition.enabledSince.round) > roundKey(seasonNumber, round)) return createYouthCompetition(competition.model);
   return { ...competition, seasons: competition.seasons.filter(season => season.seasonNumber <= seasonNumber).map(season => ({ ...season, fixtures: season.fixtures.map(fixture => fixture.seasonNumber < seasonNumber || fixture.round < round || includeCurrentRound && fixture.round === round ? fixture : { id: fixture.id, seasonNumber: fixture.seasonNumber, round: fixture.round, date: fixture.date, homeClubId: fixture.homeClubId, awayClubId: fixture.awayClubId, home: null, away: null, startingConditions: null, result: null }) })) };
 }
 

@@ -3,7 +3,8 @@ import type { FacilityAnchor, FacilityDebt, FacilityEvent, FacilityProject, Faci
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { clubFinanceDefinition, worldOf } from './career-world';
-import { facilityAutomationBuffer, facilityTypes, FACILITY_RULES_2, getActiveFacilityProject, getFacilityCondition, getFacilityLevel, hasFacilityCondition, maintenancePlanOn, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs } from './facilities-policy';
+import { seasonLeagues } from './divisions';
+import { facilityAutomationBuffer, facilityLevelsByClub, facilityTypes, FACILITY_RULES_2, getActiveFacilityProject, getFacilityCondition, getFacilityLevel, hasFacilityCondition, maintenancePlanOn, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs } from './facilities-policy';
 import { getSpendableCash, getSpendablePosition } from './payroll-policy';
 import { getFinanceBalance, recordBoardCapital, recordDebtEntry, recordFacilityInvestment } from './finance';
 import { quoteBoardFunding, type BoardFundingQuote } from './board-funding-policy';
@@ -289,6 +290,33 @@ function automaticLoan(state: SeasonState, clubId: string, type: FacilityType, p
   return takeFacilityLoan(state, type, project, rules.automaticTermSeasons, principal, clubId);
 }
 
+/** Whether a club's training equipment is below the average level of its league (all full-world clubs without leagues). */
+function trainingBehindLeague(state: SeasonState, clubId: string, levels: ReadonlyMap<string, number>): boolean {
+  const world = worldOf(state), inWorld = new Set(state.clubs.map(club => club.id));
+  const league = world.domesticLeagues ? seasonLeagues(world, state.divisions).find(item => item.clubIds.includes(clubId))?.clubIds.filter(id => inWorld.has(id)) : undefined;
+  const members = league?.length ? league : [...inWorld];
+  const level = (id: string) => levels.get(id) ?? 1;
+  return level(clubId) * members.length < members.reduce((sum, id) => sum + level(id), 0);
+}
+
+/**
+ * Format 71: rival clubs and automatic control lease under the manager's lease guards (`quoteFacilityLease`), one level
+ * at a time over the automatic term and within half the borrowing limit: more seats after sold-out home games when a
+ * loan cannot pay for them, keeping half their cash cushion after this season's payments; or training equipment below
+ * its league's average level, only without any other debt and keeping their whole cushion. Null when the rules do not
+ * allow a lease.
+ */
+function automaticLease(state: SeasonState, clubId: string, type: 'arena' | 'training', trainingLevels: () => ReadonlyMap<string, number>): SeasonState | null {
+  if (!usesFacilityFinancing(state.facilities)) return null;
+  const rules = FACILITY_FINANCING_RULES, cushion = facilityAutomationBuffer(state, clubId);
+  if (type === 'arena') {
+    if (!arenaSoldOut(state, clubId) || clubDebts(state, clubId).some(debt => debt.kind === 'lease' && debtPosition(state, debt).outstanding > 0)) return null;
+  } else if (outstandingDebt(state, clubId) > 0 || !trainingBehindLeague(state, clubId, trainingLevels())) return null;
+  const quote = quoteFacilityLease(state, type, clubId, rules.automaticTermSeasons);
+  if (!quote.canLease || quote.debtAfter > Math.floor(borrowingLimit(state, clubId) * rules.automaticMaxDebtPercent / 100) || quote.available - quote.dueThisSeason < (type === 'arena' ? cushion / 2 : cushion)) return null;
+  return leaseFacility(state, type, rules.automaticTermSeasons, clubId);
+}
+
 /**
  * The same funded quote applies to all clubs; automation preserves a conservative extra cash cushion. When no
  * upgrade is affordable with that cushion, automatic control asks the board only if its rules would approve.
@@ -298,6 +326,9 @@ export function automateFacilities(state: SeasonState): SeasonState {
   if (!state.facilities.enabledSince) return state;
   let next = state;
   const types = facilityTypes(state.facilities);
+  // Levels change only at calendar steps (a lease installs at the next one), so one reading serves the whole pass.
+  let levels: ReadonlyMap<string, number> | undefined;
+  const trainingLevels = () => levels ??= facilityLevelsByClub(state, 'training');
   for (const club of state.clubs) {
     if (!next.facilities.delegated[club.id]) continue;
     // Automatic upkeep, only with upgrades to maintain: reduce when commitments exceed cash or costs are unpaid,
@@ -319,8 +350,9 @@ export function automateFacilities(state: SeasonState): SeasonState {
       const funded = types.map(type => quoteBoardFunding(next, type, club.id, 'automatic')).filter(item => item.approved).sort((left, right) => left.cost - right.cost || types.indexOf(left.facilityType) - types.indexOf(right.facilityType))[0];
       if (funded) { next = startFacilityUpgrade(applyFacilityEvent(next, { ...facilityEventAnchor(next), ...fundingDecision(funded) }), funded.facilityType, club.id); continue; }
     }
-    // Format 71: a sold-out arena is worth a prudent loan when cash and board capital cannot pay for more seats.
-    next = automaticLoan(next, club.id, 'arena', 'upgrade') ?? next;
+    // Format 71: a sold-out arena is worth a prudent loan when cash and board capital cannot pay for more seats, or a
+    // lease when a loan cannot; training equipment that has fallen behind the league is worth a lease without other debt.
+    next = automaticLoan(next, club.id, 'arena', 'upgrade') ?? automaticLease(next, club.id, 'arena', trainingLevels) ?? automaticLease(next, club.id, 'training', trainingLevels) ?? next;
   }
   return next;
 }

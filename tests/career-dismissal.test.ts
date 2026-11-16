@@ -1,4 +1,4 @@
-import { withLegacyRelationships } from './helpers/legacy-season';
+import { withLegacyRelationships, withLegacyYouthCompetition } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
@@ -117,11 +117,12 @@ describe('careers saved in format 37, before dismissal existed', () => {
     // The format-37 runtime recorded the switch but never dismissed: the same season end, without a move.
     // Format 68: files older than 68 hold the fixed rivalries (identical derbies in season one).
     const stayed = withFixedRivalries({ ...advanceSeason({ ...legacyDay, career: { ...legacyDay.career, enabledSince: null } }), career: legacyDay.career });
-    const file = (version: number) => JSON.stringify({ format: 'basketball-manager-season', formatVersion: version, engineVersion: 'possession-3', state: { ...stayed, schemaVersion: version } });
+    // Format 72: recurring youth injuries are newer still, so these older files keep the original youth model.
+    const file = (version: number) => JSON.stringify({ format: 'basketball-manager-season', formatVersion: version, engineVersion: 'possession-3', state: { ...withLegacyYouthCompetition(stayed), schemaVersion: version } });
     expect(() => parseSeason(file(38))).toThrow(/joined after the dismissal/);
     const migrated = parseSeason(file(37));
     expect([migrated.managedClubId, migrated.career.moves, migrated.career.enabledSince!.effectiveFrom]).toEqual([CLUB, [], 2]);
-    const dismissal = JSON.parse(serializeSeason(withFixedRivalries(legacySacked)));
+    const dismissal = JSON.parse(serializeSeason(withLegacyYouthCompetition(withFixedRivalries(legacySacked))));
     dismissal.formatVersion = 37; dismissal.state.schemaVersion = 37;
     expect(() => parseSeason(JSON.stringify(dismissal))).toThrow(/supported reason/);
   }, 120_000);

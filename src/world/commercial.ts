@@ -4,12 +4,12 @@ import type { CommercialAnchor, CommercialEvent, CommercialExit, CommercialExitR
 import type { SeasonState } from '../domain/season';
 import { clubFinanceDefinition, incumbentSponsorId, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
 import { seasonLeagues } from './divisions';
-import { clubEconomy } from './economy';
+import { automationCushion, clubEconomy } from './economy';
 import { getArenaFullCapacity } from './facilities-policy';
 import { getFinanceBalance, recordCommercialEntry, recordSponsorshipPayment } from './finance';
 import { getSpendableCash } from './payroll-policy';
 import {
-  agreementFor, agreementLastSeason, bestNamingOffer, bestSponsorshipOffer, buildNamingOffers, buildSponsorshipOffers, commercialGovernsSeason, exitSourceId, namingAgreementFor, namingInstallment, namingPaymentsDue,
+  agreementFor, agreementLastSeason, bestNamingOffer, bestNamingOfferAfterExit, bestOfferAfterExit, bestSponsorshipOffer, buildNamingOffers, buildSponsorshipOffers, clearlyBetterFee, commercialGovernsSeason, COMMERCIAL_CLAUSE_RULES, exitSourceId, namingAgreementFor, namingInstallment, namingPaymentsDue,
   namingSourceId, namingSponsorAvailable, needsNamingOffers, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorClause, sponsorExitDecision, sponsorLeague,
   sponsorshipPaymentsDue, sponsorshipSourceId, sponsorshipInstallment, sponsorshipReferenceFee, terminationTerms, usesCommercialClauses, NAMING_FIRST_INSTALLMENT_ROUND, SPONSORSHIP_RENEWAL_ROUND,
   SPONSORSHIP_SECOND_INSTALLMENT_ROUND, type DueNamingPayment, type DueSponsorshipPayment, type SponsorExitEvidence, type SponsorLeague,
@@ -399,6 +399,11 @@ export interface SponsorshipTerminationQuote {
 export function quoteSponsorshipTermination(state: SeasonState, contract: CommercialContract, agreementId: string): SponsorshipTerminationQuote {
   const agreement = contractAgreement(state, contract, agreementId);
   if (!agreement || agreement.clubId !== state.managedClubId) throw new Error('Choose an agreement of your club.');
+  return terminationQuote(state, agreement);
+}
+
+/** The termination rules every club shares (the manager's and automatic control's). */
+function terminationQuote(state: SeasonState, agreement: ClauseAgreement): SponsorshipTerminationQuote {
   const terms = terminationTerms(agreement, state.seasonNumber);
   let reason: string | null = null;
   if (!usesCommercialClauses(state.commercial) || !agreement.clause) reason = 'This agreement has no early-termination clause.';
@@ -408,6 +413,41 @@ export function quoteSponsorshipTermination(state: SeasonState, contract: Commer
   else if (getFinanceBalance(state.finance, agreement.clubId).unpaid > 0) reason = 'Settle unpaid costs before paying a termination fee.';
   else if (getSpendableCash(state, agreement.clubId) < terms.fee) reason = 'The termination fee is more than your remaining budget.';
   return { agreement, canTerminate: reason === null, reason, ...terms };
+}
+
+/**
+ * Format 64: at matchday six, before the renewal offers, automatic control (every rival club, and the manager's club
+ * when delegated) ends its current main-sponsor or naming agreement early, in club order, by the manager's rules and
+ * fee, when a clearly better offer is available (`COMMERCIAL_CLAUSE_RULES.automaticExitMargin`): the best offer the
+ * club would receive in this window once the agreement ends. The fee must leave half the automatic cash cushion. Offers
+ * then arrive in the same window.
+ */
+function automateEarlyExits(state: SeasonState): SeasonState {
+  if (!usesCommercialClauses(state.commercial) || !state.commercial.enabledSince || state.status !== 'active' || state.round !== SPONSORSHIP_RENEWAL_ROUND || state.seasonNumber >= MAX_SEASON_NUMBER) return state;
+  const world = worldOf(state), completedRounds = completedSeasonRounds(state), leagues = offerLeagues(state);
+  let ledger: FinanceEntry[] | undefined;
+  const appeal = (clubId: string) => sponsorAppeal({ clubs: state.clubs, fixtures: state.fixtures, ledger: ledger ??= financeLedgerSlice(state.finance), seasonNumber: state.seasonNumber, completedRounds, world }, clubId).appeal;
+  // The current agreement still running into a later season, while the club can pay the fee and keep half its cushion.
+  const leaving = (next: SeasonState, agreement: ClauseAgreement | undefined): agreement is ClauseAgreement => {
+    if (!agreement?.clause || agreement.exit) return false;
+    const quote = terminationQuote(next, agreement);
+    return quote.canTerminate && getSpendableCash(next, agreement.clubId) - quote.fee >= automationCushion(next, agreement.clubId, COMMERCIAL_CLAUSE_RULES.automaticExitCushion) / 2;
+  };
+  const end = (next: SeasonState, contract: CommercialContract, agreement: ClauseAgreement) => { const quote = terminationQuote(next, agreement); return applyExit(next, contract, agreement, 'club', 'club', quote.lastSeason, quote.fee); };
+  let next = state;
+  for (const club of state.clubs) {
+    const main = agreementFor(next.commercial, club.id, next.seasonNumber);
+    if (next.commercial.plans[club.id]?.delegated && leaving(next, main)) {
+      const best = bestOfferAfterExit({ seed: next.seed, commercial: next.commercial, agreement: main, window: 'renewal', anchor: commercialAnchor(next), appeal: appeal(club.id), world, league: leagues(club.id), ...(next.economySeasons ? { economySeasons: next.economySeasons } : {}) });
+      if (best && clearlyBetterFee(main.annualFee, best.annualFee)) next = end(next, 'main', main);
+    }
+    const naming = namingOf(next.commercial), arena = namingAgreementFor(naming, club.id, next.seasonNumber);
+    if (naming.plans[club.id]?.delegated && leaving(next, arena)) {
+      const best = bestNamingOfferAfterExit({ seed: next.seed, naming, agreement: arena, window: 'renewal', anchor: commercialAnchor(next), appeal: appeal(club.id), world, basis: namingBasis(next, leagues(club.id), club.id) });
+      if (best && clearlyBetterFee(arena.annualFee, best.annualFee)) next = end(next, 'naming', arena);
+    }
+  }
+  return next;
 }
 
 /** The managed club ends an agreement early: the fee is paid now and the agreement covers no season after this one. */
@@ -426,7 +466,8 @@ export function processCommercialRound(state: SeasonState): SeasonState {
   let next = state;
   if (state.round === SPONSORSHIP_SECOND_INSTALLMENT_ROUND) for (const payment of paymentsDueNow(next)) next = recordSponsorshipPayment(next, payment);
   if (state.round === NAMING_FIRST_INSTALLMENT_ROUND) next = bookNamingPayments(next);
-  if (state.round === SPONSORSHIP_RENEWAL_ROUND) next = openSponsorshipWindows(next, 'renewal');
+  // Format 64: automatic control may leave a poor agreement first, so the club receives offers in the same window.
+  if (state.round === SPONSORSHIP_RENEWAL_ROUND) next = openSponsorshipWindows(automateEarlyExits(next), 'renewal');
   return automateSponsorship(next);
 }
 

@@ -6,7 +6,10 @@ import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { acceptNamingOffer, acceptSponsorshipOffer, arenaNameFor, getClubNamingRights, getClubSponsorship, quoteNamingOffer, quoteSponsorshipTermination, setNamingDelegation, terminateSponsorship } from '../src/world/commercial';
 import { clubFinanceDefinition, worldOf } from '../src/world/career-world';
-import { agreementFor, bestNamingOffer, COMMERCIAL_CLAUSE_RULES, namingAgreementFor, namingArenaName, namingPaymentsDue, namingRightsValue, sponsorExitDecision, sponsorExitTriggers, terminationTerms } from '../src/world/commercial-policy';
+import { agreementFor, bestNamingOffer, clearlyBetterFee, COMMERCIAL_CLAUSE_RULES, namingAgreementFor, namingArenaName, namingPaymentsDue, namingRightsValue, sponsorExitDecision, sponsorExitTriggers, terminationTerms } from '../src/world/commercial-policy';
+import { requireWorldContexts } from '../src/world/career-world';
+import { withRealEconomy } from '../src/world/economy';
+import { withLowerDivisions } from '../src/world/lower-division';
 import { getFinanceBalance } from '../src/world/finance';
 import { setEmploymentDelegation } from '../src/world/employment';
 import { advanceMarket } from '../src/world/market';
@@ -252,6 +255,49 @@ describe('a sponsor leaving after relegation', () => {
     expect(opening.some(entry => ended.has(entry.sponsorship!.agreementId))).toBe(false);
     expect(parseSeason(serializeSeasonCompact(next))).toEqual(next);
   }, 120_000);
+});
+
+describe('automatic control leaving a poor agreement (format 64)', () => {
+  it('leaves only for a clearly better annual fee: the termination fee share and a quarter of the old fee more', () => {
+    expect(1 + COMMERCIAL_CLAUSE_RULES.terminationFeeShare + COMMERCIAL_CLAUSE_RULES.automaticExitMargin).toBe(1.75);
+    expect(clearlyBetterFee(10_000_000, 17_500_000)).toBe(true);
+    expect(clearlyBetterFee(10_000_000, 17_400_000)).toBe(false);
+  });
+
+  it('ends a promoted rival\'s agreement at matchday six for the better offer it then receives, and the save check rebuilds it', () => {
+    // One country with two divisions and researched club money (format 72): a promoted club's sponsorship benchmark
+    // rises with its new division, so the agreement it signed in the lower division is now a poor one.
+    const base = testWorld(12);
+    const playerContracts = Object.fromEntries(base.clubs.flatMap(item => item.players.map((player, index) => [player.id, 1 + (index % 3)])));
+    const world = withRealEconomy(withLowerDivisions({ ...base, id: 'economy-seasons-test', rosterModel: 'club-roster-1', playerContracts, domesticLeagues: [
+      { id: 'first', name: 'First division', country: 'Testland', tier: 1, clubIds: base.clubs.slice(0, 6).map(item => item.id), postseason: 'test-tier1-1', standingsRule: 'fiba-2026-d' },
+      { id: 'second', name: 'Second division', country: 'Testland', tier: 2, clubIds: base.clubs.slice(6).map(item => item.id), postseason: 'test-tier2-2', standingsRule: 'fiba-2026-d' },
+    ] }, [{ country: 'Testland', tier: 3, name: 'Third division', clubs: Array.from({ length: 4 }, (_, index) => ({ id: `third-${index + 1}`, name: `Third Club ${index + 1}`, shortName: `TC${index + 1}`, color: '#336699' })) }]));
+    requireWorldContexts(true);
+    try {
+      let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+      state = rolloverSeason(finishSeason(state));
+      const before = advanceTo(state, 5), renewal = advanceTo(before, 6);
+      const exits = renewal.commercial.agreements.filter(agreement => agreement.exit?.by === 'club');
+      expect(exits.length).toBeGreaterThan(0);
+      for (const agreement of exits) {
+        expect(agreement.clubId).not.toBe(renewal.managedClubId);
+        expect(renewal.commercial.plans[agreement.clubId]!.delegated).toBe(true);
+        const fee = terminationTerms({ ...agreement, exit: null }, 2).fee;
+        expect(agreement.exit).toEqual({ by: 'club', reason: 'club', seasonNumber: 2, round: 6, date: renewal.date, lastSeason: 2, amount: fee });
+        expect(renewal.finance.ledger.filter(entry => entry.sourceId === `exit-${agreement.id}`)).toEqual([expect.objectContaining({ clubId: agreement.clubId, kind: 'sponsor-exit', seasonNumber: 2, round: 6, amount: -fee, sponsorExit: { agreementId: agreement.id, sponsorId: agreement.sponsorId, contract: 'main', by: 'club' } })]);
+        // The exit precedes the window, whose offers the club then receives; it signs the best one, clearly better.
+        const events = renewal.commercial.events, exitAt = events.findIndex(event => event.type === 'terminate' && event.agreementId === agreement.id);
+        expect(events.findIndex(event => event.type === 'offers' && event.seasonNumber === 2)).toBeGreaterThan(exitAt);
+        const next = agreementFor(renewal.commercial, agreement.clubId, 3)!;
+        expect(next).toMatchObject({ startsSeason: 3, automatic: true });
+        expect(next.sponsorId).not.toBe(agreement.sponsorId);
+        expect(clearlyBetterFee(agreement.annualFee, next.annualFee)).toBe(true);
+      }
+      expect(before.commercial.agreements.some(agreement => agreement.exit?.by === 'club')).toBe(false);
+      expect(parseSeason(serializeSeasonCompact(renewal))).toEqual(renewal);
+    } finally { requireWorldContexts(false); }
+  }, 240_000);
 });
 
 describe('older careers keep the original sponsorship rules', () => {

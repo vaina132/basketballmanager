@@ -66,7 +66,8 @@ export interface YouthCompetitionSeason {
 }
 
 export interface SeasonYouthCompetition {
-  model: 'youth-competition-1';
+  /** `youth-competition-2` (careers starting with youth matches, format 72): youth injuries recur like senior ones (`YOUTH_RECURRENCE_MODEL`). */
+  model: 'youth-competition-1' | 'youth-competition-2';
   enabledSince: YouthCompetitionAnchor | null;
   seasons: YouthCompetitionSeason[];
 }

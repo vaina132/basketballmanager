@@ -1,10 +1,12 @@
 import type { PresidentTraitLevel, PresidentTraits } from '../data/development-presidents';
-import type { BoardClubMandate, BoardCultureObjective, BoardRequest, BoardYouthObjective, SeasonBoard } from '../domain/board';
+import type { BoardClubMandate, BoardCultureObjective, BoardMandate, BoardRequest, BoardYouthObjective, SeasonBoard } from '../domain/board';
 import type { SeasonAcademy } from '../domain/academy';
 import type { ArchivedFixture, SeasonArchive, SeasonFixture } from '../domain/season';
+import type { Player } from '../domain/types';
 import type { CareerWorld } from '../domain/world';
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { clubPresident, worldOf } from './career-world';
+import { overallRating } from './overall-rating';
 export { isPresidentTraits, NEGOTIATION_STYLES } from '../data/development-presidents';
 
 /**
@@ -58,6 +60,15 @@ export const PRESIDENT_RULES = Object.freeze({
     cultureMet: 3, cultureMissPerPlayer: 2, cultureMax: 4,
     /** No youth-minutes or culture assessment before the third counted game (as for results). */
     graceGames: 3,
+    /**
+     * Automatically run clubs (every rival, and every club while the manager has none) follow their objectives with
+     * existing levers. With a youth-minutes or young-rotation objective, a regular-season game starts the club's best
+     * healthy under-23 or academy players in place of its weakest other planned starters (at the same position when
+     * there is one) while they are at most `aiStarterGap` rating points weaker (the engine's starter bonus): one for
+     * youth minutes, up to `aiYoungStarters` for a young-rotation target. A player who counts towards the club's youth
+     * or culture objective is renewed up to squad rank `aiRenewMaxRank` (otherwise 8) when he asks for a new contract.
+     */
+    aiStarterGap: 6, aiYoungStarters: 2, aiRenewMaxRank: 12,
   }),
   requests: Object.freeze({
     /** The chance of a new request at a weekly review, by interference 1-5, when none is open. */
@@ -180,6 +191,53 @@ export function boardObjectives(context: PresidentContext & { world?: CareerWorl
 export function presidentMandate(context: PresidentContext & { world?: CareerWorld; dataPackId?: string }, input: { clubId: string; seasonNumber: number; date: string; games: number; tier: ClubTier; playerIds: readonly string[] }): Pick<BoardClubMandate, 'reviewStep' | 'pressureBelow' | 'youth' | 'culture'> {
   const traits = presidentTraits(worldOf(context), input.clubId);
   return { reviewStep: presidentReviewStep(traits), pressureBelow: presidentPressureLine(traits), ...boardObjectives(context, { ...input, traits }) };
+}
+
+/** Format 70: a club's board objectives in a season (board-2 careers only). */
+export function seasonObjectives(board: Pick<SeasonBoard, 'model' | 'mandates'> | undefined, clubId: string, seasonNumber: number): { mandate: BoardMandate; objective: BoardClubMandate } | null {
+  if (!board || !usesPresidentBoard(board)) return null;
+  const mandate = board.mandates.find(item => item.seasonNumber === seasonNumber), objective = mandate?.clubs[clubId];
+  return mandate && objective ? { mandate, objective } : null;
+}
+
+/** Whether a player counts towards the club's youth or culture objective this season (an automatic renewal lever). */
+export function countsTowardsObjectives(context: PresidentContext & { world?: CareerWorld; dataPackId?: string; board?: Pick<SeasonBoard, 'model' | 'mandates'> }, clubId: string, seasonNumber: number, playerId: string): boolean {
+  const found = seasonObjectives(context.board, clubId, seasonNumber);
+  if (!found) return false;
+  const { mandate, objective } = found, maxAge = PRESIDENT_RULES.objectives.maxAge;
+  if (objective.culture?.kind === 'established-core' && objective.culture.playerIds.includes(playerId)) return true;
+  return (objective.youth?.kind === 'youth-minutes' || objective.culture?.kind === 'young-rotation') && isYouthPlayer(context, clubId, playerId, mandate.date, maxAge);
+}
+
+/**
+ * Format 70: an automatically run club's starting five for a regular-season game under a youth-minutes or
+ * young-rotation objective (`PRESIDENT_RULES.objectives.aiStarterGap`). `players` are the selected, developed players;
+ * unavailable planned starters are always replaceable. Reads state only: no random draws.
+ */
+export function objectiveStartingFive(context: PresidentContext & { world?: CareerWorld; dataPackId?: string; board?: Pick<SeasonBoard, 'model' | 'mandates'> }, input: { clubId: string; seasonNumber: number; players: readonly Player[]; planned: readonly string[]; unavailable: ReadonlySet<string> }): string[] {
+  const rules = PRESIDENT_RULES.objectives, found = seasonObjectives(context.board, input.clubId, input.seasonNumber);
+  const youth = found?.objective.youth?.kind === 'youth-minutes' ? found.objective.youth : null;
+  const culture = found?.objective.culture?.kind === 'young-rotation' ? found.objective.culture : null;
+  if (!found || !youth && !culture) return [...input.planned];
+  const maxAge = youth?.maxAge ?? culture!.maxAge, wanted = Math.max(youth ? 1 : 0, culture ? Math.min(rules.aiYoungStarters, culture.target) : 0);
+  const byId = new Map(input.players.map(player => [player.id, player]));
+  const rating = (id: string) => input.unavailable.has(id) ? -Infinity : overallRating(byId.get(id)!.attributes, byId.get(id)!.position);
+  const young = new Set(input.players.filter(player => isYouthPlayer(context, input.clubId, player.id, found.mandate.date, maxAge)).map(player => player.id));
+  const order = (a: string, b: string) => rating(a) - rating(b) || (a < b ? -1 : a > b ? 1 : 0);
+  let five = input.planned.filter(id => byId.has(id));
+  if (five.length < 5) return [...input.planned];
+  let starting = five.filter(id => young.has(id) && !input.unavailable.has(id)).length;
+  const candidates = [...young].filter(id => !five.includes(id) && !input.unavailable.has(id)).sort((a, b) => order(b, a));
+  for (const candidate of candidates) {
+    if (starting >= wanted) break;
+    const others = five.filter(id => !young.has(id) || input.unavailable.has(id)), position = byId.get(candidate)!.position;
+    const same = others.filter(id => byId.get(id)!.position === position);
+    const weakest = [...(same.length ? same : others)].sort(order)[0];
+    if (weakest === undefined || rating(candidate) < rating(weakest) - rules.aiStarterGap) continue;
+    five = five.map(id => id === weakest ? candidate : id);
+    starting += 1;
+  }
+  return five;
 }
 
 interface ClubGame { fixture: Pick<SeasonFixture, 'result'> | Pick<ArchivedFixture, 'result'>; players: ReadonlySet<string> }

@@ -54,9 +54,10 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
 
   it('exchanges clubs with the next division at each season end: leaving, returning and first-time clubs, with strict saves', () => {
     const world = lowerWorld();
-    // Seed 2 (31 before the saved ideas level): a first-time club joins in season one, the relegated club returns in
-    // season two and another first-time club comes up in season three.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 2, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    // Seed 23 (2 before AI clubs followed their president's youth objectives and youth injuries recurred, 31 before the
+    // saved ideas level): a first-time club joins in season one, the relegated club returns in season two and another
+    // first-time club comes up in season three.
+    let state = setEmploymentDelegation(createSeason({ world, seed: 23, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
     const generated = new Set(world.clubs.filter(club => club.id.startsWith('third-')).flatMap(club => club.players.map(player => player.id)));
     const finishSeason = () => {
       while (state.status === 'active') { state = play(state); if (state.round === 5) expect(roundTrip(state)).toEqual(state); }

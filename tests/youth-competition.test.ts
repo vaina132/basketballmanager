@@ -6,8 +6,12 @@ import { createSeason, dateForRound } from '../src/world/season';
 import { academyAtBoundary, processAcademyWeek } from '../src/world/academy';
 import { getAcademyCapacity, getClubAcademy } from '../src/world/academy-policy';
 import { generateAcademyProspects, generateYouthSquadProspects } from '../src/world/academy-generation';
+import type { MatchInjuryKind } from '../src/domain/injuries';
+import { parseSeason, serializeSeason } from '../src/storage/season-storage';
+import { createSeasonInjury, injuryRiskMap, isRecurrence } from '../src/world/health';
+import { playFirstSeason } from './helpers/board-funding';
 import { getCareerPlayers } from '../src/world/player-catalog';
-import { createYouthCompetition, enableYouthCompetition, getYouthFixtures, getYouthFixtureTeams, getYouthPlayerPerformance, getYouthPlayerStatus, getYouthStandings, prepareYouthFixture, processYouthRound, settleYouthFixture, youthCompetitionAtBoundary, youthFixtureSeed } from '../src/world/youth-competition';
+import { createYouthCompetition, enableYouthCompetition, getYouthFixtures, getYouthFixtureTeams, getYouthPlayerPerformance, getYouthPlayerStatus, getYouthStandings, prepareYouthFixture, processYouthRound, settleYouthFixture, youthCompetitionAtBoundary, youthFixtureSeed, youthInjuryHistory, YOUTH_RECURRENCE_MODEL } from '../src/world/youth-competition';
 
 const create = (enabled = true) => createSeason(227, 'rhine-falcons', 'off', true, false, true, true, null, true, false, true, false, false, false, false, false, true, false, false, enabled);
 const freeze = <T>(value: T): T => { if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
@@ -20,6 +24,8 @@ describe('real youth fixtures and explicit supplemental intake', () => {
   it('keeps the legacy generator intact and creates distinct, age-balanced supplemental identities', () => {
     const old = create(false), enabled = enableYouthCompetition(old);
     expect(old.youthCompetition).toEqual(createYouthCompetition());
+    // Careers that start with youth matches (format 72) use recurring youth injuries; opting in later keeps the original model.
+    expect([initial.youthCompetition.model, enabled.youthCompetition.model]).toEqual([YOUTH_RECURRENCE_MODEL, 'youth-competition-1']);
     expect(getAcademyCapacity(old)).toBe(6);
     expect(getAcademyCapacity(enabled)).toBe(8);
     expect(enabled.academy.prospects.slice(0, 18)).toEqual(old.academy.prospects);
@@ -138,5 +144,41 @@ describe('real youth fixtures and explicit supplemental intake', () => {
     expect(() => processYouthRound({ ...initial, round: 2, date: dateForRound(2) })).toThrow(/calendar order/);
     expect(getClubAcademy(next)).toHaveLength(8);
     expect(next.academy.intakes).toBe(initial.academy.intakes);
+  });
+});
+
+describe('recurring youth injuries (format 72)', () => {
+  let season: SeasonState;
+  beforeAll(() => { season = playFirstSeason(true); }, 300_000);
+
+  it('uses each youth player\'s earlier youth injuries for the same recurrence rule as senior players', () => {
+    const competition = season.youthCompetition;
+    expect(competition.model).toBe(YOUTH_RECURRENCE_MODEL);
+    const fixtures = competition.seasons.flatMap(entry => entry.fixtures).filter(fixture => fixture.result?.played);
+    const injuries = fixtures.flatMap(fixture => fixture.result!.injuries.map(injury => ({ fixture, injury })));
+    expect(injuries.length).toBeGreaterThan(0);
+    let recurrences = 0;
+    for (const { fixture, injury } of injuries) {
+      const history = youthInjuryHistory(competition, [injury.playerId], fixture.date);
+      expect(history.every(earlier => earlier.playerId === injury.playerId && earlier.occurredOn < fixture.date)).toBe(true);
+      // Each diagnosis follows the player's recorded youth history; a recurrence lasts 1.3 times as long.
+      expect(injury).toEqual(createSeasonInjury(season.seed, fixture, injury.clubId, injury.playerId, injury.kind, history));
+      if (isRecurrence(history, injury.playerId, injury.kind as MatchInjuryKind, fixture.date)) {
+        recurrences += 1;
+        expect(injury.returnOn).not.toBe(createSeasonInjury(season.seed, fixture, injury.clubId, injury.playerId, injury.kind).returnOn);
+      }
+    }
+    // A player back from a recent injury of a recurring kind carries a raised risk of it into his next game; the
+    // original model keeps no youth history at all.
+    const dayAfter = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    const raised = injuries.filter(({ injury }) => Object.keys(injuryRiskMap(youthInjuryHistory(competition, [injury.playerId], dayAfter(injury.returnOn)), [injury.playerId], dayAfter(injury.returnOn))[injury.playerId] ?? {}).includes(injury.kind));
+    expect(raised.length).toBeGreaterThan(0);
+    for (const { injury } of injuries) expect(youthInjuryHistory({ ...competition, model: 'youth-competition-1' }, [injury.playerId], dayAfter(injury.returnOn))).toEqual([]);
+    // Seed 227's first season has one youth recurrence (of eight youth injuries).
+    expect(recurrences).toBeGreaterThan(0);
+  });
+
+  it('keeps the strict save check accepting the recorded youth season', { timeout: 300_000 }, () => {
+    expect(parseSeason(serializeSeason(season))).toEqual(season);
   });
 });

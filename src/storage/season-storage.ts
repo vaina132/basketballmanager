@@ -79,7 +79,7 @@ import { academyAtBoundary, buildAcademyWeek, createAcademy, enableAcademy, grad
 import { validationReplayCache } from './replay-cache';
 import { canSummarizeAcademyReport, createAcademyHistoryContext, isAcademyOutcome, summarizeAcademyHistory, summarizeAcademyPlayer } from '../world/academy-history';
 import { createYouth } from '../world/youth';
-import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, prepareYouthFixture, settleYouthFixture, getYouthPlayerStatus, youthCompetitionAtBoundary } from '../world/youth-competition';
+import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, prepareYouthFixture, settleYouthFixture, getYouthPlayerStatus, youthCompetitionAtBoundary, youthInjuryHistory, YOUTH_RECURRENCE_MODEL } from '../world/youth-competition';
 import { canSummarizeYouthFixture, createYouthHistoryContext, isYouthOutcome, summarizeYouthFixture, summarizeYouthHistory, type YouthHistoryContext } from '../world/youth-history';
 import { createLifecycle, enableLifecycle, lifecycleAtBoundary, prepareLifecycleSeason } from '../world/lifecycle';
 import { getPlayerAging, type LifecycleContext } from '../world/lifecycle-policy';
@@ -849,9 +849,11 @@ function validateAcademyShape(value: unknown, state: SeasonState, version: numbe
 /** A separate prospective competition; disabled imports contain no fabricated youth history. */
 function validateYouthCompetitionShape(value: unknown, state: SeasonState, version: SeasonFormatVersion): SeasonYouthCompetition {
   const fields = record(value, 'youthCompetition', ['model', 'enabledSince', 'seasons']);
-  if (fields.model !== 'youth-competition-1' || !Array.isArray(fields.seasons) || fields.seasons.length > MAX_SEASON_NUMBER) fail('youthCompetition', 'must retain a supported bounded competition history');
+  // Format 72: careers that start with youth matches have recurring youth injuries (`youth-competition-2`); others keep `youth-competition-1`.
+  if (fields.model === YOUTH_RECURRENCE_MODEL && version < 72) fail('youthCompetition.model', 'requires format 72 or later for recurring youth injuries');
+  if (fields.model !== 'youth-competition-1' && fields.model !== YOUTH_RECURRENCE_MODEL || !Array.isArray(fields.seasons) || fields.seasons.length > MAX_SEASON_NUMBER) fail('youthCompetition', 'must retain a supported bounded competition history');
   if (fields.enabledSince === null) {
-    if (!sameData(fields, createYouthCompetition())) fail('youthCompetition', 'must retain its empty default while disabled');
+    if (!sameData(fields, createYouthCompetition(fields.model as SeasonYouthCompetition['model']))) fail('youthCompetition', 'must retain its empty default while disabled');
     return fields as unknown as SeasonYouthCompetition;
   }
   const anchor = record(fields.enabledSince, 'youthCompetition.enabledSince', ['seasonNumber', 'round', 'date', 'ledgerIndex', 'contractCount', 'negotiationCount', 'recruitmentEventCount', 'academyIntakeCount', 'academyGraduateCount']);
@@ -926,7 +928,7 @@ function replayYouthRound(replay: SeasonState, original: SeasonState, historyCon
         const injury = record(value, injuryPath, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);
         const club = [prepared.home, prepared.away].find(team => team.players.some(player => player.id === injury.playerId));
         if (!club || !isInjuryKind(injury.kind) || diagnosed.has(injury.playerId as string) || Object.hasOwn(prepared.unavailable, injury.playerId as string) || replay.injuryMode === 'off') fail(injuryPath, 'must identify one new supported diagnosis for an available participant');
-        const expected = createSeasonInjury(replay.seed, fixture, club.id, injury.playerId as string, injury.kind as SeasonInjury['kind']);
+        const expected = createSeasonInjury(replay.seed, fixture, club.id, injury.playerId as string, injury.kind as SeasonInjury['kind'], youthInjuryHistory(replay.youthCompetition, [injury.playerId as string], fixture.date));
         if (!sameData(injury, expected)) fail(injuryPath, 'must preserve the original deterministic diagnosis and return date');
         diagnosed.add(injury.playerId as string);
         injuryMap[injury.playerId as string] = injury.kind as SeasonInjury['kind'];
@@ -983,7 +985,7 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
   for (const [index, contract] of state.employment.contracts.entries()) if (index < anchor.contractCount ? roundKey(contract.signedSeason, contract.signedRound) > boundary : roundKey(contract.signedSeason, contract.signedRound) < boundary) fail('academy.enabledSince.contractCount', 'must identify a chronological employment prefix');
   for (const [index, reply] of state.negotiations.records.entries()) if (index < anchor.negotiationCount ? roundKey(reply.seasonNumber, reply.round) > boundary : roundKey(reply.seasonNumber, reply.round) < boundary) fail('academy.enabledSince.negotiationCount', 'must identify a chronological response prefix');
   let replay: SeasonState = {
-    ...state, clubs: fullWorldClubsIn(state, anchor.seasonNumber), divisions: divisionsInSeason(state, anchor.seasonNumber), academy: createAcademy(), youthCompetition: createYouthCompetition(), seasonNumber: anchor.seasonNumber, round: anchor.round, date: dateForRound(anchor.round, anchor.seasonNumber), status: 'active',
+    ...state, clubs: fullWorldClubsIn(state, anchor.seasonNumber), divisions: divisionsInSeason(state, anchor.seasonNumber), academy: createAcademy(), youthCompetition: createYouthCompetition(state.youthCompetition.model), seasonNumber: anchor.seasonNumber, round: anchor.round, date: dateForRound(anchor.round, anchor.seasonNumber), status: 'active',
     finance: financeAtLedgerBoundary(state.finance, anchor.ledgerIndex), employment: { ...state.employment, contracts: firstContracts }, negotiations: { ...state.negotiations, records: firstReplies },
     conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => originalIds.has(id))),
     training: { ...state.training, points: Object.fromEntries(Object.entries(state.training.points).filter(([id]) => originalIds.has(id))) },
@@ -1109,7 +1111,7 @@ function validateLifecycleHistory(state: SeasonState, recruitmentHolds: Recruitm
     const employment = { ...state.employment, contracts, transfers: state.employment.transfers.filter(transfer => contracts.some(contract => contract.id === transfer.contractId)).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => paidSources.has(payment.id)) })), buyouts: state.employment.buyouts.filter(buyout => paidSources.has(buyout.id)), market: null };
     const youthAnchor = state.youthCompetition.enabledSince;
     const youthVisible = !youthAnchor || roundKey(youthAnchor.seasonNumber, youthAnchor.round) < roundKey(year, round) || youthAnchor.seasonNumber === year && youthAnchor.round === round && youthAnchor.ledgerIndex <= ledgerIndex && youthAnchor.contractCount <= contractCount && youthAnchor.negotiationCount <= negotiationCount && youthAnchor.recruitmentEventCount <= recruitmentEventCount;
-    const youthCompetition = youthVisible ? youthCompetitionAtBoundary(state.youthCompetition, year, round) : createYouthCompetition();
+    const youthCompetition = youthVisible ? youthCompetitionAtBoundary(state.youthCompetition, year, round) : createYouthCompetition(state.youthCompetition.model);
     const academy = academyAtBoundary(state.academy, year, round, contractCount, !youthVisible && youthAnchor && youthAnchor.seasonNumber === year && youthAnchor.round === round ? youthAnchor.academyIntakeCount : undefined);
     const offers = recruitmentEventCount ? recruitmentHolds.find(hold => hold.eventCount === recruitmentEventCount)?.offers : [];
     if (!offers) fail(`${path}.recruitmentEventCount`, 'must reference a replayed in-season command boundary');
@@ -1829,7 +1831,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     const employment: SeasonEmployment = { ...state.employment, contracts, transfers: state.employment.transfers.filter(transfer => contracts.some(contract => contract.id === transfer.contractId)).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => sourceIds.has(payment.id)) })), buyouts: state.employment.buyouts.filter(buyout => ledger.some(entry => entry.kind === 'buyout' && entry.sourceId === buyout.id)), market: null };
     const youthAnchor = state.youthCompetition.enabledSince;
     const youthVisible = !youthAnchor || roundKey(youthAnchor.seasonNumber, youthAnchor.round) < roundKey(year, round) || youthAnchor.seasonNumber === year && youthAnchor.round === round && youthAnchor.ledgerIndex <= ledgerIndex && youthAnchor.contractCount <= contractCount && youthAnchor.negotiationCount <= negotiationCount && youthAnchor.recruitmentEventCount <= index;
-    const youthCompetition = youthVisible ? youthCompetitionAtBoundary(state.youthCompetition, year, round) : createYouthCompetition();
+    const youthCompetition = youthVisible ? youthCompetitionAtBoundary(state.youthCompetition, year, round) : createYouthCompetition(state.youthCompetition.model);
     const academy = academyAtBoundary(state.academy, year, round, contractCount, !youthVisible && youthAnchor && youthAnchor.seasonNumber === year && youthAnchor.round === round ? youthAnchor.academyIntakeCount : undefined);
     const lifecycle = lifecycleAtBoundary(state.lifecycle, year, round, contractCount, index, state.market.windows.filter(window => window.seasonNumber < year).reduce((sum, window) => sum + window.events.length, 0), ledgerIndex, negotiationCount);
     const catalogContext = { world: worldOf(state), academy, lifecycle, seasonNumber: year, round, background: state.background };
@@ -2185,6 +2187,13 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   for (let year = firstYear; year <= seasonNumber; year += 1) openingSponsors.set(year, openingSponsorshipClubs(commercial, clubsIn(year), year));
   const minimumEntries = clubs.length + [...openingSponsors.values()].reduce((sum, ids) => sum + ids.length, 0) + financeRounds * clubs.length + [ ...archives.flatMap(archive => archive.fixtures.map(fixture => ({ ...fixture, year: archive.seasonNumber }))), ...fixtures.map(fixture => ({ ...fixture, year: seasonNumber })) ].filter(fixture => fixture.result && (fixture.year > firstYear || fixture.year === firstYear && fixture.round >= firstRound)).length;
   if (fields.ledger.length < minimumEntries) fail('finance.ledger', 'is missing required opening, sponsorship, operating or ticket entries');
+  // An arena project started after a gate was booked cannot have closed its seats (an offseason start is dated on the
+  // final week's Saturday, before that week's later postseason games): judge each gate by the projects started before it.
+  const arenaStarts = facilities.projects.filter(project => project.type === 'arena').map(project => ({ project, ledgerIndex: facilities.events[project.startEventIndex]?.ledgerIndex ?? 0 }));
+  const facilitiesForGate = (clubId: string, index: number, date: string): SeasonFacilities => {
+    const later = arenaStarts.filter(item => item.project.clubId === clubId && item.ledgerIndex > index && item.project.startedOn < date).map(item => item.project);
+    return later.length ? { ...facilities, projects: facilities.projects.filter(project => !later.includes(project)) } : facilities;
+  };
   type RequiredEvent = Pick<FinanceEntry, 'clubId' | 'seasonNumber' | 'round' | 'kind' | 'sourceId'> & { amount?: number; fixture?: SeasonFixture | ArchivedFixture; sponsorship?: FinanceEntry['sponsorship']; boardCapital?: FinanceEntry['boardCapital']; namingRights?: FinanceEntry['namingRights']; sponsorExit?: FinanceEntry['sponsorExit']; debt?: FinanceEntry['debt'] };
   const origin = (clubId: string, kind: FinanceEntry['kind'], sourceId: string) => `${clubId}/${kind}/${sourceId}`;
   const required = new Map<string, RequiredEvent>();
@@ -2540,7 +2549,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
         const fixture = expected.fixture!;
         if (ticket.fixtureId !== fixture.id) fail(`${path}.ticket.fixtureId`, 'must identify its completed home fixture');
         const price = validateTicketPrice(ticket.price, `${path}.ticket.price`, yearContext(year), entry.clubId);
-        const gate = forecastGate({ ...worldContext, fixtures: schedules.get(year)!, seasonNumber: year, rivalries, ...(hasCapacity ? { facilities } : {}), ...(press ? press : {}) }, fixture, price);
+        const gate = forecastGate({ ...worldContext, fixtures: schedules.get(year)!, seasonNumber: year, rivalries, ...(hasCapacity ? { facilities: facilitiesForGate(entry.clubId, index, fixture.date) } : {}), ...(press ? press : {}) }, fixture, price);
         if (hasCapacity && ticket.capacity !== gate.capacity) fail(`${path}.ticket.capacity`, 'must retain the actual construction-adjusted matchday capacity');
         number(ticket.attendance, `${path}.ticket.attendance`, 0, gate.capacity);
         if (ticket.attendance !== gate.attendance || amount !== gate.revenue) fail(path, 'does not match attendance and revenue from the pre-round sporting results');

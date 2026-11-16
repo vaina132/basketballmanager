@@ -199,7 +199,9 @@ export function leaveClub(state: SeasonState, reason: 'dismissed' | 'resigned', 
 export function appointFromUnemployment(state: SeasonState, toClubId: string, phase: CareerMovePhase): SeasonState {
   if (!isUnemployed(state)) throw new Error('Only a manager without a club can be appointed.');
   if (!state.clubs.some(club => club.id === toClubId)) throw new Error('Choose a club in this league.');
-  const move: CareerMove = { seasonNumber: state.seasonNumber, date: state.date, fromClubId: NO_CLUB, toClubId, reason: 'appointed', ledgerCount: financeLedgerCount(state.finance), round: state.round, phase };
+  // The club left before unemployment links to the new one in rivalries, as a direct move would (format 72).
+  const former = lastManagedClub(state);
+  const move: CareerMove = { seasonNumber: state.seasonNumber, date: state.date, fromClubId: NO_CLUB, toClubId, reason: 'appointed', ledgerCount: financeLedgerCount(state.finance), round: state.round, phase, ...(former ? { formerClubId: former } : {}) };
   let next: SeasonState = {
     ...state,
     managedClubId: toClubId,

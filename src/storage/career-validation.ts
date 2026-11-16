@@ -65,7 +65,7 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
   // The career's own world (the built-in league for careers without one), not always the built-in league.
   const world = worldOf(state);
   const ledger = state.finance.ledger;
-  if (rules) { validateCareer2Moves(fields.moves, state, world, fields.model === CAREER_MODEL); return; }
+  if (rules) { validateCareer2Moves(fields.moves, state, world, fields.model === CAREER_MODEL, version); return; }
   let previous: { seasonNumber: number; toClubId: string; ledgerCount: number } | null = null;
   for (const [index, raw] of fields.moves.entries()) {
     const location = `career.moves[${index}]`;
@@ -90,12 +90,16 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
  * Format 63 (basic checks, development mode): career-2 moves are chronological career points between world clubs.
  * Format 69 (career-3): a dismissal or resignation may lead to no club, and only an appointment leaves no club again.
  */
-function validateCareer2Moves(moves: unknown[], state: Pick<SeasonState, 'seasonNumber' | 'round' | 'status' | 'date' | 'managedClubId' | 'finance'> & WorldContext, world: ReturnType<typeof worldOf>, unemployment: boolean): void {
+function validateCareer2Moves(moves: unknown[], state: Pick<SeasonState, 'seasonNumber' | 'round' | 'status' | 'date' | 'managedClubId' | 'finance'> & WorldContext, world: ReturnType<typeof worldOf>, unemployment: boolean, version: number): void {
   const rounds = seasonRounds(state);
   let previous: { key: number; date: string; toClubId: string; ledgerCount: number } | null = null;
   for (const [index, raw] of moves.entries()) {
     const location = `career.moves[${index}]`;
-    const move = record(raw, location, ['seasonNumber', 'date', 'fromClubId', 'toClubId', 'reason', 'ledgerCount', 'round', 'phase']);
+    // Format 72: an appointment from unemployment may record the club the manager last left.
+    const former = unemployment && raw !== null && typeof raw === 'object' && (raw as Record<string, unknown>).reason === 'appointed' && Object.hasOwn(raw, 'formerClubId');
+    const move = record(raw, location, ['seasonNumber', 'date', 'fromClubId', 'toClubId', 'reason', 'ledgerCount', 'round', 'phase', ...(former ? ['formerClubId'] : [])]);
+    if (former && version < 72) fail(`${location}.formerClubId`, 'requires format 72 or later');
+    if (former && (!previous || previous.toClubId !== NO_CLUB || move.formerClubId !== (moves[index - 1] as { fromClubId?: unknown }).fromClubId)) fail(`${location}.formerClubId`, 'must be the club the manager last left');
     const season = integer(move.seasonNumber, `${location}.seasonNumber`, 1, state.seasonNumber);
     if (!PHASES.includes(move.phase as CareerMovePhase)) fail(`${location}.phase`, 'must record when the move happened');
     const phase = move.phase as CareerMovePhase;

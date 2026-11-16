@@ -39,6 +39,11 @@ export interface CareerMove {
   round?: number;
   /** Format 63, `career-2` careers: when in the season the move happened. */
   phase?: CareerMovePhase;
+  /**
+   * Format 72, `career-3` careers created from this version: an appointment from unemployment records the club the
+   * manager last left, so rivalries grow as for a direct move between the two clubs. Older appointments lack it.
+   */
+  formerClubId?: string;
 }
 
 /**

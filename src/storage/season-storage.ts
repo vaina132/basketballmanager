@@ -2361,10 +2361,19 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   const openingSponsors = new Map<number, string[]>();
   // Each season's own full-world clubs (step 3.4d-2); a club joining the full world for the first time gets opening funds.
   const clubsIn = (year: number): readonly Team[] => world ? fullWorldClubsIn({ world, background }, year) : clubs;
+  // A pure function of the season, worked out once per season (the ledger loop asks for every entry).
+  const openingsByYear = new Map<number, string[]>();
   const openingsIn = (year: number): string[] => {
-    if (year === firstYear) return clubsIn(firstYear).map(club => club.id);
-    const earlier = new Set([...clubsIn(firstYear).map(club => club.id), ...(background?.exchanges ?? []).filter(exchange => exchange.seasonNumber < year - 1).flatMap(exchange => exchange.joining)]);
-    return (background?.exchanges ?? []).filter(exchange => exchange.seasonNumber === year - 1).flatMap(exchange => exchange.joining).filter(id => !earlier.has(id));
+    const known = openingsByYear.get(year);
+    if (known) return known;
+    let openings: string[];
+    if (year === firstYear) openings = clubsIn(firstYear).map(club => club.id);
+    else {
+      const earlier = new Set([...clubsIn(firstYear).map(club => club.id), ...(background?.exchanges ?? []).filter(exchange => exchange.seasonNumber < year - 1).flatMap(exchange => exchange.joining)]);
+      openings = (background?.exchanges ?? []).filter(exchange => exchange.seasonNumber === year - 1).flatMap(exchange => exchange.joining).filter(id => !earlier.has(id));
+    }
+    openingsByYear.set(year, openings);
+    return openings;
   };
   for (let year = firstYear; year <= seasonNumber; year += 1) openingSponsors.set(year, openingSponsorshipClubs(commercial, clubsIn(year), year));
   const minimumEntries = clubs.length + [...openingSponsors.values()].reduce((sum, ids) => sum + ids.length, 0) + financeRounds * clubs.length + [ ...archives.flatMap(archive => archive.fixtures.map(fixture => ({ ...fixture, year: archive.seasonNumber }))), ...fixtures.map(fixture => ({ ...fixture, year: seasonNumber })) ].filter(fixture => fixture.result && (fixture.year > firstYear || fixture.year === firstYear && fixture.round >= firstRound)).length;
@@ -2435,9 +2444,13 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     }
     if (debt.settled) add({ clubId: debt.clubId, seasonNumber: debt.settled.seasonNumber, round: debt.settled.round, kind: paymentKind, sourceId: debtSourceId(debt.id, 'settle'), amount: -debt.settled.amount, debt: { debtId: debt.id, payment: 'settle' } });
   }
+  // Incremental checkpoint checks (`trusted-prefix.ts`): upkeep of matchdays before the trusted checkpoint's week is booked
+  // by trusted entries, which the trusted check matched to these requirements; they are neither required nor matched again.
+  const upkeepCheckedBefore = trustedCutKey();
   if (facilities.enabledSince) for (let year = facilities.enabledSince.seasonNumber; year <= seasonNumber; year += 1) {
     const from = year === facilities.enabledSince.seasonNumber ? facilities.enabledSince.round : 1, through = year === seasonNumber ? committedRound : seasonLength;
     for (let at = from; at <= through; at += 1) for (const club of clubsIn(year)) {
+      if (roundKey(year, at) < upkeepCheckedBefore) continue;
       const date = dateForRound(at, year), upkeep = getFacilityUpkeepBreakdown({ facilities, ...yearContext(year) }, club.id, date);
       if (upkeep.total) add({ clubId: club.id, seasonNumber: year, round: at, kind: 'facility-upkeep', sourceId: `facility-upkeep-s${year}-r${at}`, amount: -upkeep.total });
     }
@@ -2553,7 +2566,9 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
 
     if (kind === 'tickets' || kind === 'operations') financialCommitRounds.add(calendar);
     if (payroll && kind !== 'payroll' && entry.payroll !== null) fail(`${path}.payroll`, 'must be empty for non-payroll events');
-    if (kind === 'facility' || kind === 'facility-upkeep') {
+    if (kind === 'facility-upkeep' && index < ledgerPlan.skip && calendar < upkeepCheckedBefore) {
+      record(entry.facilityUpkeep, `${path}.facilityUpkeep`, ['arena', 'training', 'youth', ...(facilities.model === 'facilities-2' ? ['medical', 'scouting'] : [])]);
+    } else if (kind === 'facility' || kind === 'facility-upkeep') {
       if (entry.ticket !== null || entry.coach !== null) fail(path, 'must not mix facilities and unrelated payment details');
       const expected = required.get(key);
       if (!expected || expected.kind !== kind || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must match one exact funded project or dated upkeep charge');
@@ -3224,7 +3239,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Step 3.4c: each season's divisions follow from the previous seasons' promotions and relegations.
   if (seasonDivisions) validateDivisionHistory(state as unknown as SeasonState);
   // Step 3.5f: each season's European places follow from the opening lists and every completed season.
-  if (seasonEurope) validateEuropeHistory(state as unknown as SeasonState, careerContext);
+  // Completed seasons and this season's places equal the trusted checkpoint's (`trusted-prefix.ts`), whose check derived them.
+  if (seasonEurope && trustedCutKey() === -Infinity) validateEuropeHistory(state as unknown as SeasonState, careerContext);
   // Format 68: grown rivalries are re-derived from the validated history before any replay reads their derbies.
   if (version >= 68) validateRivalryGrowth(state as unknown as SeasonState);
   // Format 72: each season's club money follows from the validated divisions, European places and registrations.

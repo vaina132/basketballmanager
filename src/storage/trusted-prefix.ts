@@ -157,6 +157,7 @@ const JOURNALS = new Map<string, Journal>([
   ['finance.ledger', { items: state => state.finance?.ledger, at: dated }],
   // A season's recruitment window follows its final matchday: dated after every matchday of that season.
   ['market.windows', { items: state => state.market?.windows, at: (window: { seasonNumber: number }) => roundKey(window.seasonNumber, 99) }],
+  ['commercial.events', { items: state => state.commercial?.events, at: dated }],
   // A board review follows its matchday's results, and the latest one is still rewritten (format 73).
   ['board.reviews', { items: state => state.board?.reviews, at: dated1 }],
   // A week's report is written at the next week's start, and the latest one is still rewritten (format 73 summaries).

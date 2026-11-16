@@ -2,7 +2,8 @@ import type { CommercialAnchor, CommercialEvent, CommercialExit, SeasonCommercia
 import type { SeasonState } from '../domain/season';
 import type { CareerMove } from '../domain/career';
 import { managedClubAtLedger } from '../world/career';
-import { clubsEverInFullWorld, fullWorldClubsIn, incumbentSponsorId, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
+import { clubsEverInFullWorld, fullWorldClubsIn, incumbentSponsorId, roundKey, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
+import { prefixPlan, recall, remember } from './trusted-prefix';
 import { agreementFor, agreementLastSeason, bestOfferAfterExit, bestSponsorshipOffer, buildSponsorshipOffers, clearlyBetterFee, createCommercial, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorClause, sponsorLeague, sponsorshipReferenceFee, terminationTerms, SPONSORSHIP_RENEWAL_ROUND } from '../world/commercial-policy';
 import { validateNamingRights } from './naming-rights-validation';
 import { dateForRound, MAX_SEASON_NUMBER, nextSeasonDivisions, seasonStartDate } from '../world/season';
@@ -268,11 +269,27 @@ export function validateCommercial(state: SeasonState, version: number): void {
     if (season < state.seasonNumber || state.status === 'complete') boundaries.push({ kind: 'window', window: 'second-round', seasonNumber: season, round: seasonRounds(state), date: dateForRound(seasonRounds(state), season), completedRounds: seasonRounds(state), activation: false, key: [ordinal(season, seasonRounds(state), seasonRounds(state)), 1] });
   }
   boundaries.sort((a, b) => a.key[0] - b.key[0] || a.key[1] - b.key[1]);
-  for (const boundary of boundaries) {
-    while (index < events.length && before(keyOf(eventAt(index)), boundary.key)) consumeManual();
+  // Incremental checkpoint checks (`trusted-prefix.ts`): commands and calendar boundaries before the trusted checkpoint's
+  // week are unchanged, so the replay resumes where its check reached that week; everything later replays in full.
+  const plan = prefixPlan('commercial.events', events as CommercialEvent[], event => roundKey(event.seasonNumber, event.round));
+  const cutOrdinal = ordinal(state.seasonNumber, state.round, seasonRounds(state));
+  interface Resume { replay: SeasonCommercial; index: number; previous: CommercialAnchor; boundary: number }
+  let recorded = false;
+  const rememberAt = (boundary: number, at: number) => {
+    if (recorded || at < cutOrdinal || index !== plan.record) return;
+    remember('commercial.events', 'replay', { replay, index, previous, boundary } satisfies Resume); recorded = true;
+  };
+  const saved = plan.skip > 0 ? recall<Resume>('commercial.events', 'replay') : undefined;
+  const resume = saved && saved.index === plan.skip ? saved : undefined;
+  if (resume) ({ replay, index, previous } = resume);
+  for (let position = resume ? resume.boundary : 0; position < boundaries.length; position += 1) {
+    const boundary = boundaries[position]!;
+    while (index < events.length && before(keyOf(eventAt(index)), boundary.key)) { rememberAt(position, keyOf(eventAt(index))[0]); consumeManual(); }
+    rememberAt(position, boundary.key[0]);
     if (boundary.kind === 'window') consumeWindow(boundary); else if (boundary.kind === 'move') consumeMove(boundary); else consumeExpiry(boundary);
   }
-  while (index < events.length) consumeManual();
+  while (index < events.length) { rememberAt(boundaries.length, keyOf(eventAt(index))[0]); consumeManual(); }
+  rememberAt(boundaries.length, Infinity);
 
   if (!equal(replay.plans, fields.plans)) fail('commercial.plans', 'must match the recorded control changes');
   if (clauses) validateNamingRights(state, fields.naming, activation, planClubs.map(club => club.id));

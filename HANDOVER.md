@@ -13,8 +13,12 @@ This file holds only the current state, the next steps and the rules that must n
 **Owner feedback after a first play (16 November 2026; "not to tackle immediately ... in the rightful time"):**
 - Safety and gaps level (before the play test):
   - **Done (16 November):** (3) the black Inbox screen (most likely a page file removed by a new deploy while the game was open; every page now shows a plain message with Save and reload instead of going blank, `src/ui/PageErrorBoundary.tsx`); (1) no "est." next to OVR on the club step; (2) "Not played · table simulated" with a one-line explanation; (9) dragging or selecting two players on the court swaps them at once (`swapActivePlayers`); a warning when closing the page while saving.
+  - (10) Without an assistant coach, "Ask assistant" still picks the squad: label it as the manager's own automatic choice; a hired assistant's skill improves it (default, reversible).
+  - (11) A facility upgrade under construction shows no time left: show the weeks left and the finish date.
   - (6) Money realism: some staff earn a lot. The owner's sentence was cut off; ask for the rest. Fits the economy gaps.
 - Interface simplification (after the play test):
+  - (12) Easier squad and starting-five selection: a small court picture with PG/SG/SF/PF/C circles, filled by drag and drop or by tapping a player then a circle. Playing someone out of position is a new game rule (today each player plays his own position).
+  - (13) Transfers becomes a player search to bring players in; own squad and contract renewals move out of it.
   - (4) Facilities: six levels for every facility (Very Poor, Poor, Average, Good, Very Good, Excellent) instead of four. The arena becomes a seat capacity, expanded for a fee over several weeks depending on the size. Loans become a simple bank loan usable for anything. Replace the Full/Reduced and automatic/manual controls with something simpler. This changes game rules and needs a new format.
   - (5) Board gets its own left menu item.
   - (7) Replace "Go to match" with a Continue button that moves day by day, like Football Manager, running the other simulations in the background with a progress bar.

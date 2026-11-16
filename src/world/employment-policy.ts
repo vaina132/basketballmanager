@@ -35,7 +35,7 @@ export const maxContractWage = (context?: WorldContext): number => worldEconomy(
 export const contractWageRuleText = (context?: WorldContext): string => worldEconomy(context) ? `Choose an annual wage from €5,000 to €${(maxContractWage(context) / 100).toLocaleString('en-GB')} in €500 steps.` : 'Choose an annual wage from €5,000 to €50,000 in €500 steps.';
 
 export function contractForSeason(employment: SeasonEmployment, playerId: string, seasonNumber: number): EmploymentContract | null {
-  return effectiveContractsForSeason(employment, seasonNumber).find(contract => contract.playerId === playerId) ?? null;
+  return contractForRound(employment, playerId, seasonNumber, MAX_SEASON_ROUNDS);
 }
 
 /** Contracts in force at the end of a season, whatever its length (no season has more than MAX_SEASON_ROUNDS matchdays). */
@@ -43,14 +43,35 @@ export function effectiveContractsForSeason(employment: SeasonEmployment, season
   return effectiveContractsForRound(employment, seasonNumber, MAX_SEASON_ROUNDS);
 }
 
+// Step 3.7: the registration in force at a week is worked out once per employment record. Records are replaced, never
+// edited (save checks build a new record for each prefix they replay), and every caller gets its own copy of the list.
+const contractsAtCache = new WeakMap<SeasonEmployment, Map<string, readonly EmploymentContract[]>>();
+const contractByPlayerCache = new WeakMap<readonly EmploymentContract[], Map<string, EmploymentContract>>();
+function contractsAt(employment: SeasonEmployment, seasonNumber: number, round: number): readonly EmploymentContract[] {
+  let byWeek = contractsAtCache.get(employment);
+  if (!byWeek) { byWeek = new Map(); contractsAtCache.set(employment, byWeek); }
+  const key = `${seasonNumber}:${round}`, known = byWeek.get(key);
+  if (known) return known;
+  const released = new Set([...(employment.transfers ?? []).filter(release => release.startsSeason < seasonNumber || release.startsSeason === seasonNumber && (release.startsRound ?? 1) <= round), ...(employment.buyouts ?? []).filter(release => release.startsSeason <= seasonNumber), ...(employment.departures ?? []).filter(release => release.startsSeason <= seasonNumber)].flatMap(release => release.releasedContractIds));
+  const contracts = employment.contracts.filter(contract => contract.startsSeason <= seasonNumber && contract.endsSeason >= seasonNumber && (contract.startsSeason < seasonNumber || (contract.startsRound ?? 1) <= round) && !released.has(contract.id));
+  byWeek.set(key, contracts);
+  return contracts;
+}
+
 /** Registration at one matchday, without applying a later arrival to earlier fixtures. */
 export function effectiveContractsForRound(employment: SeasonEmployment, seasonNumber: number, round: number): EmploymentContract[] {
-  const released = new Set([...(employment.transfers ?? []).filter(release => release.startsSeason < seasonNumber || release.startsSeason === seasonNumber && (release.startsRound ?? 1) <= round), ...(employment.buyouts ?? []).filter(release => release.startsSeason <= seasonNumber), ...(employment.departures ?? []).filter(release => release.startsSeason <= seasonNumber)].flatMap(release => release.releasedContractIds));
-  return employment.contracts.filter(contract => contract.startsSeason <= seasonNumber && contract.endsSeason >= seasonNumber && (contract.startsSeason < seasonNumber || (contract.startsRound ?? 1) <= round) && !released.has(contract.id));
+  return [...contractsAt(employment, seasonNumber, round)];
 }
 
 export function contractForRound(employment: SeasonEmployment, playerId: string, seasonNumber: number, round: number): EmploymentContract | null {
-  return effectiveContractsForRound(employment, seasonNumber, round).find(contract => contract.playerId === playerId) ?? null;
+  const contracts = contractsAt(employment, seasonNumber, round);
+  let byPlayer = contractByPlayerCache.get(contracts);
+  if (!byPlayer) {
+    byPlayer = new Map();
+    for (const contract of contracts) if (!byPlayer.has(contract.playerId)) byPlayer.set(contract.playerId, contract);
+    contractByPlayerCache.set(contracts, byPlayer);
+  }
+  return byPlayer.get(playerId) ?? null;
 }
 
 /** Approved sales cannot spend the cheap departing player's replacement allowance elsewhere. */
@@ -198,6 +219,9 @@ function contractedClubsForRound(state: { employment: SeasonEmployment; clubs: r
     return groups;
   };
   const openingTerms = termsByClub(1), openingPlayers = getCareerPlayers(state, seasonNumber, 1);
+  // Step 3.7: catalog positions looked up once, instead of filtering the whole catalog for every club.
+  const catalogIndex = new Map<string, number>();
+  openingPlayers.forEach((player, index) => { if (!catalogIndex.has(player.id)) catalogIndex.set(player.id, index); });
   const changes = changeRounds.map(at => ({ terms: termsByClub(at),
     players: new Map(getCareerPlayers(state, seasonNumber, at).map(player => [player.id, player])) }));
   return definitions.map(definition => {
@@ -208,8 +232,9 @@ function contractedClubsForRound(state: { employment: SeasonEmployment; clubs: r
       numbers.add(number);
       return { ...player, number, attributes: { ...player.attributes } };
     };
-    const opening = new Set((openingTerms.get(definition.id) ?? []).map(contract => contract.playerId));
-    let players = openingPlayers.filter(player => opening.has(player.id)).map(append);
+    // The club's opening players in catalog order, as filtering the catalog by the club's contracts gave.
+    const opening = [...new Set((openingTerms.get(definition.id) ?? []).map(contract => contract.playerId))].filter(id => catalogIndex.has(id)).sort((left, right) => catalogIndex.get(left)! - catalogIndex.get(right)!);
+    let players = opening.map(id => append(openingPlayers[catalogIndex.get(id)!]!));
     for (const changed of changes) {
       const terms = changed.terms.get(definition.id) ?? [];
       const registered = new Set(terms.map(contract => contract.playerId));

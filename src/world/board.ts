@@ -1,4 +1,4 @@
-import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
+import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntries } from './finance-ledger';
 import type { BoardAnchor, BoardClubReview, BoardMandate, BoardRequest, BoardReview, BoardSummary, SeasonBoard } from '../domain/board';
 import type { SeasonState } from '../domain/season';
 import { getFinanceBalance } from './finance';
@@ -176,7 +176,10 @@ export function enablePresidentBoard(state: SeasonState): SeasonState {
   if (!state.board.enabledSince || state.board.reviews.length || state.seasonNumber !== 1 || state.round !== 1 || state.history.length || state.fixtures.some(fixture => fixture.result)) throw new Error('President personalities start with a new career board, before its first matchday.');
   const board: SeasonBoard = { ...state.board, model: PRESIDENT_RULES.model, mandates: [], requests: [] };
   const opened = { ...state, board };
-  return { ...opened, board: { ...board, mandates: state.board.mandates.map(mandate => buildBoardMandate(opened, mandate.startsRound)) } };
+  // Step 3.7: rebuild each objective as it stood when it was set. Rival boards may already have funded facility projects
+  // during the career opening (capital and payments in the ledger); the objective keeps its original ledger point, as
+  // the save check rebuilds it there.
+  return { ...opened, board: { ...board, mandates: state.board.mandates.map(mandate => buildBoardMandate({ ...opened, finance: financeAtLedgerBoundary(opened.finance, mandate.ledgerCount) }, mandate.startsRound)) } };
 }
 
 /** One automatic dated review follows each eligible complete league matchday. */

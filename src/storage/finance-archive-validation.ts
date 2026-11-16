@@ -1,7 +1,7 @@
 import type { FinanceArchiveBlock, FinanceEntry, SeasonFinance } from '../domain/finance';
 import { expandFinanceArchiveRow, MAX_FINANCE_ARCHIVE_BLOCKS, MAX_FINANCE_LOGICAL_ENTRIES, MAX_FINANCE_SEGMENT_ENTRIES } from '../world/finance-archives';
 
-const DETAIL_KEYS = new Set(['ticket', 'coach', 'payroll', 'scout', 'fitness', 'physio', 'assistant', 'youth', 'facility', 'facilityUpkeep', 'sponsorship', 'boardCapital', 'namingRights', 'sponsorExit']);
+const DETAIL_KEYS = new Set(['ticket', 'coach', 'payroll', 'scout', 'fitness', 'physio', 'assistant', 'youth', 'facility', 'facilityUpkeep', 'sponsorship', 'boardCapital', 'namingRights', 'sponsorExit', 'debt']);
 function fail(reason: string): never { throw new Error(`Invalid season save: finance archives ${reason}.`); }
 function object(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 

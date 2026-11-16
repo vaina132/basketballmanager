@@ -14,6 +14,10 @@ import { formatEuros, formatExactEuros } from './money-format'
 import { dateForRound, seasonLabel } from '../world/season'
 import { getTransferPayments } from '../world/transfer-payments'
 import { TransferPaymentsPanel } from './TransferPaymentsPanel'
+import { DebtsPanel } from './DebtsPanel'
+import { ratePercent } from './FacilityFinancing'
+import { debtSchedule, FACILITY_FINANCING_RULES } from '../world/facility-debt'
+import { seasonRounds } from '../world/career-world'
 import { Icon } from './Icon'
 import { FACILITY_LABELS, FacilitiesPanel, type FacilitiesActions } from './FacilitiesPanel'
 import { SponsorshipPanel, type SponsorshipActions } from './SponsorshipPanel'
@@ -41,9 +45,9 @@ const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}
 const BAND_LABELS = { 'euroleague-top': 'EuroLeague top group', euroleague: 'EuroLeague', 'top-upper': 'top division, upper half', 'top-lower': 'top division, lower half', second: 'second division', third: 'third division' } as const
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
-const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital', 'naming-rights': 'Arena naming rights', 'sponsor-exit': 'Sponsor exit' }
+const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital', 'naming-rights': 'Arena naming rights', 'sponsor-exit': 'Sponsor exit', loan: 'Bank loan', 'loan-repayment': 'Loan repayment', lease: 'Facility lease' }
 
-export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, onRequestBoardFunding, onEnableMaintenance, onMaintenancePlan, onFacilityRepair, onEnableSponsorship, onAcceptSponsorship, onDeclineSponsorship, onRequestSponsorship, onSponsorshipDelegation, onAcceptNaming, onDeclineNaming, onRequestNaming, onNamingDelegation, onTerminateSponsorship, busy = false }: ClubWorkspaceProps) {
+export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, onRequestBoardFunding, onEnableMaintenance, onMaintenancePlan, onFacilityRepair, onFacilityLoan, onFacilityLease, onRepayLoan, onEndLease, onEnableSponsorship, onAcceptSponsorship, onDeclineSponsorship, onRequestSponsorship, onSponsorshipDelegation, onAcceptNaming, onDeclineNaming, onRequestNaming, onNamingDelegation, onTerminateSponsorship, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
   const [period, setPeriod] = useState<'current' | 'all'>('current')
   const club = season.clubs.find(team => team.id === season.managedClubId)!
@@ -71,6 +75,16 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
   const ledger = financeLedgerRows(season.finance, club.id).filter(entry => (kind === 'all' || entry.kind === kind) && (period === 'all' || entry.seasonNumber === season.seasonNumber))
 
   function entryDetail(entry: FinanceEntry): string {
+    // Format 71: loans and leases in plain English.
+    if (entry.debt) {
+      const debt = season.facilities.debts?.find(item => item.id === entry.debt!.debtId)
+      if (!debt) return 'Facility financing'
+      const project = season.facilities.projects.find(item => item.id === debt.projectId)
+      const what = `${FACILITY_LABELS[debt.facilityType]} ${project?.kind === 'repair' ? 'repair' : `level ${project?.toLevel ?? ''}`}`
+      const count = debtSchedule(debt, seasonRounds(season)).length, payment = entry.debt.payment
+      if (debt.kind === 'loan') return payment === 'start' ? `${what} · Loan received: ${debt.seasons} seasons at ${ratePercent(debt.rateBasisPoints)} a year, ${count} payments of ${money(debt.payment)}` : payment === 'settle' ? `${what} · Loan repaid early: the principal still owed plus a ${FACILITY_FINANCING_RULES.earlyRepaymentFeePercent}% fee` : `${what} · Loan payment ${payment} of ${count}${entry.amount < 0 ? ' (interest and principal)' : ''}`
+      return payment === 'start' ? `${what} · Lease agreed for ${debt.seasons} seasons, nothing paid upfront: ${count} payments of ${money(debt.payment)}` : payment === 'settle' ? `${what} · Lease ended early: level handed back, penalty of ${FACILITY_FINANCING_RULES.leaseEndPenaltyPercent}% of the payments still to come` : `${what} · Lease payment ${payment} of ${count}`
+    }
     if (entry.facility) {
       const project = season.facilities.projects.find(item => item.id === entry.facility!.projectId)
       if (project?.kind === 'repair') return `${FACILITY_LABELS[entry.facility.type]} · Repair, condition ${project.conditionBefore} → 100 · Paid upfront`
@@ -124,7 +138,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
     </section> : <>
       {balance.unpaid > 0 && <p className="club-unpaid-note panel">{money(balance.unpaid)} of costs remain unpaid. New income clears unpaid costs first; staff recruitment requires these costs to be settled.</p>}
 
-      <FacilitiesPanel season={season} busy={busy} onEnableFacilities={onEnableFacilities} onFacilityUpgrade={onFacilityUpgrade} onCancelFacilityUpgrade={onCancelFacilityUpgrade} onFacilityDelegation={onFacilityDelegation} onRequestBoardFunding={onRequestBoardFunding} onEnableMaintenance={onEnableMaintenance} onMaintenancePlan={onMaintenancePlan} onFacilityRepair={onFacilityRepair} />
+      <FacilitiesPanel season={season} busy={busy} onEnableFacilities={onEnableFacilities} onFacilityUpgrade={onFacilityUpgrade} onCancelFacilityUpgrade={onCancelFacilityUpgrade} onFacilityDelegation={onFacilityDelegation} onRequestBoardFunding={onRequestBoardFunding} onEnableMaintenance={onEnableMaintenance} onMaintenancePlan={onMaintenancePlan} onFacilityRepair={onFacilityRepair} onFacilityLoan={onFacilityLoan} onFacilityLease={onFacilityLease} />
 
       <section className="club-venue panel" aria-labelledby="club-venue-title">
         <header className="club-heading"><h2 id="club-venue-title">Venue</h2></header>
@@ -149,6 +163,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
       </section>
 
       <TransferPaymentsPanel season={season} />
+      <DebtsPanel season={season} busy={busy} onRepayLoan={onRepayLoan} onEndLease={onEndLease} />
 
       <details className="club-ledger panel game-disclosure">
         <summary><Icon name="wallet" size={17} />Financial activity · {ledger.length} entries</summary>

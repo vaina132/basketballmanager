@@ -28,10 +28,46 @@ export interface FacilityProject {
   completedOn: string | null;
   cancelledOn: string | null;
   startEventIndex: number;
-  /** `facilities-2` (format 65): a repair restores condition to 100 at the same level; upgrades omit this field. */
-  kind?: 'repair';
+  /**
+   * `facilities-2` (format 65): a repair restores condition to 100 at the same level; upgrades omit this field.
+   * `loans-1` (format 71): a leased level (`lease`) is installed for the next matchday without an upfront payment.
+   */
+  kind?: 'repair' | 'lease';
   /** A repair's condition when it was commissioned. */
   conditionBefore?: number;
+  /** Format 71: the date a leased level was handed back when its lease ended early; it no longer counts after that day. */
+  returnedOn?: string;
+}
+
+/**
+ * Format 71 (`loans-1`, new careers): a bank loan for one facility upgrade or repair, or a lease of one arena or
+ * training level. Payments fall on fixed weeks of each season (`FACILITY_FINANCING_RULES`); the ledger holds them.
+ */
+export interface FacilityDebt {
+  /** `facility-debt-<n>`, sequential across the career. */
+  id: string;
+  kind: 'loan' | 'lease';
+  clubId: string;
+  /** The project the loan pays for, or the leased level's project. */
+  projectId: string;
+  facilityType: FacilityType;
+  /** Loan: the amount borrowed. Lease: the purchase price of the leased level. */
+  principal: number;
+  /** Loan: the fixed yearly interest rate in basis points (500 = 5%). Lease: 0. */
+  rateBasisPoints: number;
+  /** Term in seasons; two payments fall in each season. */
+  seasons: number;
+  /** The regular payment (the last one may be slightly smaller) and the total of every payment. */
+  payment: number;
+  total: number;
+  seasonNumber: number;
+  round: number;
+  date: string;
+  /** Logical ledger position of the start entry (loan received, or lease agreed). */
+  ledgerIndex: number;
+  startEventIndex: number;
+  /** Early repayment of a loan (balance plus fee), or a lease ended early (penalty); null while running. */
+  settled: { seasonNumber: number; round: number; date: string; ledgerIndex: number; amount: number } | null;
 }
 
 /** A board capital decision for one facility upgrade; an approval is immediately followed by that upgrade's start. */
@@ -51,6 +87,19 @@ export interface FacilityFundingDecision {
   project?: 'repair';
 }
 
+/** Format 71: a bank loan for the upgrade or repair that starts immediately afterwards (the principal is received first). */
+export interface FacilityLoanDecision {
+  type: 'loan';
+  debtId: string;
+  clubId: string;
+  facilityType: FacilityType;
+  project: 'upgrade' | 'repair';
+  principal: number;
+  seasons: number;
+  /** Decision evidence, recomputed during validation. */
+  rateBasisPoints: number;
+}
+
 export type FacilityEvent = FacilityAnchor & (
   | { type: 'start'; projectId: string; clubId: string; facilityType: FacilityType }
   /** `facilities-2` (format 65): a repair project, paid in full on approval like an upgrade. */
@@ -61,6 +110,11 @@ export type FacilityEvent = FacilityAnchor & (
   | FacilityFundingDecision
   /** Format 36: a club's upkeep plan, applied from the next matchday. */
   | { type: 'maintenance'; clubId: string; plan: MaintenancePlan }
+  /** Format 71 (`loans-1`): a loan, a lease of the next level, an early loan repayment or a lease ended early. */
+  | FacilityLoanDecision
+  | { type: 'lease'; debtId: string; projectId: string; clubId: string; facilityType: FacilityType; seasons: number }
+  | { type: 'repay'; debtId: string }
+  | { type: 'end-lease'; debtId: string }
 );
 
 export interface SeasonFacilities {
@@ -77,6 +131,10 @@ export interface SeasonFacilities {
   fundingSince?: FacilityAnchor | null;
   /** Upkeep plans and facility condition (format 36); absent in older formats, null until enabled. */
   maintenanceSince?: FacilityAnchor | null;
+  /** Format 71: new careers can finance projects with bank loans and leases; older careers pay upfront (field absent). */
+  financing?: 'loans-1';
+  /** Format 71: every loan and lease, present with `financing`. */
+  debts?: FacilityDebt[];
 }
 
 export interface FacilityUpgradeQuote {

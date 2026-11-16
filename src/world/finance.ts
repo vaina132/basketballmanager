@@ -36,6 +36,7 @@ import type { SeasonMedia } from '../domain/media';
 import type { SeasonRelationships } from '../domain/relationships';
 import { pressSupporterPercent } from './media';
 import { dateForRound } from './season';
+import { debtSourceId, dueDebtPayments } from './facility-debt';
 
 export { clubFinanceDefinition } from './career-world';
 export type { FinanceBalance, FinanceLedgerRow, GateForecast } from '../domain/finance';
@@ -367,7 +368,18 @@ export function processFinanceRound(state: SeasonState): SeasonState {
     const { total, ...facilityUpkeep } = getFacilityUpkeepBreakdown(state, club.id);
     if (total) next = append(next, { clubId: club.id, kind: 'facility-upkeep', amount: -total, sourceId: `facility-upkeep-s${state.seasonNumber}-r${state.round}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, facilityUpkeep });
   }
+  // Format 71: scheduled loan and lease payments are mandatory; whatever cash cannot cover becomes unpaid costs.
+  for (const { debt, payment } of dueDebtPayments(state)) next = recordDebtEntry(next, { clubId: debt.clubId, kind: debt.kind === 'loan' ? 'loan-repayment' : 'lease', amount: -payment.amount, debt: { debtId: debt.id, payment: payment.number } });
   return next;
+}
+
+/**
+ * Format 71: one loan or lease entry on the current boundary: the loan received (or the lease agreed, at no cost), a
+ * scheduled payment, or an early settlement. Its source identity follows from the debt and the payment.
+ */
+export function recordDebtEntry(state: SeasonState, entry: Pick<FinanceEntry, 'clubId' | 'amount'> & { kind: 'loan' | 'loan-repayment' | 'lease'; debt: NonNullable<FinanceEntry['debt']> }): SeasonState {
+  if (!state.finance.enabledSince) throw new Error('Enable club finances before recording loans and leases.');
+  return append(state, { clubId: entry.clubId, kind: entry.kind, amount: entry.amount, sourceId: debtSourceId(entry.debt.debtId, entry.debt.payment), seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, debt: { ...entry.debt } });
 }
 
 /**

@@ -95,8 +95,8 @@ describe('default squad roles by recorded squad rank (relationships-2)', () => {
     expect(parseSeason(serializeSeason(legacy))).toEqual(legacy);
     const file = JSON.parse(serializeSeason(middle));
     file.formatVersion = 65; file.state.schemaVersion = 65;
-    // A new career also carries later formats' records (media 67, grown rivalries 68), whose guards may refuse it first.
-    expect(() => parseSeason(JSON.stringify(file))).toThrow(/requires format 6[6-9] or later/);
+    // A new career also carries later formats' records (media 67, grown rivalries 68, loans 71), whose guards may refuse it first.
+    expect(() => parseSeason(JSON.stringify(file))).toThrow(/requires format (6[6-9]|7[0-9]) or later/);
   });
 });
 

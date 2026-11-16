@@ -6,6 +6,7 @@ import { clubPresident, roundOrdinal, seasonRounds, worldOf } from './career-wor
 import { facilityAutomationBuffer, FACILITY_FUNDS_REASON, FACILITY_REPAIR_FUNDS_REASON, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
 import { ownerCapital } from './board-consequences';
+import { boardCapitalSurcharge } from './facility-debt';
 
 /** Confidence the board requires is 65 minus five per point of presidential generosity (60 to 40). */
 export const BOARD_FUNDING_BASE_CONFIDENCE = 65;
@@ -49,6 +50,8 @@ export interface BoardFundingQuote {
   amount: number;
   confidence: number;
   requiredConfidence: number;
+  /** Format 71: the part of `requiredConfidence` added while the club's debt ratio is high (0, 5 or 10). */
+  debtSurcharge: number;
   seasonCapital: number;
   capitalRemaining: number;
   /** Whether a request can be made at all, and why not. */
@@ -74,7 +77,9 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   const position = getSpendablePosition(state, clubId), available = Math.max(0, position);
   const cushion = mode === 'automatic' ? repair ? facilityAutomationBuffer(state, clubId) / 2 : facilityAutomationBuffer(state, clubId) : 0;
   const amount = Math.max(0, cost + cushion - available);
-  const confidence = boardConfidenceNow(state, clubId), requiredConfidence = requiredBoardConfidence(president);
+  // Format 71: a heavily indebted club needs more confidence for capital.
+  const debtSurcharge = boardCapitalSurcharge(state, clubId);
+  const confidence = boardConfidenceNow(state, clubId), requiredConfidence = requiredBoardConfidence(president) + debtSurcharge;
   // The previous season's board verdict can raise, halve or withhold the owner's capital (see board-consequences).
   const seasonCapital = ownerCapital(state, clubId);
   const capitalRemaining = Math.max(0, seasonCapital - boardCapitalGranted(state.facilities, clubId, state.seasonNumber));
@@ -91,5 +96,5 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   else if (wait > 0) reason = `The board will reconsider after ${wait} more ${wait === 1 ? 'matchday' : 'matchdays'}.`;
   const approved = reason === null && confidence >= requiredConfidence && amount <= capitalRemaining;
   const refusal = reason === null ? boardFundingRefusal({ approved, confidence, requiredConfidence, capitalRemaining }) : null;
-  return { clubId, facilityType: type, mode, project, president, cost, available, amount, confidence, requiredConfidence, seasonCapital, capitalRemaining, eligible: reason === null, reason, approved, refusal };
+  return { clubId, facilityType: type, mode, project, president, cost, available, amount, confidence, requiredConfidence, debtSurcharge, seasonCapital, capitalRemaining, eligible: reason === null, reason, approved, refusal };
 }

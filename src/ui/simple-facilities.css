@@ -38,4 +38,4 @@
 .bank-borrow>footer>span{font-size:13px;color:var(--muted);line-height:1.5}
 .bank-borrow>footer>.button{flex:none}
 @media(max-width:850px){.bank-quote{grid-template-columns:1fr 1fr}.arena-sizes{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){.bank-borrow-controls{grid-template-columns:1fr;gap:16px;padding:12px 10px}.bank-quote{padding:0 10px 12px}.bank-borrow>footer{flex-direction:column;align-items:stretch;gap:10px;padding:12px 10px}.arena-sizes{padding:12px 12px 0}.club-bank .club-unpaid-note{margin-inline:10px}.board-handles{width:100%}}
+@media(max-width:600px){.bank-borrow-controls{grid-template-columns:1fr;gap:16px;padding:12px 10px}.bank-quote{padding:0 10px 12px}.bank-borrow>footer{flex-direction:column;align-items:stretch;gap:10px;padding:12px 10px}.arena-sizes{padding:12px 12px 0}.club-bank .club-unpaid-note{margin-inline:10px}.board-handles{width:100%}.simple-facilities .facility-level{flex-wrap:wrap;gap:4px 8px}.simple-facilities .facility-level i{width:14px}}

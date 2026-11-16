@@ -787,6 +787,19 @@ export function cancelSubstitution(state: MatchState, side: Side, outId: string)
   assertSide(side); assertOpen(state); const next = copy(state); next.pendingSubstitutions[side] = next.pendingSubstitutions[side].filter(r => r.outId !== outId);
   emit(next, { type: 'command', side, text: 'Queued substitution cancelled.' }); return next;
 }
+/**
+ * Two players on the floor trade places in the five (owner feedback, 16 November 2026). The five's order sets each
+ * player's lane and side of the floor; positions and abilities stay the same. Nobody enters or leaves, so, as in
+ * real basketball, no stoppage is needed: the change applies from the next action.
+ */
+export function swapActivePlayers(state: MatchState, side: Side, firstId: string, secondId: string): MatchState {
+  assertSide(side); assertOpen(state); assertBoundary(state);
+  const first = state.lineups[side].indexOf(firstId), second = state.lineups[side].indexOf(secondId);
+  if (first < 0 || second < 0) throw new Error('Both players must be on the court.');
+  if (first === second) throw new Error('Choose two different players on the court.');
+  const next = copy(state); next.lineups[side][first] = secondId; next.lineups[side][second] = firstId;
+  emit(next, { type: 'command', side, text: `${player(next, side, firstId).name} and ${player(next, side, secondId).name} swap places on the floor.` }); return next;
+}
 export function requestTimeout(state: MatchState, side: Side): MatchState {
   assertSide(side); assertOpen(state);
   if (remainingTimeouts(state, side) <= 0) throw new Error('No timeouts remain in this allowance.');

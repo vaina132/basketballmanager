@@ -67,6 +67,7 @@ import { createWorkerSeasonCodec } from './storage/season-codec'
 import { readSeasonJournal, SeasonSaveConflictError } from './storage/season-indexed-db'
 import type { CheckpointReason } from './storage/season-indexed-db'
 import { CareerSaveHistory } from './ui/CareerSaveHistory'
+import { PageErrorBoundary } from './ui/PageErrorBoundary'
 import { SeasonEndChoice } from './ui/SeasonEndChoice'
 const RealClubFriendly = lazy(() => import('./ui/RealClubFriendly').then(module => ({ default: module.RealClubFriendly })))
 import { fetchBuiltInPack } from './world/built-in-pack'
@@ -352,6 +353,19 @@ export default function App() {
       setNotice({ message: reason === 'manual' ? 'Season was not saved. Your current game is still open.' : 'Automatic save failed. Your current game is still open.', error: true })
       return false
     } finally { persistenceBusy.current = false; setSaving(false) }
+  }
+  // Owner feedback (16 November 2026): closing or reloading during "Saving..." returned the career to the previous week.
+  useEffect(() => {
+    if (!saving) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [saving])
+  /** A page that could not be opened offers a reload; a career is saved first so that nothing is lost. */
+  async function saveAndReload() {
+    const current = sessionRef.current
+    if (current.kind === 'season' && !await persistSeason(current.season, 'manual')) return
+    window.location.reload()
   }
   async function refreshSaveHistory() {
     const request = ++historyRequest.current
@@ -689,7 +703,7 @@ export default function App() {
     {saveHistoryOpen && <CareerSaveHistory entries={saveHistory?.entries ?? []} loading={historyLoading} error={historyError} busy={saving} onRefresh={() => { void refreshSaveHistory() }} onRestore={revision => { void restoreCheckpoint(revision) }} onClose={closeSaveHistory} />}
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
   </>
-  if (entryView) return <><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing || creatingCareer} starting={creatingCareer} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} packSource={packSource} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense>{overlays}</>
+  if (entryView) return <><PageErrorBoundary key={entryView} title={entryView === 'menu' ? 'The main menu' : entryView === 'profile' ? 'Manager profile' : 'New career'} savesFirst={false} onReload={() => window.location.reload()} fullScreen><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing || creatingCareer} starting={creatingCareer} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} packSource={packSource} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense></PageErrorBoundary>{overlays}</>
 
   // Format 69 (career-3): a manager without a club sees the unemployed desk, the inbox and the world's competitions only.
   if (season && isUnemployed(season)) {
@@ -712,13 +726,13 @@ export default function App() {
         {checkpointIssue && <div className="career-save-issue" role="alert"><span>{checkpointIssue}</span><button className="text-button" onClick={openSaveHistory} disabled={saving || advancing}>Save history</button><button className="text-button" onClick={exportSave} disabled={saving || advancing}>Export current</button></div>}
         <main id="main" tabIndex={-1} inert={advancing || leavingSeason || saving}>
           <div className="page-heading"><h1>{view === 'home' ? 'Unemployed desk' : pageNames[view]}</h1><div className="heading-meta"><span className="pill">{worldOf(season).name.toUpperCase()}</span><span className="muted">{season.date}</span></div></div>
-          <Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
+          <PageErrorBoundary key={view} title={view === 'home' ? 'Unemployed desk' : pageNames[view]} savesFirst onReload={() => { void saveAndReload() }}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
             {view === 'home' && <UnemployedDesk season={season} busy={advancing || saving} onContinue={advance} onNextDay={() => processSeason('market')} onStartSeason={rollover} onAccept={clubId => { void takeJob(clubId) }} onOpenCompetitions={() => navigate('season')} onOpenCalendar={() => navigate('calendar')} />}
             {view === 'inbox' && <InboxWorkspace season={season} busy={advancing || saving} onAnswerPress={() => {}} onOpen={() => navigate('home')} />}
             {view === 'season' && <SeasonWorkspace season={season} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('home')} onAdvance={advance} onRollover={offseasonStep} onLoad={loadSeason} busy={advancing || saving} />}
             {view === 'calendar' && <SeasonCalendar season={season} />}
             {view === 'europe' && <EuropeWorkspace season={season} />}
-          </Suspense>
+          </Suspense></PageErrorBoundary>
           <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />Save &amp; open exhibition</button><button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
         </main>
       </div>
@@ -745,7 +759,7 @@ export default function App() {
         <div className={page === 'match' ? 'sr-only' : 'page-heading'}><h1>{pageNames[page]}</h1><div className="heading-meta"><span className="pill">{season || page === 'season' ? (season ? worldOf(season).name : 'Development league').toUpperCase() : 'EXHIBITION'}</span><span className="muted">{page === 'season' ? season ? season.date : 'Club selection' : restWeek ? 'Rest week' : `${match.home.shortName} vs ${match.away.shortName}`}</span></div></div>
 
         {season && page !== 'season' && page !== 'match' && <SeasonProgress season={season} showRollover={page !== 'transfers'} showMatchAction={page === 'academy' || page === 'squad' || page === 'medical' || page === 'training' || page === 'staff' || page === 'club' || page === 'transfers' || page === 'scouting'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={reviewNextSeason} />}
-        <Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
+        <PageErrorBoundary key={page} title={pageNames[page]} savesFirst={!!season} onReload={() => { void saveAndReload() }}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
         {page === 'calendar' && season && <SeasonCalendar season={season} />}
         {page === 'europe' && season && <EuropeWorkspace season={season} />}
         {page === 'season' && <SeasonWorkspace season={season} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={reviewNextSeason} onLoad={loadSeason} busy={advancing || saving} />}
@@ -805,9 +819,9 @@ export default function App() {
           {season && <SeasonMedicalReport onOpenMedical={() => navigate('medical')} season={season} onSelectPlayer={id => { setSelectedPlayer(id); document.querySelector<HTMLElement>('.player-profile')?.focus() }} />}
           </>}
         </>}
+        </Suspense></PageErrorBoundary>
 
         <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />{season ? 'Save & open exhibition' : 'New exhibition'}</button>{season && <button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button>}<details ref={setupRef} className="simulation-options" hidden={!!season}><summary>Match setup</summary><div className="seed-controls"><label htmlFor="match-seed">Replay code</label><input id="match-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-label="Exhibition replay code" /><p>Same code and choices repeat the same match. This does not change difficulty.</p><button id="open-real-friendly" className="text-button real-friendly-open" onClick={() => setFriendlyOpen(true)} disabled={saving || advancing}>Real-club friendly…</button></div></details></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
-        </Suspense>
       </main>
     </div>
     {overlays}

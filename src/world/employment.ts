@@ -133,7 +133,8 @@ export function prepareEmploymentMarket(state: SeasonState): SeasonState {
   // Clubs leaving the full world sit out the offseason market (step 3.4d-2).
   const leaving = leavingClubIds(next);
   for (const club of next.clubs) if (club.id !== next.managedClubId && !leaving.has(club.id)) next = retainPlayers(next, club.id, MIN_ROSTER_SIZE);
-  if (next.employment.delegated) {
+  // Format 69: an unemployed manager (no managed club) has no squad of their own to recruit for.
+  if (next.employment.delegated && next.managedClubId) {
     next = retainPlayers(next, next.managedClubId, clubRosterTarget(next, next.managedClubId));
     next = recruitPlayers(next, next.managedClubId, clubRosterTarget(next, next.managedClubId));
   }
@@ -167,8 +168,8 @@ export function finalizeEmploymentMarket(state: SeasonState): SeasonState {
     return { ...next, clubs, employment: { ...next.employment, market: null } };
   }
   let next = prepareEmploymentMarket(state);
-  if (next.employment.delegated) next = recruitPlayers(next, next.managedClubId, MIN_ROSTER_SIZE);
-  if (getClubContractSummary(next, next.managedClubId).rosterSize < MIN_ROSTER_SIZE) throw new Error('Contract at least eight players for next season or delegate recruitment before starting the new season.');
+  if (next.employment.delegated && next.managedClubId) next = recruitPlayers(next, next.managedClubId, MIN_ROSTER_SIZE);
+  if (next.managedClubId && getClubContractSummary(next, next.managedClubId).rosterSize < MIN_ROSTER_SIZE) throw new Error('Contract at least eight players for next season or delegate recruitment before starting the new season.');
   // Every club reaches its minimum before any club receives optional extra players.
   const leaving = leavingClubIds(next);
   for (const club of next.clubs) if (club.id !== next.managedClubId && !leaving.has(club.id)) next = recruitPlayers(next, club.id, MIN_ROSTER_SIZE);

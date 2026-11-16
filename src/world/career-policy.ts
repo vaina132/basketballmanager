@@ -1,4 +1,4 @@
-import type { SeasonCareer } from '../domain/career';
+import type { CareerMove, CareerMovePhase, SeasonCareer } from '../domain/career';
 import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { careerMovesGovern, managedClubAtRound, managedClubFor } from './career';
@@ -7,7 +7,9 @@ import { getStandings } from './season';
 import { fullWorldClubsIn, seasonRounds } from './career-world';
 import { seasonLeagues } from './divisions';
 import type { WorldContext } from '../domain/world';
-import { CAREER_RULES, careerPointKey, coachProtected, midSeasonMinimumGames, resignationsCounting, restartsBefore, startingConfidence, usesCareerRules } from './career-rules';
+import { allowsUnemployment, CAREER_RULES, careerPointKey, coachProtected, fadedReputation, isUnemployed, midSeasonMinimumGames, NO_CLUB, resignationsCounting, restartsBefore, startingConfidence, usesCareerRules } from './career-rules';
+import { calendarDaysBetween } from './competition-calendar';
+import { dateForRound } from './season';
 
 /** A season verdict of Under pressure ends the manager's job when dismissal and job changes are on. */
 export const DISMISSAL_VERDICT = 'pressure' as const;
@@ -31,6 +33,14 @@ export interface ManagerReputation { value: number; seasons: ReputationSeason[];
  * `throughSeason`) made before the career point `penalty.before`.
  */
 export function managerReputation(state: CareerContext, throughSeason = state.seasonNumber, penalty?: { seasonNumber: number; before: number }): ManagerReputation {
+  const { value, seasons } = reputationSeasons(state, throughSeason);
+  if (!usesCareerRules(state.career)) return { value, seasons };
+  const resignations = resignationsCounting(state.career, penalty?.seasonNumber ?? throughSeason, penalty?.before).length;
+  return resignations ? { value: Math.max(0, value - resignations * CAREER_RULES.resignationReputationCost), seasons, resignations } : { value, seasons };
+}
+
+/** The weighted final board confidences behind reputation, before any resignation cost (a season ended without a club counts for nothing). */
+function reputationSeasons(state: CareerContext, throughSeason: number): ManagerReputation {
   const seasons: ReputationSeason[] = [];
   for (const [offset, weight] of REPUTATION_WEIGHTS.entries()) {
     const seasonNumber = throughSeason - offset;
@@ -41,9 +51,7 @@ export function managerReputation(state: CareerContext, throughSeason = state.se
   }
   const weights = seasons.reduce((sum, season) => sum + season.weight, 0);
   const value = weights ? Math.round(seasons.reduce((sum, season) => sum + season.confidence * season.weight, 0) / weights) : STARTING_REPUTATION;
-  if (!usesCareerRules(state.career)) return { value, seasons };
-  const resignations = resignationsCounting(state.career, penalty?.seasonNumber ?? throughSeason, penalty?.before).length;
-  return resignations ? { value: Math.max(0, value - resignations * CAREER_RULES.resignationReputationCost), seasons, resignations } : { value, seasons };
+  return { value, seasons };
 }
 
 export interface ClubVacancy {
@@ -69,6 +77,8 @@ export interface SeasonEndOutlook {
   warning?: true;
   /** Career-2: a dismissal after an in-season review, or the jobs offered to a resigning manager (absent at season ends). */
   timing?: 'mid-season' | 'resignation';
+  /** Career-3 (format 69): a dismissed or resigning manager may decline every offer and leave without a club. */
+  unemployment?: true;
 }
 
 function seasonFixtures(state: CareerContext, seasonNumber: number): readonly (SeasonFixture | ArchivedFixture)[] | null {
@@ -102,6 +112,8 @@ export function seasonEndOutlook(state: CareerContext, seasonNumber = state.seas
   const fixtures = seasonFixtures(state, seasonNumber);
   if (!verdict || !fixtures) return null;
   const rules = usesCareerRules(state.career), restarts = rules ? restartsBefore(state.board, seasonNumber, seasonRounds(state), 'end') : [];
+  // Career-3 (format 69): a season ended without a club has no verdict for the manager (`unemployedSeasonEndVacancies`).
+  const unemployment = allowsUnemployment(state.career);
   const isProtected = (id: string) => rules && coachProtected(restarts, id, seasonNumber);
   // Owner decision (a), 15 November 2026: a club leaving the full world at this season end counts as a dismissal, so the
   // manager is offered at least one job at a full-world club. Leaving clubs offer no jobs.
@@ -119,14 +131,38 @@ export function seasonEndOutlook(state: CareerContext, seasonNumber = state.seas
   const others = seasonClubs.filter(club => club.id !== clubId && !leaving.has(club.id) && seasonVerdict(state.board, club.id, seasonNumber, seasonRounds(state)));
   const vacancies = others.filter(club => seasonVerdict(state.board, club.id, seasonNumber, seasonRounds(state))!.verdict === DISMISSAL_VERDICT && !isProtected(club.id)).map(club => vacancy(club.id, 'pressure'));
   // A dismissed manager is never left without a club: the least confident board then makes a change (career-2: a board
-  // whose coach is outside his protected first season, when there is one).
-  if (dismissed && !vacancies.length && others.length) {
+  // whose coach is outside his protected first season, when there is one). Career-3 keeps this only for a club leaving
+  // the full world (owner decision (a)); otherwise a dismissed manager without offers becomes unemployed.
+  const guaranteed = !unemployment || leaving.has(clubId);
+  if (dismissed && guaranteed && !vacancies.length && others.length) {
     const least = [...others].sort((a, b) => Number(isProtected(a.id)) - Number(isProtected(b.id)) || seasonVerdict(state.board, a.id, seasonNumber, seasonRounds(state))!.confidence - seasonVerdict(state.board, b.id, seasonNumber, seasonRounds(state))!.confidence)[0]!;
     vacancies.push(vacancy(least.id, 'change'));
   }
   const reputation = managerReputation(state, seasonNumber, rules ? { seasonNumber, before: careerPointKey(seasonNumber, seasonRounds(state), 'end') } : undefined);
-  const offers = offersFor(vacancies, reputation.value, dismissed, seasonClubs);
-  return { seasonNumber, clubId, verdict, dismissed, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers, ...(rules && pressure && !dismissed ? { warning: true as const } : {}) };
+  const offers = offersFor(vacancies, reputation.value, dismissed && guaranteed, seasonClubs);
+  return { seasonNumber, clubId, verdict, dismissed, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers, ...(rules && pressure && !dismissed ? { warning: true as const } : {}), ...(unemployment && dismissed ? { unemployment: true as const } : {}) };
+}
+
+/**
+ * Career-3 (format 69): the clubs replacing their coach at the end of a season the manager finished without a club:
+ * every club whose season ended Under pressure, outside a protected first season and not leaving the full world. Their
+ * jobs stay open to the unemployed manager through that offseason. Empty otherwise.
+ */
+export function unemployedSeasonEndVacancies(state: CareerContext, seasonNumber = state.seasonNumber): ClubVacancy[] {
+  if (!allowsUnemployment(state.career) || !careerMovesGovern(state.career, seasonNumber) || managedClubFor(state, seasonNumber, false) !== NO_CLUB) return [];
+  const fixtures = seasonFixtures(state, seasonNumber), rounds = seasonRounds(state);
+  if (!fixtures) return [];
+  const restarts = restartsBefore(state.board, seasonNumber, rounds, 'end');
+  const leaving = new Set((state.background?.exchanges ?? []).filter(exchange => exchange.seasonNumber === seasonNumber).flatMap(exchange => exchange.leaving));
+  const seasonClubs = state.world?.domesticLeagues ? fullWorldClubsIn(state, seasonNumber) : state.clubs;
+  const divisions = seasonNumber === state.seasonNumber ? state.divisions : state.history.find(archive => archive.seasonNumber === seasonNumber)?.divisions;
+  const standings = getStandings({ ...state, fixtures, divisions });
+  const vacancies = seasonClubs.filter(club => !leaving.has(club.id) && seasonVerdict(state.board, club.id, seasonNumber, rounds)?.verdict === DISMISSAL_VERDICT && !coachProtected(restarts, club.id, seasonNumber)).map((club): ClubVacancy => {
+    const position = standings.find(row => row.clubId === club.id)!.position;
+    const league = state.world?.domesticLeagues ? seasonLeagues(state.world, divisions).find(item => item.clubIds.includes(club.id)) : undefined;
+    return { clubId: club.id, position, requirement: vacancyRequirement(position, league ? seasonClubs.filter(item => league.clubIds.includes(item.id)) : seasonClubs), reason: 'pressure', confidence: seasonVerdict(state.board, club.id, seasonNumber, rounds)!.confidence };
+  });
+  return vacancies.sort(orderBy(seasonClubs));
 }
 
 /** Requirements during a season use the table so far (in the offseason, the final table), within each club's own league. */
@@ -179,7 +215,9 @@ export function midSeasonChanges(state: CareerContext, reviewIndex = state.board
   const vacancy = liveVacancy(state, seasonNumber, round, seasonClubs);
   const vacancies = replaced.map(id => vacancy(id, 'pressure', review.clubs[id]!.confidence));
   const others = seasonClubs.filter(club => club.id !== managed);
-  if (!vacancies.length && others.length) {
+  // Career-3 (format 69): no board makes a change only to find the dismissed manager a club.
+  const unemployment = allowsUnemployment(state.career);
+  if (!unemployment && !vacancies.length && others.length) {
     const least = [...others].sort((a, b) => Number(isProtected(a.id)) - Number(isProtected(b.id)) || review.clubs[a.id]!.confidence - review.clubs[b.id]!.confidence)[0]!;
     vacancies.push(vacancy(least.id, 'change', review.clubs[least.id]!.confidence));
     replaced.push(least.id);
@@ -187,12 +225,13 @@ export function midSeasonChanges(state: CareerContext, reviewIndex = state.board
   const confidence = review.clubs[managed]!.confidence;
   const reputation = managerReputation(state, seasonNumber - 1, { seasonNumber, before: careerPointKey(seasonNumber, round + 1, 'season') });
   const verdict: SeasonVerdict = { clubId: managed, seasonNumber, reviewId: review.id, date: review.date, confidence, verdict: verdictForConfidence(confidence) };
-  return { seasonNumber, round, reviewId: review.id, replaced, outlook: { seasonNumber, clubId: managed, verdict, dismissed: true, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers: offersFor(vacancies, reputation.value, true, seasonClubs), timing: 'mid-season' } };
+  return { seasonNumber, round, reviewId: review.id, replaced, outlook: { seasonNumber, clubId: managed, verdict, dismissed: true, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers: offersFor(vacancies, reputation.value, !unemployment, seasonClubs), timing: 'mid-season', ...(unemployment ? { unemployment: true as const } : {}) } };
 }
 
 /** Why the manager cannot resign now, or null. Career-2 careers resign between matches, during a season or offseason. */
 export function resignationRefusal(state: SeasonState): string | null {
   if (!usesCareerRules(state.career) || !careerMovesGovern(state.career, state.seasonNumber)) return 'Resigning is part of careers started with dismissal and job offers in this version.';
+  if (isUnemployed(state)) return 'You are not managing a club.';
   if (state.status !== 'complete') {
     if (state.fixtures.some(fixture => fixture.round === state.round && fixture.result)) return 'This week\'s games have started. You can resign once they are recorded.';
     if (state.activeMatch && (state.activeMatch.status !== 'ready' || state.activeMatch.stepCount !== 0)) return 'Record this week\'s match first, then you can resign before the next one.';
@@ -221,7 +260,9 @@ export function resignationOutlook(state: SeasonState): SeasonEndOutlook | null 
   const isProtected = (id: string) => coachProtected(restarts, id, judged);
   const vacancy = liveVacancy(state, seasonNumber, inSeason ? state.round - 1 : rounds, seasonClubs);
   const vacancies = others.filter(club => confidence(club.id) < CAREER_RULES.seasonDismissalBelow && !isProtected(club.id)).map(club => vacancy(club.id, 'pressure', confidence(club.id)));
-  if (!vacancies.length) {
+  // Career-3 (format 69): only boards Under pressure offer a job; the manager may leave without one.
+  const unemployment = allowsUnemployment(state.career);
+  if (!vacancies.length && !unemployment) {
     const least = [...others].sort((a, b) => Number(isProtected(a.id)) - Number(isProtected(b.id)) || confidence(a.id) - confidence(b.id))[0]!;
     vacancies.push(vacancy(least.id, 'change', confidence(least.id)));
   }
@@ -229,12 +270,112 @@ export function resignationOutlook(state: SeasonState): SeasonEndOutlook | null 
   const reputation: ManagerReputation = { ...base, value: Math.max(0, base.value - CAREER_RULES.resignationReputationCost), resignations: (base.resignations ?? 0) + 1 };
   const current = confidence(managed), latest = state.board.reviews.at(-1);
   const verdict: SeasonVerdict = { clubId: managed, seasonNumber, reviewId: latest?.id ?? '', date: state.date, confidence: current, verdict: verdictForConfidence(current) };
-  return { seasonNumber, clubId: managed, verdict, dismissed: false, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers: offersFor(vacancies, reputation.value, true, seasonClubs), timing: 'resignation' };
+  return { seasonNumber, clubId: managed, verdict, dismissed: false, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers: offersFor(vacancies, reputation.value, !unemployment, seasonClubs), timing: 'resignation', ...(unemployment ? { unemployment: true as const } : {}) };
 }
 
-/** Why the manager cannot take this club's job at the current season end, or null. */
+/**
+ * Why the manager cannot take this club's job at the current season end, or null. Career-3 (format 69): no club
+ * (`NO_CLUB`) declines every offer after a dismissal, or resigns without a new job.
+ */
 export function jobOfferRefusal(outlook: SeasonEndOutlook | null, clubId: string): string | null {
   if (!outlook) return 'There are no job offers at this point of the season.';
+  if (clubId === NO_CLUB) return outlook.unemployment && (outlook.dismissed || outlook.timing === 'resignation') ? null : 'Choose a club that has offered you its job.';
   if (!outlook.offers.some(offer => offer.clubId === clubId)) return 'Choose a club that has offered you its job.';
+  return null;
+}
+
+/** Career-3: the reputation of a manager without a club, from the reputation left with and the time since. */
+export interface UnemployedReputation extends ManagerReputation {
+  /** The reputation the manager left with (resignation costs as they stand at this point). */
+  base: number;
+  /** The day the manager left the last club. */
+  since: string;
+  /** Whole days without a club so far. */
+  days: number;
+}
+
+/** A point of the career at which an unemployed manager can take a job: before a week's games, or a day of an offseason. */
+export interface CareerPoint { seasonNumber: number; round: number; phase: Exclude<CareerMovePhase, 'end'>; date: string }
+
+/**
+ * Career-3 (format 69): the manager's reputation at `at`, unemployed since the last of `prior` (the moves made before
+ * `at`). The base is the last three season ends the manager finished at a club (the season of an in-season departure
+ * does not count), less the resignations among `prior` still costing reputation; it then fades by `fadedReputation`.
+ */
+export function unemployedReputation(state: CareerContext, prior: readonly CareerMove[], at: Pick<CareerPoint, 'seasonNumber' | 'date'>): UnemployedReputation {
+  const start = prior.at(-1);
+  if (!start || start.toClubId !== NO_CLUB) throw new Error('The manager is not unemployed at this point.');
+  const through = start.phase === 'season' ? start.seasonNumber - 1 : start.seasonNumber;
+  const raw = reputationSeasons(state, Math.max(0, through));
+  const resignations = prior.filter(move => move.reason === 'resigned' && move.seasonNumber <= at.seasonNumber && move.seasonNumber > at.seasonNumber - CAREER_RULES.resignationSeasons).length;
+  const base = Math.max(0, raw.value - resignations * CAREER_RULES.resignationReputationCost);
+  const days = Math.max(0, calendarDaysBetween(start.date, at.date));
+  return { value: fadedReputation(base, days), seasons: raw.seasons, ...(resignations ? { resignations } : {}), base, since: start.date, days };
+}
+
+/** Career-3: a job open to an unemployed manager, and until when. */
+export interface JobVacancy extends ClubVacancy {
+  /** `season`: the board replaced its coach at an in-season review; `end`: the club's season ended Under pressure. */
+  opened: 'season' | 'end';
+  /** The season and week of the review or season end that opened the job. */
+  seasonNumber: number;
+  round: number;
+  /** The last day the job can be taken: the Saturday of its last open week, or null for a season-end job (open through that offseason). */
+  openUntil: string | null;
+  /** Whether the club offers the job now: the manager's reputation reaches its requirement. */
+  offered: boolean;
+}
+
+export interface JobMarket { point: CareerPoint; reputation: UnemployedReputation; vacancies: JobVacancy[] }
+
+/**
+ * Career-3 (format 69): the jobs open to an unemployed manager at a point of the career, rebuilt from the recorded
+ * reviews, restarts and tables. During a season: clubs whose board replaced its coach at a review in the last
+ * `vacancyOpenWeeks` weeks. In an offseason: clubs whose season ended Under pressure. Best first.
+ */
+export function jobMarketAt(state: CareerContext, prior: readonly CareerMove[], point: CareerPoint): JobMarket {
+  const reputation = unemployedReputation(state, prior, point), rounds = seasonRounds(state), weeks = CAREER_RULES.vacancyOpenWeeks;
+  const seasonClubs = state.world?.domesticLeagues ? fullWorldClubsIn(state, point.seasonNumber) : state.clubs;
+  const found = new Map<string, JobVacancy>();
+  if (point.phase === 'season') {
+    for (const [index, review] of state.board.reviews.entries()) {
+      if (review.seasonNumber !== point.seasonNumber || review.round >= rounds || point.round <= review.round || point.round > review.round + weeks) continue;
+      const changes = midSeasonChanges(state, index);
+      if (!changes?.replaced.length) continue;
+      const vacancy = liveVacancy(state, point.seasonNumber, review.round, seasonClubs);
+      const last = Math.min(review.round + weeks, rounds);
+      for (const clubId of changes.replaced) found.set(clubId, { ...vacancy(clubId, 'pressure', review.clubs[clubId]!.confidence), opened: 'season', seasonNumber: point.seasonNumber, round: review.round, openUntil: dateForRound(last, point.seasonNumber), offered: false });
+    }
+  } else {
+    const outlook = seasonEndOutlook(state, point.seasonNumber);
+    const vacancies = outlook ? outlook.vacancies : unemployedSeasonEndVacancies(state, point.seasonNumber);
+    for (const vacancy of vacancies) found.set(vacancy.clubId, { ...vacancy, opened: 'end', seasonNumber: point.seasonNumber, round: rounds, openUntil: null, offered: false });
+  }
+  const vacancies = [...found.values()].map(vacancy => ({ ...vacancy, offered: vacancy.requirement <= reputation.value })).sort(orderBy(seasonClubs));
+  return { point, reputation, vacancies };
+}
+
+/** Career-3: the career point now, at which an unemployed manager can take a job (before this week's games, or in the offseason). */
+export function currentCareerPoint(state: Pick<SeasonState, 'seasonNumber' | 'round' | 'status' | 'date'>): CareerPoint {
+  return { seasonNumber: state.seasonNumber, round: state.round, phase: state.status === 'complete' ? 'offseason' : 'season', date: state.date };
+}
+
+/** Career-3: the job market now, or null while the manager has a club. */
+export function jobMarket(state: SeasonState): JobMarket | null {
+  if (!isUnemployed(state) || state.career.moves.at(-1)?.toClubId !== NO_CLUB) return null;
+  return jobMarketAt(state, state.career.moves, currentCareerPoint(state));
+}
+
+/** Career-3: why an unemployed manager cannot take this club's job now, or null. */
+export function jobRefusal(state: SeasonState, clubId: string): string | null {
+  if (!allowsUnemployment(state.career)) return 'Unemployed seasons are part of careers started in this version.';
+  const market = jobMarket(state);
+  if (!market) return 'You already manage a club.';
+  if (state.status !== 'complete' && state.fixtures.some(fixture => fixture.round === state.round && fixture.result)) return 'This week\'s games have started. You can take a job once they are recorded.';
+  const last = state.career.moves.at(-1)!;
+  if (last.seasonNumber === state.seasonNumber && last.round === state.round && last.phase === market.point.phase && last.date === state.date) return 'You left your club at this point. Open jobs can be taken from the next week or recruitment day.';
+  const vacancy = market.vacancies.find(item => item.clubId === clubId);
+  if (!vacancy) return 'This club has no job open to you.';
+  if (!vacancy.offered) return `The board looks for a reputation of ${vacancy.requirement}; yours is ${market.reputation.value}.`;
   return null;
 }

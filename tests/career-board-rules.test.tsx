@@ -22,11 +22,13 @@ import { careerNotices } from '../src/ui/career-text';
 import { getInboxItems } from '../src/ui/inbox-items';
 import { SeasonEndChoice } from '../src/ui/SeasonEndChoice';
 import { advanceMatchday } from './helpers/board-funding';
-import { asCareer1 } from './helpers/career-rules';
+import { asCareer1, asCareer2 } from './helpers/career-rules';
 
 const noop = () => {};
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
-const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true), true);
+// The format-63 rules (`career-2`, careers created before format 69): a dismissed or resigning manager always receives an
+// offer. New careers (`career-3`, unemployed seasons) are covered by tests/career-unemployment.test.tsx.
+const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(asCareer2(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS })), true), true);
 const throughOffseason = (state: SeasonState) => {
   let next = setEmploymentDelegation(state, true);
   for (let step = 0; step < 80 && getMarketStartReason(next); step += 1) next = advanceMarket(next);

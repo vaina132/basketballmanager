@@ -1,12 +1,13 @@
 import type { SeasonState } from '../domain/season';
 import { dateForRound } from '../world/season';
-import { midSeasonChanges, seasonEndOutlook } from '../world/career-policy';
+import { jobMarketAt, midSeasonChanges, seasonEndOutlook, unemployedSeasonEndVacancies } from '../world/career-policy';
+import { managedClubFor } from '../world/career';
 import type { CareerMove, CareerMovePhase, SeasonCareer } from '../domain/career';
 import type { BoardRestart } from '../domain/board';
 import { isWorldClub, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
 import type { WorldContext } from '../domain/world';
 import { financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
-import { CAREER_MODEL, CAREER_RULES, careerPointKey, usesCareerRules } from '../world/career-rules';
+import { allowsUnemployment, CAREER_2_MODEL, CAREER_MODEL, CAREER_RULES, careerPointKey, NO_CLUB, usesCareerRules } from '../world/career-rules';
 
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
 const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
@@ -24,6 +25,8 @@ function integer(value: unknown, path: string, min: number, max: number): number
 const PHASES: readonly CareerMovePhase[] = ['season', 'end', 'offseason'];
 /** Format 63: the reasons each career-2 move point allows. */
 const PHASE_REASONS: Readonly<Record<CareerMovePhase, readonly string[]>> = { season: ['dismissed', 'resigned'], end: ['dismissed', 'moved'], offseason: ['resigned'] };
+/** Format 69: career-3 careers also record an unemployed manager's appointment, before a week's games or in an offseason. */
+const PHASE_REASONS_3: Readonly<Record<CareerMovePhase, readonly string[]>> = { season: ['dismissed', 'resigned', 'appointed'], end: ['dismissed', 'moved'], offseason: ['resigned', 'appointed'] };
 
 /**
  * Format 37: the opt-in anchor is a calendar boundary actually visited, and each move happens at the end of a governed
@@ -33,8 +36,8 @@ const PHASE_REASONS: Readonly<Record<CareerMovePhase, readonly string[]>> = { se
  */
 export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonNumber' | 'round' | 'status' | 'date' | 'market' | 'managedClubId' | 'board' | 'finance'> & WorldContext, version: number): void {
   const fields = record(value, 'career', ['model', 'enabledSince', 'moves']);
-  const rules = fields.model === CAREER_MODEL;
-  if (fields.model !== 'career-1' && !(rules && version >= 63)) fail('career.model', 'is unsupported');
+  const rules = fields.model === CAREER_2_MODEL || fields.model === CAREER_MODEL;
+  if (fields.model !== 'career-1' && !(fields.model === CAREER_2_MODEL && version >= 63) && !(fields.model === CAREER_MODEL && version >= 69)) fail('career.model', 'is unsupported');
   const rounds = seasonRounds(state);
   if (!Array.isArray(fields.moves) || fields.moves.length > (rules ? state.seasonNumber * (rounds + 8) : state.seasonNumber)) fail('career.moves', 'must be a bounded list of club changes');
   if (fields.enabledSince === null) {
@@ -62,7 +65,7 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
   // The career's own world (the built-in league for careers without one), not always the built-in league.
   const world = worldOf(state);
   const ledger = state.finance.ledger;
-  if (rules) { validateCareer2Moves(fields.moves, state, world); return; }
+  if (rules) { validateCareer2Moves(fields.moves, state, world, fields.model === CAREER_MODEL); return; }
   let previous: { seasonNumber: number; toClubId: string; ledgerCount: number } | null = null;
   for (const [index, raw] of fields.moves.entries()) {
     const location = `career.moves[${index}]`;
@@ -83,8 +86,11 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
   if (previous && previous.toClubId !== state.managedClubId) fail('career.moves', 'must end at the club managed now');
 }
 
-/** Format 63 (basic checks, development mode): career-2 moves are chronological career points between world clubs. */
-function validateCareer2Moves(moves: unknown[], state: Pick<SeasonState, 'seasonNumber' | 'round' | 'status' | 'date' | 'managedClubId' | 'finance'> & WorldContext, world: ReturnType<typeof worldOf>): void {
+/**
+ * Format 63 (basic checks, development mode): career-2 moves are chronological career points between world clubs.
+ * Format 69 (career-3): a dismissal or resignation may lead to no club, and only an appointment leaves no club again.
+ */
+function validateCareer2Moves(moves: unknown[], state: Pick<SeasonState, 'seasonNumber' | 'round' | 'status' | 'date' | 'managedClubId' | 'finance'> & WorldContext, world: ReturnType<typeof worldOf>, unemployment: boolean): void {
   const rounds = seasonRounds(state);
   let previous: { key: number; date: string; toClubId: string; ledgerCount: number } | null = null;
   for (const [index, raw] of moves.entries()) {
@@ -97,8 +103,10 @@ function validateCareer2Moves(moves: unknown[], state: Pick<SeasonState, 'season
     if (phase !== 'season' && season === state.seasonNumber && state.status !== 'complete') fail(location, 'must follow a completed season');
     if (phase === 'season' && season === state.seasonNumber && state.status !== 'complete' && round > state.round) fail(location, 'cannot precede a week still to come');
     if (typeof move.date !== 'string' || (phase === 'offseason' ? move.date < dateForRound(rounds, season) : move.date !== dateForRound(round, season)) || move.date > state.date) fail(`${location}.date`, 'must be the calendar date of the move');
-    if (!PHASE_REASONS[phase].includes(move.reason as string)) fail(`${location}.reason`, 'must record a supported reason for that point of the season');
-    if (!isWorldClub(world, move.fromClubId) || !isWorldClub(world, move.toClubId) || move.fromClubId === move.toClubId) fail(location, 'must move between two different clubs in this league');
+    if (!(unemployment ? PHASE_REASONS_3 : PHASE_REASONS)[phase].includes(move.reason as string)) fail(`${location}.reason`, 'must record a supported reason for that point of the season');
+    if (move.reason === 'appointed') {
+      if (move.fromClubId !== NO_CLUB || !isWorldClub(world, move.toClubId)) fail(location, 'must appoint a manager without a club to a club in this league');
+    } else if (!isWorldClub(world, move.fromClubId) || !(isWorldClub(world, move.toClubId) || unemployment && move.toClubId === NO_CLUB && (move.reason === 'dismissed' || move.reason === 'resigned')) || move.fromClubId === move.toClubId) fail(location, 'must move between two different clubs in this league');
     const key = careerPointKey(season, round, phase);
     if (previous && (key < previous.key || key === previous.key && (phase !== 'offseason' || move.date <= previous.date))) fail(location, 'must be in chronological order, at most one per point of the season');
     if (previous && move.fromClubId !== previous.toClubId) fail(`${location}.fromClubId`, 'must be the club managed after the previous move');
@@ -106,6 +114,7 @@ function validateCareer2Moves(moves: unknown[], state: Pick<SeasonState, 'season
     previous = { key, date: move.date, toClubId: move.toClubId as string, ledgerCount };
   }
   if (previous && previous.toClubId !== state.managedClubId) fail('career.moves', 'must end at the club managed now');
+  if (!previous && state.managedClubId === NO_CLUB) fail('career.moves', 'must record how the manager left the last club');
 }
 
 /**
@@ -153,26 +162,41 @@ function validateCareer2Decisions(state: SeasonState): void {
       if (!changes) return;
       const move = changes.outlook ? moveAt(seasonNumber, round, 'season', ['dismissed']) : undefined;
       if (changes.outlook && !move) fail('career.moves', `must record the club joined after the dismissal in week ${round - 1} of season ${seasonNumber}`);
-      if (move && !changes.outlook!.offers.some(offer => offer.clubId === move.toClubId)) fail(`${pathOf(move)}.toClubId`, 'must accept a job offered after the dismissal');
+      // Career-3: a dismissed manager may decline every offer (or have none) and leave without a club.
+      if (move && !(move.toClubId === NO_CLUB && changes.outlook!.unemployment) && !changes.outlook!.offers.some(offer => offer.clubId === move.toClubId)) fail(`${pathOf(move)}.toClubId`, 'must accept a job offered after the dismissal');
       for (const clubId of changes.replaced) if (clubId !== move?.toClubId) restart(clubId, seasonNumber, round, 'season', date, 'ai');
-      if (move) { used.add(move); restart(move.fromClubId, seasonNumber, round, 'season', date, 'ai'); restart(move.toClubId, seasonNumber, round, 'season', date, 'manager'); }
+      if (move) { used.add(move); restart(move.fromClubId, seasonNumber, round, 'season', date, 'ai'); if (move.toClubId !== NO_CLUB) restart(move.toClubId, seasonNumber, round, 'season', date, 'manager'); }
     } });
   }
   for (let seasonNumber = 1; seasonNumber <= lastEnded; seasonNumber += 1) {
     const date = dateForRound(rounds, seasonNumber);
     points.push({ key: careerPointKey(seasonNumber, rounds, 'end'), order: 0, date, run: () => {
       const outlook = seasonEndOutlook(state, seasonNumber), move = moveAt(seasonNumber, rounds, 'end', ['dismissed', 'moved']);
-      if (!outlook) { if (move) fail(pathOf(move), 'must follow a season end with a final board review'); return; }
+      if (!outlook) {
+        if (move) fail(pathOf(move), 'must follow a season end with a final board review');
+        // Career-3: a season ended without a club still sees every board Under pressure replace its coach.
+        if (allowsUnemployment(career) && managedClubFor(state, seasonNumber, false) === NO_CLUB) for (const vacancy of unemployedSeasonEndVacancies(state, seasonNumber)) restart(vacancy.clubId, seasonNumber, rounds, 'end', date, 'ai');
+        return;
+      }
       if (outlook.dismissed && !move) fail('career.moves', `must record the club joined after the dismissal at the end of season ${seasonNumber}`);
       if (move && move.reason !== (outlook.dismissed ? 'dismissed' : 'moved')) fail(`${pathOf(move)}.reason`, 'must match the board\'s season verdict');
-      if (move && !outlook.offers.some(offer => offer.clubId === move.toClubId)) fail(`${pathOf(move)}.toClubId`, 'must accept a job offered at that season end');
+      if (move && !(move.toClubId === NO_CLUB && outlook.unemployment) && !outlook.offers.some(offer => offer.clubId === move.toClubId)) fail(`${pathOf(move)}.toClubId`, 'must accept a job offered at that season end');
       for (const vacancy of outlook.vacancies) if (vacancy.clubId !== move?.toClubId) restart(vacancy.clubId, seasonNumber, rounds, 'end', date, 'ai');
-      if (move) { used.add(move); restart(move.fromClubId, seasonNumber, rounds, 'end', date, 'ai'); restart(move.toClubId, seasonNumber, rounds, 'end', date, 'manager'); }
+      if (move) { used.add(move); restart(move.fromClubId, seasonNumber, rounds, 'end', date, 'ai'); if (move.toClubId !== NO_CLUB) restart(move.toClubId, seasonNumber, rounds, 'end', date, 'manager'); }
     } });
   }
   for (const move of career.moves) if (move.reason === 'resigned') points.push({ key: careerPointKey(move.seasonNumber, move.round!, move.phase!), order: 1, date: move.date, run: () => {
     used.add(move);
     restart(move.fromClubId, move.seasonNumber, move.round!, move.phase!, move.date, 'ai');
+    if (move.toClubId !== NO_CLUB) restart(move.toClubId, move.seasonNumber, move.round!, move.phase!, move.date, 'manager');
+  } });
+  // Career-3 (format 69): an unemployed manager's appointment takes a job open at that point, rebuilt from the evidence.
+  for (const [index, move] of career.moves.entries()) if (move.reason === 'appointed') points.push({ key: careerPointKey(move.seasonNumber, move.round!, move.phase!), order: 1, date: move.date, run: () => {
+    used.add(move);
+    const prior = career.moves.slice(0, index);
+    if (prior.at(-1)?.toClubId !== NO_CLUB || move.phase === 'end') fail(pathOf(move), 'must follow a period without a club');
+    const market = jobMarketAt(state, prior, { seasonNumber: move.seasonNumber, round: move.round!, phase: move.phase as 'season' | 'offseason', date: move.date });
+    if (!market.vacancies.some(vacancy => vacancy.clubId === move.toClubId && vacancy.offered)) fail(`${pathOf(move)}.toClubId`, 'must take a job open to the manager at that point');
     restart(move.toClubId, move.seasonNumber, move.round!, move.phase!, move.date, 'manager');
   } });
   points.sort((a, b) => a.key - b.key || a.order - b.order || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));

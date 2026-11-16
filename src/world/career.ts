@@ -7,7 +7,8 @@ import { applyFacilityEvent, facilityEventAnchor } from './facilities';
 import { automateSponsorship, handOverCommercialControl } from './commercial';
 import { roundOrdinal, seasonRounds, lastCommittedWeek } from './career-world';
 import type { WorldContext } from '../domain/world';
-import { CAREER_MODEL, CAREER_RULES, careerPointKey, usesCareerRules } from './career-rules';
+import { allowsUnemployment, CAREER_MODEL, CAREER_RULES, careerPointKey, isUnemployed, NO_CLUB, usesCareerRules } from './career-rules';
+import type { SeasonCommercial } from '../domain/commercial';
 
 /** Matchdays as one sequence across seasons; stored in anchors and counted forward, so it uses the season length. */
 const ordinal = (year: number, round: number, rounds: number) => roundOrdinal(year, round, rounds);
@@ -71,7 +72,8 @@ export function enableCareerMoves(state: SeasonState, mode: 'career' | 'prospect
   if (!state.board?.enabledSince) throw new Error('Dismissal and job changes require board reviews.');
   if (mode === 'career' && (state.seasonNumber !== 1 || state.round !== 1 || state.fixtures.some(fixture => fixture.result))) throw new Error('Dismissal and job changes can cover the first season only at the start of a new career.');
   if (mode !== 'career') return { ...state, career: { ...createCareer(), enabledSince: careerEventAnchor(state, mode) } };
-  // Format 63: a new career follows the career-2 rules, and the board starts the new coach from a fresh confidence.
+  // Format 63: a new career follows the career rules (format 69: career-3, adding unemployed seasons), and the board
+  // starts the new coach from a fresh confidence.
   const restart: BoardRestart = { clubId: state.managedClubId, seasonNumber: 1, round: 1, phase: 'season', date: state.date, reviewCount: state.board.reviews.length, confidence: CAREER_RULES.freshConfidence, coach: 'manager' };
   return { ...state, career: { model: CAREER_MODEL, enabledSince: careerEventAnchor(state, mode), moves: [] }, board: { ...state.board, restarts: [...(state.board.restarts ?? []), restart] } };
 }
@@ -153,4 +155,78 @@ export function transferManager(state: SeasonState, toClubId: string, reason: Ca
   }
   // Automatic sponsorship never leaves an acceptable offer waiting, so the former club decides at once.
   return automateSponsorship(next);
+}
+
+/** Sponsorship (and naming-rights) control of one club: manual for the manager's club, automatic otherwise. */
+function commercialControl(commercial: SeasonCommercial, clubId: string, delegated: boolean): SeasonCommercial {
+  return { ...commercial, plans: { ...commercial.plans, [clubId]: { delegated } }, ...(commercial.naming ? { naming: { ...commercial.naming, plans: { ...commercial.naming.plans, [clubId]: { delegated } } } } : {}) };
+}
+
+/**
+ * Career-3 (format 69): the manager leaves the club without taking another job (a dismissal whose offers were declined,
+ * or a resignation without a new job). The club continues under automatic control in every area, exactly as a club the
+ * manager leaves for another; `managedClubId` becomes empty and every club is automatic until an appointment. The
+ * caller checks the rules and restarts the board.
+ */
+export function leaveClub(state: SeasonState, reason: 'dismissed' | 'resigned', phase: CareerMovePhase): SeasonState {
+  if (!allowsUnemployment(state.career)) throw new Error('Leaving without a new job is part of careers started in this version.');
+  if (isUnemployed(state)) throw new Error('You are not managing a club.');
+  const from = state.managedClubId;
+  const move: CareerMove = { seasonNumber: state.seasonNumber, date: state.date, fromClubId: from, toClubId: NO_CLUB, reason, ledgerCount: financeLedgerCount(state.finance), round: state.round, phase };
+  let next: SeasonState = {
+    ...state,
+    managedClubId: NO_CLUB,
+    career: { ...state.career, moves: [...state.career.moves, move] },
+    plans: { ...state.plans, [from]: { ...state.plans[from]!, autoSubstitutions: true, ...(Object.hasOwn(state.plans[from]!, 'matchday') ? { matchday: null } : {}) } },
+    training: { ...state.training, plans: { ...state.training.plans, [from]: { ...state.training.plans[from]!, delegated: true } } },
+    finance: { ...state.finance, plans: { ...state.finance.plans, [from]: { ...state.finance.plans[from]!, delegated: true } } },
+    payroll: { ...state.payroll, delegated: { ...state.payroll.delegated, [from]: true } },
+    scouting: { ...state.scouting, clubs: { ...state.scouting.clubs, [from]: { ...state.scouting.clubs[from]!, delegated: true } } },
+    commercial: commercialControl(state.commercial, from, true),
+    academy: releaseAcademyFocus(state.academy, from),
+  };
+  if (!state.facilities.enabledSince) next = { ...next, facilities: { ...next.facilities, delegated: { ...next.facilities.delegated, [from]: true } } };
+  else if (!next.facilities.delegated[from]) next = applyFacilityEvent(next, { ...facilityEventAnchor(next), type: 'delegate', clubId: from, delegated: true });
+  return automateSponsorship(next);
+}
+
+/**
+ * Career-3 (format 69): an unemployed manager takes a job. The club starts like a new career: the manager controls
+ * ticket prices, payroll, scouting, sponsorship and facilities and makes the substitutions; training stays delegated
+ * as for every club. Contracts, staff, players, results and history are unchanged. The caller checks the job market
+ * and restarts the board.
+ */
+export function appointFromUnemployment(state: SeasonState, toClubId: string, phase: CareerMovePhase): SeasonState {
+  if (!isUnemployed(state)) throw new Error('Only a manager without a club can be appointed.');
+  if (!state.clubs.some(club => club.id === toClubId)) throw new Error('Choose a club in this league.');
+  const move: CareerMove = { seasonNumber: state.seasonNumber, date: state.date, fromClubId: NO_CLUB, toClubId, reason: 'appointed', ledgerCount: financeLedgerCount(state.finance), round: state.round, phase };
+  let next: SeasonState = {
+    ...state,
+    managedClubId: toClubId,
+    career: { ...state.career, moves: [...state.career.moves, move] },
+    plans: { ...state.plans, [toClubId]: { ...state.plans[toClubId]!, autoSubstitutions: false } },
+    finance: { ...state.finance, plans: { ...state.finance.plans, [toClubId]: { ...state.finance.plans[toClubId]!, delegated: false } } },
+    payroll: { ...state.payroll, delegated: { ...state.payroll.delegated, [toClubId]: false } },
+    scouting: { ...state.scouting, clubs: { ...state.scouting.clubs, [toClubId]: { ...state.scouting.clubs[toClubId]!, delegated: false } } },
+    commercial: commercialControl(state.commercial, toClubId, false),
+  };
+  if (!state.facilities.enabledSince) next = { ...next, facilities: { ...next.facilities, delegated: { ...next.facilities.delegated, [toClubId]: false } } };
+  else if (next.facilities.delegated[toClubId]) next = applyFacilityEvent(next, { ...facilityEventAnchor(next), type: 'delegate', clubId: toClubId, delegated: false });
+  return next;
+}
+
+/** Career-3: the move that started the current period without a club, or undefined while the manager has a club. */
+export function currentUnemployment(state: Pick<SeasonState, 'managedClubId'> & { career?: SeasonCareer }): CareerMove | undefined {
+  const last = state.career?.moves.at(-1);
+  return isUnemployed(state) && last?.toClubId === NO_CLUB ? last : undefined;
+}
+
+/** The club the manager ran last (the current club while employed); empty only for a career that never had a club. */
+export function lastManagedClub(state: Pick<SeasonState, 'managedClubId'> & { career?: SeasonCareer }): string {
+  return state.managedClubId || (state.career?.moves.at(-1)?.fromClubId ?? NO_CLUB);
+}
+
+/** The managed club's name for summaries and save lists; a career-3 manager without a club reads "Without a club". */
+export function managedClubLabel(state: Pick<SeasonState, 'clubs' | 'managedClubId'> & { career?: SeasonCareer }): string {
+  return isUnemployed(state) ? 'Without a club' : state.clubs.find(club => club.id === state.managedClubId)?.name ?? state.managedClubId;
 }

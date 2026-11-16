@@ -17,13 +17,15 @@ import { facilityTypes, FACILITY_RULES_2, getFacilityCondition, hasFacilityCondi
 import { clubRetirementsThisSeason } from './PlayerLifecycle'
 import { careerMoveText } from './career-text'
 import { careerMovesGovern, managedClubFor } from '../world/career'
-import { seasonEndOutlook } from '../world/career-policy'
+import { jobMarket, seasonEndOutlook } from '../world/career-policy'
+import { isUnemployed } from '../world/career-rules'
 import { medicalDate } from './SeasonMedicalReport'
 import { seasonRounds, worldOf } from '../world/career-world'
 import { formatEuros } from './money-format'
 
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
-export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract'
+/** `jobs` (format 69): the job market on the unemployed desk. */
+export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract' | 'jobs'
 export interface InboxItem {
   id: string
   date: string
@@ -42,6 +44,8 @@ const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
 
 /** Dated messages built only from recorded events at the managed club; nothing is generated for display. */
 export function getInboxItems(season: SeasonState): InboxItem[] {
+  // Format 69 (career-3): without a club, the inbox holds the career's moves and the jobs open now.
+  if (isUnemployed(season)) return unemployedInboxItems(season)
   const clubId = season.managedClubId, items: InboxItem[] = []
 
   const question = getPressQuestion(season)
@@ -129,13 +133,35 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     if (season.career.moves.some(move => move.seasonNumber === year && (move.phase ?? 'end') === 'end')) continue
     if (outlook?.offers.length && !outlook.dismissed) items.push({ id: `offers-declined-${year}`, date: outlook.verdict.date, category: 'board', title: outlook.offers.length === 1 ? 'Job offer declined' : 'Job offers declined', detail: `You stayed at ${season.clubs.find(club => club.id === outlook.clubId)!.name} after ${seasonLabel(year)}; ${outlook.offers.map(offer => season.clubs.find(club => club.id === offer.clubId)!.name).join(' and ')} had offered you ${outlook.offers.length === 1 ? 'its job' : 'their jobs'}.`, needsAction: false, target: 'board' })
   }
-  const moves = season.career?.moves ?? []
-  for (const move of moves) {
-    // Career-2 seasons can hold several moves; each keeps its own message.
-    const text = careerMoveText(season, move), sameSeason = moves.filter(item => item.seasonNumber === move.seasonNumber)
-    items.push({ id: sameSeason.length > 1 ? `career-move-${move.seasonNumber}-${sameSeason.indexOf(move) + 1}` : `career-move-${move.seasonNumber}`, date: move.date, category: 'board', title: text.title, detail: text.detail, needsAction: false, target: 'board' })
-  }
+  items.push(...careerMoveItems(season))
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })
 
   return items.sort((a, b) => Number(b.needsAction) - Number(a.needsAction) || compare(b.date, a.date) || compare(a.id, b.id))
+}
+
+/** One message for each recorded club change, unemployment and appointment (career-2 seasons can hold several moves). */
+function careerMoveItems(season: SeasonState): InboxItem[] {
+  const moves = season.career?.moves ?? []
+  return moves.map(move => {
+    const text = careerMoveText(season, move), sameSeason = moves.filter(item => item.seasonNumber === move.seasonNumber)
+    return { id: sameSeason.length > 1 ? `career-move-${move.seasonNumber}-${sameSeason.indexOf(move) + 1}` : `career-move-${move.seasonNumber}`, date: move.date, category: 'board' as const, title: text.title, detail: text.detail, needsAction: false, target: isUnemployed(season) ? 'jobs' as const : 'board' as const }
+  })
+}
+
+/** Career-3 (format 69): the inbox of a manager without a club: the career's moves and every job open now. */
+function unemployedInboxItems(season: SeasonState): InboxItem[] {
+  const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? id
+  const items = careerMoveItems(season), market = jobMarket(season)
+  for (const vacancy of market?.vacancies ?? []) {
+    const opened = vacancy.opened === 'season' ? `${name(vacancy.clubId)}'s board replaced its coach after matchday ${vacancy.round}; an interim coach has the team.` : `${name(vacancy.clubId)}'s season ended Under pressure, so its board is replacing its coach.`
+    const until = vacancy.openUntil ? `The job stays open until ${medicalDate(vacancy.openUntil)}.` : 'The job stays open through this offseason.'
+    const wanted = vacancy.offered ? `It looks for a reputation of ${vacancy.requirement} and offers you the job (yours: ${market!.reputation.value}).` : `It looks for a reputation of ${vacancy.requirement}; yours is ${market!.reputation.value}, so it is not considering you.`
+    items.push({ id: `job-${vacancy.seasonNumber}-${vacancy.round}-${vacancy.clubId}`, date: vacancy.opened === 'season' ? dateForWeek(season, vacancy.seasonNumber, vacancy.round) : season.date, category: 'board', title: vacancy.offered ? `Job offer · ${name(vacancy.clubId)}` : `Job open · ${name(vacancy.clubId)}`, detail: `${opened} ${wanted} ${until}`, needsAction: vacancy.offered, target: 'jobs' })
+  }
+  return items.sort((a, b) => Number(b.needsAction) - Number(a.needsAction) || compare(b.date, a.date) || compare(a.id, b.id))
+}
+
+/** The Saturday of a week's review (the date it was recorded). */
+function dateForWeek(season: SeasonState, seasonNumber: number, round: number): string {
+  return season.board.reviews.find(review => review.seasonNumber === seasonNumber && review.round === round)?.date ?? season.date
 }

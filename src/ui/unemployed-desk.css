@@ -1,0 +1,47 @@
+.unemployed-desk{display:flex;flex-direction:column;gap:10px;min-width:0;font-size:12px}
+.unemployed-desk .panel{border-radius:2px;background:var(--surface);min-width:0}
+.unemployed-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 12px;min-height:36px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.unemployed-heading h2{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.unemployed-heading h2 svg{color:var(--accent)}
+.unemployed-heading>span,.unemployed-heading>time{color:var(--muted);white-space:nowrap}
+.unemployed-status{border-top:2px solid var(--accent)}
+.unemployed-status-body{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
+.unemployed-lead{font-size:13px;line-height:1.55}
+.unemployed-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 18px;margin:0}
+.unemployed-facts div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.unemployed-facts dt{color:var(--muted);font-size:11px}
+.unemployed-facts dd{margin:0;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.unemployed-facts dd small{font-size:11px;font-weight:400;color:var(--muted)}
+.unemployed-facts-list{grid-template-columns:1fr;padding:10px 12px}
+.unemployed-facts-list div{flex-direction:row;justify-content:space-between;gap:12px}
+.unemployed-facts-list dd{font-size:12px;font-weight:500;text-align:right}
+.unemployed-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.unemployed-columns{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:10px;align-items:start}
+.unemployed-side{display:flex;flex-direction:column;gap:10px;min-width:0}
+.unemployed-jobs{list-style:none;margin:0;padding:0}
+.unemployed-jobs li{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.unemployed-jobs li[data-job-offered="true"]{border-left:2px solid var(--accent)}
+.unemployed-job-club{display:flex;align-items:center;gap:10px;min-width:0}
+.unemployed-job-club>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.unemployed-job-club strong{font-size:14px;font-weight:600}
+.unemployed-job-club span:not(.unemployed-club-code){color:var(--muted)}
+.unemployed-club-code{display:grid;place-items:center;flex:none;width:34px;height:34px;border:1px solid var(--border);border-radius:2px;font-size:11px;font-weight:700;letter-spacing:.5px;background:var(--bg)}
+.unemployed-jobs p{line-height:1.5}
+.unemployed-job-action{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.unemployed-job-status{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.unemployed-job-status[data-state="offered"]{color:var(--green)}
+.unemployed-job-action small{flex-basis:100%;color:var(--muted)}
+.unemployed-empty,.unemployed-note{padding:10px 12px;color:var(--muted);line-height:1.5}
+.unemployed-actions .unemployed-note{padding:0}
+.unemployed-games{list-style:none;margin:0;padding:0}
+.unemployed-games li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;padding:7px 12px;border-bottom:1px solid var(--border)}
+.unemployed-games time{color:var(--muted);white-space:nowrap}
+.unemployed-games small{grid-column:2;color:var(--muted)}
+.unemployed-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:8px 12px;color:var(--muted)}
+.unemployed-career-scroll{overflow-x:auto}
+.unemployed-career table{width:100%;border-collapse:collapse}
+.unemployed-career th,.unemployed-career td{padding:7px 12px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.unemployed-career thead th{font-size:11px;font-weight:500;color:var(--muted)}
+.unemployed-career tbody th{font-weight:600}
+@media(max-width:850px){.unemployed-columns{grid-template-columns:1fr}}
+@media(max-width:600px){.unemployed-facts{grid-template-columns:1fr 1fr}.unemployed-actions .button{flex:1 1 100%;justify-content:center}.unemployed-job-action .button{width:100%}.unemployed-heading{flex-wrap:wrap}}

@@ -100,7 +100,8 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const active = season.fixtures.find(fixture => fixture.id === season.activeFixtureId)
   // The club the manager ran in the season shown; after a move, the new club appears from the next season.
   const managedId = managedClubFor(season, selectedNumber, false)
-  const managed = club(managedId)
+  // Format 69: a season the manager spent without a club (career-3) names no club of theirs.
+  const managed = managedId ? club(managedId) : null
   const complete = archived || season.status === 'complete'
   const matchFinished = !season.activeMatch || season.activeMatch.status === 'finished'
   // With playoffs (step 3.4b) the champion is the postseason's; the regular season's first place is shown separately.
@@ -137,7 +138,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   return <div className="season-workspace">
     <section className="season-matchday panel" aria-label="Season progress">
       <div className="season-matchday-identity">
-        <ClubName club={managed} />
+        {managed ? <ClubName club={managed} /> : <span className="season-club-name"><span>Without a club</span></span>}
         <div className="season-year-filter"><label htmlFor="season-year">Season</label><select ref={seasonSelector} id="season-year" value={selectedNumber} onChange={event => selectSeason(Number(event.target.value))} disabled={busy}>
           <option value={season.seasonNumber}>{seasonLabel(season.seasonNumber)} · Current</option>
           {[...season.history].reverse().map(entry => <option key={entry.seasonNumber} value={entry.seasonNumber}>{seasonLabel(entry.seasonNumber)} · Archived</option>)}
@@ -145,7 +146,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
         <span>{archived ? 'Archived season' : complete ? 'Season complete' : season.round > regularRounds ? `Playoffs · week ${season.round - regularRounds} of ${totalRounds - regularRounds}` : `Matchday ${season.round} of ${totalRounds}`}<time dateTime={selectedDate}>{formatDate(selectedDate)}</time></span>
       </div>
       <div className="season-matchday-action">
-        <p>{complete ? playoffChampion ? <><strong>{playoffChampion.name}</strong> win the {leagueName} playoffs; {champion!.name} finished first in the regular season.</> : <><strong>{champion!.name}</strong> finish first in {leagueName}.</> : !active ? season.round > regularRounds ? 'Your club has no game on this playoff day. Continue to play the other games.' : 'Rest week. Continue to play the other games and complete this week.' : matchFinished ? 'Match finished. Continue to complete this matchday and update the table.' : <>{club(active.homeClubId).name} <span>vs</span> {club(active.awayClubId).name}</>}</p>
+        <p>{complete ? playoffChampion ? <><strong>{playoffChampion.name}</strong> win the {leagueName} playoffs; {champion!.name} finished first in the regular season.</> : <><strong>{champion!.name}</strong> finish first in {leagueName}.</> : !active ? !managed ? 'You are without a club. Continue to play every club\'s games this week.' : season.round > regularRounds ? 'Your club has no game on this playoff day. Continue to play the other games.' : 'Rest week. Continue to play the other games and complete this week.' : matchFinished ? 'Match finished. Continue to complete this matchday and update the table.' : <>{club(active.homeClubId).name} <span>vs</span> {club(active.awayClubId).name}</>}</p>
         <div className="season-result-actions">{archived ? <button className="button" onClick={() => { selectSeason(season.seasonNumber); seasonSelector.current?.focus() }} disabled={busy}>Current season<Icon name="chevron" size={16} /></button> : complete ? <>
           <button className="button primary" onClick={onRollover} disabled={busy}>{busy ? 'Preparing next season…' : season.employment.enabledSince ? 'Review offseason' : 'Next season'}<Icon name="next" size={16} /></button>
           <button className="button" onClick={onOpenMatch} disabled={busy || !active}>View last match<Icon name="court" size={16} /></button>

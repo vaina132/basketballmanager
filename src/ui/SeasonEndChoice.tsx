@@ -11,7 +11,7 @@ interface SeasonEndChoiceProps {
   season: SeasonState
   outlook: SeasonEndOutlook
   busy?: boolean
-  /** A club id to take that job, or null to stay. */
+  /** A club id to take that job, null to stay, or (career-3) an empty id to leave without a club. */
   onChoose: (clubId: string | null) => void
   onClose: () => void
 }
@@ -52,18 +52,29 @@ export function SeasonEndChoice({ season, outlook, busy = false, onChoose, onClo
   const title = timing === 'resignation' ? `Resign from ${current}` : outlook.dismissed ? `Dismissed by ${current}` : 'Job offers'
   const when = timing === 'resignation' ? `${seasonLabel(outlook.seasonNumber)} · resignation` : timing === 'mid-season' ? `${seasonLabel(outlook.seasonNumber)} · review after matchday ${season.round}` : `${seasonLabel(outlook.seasonNumber)} · final review`
   const offered = outlook.offers.length === 1 ? 'One club wants' : `${outlook.offers.length} clubs want`
-  const lead = timing === 'resignation'
-    ? `Resigning costs ${CAREER_RULES.resignationReputationCost} reputation points for three seasons, so the clubs below judge you at ${outlook.reputation.value}. ${offered} you at once. Choose a club to resign and take over there, or keep your job at ${current}.`
-    : timing === 'mid-season'
-      ? `The board's confidence is ${outlook.verdict.confidence}/100 after this review, below ${CAREER_RULES.midSeasonDismissalBelow}, and it has ended your job. Choose your next club: you take over before the next games, and ${current} continues under an interim coach.`
-      : outlook.dismissed
-        ? `The board's season verdict is ${label} (confidence ${outlook.verdict.confidence}/100), and it has ended your job. Choose your next club; ${current} continues under automatic control.`
-        : `${current}'s board gives the verdict ${label} (confidence ${outlook.verdict.confidence}/100).${outlook.warning ? ' Your first season was protected, so this is a final warning instead of a dismissal: next season counts.' : ''} ${outlook.offers.length === 1 ? 'Another club wants' : `${outlook.offers.length} clubs want`} you as their next coach. Take a job, or stay at ${current}.`
+  // Career-3 (format 69): offers are no longer guaranteed, and the manager may leave without a club.
+  const unemployment = !!outlook.unemployment, none = !outlook.offers.length
+  const offerText = none ? 'No club that is replacing its coach wants you at the moment.' : `${offered} you.`
+  const lead = unemployment
+    ? timing === 'resignation'
+      ? `Resigning costs ${CAREER_RULES.resignationReputationCost} reputation points for three seasons, so clubs judge you at ${outlook.reputation.value}. ${none ? 'No board Under pressure wants you as its coach right now.' : `${offered} you at once.`} You can ${none ? '' : 'resign and take over there, '}resign without a new job and wait for one, or keep your job at ${current}.`
+      : timing === 'mid-season'
+        ? `The board's confidence is ${outlook.verdict.confidence}/100 after this review, below ${CAREER_RULES.midSeasonDismissalBelow}, and it has ended your job. ${offerText} ${none ? 'You continue without a club' : 'Take a job before the next games, or continue without a club'}; ${current} continues under an interim coach.`
+        : `The board's season verdict is ${label} (confidence ${outlook.verdict.confidence}/100), and it has ended your job. ${offerText} ${none ? 'You continue without a club' : 'Take a job for this offseason, or continue without a club'}; ${current} continues under automatic control.`
+    : timing === 'resignation'
+      ? `Resigning costs ${CAREER_RULES.resignationReputationCost} reputation points for three seasons, so the clubs below judge you at ${outlook.reputation.value}. ${offered} you at once. Choose a club to resign and take over there, or keep your job at ${current}.`
+      : timing === 'mid-season'
+        ? `The board's confidence is ${outlook.verdict.confidence}/100 after this review, below ${CAREER_RULES.midSeasonDismissalBelow}, and it has ended your job. Choose your next club: you take over before the next games, and ${current} continues under an interim coach.`
+        : outlook.dismissed
+          ? `The board's season verdict is ${label} (confidence ${outlook.verdict.confidence}/100), and it has ended your job. Choose your next club; ${current} continues under automatic control.`
+          : `${current}'s board gives the verdict ${label} (confidence ${outlook.verdict.confidence}/100).${outlook.warning ? ' Your first season was protected, so this is a final warning instead of a dismissal: next season counts.' : ''} ${outlook.offers.length === 1 ? 'Another club wants' : `${outlook.offers.length} clubs want`} you as their next coach. Take a job, or stay at ${current}.`
   const note = timing === 'resignation'
     ? `${CAREER_RULES_TEXT.freshStart} Your first season there is protected. Contracts, staff and results stay where they are.`
     : timing === 'mid-season'
       ? `${CAREER_RULES_TEXT.freshStart} Your first season there is protected. The new club's games from the next matchday are yours; contracts, staff and results stay where they are.`
       : 'Your choice takes effect when the final matchday is recorded: the new club runs this offseason, including recruitment, and the next seasons. Contracts, staff and results stay where they are.'
+  // What waiting without a club means, in plain words (career-3).
+  const unemployedNote = `${CAREER_RULES_TEXT.unemployed} ${CAREER_RULES_TEXT.fade}`
   const place = (offer: ClubVacancy) => timing && season.status !== 'complete' ? `${ordinal(offer.position)} in the table` : `Finished ${ordinal(offer.position)}`
 
   return <dialog ref={dialog} id="season-end-choice" className="season-end-choice" aria-labelledby="season-end-choice-title" aria-describedby="season-end-choice-lead" data-dismissed={outlook.dismissed} data-timing={timing ?? 'season-end'} onCancel={event => { event.preventDefault(); onClose() }}>
@@ -77,17 +88,22 @@ export function SeasonEndChoice({ season, outlook, busy = false, onChoose, onClo
         <div><dt>{timing === 'resignation' ? 'Reputation after resigning' : 'Your reputation'}</dt><dd data-reputation={outlook.reputation.value}>{outlook.reputation.value}<small>/100</small></dd></div>
         <div><dt>Based on</dt><dd>{outlook.reputation.seasons.map(item => `${seasonLabel(item.seasonNumber)}: ${item.confidence}`).join(' · ') || 'No final review yet'}{outlook.reputation.resignations ? ` · −${outlook.reputation.resignations * CAREER_RULES.resignationReputationCost} for ${outlook.reputation.resignations === 1 ? 'a resignation' : `${outlook.reputation.resignations} resignations`}` : ''}</dd></div>
       </dl>
-      <ul className="season-end-offers" aria-label="Job offers">{outlook.offers.map((offer, index) => <li key={offer.clubId} data-offer-club={offer.clubId}>
+      {!none && <ul className="season-end-offers" aria-label="Job offers">{outlook.offers.map((offer, index) => <li key={offer.clubId} data-offer-club={offer.clubId}>
         <div><strong>{name(offer.clubId)}</strong><span>{place(offer)} · board confidence {offer.confidence}</span><p>{offerReason(offer, outlook.reputation.value, timing)}</p></div>
         <button ref={index === 0 ? first : undefined} className="button" data-join-club={offer.clubId} onClick={() => onChoose(offer.clubId)} disabled={busy}>{timing === 'resignation' ? `Resign and join ${name(offer.clubId)}` : `Join ${name(offer.clubId)}`}</button>
-      </li>)}</ul>
-      <p className="season-end-choice-note">{note}</p>
+      </li>)}</ul>}
+      {!none && <p className="season-end-choice-note">{note}</p>}
+      {unemployment && <p className="season-end-choice-note" data-unemployment-note>{unemployedNote}</p>}
     </div>
     <footer className="season-end-choice-actions">
       {timing === 'resignation'
-        ? <button className="button" id="season-end-stay" onClick={onClose} disabled={busy}>Keep my job at {current}</button>
+        ? <>
+          {unemployment && <button className="button" id="season-end-unemployed" ref={none ? first : undefined} onClick={() => onChoose('')} disabled={busy}>Resign without a new job</button>}
+          <button className="button" id="season-end-stay" onClick={onClose} disabled={busy}>Keep my job at {current}</button>
+        </>
         : <>
           <button className="text-button" id="season-end-later" onClick={onClose} disabled={busy}>Decide later</button>
+          {unemployment && outlook.dismissed && <button className="button" id="season-end-unemployed" ref={none ? first : undefined} onClick={() => onChoose('')} disabled={busy}>{none ? 'Continue without a club' : 'Decline all and continue without a club'}</button>}
           {!outlook.dismissed && <button className="button" id="season-end-stay" onClick={() => onChoose(null)} disabled={busy}>Stay at {current}</button>}
         </>}
     </footer>

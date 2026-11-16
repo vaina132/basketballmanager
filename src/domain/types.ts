@@ -153,6 +153,13 @@ export interface MatchState {
   courtSeconds: Record<Side, number>;
   result: MatchResult | null;
   lineups: Record<Side, string[]>;
+  /**
+   * The court picture's circles (format 74, the manager's side in a career): the position each player on court plays,
+   * one circle each. A side without circles plays everyone in his listed position (computer clubs, exhibitions).
+   */
+  slots?: Partial<Record<Side, Record<string, Position>>>;
+  /** The circles when the clock first ran, kept so that the next game starts from the circles set before tip-off. */
+  startingSlots?: Partial<Record<Side, Record<string, Position>>>;
   tactics: Record<Side, Tactics>;
   stats: Record<string, PlayerStats>;
   events: MatchEvent[];

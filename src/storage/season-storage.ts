@@ -57,6 +57,7 @@ import { clubsEverInFullWorld, fullWorldClubs, fullWorldClubsIn, isMemberList, i
 import type { CareerWorld, SeasonEconomy, WorldContext } from '../domain/world';
 import { getCareerPlayers, getCareerPlayer, getCareerWage, type CareerPlayerContext } from '../world/player-catalog';
 import { MAX_MATCH_PERIODS } from '../engine/match';
+import { isCourtPosition } from '../engine/positions';
 import { applyExchanges, domesticSchedule, europeanPlacesAfter, DAILY_RECOVERY, dateForRound, fixtureSeed, getPostseasons, seasonExchangesOf, getStandings, MAX_SEASON_NUMBER, recoverThroughGameDays, ROUND_INTERVAL_DAYS, scheduledFixtures, weekCloseCondition, weekLastGameDate } from '../world/season';
 import { divisionChanges, openingDivisions, seasonLeagues } from '../world/divisions';
 import { calendarDaysBetween } from '../world/competition-calendar';
@@ -2994,12 +2995,18 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const registeredPlayers = new Set(clubs.flatMap(club => club.players.map(player => player.id)));
   for (const playerId of playerIds) if (!registeredPlayers.has(playerId) && conditions[playerId] !== 100) fail(`conditions.${playerId}`, 'must retain offseason recovery while the player remains unregistered');
   for (const club of clubs) {
-    const plan = record(plans[club.id], `plans.${club.id}`, ['tactics', 'lineup', 'autoSubstitutions', ...(fullRoster ? ['matchday'] : [])]);
+    const planValue = plans[club.id], circled = planValue !== null && typeof planValue === 'object' && Object.hasOwn(planValue, 'slots');
+    const plan = record(planValue, `plans.${club.id}`, ['tactics', 'lineup', 'autoSubstitutions', ...(fullRoster ? ['matchday'] : []), ...(circled ? ['slots'] : [])]);
     if (fullRoster && plan.matchday !== null) { try { selectedTeam(club, plan.matchday as string[]); } catch { fail(`plans.${club.id}.matchday`, 'must select five to twelve distinct registered players'); } }
     const tactics = record(plan.tactics, `plans.${club.id}.tactics`, ['tempo', 'outsideShare', 'pressure']);
     for (const key of ['tempo', 'outsideShare', 'pressure']) number(tactics[key], `plans.${club.id}.tactics.${key}`, 0, 1, false);
     const lineup = array(plan.lineup, `plans.${club.id}.lineup`, 5);
     if (new Set(lineup).size !== 5 || lineup.some(id => !club.players.some(player => player.id === id))) fail(`plans.${club.id}.lineup`, 'must select five distinct players from its club');
+    // Format 74: the planned five's circles on the court picture, one different position for each lineup player.
+    if (circled) {
+      const circles = record(plan.slots, `plans.${club.id}.slots`, lineup as string[]);
+      if (new Set(Object.values(circles)).size !== 5 || Object.values(circles).some(value => !isCourtPosition(value))) fail(`plans.${club.id}.slots`, 'must give each planned starter a different court position');
+    }
     if (typeof plan.autoSubstitutions !== 'boolean' || club.id !== state.managedClubId && !plan.autoSubstitutions) fail(`plans.${club.id}.autoSubstitutions`, 'must be boolean and enabled for opponent clubs');
     for (const player of club.players) number(conditions[player.id], `conditions.${player.id}`, 0, 100, false);
   }
@@ -3213,6 +3220,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (!sameData(match.home, developed(home, homeBackground)) || !sameData(match.away, developed(away, awayBackground))) fail('activeMatch', 'must use the fixture home and away squads with their current development');
   const opposition: Side = active.homeClubId === matchClub ? 'away' : 'home';
   if (!match.autoSubstitutions[opposition]) fail('activeMatch.autoSubstitutions', 'must enable opponent substitutions');
+  // Format 74: only the manager's side plays the court picture's circles; computer clubs play listed positions.
+  if (match.slots?.[opposition] || match.startingSlots?.[opposition]) fail('activeMatch.slots', 'must leave the opponent in its listed positions');
   if (match.injuryMode !== injuryMode) fail('activeMatch.injuryMode', 'must match the season-wide injury setting');
   if (legacy) {
     if (Object.keys(match.injuries).length !== 0 || Object.hasOwn(match, 'preExistingInjuries')) fail('activeMatch', 'must use the legacy season-wide injury-off setting');

@@ -1,5 +1,6 @@
 import type { CourtPoint, CourtPosition, MatchState, Player, Position, PossessionPlay, Side } from '../domain/types';
 import { HOME_COURT_MAKE_BONUS, SCORE_EFFECT, SHOT_MAKING } from './calibration';
+import { matchPlayer } from './positions';
 
 const other = (side: Side): Side => side === 'home' ? 'away' : 'home';
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
@@ -14,7 +15,8 @@ export const positionOf = (play: PossessionPlay, id: string): CourtPosition => {
   if (!position) throw new Error('A possession actor is missing from the current court positions.');
   return position;
 };
-const active = (state: MatchState, side: Side): Player[] => state.lineups[side].map(id => state[side].players.find(player => player.id === id)!);
+/** Players on court as they play: in their circles on a side with the court picture's circles (format 74). */
+const active = (state: MatchState, side: Side): Player[] => state.lineups[side].map(id => matchPlayer(state, side, id)!);
 
 /** Stable positional assignments, including unequal lineups. No sporting draws. */
 export function assignMatchups(state: MatchState, offense: Side): PossessionPlay['matchups'] {
@@ -75,7 +77,7 @@ export function createPossessionPlay(state: MatchState, handlerId?: string): Pos
 
 export function matchedDefender(state: MatchState, play: PossessionPlay, attackerId = play.handlerId): Player {
   const id = play.matchups.find(pair => pair.attackerId === attackerId)?.defenderId;
-  const defender = state[other(play.offense)].players.find(player => player.id === id);
+  const defender = id === undefined ? undefined : matchPlayer(state, other(play.offense), id);
   if (!defender) throw new Error('A possession attacker is missing a defensive assignment.');
   return defender;
 }
@@ -106,7 +108,7 @@ export function moveForAction(state: MatchState, play: PossessionPlay, action: '
     const attacker = positions.find(point => point.playerId === assignment?.attackerId);
     const pose = positions.find(point => point.playerId === candidate.id)!;
     if (!attacker) continue;
-    const ability = action === 'pass' ? state[offense].players.find(p => p.id === play.handlerId)!.attributes.passing : state[offense].players.find(p => p.id === actorId)!.attributes.twoPoint;
+    const ability = action === 'pass' ? matchPlayer(state, offense, play.handlerId)!.attributes.passing : matchPlayer(state, offense, actorId)!.attributes.twoPoint;
     const gap = candidate.id === defender.id
       ? clamp(1.3 + (ability - candidate.attributes.defense) * .055 + (separationRoll - .5) * 2.1 - state.tactics[other(offense)].pressure * .25, .35, 3)
       : clamp(1.65 - state.tactics[other(offense)].pressure * .65, .7, 2);
@@ -117,7 +119,7 @@ export function moveForAction(state: MatchState, play: PossessionPlay, action: '
 }
 
 export function shotContext(state: MatchState, play: PossessionPlay): { defenderId: string; distanceM: number; separationM: number; contest: 'open' | 'pressured' | 'contested'; value: 2 | 3; makeChance: number } {
-  const shooter = state[play.offense].players.find(player => player.id === play.handlerId)!;
+  const shooter = matchPlayer(state, play.offense, play.handlerId)!;
   const defender = matchedDefender(state, play);
   const origin = positionOf(play, shooter.id), basket = basketPoint(state, play.offense);
   const distance = courtDistance(origin, basket), separationM = courtDistance(origin, positionOf(play, defender.id));

@@ -1,5 +1,6 @@
 import type { ClubPlan, FixtureResult, SeasonFixture, SeasonState } from '../domain/season';
-import type { Team } from '../domain/types';
+import type { Player, Position, Team } from '../domain/types';
+import { arrangeCircles } from '../engine/positions';
 import type { WorldContext } from '../domain/world';
 import { MAX_MATCHDAY_PLAYERS } from '../domain/roster';
 import { usesFullClubRoster } from './club-roster-policy';
@@ -30,11 +31,22 @@ export function teamForMatchday(context: MatchdayContext, club: Team, fixture: P
   return selectedTeam(club, club.players.filter(player => chosen.has(player.id)).map(player => player.id));
 }
 
+/**
+ * Format 74: circles on the court picture for a planned five. Each map in `keep` is applied in order (a player keeps
+ * the circle it names while that circle is free); the other players take the free circles at the smallest
+ * out-of-position cost (`arrangeCircles`).
+ */
+export function planCircles(lineup: readonly string[], players: readonly Player[], ...keep: Readonly<Record<string, Position>>[]): Record<string, Position> {
+  return arrangeCircles(lineup.map(id => { const player = players.find(candidate => candidate.id === id); if (!player) throw new Error('A planned starter must belong to the club.'); return player; }), keep);
+}
+
 /** Transfers and rollover drop departed preferences; new arrivals are available without replacing a manual choice. */
 export function reconcileMatchdayPlan(plan: ClubPlan, club: Team): ClubPlan {
-  if (!Object.hasOwn(plan, 'matchday')) return plan;
-  const retained = plan.matchday?.filter(id => club.players.some(player => player.id === id)) ?? null;
-  return { ...plan, matchday: retained && retained.length >= 5 ? retained : null };
+  // The planned five's circles follow its lineup: retained starters keep theirs (format 74).
+  const circled = plan.slots ? { ...plan, slots: planCircles(plan.lineup, club.players, plan.slots) } : plan;
+  if (!Object.hasOwn(circled, 'matchday')) return circled;
+  const retained = circled.matchday?.filter(id => club.players.some(player => player.id === id)) ?? null;
+  return { ...circled, matchday: retained && retained.length >= 5 ? retained : null };
 }
 
 export function canSelectMatchday(state: SeasonState): boolean {

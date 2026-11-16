@@ -7,7 +7,7 @@ import type { SeasonRivalries } from './rivalries';
 import type { SeasonCareer } from './career';
 import type { SeasonRelationships } from './relationships';
 import type { InjuryKind } from './injuries';
-import type { InjuryMode, MatchResult, MatchState, PlayerStats, Side, Tactics, Team } from './types';
+import type { InjuryMode, MatchResult, MatchState, PlayerStats, Position, Side, Tactics, Team } from './types';
 import type { SeasonTraining } from './training';
 import type { SeasonCoaching } from './coaching';
 import type { SeasonFinance } from './finance';
@@ -36,6 +36,11 @@ export interface ClubPlan {
   autoSubstitutions: boolean;
   /** Explicit preference for the next matchday; null delegates selection. Present only in full-roster careers. */
   matchday?: string[] | null;
+  /**
+   * Format 74: the planned five's circles on the court picture (each lineup player's position played, one circle each).
+   * Kept for the managed club once its first game is prepared; computer clubs play their listed positions.
+   */
+  slots?: Record<string, Position>;
 }
 
 /** Compact completed fixture: no duplicated animation history. */

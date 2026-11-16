@@ -87,7 +87,9 @@ export function getFixtureTeams(season: SeasonState, fixture: SeasonFixture | Ar
     const club = season.clubs.find(candidate => candidate.id === clubId) ?? worldOf(season).clubs.find(candidate => candidate.id === clubId);
     if (!club) throw new Error('A fixture refers to an unknown club.');
     const expected = rosterForRound(rosters, clubId, fixture.round);
-    const snapshot = fixture.result ? rosters.find(candidate => candidate.id === fixture.result!.rosterIds[side]) : expected;
+    // Format 73: a sealed game of an older season names no roster; its side is the registration at that round.
+    const rosterId = fixture.result?.rosterIds?.[side];
+    const snapshot = fixture.result && rosterId !== undefined ? rosters.find(candidate => candidate.id === rosterId) : expected;
     if (!snapshot || snapshot.clubId !== clubId || snapshot.id !== expected.id) throw new Error('The fixture refers to an invalid historical roster.');
     const registered = { ...club, players: snapshot.players };
     return fixture.result?.selection ? selectedTeam(registered, fixture.result.selection[side]) : registered;

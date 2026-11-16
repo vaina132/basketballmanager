@@ -1,6 +1,6 @@
 import type { AcademyWeek, AcademyWeekOutcome, AcademyWeekPlayer } from '../domain/academy';
 import type { SeasonState } from '../domain/season';
-import { managedClubFor } from './career';
+import { managedClubAtRound, managedClubFor } from './career';
 
 type AcademyHistoryState = Pick<SeasonState, 'seasonNumber' | 'managedClubId' | 'career' | 'academy'>;
 
@@ -10,6 +10,8 @@ export interface AcademyHistoryContext {
   readonly latestWeekId: string | undefined;
   readonly latestWeekByClub: ReadonlyMap<string, string>;
   readonly managedClubBySeason: ReadonlyMap<number, string>;
+  /** The club the manager ran in a week; later moves never change it (format 73). */
+  readonly managedAt: (seasonNumber: number, round: number) => string;
 }
 
 export function isAcademyOutcome(player: AcademyWeekPlayer): player is AcademyWeekOutcome {
@@ -23,15 +25,18 @@ export function createAcademyHistoryContext(state: AcademyHistoryState): Academy
     for (const player of Object.values(week.players)) latestWeekByClub.set(player.clubId, week.id);
     if (!managedClubBySeason.has(week.seasonNumber)) managedClubBySeason.set(week.seasonNumber, managedClubFor(state, week.seasonNumber, false));
   }
-  return { seasonNumber: state.seasonNumber, latestWeekId: state.academy.weeks.at(-1)?.id, latestWeekByClub, managedClubBySeason };
+  return { seasonNumber: state.seasonNumber, latestWeekId: state.academy.weeks.at(-1)?.id, latestWeekByClub, managedClubBySeason, managedAt: (seasonNumber, round) => managedClubAtRound(state, seasonNumber, round) };
 }
 
-/** Full current-season, historical manager and latest club reports must remain available for review. */
+/**
+ * Each club's latest report and the reports of clubs the manager ran must remain available for review. Format 73
+ * (step 3.7): a rival's older report of the current season is summarized weekly too, when the manager did not run
+ * that club in the report's week; once summarizable, a report stays so (later weeks and moves never change it).
+ */
 export function canSummarizeAcademyReport(context: AcademyHistoryContext, week: AcademyWeek, player: AcademyWeekPlayer): boolean {
-  return week.seasonNumber < context.seasonNumber
-    && week.id !== context.latestWeekId
-    && week.id !== context.latestWeekByClub.get(player.clubId)
-    && player.clubId !== context.managedClubBySeason.get(week.seasonNumber);
+  if (week.id === context.latestWeekId || week.id === context.latestWeekByClub.get(player.clubId)) return false;
+  if (player.clubId !== context.managedAt(week.seasonNumber, week.afterRound) && player.clubId !== context.managedAt(week.seasonNumber, week.afterRound + 1)) return true;
+  return week.seasonNumber < context.seasonNumber && player.clubId !== context.managedClubBySeason.get(week.seasonNumber);
 }
 
 /** A fresh projection, never a replacement for checking the original report or its development rules. */
@@ -40,7 +45,7 @@ export function summarizeAcademyPlayer(player: AcademyWeekPlayer): AcademyWeekOu
 }
 
 /**
- * Reduce only completed-season rival reports. Every week, player, instruction and exact accumulated point total
+ * Reduce rival reports that are no longer any club's latest (completed seasons, and from format 73 the current one). Every week, player, instruction and exact accumulated point total
  * remains. Current prospects, graduate sources, youth fixtures and all command/finance boundaries are unchanged.
  * Existing full reports are valid too; calling this again without new eligible reports returns the same state.
  */

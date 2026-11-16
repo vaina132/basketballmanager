@@ -183,7 +183,8 @@ describe('realistic money for real-club worlds (format 62)', () => {
     expect(parseSeason(serializeSeason(state))).toEqual(state);
     const envelope = JSON.parse(serializeSeason(state));
     envelope.formatVersion = 61; envelope.state.schemaVersion = 61;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/economy requires format 62/);
+    // Format 73 refuses every older real-club career (closed money gaps) before any older format rule.
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/start a new career/);
   }, 300_000);
 
   it('replaces the strength placement with a published budget, matched on the whole club name', () => {

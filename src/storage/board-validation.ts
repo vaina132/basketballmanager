@@ -14,6 +14,7 @@ import { PRESIDENT_RULES, usesPresidentBoard } from '../world/presidents';
 import { REQUEST_KINDS } from '../world/board-requests';
 import { managedClubAtRound } from '../world/career';
 import { maxTicketPriceFor, TICKET_PRICE_STEP } from '../world/finance';
+import { SEALED_HISTORY_FORMAT, withoutCountedGames } from '../world/sealed-history';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'ledgerCount', 'rosterCount'] as const;
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
@@ -195,12 +196,38 @@ export function validateBoard(state: SeasonState, version: number): void {
     if (anchor.date < previous.date || anchor.completedRounds < previous.completedRounds || anchor.ledgerCount < previous.ledgerCount || ordinal(anchor.seasonNumber, anchor.round, seasonRounds(state)) < ordinal(previous.seasonNumber, previous.round, seasonRounds(state))) fail(path, 'must preserve chronological results and cash evidence');
     previous = anchor;
   };
+  // Format 73: games of sealed seasons keep no per-player minutes, which objectives assess. Objectives and reviews
+  // of earlier seasons are kept as recorded (shape and order checked); the current season's are rebuilt.
+  const replayFrom = version >= SEALED_HISTORY_FORMAT && state.seasonNumber >= 3 ? state.seasonNumber : 0;
+  const recordedAnchor = (raw: Record<string, unknown>, path: string): BoardAnchor => {
+    integer(raw.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber); integer(raw.round, `${path}.round`, 1, seasonRounds(state));
+    integer(raw.completedRounds, `${path}.completedRounds`, 0, completedNow); integer(raw.ledgerCount, `${path}.ledgerCount`, 0, financeLedgerCount(state.finance)); integer(raw.rosterCount, `${path}.rosterCount`, 0, 100_000);
+    if (typeof raw.date !== 'string') fail(`${path}.date`, 'must identify an actual calendar boundary');
+    return Object.fromEntries(ANCHOR_KEYS.map(key => [key, raw[key]])) as unknown as BoardAnchor;
+  };
   for (let year = enabled.seasonNumber; year <= state.seasonNumber; year += 1) {
     const first = year === enabled.seasonNumber;
     const startsRound = first ? enabled.round + Number(!activation.includeCurrentRound) : 1;
     if (startsRound > seasonRounds(state)) continue;
     const path = `board.mandates[${mandateIndex}]`;
     const raw = record(source.mandates[mandateIndex], path, [...ANCHOR_KEYS, 'id', 'startsRound', 'deadlineDate', 'clubs']);
+    if (year < replayFrom) {
+      const anchor = recordedAnchor(raw, path);
+      if (first ? !equal(anchor, enabled) : anchor.seasonNumber !== year || anchor.round !== 1 || raw.startsRound !== startsRound) fail(path, 'must freeze the objective at activation or the next season opening');
+      chronological(anchor, path);
+      board = { ...board, mandates: [...board.mandates, raw as unknown as BoardMandate] }; mandateIndex += 1;
+      const reviews: SeasonBoard['reviews'] = [];
+      for (let round = startsRound; round <= seasonRounds(state); round += 1) {
+        const reviewPath = `board.reviews[${reviewIndex}]`;
+        const reviewRaw = record(source.reviews[reviewIndex], reviewPath, [...ANCHOR_KEYS, 'id', 'mandateId', 'clubs']);
+        const reviewAnchor = recordedAnchor(reviewRaw, reviewPath);
+        if (reviewAnchor.seasonNumber !== year || reviewAnchor.round !== round || reviewRaw.mandateId !== raw.id || reviewRaw.id !== `board-review-${reviewIndex + 1}`) fail(reviewPath, 'must retain one review after every eligible committed matchday');
+        chronological(reviewAnchor, reviewPath);
+        reviews.push(reviewRaw as unknown as SeasonBoard['reviews'][number]); reviewIndex += 1;
+      }
+      board = { ...board, reviews: [...board.reviews, ...reviews] };
+      continue;
+    }
     const anchor = checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, raw[key]])), path, 'mandate');
     if (first ? !equal(anchor, enabled) : anchor.seasonNumber !== year || anchor.round !== 1 || anchor.completedRounds !== ordinal(year, 0, seasonRounds(state)) || anchor.date !== dateForRound(1, year)) fail(path, 'must freeze the objective at activation or the next season opening');
     if (!first && state.finance.enabledSince && ordinal(state.finance.enabledSince.seasonNumber, state.finance.enabledSince.round, seasonRounds(state)) < ordinal(year, 1, seasonRounds(state))) {
@@ -231,6 +258,9 @@ export function validateBoard(state: SeasonState, version: number): void {
       // Format 71: each club's debt at the review's own payment boundary.
       const debtImpacts = boardDebtImpacts({ ...context, facilities: state.facilities });
       try { review = validationReplayCache.calculate('board-review', { state: { ...context, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}) }, mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
+      // Format 73: only the latest review keeps each club's list of counted games (a full earlier review stays valid; the
+      // rest of the review is compared exactly in any format).
+      if (Object.values(reviewRaw.clubs as Record<string, object>).every(club => !Object.hasOwn(club, 'fixtureIds'))) review = withoutCountedGames([review])[0]!;
       if (!equal(reviewRaw, review)) fail(reviewPath, 'must exactly reproduce results, inherited costs, injury context and bounded confidence');
       board = { ...board, reviews: [...board.reviews, review] }; reviewIndex += 1;
     }

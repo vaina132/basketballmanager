@@ -11,6 +11,7 @@ import { getFinanceBalance, financeLedgerRows } from '../src/world/finance';
 import { payrollLedgerReader } from '../src/world/finance-ledger-index';
 import { withCalculationCache } from '../src/world/pure-cache';
 import { rolloverSeason } from '../src/world/season';
+import { sealCompletedHistory } from '../src/world/sealed-history';
 import { currentSeasonFile } from './helpers/season-format';
 
 const originalText = name => gunzipSync(readFileSync(new URL(`./fixtures/season43-board-${name}.json.gz`, import.meta.url))).toString('utf8');
@@ -26,7 +27,9 @@ describe('lossless completed-season financial archives', () => {
     expect(migrated.finance.ledger.every(row => row.seasonNumber === 2)).toBe(true);
     expect(financeLedgerSlice(migrated.finance)).toEqual(original.finance.ledger);
     const { archives: _archives, ...finance } = migrated.finance;
-    expect({ ...restoreSeniorDetail(migrated, original), schemaVersion: 43, finance: { ...finance, ledger: financeLedgerSlice(migrated.finance) } }).toEqual(original);
+    // Format 73 also seals the completed season's academy weeks and youth results and lightens earlier board reviews and
+    // morale snapshots, exactly as a rollover would have done.
+    expect({ ...restoreSeniorDetail(migrated, original), schemaVersion: 43, finance: { ...finance, ledger: financeLedgerSlice(migrated.finance) } }).toEqual(sealCompletedHistory(original));
     expect(JSON.stringify(migrated.finance).length).toBeLessThan(JSON.stringify(original.finance).length);
     expect(parseSeason(serializeSeasonCompact(migrated))).toEqual(migrated);
   });

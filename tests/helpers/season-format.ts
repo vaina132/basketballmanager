@@ -1,3 +1,4 @@
+import { sealCompletedHistory } from '../../src/world/sealed-history';
 import { archiveFinancialHistory } from '../../src/world/finance-archives';
 import { summarizeSeniorHistory } from '../../src/world/senior-history';
 import type { SeasonState } from '../../src/domain/season';
@@ -65,7 +66,9 @@ export function expectedMigration<T extends LegacyIdentity>(raw: T, fromFormat: 
   const academyUpgraded = fromFormat < 42 ? summarizeAcademyHistory(upgraded as unknown as SeasonState) : upgraded as unknown as SeasonState;
   const youthUpgraded = fromFormat < 43 ? summarizeYouthHistory(academyUpgraded) : academyUpgraded;
   const archived = fromFormat < 44 ? archiveFinancialHistory(youthUpgraded) : youthUpgraded;
-  return (fromFormat < 45 ? summarizeSeniorHistory(archived) : archived) as unknown as typeof upgraded;
+  const summarized = fromFormat < 45 ? summarizeSeniorHistory(archived) : archived;
+  // Format 73: completed seasons are sealed, as a rollover would have done.
+  return (fromFormat < 73 ? sealCompletedHistory(summarized) : summarized) as unknown as typeof upgraded;
 }
 
 /** A current-format season file around any state, typically a deliberately damaged copy for rejection tests. */

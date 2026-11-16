@@ -260,8 +260,11 @@ describe('saves and older careers', () => {
   it('round-trips new careers in format 70 and refuses the president board in older formats', () => {
     expect(complete.board.model).toBe('board-2');
     expect(parseSeason(serializeSeason(opening))).toEqual(opening);
-    const file = JSON.parse(serializeSeason(opening));
-    // Recurring youth injuries (format 72) would be refused first; this check is about the president board.
+    // A fresh career: completed seasons and earlier weekly records are lightened from format 73 (step 3.7), which an
+    // older format would refuse first. Recurring youth injuries (format 72) would be too; this check is about the board.
+    const fresh = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS });
+    expect(fresh.board.model).toBe('board-2');
+    const file = JSON.parse(serializeSeason(fresh));
     file.formatVersion = 69; file.state.schemaVersion = 69; file.state.youthCompetition.model = 'youth-competition-1';
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/requires format 7[0-9] or later/);
   });

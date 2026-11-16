@@ -100,7 +100,7 @@ describe('communicated board mandates and evidence-based confidence', () => {
     expect(processBoardRound(committed(enabled, 4, 4)).board.reviews).toHaveLength(0);
     const first = processBoardRound(committed(enabled, 5, 4));
     expect(first.board.reviews[0]!.clubs[clubId]).toMatchObject({ played: 1, wins: 0, confidence: 50 });
-    expect(first.board.reviews[0]!.clubs[clubId]!.fixtureIds.every(id => first.fixtures.find(fixture => fixture.id === id)!.round === 5)).toBe(true);
+    expect(first.board.reviews[0]!.clubs[clubId]!.fixtureIds!.every(id => first.fixtures.find(fixture => fixture.id === id)!.round === 5)).toBe(true);
   });
 
   it('credits actual carried absences, excludes new injuries and honors earlier rehabilitation clearance', () => {

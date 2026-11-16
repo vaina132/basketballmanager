@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { isSealedYouthFixture } from '../src/world/sealed-history';
 import type { SeasonState } from '../src/domain/season';
 import type { InjuryMode } from '../src/domain/types';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
@@ -99,18 +100,25 @@ describe('youth matches in the actual career calendar', () => {
     const retained = getYouthFixtures(next, 1), latestByClub = new Map<string, string>();
     for (const fixture of oldFixtures) for (const id of [fixture.homeClubId, fixture.awayClubId]) latestByClub.set(id, fixture.id);
     expect(retained.map(fixture => fixture.id)).toEqual(oldFixtures.map(fixture => fixture.id));
+    // Format 73: the completed season is sealed. Other clubs' games keep their results and diagnoses; the managed
+    // club's games keep their squads and box scores for review.
     let outcomes = 0;
     for (const [index, fixture] of retained.entries()) {
       const original = oldFixtures[index]!;
-      expect(getYouthFixtureTeams(fixture, next)).toEqual({ home: original.home, away: original.away });
-      if (isYouthOutcome(fixture)) {
+      expect(isYouthOutcome(fixture)).toBe(false);
+      if (isSealedYouthFixture(fixture)) {
         expect([fixture.homeClubId, fixture.awayClubId]).not.toContain(state.managedClubId);
-        expect([fixture.homeClubId, fixture.awayClubId].some(id => latestByClub.get(id) === fixture.id)).toBe(false);
-        expect(fixture).toEqual({ ...original, home: null, away: null, startingConditions: null, detail: 'outcome', playerIds: { home: original.home!.players.map(player => player.id), away: original.away!.players.map(player => player.id) } });
+        expect(getYouthFixtureTeams(fixture, next)).toBeNull();
+        const { home: _home, away: _away, startingConditions: _conditions, ...identity } = original;
+        expect(fixture).toEqual({ ...identity, home: null, away: null, startingConditions: null, detail: 'season', result: { ...original.result!, stats: {} } });
         outcomes += 1;
-      } else expect(fixture).toEqual(original);
+      } else {
+        expect(getYouthFixtureTeams(fixture, next)).toEqual({ home: original.home, away: original.away });
+        expect(fixture).toEqual(original);
+      }
     }
     expect(outcomes).toBeGreaterThan(0);
+    expect(latestByClub.size).toBeGreaterThan(0);
     expect(getYouthFixtures(next, 2)).toHaveLength(30);
     expect(getYouthFixtures(next, 2).every(fixture => fixture.result === null)).toBe(true);
     for (const club of next.clubs) expect(getClubAcademy(next, club.id)).toHaveLength(8);

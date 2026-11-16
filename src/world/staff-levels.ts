@@ -1,7 +1,9 @@
 import type { SeasonCoaching } from '../domain/coaching';
+import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
+import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
 import type { CareerWorld, WorldContext } from '../domain/world';
-import { clubEconomy } from './economy';
+import { clubEconomy, staffFee } from './economy';
 import { overallRating } from './overall-rating';
 import { worldOf } from './career-world';
 import { staffAllocation } from './board-consequences';
@@ -112,4 +114,33 @@ export function ratingRange<T>(authored: readonly T[], rating: (member: T) => nu
 export function clubsByStaffLevel<T extends Pick<Team, 'id'>>(context: LevelContext, clubs: readonly T[]): T[] {
   const levels = clubStaffLevels(context);
   return [...clubs].sort((left, right) => (levels.get(right.id) ?? 0) - (levels.get(left.id) ?? 0) || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+}
+
+type RenewableContract = { clubId: string; seasonNumber: number; releasedRound: number | null; renew: boolean };
+/**
+ * Computer clubs' renewals at a rollover (format 74), decided before any renewal: each club keeps one training coach
+ * (its first), and anyone whose new-season fee is above the role's share of the new season's staff budget leaves, so
+ * the role is filled again at the club's new level (after relegation or a poor board verdict, for example). Extra
+ * training coaches can be hired again in the season once every role is filled. The manager's renewals are unchanged.
+ */
+export function planComputerStaffRenewals(state: SeasonState, previous: SeasonCoaching): { state: SeasonState; coaching: SeasonCoaching } {
+  if (!usesClubLevelStaff(state)) return { state, coaching: previous };
+  const year = state.seasonNumber - 1;
+  const fits = (clubId: string, role: StaffRole, fee: number | undefined) => fee !== undefined && staffFee(state, clubId, fee) <= staffShareCap(state, clubId, role);
+  const renewing = (contract: RenewableContract) => contract.clubId !== state.managedClubId && contract.releasedRound === null && contract.renew;
+  const kept = new Set<string>();
+  const coaching = { ...previous, contracts: previous.contracts.map(contract => {
+    if (!renewing(contract)) return contract;
+    const first = !kept.has(contract.clubId);
+    kept.add(contract.clubId);
+    return first && fits(contract.clubId, 'coaches', staffMember(COACH_DIRECTORY, contract.coachId)?.fee) ? contract : { ...contract, renew: false };
+  }) };
+  const plan = <C extends RenewableContract>(contracts: C[], role: StaffRole, fee: (contract: C) => number | undefined): C[] => contracts.map(contract => contract.seasonNumber === year && renewing(contract) && !fits(contract.clubId, role, fee(contract)) ? { ...contract, renew: false } : contract);
+  return { coaching, state: { ...state,
+    scouts: { ...state.scouts, contracts: plan(state.scouts.contracts, 'scouts', contract => staffMember(SCOUT_DIRECTORY, contract.scoutId)?.fee) },
+    fitness: { ...state.fitness, contracts: plan(state.fitness.contracts, 'fitness', contract => staffMember(FITNESS_DIRECTORY, contract.coachId)?.fee) },
+    physio: { ...state.physio, contracts: plan(state.physio.contracts, 'physio', contract => staffMember(PHYSIO_DIRECTORY, contract.physioId)?.fee) },
+    assistant: { ...state.assistant, contracts: plan(state.assistant.contracts, 'assistant', contract => staffMember(ASSISTANT_DIRECTORY, contract.assistantId)?.fee) },
+    youth: { ...state.youth, contracts: plan(state.youth.contracts, 'youth', contract => staffMember(YOUTH_COACH_DIRECTORY, contract.coachId)?.fee) },
+  } };
 }

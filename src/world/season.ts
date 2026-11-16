@@ -40,6 +40,7 @@ import { createFixtureMatch, preTipoffLineup, simulateToEnd } from '../engine/ma
 import { clubRecoveryPercent, injuriesFromMatch, injuryRiskMap, isRecovering, withMedicalRecurrence } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
+import { planComputerStaffRenewals } from './staff-levels';
 import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
 import { createInSeasonRecruitment, enableInSeasonRecruitment, enableInSeasonTransfers, resolveInSeasonRecruitment, scheduleInSeasonRecruitment } from './recruitment';
@@ -955,7 +956,9 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = startPayrollSeason(next);
   next = resolveInSeasonRecruitment(next);
   next = processTransferPayments(next);
-  next = renewSeasonCoaching(next, state.coaching);
+  // Format 74: computer clubs first decide which staff to keep at the new season's money level.
+  const renewals = planComputerStaffRenewals(next, state.coaching);
+  next = renewSeasonCoaching(renewals.state, renewals.coaching);
   next = renewSeasonScouts(next);
   next = renewSeasonFitness(next);
   next = renewSeasonPhysio(next);

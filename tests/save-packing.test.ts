@@ -10,8 +10,8 @@ import { getMarketStartReason } from '../src/world/market-policy';
 import { createSeason, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
 
-// Format 73 (step 3.7): compact saves pack the finance ledger losslessly; the game and its checks never see the packing.
-type Packed = { finance: { packing: string; ledger: unknown[]; archives: { seasonNumber: number; rows: unknown[][] }[] } };
+// Format 73 (step 3.7): compact saves pack the bulkiest records losslessly; the game and its checks never see the packing.
+type Packed = { packing: string; finance: { ledger: unknown[]; archives: { seasonNumber: number; rows: unknown[][] }[] }; injuries: unknown[]; physio: { rehabilitation: unknown[] }; scouting: { clubs: Record<string, { reviews: unknown[] }> }; youthCompetition: { seasons: { fixtures: { id: unknown }[] }[] }; academy: { weeks: { players: Record<string, unknown> }[] } };
 const text = (value: unknown) => JSON.stringify(value);
 const compactLength = (value: unknown) => { const { strings, shapes, nodes, value: encoded } = compactJson2(value); return text({ strings, shapes, nodes, encoded }).length; };
 
@@ -26,16 +26,24 @@ function careerWithArchive(): SeasonState {
   return career;
 }
 
-describe('finance packing in compact saves (format 73)', () => {
+describe('record packing in compact saves (format 73)', () => {
   it('packs archived and active transactions and restores exactly the same state', () => {
     const state = careerWithArchive();
     expect(state.finance.archives?.length).toBe(1);
     const packed = packSeasonForSave(state) as Packed;
-    expect(packed.finance.packing).toBe('finance-pack-1');
+    expect(packed.packing).toBe('save-pack-1');
     // Nearly every transaction packs: weekly charges, wages and gates restore their source and wage lines.
     const rows = packed.finance.archives[0]!.rows;
     expect(rows.filter(row => row[4] === 0).length).toBeGreaterThan(rows.length * 0.6);
     expect(packed.finance.ledger.filter(Array.isArray).length).toBeGreaterThan(packed.finance.ledger.length * 0.6);
+    // Scouting reports, injuries, rehabilitation weeks, youth fixtures and academy outcomes pack too.
+    const reviews = Object.values(packed.scouting.clubs).flatMap(club => club.reviews);
+    expect(reviews.length).toBeGreaterThan(0);
+    expect(reviews.every(Array.isArray)).toBe(true);
+    if (packed.injuries.length) expect(packed.injuries.every(Array.isArray)).toBe(true);
+    if (packed.physio.rehabilitation.length) expect(packed.physio.rehabilitation.every(Array.isArray)).toBe(true);
+    expect(packed.youthCompetition.seasons.flatMap(season => season.fixtures).every(fixture => Array.isArray(fixture.id))).toBe(true);
+    expect(packed.academy.weeks.some(week => Object.values(week.players).some(Array.isArray))).toBe(true);
     const restored = unpackSavedSeason(JSON.parse(text(packed)));
     expect(text(restored)).toBe(text(state));
     expect(compactLength(packed)).toBeLessThan(compactLength(state));
@@ -44,7 +52,7 @@ describe('finance packing in compact saves (format 73)', () => {
     expect(JSON.parse(saved).formatVersion).toBe(73);
     expect(parseSealedSeason(saved)).toEqual(state);
     expect(text(parseSealedSeason(saved))).toBe(text(state));
-    expect(JSON.parse(serializeSeason(state)).state.finance).not.toHaveProperty('packing');
+    expect(JSON.parse(serializeSeason(state)).state).not.toHaveProperty('packing');
   }, 600_000);
 
   it('passes the full save check after packing and keeps transactions it cannot restore exactly as written', () => {
@@ -66,10 +74,14 @@ describe('finance packing in compact saves (format 73)', () => {
     const packed = JSON.parse(text(packSeasonForSave(state))) as Packed;
     const position = packed.finance.archives[0]!.rows.findIndex(row => row[2] === 'sponsor');
     packed.finance.archives[0]!.rows[position]![4] = 0;
-    expect(() => unpackSavedSeason(packed)).toThrow('Invalid season save: finance packing cannot restore a transaction source.');
+    expect(() => unpackSavedSeason(packed)).toThrow('Invalid season save: packing cannot restore a transaction source.');
     const broken = JSON.parse(text(packSeasonForSave(state))) as Packed;
     broken.finance.ledger[0] = ['club', 1];
-    expect(() => unpackSavedSeason(broken)).toThrow('Invalid season save: finance packing has an invalid transaction.');
-    expect(() => unpackSavedSeason({ ...broken, finance: { ...broken.finance, packing: 'finance-pack-9' } })).toThrow('unsupported layout');
+    expect(() => unpackSavedSeason(broken)).toThrow('Invalid season save: packing has an invalid transaction.');
+    expect(() => unpackSavedSeason({ ...broken, packing: 'save-pack-9' })).toThrow('unsupported layout');
+    const report = JSON.parse(text(packSeasonForSave(state))) as Packed;
+    const club = Object.values(report.scouting.clubs).find(item => item.reviews.length)!;
+    (club.reviews[0] as unknown[])[5] = 7;
+    expect(() => unpackSavedSeason(report)).toThrow('Invalid season save: packing has an invalid scouting report.');
   }, 600_000);
 });

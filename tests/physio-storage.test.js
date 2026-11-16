@@ -14,6 +14,7 @@ import { decideInSeasonTransfer, submitInSeasonTransferOffer } from '../src/worl
 import { hireScout } from '../src/world/scouts';
 import { advanceSeason, createSeason, managedSide } from '../src/world/season';
 import { expectedMigration } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 const club = 'rhine-falcons';
 // Seed 172 (match calibration, sprint 4): rhf-4 strains a calf in the first match and is out until 25 September.
@@ -38,15 +39,22 @@ beforeAll(() => {
 });
 
 describe('physio save provenance and historical recovery', () => {
-  // Development mode (sprint 4 injuries): the two captured continuation weeks no longer match, so only the migration is checked.
-  it('migrates a genuine format22 injured career with its legacy diagnoses', () => {
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the two weeks
+  // are checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts).
+  it('migrates a genuine format22 injured career and continues two valid weeks that follow the independently captured ones', () => {
     expect(original.formatVersion).toBe(22);
     expect(original.state.fitness.enabledSince).not.toBeNull();
     expect(original.state.scouts.enabledSince).not.toBeNull();
     expect(migrated).toEqual(expectedMigration(original.state, 22));
     expect(stepMatch(migrated.activeMatch)).toEqual(stepMatch(original.state.activeMatch));
     expect(migrated.injuries.every(injury => ['ankle', 'muscle'].includes(injury.kind))).toBe(true);
-    expect(restore(play(migrated)).injuries.slice(0, migrated.injuries.length)).toEqual(migrated.injuries);
+    const unavailable = play(migrated), partial = play(unavailable);
+    expectValidOldSaveWeek(migrated, unavailable, parseSeason(fixture('season22-injury-fitness-scouts-next')));
+    expectValidOldSaveWeek(unavailable, partial, parseSeason(fixture('season22-injury-fitness-scouts-partial')));
+    // The legacy ankle diagnosis (through 25 September) still governs practice: a fully unavailable week, then two days.
+    expect(migrated.injuries).toEqual([expect.objectContaining({ playerId: 'rhf-9', kind: 'ankle', returnOn: '2026-09-25' })]);
+    expect(unavailable.training.lastWeek.players['rhf-9'].availableDays).toBe(0);
+    expect(partial.training.lastWeek.players['rhf-9'].availableDays).toBe(2);
   });
 
   it('activates an existing career prospectively without altering the current match, diagnoses or prior week', () => {

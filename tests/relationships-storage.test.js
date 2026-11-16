@@ -9,6 +9,7 @@ import { setEmploymentDelegation } from '../src/world/employment';
 import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
 import { currentSeasonFile, expectedMigration } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
 const upgrade = state => expectedMigration(state, 28);
@@ -32,14 +33,23 @@ beforeAll(() => {
 }, 90_000);
 
 describe('relationship journal, frozen morale and genuine format28 compatibility', () => {
-  // Development mode (sprint 4 injuries): the captured next matchday no longer matches, so only a valid next matchday is checked.
-  it('preserves the complete earlier facilities career and continues a valid next matchday', () => {
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts).
+  it('preserves the complete earlier facilities career and continues a valid matchday that follows the independently captured one', () => {
     const original = JSON.parse(fixture('season28-facilities-career'));
     expect(original.formatVersion).toBe(28);
     expect(legacy).toEqual(upgrade(original.state));
     expect(legacy.facilities.projects.some(project => project.completedOn)).toBe(true);
     expect(legacy.recruitment.offers.some(offer => offer.status === 'pending')).toBe(true);
-    expect(restore(advance(legacy))).toEqual(advance(legacy));
+    const next = advance(legacy), recorded = parseSeason(fixture('season28-facilities-career-next'));
+    expectValidOldSaveWeek(legacy, next, recorded);
+    // The pending academy promotion is answered at the boundary exactly as recorded, with the same contract and graduate.
+    expect(next.recruitment.offers).toEqual(recorded.recruitment.offers);
+    expect(next.employment.contracts).toEqual(recorded.employment.contracts);
+    expect(next.academy.graduates.map(graduate => graduate.playerId)).toEqual(recorded.academy.graduates.map(graduate => graduate.playerId));
+    // Relationships stay switched off in the old career: no journal entries and no frozen morale in the next match.
+    expect(next.relationships).toEqual(legacy.relationships);
+    expect(next.activeMatch).not.toHaveProperty('morale');
     expect(restore(legacy)).toEqual(legacy);
   });
   it('preserves independently captured offseason and next opening with relationships disabled', () => {

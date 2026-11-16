@@ -16,6 +16,7 @@ import { getClubAcademy } from '../src/world/academy-policy';
 import { enableTraining } from '../src/world/training';
 import { createYouthCareer, advanceYouthCareer as advance } from './helpers/youth-competition-careers';
 import { currentSeasonFile, expectedMigration } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
 const upgrade = state => expectedMigration(state, 27);
@@ -62,9 +63,14 @@ describe('funded facility history and format27 compatibility', () => {
     expect(restore(legacy)).toEqual(legacy);
   });
 
-  // Development mode (sprint 4 injuries): the captured next week no longer matches; the captured rollover still does.
-  it('matches the independently captured next-season outcome exactly and continues a valid week', () => {
-    expect(restore(advance(legacy))).toEqual(advance(legacy));
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts). The rollover plays no games.
+  it('continues a valid week that follows the independently captured one and matches the captured next-season outcome exactly', () => {
+    const next = advance(legacy);
+    expectValidOldSaveWeek(legacy, next, parseSeason(fixture('season27-youth-career-next')));
+    // Facilities stay switched off in the old career: no projects, upkeep or capacities appear.
+    expect(next.facilities).toEqual(legacy.facilities);
+    expect(next.finance).not.toHaveProperty('roundCapacities');
     const complete = parseSeason(fixture('season27-youth-complete'));
     const expected = upgrade(JSON.parse(fixture('season27-youth-opening')).state);
     expect(rolloverSeason(complete)).toEqual(expected);

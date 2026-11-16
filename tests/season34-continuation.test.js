@@ -5,6 +5,7 @@ import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { getPlayerRelationship } from '../src/world/relationships';
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 // Genuine format-34 saves from scripts/capture-season-fixtures.mjs; see tests/fixtures/README.md.
 const NAMES = ['career', 'career-next', 'complete', 'opening'];
@@ -27,9 +28,18 @@ describe('genuine format-34 careers', () => {
     expect(getPlayerRelationship(career, player).reasons.find(reason => reason.label === 'Press comments')?.impact).toBe(2);
   });
 
-  // Development mode: paused by the sprint-4 match calibration (simulated results after this old save now differ). Recapture before release.
-  it.skip('continues the mid-season career, with the press answer in the next frozen morale, exactly as recorded', () => {
-    expect(advance(career)).toEqual(careerNext);
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts).
+  it('continues the mid-season career for a valid week, with the press answer in the next frozen morale', () => {
+    const next = advance(career);
+    expectValidOldSaveWeek(career, next, careerNext);
+    // The recorded answer was given after matchday five was prepared; matchday six's frozen morale includes it.
+    const answer = career.relationships.events.findIndex(event => event.type === 'press' && event.answer === 'credit');
+    expect(answer).toBeGreaterThanOrEqual(0);
+    expect(career.activeMatch.morale.eventCount).toBeLessThanOrEqual(answer);
+    expect(next.activeMatch.morale.eventCount).toBeGreaterThan(answer);
+    expect(next.activeMatch.morale.eventCount).toBe(careerNext.activeMatch.morale.eventCount);
+    expect(Object.keys(next.activeMatch.morale.values).sort()).toEqual(Object.keys(careerNext.activeMatch.morale.values).sort());
   }, 120_000);
 
   it('rolls the completed offseason into the recorded opening', () => {

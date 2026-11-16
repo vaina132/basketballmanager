@@ -9,10 +9,12 @@ import { assignScouting } from '../src/world/scouting';
 import { getPlayerKnowledge } from '../src/world/scouting-policy';
 import { advanceSeason, createSeason, managedSide } from '../src/world/season';
 import { expectedMigration } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 const club = 'rhine-falcons';
 const play = state => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
+const pick = (value, keys) => Object.fromEntries(keys.map(key => [key, value[key]]));
 const changed = (state, mutate) => { const envelope = JSON.parse(serializeSeason(state)); mutate(envelope.state); return JSON.stringify(envelope); };
 let staffed, pending, report, expensive;
 beforeAll(() => {
@@ -24,8 +26,11 @@ beforeAll(() => {
 });
 
 describe('scout save provenance and migration', () => {
-  // Development mode: paused by the sprint-4 match calibration (simulated results after this old save now differ). Recapture before release.
-  it.skip('preserves a genuine format20 pending career and its independently captured next matchday', () => {
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts). The queued observation's
+  // report, knowledge, coaching and the week's ledger do not depend on the simulated game and still match exactly; the
+  // next prepared match is the recorded fixture, while its lineups and conditions follow the simulated week.
+  it('preserves a genuine format20 pending career and the recorded reply in a valid next matchday', () => {
     const text = fixture('season20-scouting-pending'), original = JSON.parse(text);
     const restored = parseSeason(text), expected = JSON.parse(fixture('season20-scouting-reply'));
     expect(original.formatVersion).toBe(20);
@@ -36,9 +41,10 @@ describe('scout save provenance and migration', () => {
     expect(next.scouting).toEqual(expected.nextScouting);
     expect(next.coaching).toEqual(expected.nextCoaching);
     expect(next.finance.ledger.slice(restored.finance.ledger.length)).toEqual(expected.nextLedger);
-    expect(next.activeMatch).toEqual(expected.nextMatch);
+    const prepared = match => ({ ...pick(match, ['schemaVersion', 'engineVersion', 'seed', 'rngState', 'injuryMode', 'status', 'period', 'clockSeconds', 'score', 'result']), home: match.home.id, away: match.away.id });
+    expect(prepared(next.activeMatch)).toEqual(prepared(expected.nextMatch));
     expect(Object.fromEntries(Object.keys(expected.afterKnowledge).map(id => [id, getPlayerKnowledge(next, id)]))).toEqual(expected.afterKnowledge);
-    expect(parseSeason(serializeSeason(next))).toEqual(next);
+    expectValidOldSaveWeek(restored, next);
   });
 
   it('activates prospectively without upgrading queued or completed legacy observations', () => {

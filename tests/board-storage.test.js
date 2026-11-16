@@ -10,6 +10,7 @@ import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
 import { enableFinance } from '../src/world/finance';
 import { currentSeasonFile, expectedMigration } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 const fixture = name => gunzipSync(readFileSync(new URL(`./fixtures/${name}.json.gz`, import.meta.url))).toString('utf8');
 const upgrade = state => expectedMigration(state, 29);
@@ -30,14 +31,15 @@ beforeAll(() => {
 }, 90_000);
 
 describe('board objectives, dated review audit and genuine format29 compatibility', () => {
-  // Development mode: paused by the sprint-4 match calibration (simulated results after this old save now differ). Recapture before release.
-  it.skip('preserves the entire original relationship-rich career and independent next matchday', () => {
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts).
+  it('preserves the entire original relationship-rich career and continues a valid week that follows the recorded matchday', () => {
     const original = JSON.parse(fixture('season29-relationships-career'));
     expect(original.formatVersion).toBe(29);
     expect(legacy).toEqual(upgrade(original.state));
     expect(legacy.relationships.events.some(event => event.type === 'talk')).toBe(true);
     expect(legacy.activeMatch.morale).toBeDefined();
-    expect(advance(legacy)).toEqual(upgrade(JSON.parse(fixture('season29-relationships-career-next')).state));
+    expectValidOldSaveWeek(legacy, advance(legacy), parseSeason(fixture('season29-relationships-career-next')));
     expect(restore(legacy)).toEqual(legacy);
   });
   it('preserves the independently captured offseason and year2 opening with board disabled', () => {

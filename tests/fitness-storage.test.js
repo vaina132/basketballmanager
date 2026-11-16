@@ -9,6 +9,7 @@ import { hireScout } from '../src/world/scouts';
 import { advanceSeason, createSeason, managedSide } from '../src/world/season';
 import { setTrainingPlan } from '../src/world/training';
 import { expectedMigration } from './helpers/season-format';
+import { expectValidOldSaveWeek } from './helpers/old-save-week';
 
 const club = 'rhine-falcons';
 const play = state => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) });
@@ -28,8 +29,9 @@ beforeAll(() => {
 });
 
 describe('fitness save history and prospective migration', () => {
-  // Development mode: paused by the sprint-4 match calibration (simulated results after this old save now differ). Recapture before release.
-  it.skip('preserves a genuine format21 career, its staff, report and independent next week exactly', () => {
+  // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
+  // checked for what must hold under intended rule changes (tests/helpers/old-save-week.ts).
+  it('preserves a genuine format21 career, its staff and report, and continues a valid week that follows the recorded one', () => {
     expect(original.formatVersion).toBe(21);
     expect(original.state.training.lastWeek).not.toBeNull();
     expect(original.state.scouting.clubs[club].reviews.some(review => review.observer?.scoutId)).toBe(true);
@@ -37,9 +39,11 @@ describe('fitness save history and prospective migration', () => {
     expect(restored).toEqual(expectedMigration(original.state, 21));
     expect(stepMatch(restored.activeMatch)).toEqual(stepMatch(original.state.activeMatch));
     const expected = JSON.parse(fixture('season21-training-scouts-next'));
+    expect(expected.formatVersion).toBe(21);
     const next = play(restored);
-    expect(next).toEqual(expectedMigration(expected.state, 21));
-    expect(restore(next)).toEqual(next);
+    expectValidOldSaveWeek(restored, next, parseSeason(JSON.stringify(expected)));
+    // Fitness coaching stays switched off in the old career: no appointment or activation appears.
+    expect(next.fitness).toEqual(restored.fitness);
   });
 
   it('activates and hires prospectively without rewriting the retained legacy week or injury dates', () => {

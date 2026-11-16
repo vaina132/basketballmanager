@@ -136,6 +136,7 @@ interface Journal {
   at: (item: never) => number;
 }
 const dated = (item: Dated) => roundKey(item.seasonNumber, item.round);
+const dated1 = (item: Dated) => roundKey(item.seasonNumber, item.round + 1);
 
 /**
  * Journals whose earlier records validators may skip. Each must be append-only in a live game for records dated before
@@ -148,6 +149,12 @@ const JOURNALS = new Map<string, Journal>([
   ['facilities.events', { items: state => state.facilities?.events, at: dated }],
   ['relationships.events', { items: state => state.relationships?.events, at: dated }],
   ['finance.ledger', { items: state => state.finance?.ledger, at: dated }],
+  // A season's recruitment window follows its final matchday: dated after every matchday of that season.
+  ['market.windows', { items: state => state.market?.windows, at: (window: { seasonNumber: number }) => roundKey(window.seasonNumber, 99) }],
+  // A board review follows its matchday's results, and the latest one is still rewritten (format 73).
+  ['board.reviews', { items: state => state.board?.reviews, at: dated1 }],
+  // A week's report is written at the next week's start, and the latest one is still rewritten (format 73 summaries).
+  ['academy.weeks', { items: state => state.academy?.weeks, at: (week: { seasonNumber: number; afterRound: number }) => roundKey(week.seasonNumber, week.afterRound + 1) }],
 ]);
 
 /** Top-level parts that cannot change during a season (season-end exchanges, money and archives change at the rollover). */

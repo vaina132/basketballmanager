@@ -1068,7 +1068,14 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
   if (anchor.contractCount !== state.negotiations.enabledSince!.contractCount + firstReplies.filter(reply => reply.outcome === 'accepted').length + joinedIn(state.employment?.contracts, anchor.contractCount)) fail('academy.enabledSince.contractCount', 'must identify the exact agreements explained by the response prefix');
   for (const [index, contract] of state.employment.contracts.entries()) if (index < anchor.contractCount ? roundKey(contract.signedSeason, contract.signedRound) > boundary : roundKey(contract.signedSeason, contract.signedRound) < boundary) fail('academy.enabledSince.contractCount', 'must identify a chronological employment prefix');
   for (const [index, reply] of state.negotiations.records.entries()) if (index < anchor.negotiationCount ? roundKey(reply.seasonNumber, reply.round) > boundary : roundKey(reply.seasonNumber, reply.round) < boundary) fail('academy.enabledSince.negotiationCount', 'must identify a chronological response prefix');
-  let replay: SeasonState = {
+  // Incremental checkpoint checks (`trusted-prefix.ts`): the weeks an accepted checkpoint held before its own week are
+  // unchanged, so the replay resumes from the context that check reached at the start of that week. Every replayed value
+  // the iterations read (academy, youth season, clubs, calendar, graduates' senior entries) is in that context; the rest
+  // is the career's unchanged world and seed. Later weeks and the final comparisons run in full.
+  const weekPlan = version === SEASON_SCHEMA_VERSION ? prefixPlan('academy.weeks', academy.weeks, week => roundKey(week.seasonNumber, week.afterRound + 1)) : { skip: 0, record: -1 };
+  const saved = weekPlan.skip > 0 ? recall<{ replay: SeasonState; weekIndex: number; round: number }>('academy.weeks', 'replay') : undefined;
+  const resume = saved && saved.weekIndex === weekPlan.skip && saved.round <= state.round ? saved : undefined;
+  let replay: SeasonState = resume ? resume.replay : {
     ...state, clubs: fullWorldClubsIn(state, anchor.seasonNumber), divisions: divisionsInSeason(state, anchor.seasonNumber), academy: createAcademy(), youthCompetition: createYouthCompetition(state.youthCompetition.model), seasonNumber: anchor.seasonNumber, round: anchor.round, date: dateForRound(anchor.round, anchor.seasonNumber), status: 'active',
     finance: financeAtLedgerBoundary(state.finance, anchor.ledgerIndex), employment: { ...state.employment, contracts: firstContracts }, negotiations: { ...state.negotiations, records: firstReplies },
     conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => originalIds.has(id))),
@@ -1077,8 +1084,9 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
   // Format 73: completed seasons are sealed. Their weeks and youth results are checked by shape, and the current
   // season replays from each prospect's accumulated points at the previous season's end.
   const sealedThrough = version >= SEALED_HISTORY_FORMAT && state.seasonNumber > anchor.seasonNumber ? state.seasonNumber - 1 : 0;
-  let weekIndex = 0;
-  if (sealedThrough) {
+  let weekIndex = resume ? resume.weekIndex : 0;
+  if (resume) { /* Resumed below at the trusted week. */ }
+  else if (sealedThrough) {
     weekIndex = validateSealedAcademyWeeks(state, anchor, sealedThrough);
     replay = sealedAcademyReplay(replay, state, sealedThrough, weekIndex);
   } else {
@@ -1086,9 +1094,9 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
     catch (error) { fail('academy.enabledSince', `cannot initialize its recorded intake: ${error instanceof Error ? error.message : 'invalid activation'}`); }
     replay = activateYouthReplay(replay, state);
   }
-  for (let year = sealedThrough ? sealedThrough + 1 : anchor.seasonNumber; year <= state.seasonNumber; year += 1) {
+  for (let year = resume ? state.seasonNumber : sealedThrough ? sealedThrough + 1 : anchor.seasonNumber; year <= state.seasonNumber; year += 1) {
     const firstRound = year === anchor.seasonNumber ? anchor.round : 1, lastRound = year === state.seasonNumber ? state.round : seasonRounds(state);
-    if (year > anchor.seasonNumber) {
+    if (year > anchor.seasonNumber && !resume) {
       // A move at the previous season's end (or in its offseason, format 63) released that club's prospects before the opening graduations.
       for (const move of state.career?.moves.filter(item => item.seasonNumber === year - 1 && item.phase !== 'season') ?? []) replay = { ...replay, academy: releaseAcademyFocus(replay.academy, move.fromClubId) };
       // Each season's own full-world clubs run academies (step 3.4d-2).
@@ -1097,7 +1105,8 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
       replay = prepareYouthSeason(replay);
       replay = activateYouthReplay(replay, state);
     }
-    for (let round = firstRound + 1; round <= lastRound; round += 1) {
+    for (let round = resume ? resume.round : firstRound + 1; round <= lastRound; round += 1) {
+      if (year === state.seasonNumber && round === state.round && weekIndex === weekPlan.record) remember('academy.weeks', 'replay', { replay, weekIndex, round });
       // Format 63: a mid-season move before the previous week's games released the former club's prospects then.
       for (const move of state.career?.moves.filter(item => item.seasonNumber === year && item.phase === 'season' && item.round === round - 1) ?? []) replay = { ...replay, academy: releaseAcademyFocus(replay.academy, move.fromClubId) };
       replay = replayYouthRound(replay, state, youthHistoryContext);
@@ -1238,12 +1247,18 @@ function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employ
     if (!sameData(injury, createSeasonInjury(state.seed, fixture, injury.clubId as string, injury.playerId as string, injury.kind as SeasonInjury['kind'], state.injuries, medicalRecoveryPercent(state, injury.clubId as string, fixture.date)))) fail(path, 'must retain the original diagnosis and recovery date');
   }
   let replayed: SeasonPhysio = { ...physio, rehabilitation: [] };
-  for (let year = physio.enabledSince.seasonNumber; year <= state.seasonNumber; year += 1) {
+  // Incremental checkpoint checks (`trusted-prefix.ts`): the weeks before the trusted checkpoint's week read only treatment
+  // and injury records it already held; resume the treatment replay where its check reached that week.
+  const resume = recall<{ replayed: SeasonPhysio; seasonNumber: number; afterRound: number }>('physio.rehabilitation', 'replay');
+  const resumed = resume && resume.seasonNumber === state.seasonNumber && roundKey(resume.seasonNumber, resume.afterRound + 1) === trustedCutKey() ? resume : undefined;
+  if (resumed) replayed = resumed.replayed;
+  for (let year = resumed ? state.seasonNumber : physio.enabledSince.seasonNumber; year <= state.seasonNumber; year += 1) {
     const fromRound = year === physio.enabledSince.seasonNumber ? physio.enabledSince.round : 1;
     const throughRound = year === state.seasonNumber ? Math.min(state.round - 1, (seasonRounds(state) - 1)) : (seasonRounds(state) - 1);
     const rosters = year === state.seasonNumber ? state.rosters : state.history[year - 1]?.rosters;
     if (!Array.isArray(rosters)) fail('physio.rehabilitation', 'requires the retained registration history for every treatment season');
-    for (let afterRound = fromRound; afterRound <= throughRound; afterRound += 1) {
+    for (let afterRound = resumed ? resumed.afterRound : fromRound; afterRound <= throughRound; afterRound += 1) {
+      if (year === state.seasonNumber && afterRound === state.round - 1) remember('physio.rehabilitation', 'replay', { replayed, seasonNumber: year, afterRound });
       const fromDate = dateForRound(afterRound, year), toDate = dateForRound(afterRound + 1, year);
       replayed = processRehabilitationWeek({ ...(state.world ? { world: state.world } : {}), ...(state.facilities ? { facilities: state.facilities } : {}), physio: replayed, clubs: clubsForEmploymentYear(employment, year, afterRound, state), rosters, injuries: state.injuries.filter(injury => injury.occurredOn <= fromDate), seasonNumber: year, afterRound, fromDate, toDate });
     }
@@ -1356,7 +1371,11 @@ function validateFacilitiesShape(value: unknown, state: SeasonState, version: nu
     if (maintenanceSince.date < anchor.date || FACILITY_ANCHOR_KEYS.filter(key => !['seasonNumber', 'round', 'date'].includes(key)).some(key => maintenanceSince[key] < anchor[key])) fail('facilities.maintenanceSince', 'cannot precede facilities activation');
   }
   let previous = anchor;
+  // Incremental checkpoint checks (`trusted-prefix.ts`): decisions made before the trusted checkpoint's week are unchanged
+  // and their anchors were checked by it (records added since are dated at or after that week).
+  const eventPlan = version === SEASON_SCHEMA_VERSION ? prefixPlan('facilities.events', fields.events as FacilityEvent[], event => roundKey(event.seasonNumber, event.round)) : { skip: 0 };
   for (const [index, raw] of fields.events.entries()) {
+    if (index < eventPlan.skip) { const event = raw as FacilityEvent; previous = Object.fromEntries(FACILITY_ANCHOR_KEYS.map(key => [key, event[key]])) as unknown as FacilityAnchor; continue; }
     const path = `facilities.events[${index}]`, type = raw && typeof raw === 'object' ? raw.type : undefined;
     const fundsRepair = repairs && type === 'funding' && Object.hasOwn(raw, 'project');
     const extra = type === 'start' || type === 'repair' && repairs ? ['projectId', 'clubId', 'facilityType'] : type === 'cancel' ? ['projectId'] : type === 'delegate' ? ['clubId', 'delegated'] : type === 'process' ? [] : type === 'maintenance' && maintenance ? ['clubId', 'plan'] : type === 'funding' && funding ? ['clubId', 'facilityType', 'amount', 'mode', 'approved', 'confidence', 'requiredConfidence', 'capitalRemaining', ...(fundsRepair ? ['project'] : [])]
@@ -1420,7 +1439,14 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
   const maintenanceFormat = Object.hasOwn(source, 'maintenanceSince'), maintenanceSince = source.maintenanceSince ?? null;
   let facilities: SeasonFacilities = { ...base, enabledSince: anchor, ...(fundingFormat ? { fundingSince: null } : {}), ...(maintenanceFormat ? { maintenanceSince: null } : {}) };
   let previousLedger = anchor.ledgerIndex;
+  // Incremental checkpoint checks (`trusted-prefix.ts`): resume the command replay where the trusted checkpoint's check
+  // reached its week; each later command is replayed against a context rebuilt from this state, as in a full check.
+  const plan = prefixPlan('facilities.events', source.events, event => roundKey(event.seasonNumber, event.round));
+  const resume = plan.skip > 0 ? recall<{ facilities: SeasonFacilities; previousLedger: number }>('facilities.events', 'replay') : undefined;
+  if (resume) { facilities = resume.facilities; previousLedger = resume.previousLedger; }
   for (const [index, event] of source.events.entries()) {
+    if (resume && index < plan.skip) continue;
+    if (index === plan.record) remember('facilities.events', 'replay', { facilities, previousLedger });
     const path = `facilities.events[${index}]`, year = event.seasonNumber, round = event.round;
     // Board funding applies from its activation anchor; an approval must start the funded upgrade at once.
     if (fundingSince && event.date >= fundingSince.date && FACILITY_ANCHOR_KEYS.filter(key => !['seasonNumber', 'round', 'date'].includes(key)).every(key => event[key] >= fundingSince[key])) facilities = { ...facilities, fundingSince };
@@ -1466,6 +1492,7 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
     if (!samePrefix(replay.finance.ledger, state.finance.ledger)) fail(path, 'must pay the exact approved project once at its anchored cash boundary');
     facilities = replay.facilities; previousLedger = financeLedgerCount(replay.finance);
   }
+  if (plan.record === source.events.length) remember('facilities.events', 'replay', { facilities, previousLedger });
   if (fundingFormat) facilities = { ...facilities, fundingSince };
   if (maintenanceFormat) facilities = { ...facilities, maintenanceSince };
   if (!sameData(facilities, source)) fail('facilities', 'must exactly reproduce funded costs, levels, dates, cancellations and delegation from its command history');
@@ -1753,7 +1780,15 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
   if (fields.windows.length !== count) fail('market.windows', 'must retain every recruitment window since activation');
   const windows: MarketWindow[] = [];
   let eventCount = 0;
+  // Incremental checkpoint checks (`trusted-prefix.ts`): windows of seasons before the trusted checkpoint's are unchanged
+  // and were replayed by its check; resume with the windows, command count and facility snapshots it reached.
+  const plan = version === SEASON_SCHEMA_VERSION ? prefixPlan('market.windows', fields.windows as MarketWindow[], window => roundKey(window.seasonNumber, 99)) : { skip: 0, record: -1 };
+  const resume = plan.skip > 0 ? recall<{ windows: MarketWindow[]; eventCount: number; snapshots: MarketReplaySnapshot[] }>('market.windows', 'replay') : undefined;
+  if (resume) { windows.push(...resume.windows); eventCount = resume.eventCount; snapshots.push(...resume.snapshots); }
+  const rememberReplay = () => remember('market.windows', 'replay', { windows: windows.slice(), eventCount, snapshots: snapshots.slice() });
   for (const [index, raw] of fields.windows.entries()) {
+    if (resume && index < plan.skip) continue;
+    if (index === plan.record) rememberReplay();
     const path = `market.windows[${index}]`;
     const window = record(raw, path, ['seasonNumber', 'openedOn', 'closesOn', 'date', 'contractCountBefore', 'negotiationCountBefore', 'closed', 'events', 'offers', ...(version >= 14 ? ['competitionFromEvent'] : [])]);
     const year = firstYear + index, openedOn = dateForRound(seasonRounds(state), year), closesOn = addMarketDays(openedOn, MARKET_WINDOW_DAYS);
@@ -1857,6 +1892,7 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
     }
     windows.push(comparable);
   }
+  if (plan.record === fields.windows.length) rememberReplay();
   return fields as unknown as SeasonMarket;
 }
 
@@ -1905,9 +1941,24 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
   if (fields.transfersEnabledSince !== null) record(fields.transfersEnabledSince, 'recruitment.transfersEnabledSince', ['seasonNumber', 'round', 'ledgerIndex', 'contractCount', 'negotiationCount']);
   let recruitment: SeasonRecruitment = { model: 'recruitment-1', enabledSince: { seasonNumber: firstYear, round: firstRound, ledgerIndex: anchorLedger, contractCount: anchorContracts, negotiationCount: anchorNegotiations }, transfersEnabledSince: null, events: [], offers: [] };
   let boundary = firstBoundary, previousLedger = anchorLedger, previousContracts = anchorContracts, previousNegotiations = anchorNegotiations;
-  const holds: RecruitmentHolds[] = [];
+  let holds: RecruitmentHolds[] = [];
   const generatedContracts = new Set<string>(), generatedResponses = new Set<string>(), generatedTransfers = new Set<string>();
+  // Incremental checkpoint checks (`trusted-prefix.ts`): resume the command replay (journal, holds and generated records)
+  // where the trusted checkpoint's check reached its week; later commands replay against contexts rebuilt from this state.
+  interface Resume { recruitment: SeasonRecruitment; boundary: number; previousLedger: number; previousContracts: number; previousNegotiations: number; holds: RecruitmentHolds[]; contracts: string[]; responses: string[]; transfers: string[] }
+  const plan = version === SEASON_SCHEMA_VERSION ? prefixPlan('recruitment.events', fields.events as InSeasonEvent[], event => roundKey(event.seasonNumber, event.round)) : { skip: 0, record: -1 };
+  const resume = plan.skip > 0 ? recall<Resume>('recruitment.events', 'replay') : undefined;
+  if (resume) {
+    ({ recruitment, boundary, previousLedger, previousContracts, previousNegotiations } = resume);
+    holds = resume.holds.slice();
+    for (const id of resume.contracts) generatedContracts.add(id);
+    for (const id of resume.responses) generatedResponses.add(id);
+    for (const id of resume.transfers) generatedTransfers.add(id);
+  }
+  const rememberReplay = () => remember('recruitment.events', 'replay', { recruitment, boundary, previousLedger, previousContracts, previousNegotiations, holds: holds.slice(), contracts: [...generatedContracts], responses: [...generatedResponses], transfers: [...generatedTransfers] } satisfies Resume);
   for (const [index, raw] of fields.events.entries()) {
+    if (resume && index < plan.skip) continue;
+    if (index === plan.record) rememberReplay();
     const path = `recruitment.events[${index}]`;
     const type = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).type : undefined;
     const event = record(raw, path, ['type', 'seasonNumber', 'round', 'date', 'ledgerIndexBefore', 'contractCountBefore', 'negotiationCountBefore', ...(type === 'offer' ? ['id', 'clubId', 'playerId', 'seasonWage', ...(version >= 19 ? ['seasons', 'transferFee', 'transferPaymentPlan'].filter(key => Object.hasOwn(raw as object, key)) : []), ...optionalClauseKeys(raw, version, ['releaseFee', 'transferMode']), ...(version >= 25 && Object.hasOwn(raw as object, 'academyProspectId') ? ['academyProspectId'] : [])] : type === 'withdraw' ? ['offerId'] : version >= 19 && type === 'club-decision' ? ['offerId', 'response'] : [])]);
@@ -1954,6 +2005,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     const liveOffers = recruitment.offers.filter(offer => offer.seasonNumber === year && (offer.status === 'pending' || offer.status === 'club-review'));
     holds.push({ eventCount: index + 1, ledgerIndex, seasonNumber: year, round, negotiationCount: replay.negotiations.records.length, offers: liveOffers, amounts: Object.fromEntries(clubs.map(club => [club.id, liveOffers.filter(offer => offer.clubId === club.id).reduce((sum, offer) => sum + offer.remainingWages + (offer.transfer?.fee ?? 0), 0)])) });
   }
+  if (plan.record === fields.events.length) rememberReplay();
   if (boundary !== lastBoundary || !sameData(recruitment, fields)) fail('recruitment', 'must retain every advanced matchday and exactly its replayed offers, choices, reservations and responses');
   if (state.employment.contracts.some(contract => (contract.kind === 'midseason' || contract.kind === 'midseason-transfer') && !generatedContracts.has(contract.id)) || state.negotiations.records.some(entry => entry.startsSeason === entry.seasonNumber && !generatedResponses.has(entry.id)) || state.employment.transfers.some(transfer => transfer.startsRound > 1 && !generatedTransfers.has(transfer.id))) fail('recruitment.events', 'must explain every in-season agreement, transfer and player reply');
   return holds;
@@ -2447,6 +2499,10 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   let previousDate = roundKey(firstYear, firstRound), entryYear = firstYear, yearIndex = 0;
   const operatingClubs = new Set<string>();
   let payrollStarted = false;
+  // Incremental checkpoint checks (`trusted-prefix.ts`): entries booked before the trusted checkpoint's week are unchanged
+  // and their recomputed gates and upkeep were checked by it. Every entry still runs the ledger's order, balance and
+  // requirement bookkeeping below; only those two recomputations are skipped for trusted entries.
+  const ledgerPlan = version === SEASON_SCHEMA_VERSION ? prefixPlan('finance.ledger', fields.ledger as FinanceEntry[], entry => roundKey(entry.seasonNumber, entry.round)) : { skip: 0 };
   for (const [index, value] of fields.ledger.entries()) {
     const path = `finance.ledger[${index}]`;
     const entry = record(value, path, ['id', 'clubId', 'seasonNumber', 'round', 'kind', 'amount', 'sourceId', 'ticket', 'coach', ...(payroll ? ['payroll'] : []), ...(version >= 21 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'scout') ? ['scout'] : []), ...(version >= 22 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'fitness') ? ['fitness'] : []), ...(version >= 23 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'physio') ? ['physio'] : []), ...(version >= 24 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'assistant') ? ['assistant'] : []), ...(version >= 25 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'youth') ? ['youth'] : []), ...(version >= 28 && value !== null && typeof value === 'object' ? ['facility', 'facilityUpkeep'].filter(key => Object.hasOwn(value, key)) : []), ...(version >= 31 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'sponsorship') ? ['sponsorship'] : []), ...(version >= 32 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'boardCapital') ? ['boardCapital'] : []), ...(version >= 64 && value !== null && typeof value === 'object' ? ['namingRights', 'sponsorExit'].filter(key => Object.hasOwn(value, key)) : []), ...(version >= 71 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'debt') ? ['debt'] : [])]);
@@ -2507,8 +2563,10 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
         if (!project || project.type !== details.type || project.id !== entry.sourceId || facilities.events[project.startEventIndex]?.ledgerIndex !== index) fail(path, 'must charge the exact project at its approval boundary');
       } else {
         const details = record(entry.facilityUpkeep, `${path}.facilityUpkeep`, ['arena', 'training', 'youth', ...(facilities.model === 'facilities-2' ? ['medical', 'scouting'] : [])]);
-        const { total: _total, ...breakdown } = getFacilityUpkeepBreakdown({ facilities, ...yearContext(year) }, entry.clubId, dateForRound(entryRound, year));
-        if (!sameData(details, breakdown)) fail(path, 'must charge the completed facility levels on this matchday');
+        if (index >= ledgerPlan.skip) {
+          const { total: _total, ...breakdown } = getFacilityUpkeepBreakdown({ facilities, ...yearContext(year) }, entry.clubId, dateForRound(entryRound, year));
+          if (!sameData(details, breakdown)) fail(path, 'must charge the completed facility levels on this matchday');
+        }
         if (operatingClubs.size !== clubs.length || payrollStarted) fail(path, 'must book upkeep after all operating costs and before matchday payroll');
       }
       required.delete(key);
@@ -2679,10 +2737,12 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
         const fixture = expected.fixture!;
         if (ticket.fixtureId !== fixture.id) fail(`${path}.ticket.fixtureId`, 'must identify its completed home fixture');
         const price = validateTicketPrice(ticket.price, `${path}.ticket.price`, yearContext(year), entry.clubId);
-        const gate = forecastGate({ ...worldContext, fixtures: schedules.get(year)!, seasonNumber: year, rivalries, ...(hasCapacity ? { facilities: facilitiesForGate(entry.clubId, index, fixture.date) } : {}), ...(press ? press : {}) }, fixture, price);
-        if (hasCapacity && ticket.capacity !== gate.capacity) fail(`${path}.ticket.capacity`, 'must retain the actual construction-adjusted matchday capacity');
-        number(ticket.attendance, `${path}.ticket.attendance`, 0, gate.capacity);
-        if (ticket.attendance !== gate.attendance || amount !== gate.revenue) fail(path, 'does not match attendance and revenue from the pre-round sporting results');
+        if (index >= ledgerPlan.skip) {
+          const gate = forecastGate({ ...worldContext, fixtures: schedules.get(year)!, seasonNumber: year, rivalries, ...(hasCapacity ? { facilities: facilitiesForGate(entry.clubId, index, fixture.date) } : {}), ...(press ? press : {}) }, fixture, price);
+          if (hasCapacity && ticket.capacity !== gate.capacity) fail(`${path}.ticket.capacity`, 'must retain the actual construction-adjusted matchday capacity');
+          number(ticket.attendance, `${path}.ticket.attendance`, 0, gate.capacity);
+          if (ticket.attendance !== gate.attendance || amount !== gate.revenue) fail(path, 'does not match attendance and revenue from the pre-round sporting results');
+        }
         if (year === seasonNumber && entryRound === round && price !== prices[entry.clubId]) fail(`${path}.ticket.price`, 'must match the current matchday locked price');
       } else {
         if (entry.ticket !== null) fail(`${path}.ticket`, 'must be empty for a non-ticket event');

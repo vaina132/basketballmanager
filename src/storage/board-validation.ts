@@ -7,7 +7,8 @@ import { validationReplayCache } from './replay-cache';
 import { dateForRound } from '../world/season';
 import { openingSponsorshipClubs } from '../world/commercial-policy';
 import { fundingSourceId } from '../world/finance';
-import { fullWorldClubsIn, roundOrdinal, seasonRounds } from '../world/career-world';
+import { fullWorldClubsIn, roundKey, roundOrdinal, seasonRounds } from '../world/career-world';
+import { prefixPlan, recall, remember } from './trusted-prefix';
 import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
 import { boardDebtImpacts } from '../world/facility-debt';
 import { PRESIDENT_RULES, usesPresidentBoard } from '../world/presidents';
@@ -202,10 +203,22 @@ export function validateBoard(state: SeasonState, version: number): void {
     if (typeof raw.date !== 'string') fail(`${path}.date`, 'must identify an actual calendar boundary');
     return Object.fromEntries(ANCHOR_KEYS.map(key => [key, raw[key]])) as unknown as BoardAnchor;
   };
-  for (let year = enabled.seasonNumber; year <= state.seasonNumber; year += 1) {
+  // Incremental checkpoint checks (`trusted-prefix.ts`): reviews of matchdays before the trusted checkpoint's latest one
+  // are unchanged (the latest is still rewritten, format 73), so the current season's replay resumes where the trusted
+  // check reached it, with its objective; later reviews are rebuilt from contexts of this state, as in a full check.
+  const plan = version >= SEALED_HISTORY_FORMAT ? prefixPlan('board.reviews', source.reviews, review => roundKey(review.seasonNumber, review.round + 1)) : { skip: 0, record: -1 };
+  interface Resume { board: SeasonBoard; mandateIndex: number; reviewIndex: number; previous: BoardAnchor; expected: BoardMandate; round: number }
+  const saved = plan.skip > 0 ? recall<Resume>('board.reviews', 'replay') : undefined;
+  const resume = saved && saved.reviewIndex === plan.skip ? saved : undefined;
+  if (resume) ({ board, mandateIndex, reviewIndex, previous } = resume);
+  for (let year = resume ? state.seasonNumber : enabled.seasonNumber; year <= state.seasonNumber; year += 1) {
     const first = year === enabled.seasonNumber;
     const startsRound = first ? enabled.round + Number(!activation.includeCurrentRound) : 1;
     if (startsRound > seasonRounds(state)) continue;
+    const resumed = resume && year === state.seasonNumber ? resume : undefined;
+    let expected: BoardMandate;
+    if (resumed) expected = resumed.expected;
+    else {
     const path = `board.mandates[${mandateIndex}]`;
     const raw = record(source.mandates[mandateIndex], path, [...ANCHOR_KEYS, 'id', 'startsRound', 'deadlineDate', 'clubs']);
     if (year < replayFrom) {
@@ -235,12 +248,13 @@ export function validateBoard(state: SeasonState, version: number): void {
       if (sponsorship.length !== openingSponsorshipClubs(state.commercial, fullWorldClubsIn(state, year), year).length || opening.some(({ index }) => index >= anchor.ledgerCount)) fail(path, 'must include the new-season funding before setting expectations');
     }
     chronological(anchor, path);
-    let expected: BoardMandate;
     try { expected = validationReplayCache.calculate('board-mandate', { state: contextAt(state, anchor, board), startsRound }, input => buildBoardMandate(input.state, input.startsRound)); } catch (error) { fail(path, `cannot rebuild objectives: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
     if (!equal(raw, expected)) fail(path, 'must retain the exact objective and resources frozen from its original registrations and payment prefix');
     board = { ...board, mandates: [...board.mandates, expected] }; mandateIndex += 1;
+    }
     const through = year === state.seasonNumber ? state.status === 'complete' ? seasonRounds(state) : state.round - 1 : seasonRounds(state);
-    for (let round = startsRound; round <= through; round += 1) {
+    for (let round = resumed ? resumed.round : startsRound; round <= through; round += 1) {
+      if (year === state.seasonNumber && reviewIndex === plan.record) remember('board.reviews', 'replay', { board, mandateIndex, reviewIndex, previous, expected, round } satisfies Resume);
       const reviewPath = `board.reviews[${reviewIndex}]`;
       const reviewRaw = record(source.reviews[reviewIndex], reviewPath, [...ANCHOR_KEYS, 'id', 'mandateId', 'clubs']);
       const reviewAnchor = checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, reviewRaw[key]])), reviewPath, 'review');

@@ -1,4 +1,4 @@
-import { financeLedgerCount, financeLedgerEntries, financeLedgerSlice } from './finance-ledger';
+import { financeLedgerCount, financeLedgerHasEvent, financeLedgerSlice } from './finance-ledger';
 import type { FinanceEntry } from '../domain/finance';
 import type { CommercialAnchor, CommercialEvent, CommercialExit, CommercialExitReason, NamingRightsAgreement, NamingRightsOffer, SeasonCommercial, SeasonNamingRights, SponsorClause, SponsorshipAgreement, SponsorshipOffer, SponsorshipWindow } from '../domain/commercial';
 import type { SeasonState } from '../domain/season';
@@ -61,24 +61,26 @@ function offerLeagues(state: SeasonState): (clubId: string) => SponsorLeague {
   return clubId => next && seasonLeagues(world, next).some(league => league.clubIds.includes(clubId)) ? sponsorLeague(world, next, clubIds, clubId) : sponsorLeague(world, state.divisions, clubIds, clubId);
 }
 
-function bookedSources(state: SeasonState, kind: FinanceEntry['kind']): Set<string> {
+// Step 3.7: archived seasons are looked up in their index (built once per archive list), not expanded on every call.
+function bookedSources(state: SeasonState, kind: FinanceEntry['kind']): { has: (clubId: string, sourceId: string) => boolean } {
   const booked = new Set<string>();
-  for (const entry of financeLedgerEntries(state.finance)) if (entry.kind === kind) booked.add(`${entry.clubId}/${entry.sourceId}`);
-  return booked;
+  for (const entry of state.finance.ledger) if (entry.kind === kind) booked.add(`${entry.clubId}/${entry.sourceId}`);
+  const archived = { ledger: [], archives: state.finance.archives };
+  return { has: (clubId, sourceId) => booked.has(`${clubId}/${sourceId}`) || financeLedgerHasEvent(archived, clubId, kind, sourceId) };
 }
 
 function paymentsDueNow(state: SeasonState): DueSponsorshipPayment[] {
   const booked = bookedSources(state, 'sponsor');
   // Only the current season's payments are booked here, so its divisions decide each club's league size (step 3.4c).
   return sponsorshipPaymentsDue(state.commercial, id => (state.world ? seasonLeagues(state.world, state.divisions) : []).find(league => league.clubIds.includes(id))?.clubIds.length ?? state.clubs.length, { seasonNumber: state.seasonNumber, round: state.round, complete: state.status === 'complete' }, finalPosition(state), seasonRounds(state), id => state.clubs.some(club => club.id === id))
-    .filter(payment => payment.seasonNumber === state.seasonNumber && payment.round === state.round && payment.sponsorship.installment !== 1 && !booked.has(`${payment.clubId}/${payment.sourceId}`));
+    .filter(payment => payment.seasonNumber === state.seasonNumber && payment.round === state.round && payment.sponsorship.installment !== 1 && !booked.has(payment.clubId, payment.sourceId));
 }
 
 function namingPaymentsDueNow(state: SeasonState): DueNamingPayment[] {
   if (!usesCommercialClauses(state.commercial)) return [];
   const booked = bookedSources(state, 'naming-rights');
   return namingPaymentsDue(namingOf(state.commercial), { seasonNumber: state.seasonNumber, round: state.round, complete: state.status === 'complete' }, seasonRounds(state), id => state.clubs.some(club => club.id === id))
-    .filter(payment => payment.seasonNumber === state.seasonNumber && payment.round === state.round && !booked.has(`${payment.clubId}/${payment.sourceId}`));
+    .filter(payment => payment.seasonNumber === state.seasonNumber && payment.round === state.round && !booked.has(payment.clubId, payment.sourceId));
 }
 
 function bookNamingPayments(state: SeasonState): SeasonState {
@@ -525,8 +527,7 @@ export interface ClubSponsorship {
 }
 
 function received(state: SeasonState, clubId: string, kind: FinanceEntry['kind'], sourceId: string): boolean {
-  for (const entry of financeLedgerEntries(state.finance)) if (entry.kind === kind && entry.clubId === clubId && entry.sourceId === sourceId) return true;
-  return false;
+  return financeLedgerHasEvent(state.finance, clubId, kind, sourceId);
 }
 
 /** The first of two agreements the club could end early, if any. */

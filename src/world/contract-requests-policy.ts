@@ -99,17 +99,40 @@ export function contractRequestsFromEvents(context: ContractRequestContext, even
  * The extra wage share (percent) a player asks to sign with this club after it refused his request (declined,
  * ignored, lapsed talks or a broken promise), for that season and the next. Zero outside `relationships-2`.
  */
+// Step 3.7: each club's and player's recent requests and replies are collected once per event journal and first season
+// (journals are replaced, never edited; the length guards against an edited one), with the same backward scan as before.
+// Contract quotes asked for them for every candidate player, reading up to two seasons of events each time.
+interface RecentRequests { events: RelationshipEvent[]; requested: boolean }
+const recentRequestCache = new WeakMap<readonly RelationshipEvent[], { length: number; bySeason: Map<number, Map<string, Map<string, RecentRequests>>> }>();
+function recentRequests(events: readonly RelationshipEvent[], earliest: number): Map<string, Map<string, RecentRequests>> {
+  let known = recentRequestCache.get(events);
+  if (!known || known.length !== events.length) { known = { length: events.length, bySeason: new Map() }; recentRequestCache.set(events, known); }
+  let byClub = known.bySeason.get(earliest);
+  if (!byClub) {
+    byClub = new Map();
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index]!;
+      if (event.seasonNumber < earliest) break;
+      if (!isRequest(event) && !isReply(event)) continue;
+      let byPlayer = byClub.get(event.clubId);
+      if (!byPlayer) { byPlayer = new Map(); byClub.set(event.clubId, byPlayer); }
+      let entry = byPlayer.get(event.playerId);
+      if (!entry) { entry = { events: [], requested: false }; byPlayer.set(event.playerId, entry); }
+      entry.events.push(event); entry.requested ||= isRequest(event);
+    }
+    // Collected newest first; the journal order is restored once.
+    for (const byPlayer of byClub.values()) for (const entry of byPlayer.values()) entry.events.reverse();
+    known.bySeason.set(earliest, byClub);
+  }
+  return byClub;
+}
+
 export function refusedContractPremium(context: ContractRequestContext, clubId: string, playerId: string): number {
   if (context.relationships?.model !== 'relationships-2' || !context.relationships.enabledSince) return 0;
-  const events = context.relationships.events, earliest = context.seasonNumber - RULES.premiumSeasons + 1, mine: RelationshipEvent[] = [];
-  let requested = false;
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index]!;
-    if (event.seasonNumber < earliest) break;
-    if ((isRequest(event) || isReply(event)) && event.clubId === clubId && event.playerId === playerId) { mine.unshift(event); requested ||= isRequest(event); }
-  }
-  if (!requested) return 0;
-  return Math.max(0, ...contractRequestsFromEvents(context, mine).map(request => request.premiumPercent));
+  const earliest = context.seasonNumber - RULES.premiumSeasons + 1;
+  const mine = recentRequests(context.relationships.events, earliest).get(clubId)?.get(playerId);
+  if (!mine?.requested) return 0;
+  return Math.max(0, ...contractRequestsFromEvents(context, [...mine.events]).map(request => request.premiumPercent));
 }
 
 /** The lowest annual wage this club can offer a player who remembers a refusal, in the wage steps contracts use. */

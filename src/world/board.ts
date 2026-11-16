@@ -1,6 +1,7 @@
-import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntries } from './finance-ledger';
+import { archivedFinanceIndex, financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntries } from './finance-ledger';
 import type { BoardAnchor, BoardClubReview, BoardMandate, BoardRequest, BoardReview, BoardSummary, SeasonBoard } from '../domain/board';
 import type { SeasonState } from '../domain/season';
+import type { FinanceEntry } from '../domain/finance';
 import { getFinanceBalance } from './finance';
 import { isRecovering } from './health';
 import { rosterForRound } from './rosters';
@@ -46,14 +47,23 @@ export function boardEventAnchor(state: Pick<BoardCalculationContext, 'world' | 
 }
 
 /** Restrict transfer evidence to receipts in this ledger prefix, including same-day decisions. */
-export function boardUnpaidCosts(state: Pick<BoardCalculationContext, 'finance' | 'employment' | 'date'>, clubId: string): number | null {
-  let opened = false;
-  const receipts = new Set<string>();
-  for (const entry of financeLedgerEntries(state.finance)) {
-    if (entry.clubId === clubId && entry.kind === 'opening') opened = true;
+const ARCHIVED_BOARD_RECEIPTS = Symbol('archived openings and transfer receipts');
+function openingsAndReceipts(entries: Iterable<FinanceEntry>, opened: Set<string>, receipts: Set<string>): void {
+  for (const entry of entries) {
+    if (entry.kind === 'opening') opened.add(entry.clubId);
     if (entry.kind === 'transfer' && entry.amount < 0) receipts.add(entry.sourceId);
   }
-  if (!opened) return null;
+}
+export function boardUnpaidCosts(state: Pick<BoardCalculationContext, 'finance' | 'employment' | 'date'>, clubId: string): number | null {
+  // Step 3.7: archived seasons' openings and receipts are collected once per archive list, not again for every club.
+  const archived = archivedFinanceIndex(state.finance, ARCHIVED_BOARD_RECEIPTS, source => {
+    const opened = new Set<string>(), receipts = new Set<string>();
+    openingsAndReceipts(financeLedgerEntries(source), opened, receipts);
+    return { opened, receipts };
+  });
+  const openedClubs = new Set<string>(), receipts = new Set<string>(archived?.receipts);
+  openingsAndReceipts(state.finance.ledger, openedClubs, receipts);
+  if (!openedClubs.has(clubId) && !archived?.opened.has(clubId)) return null;
   const transfers = state.employment.transfers.filter(transfer => receipts.has(transfer.id)).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => receipts.has(payment.id)) }));
   return getFinanceBalance(state.finance, clubId).unpaid + getTransferPaymentSummary({ date: state.date, employment: { ...state.employment, transfers } }, clubId).overdue;
 }

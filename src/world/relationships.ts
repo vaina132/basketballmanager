@@ -363,7 +363,8 @@ export function answerPress(state: SeasonState, answer: PressAnswer): SeasonStat
   if (!question) throw new Error('There is no open press question.');
   return applyRelationshipEvent(state, { ...relationshipEventAnchor(state), id: eventId(state), type: 'press', clubId: question.clubId, topic: question.topic, triggerRound: question.triggerRound, answer, playerIds: question.playerIds, coreIds: question.coreIds, ...pressEventFields(question) });
 }
-function preparationValues(state: SeasonState): { rosterIds: Record<string, string>; values: Record<string, number> } {
+/** The morale frozen before the current matchday; the save check re-freezes earlier, emptied snapshots (format 73). */
+export function preparationValues(state: SeasonState): { rosterIds: Record<string, string>; values: Record<string, number> } {
   return { rosterIds: Object.fromEntries(state.clubs.map(club => [club.id, rosterForRound(state.rosters, club.id, state.round).id])), values: Object.fromEntries(state.clubs.flatMap(club => getSquadRelationships(state, club.id).map(row => [row.player.id, row.morale]))) };
 }
 /**

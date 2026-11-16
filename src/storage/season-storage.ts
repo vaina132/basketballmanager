@@ -119,6 +119,7 @@ import { isSealedSeniorResult, sealCompletedHistory, SEALED_HISTORY_FORMAT, seni
 import { ACADEMY_GRADUATION_AGE, academyPointCap, developAcademyPlayer, emptyAcademyPoints } from '../world/academy-policy';
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { staffFee } from '../world/economy';
+import { FINANCE_PACKING_FORMAT, packSeasonForSave, unpackSavedSeason } from './save-packing';
 
 export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
@@ -3274,7 +3275,8 @@ export function serializeSeasonCompact(state: SeasonState, options: { check?: bo
   // Development mode (owner, 15 November 2026): the game's own checkpoints skip the full career check (`check: false`);
   // imported files still get it when they are read.
   if (options.check !== false) validateSeasonState(state);
-  const { strings, shapes, nodes, value } = compactJson2(state);
+  // Format 73: the finance ledger is packed losslessly inside compact files (`save-packing.ts`).
+  const { strings, shapes, nodes, value } = compactJson2(packSeasonForSave(state));
   const envelope = { format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', encoding: COMPACT_JSON_ENCODING, strings, shapes, nodes, state: value };
   // Encoded tables, object markers and the envelope must fit the reader's limits too.
   checkJsonTree(envelope);
@@ -3361,6 +3363,8 @@ function decodeSeasonText(text: string): { version: SeasonFormatVersion; state: 
   if (compact) {
     if (envelope.encoding !== (sharedNodes ? COMPACT_JSON_ENCODING : LEGACY_COMPACT_JSON_ENCODING)) throw new Error('This season file uses an unsupported save encoding.');
     try { envelope.state = expandJson({ strings: envelope.strings, shapes: envelope.shapes, ...(sharedNodes ? { nodes: envelope.nodes } : {}), value: envelope.state }); } catch (error) { throw new Error(`Invalid season save: ${error instanceof Error ? error.message : 'the compact data is damaged'}`); }
+    // Format 73 packs the finance ledger inside compact files; the checks read it as the game wrote it.
+    if ((envelope.formatVersion as number) >= FINANCE_PACKING_FORMAT) envelope.state = unpackSavedSeason(envelope.state);
   }
   return { version: envelope.formatVersion as SeasonFormatVersion, state: envelope.state };
 }

@@ -1,6 +1,6 @@
 ﻿import type { RelationshipAnchor, RelationshipEvent, SeasonRelationships } from '../domain/relationships';
 import type { SeasonFixture, SeasonState } from '../domain/season';
-import { applyRelationshipEvent, createRelationships, enableRelationships, getPreparedRelationshipMorale } from '../world/relationships';
+import { applyRelationshipEvent, createRelationships, enableRelationships, getPreparedRelationshipMorale, preparationValues } from '../world/relationships';
 import { dateForRound } from '../world/season';
 import { rosterForRound } from '../world/rosters';
 import { managedClubAtRound, managedClubFor } from '../world/career';
@@ -121,6 +121,7 @@ export function validateRelationships(state: SeasonState, version: number): void
   // the current season are kept as recorded (shape, anchors and order checked); the current season's are replayed.
   const replayFrom = version >= SEALED_HISTORY_FORMAT && state.seasonNumber >= 3 ? state.seasonNumber : 0;
   let kept: RelationshipEvent[] = [];
+  const emptiedEvents = new Set<number>();
   // Format 73: only the latest morale snapshot frozen before a matchday keeps its values; nothing reads earlier ones.
   let lastPrepare = -1;
   for (let index = fields.events.length - 1; index >= 0; index -= 1) if ((fields.events[index] as Command | null)?.type === 'prepare') { lastPrepare = index; break; }
@@ -151,9 +152,11 @@ export function validateRelationships(state: SeasonState, version: number): void
       prepared.set(boundary, index);
       if (source.events.slice(0, index).some(item => item.type !== 'prepare' && item.clubId === managedClubAtRound(state, item.seasonNumber, item.round) && ordinal(item.seasonNumber, item.round, seasonRounds(state)) === boundary)) fail(path, 'must freeze the prepared match before subsequent manager conversations');
     }
-    // An earlier snapshot kept in full stays valid and is checked; an emptied one has nothing left to check.
+    // Format 73: an earlier snapshot is stored emptied (one kept in full stays valid). The replay freezes it again, so
+    // later commands of its matchday (a contract request reads the frozen morale) see what the game saw; the history is
+    // compared in its stored, lightened form below.
     const emptied = version >= SEALED_HISTORY_FORMAT && event.type === 'prepare' && index !== lastPrepare && !Object.keys(event.rosterIds ?? {}).length && !Object.keys(event.values ?? {}).length;
-    if (sealed || emptied) {
+    if (sealed) {
       if (event.id !== `relationship-event-${index + 1}`) fail(`${path}.id`, 'must retain sequential identities');
       if (event.type === 'contract-request' || event.type === 'contract-reply') negotiationCount = integer(event.negotiationCount, `${path}.negotiationCount`, negotiationCount, state.negotiations.records.length);
       kept.push(event);
@@ -169,11 +172,14 @@ export function validateRelationships(state: SeasonState, version: number): void
       negotiationCount = count;
       replay = { ...replay, negotiations: { ...replay.negotiations, records: records.slice(0, count) } };
     }
-    try { replay = applyRelationshipEvent(replay, event); } catch (error) { fail(path, `does not follow the relationship rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
+    if (emptied) emptiedEvents.add(index);
+    const applied = emptied ? { ...event, ...preparationValues(replay) } as RelationshipEvent : event;
+    try { replay = applyRelationshipEvent(replay, applied); } catch (error) { fail(path, `does not follow the relationship rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     previous = current;
   }
   keepRecorded();
-  if (!equal(replay.relationships, source)) fail('relationships', 'must exactly preserve the validated player command history');
+  const replayed = emptiedEvents.size ? { ...replay.relationships, events: replay.relationships.events.map((item, index) => emptiedEvents.has(index) && item.type === 'prepare' ? { ...item, rosterIds: {}, values: {} } : item) } : replay.relationships;
+  if (!equal(replayed, source)) fail('relationships', 'must exactly preserve the validated player command history');
   for (let boundary = ordinal(anchor.seasonNumber, anchor.round, seasonRounds(state)) + 1; boundary <= ordinal(state.seasonNumber, state.round, seasonRounds(state)); boundary += 1) {
     if (!prepared.has(boundary)) fail('relationships.events', 'must freeze player morale at every new prepared matchday after activation');
   }

@@ -1,0 +1,23 @@
+.contract-request{border:1px solid var(--border);background:var(--surface-2);padding:12px 14px;display:grid;gap:10px;border-radius:6px;box-shadow:inset 3px 0 0 var(--accent)}
+.contract-request>header{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap}
+.contract-request h3,.contract-request h4{display:flex;align-items:center;gap:8px;margin:0;font-size:14px;font-weight:600}
+.contract-request h3>svg,.contract-request h4>svg{color:var(--accent)}
+.contract-request>header>span{font-size:13px;color:var(--muted)}
+.contract-request>p{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
+.contract-request-answers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.contract-request-answer{display:grid;gap:5px;align-content:start;text-align:left;padding:10px 12px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:6px;cursor:pointer;font:inherit}
+.contract-request-answer:hover:not(:disabled){border-color:var(--accent)}
+.contract-request-answer:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.contract-request-answer:disabled{opacity:.6;cursor:default}
+.contract-request-answer strong{font-size:14px;font-weight:600}
+.contract-request-answer span{font-size:13px;color:var(--muted);line-height:1.5}
+.contract-request-status{display:flex;align-items:flex-start;gap:8px;margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
+.contract-request-status>svg{flex:none;margin-top:2px;color:var(--accent)}
+.contract-request-status strong{color:var(--text);font-weight:600}
+.inbox-contract-requests{display:grid;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}
+@media(max-width:850px){.contract-request-answers{grid-template-columns:1fr}}
+.relationship-talk .contract-request{margin:0 14px 14px}
+.relationship-talk .contract-request-status{padding:0 14px 12px}
+.relationship-role small{font-size:12px;color:var(--muted);line-height:1.4}
+.player-profile .contract-request,.player-profile .contract-request-status{margin-top:12px;text-align:left}
+.player-profile .contract-request-answers{grid-template-columns:1fr}

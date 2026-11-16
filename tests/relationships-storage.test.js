@@ -93,7 +93,9 @@ describe('relationship journal, frozen morale and genuine format28 compatibility
   });
 
   const cases = [
-    ['unsupported model', () => role, state => { state.relationships.model = 'relationships-2'; }],
+    ['unsupported model', () => role, state => { state.relationships.model = 'relationships-3'; }],
+    ['relationships-2 without squad ranks', () => role, state => { delete state.relationships.squadRanks; }],
+    ['relationships-1 with squad ranks', () => role, state => { state.relationships.model = 'relationships-1'; }],
     ['invented aggregate morale', () => role, state => { state.relationships.morale = 100; }],
     ['disabled journal', () => role, state => { state.relationships.enabledSince = null; }],
     ['future activation date', () => enabled, state => { state.relationships.enabledSince.date = '2026-10-04'; }],

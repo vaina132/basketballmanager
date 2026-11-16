@@ -1,5 +1,5 @@
 import { getPlayerRetirement } from '../world/lifecycle-policy'
-import { getSquadRelationships } from '../world/relationships'
+import { awaitsContractReply, getClubContractRequests, getSquadRelationships } from '../world/relationships'
 import { getBoardSummary } from '../world/board'
 import { getPressQuestion } from '../world/press-policy'
 import { FACILITY_TYPES, getFacilityCondition, getFacilityLevel } from '../world/facilities-policy'
@@ -121,6 +121,12 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     const first = concerns[0] ?? promises[0]
     if (first) notices.push({ key: 'relationships', title: concerns.length ? `${concerns.length} playing-time ${concerns.length === 1 ? 'concern' : 'concerns'}` : `${promises.length} playing-time ${promises.length === 1 ? 'promise' : 'promises'}`, detail: concerns.length ? concerns.map(row => `${row.player.name}: ${row.concern}`).join(' ') : promises.map(row => `${row.player.name}: ${row.promise!.eligibleGames} of 3 eligible games reviewed, ${row.promise!.remainingClubGames} club games remaining.`).join(' '), urgent: concerns.some(row => row.morale < 40) || promises.some(row => row.promise!.remainingClubGames <= 1), action: 'Review dynamics', open: () => onOpenRelationships(first.player.id) })
     else if (roleMinutes > 200) notices.push({ key: 'relationship-roles', title: 'Playing-time commitments exceed available minutes', detail: `The squad's agreed roles require ${roleMinutes} minutes per game; a regulation game has 200. Discuss a lower role to bring the plan within available minutes.`, urgent: true, action: 'Review dynamics', open: () => onOpenRelationships() })
+  }
+
+  // Format 66: players waiting for an answer about a new contract.
+  if (season?.relationships.enabledSince && onOpenInbox) {
+    const open = getClubContractRequests(season, season.managedClubId, season.seasonNumber).filter(request => awaitsContractReply(season, request))
+    if (open.length) notices.push({ key: 'contract-requests', title: `${open.length} ${open.length === 1 ? 'player asks' : 'players ask'} about a new contract`, detail: open.map(request => `${getCareerPlayer(season, request.playerId).name}: answer by ${medicalDate(request.replyBy)}.`).join(' '), urgent: true, action: 'Answer in inbox', open: onOpenInbox })
   }
 
   if (season?.employment.enabledSince) {

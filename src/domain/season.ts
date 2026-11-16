@@ -129,7 +129,8 @@ export interface DomesticDivisions {
 /** Format 59 adds the BCL format: qualification, a protected draw, play-ins, Round of 16 groups and a Final Four (step 3.5e). */
 /** Format 60 adds estimated tables for unchosen leagues and each season end's European places (`europe`, step 3.5f). */
 /** Format 61 records realistic injury kinds (sprint 4) and each career match's recurrence risk (`activeMatch.injuryRisk`). Format 62 (sprint 4) gives real-club worlds researched money: `world.economy` and each club's `finances[].economy` (`src/world/economy.ts`). */
-export const SEASON_SCHEMA_VERSION = 62;
+/** Format 66 gives new careers the `relationships-2` model: default roles by recorded squad rank (`relationships.squadRanks`) and players' contract requests with the club's replies (`contract-request`, `contract-reply` events). */
+export const SEASON_SCHEMA_VERSION = 66;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

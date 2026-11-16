@@ -3,6 +3,7 @@ import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { enableCareerMoves } from '../src/world/career';
+import { enableRelationships } from '../src/world/relationships';
 import { managerReputation, REPUTATION_WEIGHTS, STARTING_REPUTATION, VACANCY_BASE_REQUIREMENT, VACANCY_STEP, vacancyRequirement } from '../src/world/career-policy';
 import { setEmploymentDelegation } from '../src/world/employment';
 import { setFacilityDelegation } from '../src/world/facilities';
@@ -23,13 +24,14 @@ function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number)
   }
   return finish(state);
 }
-// Seeds chosen after the match calibration of sprint 4 (the earlier seeds 67, 35 and 20 no longer produce these seasons).
+// Seeds chosen after the match calibration of sprint 4 (the earlier seeds 67, 35 and 20 no longer produce these seasons);
+// the change and offer seeds were chosen again for the relationships-2 rules of format 66 (they were 4 and 102).
 /** Rhine Falcons end Under pressure (25); Aegean Waves are also Under pressure and need a coach. */
 const SACKED_SEED = 154;
 /** Rhine Falcons are dismissed (29) and no other season ended Under pressure. */
-const CHANGE_SEED = 4;
-/** Rhine Falcons end steady (55) while Danube Lynx's season ends Under pressure. */
-const OFFERED_SEED = 102;
+const CHANGE_SEED = 16;
+/** Rhine Falcons end steady (50) while Aegean Waves' season ends Under pressure. */
+const OFFERED_SEED = 2;
 let sackedDay: SeasonState, sacked: SeasonState, changeDay: SeasonState, offeredDay: SeasonState;
 
 beforeAll(() => {
@@ -60,20 +62,20 @@ describe('dismissal at a season end', () => {
   it('opens a vacancy at the least confident board when no other season ended Under pressure', () => {
     const outlook = previewSeasonEnd(changeDay)!;
     expect(outlook.dismissed).toBe(true);
-    expect(outlook.vacancies).toEqual([expect.objectContaining({ clubId: 'alpine-stags', reason: 'change', confidence: 44 })]);
-    expect(outlook.offers.map(offer => offer.clubId)).toEqual(['alpine-stags']);
+    expect(outlook.vacancies).toEqual([expect.objectContaining({ clubId: 'adriatic-comets', reason: 'change', confidence: 45 })]);
+    expect(outlook.offers.map(offer => offer.clubId)).toEqual(['adriatic-comets']);
     const moved = advanceSeason(changeDay);
-    expect([moved.managedClubId, moved.career.moves[0]!.reason]).toEqual(['alpine-stags', 'dismissed']);
+    expect([moved.managedClubId, moved.career.moves[0]!.reason]).toEqual(['adriatic-comets', 'dismissed']);
     expect(parseSeason(serializeSeason(moved))).toEqual(moved);
   });
 
   it('offers a successful manager a job without forcing a move', () => {
     const outlook = previewSeasonEnd(offeredDay)!;
-    expect(outlook).toMatchObject({ dismissed: false, reputation: { value: 55 }, offers: [{ clubId: 'danube-lynx', requirement: VACANCY_BASE_REQUIREMENT }] });
+    expect(outlook).toMatchObject({ dismissed: false, reputation: { value: 50 }, offers: [{ clubId: 'aegean-waves', requirement: VACANCY_BASE_REQUIREMENT }] });
     expect(advanceSeason(offeredDay).managedClubId).toBe(CLUB);
-    const moved = advanceSeason(offeredDay, { moveTo: 'danube-lynx' });
+    const moved = advanceSeason(offeredDay, { moveTo: 'aegean-waves' });
     expect(moved.career.moves[0]!.reason).toBe('moved');
-    expect(getInboxItems(moved).find(item => item.id === 'career-move-1')?.title).toBe('New job · Danube Lynx');
+    expect(getInboxItems(moved).find(item => item.id === 'career-move-1')?.title).toBe('New job · Aegean Waves');
     expect(parseSeason(serializeSeason(moved))).toEqual(moved);
   });
 
@@ -99,16 +101,22 @@ describe('dismissal at a season end', () => {
 
 describe('careers saved in format 37, before dismissal existed', () => {
   it('keep a season that ended Under pressure without a move, and judge only later season ends', () => {
+    // A genuine format-37 career used the relationships-1 rules (format 66 gives new careers relationships-2), so this
+    // season is played with them; with this seed Rhine Falcons still end Under pressure and are dismissed.
+    let older = setEmploymentDelegation(setFacilityDelegation(enableRelationships(createSeason({ seed: SACKED_SEED, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, relationships: false })), true), true);
+    while (older.round < 10) older = advanceMatchday(older);
+    const olderDay = finish(older), olderSacked = advanceSeason(olderDay);
+    expect(olderSacked.career.moves).toEqual([expect.objectContaining({ fromClubId: CLUB, reason: 'dismissed' })]);
     // The format-37 runtime recorded the switch but never dismissed: the same season end, without a move.
-    const stayed = { ...advanceSeason({ ...sackedDay, career: { ...sackedDay.career, enabledSince: null } }), career: sackedDay.career };
+    const stayed = { ...advanceSeason({ ...olderDay, career: { ...olderDay.career, enabledSince: null } }), career: olderDay.career };
     const file = (version: number) => JSON.stringify({ format: 'basketball-manager-season', formatVersion: version, engineVersion: 'possession-3', state: { ...stayed, schemaVersion: version } });
     expect(() => parseSeason(file(38))).toThrow(/joined after the dismissal/);
     const migrated = parseSeason(file(37));
     expect([migrated.managedClubId, migrated.career.moves, migrated.career.enabledSince!.effectiveFrom]).toEqual([CLUB, [], 2]);
-    const dismissal = JSON.parse(serializeSeason(sacked));
+    const dismissal = JSON.parse(serializeSeason(olderSacked));
     dismissal.formatVersion = 37; dismissal.state.schemaVersion = 37;
     expect(() => parseSeason(JSON.stringify(dismissal))).toThrow(/supported reason/);
-  });
+  }, 120_000);
 });
 
 describe('reputation and requirements', () => {

@@ -23,9 +23,10 @@ function finalMatchday(seed: number): SeasonState {
 let sackedDay: SeasonState, offeredDay: SeasonState;
 
 beforeAll(() => {
-  // Seeds chosen after the match calibration of sprint 4 (they were 67 and 20), shared with tests/career-dismissal.test.ts.
+  // Seeds chosen after the match calibration of sprint 4 (they were 67 and 20) and, for the offer, the relationships-2 rules
+  // of format 66 (it was 102), shared with tests/career-dismissal.test.ts.
   sackedDay = finalMatchday(154); // Rhine Falcons dismissed; Aegean Waves offer their job.
-  offeredDay = finalMatchday(102); // Rhine Falcons safe; Danube Lynx offer their job.
+  offeredDay = finalMatchday(2); // Rhine Falcons safe; Aegean Waves offer their job.
 }, 240_000);
 
 describe('season-end choice', () => {
@@ -43,8 +44,8 @@ describe('season-end choice', () => {
   it('lets a manager who kept the job accept an offer or stay', () => {
     const html = choice(offeredDay, previewSeasonEnd(offeredDay)!);
     expect(html).toContain('Job offers');
-    expect(html).toContain('data-reputation="55"');
-    expect(html).toMatch(/data-join-club="danube-lynx"[^>]*>Join Danube Lynx/);
+    expect(html).toContain('data-reputation="50"');
+    expect(html).toMatch(/data-join-club="aegean-waves"[^>]*>Join Aegean Waves/);
     expect(html).toMatch(/id="season-end-stay"[^>]*>Stay at Rhine Falcons/);
   });
 });
@@ -69,6 +70,6 @@ describe('your job on the Board page', () => {
 
   it('lists a declined offer in the Inbox', () => {
     const stayed = advanceSeason(offeredDay);
-    expect(getInboxItems(stayed).find(item => item.id === 'offers-declined-1')).toMatchObject({ title: 'Job offer declined', detail: expect.stringContaining('Danube Lynx had offered you its job') });
+    expect(getInboxItems(stayed).find(item => item.id === 'offers-declined-1')).toMatchObject({ title: 'Job offer declined', detail: expect.stringContaining('Aegean Waves had offered you its job') });
   });
 });

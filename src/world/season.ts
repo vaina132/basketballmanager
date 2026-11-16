@@ -17,6 +17,7 @@ import { computeExchanges, departureFor, joinedContracts, leavingRecord } from '
 import type { SeasonEndDecision } from '../domain/career';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
 import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
+import { processContractRequests } from './contract-requests';
 import { createFacilities, enableBoardFunding, enableFacilities, enableFacilityMaintenance, processFacilityProjects, automateFacilities } from './facilities';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonEurope, SeasonFixture, SeasonState, Standing } from '../domain/season';
 import { nextEuropeanPlaces, openingEurope } from './european-places';
@@ -427,7 +428,8 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const youthReady = youthCompetitionEnabled ? enableYouthCompetition(developed) : developed;
   const built = facilitiesEnabled ? enableFacilities(youthReady) : youthReady;
   const sponsored = commercialEnabled ? enableCommercial(built) : built;
-  const related = relationshipsEnabled ? prepareRelationshipsRound(enableRelationships(sponsored)) : sponsored;
+  // Format 66: new careers use squad-rank default roles and contract requests (`relationships-2`).
+  const related = relationshipsEnabled ? prepareRelationshipsRound(enableRelationships(sponsored, 'relationships-2')) : sponsored;
   const boarded = boardEnabled ? enableBoard(related, 'career') : related;
   const capitalised = boardFundingEnabled ? enableBoardFunding(boarded) : boarded;
   const judged = boardConsequencesEnabled ? enableBoardConsequences(capitalised) : capitalised;
@@ -614,7 +616,7 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState): Season
   next = prepareScoutingAssignments(next);
   next = scheduleInSeasonRecruitment(next);
   next = automateFacilities(next);
-  next = automateRelationships(prepareRelationshipsRound(next));
+  next = processContractRequests(automateRelationships(prepareRelationshipsRound(next)));
   // Step 3.4a: a week whose first game day falls after its Saturday rests until then; the manager's match is that day's.
   const firstDay = currentGameDay(next);
   if (!firstDay) return { ...next, activeFixtureId: null, activeMatch: null };
@@ -792,7 +794,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = prepareScoutingAssignments(refreshSquadKnowledge(next));
   next = scheduleInSeasonRecruitment(next);
   next = automateFacilities(next);
-  next = automateRelationships(prepareRelationshipsRound(next));
+  next = processContractRequests(automateRelationships(prepareRelationshipsRound(next)));
   next = prepareBoardSeason(next);
   next.activeMatch = first ? prepareMatch(next, first) : null;
   return summarizeSeniorHistory(summarizeYouthHistory(summarizeAcademyHistory(next)));

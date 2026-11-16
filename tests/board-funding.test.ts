@@ -14,7 +14,8 @@ const changed = (state: SeasonState, mutate: (copy: SeasonState) => void) => { c
 let generous: { state: SeasonState; quote: BoardFundingQuote }, cautious: { state: SeasonState; quote: BoardFundingQuote };
 
 beforeAll(() => {
-  generous = driveToFundingRequest('aegean-waves', 227);
+  // Seed 4 (227 before the relationships-2 rules of format 66): Aegean Waves' board approves in season 1, after an automatic request.
+  generous = driveToFundingRequest('aegean-waves', 4);
   cautious = driveToFundingRequest('alpine-stags', 227);
 }, 240_000);
 

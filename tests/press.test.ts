@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { getPressQuestion, PRESS_ANSWERS, PRESS_EFFECTS, PRESS_IMPACT_CAP, pressImpact } from '../src/world/press-policy';
-import { answerPress, getPlayerRelationship } from '../src/world/relationships';
+import { answerPress, enableRelationships, getPlayerRelationship } from '../src/world/relationships';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
@@ -74,8 +74,9 @@ describe('press questions in a career', () => {
   });
 
   it('rejects press answers in a format-33 file', () => {
-    // A genuine format-33 career had no rivalries, so its derby crowds were never enlarged.
-    let plain = createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, rivalries: false, facilityMaintenance: false });
+    // A genuine format-33 career had no rivalries, so its derby crowds were never enlarged, and used the original
+    // relationships-1 rules (format 66 gives new careers relationships-2), so the squad dynamics are enabled that way.
+    let plain = enableRelationships(createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, relationships: false, rivalries: false, facilityMaintenance: false }));
     for (let step = 0; step < 10 && !getPressQuestion(plain); step += 1) plain = advanceMatchday(plain);
     const file = JSON.parse(serializeSeason(answerPress(plain, 'routine')));
     file.formatVersion = 33; file.state.schemaVersion = 33;

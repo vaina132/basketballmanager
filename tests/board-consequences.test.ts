@@ -108,6 +108,8 @@ describe('board verdict validation', () => {
     delete file.state.rivalries;
     delete file.state.facilities.maintenanceSince;
     delete file.state.career;
+    // Nor the relationships-2 rules of format 66: at the first matchday, with no results yet, the frozen morale is the same.
+    file.state.relationships.model = 'relationships-1'; delete file.state.relationships.squadRanks;
     expect(() => parseSeason(JSON.stringify(file))).not.toThrow();
     file.state.board.consequencesSince = null;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/unsupported fields/);

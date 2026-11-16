@@ -8,6 +8,7 @@ import { getTransferPaymentSummary } from './transfer-payments';
 import { dateForRound, MAX_SEASON_NUMBER } from './season';
 import { memoizePure } from './pure-cache';
 import { automationCushion, scaledMoney } from './economy';
+import { activeLease } from './facility-debt';
 
 /** The three facilities of `facilities-1` careers (formats 28-64). */
 export const FACILITY_TYPES: readonly FacilityType[] = ['arena', 'training', 'youth'];
@@ -26,6 +27,8 @@ const facilityUpkeep = (context: WorldContext, clubId: string, type: FacilityTyp
 export const FACILITY_CONSTRUCTION_CAPACITY_PERCENT = 90;
 /** The only upgrade blocker that board capital can resolve. */
 export const FACILITY_FUNDS_REASON = 'The upgrade exceeds the remaining budget after salary and transfer commitments.';
+/** Format 71: a leased level is upgraded further only once its lease is paid off or ended. */
+export const FACILITY_LEASED_REASON = 'This facility is leased. Upgrade it once the lease is paid off or ended.';
 /** The only repair blocker that board capital can resolve (`facilities-2`). */
 export const FACILITY_REPAIR_FUNDS_REASON = 'The repair exceeds the remaining budget after salary and transfer commitments.';
 
@@ -120,10 +123,13 @@ function conditionCache(facilities: SeasonFacilities): Map<string, number> {
   return cache;
 }
 
-/** The latest completed project (upgrade or repair) of one facility on or before a date. */
+/** Format 71: a leased level handed back early stops counting after its return date. */
+const inPlace = (project: FacilityProject, onDate: string): boolean => project.returnedOn === undefined || project.returnedOn >= onDate;
+
+/** The latest completed project (upgrade, repair or lease still in place) of one facility on or before a date. */
 function latestCompletion(facilities: SeasonFacilities, type: FacilityType, clubId: string, onDate: string): string | undefined {
   let latest: string | undefined;
-  for (const project of facilities.projects) if (project.clubId === clubId && project.type === type && project.completedOn !== null && project.completedOn <= onDate && (latest === undefined || project.completedOn > latest)) latest = project.completedOn;
+  for (const project of facilities.projects) if (project.clubId === clubId && project.type === type && project.completedOn !== null && project.completedOn <= onDate && inPlace(project, onDate) && (latest === undefined || project.completedOn > latest)) latest = project.completedOn;
   return latest;
 }
 
@@ -198,7 +204,7 @@ export function facilityCompletionDate(date: string, days: number): string {
 export function getFacilityLevel(state: FacilitiesContext, type: FacilityType, clubId: string, onDate = state.date ?? '9999-12-31'): number {
   if (!ALL_FACILITY_TYPES.includes(type)) throw new Error('Choose an arena, training, youth, medical or scouting facility.');
   if (!state.facilities?.enabledSince || state.facilities.enabledSince.date > onDate) return 1;
-  return state.facilities.projects.filter(project => project.clubId === clubId && project.type === type && project.completedOn !== null && project.completedOn <= onDate).reduce((level, project) => Math.max(level, project.toLevel), 1);
+  return state.facilities.projects.filter(project => project.clubId === clubId && project.type === type && project.completedOn !== null && project.completedOn <= onDate && inPlace(project, onDate)).reduce((level, project) => Math.max(level, project.toLevel), 1);
 }
 
 export function getActiveFacilityProject(state: FacilitiesContext, clubId: string): FacilityProject | null {
@@ -253,10 +259,13 @@ export function getArenaFullCapacity(state: FacilitiesContext, clubId: string, o
   return clubFinanceDefinition(worldOf(state), clubId).capacity + Math.floor(ADDED_SEATS[getFacilityLevel(state, 'arena', clubId, onDate) - 1]! * facilityEffectPercent(state, 'arena', clubId, onDate ?? '9999-12-31') / 100);
 }
 
-/** Starts and manual cancellations on matchday cannot change that day's already prepared gate. Repairs close seats like construction. */
+/**
+ * Starts and manual cancellations on matchday cannot change that day's already prepared gate. Repairs close seats like
+ * construction; installing leased seating (format 71) closes none.
+ */
 export function getArenaCapacity(state: FacilitiesContext, clubId: string, onDate = state.date ?? '9999-12-31'): number {
   const capacity = getArenaFullCapacity(state, clubId, onDate);
-  const disrupted = state.facilities?.enabledSince && state.facilities.enabledSince.date <= onDate && state.facilities.projects.some(project => project.clubId === clubId && project.type === 'arena' && project.startedOn < onDate && (project.cancelledOn === null || project.cancelledOn >= onDate) && (project.completedOn === null || project.completedOn > onDate));
+  const disrupted = state.facilities?.enabledSince && state.facilities.enabledSince.date <= onDate && state.facilities.projects.some(project => project.clubId === clubId && project.type === 'arena' && project.kind !== 'lease' && project.startedOn < onDate && (project.cancelledOn === null || project.cancelledOn >= onDate) && (project.completedOn === null || project.completedOn > onDate));
   return disrupted ? Math.floor(capacity * FACILITY_CONSTRUCTION_CAPACITY_PERCENT / 100) : capacity;
 }
 
@@ -288,6 +297,7 @@ export function quoteFacilityUpgrade(state: SeasonState, type: FacilityType, clu
   else if (type === 'scouting' && !state.scouting.enabledSince) reason = 'Enable scouting before upgrading the scouting office.';
   else if (fromLevel === FACILITY_MAX_LEVEL) reason = 'This facility is already at the highest development level.';
   else if (getActiveFacilityProject(state, clubId)) reason = 'Finish or cancel the current club project before starting another.';
+  else if (activeLease(state, clubId, type)) reason = FACILITY_LEASED_REASON;
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before funding construction.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before funding construction.';
   else if (available < cost) reason = FACILITY_FUNDS_REASON;

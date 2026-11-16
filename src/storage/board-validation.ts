@@ -9,6 +9,7 @@ import { openingSponsorshipClubs } from '../world/commercial-policy';
 import { fundingSourceId } from '../world/finance';
 import { fullWorldClubsIn, roundOrdinal, seasonRounds } from '../world/career-world';
 import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
+import { boardDebtImpacts } from '../world/facility-debt';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'ledgerCount', 'rosterCount'] as const;
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
@@ -61,7 +62,8 @@ function reviewLedgerCount(state: SeasonState, year: number, round: number): num
   const ledger = state.finance.ledger;
   let count = 0;
   for (const [index, entry] of ledger.entries()) {
-    if (entry.seasonNumber < year || entry.seasonNumber === year && entry.round < round || entry.seasonNumber === year && entry.round === round && ['tickets', 'operations', 'facility-upkeep', 'payroll'].includes(entry.kind)) count = index + 1;
+    // Format 71: a scheduled loan or lease payment belongs to the matchday's mandatory costs.
+    if (entry.seasonNumber < year || entry.seasonNumber === year && entry.round < round || entry.seasonNumber === year && entry.round === round && (['tickets', 'operations', 'facility-upkeep', 'payroll'].includes(entry.kind) || typeof entry.debt?.payment === 'number')) count = index + 1;
   }
   const initial = new Set(financeLedgerSlice(state.finance, 0, count).filter(entry => entry.kind === 'transfer').map(entry => entry.sourceId));
   const existingPayments = new Set(state.employment.transfers.filter(transfer => initial.has(transfer.id)).flatMap(transfer => transfer.payments.map(payment => payment.id)));
@@ -164,7 +166,10 @@ export function validateBoard(state: SeasonState, version: number): void {
       if (restarts) board = { ...board, restarts: restarts.filter(restart => restart.reviewCount <= reviewIndex) };
       // Format 67, careers with media: the media assessment from results and press answers before this review.
       const pressMedia = boardMediaEvidence(state, reviewAnchor.seasonNumber, reviewAnchor.round, reviewAnchor.date);
-      try { review = validationReplayCache.calculate('board-review', { state: { ...contextAt(state, reviewAnchor, board), ...(pressMedia ? { pressMedia } : {}) }, mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
+      const context = contextAt(state, reviewAnchor, board);
+      // Format 71: each club's debt at the review's own payment boundary.
+      const debtImpacts = boardDebtImpacts({ ...context, facilities: state.facilities });
+      try { review = validationReplayCache.calculate('board-review', { state: { ...context, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}) }, mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
       if (!equal(reviewRaw, review)) fail(reviewPath, 'must exactly reproduce results, inherited costs, injury context and bounded confidence');
       board = { ...board, reviews: [...board.reviews, review] }; reviewIndex += 1;
     }

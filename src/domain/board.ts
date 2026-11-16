@@ -39,6 +39,8 @@ export interface BoardClubReview {
   rivalryImpact?: number;
   /** Format 67, the manager's club in careers with media: media standing and recent press answers (`src/world/media.ts`). */
   mediaImpact?: number;
+  /** Format 71, careers with facility financing: a high debt ratio lowers the assessment a little (-1 to -4); absent at 0. */
+  debtImpact?: number;
   assessment: number;
   previousConfidence: number;
   confidence: number;

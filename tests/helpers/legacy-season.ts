@@ -75,9 +75,15 @@ export function stripAcademy(value: object): void {
   delete (value as Record<string, unknown>).youth;
 }
 
-/** Careers saved before format 65 keep the `facilities-1` model: three facilities and no repairs. */
+/** Careers saved before format 65 keep the `facilities-1` model: three facilities and no repairs (nor loans and leases). */
 export function withLegacyFacilities(state: SeasonState): SeasonState {
-  return { ...state, facilities: { ...state.facilities, model: 'facilities-1' } };
+  return withoutFacilityFinancing({ ...state, facilities: { ...state.facilities, model: 'facilities-1' } });
+}
+
+/** Careers saved before format 71 pay for facility projects upfront: no `financing` and no `debts` (an untouched career has none). */
+export function withoutFacilityFinancing(state: SeasonState): SeasonState {
+  const { financing: _financing, debts: _debts, ...facilities } = state.facilities;
+  return { ...state, facilities };
 }
 
 /** Past player statistics cannot be recovered from an old-format archive. */
@@ -168,12 +174,12 @@ export function stripBackground(value: object): void {
   if (state.world && typeof state.world === 'object') delete (state.world as Record<string, unknown>).lowerDivisions;
 }
 
-/** createSeason options for a new career as created before the saved ideas level (formats 63-68). */
+/** createSeason options for a new career as created before the saved ideas level (formats 63-71). */
 export const BEFORE_SAVED_IDEAS = { media: false, namingRights: false } as const;
 
 /**
  * An untouched new career on the rules saved before the saved ideas level: Level 7 career rules (`career-1`) and the
- * three original facilities (`facilities-1`). Create it with `BEFORE_SAVED_IDEAS`; grown rivalries are converted after
+ * three original facilities (`facilities-1`), paid upfront (no loans or leases). Create it with `BEFORE_SAVED_IDEAS`; grown rivalries are converted after
  * play with `withFixedRivalries`.
  */
 export function beforeSavedIdeas(state: SeasonState): SeasonState {

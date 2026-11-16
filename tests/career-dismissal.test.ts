@@ -11,6 +11,7 @@ import { advanceMatchday } from './helpers/board-funding';
 import { currentSeasonFile, withFixedRivalries } from './helpers/season-format';
 import { getInboxItems } from '../src/ui/inbox-items';
 import { asCareer1 } from './helpers/career-rules';
+import { withLegacyFacilities } from './helpers/legacy-season';
 
 const CLUB = 'rhine-falcons';
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
@@ -20,9 +21,9 @@ const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(s
 const start = (seed: number, careerMoves = true, media = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, media, namingRights: false }), true), true));
 /** An all-automatic Rhine Falcons season, played to the finished final match. */
 function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number, legacy = false): SeasonState {
-  // `legacy`: a career as saved before format 65 and 67, without the media record and on `facilities-1`.
+  // `legacy`: a career as saved before format 65 and 67, without the media record, on `facilities-1` and paying upfront.
   let state = start(seed, careerMoves, !legacy);
-  if (legacy) state = { ...state, facilities: { ...state.facilities, model: 'facilities-1' } };
+  if (legacy) state = withLegacyFacilities(state);
   while (state.round < 10) {
     if (state.round === enableAtRound) state = enableCareerMoves(state);
     state = advanceMatchday(state);

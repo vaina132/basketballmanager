@@ -13,7 +13,7 @@ export interface FinanceEntry {
   clubId: string;
   seasonNumber: number;
   round: number;
-  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout' | 'facility' | 'facility-upkeep' | 'board-capital' | 'naming-rights' | 'sponsor-exit';
+  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout' | 'facility' | 'facility-upkeep' | 'board-capital' | 'naming-rights' | 'sponsor-exit' | 'loan' | 'loan-repayment' | 'lease';
   /** Income or cost in signed euro cents; cash effects also depend on unpaid obligations. */
   amount: number;
   sourceId: string;
@@ -36,6 +36,11 @@ export interface FinanceEntry {
   namingRights?: NamingRightsPayment;
   /** Format 64: a sponsor's exit payment (income) or the club's termination fee (cost). */
   sponsorExit?: SponsorExitPayment;
+  /**
+   * Format 71: a facility loan or lease entry: `start` (loan received, or lease agreed at no cost), a scheduled payment
+   * by number, or `settle` (early loan repayment with its fee, or the penalty for ending a lease early).
+   */
+  debt?: { debtId: string; payment: 'start' | number | 'settle' };
 }
 
 export interface SeasonFinance {

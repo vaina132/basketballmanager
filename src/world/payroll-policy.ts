@@ -7,6 +7,7 @@ import { getReservedTransferFees } from './market-policy';
 import { getTransferObligationReserve } from './transfer-payments';
 import { getReservedInSeasonFees, getReservedInSeasonWages } from './recruitment-policy';
 import { ledgerClubNet, payrollLedgerReader, type PayrollLedgerReader } from './finance-ledger-index';
+import { debtReserve } from './facility-debt';
 
 /** Installments in the built-in league's season; every season pays one installment per matchday (`seasonRounds`). */
 export const PAYROLL_INSTALLMENTS = 10;
@@ -49,13 +50,16 @@ export function getPayrollReserve(state: Pick<SeasonState, 'payroll' | 'finance'
   return state.payroll.agreements.filter(agreement => agreement.clubId === clubId && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= (state.round ?? rounds)).reduce((sum, agreement) => sum + agreementCommittedFromLedger(agreement, agreementThroughRound(state, agreement), rounds, readPayroll), 0);
 }
 
-/** Reconciled net wealth after every reservation; negative when commitments already exceed cash. */
-export function getSpendablePosition(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'employment' | 'recruitment' | 'round'>> & WorldContext, clubId: string, excludeOfferId?: string, excludeTransferId?: string, excludeInSeasonOfferId?: string): number {
+/**
+ * Reconciled net wealth after every reservation; negative when commitments already exceed cash. Format 71: this
+ * season's loan and lease payments still to come are reserved too (none in older careers).
+ */
+export function getSpendablePosition(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'employment' | 'recruitment' | 'round' | 'facilities'>> & WorldContext, clubId: string, excludeOfferId?: string, excludeTransferId?: string, excludeInSeasonOfferId?: string): number {
   const net = ledgerClubNet(state.finance, clubId);
-  return net - getPayrollReserve(state, clubId) - getReservedTransferFees(state, clubId, excludeOfferId) - getTransferObligationReserve(state, clubId, excludeTransferId) - getReservedInSeasonWages(state, clubId, excludeInSeasonOfferId) - getReservedInSeasonFees(state, clubId, excludeInSeasonOfferId);
+  return net - getPayrollReserve(state, clubId) - getReservedTransferFees(state, clubId, excludeOfferId) - getTransferObligationReserve(state, clubId, excludeTransferId) - getReservedInSeasonWages(state, clubId, excludeInSeasonOfferId) - getReservedInSeasonFees(state, clubId, excludeInSeasonOfferId) - debtReserve(state, clubId);
 }
 
 /** Reconciled net wealth yields cash when positive and unpaid obligations when negative. */
-export function getSpendableCash(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'employment' | 'recruitment' | 'round'>>, clubId: string, excludeOfferId?: string, excludeTransferId?: string, excludeInSeasonOfferId?: string): number {
+export function getSpendableCash(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'employment' | 'recruitment' | 'round' | 'facilities'>>, clubId: string, excludeOfferId?: string, excludeTransferId?: string, excludeInSeasonOfferId?: string): number {
   return Math.max(0, getSpendablePosition(state, clubId, excludeOfferId, excludeTransferId, excludeInSeasonOfferId));
 }

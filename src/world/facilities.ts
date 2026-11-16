@@ -1,16 +1,21 @@
 import { financeLedgerCount } from './finance-ledger';
-import type { FacilityAnchor, FacilityEvent, FacilityProject, FacilityType, MaintenancePlan, SeasonFacilities } from '../domain/facilities';
+import type { FacilityAnchor, FacilityDebt, FacilityEvent, FacilityProject, FacilityType, MaintenancePlan, SeasonFacilities } from '../domain/facilities';
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { clubFinanceDefinition, worldOf } from './career-world';
 import { facilityAutomationBuffer, facilityTypes, FACILITY_RULES_2, getActiveFacilityProject, getFacilityCondition, getFacilityLevel, hasFacilityCondition, maintenancePlanOn, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs } from './facilities-policy';
 import { getSpendableCash, getSpendablePosition } from './payroll-policy';
-import { getFinanceBalance, recordBoardCapital, recordFacilityInvestment } from './finance';
+import { getFinanceBalance, recordBoardCapital, recordDebtEntry, recordFacilityInvestment } from './finance';
 import { quoteBoardFunding, type BoardFundingQuote } from './board-funding-policy';
+import { borrowingLimit, clubDebts, debtPosition, FACILITY_FINANCING_RULES, outstandingDebt, usesFacilityFinancing } from './facility-debt';
+import { quoteDebtSettlement, quoteFacilityLease, quoteFacilityLoan } from './facility-financing';
 
-/** New careers use `facilities-2` (format 65); older careers keep `facilities-1` and its three facilities. */
-export function createFacilities(clubs: readonly Pick<Team, 'id'>[] = [], managedClubId = '', model: SeasonFacilities['model'] = 'facilities-2'): SeasonFacilities {
-  return { model, enabledSince: null, delegated: Object.fromEntries(clubs.map(club => [club.id, club.id !== managedClubId])), projects: [], events: [], fundingSince: null, maintenanceSince: null };
+/**
+ * New careers use `facilities-2` (format 65) with loans and leases (`loans-1`, format 71); older careers keep
+ * `facilities-1` and its three facilities, and careers without `financing` pay upfront.
+ */
+export function createFacilities(clubs: readonly Pick<Team, 'id'>[] = [], managedClubId = '', model: SeasonFacilities['model'] = 'facilities-2', financing?: SeasonFacilities['financing']): SeasonFacilities {
+  return { model, enabledSince: null, delegated: Object.fromEntries(clubs.map(club => [club.id, club.id !== managedClubId])), projects: [], events: [], fundingSince: null, maintenanceSince: null, ...(financing ? { financing, debts: [] } : {}) };
 }
 
 export function facilityEventAnchor(state: SeasonState): FacilityAnchor {
@@ -25,24 +30,38 @@ export function facilitiesAtEventCount(facilities: SeasonFacilities, eventCount:
   if (!Number.isInteger(eventCount) || eventCount < 0 || eventCount > facilities.events.length) throw new Error('Choose an existing facilities event prefix.');
   const events = facilities.events.slice(0, eventCount);
   let projects: FacilityProject[] = [];
+  let debts: FacilityDebt[] = [];
   const delegated = Object.fromEntries(Object.keys(facilities.delegated).map(clubId => [clubId, clubId !== managedClubId]));
+  const storedDebt = (debtId: string) => {
+    const stored = facilities.debts?.find(debt => debt.id === debtId);
+    if (!stored) throw new Error('A loan or lease must retain its terms.');
+    return stored;
+  };
   for (const event of events) {
-    if (event.type === 'start' || event.type === 'repair') {
+    if (event.type === 'start' || event.type === 'repair' || event.type === 'lease') {
       const stored = facilities.projects.find(project => project.id === event.projectId);
       if (!stored) throw new Error('A construction approval must retain its project terms.');
-      projects.push({ ...stored, completedOn: null, cancelledOn: null });
+      const { returnedOn: _returned, ...terms } = stored;
+      projects.push({ ...terms, completedOn: null, cancelledOn: null });
+      if (event.type === 'lease') debts.push({ ...storedDebt(event.debtId), settled: null });
     } else if (event.type === 'cancel') projects = projects.map(project => project.id === event.projectId ? { ...project, cancelledOn: event.date } : project);
     else if (event.type === 'delegate') delegated[event.clubId] = event.delegated;
     else if (event.type === 'process') projects = projects.map(project => project.completedOn === null && project.cancelledOn === null && project.dueOn <= event.date ? { ...project, completedOn: event.date } : project);
+    else if (event.type === 'loan') debts.push({ ...storedDebt(event.debtId), settled: null });
+    else if (event.type === 'repay' || event.type === 'end-lease') {
+      const stored = storedDebt(event.debtId);
+      debts = debts.map(debt => debt.id === event.debtId ? { ...debt, settled: stored.settled } : debt);
+      if (event.type === 'end-lease') projects = projects.map(project => project.id === stored.projectId ? { ...project, returnedOn: event.date } : project);
+    }
   }
-  return { ...facilities, delegated, projects, events };
+  return { ...facilities, delegated, projects, events, ...(facilities.debts ? { debts } : {}) };
 }
 
 export function enableFacilities(state: SeasonState): SeasonState {
   if (state.facilities.enabledSince) return state;
   if (!state.finance.enabledSince) throw new Error('Enable club finances before managing facilities.');
   // Activation preserves the price and capacity of the already prepared matchday; the career keeps its facilities model.
-  const facilities: SeasonFacilities = { ...createFacilities(state.clubs, state.managedClubId, state.facilities.model), enabledSince: facilityEventAnchor(state) };
+  const facilities: SeasonFacilities = { ...createFacilities(state.clubs, state.managedClubId, state.facilities.model, state.facilities.financing), enabledSince: facilityEventAnchor(state) };
   const next = { ...state, facilities, finance: { ...state.finance, roundCapacities: Object.fromEntries(state.clubs.map(club => [club.id, clubFinanceDefinition(worldOf(state), club.id).capacity])) } };
   return automateFacilities(next);
 }
@@ -67,9 +86,11 @@ export function applyFacilityEvent(state: SeasonState, event: FacilityEvent): Se
     const project: FacilityProject = { id: event.projectId, clubId: event.clubId, type: event.facilityType, fromLevel: quote.level, toLevel: quote.level, cost: quote.cost, startedOn: state.date, dueOn: quote.dueOn, completedOn: null, cancelledOn: null, startEventIndex: state.facilities.events.length, kind: 'repair', conditionBefore: quote.conditionBefore };
     return recordFacilityInvestment({ ...state, facilities: { ...state.facilities, projects: [...state.facilities.projects, project], events } }, project);
   }
+  if (event.type === 'loan' || event.type === 'lease' || event.type === 'repay' || event.type === 'end-lease') return applyFinancingEvent(state, event, events);
   if (event.type === 'cancel') {
     const project = state.facilities.projects.find(project => project.id === event.projectId);
     if (!project || project.completedOn !== null || project.cancelledOn !== null) throw new Error('Choose a project still under construction.');
+    if (project.kind === 'lease') throw new Error('A leased level cannot be cancelled; end the lease once it is installed.');
     return { ...state, facilities: { ...state.facilities, events, projects: state.facilities.projects.map(item => item.id === project.id ? { ...item, cancelledOn: state.date } : item) } };
   }
   if (event.type === 'delegate') {
@@ -96,6 +117,64 @@ export function applyFacilityEvent(state: SeasonState, event: FacilityEvent): Se
   const due = state.facilities.projects.filter(project => project.completedOn === null && project.cancelledOn === null && project.dueOn <= state.date);
   if (!due.length) throw new Error('There are no construction projects ready to complete at this calendar boundary.');
   return { ...state, facilities: { ...state.facilities, events, projects: state.facilities.projects.map(project => due.some(item => item.id === project.id) ? { ...project, completedOn: state.date } : project) } };
+}
+
+/**
+ * Format 71 (`loans-1`): a loan books its principal as income and is followed at once by the project it pays for; a
+ * lease adds the next level (installed at the next calendar step) and books a no-cost entry; settling books the early
+ * repayment or the penalty, and an ended lease hands its level back after today.
+ */
+function applyFinancingEvent(state: SeasonState, event: Extract<FacilityEvent, { type: 'loan' | 'lease' | 'repay' | 'end-lease' }>, events: FacilityEvent[]): SeasonState {
+  const facilities = state.facilities, debts = facilities.debts ?? [];
+  if (!usesFacilityFinancing(facilities) || !facilities.debts) throw new Error('Loans and leases belong to careers started with facility financing.');
+  const nextDebtId = `facility-debt-${debts.length + 1}`, ledgerIndex = financeLedgerCount(state.finance);
+  if (event.type === 'loan') {
+    if (event.debtId !== nextDebtId) throw new Error('Loan identity must be sequential.');
+    const quote = quoteFacilityLoan(state, event.facilityType, event.clubId, event.project, event.seasons, event.principal);
+    if (!quote.canBorrow) throw new Error(quote.reason!);
+    if (event.rateBasisPoints !== quote.rateBasisPoints || (event.project !== 'upgrade' && event.project !== 'repair')) throw new Error("Record the loan exactly as the bank's rules give it.");
+    const debt: FacilityDebt = { id: event.debtId, kind: 'loan', clubId: event.clubId, projectId: `facility-project-${facilities.projects.length + 1}`, facilityType: event.facilityType, principal: quote.principal, rateBasisPoints: quote.rateBasisPoints, seasons: quote.seasons, payment: quote.payment, total: quote.total, seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex, startEventIndex: facilities.events.length, settled: null };
+    return recordDebtEntry({ ...state, facilities: { ...facilities, events, debts: [...debts, debt] } }, { clubId: debt.clubId, kind: 'loan', amount: debt.principal, debt: { debtId: debt.id, payment: 'start' } });
+  }
+  if (event.type === 'lease') {
+    if (event.debtId !== nextDebtId || event.projectId !== `facility-project-${facilities.projects.length + 1}`) throw new Error('Lease and project identities must be sequential.');
+    const quote = quoteFacilityLease(state, event.facilityType, event.clubId, event.seasons);
+    if (!quote.canLease) throw new Error(quote.reason!);
+    const project: FacilityProject = { id: event.projectId, clubId: event.clubId, type: event.facilityType, fromLevel: quote.fromLevel, toLevel: quote.toLevel, cost: 0, startedOn: state.date, dueOn: state.date, completedOn: null, cancelledOn: null, startEventIndex: facilities.events.length, kind: 'lease' };
+    const debt: FacilityDebt = { id: event.debtId, kind: 'lease', clubId: event.clubId, projectId: project.id, facilityType: event.facilityType, principal: quote.price, rateBasisPoints: 0, seasons: quote.seasons, payment: quote.payment, total: quote.total, seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex, startEventIndex: facilities.events.length, settled: null };
+    return recordDebtEntry({ ...state, facilities: { ...facilities, events, projects: [...facilities.projects, project], debts: [...debts, debt] } }, { clubId: debt.clubId, kind: 'lease', amount: 0, debt: { debtId: debt.id, payment: 'start' } });
+  }
+  const quote = quoteDebtSettlement(state, event.debtId), debt = quote.debt;
+  if ((event.type === 'repay') !== (debt.kind === 'loan')) throw new Error(event.type === 'repay' ? 'Only a loan can be repaid early.' : 'Only a lease can be ended early.');
+  if (!quote.canSettle) throw new Error(quote.reason!);
+  const settled: FacilityDebt = { ...debt, settled: { seasonNumber: state.seasonNumber, round: state.round, date: state.date, ledgerIndex, amount: quote.amount } };
+  const projects = event.type === 'end-lease' ? facilities.projects.map(project => project.id === debt.projectId ? { ...project, returnedOn: state.date } : project) : facilities.projects;
+  return recordDebtEntry({ ...state, facilities: { ...facilities, events, projects, debts: debts.map(item => item.id === debt.id ? settled : item) } }, { clubId: debt.clubId, kind: debt.kind === 'loan' ? 'loan-repayment' : 'lease', amount: -quote.amount, debt: { debtId: debt.id, payment: 'settle' } });
+}
+
+/** Format 71: borrow for an upgrade or repair; the principal is received and the project starts at once. */
+export function takeFacilityLoan(state: SeasonState, type: FacilityType, project: 'upgrade' | 'repair' = 'upgrade', seasons = 3, principal?: number, clubId = state.managedClubId): SeasonState {
+  const quote = quoteFacilityLoan(state, type, clubId, project, seasons, principal);
+  if (!quote.canBorrow) throw new Error(quote.reason!);
+  const borrowed = applyFacilityEvent(state, { ...facilityEventAnchor(state), type: 'loan', debtId: `facility-debt-${(state.facilities.debts ?? []).length + 1}`, clubId, facilityType: type, project, principal: quote.principal, seasons, rateBasisPoints: quote.rateBasisPoints });
+  return project === 'repair' ? startFacilityRepair(borrowed, type, clubId) : startFacilityUpgrade(borrowed, type, clubId);
+}
+
+/** Format 71: lease the next arena or training level; it is installed for the next matchday. */
+export function leaseFacility(state: SeasonState, type: FacilityType, seasons = 3, clubId = state.managedClubId): SeasonState {
+  return applyFacilityEvent(state, { ...facilityEventAnchor(state), type: 'lease', debtId: `facility-debt-${(state.facilities.debts ?? []).length + 1}`, projectId: `facility-project-${state.facilities.projects.length + 1}`, clubId, facilityType: type, seasons });
+}
+
+/** Format 71: repay one of the club's loans early (remaining principal plus the fee). */
+export function repayFacilityLoan(state: SeasonState, debtId: string): SeasonState {
+  if (!state.facilities.debts?.some(debt => debt.id === debtId && debt.clubId === state.managedClubId && debt.kind === 'loan')) throw new Error('Choose a loan of your club.');
+  return applyFacilityEvent(state, { ...facilityEventAnchor(state), type: 'repay', debtId });
+}
+
+/** Format 71: end one of the club's leases early: the level is handed back after today and the penalty is paid. */
+export function endFacilityLease(state: SeasonState, debtId: string): SeasonState {
+  if (!state.facilities.debts?.some(debt => debt.id === debtId && debt.clubId === state.managedClubId && debt.kind === 'lease')) throw new Error('Choose a lease of your club.');
+  return applyFacilityEvent(state, { ...facilityEventAnchor(state), type: 'end-lease', debtId });
 }
 
 export function startFacilityUpgrade(state: SeasonState, type: FacilityType, clubId = state.managedClubId): SeasonState {
@@ -173,7 +252,41 @@ function automateRepair(state: SeasonState, clubId: string): { state: SeasonStat
     const funded = quoteBoardFunding(state, needed.type, clubId, 'automatic', 'repair');
     if (funded.approved) return { state: startFacilityRepair(applyFacilityEvent(state, { ...facilityEventAnchor(state), ...fundingDecision(funded) }), needed.type, clubId), waiting: false };
   }
-  return { state, waiting: true };
+  // Format 71: a worn facility's repair is worth a prudent loan.
+  const borrowed = automaticLoan(state, clubId, needed.type, 'repair');
+  return borrowed ? { state: borrowed, waiting: false } : { state, waiting: true };
+}
+
+/** Whether the club's last home games (as many as the rules ask) filled every seat. */
+function arenaSoldOut(state: SeasonState, clubId: string): boolean {
+  let games = 0;
+  for (let index = state.finance.ledger.length - 1; index >= 0 && games < FACILITY_FINANCING_RULES.automaticSoldOutGames; index -= 1) {
+    const entry = state.finance.ledger[index]!;
+    if (entry.clubId !== clubId || entry.kind !== 'tickets' || !entry.ticket) continue;
+    if (entry.ticket.capacity === undefined || entry.ticket.attendance < entry.ticket.capacity) return false;
+    games += 1;
+  }
+  return games === FACILITY_FINANCING_RULES.automaticSoldOutGames;
+}
+
+/**
+ * Format 71: automatic control and rival clubs borrow only for a valuable project they cannot fund otherwise (a worn
+ * facility's repair, or a bigger arena after sold-out home games), one loan at a time, up to half the borrowing limit,
+ * keeping half their cash cushion after this season's repayments. Null when the rules do not allow a loan.
+ */
+function automaticLoan(state: SeasonState, clubId: string, type: FacilityType, project: 'upgrade' | 'repair'): SeasonState | null {
+  if (!usesFacilityFinancing(state.facilities)) return null;
+  const rules = FACILITY_FINANCING_RULES;
+  if (project === 'upgrade' && (type !== 'arena' || !arenaSoldOut(state, clubId))) return null;
+  if (clubDebts(state, clubId).some(debt => debt.kind === 'loan' && debtPosition(state, debt).outstanding > 0)) return null;
+  const room = Math.floor(borrowingLimit(state, clubId) * rules.automaticMaxDebtPercent / 100) - outstandingDebt(state, clubId);
+  const probe = quoteFacilityLoan(state, type, clubId, project, rules.automaticTermSeasons);
+  const principal = Math.floor(Math.min(probe.maxPrincipal, room) / 100) * 100;
+  // Borrowing less than the most never helps: the larger part paid now outweighs the smaller repayments.
+  if (probe.reason || principal < probe.minimumPrincipal) return null;
+  const quote = quoteFacilityLoan(state, type, clubId, project, rules.automaticTermSeasons, principal);
+  if (!quote.canBorrow || quote.available - quote.downPayment - quote.dueThisSeason < facilityAutomationBuffer(state, clubId) / 2) return null;
+  return takeFacilityLoan(state, type, project, rules.automaticTermSeasons, principal, clubId);
 }
 
 /**
@@ -201,11 +314,13 @@ export function automateFacilities(state: SeasonState): SeasonState {
       if (repaired.state !== next || repaired.waiting) { next = repaired.state; continue; }
     }
     const quote = types.map(type => quoteFacilityUpgrade(next, type, club.id)).filter(quote => quote.canStart && quote.remainingBudgetAfter >= facilityAutomationBuffer(next, club.id)).sort((left, right) => left.cost - right.cost || types.indexOf(left.type) - types.indexOf(right.type))[0];
-    if (quote) next = startFacilityUpgrade(next, quote.type, club.id);
-    else if (next.facilities.fundingSince) {
+    if (quote) { next = startFacilityUpgrade(next, quote.type, club.id); continue; }
+    if (next.facilities.fundingSince) {
       const funded = types.map(type => quoteBoardFunding(next, type, club.id, 'automatic')).filter(item => item.approved).sort((left, right) => left.cost - right.cost || types.indexOf(left.facilityType) - types.indexOf(right.facilityType))[0];
-      if (funded) next = startFacilityUpgrade(applyFacilityEvent(next, { ...facilityEventAnchor(next), ...fundingDecision(funded) }), funded.facilityType, club.id);
+      if (funded) { next = startFacilityUpgrade(applyFacilityEvent(next, { ...facilityEventAnchor(next), ...fundingDecision(funded) }), funded.facilityType, club.id); continue; }
     }
+    // Format 71: a sold-out arena is worth a prudent loan when cash and board capital cannot pay for more seats.
+    next = automaticLoan(next, club.id, 'arena', 'upgrade') ?? next;
   }
   return next;
 }

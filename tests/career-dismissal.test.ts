@@ -15,8 +15,9 @@ import { asCareer1 } from './helpers/career-rules';
 const CLUB = 'rhine-falcons';
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 // These scenarios check the Level 7 rules that careers created before format 63 keep (`career-1`: no protected first
-// season); tests/career-board-rules.test.ts covers the rules of new careers.
-const start = (seed: number, careerMoves = true, media = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, media }), true), true));
+// season); tests/career-board-rules.test.ts covers the rules of new careers. They are also relabelled as format-37 saves
+// below, so they keep the sponsorship model from before format 64 (naming rights and exits pay nothing in a first season).
+const start = (seed: number, careerMoves = true, media = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, media, namingRights: false }), true), true));
 /** An all-automatic Rhine Falcons season, played to the finished final match. */
 function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number, legacy = false): SeasonState {
   // `legacy`: a career as saved before format 65 and 67, without the media record and on `facilities-1`.

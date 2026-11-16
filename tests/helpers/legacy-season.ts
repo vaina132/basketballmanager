@@ -1,3 +1,4 @@
+import { asCareer1 } from './career-rules';
 import { financeAtLedgerBoundary, financeLedgerCount } from '../../src/world/finance-ledger';
 import type { SeasonState } from '../../src/domain/season';
 
@@ -165,4 +166,16 @@ export function stripBackground(value: object): void {
   const state = value as Record<string, unknown>;
   delete state.background;
   if (state.world && typeof state.world === 'object') delete (state.world as Record<string, unknown>).lowerDivisions;
+}
+
+/** createSeason options for a new career as created before the saved ideas level (formats 63-68). */
+export const BEFORE_SAVED_IDEAS = { media: false, namingRights: false } as const;
+
+/**
+ * An untouched new career on the rules saved before the saved ideas level: Level 7 career rules (`career-1`) and the
+ * three original facilities (`facilities-1`). Create it with `BEFORE_SAVED_IDEAS`; grown rivalries are converted after
+ * play with `withFixedRivalries`.
+ */
+export function beforeSavedIdeas(state: SeasonState): SeasonState {
+  return withLegacyFacilities(asCareer1(state));
 }

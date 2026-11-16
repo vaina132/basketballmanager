@@ -1,3 +1,4 @@
+import { beforeSavedIdeas } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_RIVALRIES } from '../src/data/development-rivalries';
@@ -12,8 +13,9 @@ import { asCareer1 } from './helpers/career-rules';
 import { DEVELOPMENT_WORLD } from '../src/data/development-world';
 
 const manager = { name: 'Derby Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-// The career without rivalries stands for an older save, so it also has no press and media record (format 67).
-const career = (rivalries: boolean) => createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, rivalries, media: rivalries });
+// The career without rivalries stands for an older save, so it also has no press and media record (format 67) and keeps
+// the sponsorship model from before format 64.
+const career = (rivalries: boolean) => createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, rivalries, media: rivalries, namingRights: rivalries });
 const resultsReason = (state: SeasonState, playerId: string) => getPlayerRelationship(state, playerId).reasons.find(reason => reason.label === 'Recent team results')!.impact;
 let derbyWeek: SeasonState, legacy: SeasonState, switched: SeasonState;
 
@@ -22,7 +24,7 @@ beforeAll(() => {
   derbyWeek = career(true);
   while (derbyWeek.round <= 3) derbyWeek = advanceMatchday(derbyWeek);
   // An older career (before rivalries, and before the format-63 career rules).
-  legacy = asCareer1(career(false));
+  legacy = beforeSavedIdeas(career(false));
   while (legacy.round < 4) legacy = advanceMatchday(legacy);
   switched = enableRivalries(legacy);
   for (let step = 0; step < 4; step += 1) switched = advanceMatchday(switched);

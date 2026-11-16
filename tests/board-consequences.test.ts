@@ -1,3 +1,4 @@
+import { BEFORE_SAVED_IDEAS, beforeSavedIdeas } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonBoard } from '../src/domain/board';
 import type { SeasonState } from '../src/domain/season';
@@ -101,8 +102,8 @@ describe('board verdict validation', () => {
   });
 
   it('rejects the switch in a format-32 file', () => {
-    // A genuine format-32 career had neither season verdicts, rivalries, upkeep choices nor club changes.
-    const file = JSON.parse(serializeSeason(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false, media: false })));
+    // A genuine format-32 career had neither season verdicts, rivalries, upkeep choices, club changes, naming rights (format 64) nor media (67).
+    const file = JSON.parse(serializeSeason(beforeSavedIdeas(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false, ...BEFORE_SAVED_IDEAS }))));
     file.formatVersion = 32; file.state.schemaVersion = 32;
     delete file.state.board.consequencesSince;
     delete file.state.rivalries;

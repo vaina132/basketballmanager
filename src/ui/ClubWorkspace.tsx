@@ -17,6 +17,8 @@ import { TransferPaymentsPanel } from './TransferPaymentsPanel'
 import { Icon } from './Icon'
 import { FACILITY_LABELS, FacilitiesPanel, type FacilitiesActions } from './FacilitiesPanel'
 import { SponsorshipPanel, type SponsorshipActions } from './SponsorshipPanel'
+import { NamingRightsPanel } from './NamingRightsPanel'
+import { arenaNameFor } from '../world/commercial'
 import { arenaComfortPercent, getClubFacilities } from '../world/facilities-policy'
 import { getDevelopmentSponsor } from '../data/development-sponsors'
 import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
@@ -39,9 +41,9 @@ const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}
 const BAND_LABELS = { 'euroleague-top': 'EuroLeague top group', euroleague: 'EuroLeague', 'top-upper': 'top division, upper half', 'top-lower': 'top division, lower half', second: 'second division', third: 'third division' } as const
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
-const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital' }
+const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Coaching fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital', 'naming-rights': 'Arena naming rights', 'sponsor-exit': 'Sponsor exit' }
 
-export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, onRequestBoardFunding, onEnableMaintenance, onMaintenancePlan, onFacilityRepair, onEnableSponsorship, onAcceptSponsorship, onDeclineSponsorship, onRequestSponsorship, onSponsorshipDelegation, busy = false }: ClubWorkspaceProps) {
+export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, onRequestBoardFunding, onEnableMaintenance, onMaintenancePlan, onFacilityRepair, onEnableSponsorship, onAcceptSponsorship, onDeclineSponsorship, onRequestSponsorship, onSponsorshipDelegation, onAcceptNaming, onDeclineNaming, onRequestNaming, onNamingDelegation, onTerminateSponsorship, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
   const [period, setPeriod] = useState<'current' | 'all'>('current')
   const club = season.clubs.find(team => team.id === season.managedClubId)!
@@ -65,6 +67,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
   // A European visitor may be a club outside the full world (step 3.5b): its identity is in the world.
   const opponent = home ? season.clubs.find(team => team.id === home.awayClubId) ?? worldOf(season).clubs.find(team => team.id === home.awayClubId)! : null
   const derby = home ? governingDerby(season.rivalries, home.homeClubId, home.awayClubId, season.seasonNumber, home.round, worldOf(season)) : null
+  const arenaName = arenaNameFor(season, club.id)
   const ledger = financeLedgerRows(season.finance, club.id).filter(entry => (kind === 'all' || entry.kind === kind) && (period === 'all' || entry.seasonNumber === season.seasonNumber))
 
   function entryDetail(entry: FinanceEntry): string {
@@ -104,6 +107,8 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
     if (entry.fitness) return FITNESS_DIRECTORY.find(coach => coach.id === entry.fitness!.coachId)?.name ?? 'Fitness coach fee'
     if (entry.scout) return SCOUT_DIRECTORY.find(scout => scout.id === entry.scout!.scoutId)?.name ?? 'Scout fee'
     if (entry.coach) return COACHES.find(coach => coach.id === entry.coach!.coachId)!.name
+    if (entry.namingRights) { const agreement = season.commercial.naming?.agreements.find(item => item.id === entry.namingRights!.agreementId); return `${agreement?.arenaName ?? getDevelopmentSponsor(entry.namingRights.sponsorId).name} · ${seasonLabel(entry.seasonNumber)} · ${entry.namingRights.installment === 1 ? 'Matchday 6 installment' : 'Final matchday installment'}` }
+    if (entry.sponsorExit) return `${getDevelopmentSponsor(entry.sponsorExit.sponsorId).name} · ${entry.sponsorExit.contract === 'naming' ? 'Arena naming rights' : 'Main sponsor'} · ${entry.sponsorExit.by === 'sponsor' ? 'Exit payment after the sponsor ended the agreement early' : 'Termination fee for ending the agreement early'}`
     if (entry.sponsorship) return `${getDevelopmentSponsor(entry.sponsorship.sponsorId).name} · ${seasonLabel(entry.seasonNumber)} · ${entry.sponsorship.installment === 'bonus' ? 'Top-half bonus' : entry.sponsorship.installment === 1 ? 'Opening installment' : 'Matchday 6 installment'}`
     if (entry.kind === 'sponsor' && entry.sourceId === fundingSourceId(entry.seasonNumber)) return `Season funding: league and European distributions, public money and the owner's contribution · ${seasonLabel(entry.seasonNumber)}`
     if (entry.kind === 'sponsor') return `${definition.sponsor} · ${seasonLabel(entry.seasonNumber)}`
@@ -123,10 +128,11 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
 
       <section className="club-venue panel" aria-labelledby="club-venue-title">
         <header className="club-heading"><h2 id="club-venue-title">Venue</h2></header>
-        <dl><div><dt>Venue</dt><dd>{definition.venue}</dd></div><div><dt>{facilities.arenaCapacity === facilities.arenaFullCapacity ? 'Capacity' : 'Capacity this matchday'}</dt><dd>{count(facilities.arenaCapacity)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{money(roundOperatingCostFor(season, club.id) + facilities.upkeepPerRound)}</dd></div></dl>
+        <dl>{arenaName && arenaName !== definition.venue ? <><div><dt>Arena name</dt><dd data-arena-name={arenaName}>{arenaName}</dd></div><div><dt>Official venue</dt><dd>{definition.venue}</dd></div></> : <div><dt>Venue</dt><dd data-arena-name={definition.venue}>{definition.venue}</dd></div>}<div><dt>{facilities.arenaCapacity === facilities.arenaFullCapacity ? 'Capacity' : 'Capacity this matchday'}</dt><dd>{count(facilities.arenaCapacity)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{money(roundOperatingCostFor(season, club.id) + facilities.upkeepPerRound)}</dd></div></dl>
       </section>
 
-      <SponsorshipPanel season={season} busy={busy} onEnableSponsorship={onEnableSponsorship} onAcceptSponsorship={onAcceptSponsorship} onDeclineSponsorship={onDeclineSponsorship} onRequestSponsorship={onRequestSponsorship} onSponsorshipDelegation={onSponsorshipDelegation} />
+      <SponsorshipPanel season={season} busy={busy} onEnableSponsorship={onEnableSponsorship} onAcceptSponsorship={onAcceptSponsorship} onDeclineSponsorship={onDeclineSponsorship} onRequestSponsorship={onRequestSponsorship} onSponsorshipDelegation={onSponsorshipDelegation} onTerminateSponsorship={onTerminateSponsorship} />
+      <NamingRightsPanel season={season} busy={busy} onAcceptNaming={onAcceptNaming} onDeclineNaming={onDeclineNaming} onRequestNaming={onRequestNaming} onNamingDelegation={onNamingDelegation} onTerminateSponsorship={onTerminateSponsorship} />
 
       <section className="club-ticket-plan panel" aria-labelledby="club-ticket-plan-title" data-finance-locked-price={season.finance.roundPrices[club.id]}>
         <header className="club-heading"><h2 id="club-ticket-plan-title"><Icon name="wallet" size={18} />Ticket price</h2><span>{season.status === 'complete' ? 'Next season' : 'Next matchday'}</span></header>

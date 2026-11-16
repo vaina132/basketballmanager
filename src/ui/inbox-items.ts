@@ -3,7 +3,8 @@ import { getDevelopmentSponsor } from '../data/development-sponsors'
 import { getBoardSummary } from '../world/board'
 import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/board-consequences'
 import { boardFundingRefusal } from '../world/board-funding-policy'
-import { getClubSponsorship } from '../world/commercial'
+import { getClubNamingRights, getClubSponsorship } from '../world/commercial'
+import { exitExplanation } from './sponsor-exit-text'
 import { getCareerPlayer } from '../world/player-catalog'
 import { getPressQuestion, PRESS_ANSWER_TEXT, pressAnswerLabel, pressQuote } from '../world/press-policy'
 import { PRESS_TOPIC_TITLES } from '../world/media'
@@ -73,6 +74,15 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     const sponsorship = getClubSponsorship(season)
     if (sponsorship.open.length) items.push({ id: `sponsor-offers-${sponsorship.open[0]!.id}`, date: sponsorship.open[0]!.madeAt.date, category: 'club', title: 'Sponsor offers waiting', detail: `${sponsorship.open.length} ${sponsorship.open.length === 1 ? 'offer' : 'offers'} for ${seasonLabel(sponsorship.open[0]!.forSeason)}, open until ${medicalDate(sponsorship.open[0]!.expiresOn)}.`, needsAction: true, target: 'club' })
     for (const agreement of season.commercial.agreements) if (agreement.clubId === clubId && agreement.source === 'offer') items.push({ id: agreement.id, date: agreement.signedOn, category: 'club', title: `${getDevelopmentSponsor(agreement.sponsorId).name} signed`, detail: `Main sponsor from ${seasonLabel(agreement.startsSeason)}: ${money(agreement.annualFee)} a season${agreement.automatic ? ', chosen by automatic control' : ''}.`, needsAction: false, target: 'club' })
+    // Format 64: early ends explained in plain language, and arena naming rights.
+    for (const agreement of season.commercial.agreements) if (agreement.clubId === clubId && agreement.exit) items.push({ id: `exit-${agreement.id}`, date: agreement.exit.date, category: 'club', ...exitExplanation(agreement.sponsorId, 'main', agreement.exit, agreement.startsSeason), needsAction: false, target: 'club' })
+    const naming = getClubNamingRights(season)
+    if (naming?.open.length) items.push({ id: `naming-offers-${naming.open[0]!.id}`, date: naming.open[0]!.madeAt.date, category: 'club', title: 'Naming-rights offers waiting', detail: `${naming.open.length} ${naming.open.length === 1 ? 'offer' : 'offers'} to name your arena from ${seasonLabel(naming.open[0]!.forSeason)}, open until ${medicalDate(naming.open[0]!.expiresOn)}.`, needsAction: true, target: 'club' })
+    for (const agreement of season.commercial.naming?.agreements ?? []) {
+      if (agreement.clubId !== clubId) continue
+      items.push({ id: agreement.id, date: agreement.signedOn, category: 'club', title: `Arena naming rights: ${agreement.arenaName}`, detail: `${getDevelopmentSponsor(agreement.sponsorId).name} names the arena from ${seasonLabel(agreement.startsSeason)}: ${money(agreement.annualFee)} a season${agreement.automatic ? ', chosen by automatic control' : ''}.`, needsAction: false, target: 'club' })
+      if (agreement.exit) items.push({ id: `exit-${agreement.id}`, date: agreement.exit.date, category: 'club', ...exitExplanation(agreement.sponsorId, 'naming', agreement.exit, agreement.startsSeason), needsAction: false, target: 'club' })
+    }
   }
 
   if (season.relationships.enabledSince) for (const row of getSquadRelationships(season)) {

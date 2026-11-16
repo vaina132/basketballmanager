@@ -1,3 +1,4 @@
+import { BEFORE_SAVED_IDEAS, beforeSavedIdeas } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
@@ -78,7 +79,7 @@ describe('press questions in a career', () => {
   it('rejects press answers in a format-33 file', () => {
     // A genuine format-33 career had no rivalries, so its derby crowds were never enlarged.
     // Format 33 also predates the format-63 career rules (`career-1`) and the format-67 media record.
-    let plain = asCareer1(createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, rivalries: false, facilityMaintenance: false, media: false }));
+    let plain = beforeSavedIdeas(createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, rivalries: false, facilityMaintenance: false, ...BEFORE_SAVED_IDEAS }));
     for (let step = 0; step < 10 && !getPressQuestion(plain); step += 1) plain = advanceMatchday(plain);
     const file = JSON.parse(serializeSeason(answerPress(plain, 'routine')));
     file.formatVersion = 33; file.state.schemaVersion = 33;

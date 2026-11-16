@@ -73,6 +73,7 @@ main { margin: auto; }
 .score-digits { display: flex; align-items: center; gap: 12px; font-size: 38px; line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; }
 .score-divider { color: var(--muted); font-size: 24px; }
 .match-clock { display: flex; align-items: center; gap: 8px; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.match-venue { margin-top: 3px; font-size: 11px; color: var(--muted); text-align: center; }
 .match-clock > span { width: 3px; height: 3px; background: var(--muted); }
 .court-panel { min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
 .court-top { display: flex; align-items: center; justify-content: space-between; }

@@ -404,6 +404,12 @@ function bookSeasonFunding(state: SeasonState, share: number): SeasonState {
 /** The season funding for an activation at `round` (whole season at round one), as for the fixed sponsorship. */
 export const seasonFundingShare = (funding: number, rounds: number, round: number): number => Math.floor(funding * (rounds + 1 - round) / rounds);
 
+/** Format 64: books a naming-rights installment, a sponsor's exit payment or the club's termination fee on the current boundary. */
+export function recordCommercialEntry(state: SeasonState, entry: Pick<FinanceEntry, 'clubId' | 'amount' | 'sourceId'> & ({ kind: 'naming-rights'; namingRights: NonNullable<FinanceEntry['namingRights']> } | { kind: 'sponsor-exit'; sponsorExit: NonNullable<FinanceEntry['sponsorExit']> })): SeasonState {
+  if (!state.finance.enabledSince) throw new Error('Enable club finances before recording sponsorship payments.');
+  return append(state, { ...entry, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null });
+}
+
 /** Books a later agreement payment (matchday-six installment or earned bonus) exactly once, on its due boundary. */
 export function recordSponsorshipPayment(state: SeasonState, payment: DueSponsorshipPayment): SeasonState {
   if (!state.finance.enabledSince || !commercialGovernsSeason(state.commercial, payment.seasonNumber) || payment.seasonNumber !== state.seasonNumber || payment.round !== state.round || payment.sponsorship.installment === 1) throw new Error('Record only a sponsorship payment due on the current matchday.');

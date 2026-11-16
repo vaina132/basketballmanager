@@ -1,3 +1,4 @@
+import { BEFORE_SAVED_IDEAS, beforeSavedIdeas } from './helpers/legacy-season';
 import { withLegacyFacilities } from './helpers/legacy-season';
 import { asCareer1 } from './helpers/career-rules';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -155,7 +156,7 @@ describe('grown rivalries in a career', () => {
 describe('older careers', () => {
   it('keep the fixed rivalries: a format-62 save loads and replays them, and rejects grown rivalries', () => {
     // A genuine format-62 career had no media record (format 67) either.
-    const state = withLegacyFacilities(asCareer1(createSeason({ seed: 227, managedClubId: RHINE, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, media: false })));
+    const state = beforeSavedIdeas(createSeason({ seed: 227, managedClubId: RHINE, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, ...BEFORE_SAVED_IDEAS }));
     const file = JSON.parse(serializeSeason(state));
     file.formatVersion = 62; file.state.schemaVersion = 62;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/requires format 68/);

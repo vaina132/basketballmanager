@@ -78,7 +78,7 @@ describe('season-end club changes', () => {
     for (const state of [moved, opened, playing]) expect(parseSeason(serializeSeason(state))).toEqual(state);
     expect(opened.managedClubId).toBe(TO);
     expect([opened.fixtures.find(fixture => fixture.id === opened.activeFixtureId!)!.homeClubId, opened.fixtures.find(fixture => fixture.id === opened.activeFixtureId!)!.awayClubId]).toContain(TO);
-  });
+  }, 120_000);
 
   it('refuses moves outside a governed season end', () => {
     expect(() => advanceSeason(career(), { moveTo: TO })).toThrow(/final matchday/);

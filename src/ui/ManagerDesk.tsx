@@ -7,7 +7,7 @@ import { FACILITY_LABELS } from './FacilitiesPanel'
 import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
 import { rivalryNote } from './rivalry-text'
 import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/board-consequences'
-import { getClubSponsorship } from '../world/commercial'
+import { getClubNamingRights, getClubSponsorship } from '../world/commercial'
 import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { getCareerPlayer } from '../world/player-catalog'
 import { recentClubRetirements } from './PlayerLifecycle'
@@ -112,6 +112,8 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     const sponsorship = getClubSponsorship(season), next = seasonLabel(Math.min(season.seasonNumber + 1, MAX_SEASON_NUMBER))
     if (sponsorship.open.length) notices.push({ key: 'sponsorship', title: 'Sponsor offers waiting', detail: `${sponsorship.open.length} ${sponsorship.open.length === 1 ? 'offer' : 'offers'} for ${next}. Unsigned offers expire on ${medicalDate(sponsorship.open[0]!.expiresOn)}.`, urgent: season.status === 'complete', action: 'Review offers', open: onOpenClub })
     else if (season.status === 'complete' && !sponsorship.next && season.seasonNumber < MAX_SEASON_NUMBER) notices.push({ key: 'sponsorship', title: 'No sponsor for next season', detail: `${next} will start without main-sponsor income.`, urgent: true, action: 'Review sponsorship', open: onOpenClub })
+    const naming = getClubNamingRights(season)
+    if (naming?.open.length) notices.push({ key: 'naming', title: 'Naming-rights offers waiting', detail: `${naming.open.length} ${naming.open.length === 1 ? 'offer' : 'offers'} to name your arena from ${next}. Unsigned offers expire on ${medicalDate(naming.open[0]!.expiresOn)}.`, urgent: season.status === 'complete', action: 'Review offers', open: onOpenClub })
   }
 
   if (season?.relationships.enabledSince && onOpenRelationships) {

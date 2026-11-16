@@ -1,6 +1,6 @@
 import type { PayrollCharge } from './payroll';
 import type { FacilityType } from './facilities';
-import type { SponsorshipPayment } from './commercial';
+import type { NamingRightsPayment, SponsorExitPayment, SponsorshipPayment } from './commercial';
 
 export interface FinancePlan {
   delegated: boolean;
@@ -13,7 +13,7 @@ export interface FinanceEntry {
   clubId: string;
   seasonNumber: number;
   round: number;
-  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout' | 'facility' | 'facility-upkeep' | 'board-capital';
+  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout' | 'facility' | 'facility-upkeep' | 'board-capital' | 'naming-rights' | 'sponsor-exit';
   /** Income or cost in signed euro cents; cash effects also depend on unpaid obligations. */
   amount: number;
   sourceId: string;
@@ -32,6 +32,10 @@ export interface FinanceEntry {
   sponsorship?: SponsorshipPayment;
   /** One-off owner capital for the facility upgrade that starts immediately afterwards (format 32). */
   boardCapital?: { projectId: string; facilityType: FacilityType };
+  /** Format 64: an arena naming-rights installment. */
+  namingRights?: NamingRightsPayment;
+  /** Format 64: a sponsor's exit payment (income) or the club's termination fee (cost). */
+  sponsorExit?: SponsorExitPayment;
 }
 
 export interface SeasonFinance {

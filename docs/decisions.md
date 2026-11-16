@@ -470,6 +470,10 @@ Chosen as recommended defaults under the owner's instruction to finish the level
 
 "Let's remove the selling and marketing related work. We'll come to this later, after making the game a playable and enjoyable one." Roadmap: step 3.7, safety checks and gaps, the owner's play test, interface simplification, player data, release preparation (old-save support and a final full check). The selling ideas (free first season, EUR 15 unlock, Steam, data-rights review) are not planned until the owner brings them back.
 
+## Two safety items alongside the play test (owner decision, 16 November 2026)
+
+The exact save checks for the newest features (sponsor exits, naming-rights offers, president requests and resignation offers, recomputed instead of checked for plausibility) and a faster checkpoint check for long careers run alongside the owner's play test instead of before it. The play test starts once step 3.7, the money fixes and the browser-cycle fixes are live.
+
 ## Safety and gaps level defaults (16 November 2026, reversible)
 
 Computer-run clubs follow the human club's rules (gaps closed before the play test):

@@ -8,12 +8,19 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Active level:** Step 3.7, then the safety-check restoration and gap closing (owner, 16 November 2026: "complete the step 3.7 and then the restoration of the safety checks and closing the gaps ... the selling side ... we can postpone ... the interface simplification will only come after the playtests"). The saved ideas level is complete. Level order: sprint 3 (3.7 active), sprint 4 (done), saved ideas (done), **safety and gaps (next)**, owner play test, interface simplification; selling postponed.
 
-**Saved ideas plan** (defaults reversible, recorded in `docs/decisions.md` as each lands; new careers only, older careers keep their rules through model fields):
-- Round 1 (parallel agents, formats 63-66): (a) protected first season, fresh board confidence for a new coach, mid-season dismissals and resignations; (b) early sponsor exits and arena naming rights; (c) medical and scouting facilities and repair projects; (d) default squad roles by squad rank (fix for deep-bench concerns) and players asking about new contracts.
-- Round 2: more president personalities, board verdicts affecting the player salary budget, youth and culture objectives; richer press topics and media reputation; rivalries that grow from results; loans and leases.
-- Unemployed seasons: **approved by the owner** (careers continue while unemployed); round 2, after the board and career work.
-- Also open: promoted and relegated clubs keep their opening money figures.
-- **Done (16 November 2026):** every planned saved idea: career and board rules (63), sponsor exits and naming rights (64), medical and scouting facilities and repairs (65), squad-rank roles and contract requests (66), press and media standing (67), rivalries that grow from results (68), unemployed seasons (69), president personalities with salary verdicts and youth and culture objectives (70), loans and leases (71), club money following promotion and relegation (72). Defaults in `docs/decisions.md`, "Saved ideas level defaults". Old-format tests build careers with `beforeSavedIdeas`/`BEFORE_SAVED_IDEAS` (`tests/helpers/legacy-season.ts`); career and history scenario tests run without presidents (`presidents: false`).
+**Saved ideas level (done, 16 November 2026):** formats 63-72 (career and board rules, sponsor exits and naming rights, medical and scouting facilities, squad-rank roles and contract requests, press, rivalries, unemployed seasons, presidents with salary verdicts and youth and culture objectives, loans and leases, club money after promotion and relegation). Defaults in `docs/decisions.md`, "Saved ideas level defaults". Old-format tests build careers with `beforeSavedIdeas`/`BEFORE_SAVED_IDEAS` (`tests/helpers/legacy-season.ts`); career and history scenario tests run without presidents (`presidents: false`).
+
+**Owner feedback after a first play (16 November 2026; "not to tackle immediately ... in the rightful time"):**
+- Safety and gaps level (before the play test):
+  - (3) Inbox opens an empty black screen right after starting a career: a crash to fix first.
+  - (1) Remove "est." after the OVR figure (owner decision; the club step shows "79 est.").
+  - (2) "Estimated table" means nothing to the owner: reword the countries that are not played game by game. The owner chose only Turkey and saw five other leagues plus three European competitions.
+  - (6) Money realism: some staff earn a lot. The owner's sentence was cut off; ask for the rest. Fits the economy gaps.
+- Interface simplification (after the play test):
+  - (4) Facilities: six levels for every facility (Very Poor, Poor, Average, Good, Very Good, Excellent) instead of four. The arena becomes a seat capacity, expanded for a fee over several weeks depending on the size. Loans become a simple bank loan usable for anything. Replace the Full/Reduced and automatic/manual controls with something simpler. This changes game rules and needs a new format.
+  - (5) Board gets its own left menu item.
+  - (7) Replace "Go to match" with a Continue button that moves day by day, like Football Manager, running the other simulations in the background with a progress bar.
+- Data (owner's computer): (8) wrong positions (Efes: Malcolm SG, should be SF; Kai Jones and Bruno Fernando PF, should be C). Explained to the owner: API-Sports gives only Guard/Forward/Center or nothing, and the game estimates the exact position from statistics. The corrected world-3 pack is not published yet; the owner decides on another source.
 
 **Development mode** applies (see "Rules and conventions"): build features first; full suite at sprint end.
 

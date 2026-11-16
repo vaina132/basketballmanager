@@ -41,11 +41,13 @@ describe('the compact save layout', () => {
     expect(parseSeason(plain)).toEqual(state);
     expect(compact.length).toBeLessThan(plain.length * 0.5);
     const file = JSON.parse(compact);
-    expect(file).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-2' });
+    // Format 73 writes the compact-3 layout: the state is `[shape, ...values]`, with the finance ledger packed.
+    expect(file).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-3' });
     expect(() => parseSeason(JSON.stringify({ ...file, encoding: 'other' }))).toThrow(/unsupported save encoding/);
+    expect(() => parseSeason(JSON.stringify({ ...file, encoding: 'compact-2' }))).toThrow(/unsupported save encoding/);
     // Change the managed club's seed field inside the compact state: the ordinary checks must still notice.
-    const seedIndex = file.shapes[file.state[1]].indexOf('seed');
-    const changed = structuredClone(file); changed.state[seedIndex + 2] = file.state[seedIndex + 2] + 1;
+    const seedIndex = file.shapes[file.state[0]].indexOf('seed');
+    const changed = structuredClone(file); changed.state[seedIndex + 1] = file.state[seedIndex + 1] + 1;
     expect(() => parseSeason(JSON.stringify(changed))).toThrow(/Invalid season save/);
   }, 300_000);
 });

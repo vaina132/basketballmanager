@@ -107,7 +107,7 @@ import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
 import { MAX_SEASON_COLLECTION_ENTRIES, MAX_SEASON_SAVE_BYTES, MAX_SEASON_SAVE_VALUES } from './season-limits';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
-import { COMPACT_JSON_ENCODING, LEGACY_COMPACT_JSON_ENCODING, compactJson2, expandJson } from './compact-json';
+import { COMPACT_JSON_3_ENCODING, COMPACT_JSON_ENCODING, LEGACY_COMPACT_JSON_ENCODING, compactJson3, expandJson, expandJson3 } from './compact-json';
 import { cachedCalculation, withCalculationCache } from '../world/pure-cache';
 import { ledgerBoundaryIndex } from './ledger-boundaries';
 import { appendFinanceLedgerEntry, financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
@@ -119,7 +119,7 @@ import { isSealedSeniorResult, sealCompletedHistory, SEALED_HISTORY_FORMAT, seni
 import { ACADEMY_GRADUATION_AGE, academyPointCap, developAcademyPlayer, emptyAcademyPoints } from '../world/academy-policy';
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { staffFee } from '../world/economy';
-import { FINANCE_PACKING_FORMAT, packSeasonForSave, unpackSavedSeason } from './save-packing';
+import { PACKED_SAVE_FORMAT, packSeasonForSave, unpackSavedSeason } from './save-packing';
 
 export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
@@ -3275,9 +3275,9 @@ export function serializeSeasonCompact(state: SeasonState, options: { check?: bo
   // Development mode (owner, 15 November 2026): the game's own checkpoints skip the full career check (`check: false`);
   // imported files still get it when they are read.
   if (options.check !== false) validateSeasonState(state);
-  // Format 73: the finance ledger is packed losslessly inside compact files (`save-packing.ts`).
-  const { strings, shapes, nodes, value } = compactJson2(packSeasonForSave(state));
-  const envelope = { format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', encoding: COMPACT_JSON_ENCODING, strings, shapes, nodes, state: value };
+  // Format 73: the finance ledger is packed losslessly (`save-packing.ts`) and written in the compact-3 layout.
+  const { strings, shapes, nodes, value } = compactJson3(packSeasonForSave(state));
+  const envelope = { format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', encoding: COMPACT_JSON_3_ENCODING, strings, shapes, nodes, state: value };
   // Encoded tables, object markers and the envelope must fit the reader's limits too.
   checkJsonTree(envelope);
   const text = JSON.stringify(envelope);
@@ -3361,10 +3361,12 @@ function decodeSeasonText(text: string): { version: SeasonFormatVersion; state: 
   const envelope = record(parsed, 'envelope', ['format', 'formatVersion', 'engineVersion', ...(compact ? ['encoding', 'strings', 'shapes'] : []), ...(sharedNodes ? ['nodes'] : []), 'state']);
   if (envelope.format !== FORMAT || !SUPPORTED_FORMATS.includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
   if (compact) {
-    if (envelope.encoding !== (sharedNodes ? COMPACT_JSON_ENCODING : LEGACY_COMPACT_JSON_ENCODING)) throw new Error('This season file uses an unsupported save encoding.');
-    try { envelope.state = expandJson({ strings: envelope.strings, shapes: envelope.shapes, ...(sharedNodes ? { nodes: envelope.nodes } : {}), value: envelope.state }); } catch (error) { throw new Error(`Invalid season save: ${error instanceof Error ? error.message : 'the compact data is damaged'}`); }
+    // Format 73 writes compact-3 (`compact-json.ts`); formats 41-72 compact-2 and format 40 compact-1.
+    const layout3 = (envelope.formatVersion as number) >= PACKED_SAVE_FORMAT;
+    if (envelope.encoding !== (layout3 ? COMPACT_JSON_3_ENCODING : sharedNodes ? COMPACT_JSON_ENCODING : LEGACY_COMPACT_JSON_ENCODING)) throw new Error('This season file uses an unsupported save encoding.');
+    try { envelope.state = (layout3 ? expandJson3 : expandJson)({ strings: envelope.strings, shapes: envelope.shapes, ...(sharedNodes ? { nodes: envelope.nodes } : {}), value: envelope.state }); } catch (error) { throw new Error(`Invalid season save: ${error instanceof Error ? error.message : 'the compact data is damaged'}`); }
     // Format 73 packs the finance ledger inside compact files; the checks read it as the game wrote it.
-    if ((envelope.formatVersion as number) >= FINANCE_PACKING_FORMAT) envelope.state = unpackSavedSeason(envelope.state);
+    if ((envelope.formatVersion as number) >= PACKED_SAVE_FORMAT) envelope.state = unpackSavedSeason(envelope.state);
   }
   return { version: envelope.formatVersion as SeasonFormatVersion, state: envelope.state };
 }

@@ -17,7 +17,7 @@ import type { FinanceArchiveBlock, FinanceArchiveRow, FinanceEntry } from '../do
  * transaction is written as it is. The game, its checks and plain (`serializeSeason`) files never see the packed form.
  */
 export const FINANCE_PACKING = 'finance-pack-1';
-export const FINANCE_PACKING_FORMAT = 73;
+export const PACKED_SAVE_FORMAT = 73;
 
 type PackedItem = [playerId: string, gross: number] | [playerId: string, gross: number, discount: number];
 type Details = Record<string, unknown>;

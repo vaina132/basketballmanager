@@ -18,7 +18,7 @@ function calendarWorld() {
   ] };
 }
 const play = state => state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state;
-const panel = state => renderToStaticMarkup(<RestWeek season={state} busy={false} onContinue={() => {}} onTraining={() => {}} />);
+const panel = state => renderToStaticMarkup(<RestWeek season={state} busy={false} onTraining={() => {}} />);
 const text = markup => markup.replace(/<[^>]+>/g, ' ');
 
 describe('a day without the manager\'s match (browser play-through, 16 November 2026)', () => {

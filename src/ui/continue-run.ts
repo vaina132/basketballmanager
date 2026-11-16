@@ -205,15 +205,12 @@ export function continueUntilStop(state: SeasonState, options: { decided?: boole
   }
 }
 
-/** The idle control: the day, what today is, and whether Continue can be pressed (with the reason when it cannot). */
-export interface ContinueControlInfo { day: string; status: string; disabled: boolean; reason: string | null; opensMatch: boolean }
-export function continueControlInfo(state: SeasonState, matchStatus: string, onMatchPage: boolean): ContinueControlInfo {
-  const action = continueAction(state), day = careerToday(state)
-  if (action.kind === 'match') return onMatchPage
-    ? { day, status: matchStatus, disabled: true, reason: 'Play or simulate your match, then Continue.', opensMatch: false }
-    : { day, status: matchStatus, disabled: false, reason: null, opensMatch: true }
-  if (action.kind === 'blocked') return { day, status: 'Action needed', disabled: true, reason: action.reason, opensMatch: false }
-  const status = action.kind === 'market' ? 'Offseason recruitment' : action.kind === 'rollover' ? `Ready for ${seasonLabel(state.seasonNumber + 1)}`
-    : state.activeMatch ? matchStatus : isUnemployed(state) ? 'Between jobs' : careerDay(state).label
-  return { day, status, disabled: false, reason: null, opensMatch: false }
+/** What today is for the manager, next to Continue on the top bar: the match's state, a day without it, or the offseason. */
+export function continueStatus(state: SeasonState, matchStatus: string): string {
+  const action = continueAction(state)
+  if (action.kind === 'match' || state.status === 'active' && state.activeMatch) return matchStatus
+  if (action.kind === 'blocked') return 'Action needed'
+  if (action.kind === 'market') return 'Offseason recruitment'
+  if (action.kind === 'rollover' && isMarketActive(state)) return `Ready for ${seasonLabel(state.seasonNumber + 1)}`
+  return isUnemployed(state) && state.status === 'active' ? 'Between jobs' : careerDay(state).label
 }

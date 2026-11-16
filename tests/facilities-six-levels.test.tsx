@@ -4,11 +4,11 @@ import type { FinanceEntry } from '../src/domain/finance';
 import type { SeasonState } from '../src/domain/season';
 import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { quoteBoardFunding } from '../src/world/board-funding-policy';
-import { automateFacilities, repayFacilityLoan, setFacilityDelegation, startArenaExpansion, startFacilityUpgrade, takeBankLoan, takeFacilityLoan } from '../src/world/facilities';
+import { automateFacilities, cancelFacilityUpgrade, repayFacilityLoan, setFacilityDelegation, startArenaExpansion, startFacilityUpgrade, takeBankLoan, takeFacilityLoan } from '../src/world/facilities';
 import { arenaExpansionSizes, FACILITY_BANK_REASON, FACILITY_RULES_2, FACILITY_RULES_3, facilityPracticeBonusPercent, getArenaCapacity, getClubFacilities, getFacilityLevel, getFacilityUpkeep, medicalRecoveryPercent, quoteArenaExpansion, quoteFacilityUpgrade, scoutingEvidencePercent, startingFacilityLevel, upgradeAutomationCushion } from '../src/world/facilities-policy';
 import { BANK_LOAN_RULES, bankLoanLimit, debtReserve, debtSchedule, outstandingDebt, paymentRounds } from '../src/world/facility-debt';
 import { getClubDebts, quoteBankLoan } from '../src/world/facility-financing';
-import { forecastGate, getFinanceBalance } from '../src/world/finance';
+import { forecastGate, getFinanceBalance, setTicketPlan } from '../src/world/finance';
 import { getSpendableCash } from '../src/world/payroll-policy';
 import { createSeason, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
 import { seasonRounds } from '../src/world/career-world';
@@ -235,4 +235,17 @@ describe('paying for projects and the board\'s prudent loans', () => {
     const owing = soldOut(takeBankLoan(short, 1_000_000, 1), getArenaCapacity(state, club));
     expect(automateFacilities({ ...owing, facilities: { ...owing.facilities, delegated: { ...owing.facilities.delegated, [club]: true } } }).facilities.debts!.filter(item => item.clubId === club)).toHaveLength(1);
   });
+
+  it('takes the loan and starts the expansion during the calendar, and the strict save check rebuilds both', () => {
+    // Cancelled projects are not refunded, so the board is left short of the expansion plus its cushion; free tickets sell out.
+    let state = setTicketPlan(career(), { delegated: false, price: 0 });
+    for (const type of ['training', 'youth', 'medical', 'scouting'] as const) state = cancelFacilityUpgrade(startFacilityUpgrade(state, type), `facility-project-${state.facilities.projects.length + 1}`);
+    expect(getSpendableCash(state, club)).toBeLessThan(quoteArenaExpansion(state, 500).cost + upgradeAutomationCushion(state, club));
+    state = setFacilityDelegation(state, true);
+    state = until(state, next => next.facilities.debts!.some(debt => debt.clubId === club), 10);
+    const debt = state.facilities.debts!.find(item => item.clubId === club)!;
+    expect(debt).toMatchObject({ kind: 'bank', seasons: BANK_LOAN_RULES.automaticTermSeasons, date: state.date });
+    expect(state.facilities.projects.find(project => project.clubId === club && project.kind === 'expansion')).toMatchObject({ seats: 500, startedOn: state.date });
+    expect(parseSeason(serializeSeason(state)).facilities).toEqual(state.facilities);
+  }, 600_000);
 });

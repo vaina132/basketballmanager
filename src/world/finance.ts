@@ -25,7 +25,7 @@ import { getPayrollReserve, getSpendableCash } from './payroll-policy';
 import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransferPaymentSummary, payTransferInstallment } from './transfer-payments';
 import { quoteContractBuyout } from './buyouts';
 import { staffAllocation, staffCommitted } from './staff-policy';
-import { getArenaCapacity, getFacilityUpkeepBreakdown, quoteFacilityUpgrade } from './facilities-policy';
+import { arenaComfortPercent, getArenaCapacity, getFacilityUpkeepBreakdown, quoteFacilityRepair, quoteFacilityUpgrade } from './facilities-policy';
 import { governingDerby, RIVALRY_CROWD_PERCENT } from './rivalries';
 import { agreementFor, commercialGovernsSeason, openingSponsorshipClubs, sponsorshipInstallment, sponsorshipSourceId, type DueSponsorshipPayment } from './commercial-policy';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
@@ -125,11 +125,16 @@ export function recordPayrollCharge(state: SeasonState, clubId: string, payroll:
   return book(state, clubId, 'payroll', amount === 0 ? 0 : -amount, sourceId, null, null, payroll);
 }
 
-/** Construction is paid in full on approval; cancellation does not refund this retained investment. */
+/** Construction (and a `facilities-2` repair) is paid in full on approval; cancellation does not refund this retained investment. */
 export function recordFacilityInvestment(state: SeasonState, project: FacilityProject): SeasonState {
   const stored = state.facilities.projects.at(-1), event = state.facilities.events.at(-1);
-  if (!state.facilities.enabledSince || !state.finance.enabledSince || !stored || JSON.stringify(stored) !== JSON.stringify(project) || project.id !== `facility-project-${state.facilities.projects.length}` || event?.type !== 'start' || event.projectId !== project.id || event.ledgerIndex !== financeLedgerCount(state.finance) || project.startEventIndex !== state.facilities.events.length - 1 || project.startedOn !== state.date || project.completedOn !== null || project.cancelledOn !== null) throw new Error('Pay only the exact newly approved facility project.');
+  if (!state.facilities.enabledSince || !state.finance.enabledSince || !stored || JSON.stringify(stored) !== JSON.stringify(project) || project.id !== `facility-project-${state.facilities.projects.length}` || event?.type !== (project.kind === 'repair' ? 'repair' : 'start') || event.projectId !== project.id || event.ledgerIndex !== financeLedgerCount(state.finance) || project.startEventIndex !== state.facilities.events.length - 1 || project.startedOn !== state.date || project.completedOn !== null || project.cancelledOn !== null) throw new Error('Pay only the exact newly approved facility project.');
   const before = { ...state, facilities: { ...state.facilities, projects: state.facilities.projects.slice(0, -1), events: state.facilities.events.slice(0, -1) } };
+  if (project.kind === 'repair') {
+    const repair = quoteFacilityRepair(before, project.type, project.clubId);
+    if (!repair.canStart || repair.cost !== project.cost || repair.level !== project.fromLevel || repair.level !== project.toLevel || repair.conditionBefore !== project.conditionBefore || repair.dueOn !== project.dueOn) throw new Error(repair.reason ?? 'Fund exactly the approved repair terms.');
+    return append(state, { clubId: project.clubId, kind: 'facility', amount: -project.cost, sourceId: project.id, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, facility: { projectId: project.id, type: project.type } });
+  }
   const quote = quoteFacilityUpgrade(before, project.type, project.clubId);
   if (!quote.canStart || quote.cost !== project.cost || quote.fromLevel !== project.fromLevel || quote.toLevel !== project.toLevel || quote.dueOn !== project.dueOn) throw new Error(quote.reason ?? 'Fund exactly the approved construction terms.');
   return append(state, { clubId: project.clubId, kind: 'facility', amount: -project.cost, sourceId: project.id, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, facility: { projectId: project.id, type: project.type } });
@@ -272,7 +277,9 @@ export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture
   const capacity = recorded ?? (fixture.round === state.round && (fixture.date === undefined || fixture.date === state.date) ? state.finance?.roundCapacities?.[fixture.homeClubId] : undefined) ?? getArenaCapacity(state, fixture.homeClubId, fixture.date ?? state.date);
   const own = winShare(state, fixture.homeClubId, fixture.round), opponent = winShare(state, fixture.awayClubId, fixture.round);
   const derby = state.seasonNumber === undefined ? null : governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round, worldOf(state));
-  const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent) * (derby ? 1 + RIVALRY_CROWD_PERCENT * derby.intensity / 100 : 1);
+  // Format 65 (`facilities-2`): a worn arena draws fewer spectators; older careers keep 100.
+  const comfort = arenaComfortPercent(state, fixture.homeClubId, fixture.date ?? state.date);
+  const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent) * (derby ? 1 + RIVALRY_CROWD_PERCENT * derby.intensity / 100 : 1) * (comfort === 100 ? 1 : comfort / 100);
   const attendance = price === 0 ? capacity : Math.min(capacity, Math.floor(demand * (defaultTicketPriceFor(state, fixture.homeClubId) / price) ** 1.4));
   return { fixtureId: fixture.id, clubId: fixture.homeClubId, opponentClubId: fixture.awayClubId, price, attendance, capacity, revenue: attendance * price };
 }

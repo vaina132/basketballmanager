@@ -1,3 +1,4 @@
+import type { SeasonFacilities } from './facilities';
 import type { SeasonInjury } from './season';
 import type { RosterSnapshot } from './roster';
 import type { Team } from './types';
@@ -58,6 +59,8 @@ export interface RehabilitationWeekInput {
   /** The career's world, for its season length (built-in league when omitted). */
   world?: CareerWorld;
   dataPackId?: string;
+  /** Format 65: a club's medical centre raises its physio's daily credit (`medicalPhysioPercent`). */
+  facilities?: SeasonFacilities;
   physio: SeasonPhysio;
   clubs: readonly Team[];
   rosters: readonly RosterSnapshot[];

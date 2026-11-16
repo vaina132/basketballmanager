@@ -15,8 +15,10 @@ const CLUB = 'rhine-falcons';
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 const start = (seed: number, careerMoves = true) => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves }), true), true);
 /** An all-automatic Rhine Falcons season, played to the finished final match. */
-function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number): SeasonState {
+function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number, legacyFacilities = false): SeasonState {
   let state = start(seed, careerMoves);
+  // Careers saved before format 65 use the `facilities-1` model (no medical centre, scouting office or repairs).
+  if (legacyFacilities) state = { ...state, facilities: { ...state.facilities, model: 'facilities-1' } };
   while (state.round < 10) {
     if (state.round === enableAtRound) state = enableCareerMoves(state);
     state = advanceMatchday(state);
@@ -98,14 +100,17 @@ describe('dismissal at a season end', () => {
 });
 
 describe('careers saved in format 37, before dismissal existed', () => {
-  it('keep a season that ended Under pressure without a move, and judge only later season ends', () => {
-    // The format-37 runtime recorded the switch but never dismissed: the same season end, without a move.
-    const stayed = { ...advanceSeason({ ...sackedDay, career: { ...sackedDay.career, enabledSince: null } }), career: sackedDay.career };
+  it('keep a season that ended Under pressure without a move, and judge only later season ends', { timeout: 120_000 }, () => {
+    // The format-37 runtime recorded the switch but never dismissed: the same season end, without a move. Saves from
+    // before format 65 keep the `facilities-1` model, so this season is played with it.
+    const legacyDay = finalMatchday(SACKED_SEED, true, undefined, true);
+    expect(previewSeasonEnd(legacyDay)).toMatchObject({ dismissed: true, verdict: { verdict: 'pressure' } });
+    const stayed = { ...advanceSeason({ ...legacyDay, career: { ...legacyDay.career, enabledSince: null } }), career: legacyDay.career };
     const file = (version: number) => JSON.stringify({ format: 'basketball-manager-season', formatVersion: version, engineVersion: 'possession-3', state: { ...stayed, schemaVersion: version } });
     expect(() => parseSeason(file(38))).toThrow(/joined after the dismissal/);
     const migrated = parseSeason(file(37));
     expect([migrated.managedClubId, migrated.career.moves, migrated.career.enabledSince!.effectiveFrom]).toEqual([CLUB, [], 2]);
-    const dismissal = JSON.parse(serializeSeason(sacked));
+    const dismissal = JSON.parse(serializeSeason(advanceSeason(legacyDay)));
     dismissal.formatVersion = 37; dismissal.state.schemaVersion = 37;
     expect(() => parseSeason(JSON.stringify(dismissal))).toThrow(/supported reason/);
   });

@@ -1,4 +1,4 @@
-import { stripRosterHistory, withUnavailableArchivedStats } from './helpers/legacy-season';
+import { stripRosterHistory, withLegacyFacilities, withUnavailableArchivedStats } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { CoachingContract } from '../src/domain/coaching';
@@ -137,7 +137,7 @@ describe('format 4 migration without coaching side effects', () => {
     const original = boundary === 'live' ? legacyLive : legacyComplete;
     const text = formatFour(original), snapshot = JSON.parse(text).state;
     const restored = parseSeason(text);
-    expect(restored).toEqual(withUnavailableArchivedStats(original));
+    expect(restored).toEqual(withLegacyFacilities(withUnavailableArchivedStats(original)));
     expect(restored.coaching).toEqual({ model: 'coaching-1', enabledSince: null, contracts: [] });
     expect(restored.training.plans).toEqual(snapshot.training.plans);
     expect(restored.training.points).toEqual(snapshot.training.points);
@@ -148,17 +148,17 @@ describe('format 4 migration without coaching side effects', () => {
     }
     expect(restored.training.lastWeek!.coaching).toBeNull();
     expect(JSON.parse(text).state).toEqual(snapshot);
-    if (boundary === 'live') expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(withUnavailableArchivedStats(original))));
-    else expect(rolloverSeason(restored)).toEqual(rolloverSeason(withUnavailableArchivedStats(original)));
+    if (boundary === 'live') expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(withLegacyFacilities(withUnavailableArchivedStats(original)))));
+    else expect(rolloverSeason(restored)).toEqual(rolloverSeason(withLegacyFacilities(withUnavailableArchivedStats(original))));
   });
 
   it('migrates a later-year format 4 save with its archive and activation anchor intact', () => {
     const later = rolloverSeason(legacyComplete), restored = parseSeason(formatFour(later));
-    expect(restored).toEqual(withUnavailableArchivedStats(later));
+    expect(restored).toEqual(withLegacyFacilities(withUnavailableArchivedStats(later)));
     expect(restored.history).toHaveLength(1);
     expect(restored.training.enabledSince).toEqual({ seasonNumber: 1, round: 1 });
     expect(restored.coaching.enabledSince).toBeNull();
-    expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(withUnavailableArchivedStats(later))));
+    expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(withLegacyFacilities(withUnavailableArchivedStats(later)))));
   });
 
   it.each(['extra staff field', 'extra report staff field', 'extra bonus field', 'invalid original gain'] as const)('rejects format 4 %s before migration', change => {

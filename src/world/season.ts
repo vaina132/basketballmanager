@@ -18,6 +18,7 @@ import type { SeasonEndDecision } from '../domain/career';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
 import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
 import { createFacilities, enableBoardFunding, enableFacilities, enableFacilityMaintenance, processFacilityProjects, automateFacilities } from './facilities';
+import { medicalRecurrencePercent } from './facilities-policy';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonEurope, SeasonFixture, SeasonState, Standing } from '../domain/season';
 import { nextEuropeanPlaces, openingEurope } from './european-places';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
@@ -29,7 +30,7 @@ import { DEVELOPMENT_WORLD } from '../data/development-world';
 import type { CareerWorld } from '../domain/world';
 import { fullWorldClubs, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
-import { injuriesFromMatch, injuryRiskMap, isRecovering } from './health';
+import { clubRecoveryPercent, injuriesFromMatch, injuryRiskMap, isRecovering, withMedicalRecurrence } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
 import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
@@ -275,7 +276,7 @@ export function managedSide(season: SeasonState): Side {
   throw new Error('The active fixture must include the managed club.');
 }
 
-function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background'>> & WorldContext, fixture: SeasonFixture): MatchState {
+function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background' | 'facilities'>> & WorldContext, fixture: SeasonFixture): MatchState {
   const homeClub = season.clubs.find(club => club.id === fixture.homeClubId);
   const awayClub = season.clubs.find(club => club.id === fixture.awayClubId);
   // Step 3.5b: a European game's club outside the full world plays as a background side.
@@ -293,7 +294,8 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   const conditions = { ...backgroundCondition(homeBackground), ...backgroundCondition(awayBackground), ...Object.fromEntries([homeClub ? home : null, awayClub ? away : null].flatMap(team => team ? team.players.map(player => [player.id, season.conditions[player.id]!]) : [])) };
   const develop = (team: Team, full: boolean) => full ? developClub(team, season.training, { ...season, date: fixture.date }) : team;
   // Sprint 4: earlier injuries raise the risk of the same kind again (recurrence), for every club alike.
-  const injuryRisk = season.injuryMode === 'off' ? {} : injuryRiskMap(season.injuries, registeredPlayers, fixture.date);
+  // Format 65: a club's medical centre removes part of the extra recurrence risk of its players.
+  const injuryRisk = season.injuryMode === 'off' ? {} : withMedicalRecurrence(injuryRiskMap(season.injuries, registeredPlayers, fixture.date), [home, away].map(team => ({ playerIds: team.players.map(player => player.id), percent: medicalRecurrencePercent(season, team.id, fixture.date) })));
   let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), develop(home, !!homeClub), develop(away, !!awayClub), {
     ...(morale ? { morale } : {}),
     lineups: { home: lineup(home, homePlan), away: lineup(away, awayPlan) },
@@ -469,7 +471,7 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
   }
   fixture.result = compactResult(match, rosterIds);
   if (usesFullClubRoster(season)) fixture.result.selection = captureMatchdaySelection(season.clubs, match.home, match.away, season.conditions);
-  for (const injury of injuriesFromMatch(season.seed, fixture, match, season.injuries)) {
+  for (const injury of injuriesFromMatch(season.seed, fixture, match, season.injuries, clubRecoveryPercent(season, fixture.date))) {
     if (season.injuries.some(existing => existing.id === injury.id || existing.playerId === injury.playerId && isRecovering(existing, fixture.date, season.physio))) throw new Error('An unavailable player cannot receive a duplicate injury episode.');
     season.injuries.push(injury);
   }
@@ -596,7 +598,7 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState): Season
   next.round += 1;
   next.date = dateForRound(next.round, next.seasonNumber);
   next = processFacilityProjects(next);
-  next.physio = processRehabilitationWeek({ ...storedWorld(worldOf(next)), physio: next.physio, clubs: next.clubs, rosters: next.rosters, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
+  next.physio = processRehabilitationWeek({ ...storedWorld(worldOf(next)), facilities: next.facilities, physio: next.physio, clubs: next.clubs, rosters: next.rosters, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
   if (next.training.enabledSince) {
     const trained = processTrainingWeek({ ...storedWorld(worldOf(next)), dataPackId: next.dataPackId, seed: next.seed, facilities: next.facilities, training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, lifecycle: next.lifecycle, academy: next.academy, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: trainedFrom, toDate: next.date });
     next.training = trained.training; next.conditions = trained.conditions;

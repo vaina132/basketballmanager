@@ -5,6 +5,7 @@ import { physioEffects } from './physio-policy';
 import { effectiveReturnOn, latestRehabilitation, rehabilitationCreditCap, REHABILITATION_CREDIT_PER_DAY_SAVED } from './rehabilitation-policy';
 import { rosterForRound } from './rosters';
 import { seasonRounds } from './career-world';
+import { medicalPhysioPercent } from './facilities-policy';
 import { PHYSIO_DIRECTORY } from '../data/staff-directory';
 
 const DAY_MS = 86_400_000;
@@ -22,6 +23,8 @@ export function processRehabilitationWeek(input: RehabilitationWeekInput): Seaso
     const contract = physio.contracts.find(contract => contract.clubId === club.id && contract.seasonNumber === seasonNumber && contract.startedRound <= afterRound && (contract.releasedRound === null || contract.releasedRound > afterRound));
     if (!contract) continue;
     const staff = PHYSIO_DIRECTORY.find(staff => staff.id === contract.physioId)!;
+    // Format 65: the medical centre's condition-scaled boost on the review's first day; older careers get none.
+    const boost = medicalPhysioPercent(input, club.id, fromDate), creditPerDay = boost > 0 ? Math.round(physioEffects(staff).creditPerDay * (100 + boost) / 100) : physioEffects(staff).creditPerDay;
     const roster = rosterForRound(input.rosters, club.id, afterRound);
     const registered = new Set(roster.players.map(player => player.id));
     if (club.players.length !== registered.size || club.players.some(player => !registered.has(player.id))) throw new Error('Treatment must use the registered squad for its completed interval.');
@@ -30,7 +33,7 @@ export function processRehabilitationWeek(input: RehabilitationWeekInput): Seaso
       if (!eligibleDays) continue;
       const previous = latestRehabilitation(physio, injury.id, fromDate);
       const creditBefore = previous?.creditAfter ?? 0;
-      const creditAfter = Math.min(rehabilitationCreditCap(injury), creditBefore + eligibleDays * physioEffects(staff).creditPerDay);
+      const creditAfter = Math.min(rehabilitationCreditCap(injury), creditBefore + eligibleDays * creditPerDay);
       const returnBefore = effectiveReturnOn(physio, injury, fromDate);
       const proposed = new Date(Date.parse(`${injury.returnOn}T00:00:00Z`) - Math.floor(creditAfter / REHABILITATION_CREDIT_PER_DAY_SAVED) * DAY_MS).toISOString().slice(0, 10);
       const prospective = proposed > toDate ? proposed : toDate;

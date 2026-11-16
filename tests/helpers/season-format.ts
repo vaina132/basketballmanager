@@ -37,7 +37,7 @@ const ADDED_BY_FORMAT: readonly (readonly [format: number, defaults: (state: Leg
   [25, () => ({ academy: createAcademy(), youth: createYouth() })],
   [26, () => ({ lifecycle: createLifecycle() })],
   [27, () => ({ youthCompetition: createYouthCompetition() })],
-  [28, state => ({ facilities: createFacilities(state.clubs, state.managedClubId) })],
+  [28, state => ({ facilities: createFacilities(state.clubs, state.managedClubId, 'facilities-1') })],
   [29, () => ({ relationships: createRelationships() })],
   [30, () => ({ board: createBoard() })],
   [31, state => ({ commercial: createCommercial(state.clubs, state.managedClubId) })],

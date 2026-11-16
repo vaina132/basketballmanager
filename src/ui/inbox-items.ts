@@ -9,7 +9,7 @@ import { getPressQuestion, PRESS_ANSWER_TEXT } from '../world/press-policy'
 import { getSquadRelationships } from '../world/relationships'
 import { seasonLabel } from '../world/season'
 import { governingDerby } from '../world/rivalries'
-import { FACILITY_TYPES, getFacilityCondition, getFacilityLevel, maintenancePlanOn } from '../world/facilities-policy'
+import { facilityTypes, FACILITY_RULES_2, getFacilityCondition, hasFacilityCondition, maintenancePlanOn, usesFacilityRepairs } from '../world/facilities-policy'
 import { clubRetirementsThisSeason } from './PlayerLifecycle'
 import { careerMoveText } from './career-text'
 import { careerMovesGovern, managedClubFor } from '../world/career'
@@ -33,7 +33,7 @@ export interface InboxItem {
 }
 
 const money = (cents: number) => formatEuros(cents)
-const FACILITIES: Record<string, string> = { arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure' }
+const FACILITIES: Record<string, string> = { arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure', medical: 'Medical centre', scouting: 'Scouting office' }
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
 
 /** Dated messages built only from recorded events at the managed club; nothing is generated for display. */
@@ -63,7 +63,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   }
   for (const [index, event] of season.facilities.events.entries()) {
     if (event.type !== 'funding' || event.clubId !== clubId) continue
-    items.push({ id: `funding-${index}`, date: event.date, category: 'club', title: event.approved ? 'Board capital approved' : 'Board capital refused', detail: `${FACILITIES[event.facilityType]} · ${money(event.amount)}${event.approved ? '' : `. ${boardFundingRefusal(event)}`}`, needsAction: false, target: 'board' })
+    items.push({ id: `funding-${index}`, date: event.date, category: 'club', title: event.approved ? 'Board capital approved' : 'Board capital refused', detail: `${FACILITIES[event.facilityType]}${event.project === 'repair' ? ' repair' : ''} · ${money(event.amount)}${event.approved ? '' : `. ${boardFundingRefusal(event)}`}`, needsAction: false, target: 'board' })
   }
 
   if (season.commercial.enabledSince) {
@@ -82,8 +82,13 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     const home = fixture.homeClubId === clubId, won = fixture.result.winnerClubId === clubId
     items.push({ id: `derby-${fixture.id}`, date: fixture.date, category: 'board', title: `${derby.name} ${won ? 'won' : 'lost'}`, detail: `${fixture.result.score[home ? 'home' : 'away']}–${fixture.result.score[home ? 'away' : 'home']} ${home ? 'at home' : 'away'}. The board and the squad weigh this result more than usual.`, needsAction: false, target: 'board' })
   }
-  if (season.facilities.maintenanceSince) for (const type of FACILITY_TYPES) {
-    if (getFacilityLevel(season, type, clubId) === 1) continue
+  if (usesFacilityRepairs(season.facilities) && season.facilities.enabledSince) for (const type of facilityTypes(season.facilities)) {
+    // Format 65: wear shrinks the benefit until a repair restores it.
+    if (!hasFacilityCondition(season, type, clubId)) continue
+    const condition = getFacilityCondition(season, type, clubId)
+    if (condition < FACILITY_RULES_2.automaticRepairBelow) items.push({ id: `worn-${type}`, date: season.date, category: 'club', title: `${FACILITIES[type]} wearing`, detail: `Condition ${condition}/100; its benefit shrinks until a repair restores it.`, needsAction: !season.facilities.delegated[clubId], target: 'club' })
+  } else if (season.facilities.maintenanceSince) for (const type of facilityTypes(season.facilities)) {
+    if (!hasFacilityCondition(season, type, clubId)) continue
     const condition = getFacilityCondition(season, type, clubId)
     if (condition < 60) items.push({ id: `worn-${type}`, date: season.date, category: 'club', title: `${FACILITIES[type]} wearing`, detail: `Condition ${condition}/100 under ${maintenancePlanOn(season.facilities, clubId, season.date)} upkeep; its benefit shrinks until full upkeep restores it.`, needsAction: maintenancePlanOn(season.facilities, clubId) === 'reduced', target: 'club' })
   }

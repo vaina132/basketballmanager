@@ -3,7 +3,7 @@ import type { FacilityFundingDecision, FacilityType, SeasonFacilities } from '..
 import type { SeasonState } from '../domain/season';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import { clubPresident, roundOrdinal, seasonRounds, worldOf } from './career-world';
-import { facilityAutomationBuffer, FACILITY_FUNDS_REASON, quoteFacilityUpgrade } from './facilities-policy';
+import { facilityAutomationBuffer, FACILITY_FUNDS_REASON, FACILITY_REPAIR_FUNDS_REASON, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
 import { ownerCapital } from './board-consequences';
 
@@ -40,6 +40,8 @@ export interface BoardFundingQuote {
   clubId: string;
   facilityType: FacilityType;
   mode: 'manager' | 'automatic';
+  /** What the capital pays for: an upgrade, or a `facilities-2` repair. */
+  project: 'upgrade' | 'repair';
   president: DevelopmentPresident;
   cost: number;
   available: number;
@@ -60,13 +62,18 @@ export interface BoardFundingQuote {
 /**
  * The board funds the missing part of one facility upgrade from the owner's capital for the season when its
  * confidence meets the president's threshold. The rules are visible; the same answer applies to every club.
+ * `facilities-2` careers can also ask for a repair; automatic control then asks for half its cash cushion, as it keeps
+ * for repairs. Upgrades and repairs share the owner's capital for the season.
  */
-export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId = state.managedClubId, mode: 'manager' | 'automatic' = 'manager'): BoardFundingQuote {
+export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId = state.managedClubId, mode: 'manager' | 'automatic' = 'manager', project: 'upgrade' | 'repair' = 'upgrade'): BoardFundingQuote {
   const president = clubPresident(worldOf(state), clubId);
-  const upgrade = quoteFacilityUpgrade(state, type, clubId);
+  const repair = project === 'repair' ? quoteFacilityRepair(state, type, clubId) : null;
+  const upgrade = repair ? null : quoteFacilityUpgrade(state, type, clubId);
+  const cost = repair ? repair.cost : upgrade!.cost, blocked = repair ? repair.reason : upgrade!.reason, fundsReason = repair ? FACILITY_REPAIR_FUNDS_REASON : FACILITY_FUNDS_REASON;
   // A negative position means wages and fees already exceed cash; capital is never a back door for those.
   const position = getSpendablePosition(state, clubId), available = Math.max(0, position);
-  const amount = Math.max(0, upgrade.cost + (mode === 'automatic' ? facilityAutomationBuffer(state, clubId) : 0) - available);
+  const cushion = mode === 'automatic' ? repair ? facilityAutomationBuffer(state, clubId) / 2 : facilityAutomationBuffer(state, clubId) : 0;
+  const amount = Math.max(0, cost + cushion - available);
   const confidence = boardConfidenceNow(state, clubId), requiredConfidence = requiredBoardConfidence(president);
   // The previous season's board verdict can raise, halve or withhold the owner's capital (see board-consequences).
   const seasonCapital = ownerCapital(state, clubId);
@@ -76,12 +83,13 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   let reason: string | null = null;
   if (!state.facilities.fundingSince) reason = 'Enable board funding requests first.';
   else if (!state.board.enabledSince) reason = 'Enable board reviews before asking for capital.';
-  else if (upgrade.fromLevel === upgrade.toLevel) reason = 'This facility is already at the highest development level.';
-  else if (upgrade.reason && upgrade.reason !== FACILITY_FUNDS_REASON) reason = upgrade.reason;
-  else if (amount === 0) reason = 'The club can fund this upgrade without board capital.';
-  else if (position < 0) reason = 'Committed wages and fees already exceed the club\'s cash; the board will not fund new construction.';
+  else if (repair && !usesFacilityRepairs(state.facilities)) reason = repair.reason;
+  else if (upgrade && upgrade.fromLevel === upgrade.toLevel) reason = 'This facility is already at the highest development level.';
+  else if (blocked && blocked !== fundsReason) reason = blocked;
+  else if (amount === 0) reason = repair ? 'The club can fund this repair without board capital.' : 'The club can fund this upgrade without board capital.';
+  else if (position < 0) reason = repair ? 'Committed wages and fees already exceed the club\'s cash; the board will not fund repairs.' : 'Committed wages and fees already exceed the club\'s cash; the board will not fund new construction.';
   else if (wait > 0) reason = `The board will reconsider after ${wait} more ${wait === 1 ? 'matchday' : 'matchdays'}.`;
   const approved = reason === null && confidence >= requiredConfidence && amount <= capitalRemaining;
   const refusal = reason === null ? boardFundingRefusal({ approved, confidence, requiredConfidence, capitalRemaining }) : null;
-  return { clubId, facilityType: type, mode, president, cost: upgrade.cost, available, amount, confidence, requiredConfidence, seasonCapital, capitalRemaining, eligible: reason === null, reason, approved, refusal };
+  return { clubId, facilityType: type, mode, project, president, cost, available, amount, confidence, requiredConfidence, seasonCapital, capitalRemaining, eligible: reason === null, reason, approved, refusal };
 }

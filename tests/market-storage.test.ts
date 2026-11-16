@@ -1,4 +1,4 @@
-import { stripInSeasonRecruitment } from './helpers/legacy-season';
+import { stripInSeasonRecruitment, withLegacyFacilities } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
@@ -69,7 +69,8 @@ describe('dated recruitment persistence', () => {
     const previous = structuredClone(legacy) as unknown as Record<string, unknown>;
     stripInSeasonRecruitment(previous); delete (previous.employment as Record<string, unknown>).transfers; delete (previous.employment as Record<string, unknown>).buyouts; delete previous.market; previous.schemaVersion = 12;
     const restored = parseSeason(envelope(previous, 12));
-    expect(restored).toEqual({ ...legacy, recruitment: { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] } });
+    // Careers from before format 65 keep the `facilities-1` model.
+    expect(restored).toEqual({ ...withLegacyFacilities(legacy), recruitment: { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] } });
     expect(restored.market).toEqual({ model: 'market-1', enabledSince: null, windows: [] });
     const signed = offerPlayerContract(restored, playerId, getSeasonWage(playerId), 1);
     expect(signed.employment.contracts.length).toBe(restored.employment.contracts.length + 1);

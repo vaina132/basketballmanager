@@ -13,7 +13,7 @@ This file holds only the current state, the next steps and the rules that must n
 - Round 2: more president personalities, board verdicts affecting the player salary budget, youth and culture objectives; richer press topics and media reputation; rivalries that grow from results; loans and leases.
 - Unemployed seasons: **approved by the owner** (careers continue while unemployed); round 2, after the board and career work.
 - Also open: promoted and relegated clubs keep their opening money figures.
-- **Done so far:** press topics and media standing (format 67), rivalries that grow from results (format 68); see `docs/decisions.md`, "Saved ideas level defaults". Owner checks (later): press conferences and the Media standing panel on Club > Board; rivalries listed on Club > Board from season two.
+- **Done so far:** career and board rules (format 63), sponsor exits and naming rights (64), medical and scouting facilities and repairs (65), press topics and media standing (67), rivalries that grow from results (68); round 2 running (unemployed seasons 69, presidents/salary verdicts/youth and culture objectives 70, loans and leases 71, money following promotion and relegation 72; squad roles and contract requests 66 still finishing). Old-format tests build careers with `beforeSavedIdeas`/`BEFORE_SAVED_IDEAS` (`tests/helpers/legacy-season.ts`); see `docs/decisions.md`, "Saved ideas level defaults". Owner checks (later): press conferences and the Media standing panel on Club > Board; rivalries listed on Club > Board from season two.
 
 **Development mode** applies (see "Rules and conventions"): build features first; full suite at sprint end.
 

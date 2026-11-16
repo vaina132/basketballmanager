@@ -470,6 +470,10 @@ Chosen as recommended defaults under the owner's instruction to finish the level
 
 "Let's remove the selling and marketing related work. We'll come to this later, after making the game a playable and enjoyable one." Roadmap: step 3.7, safety checks and gaps, the owner's play test, interface simplification, player data, release preparation (old-save support and a final full check). The selling ideas (free first season, EUR 15 unlock, Steam, data-rights review) are not planned until the owner brings them back.
 
+## Player positions: Supabase permission and free official sources (owner decision, 16 November 2026)
+
+The owner allowed this session to use Supabase to publish corrected player positions ("you do it with supabase permission") and chose free official sources first for exact positions ("let's first try official free sources if possible ... any website that gives info on player positions should have this data somewhere"), before any paid provider. All player data comes from API-Sports; it gives only Guard/Forward/Center (sometimes wrong) or nothing, and the pack guesses exact positions from statistics. A backup of the published pack is kept before any replacement.
+
 ## Simplification before the play test (owner decision, 16 November 2026)
 
 "Please implement now the full starting staff for every club, the court picture starting 5, squad roles in the squad list and contract ops, 6 facility levels and arena seat expansion, a simple bank loan process ... when I get a loan, it's added to my budget directly ... Board as its own menu item, a day-by-day continue button, and transfers as a player search ... I would prefer to play test when these things are implemented." The play test now follows these items. Their defaults are recorded here as each lands.

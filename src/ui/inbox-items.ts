@@ -5,7 +5,8 @@ import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/b
 import { boardFundingRefusal } from '../world/board-funding-policy'
 import { getClubSponsorship } from '../world/commercial'
 import { getCareerPlayer } from '../world/player-catalog'
-import { getPressQuestion, PRESS_ANSWER_TEXT } from '../world/press-policy'
+import { getPressQuestion, PRESS_ANSWER_TEXT, pressAnswerLabel, pressQuote } from '../world/press-policy'
+import { PRESS_TOPIC_TITLES } from '../world/media'
 import { getSquadRelationships } from '../world/relationships'
 import { seasonLabel } from '../world/season'
 import { governingDerby } from '../world/rivalries'
@@ -41,8 +42,9 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   const clubId = season.managedClubId, items: InboxItem[] = []
 
   const question = getPressQuestion(season)
-  if (question && !question.answered) items.push({ id: question.id, date: question.date, category: 'press', title: question.topic === 'losing-run' ? 'Press conference · three defeats' : 'Press conference · three wins', detail: `${question.question} Answer before the next match, or your assistant keeps it routine.`, needsAction: true, target: 'press' })
-  for (const event of season.relationships.events) if (event.type === 'press' && event.clubId === clubId) items.push({ id: event.id, date: event.date, category: 'press', title: 'Press conference answered', detail: `${PRESS_ANSWER_TEXT[event.answer].label}: “${PRESS_ANSWER_TEXT[event.answer].quote}”`, needsAction: false, target: 'dynamics' })
+  // Format 67 (careers with media) names the topic; older careers keep the two run topics.
+  if (question && !question.answered) items.push({ id: question.id, date: question.date, category: 'press', title: question.subjectIds ? `Press conference · ${PRESS_TOPIC_TITLES[question.topic]}` : question.topic === 'losing-run' ? 'Press conference · three defeats' : 'Press conference · three wins', detail: `${question.question} Answer before the next match, or your assistant ${question.subjectIds ? 'gives no comment' : 'keeps it routine'}.`, needsAction: true, target: 'press' })
+  for (const event of season.relationships.events) if (event.type === 'press' && event.clubId === clubId) items.push({ id: event.id, date: event.date, category: 'press', title: 'Press conference answered', detail: event.subjectIds ? `${pressAnswerLabel(event)}: “${pressQuote(event.topic, event.answer)}”` : `${PRESS_ANSWER_TEXT[event.answer].label}: “${PRESS_ANSWER_TEXT[event.answer].quote}”`, needsAction: false, target: 'dynamics' })
 
   if (season.board.enabledSince) {
     for (const mandate of season.board.mandates) {

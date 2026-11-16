@@ -11,6 +11,7 @@ import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS } from './rival
 import { roundKey, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
 import { seasonLeagues } from './divisions';
 import { scaledMoney } from './economy';
+import { boardMediaEvidence, type BoardMediaEvidence } from './media';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
@@ -23,6 +24,8 @@ const rounded = (n: number) => Math.round(n * 1000) / 1000;
 export type BoardCalculationContext = Pick<SeasonState, 'world' | 'dataPackId' | 'rosters' | 'seasonNumber' | 'round' | 'date' | 'fixtures' | 'finance' | 'board' | 'injuries' | 'physio' | 'rivalries'> & {
   clubs: readonly Pick<SeasonState['clubs'][number], 'id'>[];
   employment: Pick<SeasonState['employment'], 'transfers'>;
+  /** Format 67, careers with media: the board's media assessment of the manager's club at this review (`media.ts`). */
+  pressMedia?: BoardMediaEvidence;
 };
 
 export function createBoard(): SeasonBoard { return { model: 'board-1', enabledSince: null, mandates: [], reviews: [], consequencesSince: null }; }
@@ -121,10 +124,11 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     const derbies = rivalriesCount ? games.filter(fixture => governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round, worldOf(state))) : [];
     const derbyBalance = derbies.reduce((sum, fixture) => sum + (fixture.result!.winnerClubId === club.id ? 1 : -1), 0);
     const rivalryImpact = clamp(derbyBalance * RIVALRY_BOARD_POINTS, -RIVALRY_BOARD_CAP, RIVALRY_BOARD_CAP) || 0;
-    const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact + rivalryImpact, 0, 100);
+    const mediaImpact = state.pressMedia?.clubId === club.id ? state.pressMedia.impact : undefined;
+    const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact + rivalryImpact + (mediaImpact ?? 0), 0, 100);
     const previousConfidence = state.board.reviews.at(-1)?.clubs[club.id]?.confidence ?? 50;
     const confidence = previousConfidence + clamp(assessment - previousConfidence, -BOARD_REVIEW_STEP, BOARD_REVIEW_STEP);
-    clubs[club.id] = { fixtureIds: games.map(fixture => fixture.id), played, wins, targetPace: rounded(targetPace), carriedAbsences, rosterPlaces, unpaid, resultsImpact, injuryRelief, financeImpact, ...(rivalriesCount ? { rivalryImpact } : {}), assessment, previousConfidence, confidence };
+    clubs[club.id] = { fixtureIds: games.map(fixture => fixture.id), played, wins, targetPace: rounded(targetPace), carriedAbsences, rosterPlaces, unpaid, resultsImpact, injuryRelief, financeImpact, ...(rivalriesCount ? { rivalryImpact } : {}), ...(mediaImpact !== undefined ? { mediaImpact } : {}), assessment, previousConfidence, confidence };
   }
   // A review follows its week's commit, so that week counts as completed even when it had no game (format 57).
   return { ...boardEventAnchor(state), completedRounds: roundOrdinal(state.seasonNumber, state.round, seasonRounds(state)), id: `board-review-${state.board.reviews.length + 1}`, mandateId: mandate.id, clubs };
@@ -135,7 +139,8 @@ export function processBoardRound(state: SeasonState): SeasonState {
   if (!state.board.enabledSince) return state;
   const mandate = state.board.mandates.find(mandate => mandate.seasonNumber === state.seasonNumber);
   if (!mandate || state.round < mandate.startsRound || state.board.reviews.some(review => review.seasonNumber === state.seasonNumber && review.round === state.round)) return state;
-  const review = buildBoardReview(state, mandate);
+  const pressMedia = boardMediaEvidence(state, state.seasonNumber, state.round, state.date);
+  const review = buildBoardReview(pressMedia ? { ...state, pressMedia } : state, mandate);
   return { ...state, board: { ...state.board, reviews: [...state.board.reviews, review] } };
 }
 

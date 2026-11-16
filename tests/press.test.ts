@@ -11,7 +11,7 @@ const morale = (state: SeasonState, playerId: string) => getPlayerRelationship(s
 let start: SeasonState, open: SeasonState;
 
 beforeAll(() => {
-  start = createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Press Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS });
+  start = createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Press Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, media: false });
   open = start;
   for (let step = 0; step < 10 && !getPressQuestion(open); step += 1) open = advanceMatchday(open);
 }, 120_000);
@@ -26,6 +26,7 @@ describe('press rules', () => {
   });
 });
 
+// Careers without the media system (every career before format 67) keep the format-34 press.
 describe('press questions in a career', () => {
   it('appears only when the latest matchday completes a run of three, naming the most-used players', () => {
     const question = getPressQuestion(open)!;
@@ -75,7 +76,7 @@ describe('press questions in a career', () => {
 
   it('rejects press answers in a format-33 file', () => {
     // A genuine format-33 career had no rivalries, so its derby crowds were never enlarged.
-    let plain = createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, rivalries: false, facilityMaintenance: false });
+    let plain = createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, rivalries: false, facilityMaintenance: false, media: false });
     for (let step = 0; step < 10 && !getPressQuestion(plain); step += 1) plain = advanceMatchday(plain);
     const file = JSON.parse(serializeSeason(answerPress(plain, 'routine')));
     file.formatVersion = 33; file.state.schemaVersion = 33;

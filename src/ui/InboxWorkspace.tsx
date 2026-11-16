@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import type { PressAnswer, PressQuestion } from '../domain/relationships'
+import type { PressAnswer, PressQuestion, PressTopic } from '../domain/relationships'
 import type { SeasonState } from '../domain/season'
 import { getCareerPlayer } from '../world/player-catalog'
-import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, PRESS_HALF_LIFE_DAYS } from '../world/press-policy'
+import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, PRESS_HALF_LIFE_DAYS, pressQuote, type LegacyPressAnswer } from '../world/press-policy'
+import { isPressStyle, MEDIA_RULES, mediaLabel, mediaMoraleFactor, PRESS_TOPIC_TITLES, pressStyleEffect } from '../world/media'
 import { getInboxItems, type InboxCategory, type InboxTarget } from './inbox-items'
 import { Icon, type IconName } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
@@ -19,14 +20,43 @@ const ICONS: Record<InboxCategory, IconName> = { press: 'mail', board: 'shield',
 const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad' }
 const signed = (value: number) => `${value > 0 ? '+' : '−'}${Math.abs(value)}`
 
-export function pressEffectText(answer: PressAnswer): string {
-  const effect = PRESS_EFFECTS[answer]
+export function pressEffectText(answer: PressAnswer, topic?: PressTopic, subject?: string): string {
+  if (isPressStyle(answer) && topic) {
+    // Format 67: every effect of the style on this topic, before the media standing's morale factor.
+    const effect = pressStyleEffect(topic, answer), parts: string[] = []
+    if (effect.subject && subject) parts.push(`${subject} ${signed(effect.subject)} morale`)
+    if (effect.core && effect.core === effect.others) parts.push(`${effect.subject && subject ? 'Rest of the squad' : 'Squad'} ${signed(effect.core)} morale`)
+    else {
+      if (effect.core) parts.push(`Regulars ${signed(effect.core)}`)
+      if (effect.others) parts.push(`rest of the squad ${signed(effect.others)} morale`)
+    }
+    if (effect.board) parts.push(`Board ${signed(effect.board)}`)
+    if (effect.supporters) parts.push(`Crowds ${signed(effect.supporters)}%`)
+    if (effect.media) parts.push(`Media ${signed(effect.media)}`)
+    return parts.join(' · ') || 'No effect'
+  }
+  const effect = PRESS_EFFECTS[answer as LegacyPressAnswer]
   if (effect.core === 0 && effect.others === 0) return 'No morale change'
   if (effect.core === effect.others) return `Whole squad ${signed(effect.core)} morale`
   return `Regulars ${signed(effect.core)}, rest of the squad ${signed(effect.others)} morale`
 }
 
+function RichPressConference({ season, question, busy, onAnswer }: { season: SeasonState; question: PressQuestion; busy: boolean; onAnswer: (answer: PressAnswer) => void }) {
+  const name = (id: string) => season.clubs.flatMap(club => club.players).find(player => player.id === id)?.name ?? getCareerPlayer(season, id).name
+  const regulars = question.coreIds.map(name).join(', '), subject = question.subjectIds?.length && question.topic !== 'sale' ? name(question.subjectIds[0]!) : undefined
+  const standing = question.standing ?? MEDIA_RULES.start
+  return <section id="press-conference" className="inbox-press" tabIndex={-1} aria-labelledby="press-title" data-press-topic={question.topic}>
+    <header><h3 id="press-title"><Icon name="mail" size={16} />Press conference · {PRESS_TOPIC_TITLES[question.topic]}</h3><span>After matchday {question.triggerRound} · <time dateTime={question.date}>{medicalDate(question.date)}</time></span></header>
+    <p className="inbox-press-question">“{question.question}”</p>
+    <div className="inbox-press-answers">{question.answers.map(answer => <button key={answer} className="inbox-press-answer" data-press-answer={answer} onClick={() => onAnswer(answer)} disabled={busy}>
+      <strong>{PRESS_ANSWER_TEXT[answer].label}</strong><span>“{pressQuote(question.topic, answer)}”</span><small>{pressEffectText(answer, question.topic, subject)}</small>
+    </button>)}</div>
+    <p className="inbox-press-note" data-press-standing={standing}>Media standing {standing}/100 ({mediaLabel(standing)}): morale effects count ×{(Math.round(mediaMoraleFactor(standing) * 100) / 100).toFixed(2)}. Regulars (most minutes in the last five games): {regulars}. Morale effects fade by half every {PRESS_HALF_LIFE_DAYS / 7} weeks, board effects every four and crowd effects every three; media points stay. Nothing changes the match already prepared. If you don't answer before the next match, your assistant gives no comment and nothing changes.</p>
+  </section>
+}
+
 function PressConference({ season, question, busy, onAnswer }: { season: SeasonState; question: PressQuestion; busy: boolean; onAnswer: (answer: PressAnswer) => void }) {
+  if (question.subjectIds) return <RichPressConference season={season} question={question} busy={busy} onAnswer={onAnswer} />
   const regulars = question.coreIds.map(id => getCareerPlayer(season, id).name).join(', ')
   return <section id="press-conference" className="inbox-press" tabIndex={-1} aria-labelledby="press-title" data-press-topic={question.topic}>
     <header><h3 id="press-title"><Icon name="mail" size={16} />Press conference</h3><span>After matchday {question.triggerRound} · <time dateTime={question.date}>{medicalDate(question.date)}</time></span></header>

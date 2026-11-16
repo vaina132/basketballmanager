@@ -6,6 +6,7 @@ import { clubsEverInFullWorld, fullWorldClubsIn, incumbentSponsorId, roundOrdina
 import { agreementFor, bestSponsorshipOffer, buildSponsorshipOffers, createCommercial, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorshipReferenceFee, SPONSORSHIP_RENEWAL_ROUND } from '../world/commercial-policy';
 import { dateForRound, MAX_SEASON_NUMBER, seasonStartDate } from '../world/season';
 import { financeLedgerCount } from '../world/finance-ledger';
+import { mediaSponsorBonus } from '../world/media';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'ledgerCount'] as const;
 const EVENT_KEYS: Record<CommercialEvent['type'], readonly string[]> = {
@@ -179,7 +180,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
     if (event.type === 'decline') { replay = { ...replay, offers: replay.offers.map(item => item.id === offer.id ? { ...item, status: 'declined', closedOn: at.date } : item) }; return; }
     if (event.type === 'request') {
       if (offer.request) fail(path, 'can ask each sponsor for better terms only once');
-      const response = respondToSponsorshipRequest(state.seed, offer);
+      const response = respondToSponsorshipRequest(state.seed, offer, mediaSponsorBonus(state, offer.id));
       replay = { ...replay, offers: replay.offers.map(item => item.id === offer.id ? { ...item, request: response.request, annualFee: response.annualFee, status: response.status, closedOn: response.status === 'open' ? null : at.date } : item) };
       return;
     }

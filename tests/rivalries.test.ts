@@ -11,7 +11,8 @@ import { currentSeasonFile } from './helpers/season-format';
 import { DEVELOPMENT_WORLD } from '../src/data/development-world';
 
 const manager = { name: 'Derby Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-const career = (rivalries: boolean) => createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, rivalries });
+// The career without rivalries stands for an older save, so it also has no press and media record (format 67).
+const career = (rivalries: boolean) => createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, rivalries, media: rivalries });
 const resultsReason = (state: SeasonState, playerId: string) => getPlayerRelationship(state, playerId).reasons.find(reason => reason.label === 'Recent team results')!.impact;
 let derbyWeek: SeasonState, legacy: SeasonState, switched: SeasonState;
 

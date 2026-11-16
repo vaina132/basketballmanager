@@ -32,6 +32,10 @@ import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTO
 import { appendFinanceLedgerEntry, financeLedgerCount, financeLedgerEntries, financeLedgerTicket } from './finance-ledger';
 import { clubEconomy, REAL_ECONOMY_RULES, staffFee } from './economy';
 import { ledgerClubBalance } from './finance-ledger-index';
+import type { SeasonMedia } from '../domain/media';
+import type { SeasonRelationships } from '../domain/relationships';
+import { pressSupporterPercent } from './media';
+import { dateForRound } from './season';
 
 export { clubFinanceDefinition } from './career-world';
 export type { FinanceBalance, FinanceLedgerRow, GateForecast } from '../domain/finance';
@@ -71,7 +75,8 @@ export interface FinanceFixture {
   awayClubId: string;
   result: { winnerClubId: string } | null;
 }
-export interface FinanceContext extends WorldContext { fixtures: readonly FinanceFixture[]; facilities?: SeasonFacilities; finance?: SeasonFinance; date?: string; round?: number; seasonNumber?: number; rivalries?: SeasonRivalries }
+/** Format 67: careers with media also carry their press answers (`relationships`), which move gate demand a little. */
+export interface FinanceContext extends WorldContext { fixtures: readonly FinanceFixture[]; facilities?: SeasonFacilities; finance?: SeasonFinance; date?: string; round?: number; seasonNumber?: number; rivalries?: SeasonRivalries; media?: SeasonMedia; relationships?: SeasonRelationships }
 
 function validatePrice(price: number, maximum = MAX_TICKET_PRICE): void {
   if (!Number.isInteger(price) || price < 0 || price > maximum || price % TICKET_PRICE_STEP !== 0) throw new Error(maximum === MAX_TICKET_PRICE ? 'Choose a ticket price from zero to sixty euros in one-euro steps.' : `Choose a ticket price from zero to ${maximum / 100} euros in one-euro steps.`);
@@ -272,7 +277,9 @@ export function forecastGate(state: FinanceContext, fixture: Pick<FinanceFixture
   const capacity = recorded ?? (fixture.round === state.round && (fixture.date === undefined || fixture.date === state.date) ? state.finance?.roundCapacities?.[fixture.homeClubId] : undefined) ?? getArenaCapacity(state, fixture.homeClubId, fixture.date ?? state.date);
   const own = winShare(state, fixture.homeClubId, fixture.round), opponent = winShare(state, fixture.awayClubId, fixture.round);
   const derby = state.seasonNumber === undefined ? null : governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, state.seasonNumber, fixture.round, worldOf(state));
-  const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent) * (derby ? 1 + RIVALRY_CROWD_PERCENT * derby.intensity / 100 : 1);
+  // Format 67: the home club's recent press answers move supporter demand by up to 4% (careers with media only).
+  const supporters = state.media && state.seasonNumber !== undefined ? pressSupporterPercent(state, fixture.homeClubId, state.seasonNumber, fixture.round, fixture.date ?? dateForRound(fixture.round, state.seasonNumber)) : 0;
+  const demand = venue.referenceDemand * (own === null ? 1 : .85 + .3 * own) * (opponent === null ? 1 : .9 + .2 * opponent) * (derby ? 1 + RIVALRY_CROWD_PERCENT * derby.intensity / 100 : 1) * (supporters ? 1 + supporters / 100 : 1);
   const attendance = price === 0 ? capacity : Math.min(capacity, Math.floor(demand * (defaultTicketPriceFor(state, fixture.homeClubId) / price) ** 1.4));
   return { fixtureId: fixture.id, clubId: fixture.homeClubId, opponentClubId: fixture.awayClubId, price, attendance, capacity, revenue: attendance * price };
 }

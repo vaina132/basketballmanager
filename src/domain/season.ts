@@ -83,7 +83,14 @@ export interface SeasonFixture {
 
 /** Older imports lack box scores; newly archived seasons retain complete results. */
 export interface ArchivedFixture extends Omit<SeasonFixture, 'result'> {
-  result: Omit<FixtureResult, 'stats'> & { stats: Record<string, PlayerStats> | null; appearances?: Record<string, ArchivedAppearance> };
+  result: Omit<FixtureResult, 'stats' | 'rosterIds'> & {
+    stats: Record<string, PlayerStats> | null;
+    /** Absent only from a sealed result (format 73), whose sides are the clubs' registrations at that round. */
+    rosterIds?: Record<Side, string>;
+    appearances?: Record<string, ArchivedAppearance>;
+    /** Format 73, sealed rival games of seasons before the latest completed one: each side's personal fouls (for tie-break rules). */
+    fouls?: Record<Side, number>;
+  };
 }
 
 /** Retained per-game evidence for historical morale, scouting and injury checks. No invented box score. */
@@ -131,7 +138,8 @@ export interface DomesticDivisions {
 /** Format 60 adds estimated tables for unchosen leagues and each season end's European places (`europe`, step 3.5f). */
 /** Format 61 records realistic injury kinds (sprint 4) and each career match's recurrence risk (`activeMatch.injuryRisk`). Format 62 (sprint 4) gives real-club worlds researched money: `world.economy` and each club's `finances[].economy` (`src/world/economy.ts`). */
 /** Format 63 (saved ideas: career and board) adds the `career-2` rules for new careers: a protected first season, fresh board confidence for a new coach (`board.restarts`), mid-season dismissals and resignations (`CAREER_RULES`, `src/world/career-rules.ts`). Format 64 gives new careers sponsorship exit clauses and arena naming rights (`commercial.model` 'commercial-2', `commercial.naming`, ledger kinds 'naming-rights' and 'sponsor-exit'). Format 65: new careers use the `facilities-2` model: medical and scouting facilities, seasonal wear and repair projects (`FACILITY_RULES_2`, `src/world/facilities-policy.ts`). Format 66 gives new careers the `relationships-2` model: default roles by recorded squad rank (`relationships.squadRanks`) and players' contract requests with the club's replies. Format 67 adds richer press topics and the manager's media standing (`media`, `src/world/media.ts`). Format 68: new careers grow rivalries from results (`rivalries.model` 'rivalries-2', `src/world/rivalry-growth.ts`); older careers keep the world's fixed rivalries. Format 69: new careers use the `career-3` model: a manager may become unemployed (`managedClubId` empty), every club is then run automatically, and boards changing coach offer jobs by a slowly fading reputation (`CAREER_RULES`). Format 70: new careers use the board-2 model: president personalities, season verdicts on the player salary budget, youth and culture objectives and the president's requests (`PRESIDENT_RULES`, `src/world/presidents.ts`). Format 71: new careers can finance facility projects with bank loans and leases (`facilities.financing` 'loans-1', `facilities.debts`, ledger kinds 'loan', 'loan-repayment' and 'lease'; `FACILITY_FINANCING_RULES`, `src/world/facility-debt.ts`); older careers pay upfront.  Format 72 (club money follows promotion and relegation): new careers of real-data worlds record each season's club money figures (`economySeasons`, `src/world/economy.ts`); older careers keep their opening figures. */
-export const SEASON_SCHEMA_VERSION = 72;
+/** Format 73 (step 3.7, save size): completed seasons are sealed at each rollover. Rival senior games of seasons before the latest completed one keep their results, diagnoses and each side's fouls (`fouls`) beside the season totals; rival youth games of completed seasons keep results and diagnoses (`detail: 'season'`); academy weeks of completed seasons keep each prospect's last report of the season. Strict checks replay the current season from these records (`src/world/sealed-history.ts`). */
+export const SEASON_SCHEMA_VERSION = 73;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

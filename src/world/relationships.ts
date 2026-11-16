@@ -5,6 +5,7 @@ import { dateForRound } from './season';
 import { rosterForRound } from './rosters';
 import { isRecovering } from './health';
 import { fixturePlayerEvidence } from './senior-history';
+import { withoutEarlierMorale } from './sealed-history';
 import { getPlayerRetirement } from './lifecycle-policy';
 import { getPressQuestion, pressAnswerLabel, pressEventFields, pressEventMatches, pressImpact, pressMoraleValue } from './press-policy';
 import { governingDerby, RIVALRY_MORALE_WEIGHT } from './rivalries';
@@ -384,7 +385,9 @@ export function prepareRelationshipsRound(state: SeasonState): SeasonState {
   if (!state.relationships.enabledSince) return state;
   const next = rankSquads(state);
   if (next.relationships.events.some(event => event.type === 'prepare' && event.seasonNumber === next.seasonNumber && event.round === next.round)) return next;
-  return applyRelationshipEvent(next, { ...relationshipEventAnchor(next), id: eventId(next), type: 'prepare', ...preparationValues(next) });
+  const prepared = applyRelationshipEvent(next, { ...relationshipEventAnchor(next), id: eventId(next), type: 'prepare', ...preparationValues(next) });
+  // Format 73: earlier snapshots are no longer read once a new matchday is frozen.
+  return { ...prepared, relationships: { ...prepared.relationships, events: withoutEarlierMorale(prepared.relationships.events) } };
 }
 /** `relationships-2`: a player's rank in his club's registered squad now (1 = best), or null when unranked. */
 export function getSquadRank(state: SeasonState, playerId: string, clubId = state.managedClubId): number | null {

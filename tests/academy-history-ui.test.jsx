@@ -17,7 +17,9 @@ beforeAll(() => {
 });
 
 it('preserves the actual academy workspace and latest report after migration', () => {
-  expect(reduced.academy.weeks.some(week => Object.values(week.players).some(player => 'detail' in player))).toBe(true);
+  // Format 73: the completed season is sealed (each prospect keeps its last report of the season).
+  const reports = state => state.academy.weeks.reduce((count, week) => count + Object.keys(week.players).length, 0);
+  expect(reports(reduced)).toBeLessThan(reports(detailed));
   const html = render(reduced);
   expect(html).toContain('Latest development report');
   expect(html).toContain('data-academy-coaching-gain=');

@@ -2,6 +2,7 @@ import { restoreSeniorDetail } from './helpers/senior-reference';
 import { createBoard } from '../src/world/board';
 import { createRelationships } from '../src/world/relationships';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { sealCompletedHistory } from '../src/world/sealed-history';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../src/data/development-league';
@@ -157,7 +158,9 @@ describe('same-club career rollover', () => {
       expect(state.activeMatch!.tactics[managedSide(state)]).toEqual(instructions);
       expect(state.history.map(archive => archive.seasonNumber)).toEqual(Array.from({ length: seasonNumber }, (_, index) => index + 1));
     }
-    expect(state.history[0]).toEqual(firstArchive);
+    // Format 73: two rollovers later the first season is sealed: rival games keep results, diagnoses and fouls.
+    expect(state.history[0]).toEqual(sealCompletedHistory({ ...state, history: [firstArchive] }).history[0]);
+    expect(state.history[0]!.fixtures.some(fixture => fixture.result.fouls)).toBe(true);
     const fixtureIds = [...state.history.flatMap(archive => archive.fixtures.map(fixture => fixture.id)), ...state.fixtures.map(fixture => fixture.id)];
     expect(new Set(fixtureIds).size).toBe(120);
     expect(new Set(state.injuries.map(injury => injury.id)).size).toBe(state.injuries.length);

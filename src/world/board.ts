@@ -16,6 +16,7 @@ import { startingConfidence } from './career-rules';
 import { boardDebtImpacts } from './facility-debt';
 import { ambitionWinRate, assessCultureObjective, assessYouthObjective, clubTier, playerSeconds, PRESIDENT_RULES, presidentMandate, presidentTraits, requestImpactAt, usesPresidentBoard, type PresidentContext } from './presidents';
 import { issueBoardRequest, resolveBoardRequests } from './board-requests';
+import { withoutCountedGames } from './sealed-history';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
@@ -192,12 +193,13 @@ export function processBoardRound(state: SeasonState): SeasonState {
   const debtImpacts = boardDebtImpacts(state);
   if (!usesPresidentBoard(state.board)) {
     const review = buildBoardReview({ ...state, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}) }, mandate);
-    return { ...state, board: { ...state.board, reviews: [...state.board.reviews, review] } };
+    return { ...state, board: { ...state.board, reviews: [...withoutCountedGames(state.board.reviews), review] } };
   }
   // Format 70: settle the president's open requests, review, then perhaps raise a new request for the manager's club.
   const requests = resolveBoardRequests(state);
   const review = buildBoardReview({ ...state, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}), boardRequests: requests }, mandate);
-  const reviewed = { ...state, board: { ...state.board, reviews: [...state.board.reviews, review], requests } };
+  // Format 73: only the latest review keeps each club's list of counted games.
+  const reviewed = { ...state, board: { ...state.board, reviews: [...withoutCountedGames(state.board.reviews), review], requests } };
   const clubId = state.managedClubId;
   if (!mandate.clubs[clubId]?.games) return reviewed;
   return { ...reviewed, board: { ...reviewed.board, requests: issueBoardRequest(reviewed, clubId, presidentTraits(worldOf(state), clubId).interference) } };

@@ -47,7 +47,8 @@ const emptyTotals = emptySeniorTotals;
 /** Missing legacy box scores are unavailable history, never zero performances. */
 export function getPerformanceCoverage(season: SeasonState, seasonNumber = season.seasonNumber): 'complete' | 'unavailable' {
   const data = getSeasonRosterData(season, seasonNumber);
-  return data.fixtures.some(fixture => fixture.result !== null && fixture.result.stats === null && !('appearances' in fixture.result)) ? 'unavailable' : 'complete';
+  // Format 73: a sealed game's statistics are in the season totals, like a summarized game's.
+  return data.fixtures.some(fixture => fixture.result !== null && fixture.result.stats === null && !('appearances' in fixture.result) && !('fouls' in fixture.result)) ? 'unavailable' : 'complete';
 }
 
 export function performanceRecordKey(seasonNumber: number, clubId: string, playerId: string): string {
@@ -71,10 +72,13 @@ export function getSeasonPerformance(season: SeasonState, seasonNumber = season.
   }
   const registered = new Set(data.rosters.map(roster => roster.clubId));
   // Sorting a copy makes totals/log order independent of the input fixture order.
+  let sealedSeason = false;
   const fixtures = data.fixtures.filter(fixture => fixture.result !== null).sort((left, right) => compareText(right.date, left.date) || right.round - left.round || compareText(left.id, right.id));
   for (const fixture of fixtures) {
     const result = fixture.result!;
     if (result.stats === null) {
+      // Format 73: a sealed game keeps no squads; its players' games are counted from the season totals below.
+      if ('fouls' in result && data.summary) { sealedSeason = true; continue; }
       if (!('appearances' in result) || !result.appearances || !data.summary) throw new Error('Player statistics were not retained for this season.');
       for (const clubId of [fixture.homeClubId, fixture.awayClubId]) {
         // Background sides of European games (step 3.5b) have no registrations and no season records.
@@ -118,6 +122,7 @@ export function getSeasonPerformance(season: SeasonState, seasonNumber = season.
     const row = records.get(performanceRecordKey(seasonNumber, summary.clubId, summary.playerId));
     if (!row) throw new Error('Season totals refer to an unknown registration.');
     row.games += summary.games;
+    if (sealedSeason && summary.games) row.summaryGames = (row.summaryGames ?? 0) + summary.games;
     for (const key of TOTAL_KEYS) row.totals[key] += summary.totals[key];
   }
   return [...records.values()];

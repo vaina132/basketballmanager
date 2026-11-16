@@ -42,5 +42,6 @@ export interface ScoutingObserver {
   scoutId: string | null;
   /** Potential evidence if the target plays; 100 is one baseline observation. */
   evidence: number;
-  assignedLedgerIndex: number;
+  /** The ledger position when the work was assigned; not kept for reports of sealed seasons (format 73). */
+  assignedLedgerIndex?: number;
 }

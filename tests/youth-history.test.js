@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+import { isSealedYouthFixture } from '../src/world/sealed-history';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { offerAcademyPromotion } from '../src/world/academy';
@@ -160,7 +161,8 @@ describe('historical youth fixture retention', () => {
     let protectedCount = 0, outcomes = 0;
     for (const fixture of fixtures(opened)) if (fixture.seasonNumber === 1) {
       if ([fixture.homeClubId, fixture.awayClubId].includes(from)) { expect(fixture).toEqual(originalFixtures.get(fixture.id)); expect(isYouthOutcome(fixture)).toBe(false); protectedCount += 1; }
-      if (isYouthOutcome(fixture)) outcomes += 1;
+      // Format 73: other clubs' completed-season games keep their results and diagnoses only.
+      if (isSealedYouthFixture(fixture)) outcomes += 1;
     }
     expect(protectedCount).toBe(10);
     expect(outcomes).toBeGreaterThan(0);

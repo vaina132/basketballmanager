@@ -55,7 +55,16 @@ export interface YouthFixtureOutcome extends YouthFixtureIdentity {
   result: YouthFixtureResult;
 }
 
-export type YouthFixture = YouthFixtureFull | YouthFixtureOutcome;
+/** Format 73: a completed season's rival result. Scores, the winner and diagnoses remain; squads and player statistics (`stats` is empty) do not. */
+export interface YouthFixtureSealed extends YouthFixtureIdentity {
+  detail: 'season';
+  home: null;
+  away: null;
+  startingConditions: null;
+  result: YouthFixtureResult;
+}
+
+export type YouthFixture = YouthFixtureFull | YouthFixtureOutcome | YouthFixtureSealed;
 
 export interface YouthCompetitionSeason {
   seasonNumber: number;

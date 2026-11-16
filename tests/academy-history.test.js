@@ -29,10 +29,18 @@ describe('completed academy report retention', () => {
     expect(isAcademyOutcome(report)).toBe(false);
   });
 
-  it('keeps current-season history and empty history unchanged', () => {
-    const current = freeze(original('career'));
+  it('keeps the manager and latest current-season reports, and empty history unchanged', () => {
+    // Format 73: a rival's older report of the current season keeps only its outcome, every week.
+    const current = freeze(original('career')), reduced = summarizeAcademyHistory(current), last = current.academy.weeks.at(-1);
     expect(current.academy.weeks.length).toBeGreaterThan(1);
-    expect(summarizeAcademyHistory(current)).toBe(current);
+    let summarized = 0;
+    for (const [index, week] of current.academy.weeks.entries()) for (const [id, report] of Object.entries(week.players)) {
+      const retained = reduced.academy.weeks[index].players[id];
+      if (report.clubId === current.managedClubId || week.id === last.id) expect(retained).toEqual(report);
+      else { expect(retained).toEqual(outcome(report)); summarized += 1; }
+    }
+    expect(summarized).toBeGreaterThan(0);
+    expect(summarizeAcademyHistory(reduced)).toBe(reduced);
     const empty = freeze({ ...current, academy: { ...current.academy, weeks: [] } });
     expect(summarizeAcademyHistory(empty)).toBe(empty);
   });
@@ -109,7 +117,11 @@ describe('completed academy report retention', () => {
       if (isAcademyOutcome(report)) outcomes += 1;
     }
     expect(oldManagerReports).toBeGreaterThan(0);
-    expect(outcomes).toBeGreaterThan(0);
+    // Format 73: the completed season is sealed. Each prospect keeps its last report of the season, which the final
+    // (still latest) week holds in full; reports summarized during the season are no longer kept.
+    expect(outcomes).toBe(0);
+    const reports = opened.academy.weeks.filter(week => week.seasonNumber === 1).flatMap(week => Object.keys(week.players));
+    expect(new Set(reports).size).toBe(reports.length);
     const restored = parseSeason(serializeSeasonCompact(opened));
     expect(restored).toEqual(opened);
     const next = advanceMatchday(restored);

@@ -3,6 +3,7 @@ import { competitionTable } from './competition-table';
 import { BOARD_REVIEW_STEP, createBoard, enableBoard, enableBoardConsequences, enablePresidentBoard, prepareBoardSeason, processBoardRound } from './board';
 import { summarizeAcademyHistory } from './academy-history';
 import { summarizeYouthHistory } from './youth-history';
+import { sealCompletedHistory } from './sealed-history';
 import { fixturePlayerEvidence, summarizeSeniorHistory } from './senior-history';
 import { createRivalries, enableRivalries } from './rivalries';
 import { createGrownRivalries, growRivalries } from './rivalry-growth';
@@ -724,6 +725,8 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState, coachCh
     recoverConditions(next.conditions, calendarDaysBetween(trainedFrom, next.date));
   }
   next.academy = processAcademyWeek({ rounds: seasonRounds(next), ...storedWorld(worldOf(next)), facilities: next.facilities, academy: next.academy, youth: next.youth, youthCompetition: next.youthCompetition, clubs: next.clubs, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
+  // Format 73: rival reports that are no longer a club's latest keep only their outcome, every week.
+  next.academy = summarizeAcademyHistory(next).academy;
   const registeredBefore = next.rosters.length;
   next = resolveInSeasonRecruitment(next);
   next = prepareFinanceRound(next);
@@ -869,6 +872,9 @@ export function rolloverSeason(state: SeasonState): SeasonState {
     })) },
     coaching: { ...state.coaching, contracts: [] },
   };
+  // Completed seasons keep their lighter records (formats 42-45) and are sealed (format 73) before any opening
+  // calculation reads them, so the new season is computed from exactly the history its save keeps.
+  next = sealCompletedHistory(summarizeSeniorHistory(summarizeYouthHistory(summarizeAcademyHistory(next))));
   // Format 68: the new season's rivalries grow from the completed season, before any system reads its derbies.
   next = growRivalries(next);
   // Format 72: the new season's club money follows its divisions and European places, before any of it moves.
@@ -922,7 +928,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = processContractRequests(automateRelationships(prepareRelationshipsRound(next)));
   next = prepareBoardSeason(next);
   next.activeMatch = first ? prepareMatch(next, first) : null;
-  return summarizeSeniorHistory(summarizeYouthHistory(summarizeAcademyHistory(next)));
+  return next;
 }
 
 /**
@@ -930,6 +936,9 @@ export function rolloverSeason(state: SeasonState): SeasonState {
  * scores, or the per-player appearances kept for archived games of other clubs). The engine has no technical fouls.
  */
 function fixtureFouls(fixture: SeasonFixture | ArchivedFixture): { home: number; away: number } {
+  // Format 73: a sealed rival game of an older season keeps each side's fouls instead of per-player evidence.
+  const sealed = (fixture.result as ArchivedFixture['result'] | null)?.fouls;
+  if (sealed) return { home: sealed.home, away: sealed.away };
   const selection = fixture.result?.selection;
   if (!selection) throw new Error('A table that counts fouls needs each game\'s selected players.');
   const side = (ids: readonly string[]) => ids.reduce((sum, id) => sum + (fixturePlayerEvidence(fixture, id)?.fouls ?? 0), 0);

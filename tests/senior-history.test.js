@@ -8,6 +8,7 @@ import { getSeasonPerformance, getPerformanceCoverage } from '../src/world/perfo
 import { getSquadRelationships } from '../src/world/relationships';
 import { managedClubFor } from '../src/world/career';
 import { SENIOR_TOTAL_KEYS, summarizeSeniorHistory } from '../src/world/senior-history';
+import { sealCompletedHistory } from '../src/world/sealed-history';
 import { currentSeasonFile } from './helpers/season-format';
 
 const manifest = JSON.parse(readFileSync(new URL('./fixtures/senior-history-original-44.json', import.meta.url), 'utf8'));
@@ -51,7 +52,8 @@ describe('completed senior season summaries', () => {
   it('shrinks the retained season while preserving the full source object', () => {
     const { full, summarized } = opening(), before = structuredClone(full);
     expect(serializeSeasonCompact(summarized).length).toBeLessThan(serializeSeasonCompact(full).length);
-    expect(summarizeSeniorHistory(full)).toEqual(summarized);
+    // Format 73: the upgraded career's completed youth and academy seasons are sealed as a rollover would do.
+    expect(sealCompletedHistory(summarizeSeniorHistory(full))).toEqual(summarized);
     expect(full).toEqual(before);
   });
 

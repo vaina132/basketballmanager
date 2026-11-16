@@ -4,6 +4,7 @@ import { beforeAll, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { parseSeason } from '../src/storage/season-storage';
 import { YouthResultReview } from '../src/ui/AcademyCompetition';
+import { summarizeYouthFixture } from '../src/world/youth-history';
 
 const noop = () => {};
 const render = (season, fixture) => renderToStaticMarkup(<YouthResultReview season={season} fixture={fixture} onClose={noop} />);
@@ -12,9 +13,12 @@ beforeAll(() => {
   const text = gunzipSync(readFileSync(new URL('./fixtures/season42-board-opening.json.gz', import.meta.url))).toString('utf8');
   source = JSON.parse(text).state;
   state = parseSeason(text);
-  archived = state.youthCompetition.seasons.flatMap(season => season.fixtures).find(fixture => fixture.detail === 'outcome' && fixture.result.played);
-  expect(archived).toBeDefined();
-  full = source.youthCompetition.seasons.flatMap(season => season.fixtures).find(fixture => fixture.id === archived.id);
+  // Format 73 seals the completed season, so the format-43 outcome is projected from a genuine frozen snapshot of a
+  // game in the opening week, whose academy points the sealed career still holds.
+  const sealed = state.youthCompetition.seasons.flatMap(season => season.fixtures).find(fixture => fixture.detail === 'season' && fixture.result.played && fixture.round === 1);
+  expect(sealed).toBeDefined();
+  full = source.youthCompetition.seasons.flatMap(season => season.fixtures).find(fixture => fixture.id === sealed.id);
+  archived = summarizeYouthFixture(full);
 });
 
 it('renders the same historical box score, player identities and MVP from an outcome and its genuine frozen snapshot', () => {

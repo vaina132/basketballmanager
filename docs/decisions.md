@@ -466,6 +466,15 @@ Chosen as recommended defaults under the owner's instruction to finish the level
 
 "Before we start the playing test, I would like you to complete the step 3.7 and then the restoration of the safety checks and closing the gaps ... the selling side doesn't have to be implemented now, so we can postpone it for the future phases ... the interface simplification will only come after the playtests." Order: step 3.7, then safety checks and gaps (the "Before release" list in HANDOVER.md), then the owner's play test, then interface simplification. Selling (free first season, EUR 15 unlock, Steam) is postponed. Development mode continues until the safety-check restoration begins.
 
+## Safety and gaps level defaults (16 November 2026, reversible)
+
+Computer-run clubs follow the human club's rules (gaps closed before the play test):
+- **Leases (format 71):** an automatically run club leases arena seats after two sold-out home games when a loan cannot pay (keeping half its cash cushion after this season's payments), or training equipment below its league's average (no other debt, whole cushion kept). One lease at a time, over three seasons, total debt at most 50% of the borrowing limit (`automaticLease`, `src/world/facilities.ts`).
+- **Early sponsor exits (format 64):** at matchday 6, before renewal offers, automatic control leaves its main or naming deal only if the best offer it would then get pays at least 1.75 times the current fee (termination share 0.5 plus a margin of 0.25), and the termination fee leaves half the automatic cash cushion and no unpaid costs (`automateEarlyExits`).
+- **Youth and culture objectives (format 70):** under a youth-minutes or young-rotation objective, an automatically run club starts its best healthy under-23 or academy players in regular-season games (one for youth minutes, up to two for young rotation), each replacing the weakest planned starter if at most 6 rating points weaker; players who count towards a youth or established-core objective are renewed up to squad rank 12 instead of 8.
+- **Youth injury recurrence:** careers that start with youth matches use the senior recurrence rule in youth games (`youth-competition-2`); older careers keep `-1`.
+- **Rivalry through unemployment:** an appointment after unemployment records the club last left (`formerClubId`) and adds the same +15 manager-move points as a direct move.
+
 ## Owner feedback after playing, 15 November 2026
 
 The owner started a career and asked for these (verbatim points summarised), "Either do these or be sure that you put them into their respective places in the development plan":

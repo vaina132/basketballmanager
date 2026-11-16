@@ -1,6 +1,7 @@
 import type { WorldContext } from '../domain/world';
 import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
-import { salaryBudgetRatio } from './economy';
+import type { SeasonState } from '../domain/season';
+import { knownMoneySeason, salaryBudgetRatio } from './economy';
 
 export const usesFullClubRoster = (context: WorldContext): boolean => context.world?.rosterModel === FULL_ROSTER_MODEL;
 export const clubRosterLimit = (context: WorldContext): number => usesFullClubRoster(context) ? MAX_CLUB_ROSTER_SIZE : 12;
@@ -11,9 +12,10 @@ export const clubRosterTarget = (context: WorldContext, clubId: string, legacyTa
 /**
  * New worlds fund their whole imported roster. This is an estimated annual allocation, never a cash balance. Format 72:
  * in careers with per-season club money it follows the season's player wage bill (`salaryBudgetRatio`), from the
- * figures known by `knownThrough` (the context's season by default; a later contract season reads the latest known).
+ * figures known by `knownThrough` (by default the context's season, or the next one once that season is complete and
+ * has decided it; a later contract season reads the latest known).
  */
-export function clubSalaryBudget(context: WorldContext, clubId: string, seasonNumber = context.seasonNumber ?? 1, knownThrough = context.seasonNumber ?? seasonNumber): number {
+export function clubSalaryBudget(context: WorldContext & { status?: SeasonState['status'] }, clubId: string, seasonNumber = context.seasonNumber ?? 1, knownThrough = knownMoneySeason(context, seasonNumber)): number {
   const world = context.world;
   if (!usesFullClubRoster(context) || !world) return 24_000_000;
   const club = world.clubs.find(club => club.id === clubId);

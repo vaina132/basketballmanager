@@ -77,7 +77,9 @@ export interface SeasonEconomyTable { seasonNumber: number; clubs: Record<string
 
 /**
  * Format 72 (saved ideas level): club money follows promotion, relegation and European places in new careers of
- * real-data worlds. One table for each season from the second; older careers keep their opening figures.
+ * real-data worlds. One table for each season from the second; once a season is complete, its divisions and European
+ * places have decided the next season's figures, so the table for the next season is added then (offseason offers and
+ * budgets use it). Older careers keep their opening figures.
  */
 export interface SeasonEconomy { model: 'economy-seasons-1'; seasons: SeasonEconomyTable[] }
 

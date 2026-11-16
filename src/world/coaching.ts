@@ -71,6 +71,9 @@ export function enableCoaching(state: SeasonState): SeasonState {
 
 function canPayCoach(state: SeasonState, clubId: string, coach: Coach): boolean {
   const fee = staffFee(state, clubId, coach.fee);
+  // The catalog coaching limit also applies: since staff fees follow the square root of a club's money level, a rich
+  // club's allocation alone no longer keeps its coaches within it.
+  if (coachingCommitted(state.coaching, clubId) + coach.fee > COACHING_BUDGET) return false;
   if (staffCommitted(state, clubId) + fee > staffAllocation(state, clubId)) return false;
   if (!state.finance.enabledSince) return true;
   const balance = getFinanceBalance(state.finance, clubId);

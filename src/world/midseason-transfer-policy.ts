@@ -6,7 +6,7 @@ import { financeLedgerEntries } from './finance-ledger';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import type { Player } from '../domain/types';
 import { getActiveCareerPlayers } from './player-catalog';
-import { contractForRound, effectiveContractsForRound, getClubContractSummary, MAX_CONTRACT_SEASONS, maxContractWage, MIN_CONTRACT_WAGE, MIN_ROSTER_SIZE, MIN_ROSTER_WAGE_RESERVE, outgoingReplacementReserve, WAGE_STEP } from './employment-policy';
+import { contractForRound, effectiveContractsForRound, getClubContractSummary, MAX_CONTRACT_SEASONS, maxContractWage, MIN_CONTRACT_WAGE, MIN_ROSTER_SIZE, outgoingReplacementReserve, WAGE_STEP } from './employment-policy';
 import { getFinanceBalance } from './finance';
 import { getPlayerPayroll } from './payroll';
 import { getInSeasonBudget, getInSeasonOffers, remainingSeasonWages } from './recruitment-policy';
@@ -69,8 +69,8 @@ export function inSeasonSellerReason(state: SeasonState, playerId: string, selle
     const size = summary.rosterSize - removed.length;
     const wages = summary.seasonWages - removed.reduce((sum, contract) => sum + contract.seasonWage, 0);
     const holds = getInSeasonOffers(state, sellerClubId, true).filter(offer => offer.seasonNumber + offer.seasons - 1 >= year);
-    const shortfalls = holds.reduce((sum, offer) => sum + Math.max(0, MIN_ROSTER_WAGE_RESERVE - offer.seasonWage), 0);
-    const reserve = Math.max(0, MIN_ROSTER_SIZE - size - summary.reservedRosterSize) * MIN_ROSTER_WAGE_RESERVE + shortfalls;
+    const shortfalls = holds.reduce((sum, offer) => sum + Math.max(0, summary.reserveWage - offer.seasonWage), 0);
+    const reserve = Math.max(0, MIN_ROSTER_SIZE - size - summary.reservedRosterSize) * summary.reserveWage + shortfalls;
     if (wages + summary.reservedWages + reserve > summary.budget) return `The selling club needs salary budget to replace its departing players in season ${year}.`;
   }
   return null;
@@ -110,8 +110,9 @@ export function quoteInSeasonTransferOffer(state: SeasonState, playerId: string,
   if (termsValid) for (let year = state.seasonNumber + 1; year < state.seasonNumber + seasons; year += 1) {
     const summary = getClubContractSummary(state, clubId, year, own?.id);
     const size = summary.rosterSize + summary.reservedRosterSize + 1;
-    const shortfalls = getInSeasonOffers(state, clubId, true).filter(offer => offer.id !== own?.id && offer.seasonNumber + offer.seasons - 1 >= year).reduce((sum, offer) => sum + Math.max(0, MIN_ROSTER_WAGE_RESERVE - offer.seasonWage), 0);
-    const reserve = Math.max(0, MIN_ROSTER_SIZE - size) * MIN_ROSTER_WAGE_RESERVE + shortfalls + (resolving ? 0 : Math.max(0, MIN_ROSTER_WAGE_RESERVE - seasonWage)) + outgoingReplacementReserve(state, clubId, year);
+    const reserveWage = summary.reserveWage;
+    const shortfalls = getInSeasonOffers(state, clubId, true).filter(offer => offer.id !== own?.id && offer.seasonNumber + offer.seasons - 1 >= year).reduce((sum, offer) => sum + Math.max(0, reserveWage - offer.seasonWage), 0);
+    const reserve = Math.max(0, MIN_ROSTER_SIZE - size) * reserveWage + shortfalls + (resolving ? 0 : Math.max(0, reserveWage - seasonWage)) + outgoingReplacementReserve(state, clubId, year);
     const remainingBudget = Math.max(0, summary.budget - summary.seasonWages - summary.reservedWages - (wageValid ? seasonWage : 0));
     futureBudgets.push({ seasonNumber: year, remainingBudget, rosterSize: size });
     if (!reason && size > clubRosterLimit(state)) reason = `The squad already has ${clubRosterLimitText(state)} signed or reserved players for season ${year}.`;

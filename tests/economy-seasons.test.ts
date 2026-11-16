@@ -12,7 +12,7 @@ import { openingDivisions } from '../src/world/divisions';
 import { openingEurope } from '../src/world/european-places';
 import { annualFundingFor, annualSponsorshipFor, defaultTicketPriceFor, maxTicketPriceFor, openingCashFor, roundOperatingCostFor } from '../src/world/finance';
 import { clubSalaryBudget } from '../src/world/club-roster-policy';
-import { staffFee } from '../src/world/economy';
+import { staffFee, staffScale } from '../src/world/economy';
 import { sponsorshipReferenceFee } from '../src/world/commercial-policy';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { DEVELOPMENT_WORLD } from '../src/data/development-world';
@@ -130,7 +130,7 @@ describe('club money follows promotion, relegation and European places (format 7
     const clubId = promoted[0]!, after = table.clubs[clubId]!, before = opening(clubId);
     const season = (seasonNumber: number) => ({ world, seasonNumber, economySeasons: two.economySeasons });
     const read = (context: object) => [annualSponsorshipFor(context, clubId), annualFundingFor(context, clubId), openingCashFor(context, clubId), defaultTicketPriceFor(context, clubId), maxTicketPriceFor(context, clubId), roundOperatingCostFor(context, clubId), staffFee(context, clubId, 1_000_000), sponsorshipReferenceFee(world, clubId, context)];
-    const expected = (economy: ClubEconomy) => [economy.sponsorship, economy.funding, economy.openingCash, economy.ticketPrice, economy.ticketPrice * 3, Math.round(economy.operatingCost / seasonRounds({ world })), Math.max(10_000, Math.round(1_000_000 * economy.scale / 1000 / 10_000) * 10_000), economy.sponsorship];
+    const expected = (economy: ClubEconomy) => [economy.sponsorship, economy.funding, economy.openingCash, economy.ticketPrice, economy.ticketPrice * 3, Math.round(economy.operatingCost / seasonRounds({ world })), Math.max(10_000, Math.round(1_000_000 * staffScale(economy.scale) / 1000 / 10_000) * 10_000), economy.sponsorship];
     expect(read(season(2))).toEqual(expected(after));
     expect(read(season(1))).toEqual(expected(before));
     expect(read(season(1))).toEqual(read({ world }));

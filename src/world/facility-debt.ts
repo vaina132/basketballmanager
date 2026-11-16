@@ -60,7 +60,8 @@ export const FACILITY_FINANCING_RULES = Object.freeze({
   // one level at a time over the automatic term and within the same half of the limit: more seats after sold-out home
   // games when a loan cannot pay for them (one is already running, or its terms do not fit), keeping half their cash
   // cushion after this season's payments; or training equipment below the average level of the club's league, only
-  // without any other debt and keeping their whole cushion after this season's payments.
+  // without any other debt and keeping their whole cushion after this season's payments. With an economy both follow the
+  // money rules of automatic upgrades instead (upkeep limit and season-aware cushion), as an automatic arena loan does.
 });
 
 /** Careers started with facility financing (format 71). */

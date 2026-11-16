@@ -194,11 +194,11 @@ function VerdictSection({ season, busy, onEnableConsequences }: { season: Season
   const confidence = final?.confidence ?? boardConfidenceNow(season, clubId)
   const pressureBelow = season.board.mandates.find(mandate => mandate.seasonNumber === season.seasonNumber)?.clubs[clubId]?.pressureBelow
   const outlook = final?.verdict ?? verdictOnLine(confidence, pressureBelow)
-  const budgets = verdictBudgets(clubId, outlook, worldOf(season))
+  const budgets = verdictBudgets(season, clubId, outlook, next)
   // Format 70 (board-2): the verdict also sets next season's player salary budget.
   const salaries = usesPresidentBoard(season.board) && season.employment.enabledSince
   const currentSalary = salaryBudgetBasis(season, clubId, season.seasonNumber)
-  const nextSalaryPercent = verdictSalaryPercent(worldOf(season), clubId, outlook), nextSalary = Math.round(clubSalaryBudget(season, clubId) * (100 + nextSalaryPercent) / 100)
+  const nextSalaryPercent = verdictSalaryPercent(worldOf(season), clubId, outlook), nextSalary = Math.round(clubSalaryBudget(season, clubId, next) * (100 + nextSalaryPercent) / 100)
   if (!season.board.consequencesSince) return <>
     <h3 className="board-section-heading"><Icon name="target" size={16} />Season verdict &amp; budgets</h3>
     <div className="board-enable board-verdict-enable"><Icon name="target" size={24} /><div><strong>Let the season verdict set budgets</strong><p>At the end of each season, the board's final confidence sets next season's staff budget and the owner's capital for facility upgrades: Confident adds 10% to staff and 50% to capital, Steady changes nothing, Concerned cuts staff 10% and halves capital, Under pressure cuts staff 20% and withholds capital. Signed staff contracts are never cut. This starts with {seasonLabel(next)}.</p></div><button id="enable-board-consequences" className="button" onClick={onEnableConsequences} disabled={busy}>Enable season verdicts</button></div>

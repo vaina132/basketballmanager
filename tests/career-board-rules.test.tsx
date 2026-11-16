@@ -37,9 +37,10 @@ const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={
 
 // Seeds found after this feature (format 63): seed 4 ends Rhine Falcons' first season Under pressure (29); seed 8 drops
 // Danube Lynx below 20 after week 6 of its second season. Re-seeded after the facilities-2 merge (AI clubs now build
-// medical and scouting facilities and repair, which changes their seasons): seed 14 dismisses at week 7.
+// medical and scouting facilities and repair, which changes their seasons): seed 14 dismissed at week 7; with format 66's
+// squad-rank roles and contract requests, seed 17 dismisses at week 9.
 const WARNING_SEED = 4;
-const MID_SEASON_SEED = 14, MID_SEASON_CLUB = 'danube-lynx', DISMISSAL_WEEK = 7;
+const MID_SEASON_SEED = 17, MID_SEASON_CLUB = 'danube-lynx', DISMISSAL_WEEK = 9;
 let warningDay: SeasonState, warned: SeasonState, beforeDismissal: SeasonState, dismissed: SeasonState;
 
 beforeAll(() => {

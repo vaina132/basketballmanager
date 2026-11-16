@@ -1,8 +1,10 @@
+import { withLegacyRelationships } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { enableCareerMoves } from '../src/world/career';
+import { enableRelationships } from '../src/world/relationships';
 import { managerReputation, REPUTATION_WEIGHTS, STARTING_REPUTATION, VACANCY_BASE_REQUIREMENT, VACANCY_STEP, vacancyRequirement } from '../src/world/career-policy';
 import { setEmploymentDelegation } from '../src/world/employment';
 import { setFacilityDelegation } from '../src/world/facilities';
@@ -20,22 +22,23 @@ const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(s
 const start = (seed: number, careerMoves = true, media = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, media, namingRights: false }), true), true));
 /** An all-automatic Rhine Falcons season, played to the finished final match. */
 function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number, legacy = false): SeasonState {
-  // `legacy`: a career as saved before format 65 and 67, without the media record and on `facilities-1`.
+  // `legacy`: a career as saved before formats 65-67: no media record, `facilities-1` and `relationships-1`.
   let state = start(seed, careerMoves, !legacy);
-  if (legacy) state = { ...state, facilities: { ...state.facilities, model: 'facilities-1' } };
+  if (legacy) state = withLegacyRelationships({ ...state, facilities: { ...state.facilities, model: 'facilities-1' } });
   while (state.round < 10) {
     if (state.round === enableAtRound) state = enableCareerMoves(state);
     state = advanceMatchday(state);
   }
   return finish(state);
 }
-// Seeds chosen after the match calibration of sprint 4 (the earlier seeds 67, 35 and 20 no longer produce these seasons).
+// Seeds chosen after the match calibration of sprint 4 (the earlier seeds 67, 35 and 20 no longer produce these seasons);
+// the change and offer seeds were chosen again for the relationships-2 rules of format 66 (they were 4 and 102).
 /** Rhine Falcons end Under pressure (25); Aegean Waves are also Under pressure and need a coach. */
 const SACKED_SEED = 154;
 /** Rhine Falcons are dismissed (29) and no other season ended Under pressure. */
-const CHANGE_SEED = 4;
-/** Rhine Falcons end steady (55) while Danube Lynx's season ends Under pressure. */
-const OFFERED_SEED = 102;
+const CHANGE_SEED = 16;
+/** Rhine Falcons end steady (50) while Aegean Waves' season ends Under pressure. */
+const OFFERED_SEED = 2;
 let sackedDay: SeasonState, sacked: SeasonState, changeDay: SeasonState, offeredDay: SeasonState;
 
 beforeAll(() => {
@@ -66,20 +69,20 @@ describe('dismissal at a season end', () => {
   it('opens a vacancy at the least confident board when no other season ended Under pressure', () => {
     const outlook = previewSeasonEnd(changeDay)!;
     expect(outlook.dismissed).toBe(true);
-    expect(outlook.vacancies).toEqual([expect.objectContaining({ clubId: 'alpine-stags', reason: 'change', confidence: 44 })]);
-    expect(outlook.offers.map(offer => offer.clubId)).toEqual(['alpine-stags']);
+    expect(outlook.vacancies).toEqual([expect.objectContaining({ clubId: 'adriatic-comets', reason: 'change', confidence: 45 })]);
+    expect(outlook.offers.map(offer => offer.clubId)).toEqual(['adriatic-comets']);
     const moved = advanceSeason(changeDay);
-    expect([moved.managedClubId, moved.career.moves[0]!.reason]).toEqual(['alpine-stags', 'dismissed']);
+    expect([moved.managedClubId, moved.career.moves[0]!.reason]).toEqual(['adriatic-comets', 'dismissed']);
     expect(parseSeason(serializeSeason(moved))).toEqual(moved);
   });
 
   it('offers a successful manager a job without forcing a move', () => {
     const outlook = previewSeasonEnd(offeredDay)!;
-    expect(outlook).toMatchObject({ dismissed: false, reputation: { value: 55 }, offers: [{ clubId: 'danube-lynx', requirement: VACANCY_BASE_REQUIREMENT }] });
+    expect(outlook).toMatchObject({ dismissed: false, reputation: { value: 50 }, offers: [{ clubId: 'aegean-waves', requirement: VACANCY_BASE_REQUIREMENT }] });
     expect(advanceSeason(offeredDay).managedClubId).toBe(CLUB);
-    const moved = advanceSeason(offeredDay, { moveTo: 'danube-lynx' });
+    const moved = advanceSeason(offeredDay, { moveTo: 'aegean-waves' });
     expect(moved.career.moves[0]!.reason).toBe('moved');
-    expect(getInboxItems(moved).find(item => item.id === 'career-move-1')?.title).toBe('New job · Danube Lynx');
+    expect(getInboxItems(moved).find(item => item.id === 'career-move-1')?.title).toBe('New job · Aegean Waves');
     expect(parseSeason(serializeSeason(moved))).toEqual(moved);
   });
 

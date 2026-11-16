@@ -8,7 +8,8 @@ import { exitExplanation } from './sponsor-exit-text'
 import { getCareerPlayer } from '../world/player-catalog'
 import { getPressQuestion, PRESS_ANSWER_TEXT, pressAnswerLabel, pressQuote } from '../world/press-policy'
 import { PRESS_TOPIC_TITLES } from '../world/media'
-import { getSquadRelationships } from '../world/relationships'
+import { awaitsContractReply, getClubContractRequests, getSquadRelationships } from '../world/relationships'
+import { CONTRACT_REQUEST_TEXT as TEXT } from '../world/relationship-rules'
 import { seasonLabel } from '../world/season'
 import { governingDerby } from '../world/rivalries'
 import { rivalClubName, rivalryInboxItems } from './rivalry-text'
@@ -22,7 +23,7 @@ import { seasonRounds, worldOf } from '../world/career-world'
 import { formatEuros } from './money-format'
 
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
-export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad'
+export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract'
 export interface InboxItem {
   id: string
   date: string
@@ -88,6 +89,18 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   if (season.relationships.enabledSince) for (const row of getSquadRelationships(season)) {
     if (row.concern) items.push({ id: `concern-${row.player.id}`, date: season.date, category: 'players', title: `${row.player.name}: playing-time concern`, detail: `${row.concern}. Averaging ${row.averageMinutes} minutes against an agreed minimum of ${row.minMinutes}.`, needsAction: row.canTalk, target: 'dynamics', playerId: row.player.id })
     for (const promise of row.promises) if (promise.outcomeDate && (promise.status === 'kept' || promise.status === 'broken')) items.push({ id: `${promise.id}-outcome`, date: promise.outcomeDate, category: 'players', title: `Promise ${promise.status} · ${row.player.name}`, detail: `${promise.averageMinutes} minutes per eligible game against ${promise.targetMinutes} promised.`, needsAction: false, target: 'dynamics', playerId: row.player.id })
+  }
+  // Format 66: contract requests at the managed club and what became of them.
+  for (const request of getClubContractRequests(season, clubId)) {
+    const name = getCareerPlayer(season, request.playerId).name, waiting = awaitsContractReply(season, request)
+    items.push({ id: request.id, date: request.date, category: 'players', title: `${name} asks about a new contract`, detail: waiting ? `His contract ends after ${seasonLabel(request.seasonNumber)}${request.trigger === 'interest' ? ' and another club has made an offer' : ''}. Answer by ${medicalDate(request.replyBy)}: open renewal talks, promise talks at season end, or decline.` : request.status === 'open' ? 'He has left the club; the request can no longer be answered.' : `His contract ends after ${seasonLabel(request.seasonNumber)}.`, needsAction: waiting, target: 'dynamics', playerId: request.playerId })
+    if (request.repliedOn && request.reply) items.push({ id: `${request.id}-reply`, date: request.repliedOn, category: 'players', title: request.reply === 'talks' ? `Renewal talks opened · ${name}` : request.reply === 'promise' ? `Talks promised at season end · ${name}` : `Contract request declined · ${name}`, detail: request.status === 'talks' ? `Make him an offer by ${medicalDate(request.deadlineDate!)}.` : request.status === 'promised' ? `Make him an offer before ${medicalDate(request.deadlineDate!)}, when next season starts.` : request.reply === 'decline' ? `This ${TEXT.cost('declined')}, fading over time; ${TEXT.premium('declined')}.` : 'See the outcome below.', needsAction: request.status === 'talks' || request.status === 'promised', target: request.status === 'talks' || request.status === 'promised' ? 'contract' : 'dynamics', playerId: request.playerId })
+    const outcome = request.status === 'ignored' ? ['Contract request ignored', `No answer within ${TEXT.replyWindow}: this ${TEXT.cost('ignored')}; ${TEXT.premium('ignored')}.`]
+      : request.status === 'lapsed' ? ['Renewal talks lapsed', `No offer followed within ${TEXT.talksWindow}: this ${TEXT.cost('lapsed')}; ${TEXT.premium('lapsed')}.`]
+      : request.status === 'broken' ? ['Promised contract talks never happened', `No offer before the new season: this ${TEXT.cost('broken')}; ${TEXT.premium('broken')}.`]
+      : request.status === 'kept' ? ['Contract talks held', 'Your offer answered his request.']
+      : request.status === 'renewed' ? ['New contract agreed', 'The renewal settled his request and restored morale and trust.'] : null
+    if (outcome && request.outcomeDate) items.push({ id: `${request.id}-outcome`, date: request.outcomeDate, category: 'players', title: `${outcome[0]} · ${name}`, detail: outcome[1]!, needsAction: false, target: 'dynamics', playerId: request.playerId })
   }
   for (const fixture of season.fixtures) {
     const derby = fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(clubId) ? governingDerby(season.rivalries, fixture.homeClubId, fixture.awayClubId, season.seasonNumber, fixture.round, worldOf(season)) : null

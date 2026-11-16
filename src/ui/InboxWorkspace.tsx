@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import type { PressAnswer, PressQuestion, PressTopic } from '../domain/relationships'
+import type { ContractRequestReply, PressAnswer, PressQuestion, PressTopic } from '../domain/relationships'
 import type { SeasonState } from '../domain/season'
 import { getCareerPlayer } from '../world/player-catalog'
 import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, PRESS_HALF_LIFE_DAYS, pressQuote, type LegacyPressAnswer } from '../world/press-policy'
 import { isPressStyle, MEDIA_RULES, mediaLabel, mediaMoraleFactor, PRESS_TOPIC_TITLES, pressStyleEffect } from '../world/media'
 import { getInboxItems, type InboxCategory, type InboxTarget } from './inbox-items'
+import { awaitsContractReply, getClubContractRequests } from '../world/relationships'
+import { ContractRequestCard } from './ContractRequestCard'
 import { Icon, type IconName } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
 import './inbox-workspace.css'
@@ -12,12 +14,14 @@ import './inbox-workspace.css'
 export interface InboxActions {
   onAnswerPress: (answer: PressAnswer) => void
   onOpen: (target: Exclude<InboxTarget, 'press'>, playerId?: string) => void
+  /** Format 66: answer a player's contract request; opening talks also opens his contract offer. */
+  onContractReply?: (playerId: string, reply: ContractRequestReply) => void
 }
 
 type Filter = 'all' | 'action' | InboxCategory
 const FILTERS: { id: Filter; label: string }[] = [{ id: 'all', label: 'All' }, { id: 'action', label: 'Needs action' }, { id: 'press', label: 'Press' }, { id: 'board', label: 'Board' }, { id: 'players', label: 'Players' }, { id: 'club', label: 'Club' }]
 const ICONS: Record<InboxCategory, IconName> = { press: 'mail', board: 'shield', club: 'building', players: 'people' }
-const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad' }
+const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad', contract: 'Open contract offer' }
 const signed = (value: number) => `${value > 0 ? '+' : '−'}${Math.abs(value)}`
 
 export function pressEffectText(answer: PressAnswer, topic?: PressTopic, subject?: string): string {
@@ -68,16 +72,18 @@ function PressConference({ season, question, busy, onAnswer }: { season: SeasonS
   </section>
 }
 
-export function InboxWorkspace({ season, busy = false, onAnswerPress, onOpen }: InboxActions & { season: SeasonState; busy?: boolean }) {
+export function InboxWorkspace({ season, busy = false, onAnswerPress, onOpen, onContractReply }: InboxActions & { season: SeasonState; busy?: boolean }) {
   const [filter, setFilter] = useState<Filter>('all')
   const items = getInboxItems(season)
   const question = getPressQuestion(season)
+  const requests = onContractReply ? getClubContractRequests(season, season.managedClubId, season.seasonNumber).filter(request => awaitsContractReply(season, request)) : []
   const shown = items.filter(item => filter === 'all' || (filter === 'action' ? item.needsAction : item.category === filter))
   const waiting = items.filter(item => item.needsAction).length
   return <div className="inbox-workspace">
     <section className="panel inbox-panel" aria-labelledby="inbox-title">
       <header className="inbox-heading"><h2 id="inbox-title"><Icon name="mail" size={18} />Inbox</h2><span data-inbox-waiting={waiting}>{waiting ? `${waiting} ${waiting === 1 ? 'needs' : 'need'} action · ` : ''}{items.length} {items.length === 1 ? 'message' : 'messages'}</span></header>
       {question && !question.answered && <PressConference season={season} question={question} busy={busy} onAnswer={onAnswerPress} />}
+      {requests.length > 0 && onContractReply && <div id="contract-requests" className="inbox-contract-requests" tabIndex={-1}>{requests.map(request => <ContractRequestCard key={request.id} season={season} request={request} busy={busy} onReply={onContractReply} />)}</div>}
       <div className="inbox-filters" role="group" aria-label="Filter messages">{FILTERS.map(option => <button key={option.id} className={filter === option.id ? 'selected' : ''} aria-pressed={filter === option.id} onClick={() => setFilter(option.id)}>{option.label}</button>)}</div>
       {shown.length ? <ul className="inbox-list">{shown.map(item => <li key={item.id} data-inbox-item={item.id} data-inbox-category={item.category} className={item.needsAction ? 'inbox-action' : ''}>
         <span className="inbox-icon" aria-hidden="true"><Icon name={ICONS[item.category]} size={18} /></span>

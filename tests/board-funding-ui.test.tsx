@@ -17,7 +17,8 @@ let generous: { state: SeasonState; quote: BoardFundingQuote }, cautious: { stat
 let funded: SeasonState, refused: SeasonState;
 
 beforeAll(() => {
-  generous = driveToFundingRequest('aegean-waves', 227);
+  // Seed 4 (227 before the relationships-2 rules of format 66): Aegean Waves' board approves in season 1, after an automatic request.
+  generous = driveToFundingRequest('aegean-waves', 4);
   cautious = driveToFundingRequest('alpine-stags', 227);
   funded = requestBoardFunding(generous.state, generous.quote.facilityType);
   refused = requestBoardFunding(cautious.state, cautious.quote.facilityType);

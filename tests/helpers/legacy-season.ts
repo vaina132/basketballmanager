@@ -172,10 +172,18 @@ export function stripBackground(value: object): void {
 export const BEFORE_SAVED_IDEAS = { media: false, namingRights: false } as const;
 
 /**
- * An untouched new career on the rules saved before the saved ideas level: Level 7 career rules (`career-1`) and the
- * three original facilities (`facilities-1`). Create it with `BEFORE_SAVED_IDEAS`; grown rivalries are converted after
+ * An untouched new career on the rules saved before the saved ideas level: Level 7 career rules (`career-1`), the
+ * three original facilities (`facilities-1`) and the original squad dynamics (`relationships-1`). Create it with `BEFORE_SAVED_IDEAS`; grown rivalries are converted after
  * play with `withFixedRivalries`.
  */
 export function beforeSavedIdeas(state: SeasonState): SeasonState {
-  return withLegacyFacilities(asCareer1(state));
+  return withLegacyRelationships(withLegacyFacilities(asCareer1(state)));
+}
+
+/** An untouched new career's squad dynamics on the original rules (`relationships-1`, before format 66). */
+export function withLegacyRelationships(state: SeasonState): SeasonState {
+  if (state.relationships.model !== 'relationships-2') return state;
+  if (state.relationships.events.some(event => event.type !== 'prepare')) throw new Error('Convert only an untouched new career.');
+  const { squadRanks: _ranks, ...relationships } = state.relationships;
+  return { ...state, relationships: { ...relationships, model: 'relationships-1' } };
 }

@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import type { PlayerRelationship, PlayingTimePromise, RelationshipTalk, SquadRole } from '../domain/relationships'
+import type { ContractRequestReply, PlayerRelationship, PlayingTimePromise, RelationshipTalk, SquadRole } from '../domain/relationships'
 import type { SeasonState } from '../domain/season'
 import { getPlayerRelationship, getSquadRelationships, quoteRelationshipTalk, quoteSquadRole } from '../world/relationships'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
+import { ContractRequestCard } from './ContractRequestCard'
 import './relationships-panel.css'
 
 interface RelationshipsPanelProps {
@@ -15,6 +16,8 @@ interface RelationshipsPanelProps {
   onEnable: () => void
   onRole: (playerId: string, role: SquadRole) => void
   onTalk: (playerId: string, choice: RelationshipTalk) => void
+  /** Format 66: answer a player's contract request. */
+  onContractReply?: (playerId: string, reply: ContractRequestReply) => void
 }
 
 const minutes = (value: number | null, belowTarget?: number) => value === null ? 'No reviewed games' : belowTarget !== undefined && value >= belowTarget ? `<${belowTarget.toFixed(1)} min / game` : `${value.toFixed(1)} min / game`
@@ -43,7 +46,7 @@ function PromiseProgress({ row }: { row: PlayerRelationship }) {
   </div>
 }
 
-function PlayerTalk({ season, row, busy, onClose, onRole, onTalk }: Pick<RelationshipsPanelProps, 'season' | 'onRole' | 'onTalk'> & { row: PlayerRelationship; busy: boolean; onClose: () => void }) {
+function PlayerTalk({ season, row, busy, onClose, onRole, onTalk, onContractReply }: Pick<RelationshipsPanelProps, 'season' | 'onRole' | 'onTalk' | 'onContractReply'> & { row: PlayerRelationship; busy: boolean; onClose: () => void }) {
   const region = useRef<HTMLElement>(null)
   const [choice, setChoice] = useState<RelationshipTalk | 'role' | null>(null)
   const [role, setRole] = useState<SquadRole>(row.role)
@@ -55,6 +58,7 @@ function PlayerTalk({ season, row, busy, onClose, onRole, onTalk }: Pick<Relatio
     <header><div><Icon name="people" size={18} /><h3 id={`relationship-talk-title-${row.player.id}`}>Talk to {row.player.name}</h3></div><button className="text-button" onClick={onClose} disabled={busy}><Icon name="close" size={15} />Close</button></header>
     <div className="relationship-talk-context"><div><strong>Trust in manager</strong><span data-relationship-trust={row.trust}>{row.trust} / 100</span></div>{reasons.slice(0, 2).map((reason, index) => <span key={`${index}:${reason.label}`}>{reason.label} <b>{signed(reason.impact)}</b></span>)}</div>
     {row.concern && <p className="relationship-concern"><Icon name="people" size={16} />{row.concern}</p>}
+    {row.contractRequest && row.contractRequest.seasonNumber === season.seasonNumber && onContractReply && <ContractRequestCard season={season} request={row.contractRequest} busy={busy} onReply={onContractReply} headingLevel={4} />}
     <PromiseProgress row={row} />
     <div className="relationship-talk-actions" role="group" aria-label={`Conversation choices for ${row.player.name}`}>
       <button className={`button ${choice === 'explain' ? 'selected' : ''}`} aria-pressed={choice === 'explain'} onClick={() => setChoice('explain')} disabled={busy} data-relationship-choice="explain"><Icon name="people" size={16} />Explain rotation</button>
@@ -77,7 +81,7 @@ function PlayerTalk({ season, row, busy, onClose, onRole, onTalk }: Pick<Relatio
   </section>
 }
 
-export function RelationshipsPanel({ season, busy = false, selectedPlayerId, onSelectPlayer, onEnable, onRole, onTalk }: RelationshipsPanelProps) {
+export function RelationshipsPanel({ season, busy = false, selectedPlayerId, onSelectPlayer, onEnable, onRole, onTalk, onContractReply }: RelationshipsPanelProps) {
   const enabled = season.relationships.enabledSince !== null
   const rows = enabled ? getSquadRelationships(season) : []
   const club = season.clubs.find(club => club.id === season.managedClubId)!
@@ -92,12 +96,12 @@ export function RelationshipsPanel({ season, busy = false, selectedPlayerId, onS
       <div className="relationship-columns" aria-hidden="true"><span>Player</span><span>Agreed role</span><span>Morale</span><span>Playing time &amp; concerns</span><span /></div>
       <div className="relationship-rows">{rows.map(row => <Fragment key={row.player.id}><div className={`relationship-row ${selectedPlayerId === row.player.id ? 'selected' : ''}`} data-relationship-player={row.player.id}>
         <div className="relationship-player"><Avatar player={row.player} color={club.color} size={38} /><div><strong>{row.player.name}</strong><span>#{row.player.number} · {row.player.position}</span></div></div>
-        <div className="relationship-role"><strong data-relationship-role={row.role}>{row.roleLabel}</strong><span>{row.minMinutes}–{row.maxMinutes} min / game</span></div>
+        <div className="relationship-role"><strong data-relationship-role={row.role}>{row.roleLabel}</strong><span>{row.minMinutes}–{row.maxMinutes} min / game</span>{row.squadRank != null && <small data-relationship-rank={row.squadRank} title="No role agreed: the default follows his rank in the registered squad by overall rating (top nine Rotation, the rest Reserve).">Default · squad rank {row.squadRank}</small>}</div>
         <MoraleMeter row={row} />
-        <div className="relationship-situation"><strong data-relationship-average>{minutes(row.averageMinutes, row.concern ? row.minMinutes : undefined)}</strong><span>{row.eligibleGames} eligible {row.eligibleGames === 1 ? 'game' : 'games'} reviewed</span>{row.promise ? <small><Icon name="target" size={13} />{promiseLabels[row.promise.status]}</small> : row.concern ? <small><Icon name="people" size={13} />Playing-time concern</small> : null}</div>
+        <div className="relationship-situation"><strong data-relationship-average>{minutes(row.averageMinutes, row.concern ? row.minMinutes : undefined)}</strong><span>{row.eligibleGames} eligible {row.eligibleGames === 1 ? 'game' : 'games'} reviewed</span>{row.promise ? <small><Icon name="target" size={13} />{promiseLabels[row.promise.status]}</small> : row.concern ? <small><Icon name="people" size={13} />Playing-time concern</small> : null}{row.contractRequest?.status === 'open' && <small data-relationship-contract-request><Icon name="mail" size={13} />Asks about a new contract</small>}</div>
         <button className="button small relationship-talk-button" data-relationship-talk={row.player.id} onClick={() => selectedPlayerId === row.player.id ? close(row.player.id) : onSelectPlayer(row.player.id)} disabled={busy} aria-expanded={selectedPlayerId === row.player.id} aria-controls={`relationship-talk-${row.player.id}`} aria-label={`Talk to ${row.player.name}`}>Talk<Icon name="chevron" size={14} /></button>
-      </div>{selectedPlayerId === row.player.id && <PlayerTalk key={`talk-${row.player.id}`} season={season} row={row} busy={busy} onClose={() => close(row.player.id)} onRole={onRole} onTalk={onTalk} />}</Fragment>)}</div>
-      <details className="relationship-rules"><summary>How playing time is reviewed</summary><p>Roles are assessed from committed match results. Injured, excluded and unregistered games do not count toward eligible playing time. Conversations and role changes apply prospectively; repeating them cannot continually raise morale.</p><p>Morale affects focus in future matches. Condition, ability and match performance remain separate.</p></details>
+      </div>{selectedPlayerId === row.player.id && <PlayerTalk key={`talk-${row.player.id}`} season={season} row={row} busy={busy} onClose={() => close(row.player.id)} onRole={onRole} onTalk={onTalk} onContractReply={onContractReply} />}</Fragment>)}</div>
+      <details className="relationship-rules"><summary>How playing time is reviewed</summary><p>Roles are assessed from committed match results. Injured, excluded and unregistered games do not count toward eligible playing time. Conversations and role changes apply prospectively; repeating them cannot continually raise morale.</p>{season.relationships.model === 'relationships-2' && <p>Without an agreed role, a player's expectation follows his rank in the registered squad by overall rating, recorded at each registration: the top nine expect Rotation minutes, the rest Reserve. From the middle of the season, valued players in the final year of their contract ask about a new one.</p>}<p>Morale affects focus in future matches. Condition, ability and match performance remain separate.</p></details>
     </>}
   </section>
 }

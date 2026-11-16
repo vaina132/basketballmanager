@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { getPressQuestion, PRESS_ANSWERS, PRESS_EFFECTS, PRESS_IMPACT_CAP, pressImpact } from '../src/world/press-policy';
-import { answerPress, getPlayerRelationship } from '../src/world/relationships';
+import { answerPress, enableRelationships, getPlayerRelationship } from '../src/world/relationships';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';

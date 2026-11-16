@@ -1,10 +1,10 @@
-import { beforeSavedIdeas } from './helpers/legacy-season';
+import { BEFORE_SAVED_IDEAS, beforeSavedIdeas } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { DEVELOPMENT_RIVALRIES } from '../src/data/development-rivalries';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { forecastGate } from '../src/world/finance';
-import { getPlayerRelationship } from '../src/world/relationships';
+import { enableRelationships, getPlayerRelationship } from '../src/world/relationships';
 import { createRivalries, enableRivalries, governingDerby, rivalryFor } from '../src/world/rivalries';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
@@ -91,7 +91,10 @@ describe('rivalries in a career', () => {
   });
 
   it('rejects rivalries in a format-34 file', () => {
-    const file = JSON.parse(serializeSeason(legacy));
+    // A genuine format-34 career used the relationships-1 rules (format 66 gives new careers relationships-2).
+    let older = beforeSavedIdeas(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, rivalries: false, ...BEFORE_SAVED_IDEAS }));
+    while (older.round < 4) older = advanceMatchday(older);
+    const file = JSON.parse(serializeSeason(older));
     file.formatVersion = 34; file.state.schemaVersion = 34;
     // Format 34 also predates upkeep plans and club changes; this career has made no upkeep choice and no move.
     expect(file.state.facilities.events.some((event: { type: string }) => event.type === 'maintenance')).toBe(false);

@@ -52,14 +52,29 @@ function contextAt(state: SeasonState, anchor: RelationshipAnchor, relationships
   };
 }
 
+/** Format 66 basic check: each recorded squad order lists exactly the players of an existing registration snapshot. */
+function validateSquadRanks(state: SeasonState, value: unknown): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) fail('relationships.squadRanks', 'must be an object');
+  const rosters = new Map([...state.history.flatMap(archive => archive.rosters), ...state.rosters].map(roster => [roster.id, roster]));
+  for (const [id, order] of Object.entries(value as Record<string, unknown>)) {
+    const roster = rosters.get(id);
+    if (!roster) fail(`relationships.squadRanks.${id}`, 'must identify a recorded registration');
+    if (!Array.isArray(order) || order.length !== roster.players.length || new Set(order).size !== order.length || order.some(playerId => typeof playerId !== 'string' || !roster.players.some(player => player.id === playerId))) fail(`relationships.squadRanks.${id}`, 'must rank exactly the registered players once each');
+  }
+}
+
 /** Schema29 promises are journaled decisions; morale and outcomes are regenerated from those decisions. */
 export function validateRelationships(state: SeasonState, version: number): void {
   if (version < 29) {
     if (state.activeMatch && Object.hasOwn(state.activeMatch, 'morale')) fail('activeMatch.morale', 'must be absent from careers predating player relationships');
     return;
   }
-  const fields = record(state.relationships, 'relationships', ['model', 'enabledSince', 'events']);
-  if (fields.model !== 'relationships-1') fail('relationships.model', 'is unsupported');
+  const raw = state.relationships as unknown as Record<string, unknown> | null;
+  // Format 66 adds the relationships-2 model (squad-rank default roles and contract requests) for new careers.
+  const second = raw !== null && typeof raw === 'object' && raw.model === 'relationships-2';
+  if (second && version < 66) fail('relationships.model', 'requires format 66 or later');
+  const fields = record(state.relationships, 'relationships', ['model', 'enabledSince', 'events', ...(second ? ['squadRanks'] : [])]);
+  if (fields.model !== 'relationships-1' && !second) fail('relationships.model', 'is unsupported');
   if (!Array.isArray(fields.events) || fields.events.length > 20000) fail('relationships.events', 'must retain a bounded chronological command history');
   if (fields.enabledSince === null) {
     if (!equal(fields, createRelationships())) fail('relationships', 'must remain empty while disabled');
@@ -93,14 +108,19 @@ export function validateRelationships(state: SeasonState, version: number): void
   };
   const anchor = checkAnchor(fields.enabledSince, 'relationships.enabledSince');
   const source = fields as unknown as SeasonRelationships;
-  let replay = enableRelationships(contextAt(state, anchor, createRelationships()));
+  if (second) validateSquadRanks(state, fields.squadRanks);
+  let replay = enableRelationships(contextAt(state, anchor, createRelationships()), source.model);
   if (!equal(replay.relationships.enabledSince, anchor)) fail('relationships.enabledSince', 'must identify the exact activation boundary');
-  let previous = anchor;
+  // Squad ranks are recorded at registration boundaries, not by commands: replays read the saved record.
+  if (second) replay = { ...replay, relationships: { ...replay.relationships, squadRanks: source.squadRanks! } };
+  let previous = anchor, negotiationCount = 0;
   const prepared = new Map<number, number>();
   for (const [index, raw] of fields.events.entries()) {
     const path = `relationships.events[${index}]`, type = raw && typeof raw === 'object' ? raw.type : undefined;
     // Format 34 adds press answers to the same chronological journal; format 67 (careers with media) names players and the standing.
-    const extra = type === 'role' ? ['clubId', 'playerId', 'role'] : type === 'talk' ? ['clubId', 'playerId', 'choice'] : type === 'prepare' ? ['rosterIds', 'values'] : type === 'press' && version >= 34 ? ['clubId', 'topic', 'triggerRound', 'answer', 'playerIds', 'coreIds', ...(version >= 67 && Object.hasOwn(raw, 'subjectIds') ? ['subjectIds', 'standing'] : [])] : null;
+    const extra = type === 'role' ? ['clubId', 'playerId', 'role'] : type === 'talk' ? ['clubId', 'playerId', 'choice'] : type === 'prepare' ? ['rosterIds', 'values'] : type === 'press' && version >= 34 ? ['clubId', 'topic', 'triggerRound', 'answer', 'playerIds', 'coreIds', ...(version >= 67 && Object.hasOwn(raw, 'subjectIds') ? ['subjectIds', 'standing'] : [])]
+      // Format 66 (relationships-2): contract requests and the club's replies.
+      : type === 'contract-request' && second ? ['clubId', 'playerId', 'trigger', 'negotiationCount'] : type === 'contract-reply' && second ? ['clubId', 'playerId', 'requestId', 'reply', 'negotiationCount'] : null;
     if (!extra) fail(path, 'must identify a supported player relationship command');
     const event = record(raw, path, [...ANCHOR_KEYS, 'id', 'type', ...extra]) as unknown as RelationshipEvent;
     const current = checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, event[key]])), path);
@@ -112,6 +132,13 @@ export function validateRelationships(state: SeasonState, version: number): void
       if (source.events.slice(0, index).some(item => item.type !== 'prepare' && item.clubId === managedClubAtRound(state, item.seasonNumber, item.round) && ordinal(item.seasonNumber, item.round, seasonRounds(state)) === boundary)) fail(path, 'must freeze the prepared match before subsequent manager conversations');
     }
     replay = contextAt(state, current, replay.relationships);
+    if (event.type === 'contract-request' || event.type === 'contract-reply') {
+      // Contract offers made at the same boundary are ordered by the recorded count of negotiation records.
+      const records = state.negotiations.records, count = integer(event.negotiationCount, `${path}.negotiationCount`, negotiationCount, records.length);
+      if (count > 0 && records[count - 1]!.date > current.date || count < records.length && records[count]!.date < current.date) fail(`${path}.negotiationCount`, 'must identify the contract offers already made at this boundary');
+      negotiationCount = count;
+      replay = { ...replay, negotiations: { ...replay.negotiations, records: records.slice(0, count) } };
+    }
     try { replay = applyRelationshipEvent(replay, event); } catch (error) { fail(path, `does not follow the relationship rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     previous = current;
   }

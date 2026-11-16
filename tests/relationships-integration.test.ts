@@ -67,7 +67,9 @@ describe('career relationships and match preparation boundaries', () => {
   });
 
   it('freezes AI focus before new-day automatic conversations just as it does for the manager', () => {
-    let state = initial();
+    // relationships-1 (an older career's rules): five agreed starters plus seven default Rotation players overcommit
+    // the AI squad, so its conversation is certain. New careers' rank defaults never overcommit a squad by themselves.
+    let state = enableRelationships(initial(false));
     const ai = state.clubs.find(club => club.id === 'aegean-waves')!;
     for (const player of ai.players.slice(0, 5)) state = agreeSquadRole(state, player.id, 'starter', ai.id);
     for (let round = 0; round < 4; round += 1) state = advance(state);

@@ -3,11 +3,12 @@ import type { InSeasonBudget, InSeasonOffer, InSeasonOfferQuote } from '../domai
 import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
-import { getCareerPlayers, getActiveCareerPlayers } from './player-catalog';
+import { getCareerPlayers, getActiveCareerPlayers, getCareerWage } from './player-catalog';
 import { retirementContractReason } from './lifecycle-policy';
 import { getAcademyProspect } from './academy-policy';
 import { getYouthPlayerStatus } from './youth-competition';
-import { contractForSeason, effectiveContractsForRound, maxContractWage, MIN_CONTRACT_WAGE, WAGE_STEP } from './employment-policy';
+import { contractForSeason, effectiveContractsForRound, maxContractWage, MIN_CONTRACT_WAGE, refusedContractText, WAGE_STEP } from './employment-policy';
+import { refusedContractMinimum, refusedContractPremium } from './contract-requests-policy';
 import { getFinanceBalance } from './finance';
 import { getSpendableCash, payrollInstallment } from './payroll-policy';
 import { dateForRound } from './season';
@@ -67,6 +68,8 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   else if (!validWage) reason = 'Choose an annual salary from EUR 5,000 to EUR 50,000 in EUR 500 steps.';
   else if (retirementContractReason(state, playerId, state.seasonNumber)) reason = retirementContractReason(state, playerId, state.seasonNumber);
   else if (contractForSeason(state.employment, playerId, state.seasonNumber)) reason = 'Choose a free agent without an employer for this season.';
+  // Format 66: a player who remembers this club refusing his contract request asks more (relationships-2).
+  else if (!prospect && refusedContractPremium(state, clubId, playerId) && seasonWage < refusedContractMinimum(state, clubId, playerId, getCareerWage(state, playerId), WAGE_STEP)) reason = refusedContractText(refusedContractMinimum(state, clubId, playerId, getCareerWage(state, playerId), WAGE_STEP));
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before offering another salary.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before offering another salary.';
   else if (budget.rosterSize + budget.reservedRosterSize + 1 > clubRosterLimit(state)) reason = `The squad already has ${clubRosterLimitText(state)} registered players or reserved places.`;

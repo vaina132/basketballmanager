@@ -13,6 +13,7 @@ import { retirementContractReason } from './lifecycle-policy';
 import type { WorldContext } from '../domain/world';
 import { clubRosterLimitText, clubRosterLimit, clubSalaryBudget } from './club-roster-policy';
 import { REAL_ECONOMY_RULES, worldEconomy } from './economy';
+import { refusedContractMinimum, refusedContractPremium } from './contract-requests-policy';
 
 export const EMPLOYMENT_BUDGET = 24_000_000;
 export const MIN_ROSTER_SIZE = 8;
@@ -94,6 +95,8 @@ export function quotePlayerContract(state: SeasonState, playerId: string, season
   else if (retirementContractReason(state, playerId, endsSeason)) reason = retirementContractReason(state, playerId, endsSeason);
   else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > maxContractWage(state) || seasonWage % WAGE_STEP !== 0) reason = contractWageRuleText(state);
   else if (seasonWage < askingWage && !state.negotiations.enabledSince) reason = 'The player will not accept less than his asking wage.';
+  // Format 66: a player whose contract request this club refused asks more to sign with it (relationships-2).
+  else if (refusedContractPremium(state, clubId, playerId) && seasonWage < refusedContractMinimum(state, clubId, playerId, askingWage, WAGE_STEP)) reason = refusedContractText(refusedContractMinimum(state, clubId, playerId, askingWage, WAGE_STEP));
   else if ((state.employment.buyouts ?? []).some(buyout => buyout.playerId === playerId && buyout.clubId === clubId && buyout.seasonNumber === state.seasonNumber)) reason = 'A player you buy out cannot rejoin your club during the same offseason.';
   else if (state.status === 'active' && getInSeasonOffers(state, undefined, true).some(offer => offer.playerId === playerId && offer.transfer?.sellerClubId === clubId)) reason = 'Resolve the current transfer proposals before renewing this player.';
   else if (paidTransfer) reason = transferOfferReason(state, playerId, transferFee, clubId, resolvingOfferId, transferPaymentPlan, options);
@@ -113,6 +116,9 @@ export function quotePlayerContract(state: SeasonState, playerId: string, season
   }
   return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
 }
+
+/** The guard text when a player who remembers a refused contract request asks more of this club. */
+export const refusedContractText = (minimum: number): string => `After the club turned down his contract request, he asks at least €${(minimum / 100).toLocaleString('en-GB')} a season to sign.`;
 
 /** Players without an opening-day employer; current-season ownership is preserved. */
 export function getAvailablePlayers(state: Pick<SeasonState, 'employment' | 'seasonNumber' | 'status'> & Partial<Pick<SeasonState, 'market' | 'managedClubId'>> & CareerPlayerContext): readonly Player[] {

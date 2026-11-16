@@ -20,6 +20,7 @@ import type { SeasonEndDecision } from '../domain/career';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
 import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
 import { enableMedia } from './media';
+import { processContractRequests } from './contract-requests';
 import { createFacilities, enableBoardFunding, enableFacilities, enableFacilityMaintenance, processFacilityProjects, automateFacilities } from './facilities';
 import { medicalRecurrencePercent } from './facilities-policy';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonEurope, SeasonFixture, SeasonState, Standing } from '../domain/season';
@@ -442,7 +443,8 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const youthReady = youthCompetitionEnabled ? enableYouthCompetition(developed) : developed;
   const built = facilitiesEnabled ? enableFacilities(youthReady) : youthReady;
   const sponsored = commercialEnabled ? enableCommercial(built) : built;
-  const related = relationshipsEnabled ? prepareRelationshipsRound(enableRelationships(sponsored)) : sponsored;
+  // Format 66: new careers use squad-rank default roles and contract requests (`relationships-2`).
+  const related = relationshipsEnabled ? prepareRelationshipsRound(enableRelationships(sponsored, 'relationships-2')) : sponsored;
   const boarded = boardEnabled ? enableBoard(related, 'career') : related;
   const capitalised = boardFundingEnabled ? enableBoardFunding(boarded) : boarded;
   const judged = boardConsequencesEnabled ? enableBoardConsequences(capitalised) : capitalised;
@@ -685,7 +687,7 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState, coachCh
   next = prepareScoutingAssignments(next);
   next = scheduleInSeasonRecruitment(next);
   next = automateFacilities(next);
-  next = automateRelationships(prepareRelationshipsRound(next));
+  next = processContractRequests(automateRelationships(prepareRelationshipsRound(next)));
   // Career-2: an in-season review's coach changes take effect before this week's games, like a resignation would.
   if (coachChanges) next = applyMidSeasonChanges(next, coachChanges.changes, coachChanges.moveTo);
   // Step 3.4a: a week whose first game day falls after its Saturday rests until then; the manager's match is that day's.
@@ -868,7 +870,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = prepareScoutingAssignments(refreshSquadKnowledge(next));
   next = scheduleInSeasonRecruitment(next);
   next = automateFacilities(next);
-  next = automateRelationships(prepareRelationshipsRound(next));
+  next = processContractRequests(automateRelationships(prepareRelationshipsRound(next)));
   next = prepareBoardSeason(next);
   next.activeMatch = first ? prepareMatch(next, first) : null;
   return summarizeSeniorHistory(summarizeYouthHistory(summarizeAcademyHistory(next)));

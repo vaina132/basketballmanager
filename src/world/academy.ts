@@ -132,15 +132,18 @@ export function buildAcademyWeek(input: AcademyWeekCalculation): AcademyWeek {
     };
     allocate(ordinaryPoints, base, 0); allocate(bonusTotal, bonus, ordinaryPoints % TRAINING_ATTRIBUTES.length);
     const facilitiesActive = !!input.facilities?.enabledSince && input.facilities.enabledSince.date <= fromDate;
-    const facilityPoints = facilitiesActive ? Math.floor(eligibleDates.reduce((sum, date) => sum + 4 * facilityPracticeBonusPercent(input, 'youth', prospect.clubId, date), 0) / 100) : 0;
+    // Format 74 (`facilities-3`): Very Poor and Poor infrastructure costs practice, rounded towards zero like a gain.
+    const facilityUnits = facilitiesActive ? eligibleDates.reduce((sum, date) => sum + 4 * facilityPracticeBonusPercent(input, 'youth', prospect.clubId, date), 0) : 0;
+    const facilitySign = facilityUnits < 0 ? -1 : 1, facilityPoints = facilitySign * Math.floor(Math.abs(facilityUnits) / 100);
     const facilityDesired = emptyAcademyPoints(), facilityGains = emptyAcademyPoints();
-    allocate(facilityPoints, facilityDesired, ordinaryPoints % TRAINING_ATTRIBUTES.length);
+    allocate(Math.abs(facilityPoints), facilityDesired, ordinaryPoints % TRAINING_ATTRIBUTES.length);
+    if (facilitySign < 0) for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = -facilityDesired[key];
     for (const key of TRAINING_ATTRIBUTES) {
       const cap = academyPointCap(prospect.player.attributes[key]);
       if (!Number.isInteger(before[key]) || before[key] < 0 || before[key] > cap) throw new Error('Academy development exceeds its supported limits.');
       const withoutCoach = Math.min(cap, before[key] + base[key]);
       const coached = Math.min(cap, withoutCoach + bonus[key]);
-      after[key] = Math.min(cap, coached + facilityDesired[key]);
+      after[key] = Math.max(before[key], Math.min(cap, coached + facilityDesired[key]));
       gains[key] = after[key] - before[key]; coachingGains[key] = coached - withoutCoach;
       facilityGains[key] = after[key] - coached;
     }

@@ -92,11 +92,12 @@ export function injuryRiskMap(injuries: readonly SeasonInjury[], playerIds: Iter
  * becomes 1.85 at 15%). Players of clubs without one, and every player in older careers, keep their factors.
  */
 export function withMedicalRecurrence(risks: Record<string, InjuryRisk>, clubs: readonly { playerIds: readonly string[]; percent: number }[]): Record<string, InjuryRisk> {
-  if (!clubs.some(club => club.percent > 0)) return risks;
+  // Format 74: a Very Poor or Poor medical centre (a negative percent) raises the extra risk instead.
+  if (!clubs.some(club => club.percent !== 0)) return risks;
   const result: Record<string, InjuryRisk> = {};
   for (const [playerId, risk] of Object.entries(risks)) {
     const percent = clubs.find(club => club.playerIds.includes(playerId))?.percent ?? 0;
-    result[playerId] = percent > 0 ? Object.fromEntries(Object.entries(risk).map(([kind, factor]) => [kind, 1 + (factor! - 1) * (100 - percent) / 100])) as InjuryRisk : risk;
+    result[playerId] = percent !== 0 ? Object.fromEntries(Object.entries(risk).map(([kind, factor]) => [kind, 1 + (factor! - 1) * (100 - percent) / 100])) as InjuryRisk : risk;
   }
   return result;
 }
@@ -137,7 +138,8 @@ export function injuryDays(kind: MatchInjuryKind, hash: number, recurrence = fal
 export function createSeasonInjury(seed: number, fixture: Pick<SeasonFixture, 'id' | 'date'>, clubId: string, playerId: string, kind: SeasonInjury['kind'], earlier: readonly SeasonInjury[] = [], recoveryPercent = 0): SeasonInjury {
   const hash = stableHash(seed, `health:${fixture.id}:${playerId}:${kind}`);
   const diagnosed = isMatchInjuryKind(kind) ? injuryDays(kind, hash, isRecurrence(earlier, playerId, kind, fixture.date)) : 7 + hash % (kind === 'ankle' ? 22 : 15);
-  const duration = recoveryPercent > 0 ? Math.max(1, Math.round(diagnosed * (100 - recoveryPercent) / 100)) : diagnosed;
+  // Format 74: a Very Poor or Poor medical centre (a negative percent) makes recovery longer.
+  const duration = recoveryPercent !== 0 ? Math.max(1, Math.round(diagnosed * (100 - recoveryPercent) / 100)) : diagnosed;
   const returnOn = new Date(Date.parse(`${fixture.date}T00:00:00Z`) + duration * DAY_MS).toISOString().slice(0, 10);
   return { id: `${fixture.id}:${playerId}`, playerId, clubId, kind, fixtureId: fixture.id, occurredOn: fixture.date, returnOn };
 }

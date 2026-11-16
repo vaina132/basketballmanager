@@ -25,8 +25,8 @@ import { openingEurope } from '../world/european-places';
 import { selectBackgroundMatchday } from '../world/background';
 import type { FacilityAnchor, FacilityEvent, FacilityType, SeasonFacilities } from '../domain/facilities';
 import { createFacilities, applyFacilityEvent, facilitiesAtEventCount } from '../world/facilities';
-import { ALL_FACILITY_TYPES, FACILITY_TYPES, getArenaCapacity, getFacilityUpkeepBreakdown, medicalRecoveryPercent } from '../world/facilities-policy';
-import { debtSchedule, debtSourceId, FACILITY_FINANCING_RULES } from '../world/facility-debt';
+import { FACILITY_RULES_3, facilityMaxLevel, facilityTypes, getArenaCapacity, getFacilityUpkeepBreakdown, medicalRecoveryPercent } from '../world/facilities-policy';
+import { BANK_LOAN_RULES, debtSchedule, debtSourceId, FACILITY_FINANCING_RULES } from '../world/facility-debt';
 import type { FinanceBalance, FinanceEntry } from '../domain/finance';
 import type { PayrollCharge, PayrollItem, PlayerWageAgreement, SeasonPayroll } from '../domain/payroll';
 import type { SeasonTraining, TrainingPlan, TrainingPoints, TrainingWeekReport } from '../domain/training';
@@ -127,6 +127,11 @@ const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
 type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
+/**
+ * The format that introduced six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
+ * Built while the schema was 73; set to 74 when the schema version moves to 74 for the interface-simplification round.
+ */
+const SIX_LEVEL_FORMAT = 73;
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
   'secondsPlayed', 'points', 'fieldGoalsMade', 'fieldGoalsAttempted', 'threePointersMade',
@@ -1298,16 +1303,21 @@ const FACILITY_ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'ledgerIndex', 'c
 function validateFacilitiesShape(value: unknown, state: SeasonState, version: number): SeasonFacilities {
   const funding = version >= 32;
   const maintenance = version >= 36;
-  // Format 71: new careers can finance projects with loans and leases (`loans-1`).
+  // Format 71: careers can finance projects with loans and leases (`loans-1`); format 74: the simple bank loan (`bank-1`).
   const financed = value !== null && typeof value === 'object' && Object.hasOwn(value, 'financing');
   const fields = record(value, 'facilities', ['model', 'enabledSince', 'delegated', 'projects', 'events', ...(funding ? ['fundingSince'] : []), ...(maintenance ? ['maintenanceSince'] : []), ...(financed ? ['financing', 'debts'] : [])]);
-  if (financed && (fields.financing !== 'loans-1' || !Array.isArray(fields.debts) || fields.debts.length > 20_000)) fail('facilities.debts', 'must retain a bounded loan and lease history of the supported financing model');
-  if (fields.model !== 'facilities-1' && fields.model !== 'facilities-2') fail('facilities.model', 'is unsupported');
+  if (financed && (fields.financing !== 'loans-1' && fields.financing !== 'bank-1' || !Array.isArray(fields.debts) || fields.debts.length > 20_000)) fail('facilities.debts', 'must retain a bounded loan and lease history of the supported financing model');
+  if (fields.model !== 'facilities-1' && fields.model !== 'facilities-2' && fields.model !== 'facilities-3') fail('facilities.model', 'is unsupported');
   // Format 65: medical and scouting facilities, seasonal wear and repairs (`facilities-2`) belong to new careers only.
   if (fields.model === 'facilities-2' && version < 65) fail('facilities.model', 'requires format 65 or later');
   if (financed && version < 71) fail('facilities.financing', 'requires format 71 or later');
+  // Format 74 (owner request, 16 November 2026): six named levels, arena seats and the simple bank loan go together.
+  // The format guard names the format the six-level model shipped with.
+  const six = fields.model === 'facilities-3', bank = fields.financing === 'bank-1';
+  if (six && version < SIX_LEVEL_FORMAT) fail('facilities.model', `requires format ${SIX_LEVEL_FORMAT} or later`);
+  if (six !== bank) fail('facilities.financing', 'must pair six facility levels with the simple bank loan');
   const repairs = fields.model === 'facilities-2';
-  const { fundingSince: _fundingDefault, maintenanceSince: _maintenanceDefault, ...legacyDefaults } = createFacilities(clubsEverInFullWorld(state, state.seasonNumber), state.managedClubId, fields.model as SeasonFacilities['model'], financed ? 'loans-1' : undefined);
+  const { fundingSince: _fundingDefault, maintenanceSince: _maintenanceDefault, ...legacyDefaults } = createFacilities(clubsEverInFullWorld(state, state.seasonNumber), state.managedClubId, fields.model as SeasonFacilities['model'], financed ? fields.financing as SeasonFacilities['financing'] : undefined);
   const defaults = { ...legacyDefaults, ...(funding ? { fundingSince: null } : {}), ...(maintenance ? { maintenanceSince: null } : {}) };
   const policies = record(fields.delegated, 'facilities.delegated', clubsEverInFullWorld(state, state.seasonNumber).map(club => club.id));
   for (const [id, policy] of Object.entries(policies)) if (typeof policy !== 'boolean') fail(`facilities.delegated.${id}`, 'must be boolean');
@@ -1361,20 +1371,28 @@ function validateFacilitiesShape(value: unknown, state: SeasonState, version: nu
   for (const [index, raw] of fields.events.entries()) {
     const path = `facilities.events[${index}]`, type = raw && typeof raw === 'object' ? raw.type : undefined;
     const fundsRepair = repairs && type === 'funding' && Object.hasOwn(raw, 'project');
-    const extra = type === 'start' || type === 'repair' && repairs ? ['projectId', 'clubId', 'facilityType'] : type === 'cancel' ? ['projectId'] : type === 'delegate' ? ['clubId', 'delegated'] : type === 'process' ? [] : type === 'maintenance' && maintenance ? ['clubId', 'plan'] : type === 'funding' && funding ? ['clubId', 'facilityType', 'amount', 'mode', 'approved', 'confidence', 'requiredConfidence', 'capitalRemaining', ...(fundsRepair ? ['project'] : [])]
+    // Format 74: an arena start names the seats it adds; there are no repairs, upkeep plans, board capital or leases.
+    const expansion = six && type === 'start' && raw.facilityType === 'arena';
+    const extra = type === 'start' ? ['projectId', 'clubId', 'facilityType', ...(expansion ? ['seats'] : [])] : type === 'repair' && repairs ? ['projectId', 'clubId', 'facilityType'] : type === 'cancel' ? ['projectId'] : type === 'delegate' ? ['clubId', 'delegated'] : type === 'process' ? [] : six ? type === 'borrow' ? ['debtId', 'clubId', 'principal', 'seasons', 'rateBasisPoints'] : type === 'repay' ? ['debtId'] : null
+      : type === 'maintenance' && maintenance ? ['clubId', 'plan'] : type === 'funding' && funding ? ['clubId', 'facilityType', 'amount', 'mode', 'approved', 'confidence', 'requiredConfidence', 'capitalRemaining', ...(fundsRepair ? ['project'] : [])]
       : !financed ? null : type === 'loan' ? ['debtId', 'clubId', 'facilityType', 'project', 'principal', 'seasons', 'rateBasisPoints'] : type === 'lease' ? ['debtId', 'projectId', 'clubId', 'facilityType', 'seasons'] : type === 'repay' || type === 'end-lease' ? ['debtId'] : null;
     if (!extra) fail(path, 'must identify a supported facilities decision');
     const event = record(raw, path, [...FACILITY_ANCHOR_KEYS, 'type', ...extra]);
     if (fundsRepair && event.project !== 'repair') fail(`${path}.project`, 'must name a repair');
-    if (Object.hasOwn(event, 'facilityType') && !(repairs ? ALL_FACILITY_TYPES : FACILITY_TYPES).includes(event.facilityType as FacilityType)) fail(`${path}.facilityType`, 'must name a facility of this career');
+    if (Object.hasOwn(event, 'facilityType') && !facilityTypes(fields as Pick<SeasonFacilities, 'model'>).includes(event.facilityType as FacilityType)) fail(`${path}.facilityType`, 'must name a facility of this career');
+    if (expansion && !FACILITY_RULES_3.expansionSeats.includes(event.seats as number)) fail(`${path}.seats`, 'must name a supported arena expansion size');
     const at = checkAnchor(Object.fromEntries(FACILITY_ANCHOR_KEYS.map(key => [key, event[key]])), path);
     if (at.date < previous.date || FACILITY_ANCHOR_KEYS.filter(key => !['seasonNumber', 'round', 'date'].includes(key)).some(key => at[key] < previous[key])) fail(path, 'must preserve chronological command and commitment prefixes');
     previous = at;
   }
   for (const [index, raw] of fields.projects.entries()) {
     const kind = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>).kind : undefined;
-    const lease = financed && kind === 'lease', repair = repairs && !lease && raw !== null && typeof raw === 'object' && Object.hasOwn(raw, 'kind');
-    const path = `facilities.projects[${index}]`, project = record(raw, path, ['id', 'clubId', 'type', 'fromLevel', 'toLevel', 'cost', 'startedOn', 'dueOn', 'completedOn', 'cancelledOn', 'startEventIndex', ...(repair ? ['kind', 'conditionBefore'] : []), ...(lease ? ['kind', ...(Object.hasOwn(raw, 'returnedOn') ? ['returnedOn'] : [])] : [])]);
+    const lease = financed && !six && kind === 'lease', repair = repairs && !lease && raw !== null && typeof raw === 'object' && Object.hasOwn(raw, 'kind');
+    // Format 74: an arena expansion keeps level 1 and records the seats it adds.
+    const expansion = six && raw !== null && typeof raw === 'object' && (raw as Record<string, unknown>).type === 'arena';
+    const path = `facilities.projects[${index}]`, project = record(raw, path, ['id', 'clubId', 'type', 'fromLevel', 'toLevel', 'cost', 'startedOn', 'dueOn', 'completedOn', 'cancelledOn', 'startEventIndex', ...(repair ? ['kind', 'conditionBefore'] : []), ...(lease ? ['kind', ...(Object.hasOwn(raw, 'returnedOn') ? ['returnedOn'] : [])] : []), ...(expansion ? ['kind', 'seats'] : [])]);
+    if (expansion && (project.kind !== 'expansion' || project.fromLevel !== 1 || project.toLevel !== 1 || !FACILITY_RULES_3.expansionSeats.includes(project.seats as number))) fail(path, 'must add a supported number of seats to the arena');
+    if (six && !expansion && (project.toLevel !== (project.fromLevel as number) + 1 || (project.toLevel as number) > facilityMaxLevel(fields as Pick<SeasonFacilities, 'model'>))) fail(path, 'must raise one facility by one level');
     if (lease && (project.toLevel !== (project.fromLevel as number) + 1 || project.cost !== 0 || project.dueOn !== project.startedOn || project.cancelledOn !== null || Object.hasOwn(project, 'returnedOn') && (typeof project.returnedOn !== 'string' || project.completedOn === null || project.returnedOn < (project.completedOn as string)))) fail(path, 'must install one leased level for nothing upfront, and hand it back only after it was installed');
     if (repair && (project.kind !== 'repair' || project.fromLevel !== project.toLevel)) fail(path, 'must restore condition at an unchanged level');
     if (repair) number(project.conditionBefore, `${path}.conditionBefore`, 0, 100);
@@ -1383,10 +1401,12 @@ function validateFacilitiesShape(value: unknown, state: SeasonState, version: nu
   }
   // Format 71: loan and lease terms; the command replay rebuilds each one exactly.
   if (financed) for (const [index, raw] of (fields.debts as unknown[]).entries()) {
-    const path = `facilities.debts[${index}]`, debt = record(raw, path, ['id', 'kind', 'clubId', 'projectId', 'facilityType', 'principal', 'rateBasisPoints', 'seasons', 'payment', 'total', 'seasonNumber', 'round', 'date', 'ledgerIndex', 'startEventIndex', 'settled']);
-    if (debt.id !== `facility-debt-${index + 1}` || (debt.kind !== 'loan' && debt.kind !== 'lease') || !FACILITY_FINANCING_RULES.termSeasons.includes(debt.seasons as number)) fail(path, 'must retain sequential loan and lease terms');
+    // Format 74: a bank loan is tied to no project or facility.
+    const path = `facilities.debts[${index}]`, debt = record(raw, path, ['id', 'kind', 'clubId', ...(bank ? [] : ['projectId', 'facilityType']), 'principal', 'rateBasisPoints', 'seasons', 'payment', 'total', 'seasonNumber', 'round', 'date', 'ledgerIndex', 'startEventIndex', 'settled']);
+    const terms = bank ? BANK_LOAN_RULES.termSeasons : FACILITY_FINANCING_RULES.termSeasons;
+    if (debt.id !== `facility-debt-${index + 1}` || (bank ? debt.kind !== 'bank' : debt.kind !== 'loan' && debt.kind !== 'lease') || !terms.includes(debt.seasons as number)) fail(path, 'must retain sequential loan and lease terms');
     for (const key of ['principal', 'payment', 'total', 'ledgerIndex', 'startEventIndex', 'rateBasisPoints'] as const) number(debt[key], `${path}.${key}`, 0, Number.MAX_SAFE_INTEGER);
-    if (debt.kind === 'loan' && (debt.rateBasisPoints as number) > FACILITY_FINANCING_RULES.maxRateBasisPoints || debt.kind === 'lease' && debt.rateBasisPoints !== 0) fail(`${path}.rateBasisPoints`, 'must be a supported rate');
+    if (debt.kind !== 'lease' && (debt.rateBasisPoints as number) > FACILITY_FINANCING_RULES.maxRateBasisPoints || debt.kind === 'lease' && debt.rateBasisPoints !== 0) fail(`${path}.rateBasisPoints`, 'must be a supported rate');
     if (debt.settled !== null) {
       const settled = record(debt.settled, `${path}.settled`, ['seasonNumber', 'round', 'date', 'ledgerIndex', 'amount']);
       number(settled.amount, `${path}.settled.amount`, 0, Number.MAX_SAFE_INTEGER);
@@ -1403,6 +1423,18 @@ interface MarketReplaySnapshot { eventCount: number; seasonNumber: number; marke
  */
 const facilityProjectOf = (entry: FinanceEntry, facilities: SeasonFacilities): string | null => entry.kind === 'facility' ? entry.sourceId : entry.kind === 'board-capital' ? entry.boardCapital?.projectId ?? null
   : (entry.kind === 'loan' || entry.kind === 'lease') && entry.debt?.payment === 'start' ? facilities.debts?.find(debt => debt.id === entry.debt!.debtId)?.projectId ?? null : null;
+
+/**
+ * The facilities command that booked a payment, as its event index: a project's start (its cost, board capital or the
+ * loan or lease for it), or a bank loan received (format 74, tied to no project). Null for any other entry.
+ */
+function facilityCommandOf(entry: FinanceEntry, facilities: SeasonFacilities): number | null {
+  const projectId = facilityProjectOf(entry, facilities);
+  if (projectId !== null) return facilities.projects.find(project => project.id === projectId)?.startEventIndex ?? null;
+  if (entry.kind !== 'loan' || entry.debt?.payment !== 'start') return null;
+  const debt = facilities.debts?.find(item => item.id === entry.debt!.debtId);
+  return debt?.kind === 'bank' ? debt.startEventIndex : null;
+}
 
 /** A command may share a date with later completion/cancellation; counters disambiguate that history. */
 function facilitiesAtPrefix(state: SeasonState, date: string, ledgerIndex: number, contractCount: number, negotiationCount: number, recruitmentEventCount: number, marketEventCount: number): SeasonFacilities {
@@ -1456,7 +1488,7 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
     let replay: SeasonState = { ...state, managedClubId: managedClubAtLedger(state, event.ledgerIndex), training, seasonNumber: year, round, date: event.date, status: round === seasonRounds(state) && ledger.some(entry => entry.seasonNumber === year && entry.round === seasonRounds(state) && entry.kind === 'operations') ? 'complete' : 'active', clubs, academy, lifecycle, employment, facilities, finance, payroll, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, event.negotiationCount) }, recruitment: { ...state.recruitment, events: state.recruitment.events.slice(0, event.recruitmentEventCount), offers: live }, market };
     if (event.ledgerIndex < previousLedger) fail(path, 'cannot rewind cash after a funded approval');
     for (const [i, command] of state.recruitment.events.entries()) {
-      const nextLedger = event.ledgerIndex + Number(['start', 'repair', 'loan', 'lease', 'repay', 'end-lease'].includes(event.type));
+      const nextLedger = event.ledgerIndex + Number(['start', 'repair', 'loan', 'lease', 'repay', 'end-lease', 'borrow'].includes(event.type));
       if (i < event.recruitmentEventCount ? command.ledgerIndexBefore > event.ledgerIndex : command.ledgerIndexBefore < nextLedger) fail(path, 'must preserve the cash ordering of the recorded recruitment prefix and project payment');
     }
     if (event.type === 'process' && event.date === dateForRound(round, year)) {
@@ -1770,7 +1802,7 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
     // window's fees must not finance earlier proposals while replaying history.
     const beforePaymentIds = new Set(beforeTransfers.flatMap(transfer => transfer.payments.filter(payment => payment.paidOn <= openedOn).map(payment => payment.id)));
     const previousMarketEvents = windows.reduce((sum, item) => sum + item.events.length, 0);
-    const beforeLedger = state.finance.ledger.filter(entry => (entry.seasonNumber < year || entry.seasonNumber === year && (entry.kind !== 'buyout' && (entry.kind !== 'transfer' || beforePaymentIds.has(entry.sourceId)))) && (facilityProjectOf(entry, state.facilities) === null || state.facilities.events[state.facilities.projects.find(project => project.id === facilityProjectOf(entry, state.facilities))!.startEventIndex]!.marketEventCount <= previousMarketEvents));
+    const beforeLedger = state.finance.ledger.filter(entry => (entry.seasonNumber < year || entry.seasonNumber === year && (entry.kind !== 'buyout' && (entry.kind !== 'transfer' || beforePaymentIds.has(entry.sourceId)))) && (facilityCommandOf(entry, state.facilities) === null || state.facilities.events[facilityCommandOf(entry, state.facilities)!]!.marketEventCount <= previousMarketEvents));
     if (!sameData(beforeLedger, financeLedgerSlice(state.finance, 0, beforeLedger.length))) fail(path, 'must open after a contiguous financial history, before the transfer fees for this window');
     const employment = { ...state.employment, contracts: state.employment.contracts.slice(0, expectedContractCount), transfers: beforeTransfers.map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => beforePaymentIds.has(payment.id)) })), buyouts: beforeBuyouts, market: { seasonNumber: year + 1 } };
     const initialWindow: MarketWindow = { seasonNumber: year, openedOn, closesOn, date: openedOn, contractCountBefore: expectedContractCount, negotiationCountBefore: expectedNegotiationCount, closed: false, competitionFromEvent, events: [], offers: [] };
@@ -1787,10 +1819,11 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
       // may enter the next offer quote; later construction cannot finance or cancel an earlier bid.
       while (true) {
         const entry = financeLedgerEntry(state.finance, financeLedgerCount(replay.finance));
-        // Board capital precedes the upgrade it funds and follows the same project boundary.
-        if (!entry || facilityProjectOf(entry, state.facilities) === null) break;
-        const project = state.facilities.projects.find(project => project.id === facilityProjectOf(entry, state.facilities));
-        const event = project && state.facilities.events[project.startEventIndex];
+        // Board capital precedes the upgrade it funds and follows the same project boundary; a bank loan (format 74)
+        // follows its own command.
+        const command = entry ? facilityCommandOf(entry, state.facilities) : null;
+        if (!entry || command === null) break;
+        const event = state.facilities.events[command];
         if (!event || event.seasonNumber !== year || event.marketEventCount > count || event.date > date || event.contractCount > replay.employment.contracts.length || event.negotiationCount > replay.negotiations.records.length) break;
         const { id, ...charge } = entry;
         const finance = appendFinanceLedgerEntry(replay.finance, charge);
@@ -2356,8 +2389,9 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   // Format 71: each loan received (or lease agreed at no cost), every scheduled payment already due while the debt ran
   // and the club was in the full world, and any early settlement (the command replay checks its amount).
   for (const debt of version >= 71 ? facilities.debts ?? [] : []) {
-    const paymentKind = debt.kind === 'loan' ? 'loan-repayment' as const : 'lease' as const;
-    add({ clubId: debt.clubId, seasonNumber: debt.seasonNumber, round: debt.round, kind: debt.kind, sourceId: debtSourceId(debt.id, 'start'), amount: debt.kind === 'loan' ? debt.principal : 0, debt: { debtId: debt.id, payment: 'start' } });
+    // Format 74: a bank loan books like a facility loan.
+    const paymentKind = debt.kind === 'lease' ? 'lease' as const : 'loan-repayment' as const;
+    add({ clubId: debt.clubId, seasonNumber: debt.seasonNumber, round: debt.round, kind: debt.kind === 'lease' ? 'lease' : 'loan', sourceId: debtSourceId(debt.id, 'start'), amount: debt.kind === 'lease' ? 0 : debt.principal, debt: { debtId: debt.id, payment: 'start' } });
     for (const payment of debtSchedule(debt, seasonLength)) {
       if (roundKey(payment.seasonNumber, payment.round) > roundKey(seasonNumber, committedRound) || debt.settled && roundKey(payment.seasonNumber, payment.round) >= roundKey(debt.settled.seasonNumber, debt.settled.round) || !clubsIn(payment.seasonNumber).some(club => club.id === debt.clubId)) continue;
       add({ clubId: debt.clubId, seasonNumber: payment.seasonNumber, round: payment.round, kind: paymentKind, sourceId: debtSourceId(debt.id, payment.number), amount: -payment.amount, debt: { debtId: debt.id, payment: payment.number } });
@@ -2487,7 +2521,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
         const project = facilities.projects.find(project => project.id === details.projectId);
         if (!project || project.type !== details.type || project.id !== entry.sourceId || facilities.events[project.startEventIndex]?.ledgerIndex !== index) fail(path, 'must charge the exact project at its approval boundary');
       } else {
-        const details = record(entry.facilityUpkeep, `${path}.facilityUpkeep`, ['arena', 'training', 'youth', ...(facilities.model === 'facilities-2' ? ['medical', 'scouting'] : [])]);
+        const details = record(entry.facilityUpkeep, `${path}.facilityUpkeep`, ['arena', 'training', 'youth', ...(facilities.model !== 'facilities-1' ? ['medical', 'scouting'] : [])]);
         const { total: _total, ...breakdown } = getFacilityUpkeepBreakdown({ facilities, ...yearContext(year) }, entry.clubId, dateForRound(entryRound, year));
         if (!sameData(details, breakdown)) fail(path, 'must charge the completed facility levels on this matchday');
         if (operatingClubs.size !== clubs.length || payrollStarted) fail(path, 'must book upkeep after all operating costs and before matchday payroll');
@@ -2843,7 +2877,7 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
       const path = `training.lastWeek.players.${player.id}`;
       const value = players[player.id];
       const entry = record(value, path, ['focus', 'intensity', 'availableDays', 'conditionBefore', 'conditionAfter', 'gains', ...(coaching ? ['coachingGains'] : []), ...(version >= 22 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'fitness') ? ['fitness'] : []), ...(version >= 26 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'aging') ? ['aging'] : []), ...(version >= 28 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'facility') ? ['facility'] : [])]);
-      if (Object.hasOwn(entry, 'facility')) { const bonus = record(entry.facility, `${path}.facility`, ['earnedPoints', 'gains']); number(bonus.earnedPoints, `${path}.facility.earnedPoints`, 0, 4); record(bonus.gains, `${path}.facility.gains`, TRAINING_ATTRIBUTES); }
+      if (Object.hasOwn(entry, 'facility')) { const bonus = record(entry.facility, `${path}.facility`, ['earnedPoints', 'gains']); number(bonus.earnedPoints, `${path}.facility.earnedPoints`, -4, 4); record(bonus.gains, `${path}.facility.gains`, TRAINING_ATTRIBUTES); }
       if (Object.hasOwn(entry, 'aging')) record(entry.aging, `${path}.aging`, ['ordinaryPracticePoints', 'adjustedPracticePoints', 'rateBasisPoints']);
       if (!TRAINING_FOCUSES.includes(entry.focus as TrainingPlan['focus']) || !TRAINING_INTENSITIES.includes(entry.intensity as TrainingPlan['intensity'])) fail(path, 'has unsupported training instructions');
       number(entry.availableDays, `${path}.availableDays`, 0, 7);

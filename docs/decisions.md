@@ -474,6 +474,8 @@ Chosen as recommended defaults under the owner's instruction to finish the level
 
 The owner allowed this session to use Supabase to publish corrected player positions ("you do it with supabase permission") and chose free official sources first for exact positions ("let's first try official free sources if possible ... any website that gives info on player positions should have this data somewhere"), before any paid provider. All player data comes from API-Sports; it gives only Guard/Forward/Center (sometimes wrong) or nothing, and the pack guesses exact positions from statistics. A backup of the published pack is kept before any replacement.
 
+Phase 1 result (16 November 2026): `2026.11-world-4-online` is live. Official exact positions win; an official Guard/Forward/Center role keeps the estimate inside that group (statistics rule); Center is exact. Matches are made within a club only (exact name, unique initial and surname, contained name words, or unique surname with the same shirt number); ambiguous names are left alone. Official heights, weights, birth dates, shirt numbers and full names are applied; nationalities only where the pack had none.
+
 ## Simplification before the play test (owner decision, 16 November 2026)
 
 "Please implement now the full starting staff for every club, the court picture starting 5, squad roles in the squad list and contract ops, 6 facility levels and arena seat expansion, a simple bank loan process ... when I get a loan, it's added to my budget directly ... Board as its own menu item, a day-by-day continue button, and transfers as a player search ... I would prefer to play test when these things are implemented." The play test now follows these items. Their defaults are recorded here as each lands.

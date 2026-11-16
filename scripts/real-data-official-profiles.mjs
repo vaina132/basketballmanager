@@ -48,6 +48,10 @@ const GROUP_LABELS = Object.freeze({
   Forward: ['f', 'forward', 'ala', 'forvet', 'flügel', 'flugel', 'φόργουορντ'],
   Center: [],
 });
+/** Official country names in the pack's spelling. */
+const COUNTRY_NAMES = Object.freeze({ 'United States of America': 'USA', Turkiye: 'Turkey', 'Cabo Verde': 'Cape Verde' });
+/** Provider values in the nationality field that are clubs or cities, not countries (observed 16 November 2026). */
+const NOT_COUNTRIES = new Set(['Apoel BC', 'Bayern', 'Gran Canaria', 'Mega Basket', 'Merkezefendi', 'Partizan', 'Real Madrid', 'Rio Breogan', 'Runa Moscow', 'Saratov', 'Split', 'Studentski Centar']);
 const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().trim();
 
 /** A roster label as exact options and/or a broad group; unknown labels give nothing. */
@@ -187,7 +191,10 @@ export function profileOverrides({ pack, officialDocuments = [], clubLinks = [],
     const age = date(born) ? Number(opening.slice(0, 4)) - Number(born.slice(0, 4)) - Number(opening.slice(5) < born.slice(5)) : null;
     if (age !== null && age >= 14 && age <= 60) add(player, 'birth_date', { value: born, ...sourced }, why);
     if (/^\d{1,2}$/.test(match.row.dorsal ?? '')) add(player, 'shirt_number', { value: Number(match.row.dorsal), ...sourced }, why);
-    if (person.country?.name) add(player, 'nationality', { value: person.country.name, ...sourced }, why);
+    // The pack's spelling of countries is kept ("USA" decides the US import contract rule); a known provider
+    // nationality is not replaced (dual nationals), only a missing one or a club name in the nationality field.
+    const nation = person.country?.name ? COUNTRY_NAMES[person.country.name] ?? person.country.name : null;
+    if (nation && nation !== player.nationality && (!player.nationality || NOT_COUNTRIES.has(player.nationality))) add(player, 'nationality', { value: nation, ...sourced }, why);
   }
   const keys = new Set();
   for (const row of rows) { const key = `${row.entity_id}/${row.field}`; if (keys.has(key)) throw new Error(`Two overrides for ${key}.`); keys.add(key); }

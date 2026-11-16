@@ -333,6 +333,8 @@ export interface SeasonSystems {
   negotiations?: boolean; market?: boolean; scouts?: boolean; fitness?: boolean; physio?: boolean; assistant?: boolean;
   academy?: boolean; youth?: boolean; lifecycle?: boolean; youthCompetition?: boolean; facilities?: boolean;
   relationships?: boolean; board?: boolean; commercial?: boolean; boardFunding?: boolean; boardConsequences?: boolean; rivalries?: boolean; facilityMaintenance?: boolean; careerMoves?: boolean;
+  /** Format 64: sponsorship agreements with exit clauses and arena naming rights (the `commercial-2` model), whenever negotiations are enabled. */
+  namingRights?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -344,7 +346,7 @@ export interface SeasonOptions extends SeasonSystems {
 export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.freeze({
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
-  facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true,
+  facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -356,11 +358,11 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   const unknown = Object.keys(first).filter(key => !SEASON_OPTION_KEYS.has(key));
   if (unknown.length || positional.length) throw new Error(`Unsupported career options: ${unknown.join(', ') || 'extra positional arguments'}.`);
   const options = first, finance = options.finance ?? true;
-  return createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD);
+  return createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false);
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.
-function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD): SeasonState {
+function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD, namingRightsEnabled = false): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   validateWorld(world);
   managedClubId ??= fullWorldClubs(world)[0]!.id;
@@ -389,6 +391,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   if (typeof rivalriesEnabled !== 'boolean') throw new Error('Choose a valid rivalries setting.');
   if (typeof maintenanceEnabled !== 'boolean' || maintenanceEnabled && !facilitiesEnabled) throw new Error('Facility upkeep plans require club facilities.');
   if (typeof careerMovesEnabled !== 'boolean' || careerMovesEnabled && !boardEnabled) throw new Error('Dismissal and job changes require board reviews.');
+  if (typeof namingRightsEnabled !== 'boolean') throw new Error('Choose a valid naming-rights setting.');
   if (typeof negotiationsEnabled !== 'boolean' || negotiationsEnabled && !employmentEnabled) throw new Error('Contract negotiations require enabled player contracts and a valid negotiation setting.');
   if (typeof marketEnabled !== 'boolean' || marketEnabled && !negotiationsEnabled) throw new Error('The offseason calendar requires enabled negotiations and a valid setting.');
   const managerProfile = manager === null ? null : validateManagerProfile(manager, DEVELOPMENT_START_DATE);
@@ -406,7 +409,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId, { world }), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), facilities: createFacilities(clubs, managedClubId), relationships: createRelationships(), board: createBoard(), rivalries: createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId), negotiations: createNegotiations(), market: createMarket(),
+    schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId, { world }), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(), facilities: createFacilities(clubs, managedClubId), relationships: createRelationships(), board: createBoard(), rivalries: createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId, namingRightsEnabled ? 'commercial-2' : 'commercial-1'), negotiations: createNegotiations(), market: createMarket(),
     ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), ...(europe ? { europe } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
     activeFixtureId: first?.id ?? null, activeMatch: first ? prepareMatch({ ...preparation, dataPackId: world.id }, first) : null,
   };
@@ -757,7 +760,8 @@ export function rolloverSeason(state: SeasonState): SeasonState {
     // Per-club settings follow the full world's clubs: leaving clubs' settings go, joining clubs start delegated.
     // Facilities and sponsorship plans stay with every club that has been in the full world; a joining club starts delegated.
     next = { ...next, facilities: { ...next.facilities, delegated: { ...next.facilities.delegated, ...Object.fromEntries(next.clubs.filter(club => !Object.hasOwn(next.facilities.delegated, club.id)).map(club => [club.id, true])) } },
-      commercial: { ...next.commercial, plans: { ...next.commercial.plans, ...Object.fromEntries(next.clubs.filter(club => !Object.hasOwn(next.commercial.plans, club.id)).map(club => [club.id, { delegated: true }])) } } };
+      commercial: { ...next.commercial, plans: { ...next.commercial.plans, ...Object.fromEntries(next.clubs.filter(club => !Object.hasOwn(next.commercial.plans, club.id)).map(club => [club.id, { delegated: true }])) },
+        ...(next.commercial.naming ? { naming: { ...next.commercial.naming, plans: { ...next.commercial.naming.plans, ...Object.fromEntries(next.clubs.filter(club => !Object.hasOwn(next.commercial.naming!.plans, club.id)).map(club => [club.id, { delegated: true }])) } } } : {}) } };
     const keep = <T>(record: Record<string, T>, fallback: T) => Object.fromEntries(next.clubs.map(club => [club.id, Object.hasOwn(record, club.id) ? record[club.id]! : fallback]));
     const offices = createScouting(next.clubs, next.managedClubId).clubs;
     next = { ...next, payroll: { ...next.payroll, delegated: keep(next.payroll.delegated, true) }, finance: { ...next.finance, plans: Object.fromEntries(next.clubs.map(club => [club.id, next.finance.plans[club.id] ?? { delegated: true, price: defaultTicketPriceFor(next, club.id) }])), roundPrices: Object.fromEntries(next.clubs.map(club => [club.id, next.finance.roundPrices[club.id] ?? defaultTicketPriceFor(next, club.id)])) },

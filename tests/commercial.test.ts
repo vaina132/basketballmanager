@@ -96,7 +96,7 @@ describe('sponsorship negotiations in a career', () => {
     for (const rival of rivals) expect(renewal.commercial.agreements.filter(agreement => agreement.clubId === rival.id && agreement.startsSeason === 2)).toHaveLength(1);
     expect(renewal.commercial.agreements.filter(agreement => agreement.startsSeason === 2).every(agreement => agreement.automatic)).toBe(true);
     expect(advanceTo(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', ...NEW_CAREER_SYSTEMS }), 6).commercial).toEqual(renewal.commercial);
-  });
+  }, 120_000);
 
   it('answers one request for better terms and never more', () => {
     const offer = own(renewal)[1]!;

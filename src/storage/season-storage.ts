@@ -5,7 +5,7 @@ import type { SeasonBoard } from '../domain/board';
 import type { SeasonCommercial } from '../domain/commercial';
 import { validateBoard } from './board-validation';
 import { validateCommercial } from './commercial-validation';
-import { commercialGovernsSeason, createCommercial, openingSponsorshipClubs, sponsorshipPaymentsDue } from '../world/commercial-policy';
+import { commercialGovernsSeason, createCommercial, exitSourceId, namingPaymentsDue, openingSponsorshipClubs, sponsorshipPaymentsDue } from '../world/commercial-policy';
 import { createRelationships } from '../world/relationships';
 import type { SeasonRelationships } from '../domain/relationships';
 import { validateRelationships } from './relationships-validation';
@@ -116,7 +116,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -2138,7 +2138,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   for (let year = firstYear; year <= seasonNumber; year += 1) openingSponsors.set(year, openingSponsorshipClubs(commercial, clubsIn(year), year));
   const minimumEntries = clubs.length + [...openingSponsors.values()].reduce((sum, ids) => sum + ids.length, 0) + financeRounds * clubs.length + [ ...archives.flatMap(archive => archive.fixtures.map(fixture => ({ ...fixture, year: archive.seasonNumber }))), ...fixtures.map(fixture => ({ ...fixture, year: seasonNumber })) ].filter(fixture => fixture.result && (fixture.year > firstYear || fixture.year === firstYear && fixture.round >= firstRound)).length;
   if (fields.ledger.length < minimumEntries) fail('finance.ledger', 'is missing required opening, sponsorship, operating or ticket entries');
-  type RequiredEvent = Pick<FinanceEntry, 'clubId' | 'seasonNumber' | 'round' | 'kind' | 'sourceId'> & { amount?: number; fixture?: SeasonFixture | ArchivedFixture; sponsorship?: FinanceEntry['sponsorship']; boardCapital?: FinanceEntry['boardCapital'] };
+  type RequiredEvent = Pick<FinanceEntry, 'clubId' | 'seasonNumber' | 'round' | 'kind' | 'sourceId'> & { amount?: number; fixture?: SeasonFixture | ArchivedFixture; sponsorship?: FinanceEntry['sponsorship']; boardCapital?: FinanceEntry['boardCapital']; namingRights?: FinanceEntry['namingRights']; sponsorExit?: FinanceEntry['sponsorExit'] };
   const origin = (clubId: string, kind: FinanceEntry['kind'], sourceId: string) => `${clubId}/${kind}/${sourceId}`;
   const required = new Map<string, RequiredEvent>();
   const schedules = new Map<number, readonly (SeasonFixture | ArchivedFixture)[]>(archives.map(archive => [archive.seasonNumber, archive.fixtures]));
@@ -2171,6 +2171,14 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     return positions.get(clubId) ?? null;
   };
   for (const payment of sponsorshipPaymentsDue(commercial, (id, year) => (world ? seasonLeagues(world, divisionsOfYear(year)) : []).find(league => league.clubIds.includes(id))?.clubIds.length ?? clubs.length, { seasonNumber, round, complete: status === 'complete' }, finalPosition, seasonLength, (id, year) => clubsIn(year).some(club => club.id === id))) add({ clubId: payment.clubId, seasonNumber: payment.seasonNumber, round: payment.round, kind: 'sponsor', sourceId: payment.sourceId, amount: payment.amount, sponsorship: payment.sponsorship });
+  // Format 64: naming installments (matchday six and after the final matchday) and each early end's exit payment or fee.
+  if (version >= 64 && commercial.naming) {
+    for (const payment of namingPaymentsDue(commercial.naming, { seasonNumber, round, complete: status === 'complete' }, seasonLength, (id, year) => clubsIn(year).some(club => club.id === id))) add({ clubId: payment.clubId, seasonNumber: payment.seasonNumber, round: payment.round, kind: 'naming-rights', sourceId: payment.sourceId, amount: payment.amount, namingRights: payment.namingRights });
+    for (const [contract, agreements] of [['main', commercial.agreements], ['naming', commercial.naming.agreements]] as const) for (const agreement of agreements) {
+      if (!agreement.exit) continue;
+      add({ clubId: agreement.clubId, seasonNumber: agreement.exit.seasonNumber, round: agreement.exit.round, kind: 'sponsor-exit', sourceId: exitSourceId(agreement.id), amount: agreement.exit.by === 'sponsor' ? agreement.exit.amount : -agreement.exit.amount, sponsorExit: { agreementId: agreement.id, sponsorId: agreement.sponsorId, contract, by: agreement.exit.by } });
+    }
+  }
 
   for (const project of facilities.projects) {
     const event = facilities.events[project.startEventIndex]!;
@@ -2242,7 +2250,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   let payrollStarted = false;
   for (const [index, value] of fields.ledger.entries()) {
     const path = `finance.ledger[${index}]`;
-    const entry = record(value, path, ['id', 'clubId', 'seasonNumber', 'round', 'kind', 'amount', 'sourceId', 'ticket', 'coach', ...(payroll ? ['payroll'] : []), ...(version >= 21 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'scout') ? ['scout'] : []), ...(version >= 22 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'fitness') ? ['fitness'] : []), ...(version >= 23 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'physio') ? ['physio'] : []), ...(version >= 24 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'assistant') ? ['assistant'] : []), ...(version >= 25 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'youth') ? ['youth'] : []), ...(version >= 28 && value !== null && typeof value === 'object' ? ['facility', 'facilityUpkeep'].filter(key => Object.hasOwn(value, key)) : []), ...(version >= 31 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'sponsorship') ? ['sponsorship'] : []), ...(version >= 32 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'boardCapital') ? ['boardCapital'] : [])]);
+    const entry = record(value, path, ['id', 'clubId', 'seasonNumber', 'round', 'kind', 'amount', 'sourceId', 'ticket', 'coach', ...(payroll ? ['payroll'] : []), ...(version >= 21 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'scout') ? ['scout'] : []), ...(version >= 22 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'fitness') ? ['fitness'] : []), ...(version >= 23 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'physio') ? ['physio'] : []), ...(version >= 24 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'assistant') ? ['assistant'] : []), ...(version >= 25 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'youth') ? ['youth'] : []), ...(version >= 28 && value !== null && typeof value === 'object' ? ['facility', 'facilityUpkeep'].filter(key => Object.hasOwn(value, key)) : []), ...(version >= 31 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'sponsorship') ? ['sponsorship'] : []), ...(version >= 32 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'boardCapital') ? ['boardCapital'] : []), ...(version >= 64 && value !== null && typeof value === 'object' ? ['namingRights', 'sponsorExit'].filter(key => Object.hasOwn(value, key)) : [])]);
     if (entry.id !== `finance-${index + 1}`) fail(`${path}.id`, 'must use sequential career-wide identities');
     if (typeof entry.clubId !== 'string' || !balances.has(entry.clubId)) fail(`${path}.clubId`, 'must identify a club in this league');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, seasonNumber);
@@ -2255,7 +2263,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     }
     if (calendar !== previousDate) { operatingClubs.clear(); payrollStarted = false; }
     previousDate = calendar;
-    if (!['opening', 'sponsor', 'operations', 'tickets', 'coaching', ...(version >= 21 ? ['scouting'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['youth'] : []), ...(version >= 28 ? ['facility', 'facility-upkeep'] : []), ...(version >= 32 ? ['board-capital'] : []), ...(payroll ? ['payroll'] : []), ...(employment?.transfers ? ['transfer'] : []), ...(employment?.buyouts ? ['buyout'] : [])].includes(entry.kind as string)) fail(`${path}.kind`, 'is unsupported');
+    if (!['opening', 'sponsor', 'operations', 'tickets', 'coaching', ...(version >= 21 ? ['scouting'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['youth'] : []), ...(version >= 28 ? ['facility', 'facility-upkeep'] : []), ...(version >= 32 ? ['board-capital'] : []), ...(version >= 64 ? ['naming-rights', 'sponsor-exit'] : []), ...(payroll ? ['payroll'] : []), ...(employment?.transfers ? ['transfer'] : []), ...(employment?.buyouts ? ['buyout'] : [])].includes(entry.kind as string)) fail(`${path}.kind`, 'is unsupported');
     const kind = entry.kind as FinanceEntry['kind'];
     if (kind !== 'scouting' && Object.hasOwn(entry, 'scout')) fail(`${path}.scout`, 'must be absent from other financial events');
     if (kind !== 'fitness' && Object.hasOwn(entry, 'fitness')) fail(`${path}.fitness`, 'must be absent from other financial events');
@@ -2266,6 +2274,8 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     if (kind !== 'youth' && Object.hasOwn(entry, 'youth')) fail(`${path}.youth`, 'must be absent from other financial events');
     if (kind !== 'sponsor' && Object.hasOwn(entry, 'sponsorship')) fail(`${path}.sponsorship`, 'must be absent from other financial events');
     if (kind !== 'board-capital' && Object.hasOwn(entry, 'boardCapital')) fail(`${path}.boardCapital`, 'must be absent from other financial events');
+    if (kind !== 'naming-rights' && Object.hasOwn(entry, 'namingRights')) fail(`${path}.namingRights`, 'must be absent from other financial events');
+    if (kind !== 'sponsor-exit' && Object.hasOwn(entry, 'sponsorExit')) fail(`${path}.sponsorExit`, 'must be absent from other financial events');
     if (payrollAnchor && calendar === roundKey(payrollAnchor.seasonNumber, payrollAnchor.round)) {
       if ((kind === 'opening' || kind === 'sponsor') && index >= payrollAnchor.ledgerIndex) fail('payroll.enabledSince.ledgerIndex', 'must follow opening funds and sponsorship already booked at activation');
       if ((kind === 'tickets' || kind === 'operations' || kind === 'payroll') && index < payrollAnchor.ledgerIndex) fail('payroll.enabledSince.ledgerIndex', 'must precede the activation matchday financial commit');
@@ -2478,6 +2488,8 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
         if (amount !== expected.amount) fail(`${path}.amount`, 'does not match its required financial event');
         if (kind === 'sponsor' && !sameData(entry.sponsorship ?? null, expected.sponsorship ?? null)) fail(`${path}.sponsorship`, 'must identify the agreement installment it pays');
         if (kind === 'board-capital' && !sameData(entry.boardCapital, expected.boardCapital)) fail(`${path}.boardCapital`, 'must identify the funded facility upgrade');
+        if (kind === 'naming-rights' && !sameData(entry.namingRights, expected.namingRights)) fail(`${path}.namingRights`, 'must identify the naming installment it pays');
+        if (kind === 'sponsor-exit' && !sameData(entry.sponsorExit, expected.sponsorExit)) fail(`${path}.sponsorExit`, 'must identify the agreement that ended early');
       }
       required.delete(key);
     }

@@ -13,7 +13,9 @@ import { getInboxItems } from '../src/ui/inbox-items';
 
 const CLUB = 'rhine-falcons';
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
-const start = (seed: number, careerMoves = true) => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves }), true), true);
+// These seasons are also relabelled as format-37 saves below, so they keep the sponsorship model from before format 64
+// (exit clauses and naming rights pay nothing in a first season, so the dismissal scenarios are unchanged).
+const start = (seed: number, careerMoves = true) => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, namingRights: false }), true), true);
 /** An all-automatic Rhine Falcons season, played to the finished final match. */
 function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number): SeasonState {
   let state = start(seed, careerMoves);

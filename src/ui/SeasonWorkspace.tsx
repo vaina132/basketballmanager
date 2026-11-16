@@ -5,6 +5,7 @@ import { currentGameDay, getPostseasons, getStandings, isDomesticFixture, season
 import { classificationPoints } from '../world/fiba-ranking'
 import { PostseasonPanel } from './PostseasonPanel'
 import { getFixtureTeams } from '../world/rosters'
+import { arenaNameFor } from '../world/commercial'
 import { managedClubFor } from '../world/career'
 import { Icon } from './Icon'
 import { SeasonLeaders } from './SeasonLeaders'
@@ -113,6 +114,9 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const regularRounds = regularWorldRounds(worldOf(season))
   const stageLabel = (fixture: SeasonFixture | ArchivedFixture) => fixture.stage ? `${STAGE_NAMES[fixture.stage]}${fixture.game && postseason?.series.find(series => series.id === fixture.seriesId)?.bestOf !== 1 ? ` · Game ${fixture.game}` : ''}` : `Matchday ${fixture.round}`
 
+  // Format 64: the home arena's name in the season shown (a naming partner's name while its agreement ran); one-venue series stay unnamed.
+  const venueOf = (fixture: SeasonFixture | ArchivedFixture) => postseason?.series.find(series => series.id === fixture.seriesId)?.neutral ? null : arenaNameFor(season, fixture.homeClubId, selectedNumber)
+
   function selectSeason(number: number) {
     setSelectedSeason(number)
     setReviewId(null)
@@ -175,7 +179,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
         const isActive = !archived && fixture.id === season.activeFixtureId
         const score = fixture.result?.officialScore ?? (isActive && season.activeMatch?.status !== 'ready' ? season.activeMatch?.result?.officialScore ?? season.activeMatch?.score : null)
         return <tr key={fixture.id} data-fixture-id={fixture.id} className={fixture.homeClubId === managedId || fixture.awayClubId === managedId ? 'season-managed-row' : ''}>
-          <td><time dateTime={fixture.date}>{formatDate(fixture.date)}</time><small>{stageLabel(fixture)}</small></td><td><ClubName club={club(fixture.homeClubId)} /></td><td className="season-fixture-score">{score ? `${score.home} : ${score.away}` : '—'}</td><td><ClubName club={club(fixture.awayClubId)} /></td>
+          <td><time dateTime={fixture.date}>{formatDate(fixture.date)}</time><small>{stageLabel(fixture)}</small>{venueOf(fixture) && <small className="season-fixture-venue" data-arena-name={venueOf(fixture)!}>{venueOf(fixture)}</small>}</td><td><ClubName club={club(fixture.homeClubId)} /></td><td className="season-fixture-score">{score ? `${score.home} : ${score.away}` : '—'}</td><td><ClubName club={club(fixture.awayClubId)} /></td>
           <td>{fixture.result ? fixture.result.stats ? <button className="text-button" aria-label={`Review ${club(fixture.homeClubId).shortName} vs ${club(fixture.awayClubId).shortName}`} onClick={event => openFixtureReview(fixture.id, event.currentTarget)} aria-expanded={reviewId === fixture.id} aria-controls="season-result-review" disabled={busy}>Review<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">{fixture.result.kind === 'default' ? 'Awarded by default' : fixture.result.periods > 4 ? `Full time · ${fixture.result.periods - 4} OT` : 'Full time'} · {'appearances' in fixture.result ? 'Season totals retained' : 'Box score unavailable'}</span> : isActive ? <button className="text-button" onClick={onOpenMatch} disabled={busy}>{matchFinished ? 'Played · pending' : season.activeMatch?.status === 'ready' ? 'Pre-match' : 'In progress'}<Icon name="chevron" size={14} /></button> : <span className="season-scheduled">Scheduled</span>}{mvp && <small className="season-fixture-mvp" data-fixture-mvp={mvp.playerId}>MVP {mvp.player.name} &middot; {mvp.pir} PIR</small>}</td>
         </tr>
       })}</tbody></table></div>
@@ -183,11 +187,11 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
       {archived && <p className="season-table-note">Archived results use the squads recorded for each match. Older saves may contain team results without player box scores.</p>}
     </section>
 
-    {review && reviewTeams && <FixtureReview key={review.id} fixture={review} home={reviewTeams.home} away={reviewTeams.away} onClose={() => { setReviewId(null); if (reviewTrigger.current?.isConnected) reviewTrigger.current.focus(); else seasonSelector.current?.focus() }} />}
+    {review && reviewTeams && <FixtureReview key={review.id} fixture={review} home={reviewTeams.home} away={reviewTeams.away} venue={venueOf(review)} onClose={() => { setReviewId(null); if (reviewTrigger.current?.isConnected) reviewTrigger.current.focus(); else seasonSelector.current?.focus() }} />}
   </div>
 }
 
-function FixtureReview({ fixture, home, away, onClose }: { fixture: SeasonFixture | ArchivedFixture; home: Team; away: Team; onClose: () => void }) {
+function FixtureReview({ fixture, home, away, venue, onClose }: { fixture: SeasonFixture | ArchivedFixture; home: Team; away: Team; venue?: string | null; onClose: () => void }) {
   const [side, setSide] = useState<Side>('home')
   const region = useRef<HTMLElement>(null)
   useEffect(() => {
@@ -199,7 +203,7 @@ function FixtureReview({ fixture, home, away, onClose }: { fixture: SeasonFixtur
   if (!statistics) return null
   const team = side === 'home' ? home : away
   return <section ref={region} id="season-result-review" className="season-result-review panel" aria-labelledby="season-result-title" tabIndex={-1} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }}>
-    <header className="season-panel-heading"><div><h2 id="season-result-title">{home.shortName} {result.officialScore.home} : {result.officialScore.away} {away.shortName}</h2><p>{formatDate(fixture.date)} · Matchday {fixture.round} · {result.kind === 'default' ? 'Awarded by default' : result.periods > 4 ? `${result.periods - 4} overtime ${result.periods - 4 === 1 ? 'period' : 'periods'}` : 'Full time'}</p></div><button className="text-button" onClick={onClose} aria-label="Close result review"><Icon name="close" size={16} />Close</button></header>
+    <header className="season-panel-heading"><div><h2 id="season-result-title">{home.shortName} {result.officialScore.home} : {result.officialScore.away} {away.shortName}</h2><p>{formatDate(fixture.date)} · Matchday {fixture.round}{venue ? ` · ${venue}` : ''} · {result.kind === 'default' ? 'Awarded by default' : result.periods > 4 ? `${result.periods - 4} overtime ${result.periods - 4 === 1 ? 'period' : 'periods'}` : 'Full time'}</p></div><button className="text-button" onClick={onClose} aria-label="Close result review"><Icon name="close" size={16} />Close</button></header>
     <MatchMvpCard mvp={selectMatchMvp([home, away], statistics, result.winnerClubId)} />
     <div className="season-result-tools"><span>{team.name}</span><div className="segmented" aria-label="Result box score team">{(['home', 'away'] as const).map(value => <button key={value} onClick={() => setSide(value)} aria-pressed={side === value} className={side === value ? 'selected' : ''}>{value === 'home' ? home.shortName : away.shortName}</button>)}</div></div>
     <div className="season-table-scroll"><table className="season-result-table"><thead><tr><th scope="col">Player</th><th scope="col">Rating</th><th scope="col" title={PIR_HELP}>PIR</th><th scope="col">Min</th><th scope="col">Pts</th><th scope="col">Reb</th><th scope="col">Ast</th><th scope="col">FG</th><th scope="col">3PT</th><th scope="col">FT</th><th scope="col">Fouls</th></tr></thead><tbody>{team.players.map(player => {

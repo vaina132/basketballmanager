@@ -1,9 +1,10 @@
-import type { CommercialAnchor, SeasonCommercial, SponsorshipAgreement, SponsorshipOffer, SponsorshipPayment, SponsorshipRequest, SponsorshipWindow } from '../domain/commercial';
+import type { CommercialAnchor, CommercialExit, CommercialExitReason, NamingRightsAgreement, NamingRightsOffer, NamingRightsPayment, SeasonCommercial, SeasonNamingRights, SponsorClause, SponsorObjective, SponsorshipAgreement, SponsorshipOffer, SponsorshipPayment, SponsorshipRequest, SponsorshipWindow } from '../domain/commercial';
 import type { FinanceEntry } from '../domain/finance';
-import type { ArchivedFixture, SeasonFixture } from '../domain/season';
+import type { ArchivedFixture, DomesticDivisions, SeasonFixture } from '../domain/season';
 import type { Team } from '../domain/types';
 import type { CareerWorld } from '../domain/world';
 import { clubFinanceDefinition } from './career-world';
+import { seasonLeagues } from './divisions';
 import { clubEconomy } from './economy';
 import { seasonStartDate } from './season';
 
@@ -25,6 +26,41 @@ export const SPONSORSHIP_TERM_DISCOUNT = 0.03;
 export const SPONSORSHIP_NEUTRAL_FILL = 0.8;
 const FEE_STEP = 100_000;
 
+/**
+ * Format 64 (`commercial-2`, new careers): exit clauses on sponsorship agreements and arena naming rights. Every number
+ * is a reversible default. Fees start from the club's sponsorship benchmark (`sponsorshipReferenceFee`), so worlds with
+ * an economy scale with each club's researched sponsorship.
+ */
+export const COMMERCIAL_CLAUSE_RULES = Object.freeze({
+  /** Naming rights per season before seats, league level, appeal and term: this share of the sponsorship benchmark. */
+  namingFeeShare: 0.15,
+  /** Arena seats against the league's average venue move the naming fee by their square root, within these bounds. */
+  namingCapacityFactor: Object.freeze([0.8, 1.25] as const),
+  /** League level: index = tier - 1 (first division in full); deeper tiers use the last value. */
+  namingTierFactor: Object.freeze([1, 0.85, 0.7] as const),
+  /** Naming offers per club and window (main-sponsor windows bring three). */
+  namingOffersPerWindow: 2,
+  /** Naming terms: two to four seasons; the incumbent partner's renewal runs three. */
+  namingMinSeasons: 2,
+  namingMaxSeasons: 4,
+  namingRenewalSeasons: 3,
+  /** The sponsor's exit payment when it leaves early under the clause: this share of one season's fee. */
+  exitPaymentShare: 0.25,
+  /** The club's termination fee for each cancelled season: this share of that season's fee. */
+  terminationFeeShare: 0.5,
+  /** A stated objective lies this share of the league (at least one place) below the club's commercial-size rank. */
+  objectiveMarginShare: 1 / 6,
+  /** Finishing this share of the league (at least `badMissMinimum` places) below the objective is a bad miss. */
+  badMissShare: 0.25,
+  badMissMinimum: 2,
+  /** A fall in appeal of at least this much since the offer is sharp (worlds with an economy: half, as appeal moves half as much). */
+  declineDrop: 0.15,
+  /** Chance in percent that a sponsor uses the clause after a season with each trigger, drawn from the career seed. */
+  exitChance: Object.freeze({ relegation: 75, objective: 50, decline: 30 } as Readonly<Record<Exclude<CommercialExitReason, 'club'>, number>>),
+});
+const EXIT_REASONS = ['relegation', 'objective', 'decline'] as const;
+const roundEuro = (value: number) => Math.max(0, Math.round(value / 100) * 100);
+
 function hash(seed: number, key: string): number {
   let value = (2166136261 ^ seed) >>> 0;
   for (let index = 0; index < key.length; index += 1) value = Math.imul(value ^ key.charCodeAt(index), 16777619) >>> 0;
@@ -34,9 +70,16 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 const roundFee = (value: number) => Math.max(FEE_STEP, Math.round(value / FEE_STEP) * FEE_STEP);
 const dayBefore = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 
-export function createCommercial(clubs: readonly Team[], managedClubId: string): SeasonCommercial {
-  return { model: 'commercial-1', enabledSince: null, plans: Object.fromEntries(clubs.map(club => [club.id, { delegated: club.id !== managedClubId }])), agreements: [], offers: [], events: [] };
+export function createCommercial(clubs: readonly Team[], managedClubId: string, model: SeasonCommercial['model'] = 'commercial-1'): SeasonCommercial {
+  const plans = () => Object.fromEntries(clubs.map(club => [club.id, { delegated: club.id !== managedClubId }]));
+  return { model, enabledSince: null, plans: plans(), agreements: [], offers: [], events: [], ...(model === 'commercial-2' ? { naming: { plans: plans(), agreements: [], offers: [], events: [] } } : {}) };
 }
+
+/** Format 64: exit clauses and naming rights apply to careers created with the `commercial-2` model. */
+export const usesCommercialClauses = (commercial: Pick<SeasonCommercial, 'model'> | undefined): boolean => commercial?.model === 'commercial-2';
+
+/** The last season an agreement still covers after any early exit. */
+export const agreementLastSeason = (agreement: { endsSeason: number; exit?: CommercialExit | null }): number => agreement.exit ? Math.min(agreement.endsSeason, agreement.exit.lastSeason) : agreement.endsSeason;
 
 /** Negotiated agreements govern every season after the activation season, whose fixed payment was already made. */
 export function commercialGovernsSeason(commercial: SeasonCommercial | undefined, seasonNumber: number): boolean {
@@ -44,7 +87,7 @@ export function commercialGovernsSeason(commercial: SeasonCommercial | undefined
 }
 
 export function agreementFor(commercial: SeasonCommercial, clubId: string, seasonNumber: number): SponsorshipAgreement | undefined {
-  return commercial.agreements.find(agreement => agreement.clubId === clubId && agreement.startsSeason <= seasonNumber && agreement.endsSeason >= seasonNumber);
+  return commercial.agreements.find(agreement => agreement.clubId === clubId && agreement.startsSeason <= seasonNumber && agreementLastSeason(agreement) >= seasonNumber);
 }
 
 /** Clubs paid at a season opening, in club order: everyone under fixed sponsorship, otherwise only covered clubs. */
@@ -78,7 +121,7 @@ export interface DueSponsorshipPayment {
 export function sponsorshipPaymentsDue(commercial: SeasonCommercial, clubCount: number | ((clubId: string, seasonNumber: number) => number), through: { seasonNumber: number; round: number; complete: boolean }, finalPosition: (seasonNumber: number, clubId: string) => number | null, calendarRounds?: number, inFullWorld: (clubId: string, seasonNumber: number) => boolean = () => true): DueSponsorshipPayment[] {
   const due: DueSponsorshipPayment[] = [];
   for (const agreement of commercial.agreements) {
-    for (let season = agreement.startsSeason; season <= Math.min(agreement.endsSeason, through.seasonNumber); season += 1) {
+    for (let season = agreement.startsSeason; season <= Math.min(agreementLastSeason(agreement), through.seasonNumber); season += 1) {
       // A club outside the full world that season receives nothing from its agreement (step 3.4d-2).
       if (!commercialGovernsSeason(commercial, season) || agreement.prepaidSeasons.includes(season) || !inFullWorld(agreement.clubId, season)) continue;
       const payment = (round: number, installment: SponsorshipPayment['installment'], amount: number) => due.push({ clubId: agreement.clubId, seasonNumber: season, round, sourceId: sponsorshipSourceId(agreement, season, installment), amount, sponsorship: { agreementId: agreement.id, sponsorId: agreement.sponsorId, installment } });
@@ -121,7 +164,7 @@ export function sponsorAppeal(context: { clubs: readonly Pick<Team, 'id'>[]; fix
  * current sponsor it negotiates only with that club, so club processing order gives no club a free advantage.
  */
 export function sponsorAvailable(commercial: SeasonCommercial, sponsorId: string, clubId: string, forSeason: number): boolean {
-  if (commercial.agreements.some(agreement => agreement.sponsorId === sponsorId && agreement.clubId !== clubId && agreement.startsSeason <= forSeason && agreement.endsSeason >= forSeason - 1)) return false;
+  if (commercial.agreements.some(agreement => agreement.sponsorId === sponsorId && agreement.clubId !== clubId && agreement.startsSeason <= forSeason && agreementLastSeason(agreement) >= forSeason - 1)) return false;
   return !commercial.offers.some(offer => offer.sponsorId === sponsorId && offer.clubId !== clubId && offer.status === 'open');
 }
 
@@ -131,12 +174,15 @@ export function needsSponsorshipOffers(commercial: SeasonCommercial, clubId: str
 }
 
 /** Deterministic offers for one club: the incumbent's renewal first, then other available sponsors in seeded order. */
-export function buildSponsorshipOffers(input: { seed: number; commercial: SeasonCommercial; clubId: string; window: SponsorshipWindow; anchor: CommercialAnchor; appeal: number; world: CareerWorld }): SponsorshipOffer[] {
+export function buildSponsorshipOffers(input: { seed: number; commercial: SeasonCommercial; clubId: string; window: SponsorshipWindow; anchor: CommercialAnchor; appeal: number; world: CareerWorld; league?: Pick<SponsorLeague, 'id' | 'clubIds'> }): SponsorshipOffer[] {
   const { seed, commercial, clubId, window, anchor, appeal, world } = input;
-  const forSeason = anchor.seasonNumber + 1;
+  const forSeason = anchor.seasonNumber + 1, clauses = usesCommercialClauses(commercial);
   const current = agreementFor(commercial, clubId, anchor.seasonNumber);
-  const incumbent = window === 'renewal' && current && sponsorAvailable(commercial, current.sponsorId, clubId, forSeason) ? current.sponsorId : null;
-  const pool = world.sponsors.map(sponsor => sponsor.id).filter(id => id !== incumbent && sponsorAvailable(commercial, id, clubId, forSeason))
+  // Format 64: a sponsor that left early, or was ended early, makes no new offer to that club the same season.
+  const incumbent = window === 'renewal' && current && !current.exit && sponsorAvailable(commercial, current.sponsorId, clubId, forSeason) ? current.sponsorId : null;
+  const ended = clauses ? new Set(commercial.agreements.filter(agreement => agreement.clubId === clubId && agreement.exit && agreement.exit.seasonNumber === anchor.seasonNumber).map(agreement => agreement.sponsorId)) : null;
+  const objective = clauses && input.league ? sponsorObjective(world, input.league, clubId) : null;
+  const pool = world.sponsors.map(sponsor => sponsor.id).filter(id => id !== incumbent && !ended?.has(id) && sponsorAvailable(commercial, id, clubId, forSeason))
     .sort((left, right) => hash(seed, `${clubId}|${forSeason}|${window}|${left}`) - hash(seed, `${clubId}|${forSeason}|${window}|${right}`) || (left < right ? -1 : left > right ? 1 : 0));
   const chosen = [...(incumbent ? [incumbent] : []), ...pool].slice(0, SPONSORSHIP_OFFERS_PER_WINDOW);
   const expiresOn = dayBefore(seasonStartDate(forSeason));
@@ -146,7 +192,7 @@ export function buildSponsorshipOffers(input: { seed: number; commercial: Season
     const variation = 0.95 + Math.floor(h / 3) % 11 / 100;
     const annualFee = roundFee(sponsorshipReferenceFee(world, clubId) * appeal * variation * (1 - SPONSORSHIP_TERM_DISCOUNT * (seasons - 1)));
     const bonus = Math.floor(h / 33) % 2 === 0 ? roundFee(annualFee * SPONSORSHIP_BONUS_PERCENT / 100) : 0;
-    return { id: `sponsorship-offer-${commercial.offers.length + index + 1}`, clubId, sponsorId, window, madeAt: { ...anchor }, appeal, forSeason, seasons, initialAnnualFee: annualFee, annualFee, bonus, expiresOn, status: 'open' as const, closedOn: null, request: null };
+    return { id: `sponsorship-offer-${commercial.offers.length + index + 1}`, clubId, sponsorId, window, madeAt: { ...anchor }, appeal, forSeason, seasons, initialAnnualFee: annualFee, annualFee, bonus, expiresOn, status: 'open' as const, closedOn: null, request: null, ...(clauses ? { objective: objective && { ...objective } } : {}) };
   });
 }
 
@@ -156,7 +202,7 @@ export function sponsorshipFlexibility(seed: number, offer: Pick<SponsorshipOffe
 }
 
 /** One request for 10% more: accepted with enough flexibility, otherwise a smaller counter, or a rare withdrawal. */
-export function respondToSponsorshipRequest(seed: number, offer: SponsorshipOffer): { request: SponsorshipRequest; annualFee: number; status: SponsorshipOffer['status'] } {
+export function respondToSponsorshipRequest(seed: number, offer: Pick<SponsorshipOffer, 'id' | 'sponsorId' | 'clubId' | 'annualFee' | 'appeal'>): { request: SponsorshipRequest; annualFee: number; status: SponsorshipOffer['status'] } {
   const askedAnnualFee = roundFee(offer.annualFee * (100 + SPONSORSHIP_REQUEST_PERCENT) / 100);
   const flexibility = sponsorshipFlexibility(seed, offer);
   if (flexibility >= SPONSORSHIP_REQUEST_PERCENT) return { request: { askedAnnualFee, response: 'accepted' }, annualFee: askedAnnualFee, status: 'open' };
@@ -168,3 +214,141 @@ export function respondToSponsorshipRequest(seed: number, offer: SponsorshipOffe
 export function bestSponsorshipOffer(offers: readonly SponsorshipOffer[]): SponsorshipOffer | undefined {
   return [...offers].sort((left, right) => right.annualFee * right.seasons - left.annualFee * left.seasons || right.annualFee - left.annualFee || right.bonus - left.bonus || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))[0];
 }
+
+/** A club's league in a season: its division, or every full-world club in a world without divisions. */
+export interface SponsorLeague { id: string; clubIds: readonly string[]; tier: number }
+export function sponsorLeague(world: CareerWorld, divisions: DomesticDivisions | null | undefined, clubIds: readonly string[], clubId: string): SponsorLeague {
+  const league = seasonLeagues(world, divisions).find(item => item.clubIds.includes(clubId));
+  return league ? { id: league.id, clubIds: league.clubIds, tier: league.tier } : { id: 'league', clubIds, tier: 1 };
+}
+
+/**
+ * The sponsor's stated objective: clubs are ranked by commercial size (sponsorship benchmark times usual crowd); the
+ * objective lies a sixth of the league below that rank, so a large club is expected to finish high.
+ */
+export function sponsorObjective(world: CareerWorld, league: Pick<SponsorLeague, 'id' | 'clubIds'>, clubId: string): SponsorObjective {
+  const size = league.clubIds.length;
+  const value = (id: string) => sponsorshipReferenceFee(world, id) * clubFinanceDefinition(world, id).referenceDemand;
+  const ranked = [...league.clubIds].sort((left, right) => value(right) - value(left) || (left < right ? -1 : left > right ? 1 : 0));
+  const rank = Math.max(1, ranked.indexOf(clubId) + 1);
+  return { leagueId: league.id, position: Math.min(size, rank + Math.max(1, Math.ceil(size * COMMERCIAL_CLAUSE_RULES.objectiveMarginShare))), leagueSize: size };
+}
+
+/** Places below the objective that count as a bad miss. */
+export const objectiveBadMiss = (leagueSize: number): number => Math.max(COMMERCIAL_CLAUSE_RULES.badMissMinimum, Math.ceil(leagueSize * COMMERCIAL_CLAUSE_RULES.badMissShare));
+
+/** The clause agreed at signing; its amounts follow the final agreed fee. */
+export function sponsorClause(objective: SponsorObjective | null, appeal: number, annualFee: number): SponsorClause {
+  return { objective: objective && { ...objective }, appeal, exitPayment: roundEuro(annualFee * COMMERCIAL_CLAUSE_RULES.exitPaymentShare), terminationFee: roundEuro(annualFee * COMMERCIAL_CLAUSE_RULES.terminationFeeShare) };
+}
+
+/** The club ending an agreement now: notice runs to the end of this season, or cancels a term that has not started. */
+export function terminationTerms(agreement: { startsSeason: number; endsSeason: number; exit?: CommercialExit | null; clause?: SponsorClause | null }, seasonNumber: number): { lastSeason: number; cancelledSeasons: number; fee: number } {
+  const lastSeason = agreement.startsSeason <= seasonNumber ? seasonNumber : agreement.startsSeason - 1;
+  const cancelledSeasons = Math.max(0, agreementLastSeason(agreement) - lastSeason);
+  return { lastSeason, cancelledSeasons, fee: cancelledSeasons * (agreement.clause?.terminationFee ?? 0) };
+}
+
+/** What a sponsor sees after a season: relegation, the final position in the club's league and appeal. */
+export interface SponsorExitEvidence { relegated: boolean; leagueId: string | null; position: number | null; appeal: number; economy: boolean }
+
+/** Every trigger met after `seasonNumber`, strongest first. Only an agreement still covering a later season can end early. */
+export function sponsorExitTriggers(agreement: { endsSeason: number; exit?: CommercialExit | null; clause?: SponsorClause | null }, seasonNumber: number, evidence: SponsorExitEvidence): Exclude<CommercialExitReason, 'club'>[] {
+  const clause = agreement.clause;
+  if (!clause || agreement.exit || agreementLastSeason(agreement) <= seasonNumber) return [];
+  const met: Exclude<CommercialExitReason, 'club'>[] = [];
+  if (evidence.relegated) met.push('relegation');
+  const objective = clause.objective;
+  if (objective && evidence.position !== null && evidence.leagueId === objective.leagueId && evidence.position >= objective.position + objectiveBadMiss(objective.leagueSize)) met.push('objective');
+  // Appeal is stored to three decimals; compare in thousandths so the threshold is exact.
+  if (Math.round((clause.appeal - evidence.appeal) * 1000) * (evidence.economy ? 2 : 1) >= Math.round(COMMERCIAL_CLAUSE_RULES.declineDrop * 1000)) met.push('decline');
+  return EXIT_REASONS.filter(reason => met.includes(reason));
+}
+
+/** A seeded decision (never match randomness): the sponsor leaves under its strongest trigger with that trigger's chance. */
+export function sponsorExitDecision(seed: number, agreement: { id: string; endsSeason: number; exit?: CommercialExit | null; clause?: SponsorClause | null }, seasonNumber: number, evidence: SponsorExitEvidence): Exclude<CommercialExitReason, 'club'> | null {
+  const reason = sponsorExitTriggers(agreement, seasonNumber, evidence)[0];
+  if (!reason) return null;
+  return hash(seed, `commercial-exit|${agreement.id}|${seasonNumber}`) % 100 < COMMERCIAL_CLAUSE_RULES.exitChance[reason] ? reason : null;
+}
+
+export function namingAgreementFor(naming: SeasonNamingRights, clubId: string, seasonNumber: number): NamingRightsAgreement | undefined {
+  return naming.agreements.find(agreement => agreement.clubId === clubId && agreement.startsSeason <= seasonNumber && agreementLastSeason(agreement) >= seasonNumber);
+}
+
+/** As for main sponsors: one naming contract per sponsor, and naming offers to one club at a time. */
+export function namingSponsorAvailable(naming: SeasonNamingRights, sponsorId: string, clubId: string, forSeason: number): boolean {
+  if (naming.agreements.some(agreement => agreement.sponsorId === sponsorId && agreement.clubId !== clubId && agreement.startsSeason <= forSeason && agreementLastSeason(agreement) >= forSeason - 1)) return false;
+  return !naming.offers.some(offer => offer.sponsorId === sponsorId && offer.clubId !== clubId && offer.status === 'open');
+}
+
+export function needsNamingOffers(naming: SeasonNamingRights, clubId: string, seasonNumber: number): boolean {
+  return !namingAgreementFor(naming, clubId, seasonNumber + 1) && !naming.offers.some(offer => offer.clubId === clubId && offer.status === 'open');
+}
+
+/** A naming fee before the offer's own variation and term: benchmark share, seats against the league, league level and appeal. */
+export function namingRightsValue(basis: NamingRightsOffer['basis'], appeal: number): number {
+  const [low, high] = COMMERCIAL_CLAUSE_RULES.namingCapacityFactor, tiers = COMMERCIAL_CLAUSE_RULES.namingTierFactor;
+  const seats = clamp(Math.sqrt(basis.capacity / Math.max(1, basis.leagueCapacity)), low, high);
+  const tier = tiers[Math.min(tiers.length, Math.max(1, basis.tier)) - 1]!;
+  return basis.benchmark * COMMERCIAL_CLAUSE_RULES.namingFeeShare * seats * tier * appeal;
+}
+
+/** The arena's commercial name under a naming partner. */
+export const namingArenaName = (world: CareerWorld, sponsorId: string): string => `${world.sponsors.find(sponsor => sponsor.id === sponsorId)?.name ?? sponsorId} Arena`;
+
+/** Deterministic naming offers for one club: the incumbent partner's renewal first, then other available sponsors in seeded order. */
+export function buildNamingOffers(input: { seed: number; naming: SeasonNamingRights; clubId: string; window: SponsorshipWindow; anchor: CommercialAnchor; appeal: number; world: CareerWorld; basis: NamingRightsOffer['basis'] }): NamingRightsOffer[] {
+  const { seed, naming, clubId, window, anchor, appeal, world, basis } = input;
+  const forSeason = anchor.seasonNumber + 1;
+  const current = namingAgreementFor(naming, clubId, anchor.seasonNumber);
+  const incumbent = window === 'renewal' && current && !current.exit && namingSponsorAvailable(naming, current.sponsorId, clubId, forSeason) ? current.sponsorId : null;
+  const ended = new Set(naming.agreements.filter(agreement => agreement.clubId === clubId && agreement.exit && agreement.exit.seasonNumber === anchor.seasonNumber).map(agreement => agreement.sponsorId));
+  const pool = world.sponsors.map(sponsor => sponsor.id).filter(id => id !== incumbent && !ended.has(id) && namingSponsorAvailable(naming, id, clubId, forSeason))
+    .sort((left, right) => hash(seed, `naming|${clubId}|${forSeason}|${window}|${left}`) - hash(seed, `naming|${clubId}|${forSeason}|${window}|${right}`) || (left < right ? -1 : left > right ? 1 : 0));
+  const chosen = [...(incumbent ? [incumbent] : []), ...pool].slice(0, COMMERCIAL_CLAUSE_RULES.namingOffersPerWindow);
+  const expiresOn = dayBefore(seasonStartDate(forSeason)), span = COMMERCIAL_CLAUSE_RULES.namingMaxSeasons - COMMERCIAL_CLAUSE_RULES.namingMinSeasons + 1;
+  return chosen.map((sponsorId, index) => {
+    const h = hash(seed, `naming-offer|${clubId}|${forSeason}|${window}|${sponsorId}`);
+    const seasons = sponsorId === incumbent ? COMMERCIAL_CLAUSE_RULES.namingRenewalSeasons : COMMERCIAL_CLAUSE_RULES.namingMinSeasons + h % span;
+    const variation = 0.95 + Math.floor(h / 7) % 11 / 100;
+    const annualFee = roundFee(namingRightsValue(basis, appeal) * variation * (1 - SPONSORSHIP_TERM_DISCOUNT * (seasons - 1)));
+    return { id: `naming-offer-${naming.offers.length + index + 1}`, clubId, sponsorId, window, madeAt: { ...anchor }, appeal, forSeason, seasons, initialAnnualFee: annualFee, annualFee, arenaName: namingArenaName(world, sponsorId), basis: { ...basis }, expiresOn, status: 'open' as const, closedOn: null, request: null };
+  });
+}
+
+/** Automatic control and AI clubs take the largest guaranteed naming total, then the larger annual fee. */
+export function bestNamingOffer(offers: readonly NamingRightsOffer[]): NamingRightsOffer | undefined {
+  return [...offers].sort((left, right) => right.annualFee * right.seasons - left.annualFee * left.seasons || right.annualFee - left.annualFee || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))[0];
+}
+
+export function namingInstallment(agreement: Pick<NamingRightsAgreement, 'annualFee'>, installment: 1 | 2): number {
+  const first = Math.floor(agreement.annualFee / 2);
+  return installment === 1 ? first : agreement.annualFee - first;
+}
+
+export function namingSourceId(agreement: Pick<NamingRightsAgreement, 'id'>, seasonNumber: number, installment: 1 | 2): string {
+  return `naming-${agreement.id}-s${seasonNumber}-${installment}`;
+}
+
+/** Naming installments fall on matchday six and after the final matchday. */
+export const NAMING_FIRST_INSTALLMENT_ROUND = SPONSORSHIP_SECOND_INSTALLMENT_ROUND;
+
+export interface DueNamingPayment { clubId: string; seasonNumber: number; round: number; sourceId: string; amount: number; namingRights: NamingRightsPayment }
+
+/** Every naming installment owed through a calendar boundary; a club outside the full world that season receives nothing. */
+export function namingPaymentsDue(naming: SeasonNamingRights, through: { seasonNumber: number; round: number; complete: boolean }, calendarRounds: number, inFullWorld: (clubId: string, seasonNumber: number) => boolean = () => true): DueNamingPayment[] {
+  const due: DueNamingPayment[] = [];
+  for (const agreement of naming.agreements) {
+    for (let season = agreement.startsSeason; season <= Math.min(agreementLastSeason(agreement), through.seasonNumber); season += 1) {
+      if (!inFullWorld(agreement.clubId, season)) continue;
+      const payment = (round: number, installment: 1 | 2) => due.push({ clubId: agreement.clubId, seasonNumber: season, round, sourceId: namingSourceId(agreement, season, installment), amount: namingInstallment(agreement, installment), namingRights: { agreementId: agreement.id, sponsorId: agreement.sponsorId, installment } });
+      if (season < through.seasonNumber || through.round >= NAMING_FIRST_INSTALLMENT_ROUND) payment(NAMING_FIRST_INSTALLMENT_ROUND, 1);
+      if (season < through.seasonNumber || through.complete) payment(calendarRounds, 2);
+    }
+  }
+  return due;
+}
+
+/** The ledger source of an exit payment or a termination fee: at most one per agreement. */
+export const exitSourceId = (agreementId: string): string => `exit-${agreementId}`;

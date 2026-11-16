@@ -3,7 +3,7 @@ import type { CareerAnchor, CareerMove, CareerMoveReason, SeasonCareer } from '.
 import type { SeasonState } from '../domain/season';
 import type { SeasonAcademy } from '../domain/academy';
 import { applyFacilityEvent, facilityEventAnchor } from './facilities';
-import { automateSponsorship } from './commercial';
+import { automateSponsorship, handOverCommercialControl } from './commercial';
 import { roundOrdinal, seasonRounds, lastCommittedWeek } from './career-world';
 import type { WorldContext } from '../domain/world';
 
@@ -98,7 +98,7 @@ export function appointManager(state: SeasonState, toClubId: string, reason: Car
     finance: { ...state.finance, plans: { ...state.finance.plans, [from]: { ...state.finance.plans[from]!, delegated: true }, [toClubId]: { ...state.finance.plans[toClubId]!, delegated: false } } },
     payroll: { ...state.payroll, delegated: { ...state.payroll.delegated, [from]: true, [toClubId]: false } },
     scouting: { ...state.scouting, clubs: { ...state.scouting.clubs, [from]: { ...state.scouting.clubs[from]!, delegated: true }, [toClubId]: { ...state.scouting.clubs[toClubId]!, delegated: false } } },
-    commercial: { ...state.commercial, plans: { ...state.commercial.plans, [from]: { delegated: true }, [toClubId]: { delegated: false } } },
+    commercial: handOverCommercialControl(state.commercial, from, toClubId),
     academy: releaseAcademyFocus(state.academy, from),
   };
   // Facility control changes are journaled like the manager's own switches, so every replay reproduces them.

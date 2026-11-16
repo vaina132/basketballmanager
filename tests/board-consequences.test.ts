@@ -101,8 +101,8 @@ describe('board verdict validation', () => {
   });
 
   it('rejects the switch in a format-32 file', () => {
-    // A genuine format-32 career had neither season verdicts, rivalries, upkeep choices nor club changes.
-    const file = JSON.parse(serializeSeason(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false })));
+    // A genuine format-32 career had neither season verdicts, rivalries, upkeep choices, club changes nor naming rights (format 64).
+    const file = JSON.parse(serializeSeason(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false, namingRights: false })));
     file.formatVersion = 32; file.state.schemaVersion = 32;
     delete file.state.board.consequencesSince;
     delete file.state.rivalries;

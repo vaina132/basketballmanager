@@ -197,7 +197,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   const displayName = complete ? 'Final lineup' : ready ? 'Starting five' : 'On the floor'
 
   return <div className="manager-desk">
-    {market && <section className="desk-market panel" aria-label="Offseason recruitment"><Icon name="calendar" size={25} /><div><h2>Build next season's squad</h2><p>{marketOffers.length} outstanding {marketOffers.length === 1 ? 'offer' : 'offers'}{nextDecision ? ` ? Next decision ${medicalDate(nextDecision)}` : ' ? Recruitment closed'}</p></div><button className="button primary" onClick={onOpenTransfers}>Review recruitment<Icon name="chevron" size={15} /></button></section>}
+    {market && <section className="desk-market panel" aria-label="Offseason recruitment"><Icon name="calendar" size={25} /><div><h2>Build next season's squad</h2><p>Your open offers: {marketOffers.length}{nextDecision ? ` · Next decisions ${medicalDate(nextDecision)}` : ' · Recruitment closed'}</p></div><button className="button primary" onClick={onOpenTransfers}>Review recruitment<Icon name="chevron" size={15} /></button></section>}
     <section className="desk-fixture panel" aria-label="Current fixture">
       <div className="desk-fixture-label"><span>{complete ? 'Last match \u00b7 ' : ''}{fixtureLabel}</span><strong className={needsReplacement ? 'desk-status-urgent' : ''}>{status}</strong></div>
       <div className="desk-fixture-content">

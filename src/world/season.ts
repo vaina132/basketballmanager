@@ -35,7 +35,7 @@ import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-l
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import type { CareerWorld } from '../domain/world';
 import { fullWorldClubs, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
-import { createFixtureMatch, simulateToEnd } from '../engine/match';
+import { createFixtureMatch, preTipoffLineup, simulateToEnd } from '../engine/match';
 import { clubRecoveryPercent, injuriesFromMatch, injuryRiskMap, isRecovering, withMedicalRecurrence } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
@@ -480,6 +480,17 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   return first && (assistantEnabled || relationshipsEnabled) ? { ...reviewed, activeMatch: prepareMatch(reviewed, first) } : reviewed;
 }
 
+/**
+ * The manager's planned starting five after a game: the five set before tip-off when a change was made then (a
+ * substitution before the clock first ran), in the plan's slots; otherwise the plan as it was, as for computer clubs.
+ */
+function plannedFiveAfter(match: MatchState, side: Side, planned: readonly string[]): string[] {
+  const { five, changed } = preTipoffLineup(match, side);
+  if (!changed) return [...planned];
+  const rest = five.filter(id => !planned.includes(id));
+  return planned.map(id => five.includes(id) ? id : rest.shift()).filter((id): id is string => id !== undefined).concat(rest);
+}
+
 function compactResult(match: MatchState, rosterIds: FixtureResult['rosterIds']): FixtureResult {
   if (match.status !== 'finished' || !match.result) throw new Error('Only a finished game can post a season result.');
   return {
@@ -518,9 +529,10 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
   for (const side of SIDES) {
     const club = match[side], previous = season.plans[club.id];
     if (!previous) continue;
-    // Fouls reset next game. The manager's club keeps its final lineup; other clubs keep their starting five (sprint 4:
-    // a closing or garbage-time five is not the next game's starters). Vacancies come from the roster's stable order.
-    const lineup = [...new Set([...(club.id === season.managedClubId ? match.lineups[side] : []), ...previous.lineup, ...club.players.map(player => player.id)])].slice(0, 5);
+    // Fouls reset next game. Every club keeps its planned starting five, never the five on the floor at the final
+    // buzzer (a closing or garbage-time five is not the next game's starters; browser play-through, 16 November 2026).
+    // The manager's plan takes any change made before tip-off. Vacancies come from the roster's stable order.
+    const lineup = [...new Set([...(club.id === season.managedClubId ? plannedFiveAfter(match, side, previous.lineup) : []), ...previous.lineup, ...club.players.map(player => player.id)])].slice(0, 5);
     season.plans[club.id] = { ...previous, tactics: { ...match.tactics[side] }, lineup, autoSubstitutions: club.id === season.managedClubId ? match.autoSubstitutions[side] : true };
     for (const player of club.players) season.conditions[player.id] = match.stats[player.id]!.condition;
   }

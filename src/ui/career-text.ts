@@ -1,11 +1,12 @@
 import type { CareerMove } from '../domain/career'
-import type { SeasonState } from '../domain/season'
+import type { SeasonFixture, SeasonState } from '../domain/season'
 import { CAREER_RULES, CAREER_RULES_TEXT, careerPointKey, coachProtected, isUnemployed, NO_CLUB, usesCareerRules } from '../world/career-rules'
 import { careerMovesGovern, currentUnemployment } from '../world/career'
 import { seasonEndOutlook } from '../world/career-policy'
 import { getBoardSummary } from '../world/board'
-import { seasonRounds } from '../world/career-world'
-import { seasonLabel } from '../world/season'
+import { regularWorldRounds, seasonRounds, worldOf } from '../world/career-world'
+import { currentGameDay, seasonLabel } from '../world/season'
+import { isMarketActive } from '../world/market-policy'
 
 /**
  * Leagues of countries not chosen at career start (owner feedback, 16 November 2026: "Estimated table" meant nothing).
@@ -92,16 +93,111 @@ export function careerNotices(season: SeasonState): CareerNotice[] {
   return notices
 }
 
+const dayFormatter = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 /**
- * The notice after a week is recorded (`round`): the club change it brought, a dismissal into a period without a club
- * (career-3), or the plain outcome of the week.
+ * A game day as the player reads it everywhere: "Tue 8 Sept", or "Tue 8 Sept 2026" with the year. Built from the parts so
+ * that every browser writes it alike (Chromium adds a comma after the weekday when the year is shown).
+ */
+export function gameDate(date: string, withYear = false): string {
+  const parts = Object.fromEntries(dayFormatter.formatToParts(new Date(`${date}T00:00:00Z`)).map(part => [part.type, part.value]))
+  return `${parts.weekday} ${parts.day} ${parts.month}${withYear ? ` ${parts.year}` : ''}`
+}
+
+/** The day the career stands on: the week's next game day during a season (a midweek day included), else its date. */
+export function careerToday(season: Pick<SeasonState, 'status' | 'fixtures' | 'round' | 'date'>): string {
+  return season.status === 'active' ? currentGameDay(season) ?? season.date : season.date
+}
+
+/** The point of the career a save holds, as the top bar names it: "Matchday 14", "Matchday 1, Tue 8 Sept", "Offseason, Sat 3 July". */
+export function careerPointLabel(season: SeasonState): string {
+  if (season.status === 'complete') return isMarketActive(season) ? `Offseason, ${gameDate(season.date)}` : `Season ${season.seasonNumber} end`
+  const today = careerToday(season)
+  return today === season.date ? `Matchday ${season.round}` : `Matchday ${season.round}, ${gameDate(today)}`
+}
+
+/**
+ * The world's name for the season being played: a name ending in the opening season ("European domestic leagues
+ * 2026-27") reads the current one ("... 2027-28") from the second season on.
+ */
+export function worldSeasonName(season: SeasonState): string {
+  const current = seasonLabel(season.seasonNumber)
+  return worldOf(season).name.replace(/\d{4}([-/])\d{2}$/u, (_, separator: string) => `${current.slice(0, 4)}${separator}${current.slice(5)}`)
+}
+
+/** One label for a career day without the manager's match, shared by the top bar, the page heading and the desk panel. */
+export type CareerDayLabel = 'Offseason recruitment' | 'Season complete' | 'No game today' | 'Rest week'
+
+/** What today means for the manager's club when it has no match prepared, or in the offseason. */
+export interface CareerDay {
+  label: CareerDayLabel
+  /** The day shown: the week's next game day (or the week's Saturday when it has none). */
+  day: string
+  /** Games still to play on `day`. */
+  gamesToday: number
+  /** What those games are: European (midweek) games, playoff games, or other games. */
+  kind: 'European' | 'playoff' | 'other'
+  /** The club's game already played this week, if any. */
+  playedThisWeek: SeasonFixture | undefined
+  /** The club's next game, this week or later. */
+  next: SeasonFixture | undefined
+}
+
+const kindOf = (games: readonly SeasonFixture[]): CareerDay['kind'] => games.length && games.every(fixture => fixture.competition) ? 'European' : games.length && games.every(fixture => fixture.stage) ? 'playoff' : 'other'
+
+/** What today means for the manager's club when it has no match prepared (no active match), or in the offseason. */
+export function careerDay(season: SeasonState): CareerDay {
+  const clubId = season.managedClubId, day = careerToday(season)
+  const today = season.status === 'active' ? season.fixtures.filter(fixture => fixture.round === season.round && fixture.date === day && !fixture.result) : []
+  const own = season.fixtures.filter(fixture => fixture.homeClubId === clubId || fixture.awayClubId === clubId)
+  const playedThisWeek = own.filter(fixture => fixture.round === season.round && fixture.result).at(-1)
+  const next = season.status === 'active' ? own.find(fixture => fixture.round >= season.round && !fixture.result) : undefined
+  // A day without the club's game in a week it plays (a midweek day, or a day before its own later game) or a playoff
+  // week is not a rest week: other clubs play today.
+  const playsThisWeek = !!playedThisWeek || next?.round === season.round
+  const label: CareerDayLabel = season.status === 'complete' ? isMarketActive(season) ? 'Offseason recruitment' : 'Season complete'
+    : playsThisWeek || season.round > regularWorldRounds(worldOf(season)) ? 'No game today' : 'Rest week'
+  return { label, day, gamesToday: today.length, kind: kindOf(today), playedThisWeek, next }
+}
+
+/** "Sat 12 Sept vs MoraBanc Andorra (away)" for one of the club's games; a European game names its competition. */
+export function nextGameText(season: SeasonState, fixture: SeasonFixture): string {
+  const clubId = season.managedClubId, opponentId = fixture.homeClubId === clubId ? fixture.awayClubId : fixture.homeClubId
+  // A European opponent may be a club outside the full world (step 3.5b): its identity is in the world.
+  const opponent = season.clubs.find(club => club.id === opponentId) ?? worldOf(season).clubs.find(club => club.id === opponentId)
+  const competition = fixture.competition ? worldOf(season).europeanCompetitions?.find(item => item.id === fixture.competition)?.name : undefined
+  return `${gameDate(fixture.date)} vs ${opponent?.name ?? opponentId} (${fixture.homeClubId === clubId ? 'home' : 'away'}${competition ? `, ${competition}` : ''})`
+}
+
+/** "12 European games", "1 game". */
+export const gamesText = (count: number, kind: CareerDay['kind']) => `${count} ${kind === 'European' ? 'European ' : kind === 'playoff' ? 'playoff ' : ''}${count === 1 ? 'game' : 'games'}`
+
+/**
+ * The notice after Continue: what was just recorded (the club's game day, another game day of the week, or the whole
+ * week) and what comes next. A week with midweek game days takes one Continue per game day, so "Matchday N recorded"
+ * appears only once the week is complete. Also the club change a week brought, or a dismissal into a period without a
+ * club (career-3).
  */
 export function roundNotice(before: SeasonState, after: SeasonState): string {
   const name = (id: string) => after.clubs.find(club => club.id === id)?.name ?? id
   const move = after.career.moves.length > before.career.moves.length ? after.career.moves.at(-1) : undefined
-  const week = after.round - 1
-  if (move && move.toClubId === NO_CLUB) return after.status === 'complete' ? `Season complete. ${name(move.fromClubId)}'s board dismissed you, and you are now without a club. Jobs that open appear on your desk.` : `Week ${week} recorded. ${name(move.fromClubId)}'s board dismissed you, and you are now without a club. Jobs that open appear on your desk.`
-  if (move) return after.status === 'complete' ? `Season complete. You now manage ${name(move.toClubId)}, including its offseason.` : `Week ${week} recorded. The board dismissed you; you now manage ${name(move.toClubId)}.`
-  if (isUnemployed(after)) return after.status === 'complete' ? 'Season complete. Every club\'s offseason runs automatically; open jobs are on your desk.' : `Week ${week} recorded across every competition.`
-  return after.status === 'complete' ? 'Season complete. Final standings and all results are available.' : after.activeMatch ? `Week ${week} recorded. Your next fixture is ready.` : `Week ${week} recorded. Your club has a rest week.`
+  const week = before.round
+  if (move && move.toClubId === NO_CLUB) return after.status === 'complete' ? `Season complete. ${name(move.fromClubId)}'s board dismissed you, and you are now without a club. Jobs that open appear on your desk.` : `Matchday ${week} recorded. ${name(move.fromClubId)}'s board dismissed you, and you are now without a club. Jobs that open appear on your desk.`
+  if (move) return after.status === 'complete' ? `Season complete. You now manage ${name(move.toClubId)}, including its offseason.` : `Matchday ${week} recorded. The board dismissed you; you now manage ${name(move.toClubId)}.`
+  if (isUnemployed(after)) return after.status === 'complete' ? 'Season complete. Every club\'s offseason runs automatically; open jobs are on your desk.' : `Matchday ${week} recorded across every competition.`
+  if (after.status === 'complete') return 'Season complete. Final standings and all results are available.'
+  // What was recorded: the whole week, or one game day of a week that has more game days to come.
+  const played = currentGameDay(before) ?? before.date
+  const playedGames = before.fixtures.filter(fixture => fixture.round === before.round && fixture.date === played && !fixture.result)
+  const playedKind = kindOf(playedGames)
+  const recorded = after.round !== before.round ? `Matchday ${week} recorded.`
+    : before.activeMatch ? `${gameDate(played)} recorded: your game${playedGames.length > 1 ? ` and ${playedGames.length - 1} other ${playedGames.length === 2 ? 'game' : 'games'}` : ''}.`
+      : `${playedKind === 'European' ? 'Midweek European games' : playedKind === 'playoff' ? 'Playoff games' : 'Games'} played (${gameDate(played)}).`
+  // What comes next: the club's prepared game, or the other clubs' next game day and the club's next game.
+  if (after.activeMatch) {
+    const fixture = after.fixtures.find(item => item.id === after.activeFixtureId)
+    return `${recorded} Your next game is ready${fixture ? `: ${nextGameText(after, fixture)}` : ''}.`
+  }
+  const day = careerDay(after)
+  const others = day.gamesToday ? ` Next: ${gamesText(day.gamesToday, day.kind)} on ${gameDate(day.day)}, without your club.` : ''
+  return `${recorded}${others}${day.next ? ` Your next game: ${nextGameText(after, day.next)}.` : ''}`
 }

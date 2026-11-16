@@ -19,6 +19,7 @@
 .transfers-heading>div>span{display:block;margin-top:3px}
 #transfers-heading:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .transfers-start{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.transfers-start-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
 .transfers-start small{font-size:12px;line-height:1.4;color:var(--accent)}
 .transfers-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 20px;margin:0;padding:13px 14px;font-variant-numeric:tabular-nums}
 .transfers-summary dt{font-size:12px;line-height:1.4;color:var(--muted)}
@@ -149,3 +150,4 @@
 @media(max-width:1050px){.transfers-squad-plan{flex-wrap:wrap}.transfers-squad-goal{margin-left:0}.transfers-workspace .transfers-policy-body{grid-template-columns:minmax(0,1fr) 180px}.transfers-policy-body>span{grid-column:1/-1}}
 @media(max-width:650px){.transfers-squad-plan{gap:14px;padding:12px 10px}.transfers-squad-slots{order:3;width:100%}.transfers-workspace .transfers-policy-body{grid-template-columns:1fr;gap:12px}.transfers-squad-goal{white-space:normal}}
 .transfers-squad-slots>.transfers-reserved-slot{border:1px dashed var(--accent);opacity:.7}.transfers-start small{max-width:290px;font-size:12px;line-height:1.4}
+@media(max-width:650px){.transfers-start-actions{justify-content:flex-start}}

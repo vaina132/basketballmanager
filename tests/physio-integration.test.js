@@ -94,7 +94,7 @@ describe('physiotherapy across actual career boundaries', () => {
     expect(fulltime.injuries).toEqual(hired.injuries);
     expect(fulltime.physio.rehabilitation).toEqual(hired.physio.rehabilitation);
     const summary = getPlayerMedicalSummary(fulltime, eligible);
-    expect(summary).toMatchObject({ pending: true, originalReturnOn: '2026-09-28', effectiveReturnOn: '2026-09-28', daysSaved: 0, lastReview: null });
+    expect(summary).toMatchObject({ pending: true, originalReturnOn: '2026-09-27', effectiveReturnOn: '2026-09-27', daysSaved: 0, lastReview: null });
     expect(getClubMedicalCases(fulltime).some(item => item.injury.playerId === eligible)).toBe(true);
   });
 
@@ -102,7 +102,7 @@ describe('physiotherapy across actual career boundaries', () => {
     const { treated, returned, stillUnavailable } = eligibility;
     expect(returned.training.enabledSince).toBeNull();
     const injury = returned.injuries.find(injury => injury.playerId === eligible);
-    expect(injury.returnOn).toBe('2026-09-28');
+    expect(injury.returnOn).toBe('2026-09-27');
     expect(returned.injuries).toEqual(stillUnavailable.injuries);
     expect(returned.fixtures).toEqual(stillUnavailable.fixtures);
     expect(returned.date).toBe('2026-09-26');
@@ -110,8 +110,9 @@ describe('physiotherapy across actual career boundaries', () => {
     expect(getPlayerHealth(stillUnavailable, eligible)).toEqual(injury);
     expect(returned.activeMatch.preExistingInjuries ?? []).not.toContain(eligible);
     expect(stillUnavailable.activeMatch.preExistingInjuries).toContain(eligible);
-    expect(getPlayerMedicalSummary(returned, eligible)).toMatchObject({ effectiveReturnOn: '2026-09-26', daysSaved: 2 });
-    expect(getPlayerMedicalSummary(treated, eligible)).toMatchObject({ effectiveReturnOn: '2026-09-27', daysSaved: 1 });
+    // Cleared on the day of the round-4 game by the first week's care; later credit adds no further saved day.
+    expect(getPlayerMedicalSummary(returned, eligible)).toMatchObject({ effectiveReturnOn: '2026-09-26', daysSaved: 1 });
+    expect(getPlayerMedicalSummary(treated, eligible)).toMatchObject({ effectiveReturnOn: '2026-09-26', daysSaved: 1 });
     expect(finishPhysioMatch(returned).activeMatch.stats[eligible].secondsPlayed).toBeGreaterThan(0);
     expect(finishPhysioMatch(stillUnavailable).activeMatch.stats[eligible].secondsPlayed).toBe(0);
   });

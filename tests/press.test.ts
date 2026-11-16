@@ -13,7 +13,9 @@ const morale = (state: SeasonState, playerId: string) => getPlayerRelationship(s
 let start: SeasonState, open: SeasonState;
 
 beforeAll(() => {
-  start = createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Press Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, media: false });
+  // Seed 14 (8 before the manager's next game started from the planned five instead of the closing five, 16 November
+  // 2026): three losses in the first three matchdays.
+  start = createSeason({ seed: 14, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Press Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, media: false });
   open = start;
   for (let step = 0; step < 10 && !getPressQuestion(open); step += 1) open = advanceMatchday(open);
 }, 120_000);

@@ -9,7 +9,7 @@ import { RestWeek } from '../src/ui/RestWeek';
 
 const noop = () => {};
 const text = (markup: string) => markup.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-const running: ContinueRunView = { day: '2026-09-08', label: '8 European games', progress: 0.4, steps: 2, stopping: false };
+const running: ContinueRunView = { day: '2026-09-08', label: '8 European games', steps: 2, total: 5, stopping: false };
 const key = (target: unknown, extra: Partial<Parameters<typeof isContinueShortcut>[0]> = {}) => isContinueShortcut({ key: ' ', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, repeat: false, defaultPrevented: false, target: target as EventTarget, ...extra });
 /** A focused element: `closest` finds it when it matches one of the selectors (as the browser does for the element itself). */
 const element = (tag: string) => ({ closest: (selector: string) => selector.split(',').map(part => part.trim()).includes(tag) ? {} : null });
@@ -35,9 +35,10 @@ describe('the one Continue control (owner request, 16 November 2026)', () => {
     expect(stopping).toMatch(/id="continue-stop"[^>]*disabled/);
     expect(text(stopping)).toContain('Stopping after this day Stopping…');
     const progress = renderToStaticMarkup(<ContinueProgress run={running} />);
-    expect(text(progress)).toBe('Tue 8 Sept 8 European games 2 days processed');
-    expect(progress).toMatch(/role="progressbar" aria-labelledby="continue-progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40" aria-valuetext="2 days processed"><span style="width:40%"><\/span>/);
-    expect(renderToStaticMarkup(<ContinueProgress run={{ ...running, label: 'Weekly club business', progress: 1.7, steps: 1 }} />)).toMatch(/aria-valuenow="100".*1 day processed/);
+    expect(text(progress)).toBe('Tue 8 Sept 8 European games Day 3 of 5');
+    expect(progress).toMatch(/role="progressbar" aria-labelledby="continue-progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40" aria-valuetext="Day 3 of 5"><span style="width:40%"><\/span>/);
+    // An estimate that falls short (a postseason game added) never shows a day beyond the total.
+    expect(renderToStaticMarkup(<ContinueProgress run={{ ...running, label: 'Weekly club business', steps: 4, total: 3 }} />)).toMatch(/aria-valuenow="80".*Day 5 of 5/);
   });
 
   it('presses Continue with Space only when no field or control has focus', () => {

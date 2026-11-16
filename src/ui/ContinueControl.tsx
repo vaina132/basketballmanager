@@ -2,13 +2,14 @@ import { gameDate } from './career-text'
 import { Icon } from './Icon'
 import './continue-control.css'
 
-/** A Continue run in progress: the day being processed, what it processes, the share done and the days passed. */
+/** A Continue run in progress: the day being processed, what it processes, the days done and the days expected. */
 export interface ContinueRunView {
   day: string
   label: string
-  /** 0-1, an estimate (postseason games and offers can add days). */
-  progress: number
+  /** Days done in this run. */
   steps: number
+  /** Days expected until the run's natural stop, done ones included: an estimate (postseason games and offers can add days). */
+  total: number
   /** The manager pressed Stop: the run ends after the day in progress. */
   stopping: boolean
 }
@@ -28,8 +29,8 @@ export function ContinueControl({ day, status, busy, run, onContinue, onStop }: 
 
 /** The progress of a run below the top bar: the date ticking, what is processed and a bar of the share done. */
 export function ContinueProgress({ run }: { run: ContinueRunView }) {
-  const percent = Math.round(Math.min(1, Math.max(0, run.progress)) * 100)
-  const days = `${run.steps} ${run.steps === 1 ? 'day' : 'days'} processed`
+  const total = Math.max(run.total, run.steps + 1), percent = Math.round(run.steps / total * 100)
+  const days = `Day ${run.steps + 1} of ${total}`
   return <div className="continue-progress" data-continue-progress>
     <p id="continue-progress-label" className="continue-progress-text"><time dateTime={run.day}>{gameDate(run.day)}</time><span>{run.label || 'Processing'}</span></p>
     <div className="continue-progress-bar" role="progressbar" aria-labelledby="continue-progress-label" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={days}><span style={{ width: `${percent}%` }} /></div>

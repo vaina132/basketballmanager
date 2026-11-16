@@ -88,7 +88,7 @@ describe('declining every offer', () => {
     expect(html).toContain('data-career-period="unemployed"');
     expect(html).toContain('No club is looking for a coach right now.');
     // The one Continue on the top bar plays the week (owner request, 16 November 2026).
-    expect(html).toContain('Continue plays every club&#x27;s games this week.');
+    expect(html).toMatch(/data-unemployed-next="true">Continue plays (every club&#x27;s games this week|the final week and finishes the season)\./);
     expect(getInboxItems(unemployed).find(item => item.id === 'career-move-2')).toMatchObject({ title: 'Dismissed by Danube Lynx · without a club', target: 'jobs' });
     expect(careerNotices(unemployed).map(notice => notice.key)).toEqual(['career', 'career-unemployed']);
   });

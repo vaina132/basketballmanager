@@ -61,7 +61,7 @@ import { RestWeek } from './ui/RestWeek'
 import { acceptJob, careerPresentationMatch, createSeason, getStandings, managedSide as seasonManagedSide, NEW_CAREER_SYSTEMS, resignManager, seasonLabel } from './world/season'
 import { isUnemployed } from './world/career-rules'
 import { careerDay, careerPointLabel, careerToday, gameDate, worldSeasonName } from './ui/career-text'
-import { continueNotice, continueProgress, continueStatus, continueStepView, continueStop, stoppedRun, type ContinueStop } from './ui/continue-run'
+import { continueNotice, continueStatus, continueStepView, continueStop, remainingSteps, stoppedRun, type ContinueStop } from './ui/continue-run'
 import { continueAction } from './world/continue-step'
 import { ContinueControl, ContinueProgress, isContinueShortcut, type ContinueRunView } from './ui/ContinueControl'
 import { closeWarning, SaveStatus, type SaveProgress } from './ui/SaveStatus'
@@ -701,7 +701,7 @@ export default function App() {
     seasonWorker.current = worker; continueStopRequested.current = false
     setAdvancing(true); setNotice(null)
     let previous = start, steps = 0
-    const view = (state: SeasonState): ContinueRunView => ({ ...continueStepView(state), progress: continueProgress(state, steps), steps, stopping: continueStopRequested.current })
+    const view = (state: SeasonState): ContinueRunView => ({ ...continueStepView(state), steps, total: steps + remainingSteps(state), stopping: continueStopRequested.current })
     setContinueRun(view(start))
     // The career stays at the last day processed (already installed) when a run ends early.
     const end = () => { worker.terminate(); if (seasonWorker.current === worker) seasonWorker.current = null; setAdvancing(false); setContinueRun(null) }

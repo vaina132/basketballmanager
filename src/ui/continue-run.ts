@@ -26,11 +26,16 @@ export interface ContinueStop {
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
 
-/** New items that need the manager, by id: what was not waiting before the step. */
+/**
+ * New items that need the manager, by id: what was not waiting before the step. A press question does not stop a run
+ * (browser check, 16 November 2026: one after almost every win); the assistant answers it if the manager does not, and
+ * the stop at the next game mentions it.
+ */
 function newActionItems(before: SeasonState, after: SeasonState) {
   const waiting = new Set(getInboxItems(before).filter(item => item.needsAction).map(item => item.id))
-  return getInboxItems(after).filter(item => item.needsAction && !waiting.has(item.id))
+  return getInboxItems(after).filter(item => item.needsAction && item.category !== 'press' && !waiting.has(item.id))
 }
+const pressWaiting = (state: SeasonState) => getInboxItems(state).some(item => item.category === 'press' && item.needsAction)
 
 type AnyOffer = { id: string; clubId: string; status: string; transfer: { sellerClubId: string; clubStatus: string } | null }
 const offerKey = (offer: AnyOffer) => `${offer.status}:${offer.transfer?.clubStatus ?? ''}`
@@ -73,7 +78,7 @@ export function continueStop(before: SeasonState, after: SeasonState): ContinueS
   }
   if (after.status === 'active' && after.activeMatch && (after.activeMatch.status !== 'finished' || after.activeMatch.result?.kind === 'default')) {
     const fixture = after.fixtures.find(item => item.id === after.activeFixtureId)
-    return { kind: 'match', message: `Your next game is ready${fixture ? `: ${nextGameText(after, fixture)}` : ''}.`, page: 'match' }
+    return { kind: 'match', message: `Your next game is ready${fixture ? `: ${nextGameText(after, fixture)}` : ''}.${pressWaiting(after) ? ' A press question waits in the Inbox.' : ''}`, page: 'match' }
   }
   // The offseason's last recruitment day can also bring news; its stop then says that the season can start.
   const ready = after.status === 'complete' && before.status === 'complete' && continueAction(after).kind === 'rollover'

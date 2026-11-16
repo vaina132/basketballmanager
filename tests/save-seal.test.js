@@ -3,9 +3,9 @@ import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from '../src/domain/season';
-import { loadCareerCheckpoint, readCareerSaves, readCurrentCareer, saveCareerCheckpoint } from '../src/storage/career-saves';
+import { createCheckpointQueue, loadCareerCheckpoint, readCareerSaves, readCurrentCareer, saveCareerCheckpoint } from '../src/storage/career-saves';
 import { SAVE_CHECKS_VERSION, saveSeal, sealMatches } from '../src/storage/save-seal';
-import { directSeasonCodec } from '../src/storage/season-codec';
+import { directSeasonCodec, handleSeasonCodecRequest } from '../src/storage/season-codec';
 import { decodeSeasonJournal, prepareSeasonCheckpoint } from '../src/storage/season-journal';
 import { parseSealedSeason, parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { createSeason } from '../src/world/season';
@@ -28,7 +28,7 @@ function tampered() {
   // Serialize without validation, as a damaged or edited file would be.
   return JSON.stringify({ format: 'basketball-manager-season', formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', state: invalidState() });
 }
-const versionOneSeal = serialized => createHash('sha256').update(`courtside-save-seal|format-${SEASON_SCHEMA_VERSION}|checks-1|${serialized}`).digest('hex');
+const oldVersionSeal = (version, serialized) => createHash('sha256').update(`courtside-save-seal|format-${SEASON_SCHEMA_VERSION}|checks-${version}|${serialized}`).digest('hex');
 const counting = () => {
   const calls = { parse: 0, parseSealed: 0 };
   const codec = {
@@ -65,21 +65,27 @@ describe('save seals (step 3.2)', () => {
     expect(parseSealedSeason(old)).toEqual(parseSeason(old));
   }, 120_000);
 
-  // Development mode (owner, 15 November 2026): checkpoints skip the full career check; restore before release (HANDOVER.md, "Before release").
-  it.skip.each(['manual', 'new-game', 'matchday', 'rollover', 'recovery'])('fully validate a %s checkpoint before any write', async reason => {
+  it.each(['manual', 'new-game', 'matchday', 'rollover', 'recovery'])('fully validate a %s checkpoint before any write', async reason => {
     await expect(saveCareerCheckpoint(invalidState(), 0, reason)).rejects.toThrow(/Invalid season save/);
+    // The game's background checkpoints take the same full check.
+    await expect(createCheckpointQueue({ revision: () => 0 }).save(invalidState(), reason)).rejects.toThrow(/Invalid season save/);
     expect(storage.writeSeasonCheckpoint).not.toHaveBeenCalled();
   });
 
-  // Development mode (owner, 15 November 2026): checkpoints skip the full career check; restore before release (HANDOVER.md, "Before release").
-  it.skip('never uses an unchecked serialization shortcut, including codecs from the unfinished implementation', async () => {
+  it('never uses an unchecked serialization shortcut, including codecs from the unfinished implementation', async () => {
     const serialize = vi.fn(value => directSeasonCodec.serialize(value));
     const unchecked = vi.fn(async () => tampered());
     const codec = { ...directSeasonCodec, serialize, serializeCheckpoint: unchecked };
     await expect(saveCareerCheckpoint(invalidState(), 0, 'manual', codec)).rejects.toThrow(/Invalid season save/);
     expect(serialize).toHaveBeenCalledExactlyOnceWith(invalidState());
+    await expect(createCheckpointQueue({ revision: () => 0, codec }).save(invalidState(), 'matchday')).rejects.toThrow(/Invalid season save/);
+    expect(serialize).toHaveBeenCalledTimes(2);
+    expect(serialize).toHaveBeenLastCalledWith(invalidState());
     expect(unchecked).not.toHaveBeenCalled();
     expect(storage.writeSeasonCheckpoint).not.toHaveBeenCalled();
+    // Neither the save worker nor the direct codec accepts a request to skip the check.
+    expect(handleSeasonCodecRequest({ requestId: 1, kind: 'serialize', state: invalidState(), check: false })).toEqual({ requestId: 1, error: expect.stringMatching(/Invalid season save/) });
+    await expect(directSeasonCodec.serialize(invalidState(), { check: false })).rejects.toThrow(/Invalid season save/);
   });
 
   it('keep portable import and export strict, with no fingerprint inside the exported text', async () => {
@@ -126,10 +132,11 @@ describe('save seals (step 3.2)', () => {
     expect(calls).toEqual({ parse: 0, parseSealed: 1 });
   });
 
-  it('invalidate version-one fingerprints even when their text is unchanged', async () => {
-    expect(SAVE_CHECKS_VERSION).toBeGreaterThan(1);
+  // Version 1 came from an unfinished path and version 3 from development-mode checkpoints, both written without the full check.
+  it.each([1, 3])('invalidate version-%i fingerprints even when their text is unchanged', async version => {
+    expect(SAVE_CHECKS_VERSION).toBeGreaterThan(3);
     for (const serialized of [text, tampered()]) {
-      const oldSeal = versionOneSeal(serialized);
+      const oldSeal = oldVersionSeal(version, serialized);
       expect(await sealMatches(serialized, oldSeal)).toBe(false);
       storage.readSeasonJournal.mockResolvedValue({ revision: 1, current: serialized, checkpoints: [checkpoint(1, serialized, oldSeal)] });
       const { codec, calls } = counting();
@@ -170,8 +177,7 @@ describe('save seals (step 3.2)', () => {
     expect(storage.writeSeasonCheckpoint).not.toHaveBeenCalled();
   });
 
-  // Development mode (owner, 15 November 2026): checkpoints skip the full career check; restore before release (HANDOVER.md, "Before release").
-  it.skip.each(['missing crypto', 'missing subtle', 'rejected digest'])('preserve strict saving and loading with %s', async failure => {
+  it.each(['missing crypto', 'missing subtle', 'rejected digest'])('preserve strict saving and loading with %s', async failure => {
     const seal = await saveSeal(text);
     const crypto = failure === 'missing crypto' ? undefined : failure === 'missing subtle' ? {} : { subtle: { digest: vi.fn().mockRejectedValue(new Error('Crypto unavailable')) } };
     vi.stubGlobal('crypto', crypto);
@@ -193,6 +199,7 @@ describe('save seals (step 3.2)', () => {
     expect(calls).toEqual({ parse: 2, parseSealed: 0 });
     storage.writeSeasonCheckpoint.mockClear();
     await expect(saveCareerCheckpoint(invalidState(), 1, 'manual')).rejects.toThrow(/Invalid season save/);
+    await expect(createCheckpointQueue({ revision: () => 1 }).save(invalidState(), 'matchday')).rejects.toThrow(/Invalid season save/);
     expect(storage.writeSeasonCheckpoint).not.toHaveBeenCalled();
   });
 

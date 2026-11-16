@@ -6,25 +6,25 @@ import { parseSealedSeason, parseSeason, serializeSeasonCompact } from './season
  * historical validation never freezes the interface; tests and fallbacks use the same functions directly.
  */
 export interface SeasonCodec {
-  /** `check: false` (the game's own checkpoints in development mode) skips the full career check; exports keep it. */
-  serialize(state: SeasonState, options?: { check?: boolean }): Promise<string>;
+  /** Always runs the full career check first: checkpoints and exports alike are written only when it accepts the career. */
+  serialize(state: SeasonState): Promise<string>;
   parse(text: string): Promise<SeasonState>;
   /** Unpack a previously validated local checkpoint after its current-version seal has been verified. */
   parseSealed?(text: string): Promise<SeasonState>;
 }
 
-type SeasonCodecJob = { kind: 'serialize'; state: SeasonState; check?: boolean } | { kind: 'parse'; text: string } | { kind: 'parse-sealed'; text: string };
+type SeasonCodecJob = { kind: 'serialize'; state: SeasonState } | { kind: 'parse'; text: string } | { kind: 'parse-sealed'; text: string };
 export type SeasonCodecRequest = SeasonCodecJob & { requestId: number };
 export type SeasonCodecReply = { requestId: number; result: string | SeasonState } | { requestId: number; error: string };
 
 export const directSeasonCodec: SeasonCodec = {
-  serialize: async (state, options) => serializeSeasonCompact(state, options),
+  serialize: async state => serializeSeasonCompact(state),
   parse: async text => parseSeason(text),
   parseSealed: async text => parseSealedSeason(text),
 };
 
 function runDirectly(job: SeasonCodecJob): Promise<string | SeasonState> {
-  if (job.kind === 'serialize') return directSeasonCodec.serialize(job.state, job.check === false ? { check: false } : {});
+  if (job.kind === 'serialize') return directSeasonCodec.serialize(job.state);
   if (job.kind === 'parse-sealed') return directSeasonCodec.parseSealed!(job.text);
   return directSeasonCodec.parse(job.text);
 }
@@ -32,7 +32,8 @@ function runDirectly(job: SeasonCodecJob): Promise<string | SeasonState> {
 /** The worker's entire behavior: identical validation and messages to the direct codec. */
 export function handleSeasonCodecRequest(request: SeasonCodecRequest): SeasonCodecReply {
   try {
-    if (request.kind === 'serialize') return { requestId: request.requestId, result: serializeSeasonCompact(request.state, request.check === false ? { check: false } : {}) };
+    // Requests carry no option to skip the career check: whatever else a message holds, saving validates first.
+    if (request.kind === 'serialize') return { requestId: request.requestId, result: serializeSeasonCompact(request.state) };
     if (request.kind === 'parse') return { requestId: request.requestId, result: parseSeason(request.text) };
     if (request.kind === 'parse-sealed') return { requestId: request.requestId, result: parseSealedSeason(request.text) };
     throw new Error('Unsupported save operation.');
@@ -96,7 +97,7 @@ export function createWorkerSeasonCodec(createWorker: (() => SeasonCodecWorker) 
   }
 
   return {
-    serialize: (state, options) => run({ kind: 'serialize', state, ...(options?.check === false ? { check: false } : {}) }) as Promise<string>,
+    serialize: state => run({ kind: 'serialize', state }) as Promise<string>,
     parse: text => run({ kind: 'parse', text }) as Promise<SeasonState>,
     parseSealed: text => run({ kind: 'parse-sealed', text }) as Promise<SeasonState>,
     dispose() {

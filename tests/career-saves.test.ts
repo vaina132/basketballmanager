@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToQuarterEnd, stepMatch } from '../src/engine/match';
-import { loadCareerCheckpoint, readCareerSaves, readCurrentCareer, saveCareerCheckpoint } from '../src/storage/career-saves';
+import { createCheckpointQueue, loadCareerCheckpoint, readCareerSaves, readCurrentCareer, saveCareerCheckpoint } from '../src/storage/career-saves';
 import { directSeasonCodec, type SeasonCodec } from '../src/storage/season-codec';
-import type { SeasonCheckpoint, SeasonJournal } from '../src/storage/season-indexed-db';
+import type { CheckpointReason, SeasonCheckpoint, SeasonJournal } from '../src/storage/season-indexed-db';
 // Local saves and checkpoints use the compact layout.
 import { loadLocalSeason, MAX_SEASON_SAVE_BYTES, parseSeason, saveLocalSeason, serializeSeasonCompact as serializeSeason } from '../src/storage/season-storage';
 import { createSeason, managedSide } from '../src/world/season';
@@ -150,8 +150,7 @@ describe('checkpoint restore and append', () => {
     expect(storage.writeSeasonCheckpoint).not.toHaveBeenCalled();
   });
 
-  // Development mode (owner, 15 November 2026): checkpoints skip the full career check; restore before release.
-  it.skip('validates malformed game state before issuing any write', async () => {
+  it('validates malformed game state before issuing any write', async () => {
     const invalid = createSeason(5);
     invalid.managedClubId = 'missing-club';
     await expect(saveCareerCheckpoint(invalid, 2, 'manual')).rejects.toThrow(/managedClubId/);
@@ -253,5 +252,79 @@ describe('save history work and the background codec', () => {
     expect(parsed).toEqual([saved.serialized]);
     expect(serialized).toEqual([state]);
     expect(storage.writeSeasonCheckpoint).toHaveBeenCalledExactlyOnceWith(saved.serialized, 1, 'manual', SEALED);
+  });
+});
+
+describe('background checkpoints, fully checked while play continues', () => {
+  /** A codec whose full check finishes only when the test says so, like a slow check in the save worker. */
+  const heldCodec = () => {
+    const checks: { state: SeasonState; finish: () => void }[] = [];
+    const codec: SeasonCodec = {
+      parse: text => directSeasonCodec.parse(text),
+      serialize: state => new Promise<string>((resolve, reject) => {
+        checks.push({ state, finish: () => { directSeasonCodec.serialize(state).then(resolve, reject); } });
+      }),
+    };
+    return { codec, checks };
+  };
+  const acceptWrites = () => storage.writeSeasonCheckpoint.mockImplementation(async (serialized: string, revision: number, reason: CheckpointReason, seal?: string) => ({ revision: revision + 1, savedAt: '2026-11-16T12:00:00.000Z', reason, serialized, ...(seal ? { seal } : {}) }));
+  /** Three successive states of one career, as play moves on while a checkpoint is being checked. */
+  const laterStates = () => {
+    const first = createSeason(5);
+    const second = { ...first, activeMatch: stepMatch(first.activeMatch!) };
+    return [first, second, { ...second, activeMatch: stepMatch(second.activeMatch!) }] as const;
+  };
+
+  it('checks and writes only the newest waiting state after a slow check, never an older state after a newer one', async () => {
+    acceptWrites();
+    const { codec, checks } = heldCodec(), busy: boolean[] = [];
+    let revision = 3;
+    const queue = createCheckpointQueue({ codec, revision: () => revision, written: checkpoint => { revision = checkpoint.revision; }, busy: value => busy.push(value) });
+    const [first, second, third] = laterStates();
+    const saves = [queue.save(first, 'matchday'), queue.save(second, 'matchday'), queue.save(third, 'rollover')];
+    expect(queue.busy).toBe(true);
+    expect(checks.map(check => check.state)).toEqual([first]);
+    checks[0]!.finish();
+    expect(await saves[0]).toMatchObject({ revision: 4, reason: 'matchday' });
+    // The intermediate state is skipped; the newest is checked next.
+    expect(checks.map(check => check.state)).toEqual([first, third]);
+    checks[1]!.finish();
+    const [, replaced, newest] = await Promise.all(saves);
+    expect(replaced).toBe(newest);
+    expect(newest).toMatchObject({ revision: 5, reason: 'rollover' });
+    expect(storage.writeSeasonCheckpoint.mock.calls).toEqual([[serializeSeason(first), 3, 'matchday', SEALED], [serializeSeason(third), 4, 'rollover', SEALED]]);
+    await queue.idle();
+    expect([queue.busy, busy]).toEqual([false, [true, false]]);
+  });
+
+  it('writes nothing for a state the check refuses, keeps the earlier checkpoint and still saves the newer state', async () => {
+    acceptWrites();
+    const { codec, checks } = heldCodec();
+    let revision = 1;
+    const queue = createCheckpointQueue({ codec, revision: () => revision, written: checkpoint => { revision = checkpoint.revision; } });
+    const [valid, newer] = laterStates(), refused = { ...valid, managedClubId: 'missing-club' };
+    const failing = queue.save(refused, 'matchday'), next = queue.save(newer, 'matchday');
+    checks[0]!.finish();
+    await expect(failing).rejects.toThrow(/managedClubId/);
+    expect(storage.writeSeasonCheckpoint).not.toHaveBeenCalled();
+    expect(revision).toBe(1);
+    checks[1]!.finish();
+    expect(await next).toMatchObject({ revision: 2 });
+    expect(storage.writeSeasonCheckpoint).toHaveBeenCalledExactlyOnceWith(serializeSeason(newer), 1, 'matchday', SEALED);
+  });
+
+  it('shares one check between requests for the same state and is idle when nothing waits', async () => {
+    acceptWrites();
+    const { codec, checks } = heldCodec();
+    const queue = createCheckpointQueue({ codec, revision: () => 0 });
+    await queue.idle();
+    expect(queue.busy).toBe(false);
+    const [state] = laterStates();
+    const saves = [queue.save(state, 'matchday'), queue.save(state, 'manual')];
+    expect(saves[0]).toBe(saves[1]);
+    checks[0]!.finish();
+    await queue.idle();
+    expect(checks).toHaveLength(1);
+    expect(storage.writeSeasonCheckpoint).toHaveBeenCalledExactlyOnceWith(serializeSeason(state), 0, 'matchday', SEALED);
   });
 });

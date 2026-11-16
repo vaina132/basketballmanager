@@ -7,6 +7,8 @@ import type { CheckpointReason, SeasonCheckpoint, SeasonJournal } from './season
 import { managedClubLabel } from '../world/career';
 
 export type { CheckpointReason, SeasonCheckpoint } from './season-indexed-db';
+/** Every reason a new checkpoint can be written for; legacy checkpoints are read-only. */
+export type SaveReason = Exclude<CheckpointReason, 'legacy'>;
 
 interface CheckpointMetadata {
   revision: number;
@@ -141,12 +143,91 @@ export async function loadCareerCheckpoint(revision: number, codec: SeasonCodec 
   catch (error) { throw new Error(`This checkpoint cannot be loaded. ${errorMessage(error)}`); }
 }
 
-/**
- * Write a checkpoint of the game's own state, then optionally fingerprint that exact serialized text. Development mode
- * (owner, 15 November 2026): checkpoints skip the full career check, which took 17 seconds a matchday in large
- * worlds; exports and imports keep it. An unavailable fingerprint only costs a full check on the next load.
- */
+/** The full career check runs before anything is written: a refused state leaves the previous checkpoint in place. */
+async function writeCheckedCheckpoint(state: SeasonState, revision: () => number | Promise<number>, reason: CheckpointReason, codec: SeasonCodec): Promise<SeasonCheckpoint> {
+  const serialized = await codec.serialize(state);
+  // Only text the check accepted is fingerprinted; an unavailable fingerprint costs a full check on the next load.
+  const seal = await saveSeal(serialized);
+  return writeSeasonCheckpoint(serialized, await revision(), reason, seal);
+}
+
+/** Fully check a checkpoint of the game's own state, then write it with a fingerprint of that exact accepted text. */
 export async function saveCareerCheckpoint(state: SeasonState, expectedRevision: number, reason: CheckpointReason, codec: SeasonCodec = directSeasonCodec): Promise<SeasonCheckpoint> {
-  const serialized = await codec.serialize(state, { check: false });
-  return writeSeasonCheckpoint(serialized, expectedRevision, reason, await saveSeal(serialized));
+  return writeCheckedCheckpoint(state, () => expectedRevision, reason, codec);
+}
+
+export interface CheckpointQueue {
+  /**
+   * Check and write a checkpoint of `state` without making play wait. One checkpoint is checked at a time; a request
+   * made meanwhile waits, and a newer request replaces one still waiting, so the newest state is checked and written
+   * next and an older state is never written after a newer one. A replaced request settles with its replacement.
+   * Rejects, with nothing written, when the check refuses the state or the write fails.
+   */
+  save(state: SeasonState, reason: SaveReason): Promise<SeasonCheckpoint>;
+  /** Settles (never rejects) once no checkpoint is being checked, written or waiting. */
+  idle(): Promise<void>;
+  readonly busy: boolean;
+}
+
+interface QueuedCheckpoint {
+  state: SeasonState;
+  reason: SaveReason;
+  promise: Promise<SeasonCheckpoint>;
+  resolve: (checkpoint: SeasonCheckpoint) => void;
+  reject: (error: unknown) => void;
+}
+
+/**
+ * Background checkpoints for a running career. `revision` supplies the journal revision expected by the next write
+ * (read just before writing) and `written` hears each written checkpoint before the next write, so the caller's
+ * revision is current. `busy` hears when checking starts and when everything requested has finished.
+ */
+export function createCheckpointQueue(options: {
+  revision: () => number | Promise<number>;
+  written?: (checkpoint: SeasonCheckpoint) => void;
+  busy?: (busy: boolean) => void;
+  codec?: SeasonCodec;
+}): CheckpointQueue {
+  const codec = options.codec ?? directSeasonCodec;
+  let running: Promise<void> | null = null, current: QueuedCheckpoint | null = null, waiting: QueuedCheckpoint | null = null;
+
+  function queued(state: SeasonState, reason: SaveReason): QueuedCheckpoint {
+    let resolve!: QueuedCheckpoint['resolve'], reject!: QueuedCheckpoint['reject'];
+    const promise = new Promise<SeasonCheckpoint>((done, fail) => { resolve = done; reject = fail; });
+    return { state, reason, promise, resolve, reject };
+  }
+
+  async function drain(): Promise<void> {
+    options.busy?.(true);
+    try {
+      while (waiting) {
+        const job = current = waiting;
+        waiting = null;
+        try {
+          const checkpoint = await writeCheckedCheckpoint(job.state, options.revision, job.reason, codec);
+          options.written?.(checkpoint);
+          job.resolve(checkpoint);
+        } catch (error) { job.reject(error); }
+      }
+    } finally {
+      current = null; running = null;
+      options.busy?.(false);
+    }
+  }
+
+  return {
+    save(state, reason) {
+      // The same career state already on its way shares that save instead of being checked twice.
+      if (waiting?.state === state || !waiting && current?.state === state) return (waiting ?? current)!.promise;
+      if (waiting) {
+        // Skip the older waiting state: its callers are answered by the newer state's check and write.
+        waiting.state = state; waiting.reason = reason;
+      } else waiting = queued(state, reason);
+      const { promise } = waiting;
+      running ??= drain();
+      return promise;
+    },
+    idle: () => running ?? Promise.resolve(),
+    get busy() { return running !== null; },
+  };
 }

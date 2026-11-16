@@ -1199,7 +1199,10 @@ function validateLifecycleHistory(state: SeasonState, recruitmentHolds: Recruitm
     }
     const finance = financeAtLedgerBoundary(state.finance, ledgerIndex), ledger = finance.ledger, paidSources = new Set(ledger.map(entry => entry.sourceId));
     const contracts = state.employment.contracts.slice(0, contractCount);
-    const employment = { ...state.employment, contracts, transfers: state.employment.transfers.filter(transfer => contracts.some(contract => contract.id === transfer.contractId)).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => paidSources.has(payment.id)) })), buyouts: state.employment.buyouts.filter(buyout => paidSources.has(buyout.id)), market: null };
+    const employment = { ...state.employment, contracts, transfers: state.employment.transfers.filter(transfer => contracts.some(contract => contract.id === transfer.contractId)).map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => paidSources.has(payment.id)) })), buyouts: state.employment.buyouts.filter(buyout => paidSources.has(buyout.id)), market: null,
+      // Step 3.7: only departures decided at earlier season ends. A later departure releasing a noticed player's last
+      // seasons ended his agreement early in this review's replay, so it rebuilt a shorter notice than live play kept.
+      ...(state.employment.departures ? { departures: state.employment.departures.filter(departure => departure.seasonNumber < year) } : {}) };
     const youthAnchor = state.youthCompetition.enabledSince;
     const youthVisible = !youthAnchor || roundKey(youthAnchor.seasonNumber, youthAnchor.round) < roundKey(year, round) || youthAnchor.seasonNumber === year && youthAnchor.round === round && youthAnchor.ledgerIndex <= ledgerIndex && youthAnchor.contractCount <= contractCount && youthAnchor.negotiationCount <= negotiationCount && youthAnchor.recruitmentEventCount <= recruitmentEventCount;
     const youthCompetition = youthVisible ? youthCompetitionAtBoundary(state.youthCompetition, year, round) : createYouthCompetition(state.youthCompetition.model);

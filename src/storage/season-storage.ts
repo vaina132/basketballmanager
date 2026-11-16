@@ -1055,7 +1055,10 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
   for (const item of [state.payroll.enabledSince, state.recruitment.enabledSince]) if (item && roundKey(item.seasonNumber, item.round) === boundary && item.ledgerIndex > anchor.ledgerIndex) fail('academy.enabledSince.ledgerIndex', 'cannot precede required payroll or recruitment activation within the same matchday');
   const originalIds = new Set(worldOf(state).clubs.flatMap(club => club.players.map(player => player.id)));
   const prospects = new Map(academy.prospects.map(prospect => [prospect.player.id, prospect]));
-  const historyContext = version >= 42 ? createAcademyHistoryContext(state) : null;
+  // Format 42 summarizes completed seasons' rival reports; format 73 also the current season's, every week, once a report
+  // is no longer its club's latest. The outcome is replayed exactly, so a current-season outcome is accepted in any format
+  // (a test may write a current career under an older format number); completed seasons' outcomes need format 42.
+  const historyContext = createAcademyHistoryContext(state);
   const youthHistoryContext = version >= 43 ? createYouthHistoryContext(state) : null;
   const focus = record(academy.focus, 'academy.focus', [...prospects.keys()]);
   record(academy.points, 'academy.points', [...prospects.keys()]);
@@ -1107,10 +1110,10 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
       const outcomes = new Set<string>();
       for (const prospect of active) {
         const id = prospect.player.id;
-        const outcome = historyContext !== null && isAcademyOutcome(raw.players[id]!);
+        const outcome = (version >= 42 || year === state.seasonNumber) && isAcademyOutcome(raw.players[id]!);
         const entry = record(players[id], `${path}.players.${id}`, outcome ? ['detail', 'clubId', 'focus', 'pointsAfter'] : ['clubId', 'focus', 'pointsBefore', 'gains', 'coachingGains', 'pointsAfter', ...(replay.youthCompetition.enabledSince ? ['availability'] : []), ...(state.facilities.enabledSince && state.facilities.enabledSince.date <= dateForRound(afterRound, year) ? ['facility'] : [])]);
         if (outcome) {
-          if (entry.clubId !== prospect.clubId || !canSummarizeAcademyReport(historyContext!, raw, raw.players[id]!)) fail(`${path}.players.${id}`, 'must retain full detail for current, manager and latest club development reports');
+          if (entry.clubId !== prospect.clubId || !canSummarizeAcademyReport(historyContext, raw, raw.players[id]!)) fail(`${path}.players.${id}`, 'must retain full detail for current, manager and latest club development reports');
           outcomes.add(id);
         }
         if (!TRAINING_FOCUSES.includes(entry.focus as TrainingPlan['focus']) || prospect.clubId !== managedClubAtRound(state, year, afterRound) && entry.focus !== 'balanced') fail(`${path}.players.${id}.focus`, 'must retain a supported instruction for this club');

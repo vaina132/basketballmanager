@@ -255,8 +255,9 @@ export function validateBoard(state: SeasonState, version: number): void {
       // Format 71: each club's debt at the review's own payment boundary.
       const debtImpacts = boardDebtImpacts({ ...context, facilities: state.facilities });
       try { review = validationReplayCache.calculate('board-review', { state: { ...context, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}) }, mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
-      // Format 73: only the latest review keeps each club's list of counted games (a full earlier review stays valid).
-      if (version >= SEALED_HISTORY_FORMAT && Object.values(reviewRaw.clubs as Record<string, object>).every(club => !Object.hasOwn(club, 'fixtureIds'))) review = withoutCountedGames([review])[0]!;
+      // Format 73: only the latest review keeps each club's list of counted games (a full earlier review stays valid; the
+      // rest of the review is compared exactly in any format).
+      if (Object.values(reviewRaw.clubs as Record<string, object>).every(club => !Object.hasOwn(club, 'fixtureIds'))) review = withoutCountedGames([review])[0]!;
       if (!equal(reviewRaw, review)) fail(reviewPath, 'must exactly reproduce results, inherited costs, injury context and bounded confidence');
       board = { ...board, reviews: [...board.reviews, review] }; reviewIndex += 1;
     }

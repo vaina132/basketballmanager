@@ -155,7 +155,7 @@ export function validateRelationships(state: SeasonState, version: number): void
     // Format 73: an earlier snapshot is stored emptied (one kept in full stays valid). The replay freezes it again, so
     // later commands of its matchday (a contract request reads the frozen morale) see what the game saw; the history is
     // compared in its stored, lightened form below.
-    const emptied = version >= SEALED_HISTORY_FORMAT && event.type === 'prepare' && index !== lastPrepare && !Object.keys(event.rosterIds ?? {}).length && !Object.keys(event.values ?? {}).length;
+    const emptied = event.type === 'prepare' && index !== lastPrepare && !Object.keys(event.rosterIds ?? {}).length && !Object.keys(event.values ?? {}).length;
     if (sealed) {
       if (event.id !== `relationship-event-${index + 1}`) fail(`${path}.id`, 'must retain sequential identities');
       if (event.type === 'contract-request' || event.type === 'contract-reply') negotiationCount = integer(event.negotiationCount, `${path}.negotiationCount`, negotiationCount, state.negotiations.records.length);

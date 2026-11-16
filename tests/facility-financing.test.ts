@@ -1,16 +1,19 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { FinanceEntry } from '../src/domain/finance';
 import type { SeasonState } from '../src/domain/season';
+import type { CareerWorld } from '../src/domain/world';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { boardUnpaidCosts } from '../src/world/board';
 import { quoteBoardFunding } from '../src/world/board-funding-policy';
-import { automateFacilities, endFacilityLease, leaseFacility, processFacilityProjects, repayFacilityLoan, takeFacilityLoan } from '../src/world/facilities';
-import { facilityAutomationBuffer, FACILITY_LEASED_REASON, getArenaFullCapacity, getFacilityLevel, quoteFacilityRepair, quoteFacilityUpgrade } from '../src/world/facilities-policy';
+import { automateFacilities, endFacilityLease, leaseFacility, processFacilityProjects, repayFacilityLoan, startFacilityUpgrade, takeFacilityLoan } from '../src/world/facilities';
+import { facilityAutomationBuffer, FACILITY_LEASED_REASON, getArenaCapacity, getArenaFullCapacity, getFacilityLevel, quoteFacilityRepair, quoteFacilityUpgrade } from '../src/world/facilities-policy';
 import { boardDebtImpactFor, borrowingLimit, debtReserve, debtSchedule, FACILITY_FINANCING_RULES, loanPayment, outstandingDebt } from '../src/world/facility-debt';
 import { getClubDebts, quoteDebtSettlement, quoteFacilityLease, quoteFacilityLoan } from '../src/world/facility-financing';
 import { financeLedgerRows, getFinanceBalance } from '../src/world/finance';
 import { getSpendableCash } from '../src/world/payroll-policy';
-import { createSeason, dateForRound, NEW_CAREER_SYSTEMS } from '../src/world/season';
+import { advanceSeason, createSeason, dateForRound, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
+import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
+import { testWorld } from './world-fixtures';
 import { advanceMatchday } from './helpers/board-funding';
 import { advanceMarket } from '../src/world/market';
 import { setEmploymentDelegation } from '../src/world/employment';
@@ -322,6 +325,31 @@ describe('automatic borrowing', () => {
     const indebted = takeFacilityLoan(withCash(ahead, rival, 20_000_000), 'youth', 'upgrade', 3, 1_000_000, rival);
     const finished = processFacilityProjects({ ...indebted, date: indebted.facilities.projects.at(-1)!.dueOn });
     expect(leases(automateFacilities(withCash(finished, rival, cushion + quote.dueThisSeason + 2_000_000)))).toEqual([]);
+  });
+});
+
+describe('arena work started at a season end', () => {
+  it('leaves the gates of the final week\'s later playoff games as they were played', { timeout: 300_000 }, () => {
+    // Two divisions with playoffs: the final week's later games fall after its Saturday, which stays the calendar date
+    // until the first offseason day, so arena work started then is dated before games already played. Seed 2: Adriatic
+    // Comets host one of those games.
+    const base = testWorld(12), managed = 'w0-adriatic-comets';
+    const playerContracts = Object.fromEntries(base.clubs.flatMap(item => item.players.map((player, index) => [player.id, 1 + (index % 3)])));
+    const world: CareerWorld = { ...base, id: 'season-end-arena-test', rosterModel: 'club-roster-1', playerContracts, domesticLeagues: [
+      { id: 'first', name: 'First division', country: 'Testland', tier: 1, clubIds: base.clubs.slice(0, 6).map(item => item.id), postseason: 'test-tier1-1' },
+      { id: 'second', name: 'Second division', country: 'Testland', tier: 2, clubIds: base.clubs.slice(6).map(item => item.id), postseason: 'test-tier2-2' },
+    ] };
+    let state = setEmploymentDelegation(createSeason({ seed: 2, world, managedClubId: managed, ...NEW_CAREER_SYSTEMS }), true);
+    while (state.status === 'active') state = advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
+    const fixture = state.fixtures.find(item => item.result && item.date > state.date && item.homeClubId === managed)!;
+    expect(fixture).toBeDefined();
+    const started = startFacilityUpgrade(state, 'arena');
+    expect(started.facilities.projects.at(-1)).toMatchObject({ clubId: managed, type: 'arena', startedOn: state.date });
+    // Read by date alone, the project would have closed seats at the later game; the booked gate kept them all.
+    const gate = started.finance.ledger.find(entry => entry.kind === 'tickets' && entry.ticket?.fixtureId === fixture.id)!;
+    expect(gate.ticket!.capacity).toBe(getArenaCapacity(state, managed, fixture.date));
+    expect(getArenaCapacity(started, managed, fixture.date)).toBeLessThan(gate.ticket!.capacity!);
+    expect(parseSeason(serializeSeason(started))).toEqual(started);
   });
 });
 

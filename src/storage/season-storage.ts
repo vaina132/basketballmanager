@@ -2187,6 +2187,13 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   for (let year = firstYear; year <= seasonNumber; year += 1) openingSponsors.set(year, openingSponsorshipClubs(commercial, clubsIn(year), year));
   const minimumEntries = clubs.length + [...openingSponsors.values()].reduce((sum, ids) => sum + ids.length, 0) + financeRounds * clubs.length + [ ...archives.flatMap(archive => archive.fixtures.map(fixture => ({ ...fixture, year: archive.seasonNumber }))), ...fixtures.map(fixture => ({ ...fixture, year: seasonNumber })) ].filter(fixture => fixture.result && (fixture.year > firstYear || fixture.year === firstYear && fixture.round >= firstRound)).length;
   if (fields.ledger.length < minimumEntries) fail('finance.ledger', 'is missing required opening, sponsorship, operating or ticket entries');
+  // An arena project started after a gate was booked cannot have closed its seats (an offseason start is dated on the
+  // final week's Saturday, before that week's later postseason games): judge each gate by the projects started before it.
+  const arenaStarts = facilities.projects.filter(project => project.type === 'arena').map(project => ({ project, ledgerIndex: facilities.events[project.startEventIndex]?.ledgerIndex ?? 0 }));
+  const facilitiesForGate = (clubId: string, index: number, date: string): SeasonFacilities => {
+    const later = arenaStarts.filter(item => item.project.clubId === clubId && item.ledgerIndex > index && item.project.startedOn < date).map(item => item.project);
+    return later.length ? { ...facilities, projects: facilities.projects.filter(project => !later.includes(project)) } : facilities;
+  };
   type RequiredEvent = Pick<FinanceEntry, 'clubId' | 'seasonNumber' | 'round' | 'kind' | 'sourceId'> & { amount?: number; fixture?: SeasonFixture | ArchivedFixture; sponsorship?: FinanceEntry['sponsorship']; boardCapital?: FinanceEntry['boardCapital']; namingRights?: FinanceEntry['namingRights']; sponsorExit?: FinanceEntry['sponsorExit']; debt?: FinanceEntry['debt'] };
   const origin = (clubId: string, kind: FinanceEntry['kind'], sourceId: string) => `${clubId}/${kind}/${sourceId}`;
   const required = new Map<string, RequiredEvent>();
@@ -2542,7 +2549,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
         const fixture = expected.fixture!;
         if (ticket.fixtureId !== fixture.id) fail(`${path}.ticket.fixtureId`, 'must identify its completed home fixture');
         const price = validateTicketPrice(ticket.price, `${path}.ticket.price`, yearContext(year), entry.clubId);
-        const gate = forecastGate({ ...worldContext, fixtures: schedules.get(year)!, seasonNumber: year, rivalries, ...(hasCapacity ? { facilities } : {}), ...(press ? press : {}) }, fixture, price);
+        const gate = forecastGate({ ...worldContext, fixtures: schedules.get(year)!, seasonNumber: year, rivalries, ...(hasCapacity ? { facilities: facilitiesForGate(entry.clubId, index, fixture.date) } : {}), ...(press ? press : {}) }, fixture, price);
         if (hasCapacity && ticket.capacity !== gate.capacity) fail(`${path}.ticket.capacity`, 'must retain the actual construction-adjusted matchday capacity');
         number(ticket.attendance, `${path}.ticket.attendance`, 0, gate.capacity);
         if (ticket.attendance !== gate.attendance || amount !== gate.revenue) fail(path, 'does not match attendance and revenue from the pre-round sporting results');

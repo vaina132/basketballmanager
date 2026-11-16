@@ -4,7 +4,7 @@ import type { CareerWorld, WorldContext } from '../domain/world';
 import { clubPresident, seasonRounds, worldOf } from './career-world';
 import { STAFF_BUDGET } from './staff-constants';
 import { scaledMoney } from './economy';
-import { clubSalaryBudget } from './club-roster-policy';
+import { clubSalaryBudget, clubSalaryCeiling } from './club-roster-policy';
 import { salaryVerdictPercent, usesPresidentBoard } from './presidents';
 
 /** The board's end-of-season judgement, named after the confidence labels shown throughout the game. */
@@ -112,7 +112,11 @@ export function salaryBudgetBasis(context: SalaryBudgetContext, clubId: string, 
 
 /** The most a season's salary budget can be under any verdict: the save check's bound for terms signed before a verdict. */
 export function seasonSalaryCeiling(context: SalaryBudgetContext, clubId: string, seasonNumber: number): number {
-  return Math.max(clubSalaryBudget(context, clubId), seasonSalaryBudget({ ...context, seasonNumber: undefined, status: undefined }, clubId, seasonNumber));
+  let ceiling = Math.max(clubSalaryBudget(context, clubId), clubSalaryCeiling(context, clubId, seasonNumber), seasonSalaryBudget({ ...context, seasonNumber: undefined, status: undefined }, clubId, seasonNumber));
+  // Step 3.7: format 72 money figures change at each rollover, so terms signed earlier met the verdict applied to the
+  // budget known then (for example a renewal in the offseason before a relegated club's money fell).
+  if (context.economySeasons) for (let known = 1; known <= seasonNumber; known += 1) ceiling = Math.max(ceiling, seasonSalaryBudget({ ...context, seasonNumber: known, status: 'complete' }, clubId, seasonNumber));
+  return ceiling;
 }
 
 export type SalaryBudgetContext = WorldContext & { board?: Pick<SeasonBoard, 'model' | 'reviews' | 'consequencesSince'> & Partial<Pick<SeasonBoard, 'mandates'>>; seasonNumber?: number; status?: SeasonState['status'] };

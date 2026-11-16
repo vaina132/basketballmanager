@@ -60,7 +60,8 @@ import type { SeasonState } from './domain/season'
 import { RestWeek } from './ui/RestWeek'
 import { acceptJob, careerPresentationMatch, createSeason, getStandings, managedSide as seasonManagedSide, midSeasonDismissalPossible, NEW_CAREER_SYSTEMS, resignManager, seasonLabel } from './world/season'
 import { isUnemployed } from './world/career-rules'
-import { roundNotice } from './ui/career-text'
+import { careerDay, careerPointLabel, careerToday, gameDate, roundNotice, worldSeasonName } from './ui/career-text'
+import { closeWarning, SaveStatus, type SaveProgress } from './ui/SaveStatus'
 import { MAX_SEASON_SAVE_BYTES } from './storage/season-storage'
 import { createCheckpointQueue, readCareerSaves, readCurrentCareer, loadCareerCheckpoint } from './storage/career-saves'
 import type { CareerSaveList } from './storage/career-saves'
@@ -68,7 +69,7 @@ import { createWorkerSeasonCodec } from './storage/season-codec'
 import { readSeasonJournal, SeasonSaveConflictError } from './storage/season-indexed-db'
 import type { CheckpointReason } from './storage/season-indexed-db'
 import { CareerSaveHistory } from './ui/CareerSaveHistory'
-import { PageErrorBoundary } from './ui/PageErrorBoundary'
+import { isWorkerLoadFailure, PageError, PageErrorBoundary } from './ui/PageErrorBoundary'
 import { SeasonEndChoice } from './ui/SeasonEndChoice'
 const RealClubFriendly = lazy(() => import('./ui/RealClubFriendly').then(module => ({ default: module.RealClubFriendly })))
 import { fetchBuiltInPack } from './world/built-in-pack'
@@ -96,7 +97,7 @@ import type { TrainingPlan } from './domain/training'
 import { PlayerHealthSummary, SeasonMedicalReport } from './ui/SeasonMedicalReport'
 import type { SeasonReply } from './world/season.worker'
 import './ui/season-progress.css'
-import { regularWorldRounds, seasonRounds, worldOf } from './world/career-world'
+import { seasonRounds, worldOf } from './world/career-world'
 import { seasonLeagues } from './world/divisions'
 import { ASSISTANT_DIRECTORY } from './data/staff-directory'
 
@@ -139,6 +140,8 @@ export default function App() {
   const sessionRef = useRef(session)
   const season = session.kind === 'season' ? session.season : null
   const restWeek = !!season && !season.activeMatch
+  // One label for a day without the manager's match (or the offseason) on the top bar, page heading and desk panel.
+  const deskDay = season && (restWeek || season.status === 'complete') ? careerDay(season) : null
   const match = useMemo(() => session.kind === 'season' ? careerPresentationMatch(session.season) : session.match, [session])
   const matchRef = useRef(match)
   const managedSide = season ? restWeek ? match.home.id === season.managedClubId ? 'home' : 'away' : seasonManagedSide(season) : 'home'
@@ -178,9 +181,16 @@ export default function App() {
   const persistenceBusy = useRef(false)
   const savedRevision = useRef<number | null>(null)
   const revisionRead = useRef<Promise<number> | null>(null)
-  // Checkpoints get the full career check in the save worker while play goes on; "Saving..." shows until the newest is written.
+  // Checkpoints get the full career check in the save worker while play goes on. The top bar names the career point of
+  // the last save written and of the newest one waiting (browser play-through, 16 November 2026: from about matchday 12
+  // a check takes longer than a week of play, so "Saving..." alone never cleared).
   const [savingInBackground, setSavingInBackground] = useState(false)
-  const [checkpoints] = useState(() => createCheckpointQueue({ codec: saveCodec, revision: ensureSaveRevision, written: checkpoint => { savedRevision.current = checkpoint.revision }, busy: setSavingInBackground }))
+  const [lastSave, setLastSave] = useState<SaveProgress['saved']>(null)
+  const [pendingSave, setPendingSave] = useState<string | null>(null)
+  const [checkpoints] = useState(() => createCheckpointQueue({ codec: saveCodec, revision: ensureSaveRevision, written: (checkpoint, state) => { savedRevision.current = checkpoint.revision; setLastSave({ label: careerPointLabel(state), at: Date.now() }) }, busy: setSavingInBackground }))
+  const saveProgress: SaveProgress = { saving: savingInBackground, pending: pendingSave, saved: lastSave }
+  // A season worker that could not be downloaded (a new version went live while the game was open): only a reload helps.
+  const [workerFailure, setWorkerFailure] = useState<{ title: string; failed: string; error: unknown } | null>(null)
   const [checkpointIssue, setCheckpointIssue] = useState<string | null>(null)
   const [saveHistoryOpen, setSaveHistoryOpen] = useState(false)
   const [saveHistory, setSaveHistory] = useState<CareerSaveList | null>(null)
@@ -346,6 +356,8 @@ export default function App() {
   async function persistSeason(state: SeasonState, reason: Exclude<CheckpointReason, 'legacy'>, wait = false): Promise<boolean> {
     if (persistenceBusy.current) return false
     if (wait) { persistenceBusy.current = true; setSaving(true); setPlaying(false); settlePlayback() }
+    // The queue writes the newest state next, so the save in progress is named after it.
+    setPendingSave(careerPointLabel(state))
     try {
       await checkpoints.save(state, reason)
       setCheckpointIssue(null)
@@ -358,12 +370,14 @@ export default function App() {
     } finally { if (wait) { persistenceBusy.current = false; setSaving(false) } }
   }
   // Owner feedback (16 November 2026): closing or reloading during "Saving..." returned the career to the previous week.
+  // Browsers show their own fixed leave text; the save status in the top bar says how far back the career would return.
+  const leaveWarning = closeWarning(saveProgress)
   useEffect(() => {
     if (!saving && !savingInBackground) return
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = leaveWarning }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [saving, savingInBackground])
+  }, [saving, savingInBackground, leaveWarning])
   /** A page that could not be opened offers a reload; a career is saved first so that nothing is lost. */
   async function saveAndReload() {
     const current = sessionRef.current
@@ -413,6 +427,8 @@ export default function App() {
       if (request !== replacementRequest.current) return
       savedRevision.current = restored.revision
       install({ kind: 'season', season: restored.state })
+      // The newest save is still the current one until the next save writes this checkpoint again.
+      setLastSave(null); setPendingSave(null)
       historyRequest.current += 1; setSaveHistoryOpen(false); setCheckpointIssue(null)
       navigate('home'); setNotice({ message: 'Checkpoint restored. Your next save will create a new checkpoint.' })
     } catch (error) { if (request === replacementRequest.current) setHistoryError(messageOf(error)) }
@@ -480,6 +496,7 @@ export default function App() {
       if (!saved.current) { setNotice({ message: 'No saved season yet. Start a season to create one.' }); return }
       savedRevision.current = saved.revision
       install({ kind: 'season', season: saved.current }); setCheckpointIssue(null)
+      setLastSave({ label: careerPointLabel(saved.current), at: null }); setPendingSave(null)
       setNotice({ message: 'Saved season restored.' }); navigate('home')
     } catch (error) { if (request !== replacementRequest.current) return; setNotice({ message: messageOf(error), error: true }) }
     finally { persistenceBusy.current = false; setSaving(false) }
@@ -565,6 +582,7 @@ export default function App() {
       setCreatingCareer(false)
       install({ kind: 'season', season: created }); navigate('home')
       setNotice({ message: 'Season ready. Review your lineup before the opening match.' })
+      setLastSave(null)
       void persistSeason(created, 'new-game')
     }
     const failed = (error: unknown) => { setCreatingCareer(false); setEntryError(messageOf(error)) }
@@ -680,7 +698,7 @@ export default function App() {
       const finish = () => { worker.terminate(); seasonWorker.current = null; setAdvancing(false) }
       worker.onmessage = async ({ data }: MessageEvent<SeasonReply>) => {
         if (data.requestId !== seasonJob.current || seasonWorker.current !== worker) return
-        finish()
+        finish(); setWorkerFailure(null)
         if ('error' in data) { setNotice({ message: data.error, error: true }); return }
         if ('outlook' in data) {
           if (data.outlook && (data.outlook.dismissed || data.outlook.offers.length)) setSeasonEnd(data.outlook)
@@ -694,7 +712,18 @@ export default function App() {
         navigate(unemployed ? 'home' : action === 'market' || data.state.status === 'complete' && data.state.market.enabledSince ? 'transfers' : data.state.status === 'complete' ? 'season' : 'home')
         await persistSeason(data.state, action === 'market' ? 'manual' : action === 'rollover' ? 'rollover' : 'matchday')
       }
-      worker.onerror = () => { if (seasonWorker.current !== worker) return; finish(); setNotice({ message: action === 'market' ? 'Could not process recruitment. Your offers and date are preserved; try Continue again.' : action === 'rollover' ? 'Could not start the next season. Your completed season is preserved; try again.' : 'Could not process the matchday. Your match is preserved; try Continue again.', error: true }) }
+      worker.onerror = event => {
+        if (seasonWorker.current !== worker) return
+        finish()
+        // A worker file that cannot be downloaded fails every retry: offer Save and reload, as for a page.
+        if (isWorkerLoadFailure(event)) {
+          event.preventDefault()
+          setNotice(null)
+          setWorkerFailure({ title: action === 'market' ? 'The recruitment day' : action === 'rollover' ? 'The next season' : preview ? 'The board review' : 'The next game day', failed: action === 'market' ? 'could not be processed' : action === 'rollover' ? 'could not be started' : preview ? 'could not be shown' : 'could not be played', error: new Error(`The season worker could not be loaded${event instanceof ErrorEvent && event.message ? `: ${event.message}` : '.'}`) })
+          return
+        }
+        setNotice({ message: action === 'market' ? 'Could not process recruitment. Your offers and date are preserved; try Continue again.' : action === 'rollover' ? 'Could not start the next season. Your completed season is preserved; try again.' : 'Could not process the matchday. Your match is preserved; try Continue again.', error: true })
+      }
       worker.postMessage({ requestId, state: current.season, action: preview ? 'preview' : action, ...(choice?.decision ? { decision: choice.decision } : {}) })
     } catch (error) { seasonWorker.current?.terminate(); seasonWorker.current = null; setAdvancing(false); setNotice({ message: messageOf(error), error: true }) }
   }
@@ -727,11 +756,12 @@ export default function App() {
         <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />Season</div><p>{worldOf(season).source === 'real-data-pack' ? 'Real clubs' : 'Fictional squads'}</p><button id="manager-profile" className="manager manager-profile-button" onClick={openManagerProfile} disabled={saving || advancing} aria-label={season.manager ? 'Edit manager profile' : 'Set manager profile'}><span className="manager-avatar">{season.manager ? season.manager.name.split(/\s+/u).map(part => Array.from(part)[0]).slice(0, 2).join('').toUpperCase() : 'YOU'}</span><span className="manager-identity"><strong data-manager-name>{season.manager?.name ?? 'Set manager profile'}</strong><small>Without a club</small></span></button></div>
       </aside>
       <div className="main-shell">
-        <header className="topbar"><div className="game-context"><strong>Without a club</strong><span>/</span><span>{view === 'home' ? 'Unemployed desk' : pageNames[view]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{season.status === 'complete' ? isMarketActive(season) ? 'Recruitment' : 'Season complete' : 'Between jobs'}</span><button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving || savingInBackground ? 'Saving...' : 'Save season'}</button></div></header>
+        <header className="topbar"><div className="game-context"><strong>Without a club</strong><span>/</span><span>{view === 'home' ? 'Unemployed desk' : pageNames[view]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{season.status === 'complete' ? careerDay(season).label : 'Between jobs'}</span><SaveStatus progress={saveProgress} /><button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : 'Save season'}</button></div></header>
         {advancing && <div className="season-processing" role="status"><span>{seasonOperation === 'market' ? 'Processing the recruitment day...' : seasonOperation === 'rollover' ? 'Preparing next season...' : 'Playing this week\'s games...'}</span><button className="text-button" onClick={cancelAdvance}>Cancel</button></div>}
         {checkpointIssue && <div className="career-save-issue" role="alert"><span>{checkpointIssue}</span><button className="text-button" onClick={openSaveHistory} disabled={saving || advancing}>Save history</button><button className="text-button" onClick={exportSave} disabled={saving || advancing}>Export current</button></div>}
         <main id="main" tabIndex={-1} inert={advancing || leavingSeason || saving}>
-          <div className="page-heading"><h1>{view === 'home' ? 'Unemployed desk' : pageNames[view]}</h1><div className="heading-meta"><span className="pill">{worldOf(season).name.toUpperCase()}</span><span className="muted">{season.date}</span></div></div>
+          <div className="page-heading"><h1>{view === 'home' ? 'Unemployed desk' : pageNames[view]}</h1><div className="heading-meta"><span className="pill">{worldSeasonName(season).toUpperCase()}</span><span className="muted"><time dateTime={careerToday(season)}>{gameDate(careerToday(season), true)}</time></span></div></div>
+          {workerFailure && <PageError title={workerFailure.title} error={workerFailure.error} step={{ failed: workerFailure.failed, part: 'the file that runs this step' }} savesFirst onReload={() => { void saveAndReload() }} />}
           <PageErrorBoundary key={view} title={view === 'home' ? 'Unemployed desk' : pageNames[view]} savesFirst onReload={() => { void saveAndReload() }}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
             {view === 'home' && <UnemployedDesk season={season} busy={advancing || saving} onContinue={advance} onNextDay={() => processSeason('market')} onStartSeason={rollover} onAccept={clubId => { void takeJob(clubId) }} onOpenCompetitions={() => navigate('season')} onOpenCalendar={() => navigate('calendar')} />}
             {view === 'inbox' && <InboxWorkspace season={season} busy={advancing || saving} onAnswerPress={() => {}} onOpen={() => navigate('home')} />}
@@ -757,12 +787,13 @@ export default function App() {
     </aside>
 
     <div className="main-shell">
-      <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{restWeek ? season?.status === 'complete' ? 'Season complete' : season && season.round > regularWorldRounds(worldOf(season)) ? 'No game today' : 'Rest week' : season && isMarketActive(season) ? 'Recruitment' : complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span><button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving || savingInBackground ? 'Saving...' : season ? 'Save season' : 'Save match'}</button></div></header>
-      {advancing && <div className="season-processing" role="status"><span>{seasonOperation === 'market' ? 'Processing player replies...' : seasonOperation === 'rollover' ? 'Preparing next season...' : seasonOperation === 'preview' ? 'The board is reviewing your season...' : 'Processing matchday results...'}</span><button className="text-button" onClick={cancelAdvance}>Cancel</button></div>}
+      <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions"><span className="session-status"><span className="status-dot" />{deskDay ? deskDay.label : complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span>{season && <SaveStatus progress={saveProgress} />}<button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save season' : 'Save match'}</button></div></header>
+      {advancing && <div className="season-processing" role="status"><span>{seasonOperation === 'market' ? 'Processing player replies...' : seasonOperation === 'rollover' ? 'Preparing next season...' : seasonOperation === 'preview' ? 'The board is reviewing your season...' : season ? `Playing the games of ${gameDate(careerToday(season))}...` : 'Processing matchday results...'}</span><button className="text-button" onClick={cancelAdvance}>Cancel</button></div>}
       {checkpointIssue && <div className="career-save-issue" role="alert"><span>{checkpointIssue}</span><button className="text-button" onClick={openSaveHistory} disabled={saving || advancing}>Save history</button><button className="text-button" onClick={exportSave} disabled={saving || advancing}>Export current</button></div>}
       <main id="main" tabIndex={-1} inert={advancing || leavingSeason || saving}>
         {season && page !== 'match' && <ClubBudgetBar season={season} disabled={saving || advancing} onOpenClub={() => { setClubView('operations'); navigate('club') }} onOpenStaff={() => navigate('staff')} onOpenTransfers={() => navigate('transfers')} />}
-        <div className={page === 'match' ? 'sr-only' : 'page-heading'}><h1>{pageNames[page]}</h1><div className="heading-meta"><span className="pill">{season || page === 'season' ? (season ? worldOf(season).name : 'Development league').toUpperCase() : 'EXHIBITION'}</span><span className="muted">{page === 'season' ? season ? season.date : 'Club selection' : restWeek ? 'Rest week' : `${match.home.shortName} vs ${match.away.shortName}`}</span></div></div>
+        <div className={page === 'match' ? 'sr-only' : 'page-heading'}><h1>{pageNames[page]}</h1><div className="heading-meta"><span className="pill">{season || page === 'season' ? (season ? worldSeasonName(season) : 'Development league').toUpperCase() : 'EXHIBITION'}</span><span className="muted">{page === 'season' ? season ? <time dateTime={careerToday(season)}>{gameDate(careerToday(season), true)}</time> : 'Club selection' : deskDay ? deskDay.label : `${match.home.shortName} vs ${match.away.shortName}`}</span></div></div>
+        {workerFailure && <PageError title={workerFailure.title} error={workerFailure.error} step={{ failed: workerFailure.failed, part: 'the file that runs this step' }} savesFirst onReload={() => { void saveAndReload() }} />}
 
         {season && page !== 'season' && page !== 'match' && <SeasonProgress season={season} showRollover={page !== 'transfers'} showMatchAction={page === 'academy' || page === 'squad' || page === 'medical' || page === 'training' || page === 'staff' || page === 'club' || page === 'transfers' || page === 'scouting'} canContinue={complete && !playback.busy} onCompetition={() => navigate('season')} onOpenMatch={() => navigate('match')} onAdvance={advance} onRollover={reviewNextSeason} />}
         <PageErrorBoundary key={page} title={pageNames[page]} savesFirst={!!season} onReload={() => { void saveAndReload() }}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
@@ -846,9 +877,10 @@ function PlayerProfile({ player, match, managedSide, season, onPerformance, onOp
 function SeasonProgress({ season, showRollover, showMatchAction, canContinue, onCompetition, onOpenMatch, onAdvance, onRollover }: { season: SeasonState; showRollover: boolean; showMatchAction: boolean; canContinue: boolean; onCompetition: () => void; onOpenMatch: () => void; onAdvance: () => void; onRollover: () => void }) {
   const fixture = season.fixtures.find(item => item.id === season.activeFixtureId)
   const standing = getStandings(season).find(row => row.clubId === season.managedClubId)!
-  const date = new Date(`${season.date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  // The day the career stands on (a midweek game day included), in the same words as the desk panel and the notices.
+  const today = careerToday(season), date = gameDate(today, true)
   return <section className="season-progress panel" aria-label="Season progress">
-    <div><time dateTime={season.date}>{date}</time><span>{season.status === 'complete' ? isMarketActive(season) ? 'Offseason recruitment' : `Season ${season.seasonNumber} complete` : `Season ${season.seasonNumber} / Matchday ${fixture?.round ?? season.round} / ${seasonRounds(season)}`}</span></div>
+    <div><time dateTime={today}>{date}</time><span>{season.status === 'complete' ? isMarketActive(season) ? 'Offseason recruitment' : `Season ${season.seasonNumber} complete` : `Season ${season.seasonNumber} / Matchday ${fixture?.round ?? season.round} / ${seasonRounds(season)}`}</span></div>
     <div className="season-record"><strong>{standing.played ? `${standing.position} / ${(season.world ? seasonLeagues(season.world, season.divisions) : []).find(league => league.clubIds.includes(season.managedClubId))?.clubIds.length ?? season.clubs.length}` : 'Unplayed'}</strong><span>{standing.wins} W / {standing.losses} L</span></div>
     <button className="text-button" onClick={onCompetition}>League table<Icon name="chevron" size={14} /></button>
     {season.status === 'complete' && showRollover && <button className="button primary season-continue" onClick={onRollover}>{season.employment.enabledSince ? 'Review offseason' : 'Next season'}<Icon name="next" size={15} /></button>}

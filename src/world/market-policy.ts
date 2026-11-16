@@ -79,10 +79,21 @@ export function quoteMarketDates(state: SeasonState, transfer = false): { respon
 export function getMarketStartReason(state: SeasonState): string | null {
   if (!state.market?.enabledSince) return null;
   if (!isMarketActive(state)) return 'Finish this season before starting the next one.';
-  if (getLiveMarketOffers(state).length) return 'Resolve or withdraw outstanding offers before starting next season.';
+  // Say whose offers still wait and what to do (browser play-through, 16 November 2026: "Resolve or withdraw outstanding
+  // offers" showed while the manager had none open; the open offers were other clubs').
+  const live = getLiveMarketOffers(state);
+  if (live.some(offer => offer.clubId === state.managedClubId)) return 'Your offers are still waiting for replies. Continue the offseason to get the replies, or withdraw the offers.';
+  if (live.some(offer => offer.transfer?.sellerClubId === state.managedClubId && offer.status === 'club-review')) return 'Clubs are waiting for your answer to their offers for your players. Answer them, or continue the offseason until they expire.';
+  if (live.length) return 'Other clubs\' offers are still open. Continue the offseason to let the players answer them.';
   const year = state.seasonNumber + 1;
   const effective = effectiveContractsForSeason(state.employment, year);
   const leaving = leavingClubIds(state);
   const incomplete = state.clubs.filter(club => !leaving.has(club.id) && effective.filter(contract => contract.clubId === club.id).length < MIN_ROSTER_SIZE);
-  return incomplete.length ? `${incomplete.some(club => club.id === state.managedClubId) ? 'Your squad needs' : 'Other clubs need'} at least eight signed players for next season. Continue recruitment.` : null;
+  if (!incomplete.length) return null;
+  return incomplete.some(club => club.id === state.managedClubId) ? 'Your squad needs at least eight signed players for next season. Make offers to players, then continue the offseason to get their replies.' : 'Other clubs still need at least eight signed players for next season. Continue the offseason to let them sign players.';
+}
+
+/** Whether continuing the offseason is the way to the next season now: the start is blocked and a decision date remains. */
+export function offseasonContinueFirst(state: SeasonState): boolean {
+  return !!getMarketStartReason(state) && getNextMarketDate(state) !== null;
 }

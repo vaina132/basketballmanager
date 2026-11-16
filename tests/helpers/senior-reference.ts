@@ -17,7 +17,7 @@ export function restoreSeniorDetail(candidate: SeasonState, original: SeasonStat
       const appearances = Object.fromEntries(Object.entries(before.result!.stats!).map(([id, stats]) => [id, { secondsPlayed: stats.secondsPlayed, fouls: stats.fouls, appeared: fields.some(key => stats[key] !== 0) }]));
       expect(fixture).toEqual({ ...before, result: { ...before.result, stats: null, appearances } });
       for (const side of ['home', 'away'] as const) {
-        const roster = source.rosters.find(row => row.id === before.result!.rosterIds[side])!;
+        const roster = source.rosters.find(row => row.id === before.result!.rosterIds![side])!;
         for (const player of roster.players) {
           const stats = before.result!.stats![player.id]!, key = JSON.stringify([roster.clubId, player.id]);
           const row = rows.get(key) ?? { clubId: roster.clubId, playerId: player.id, games: 0, totals: Object.fromEntries(fields.map(key => [key, 0])) as ArchivedPlayerTotals['totals'] };

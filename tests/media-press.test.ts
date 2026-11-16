@@ -205,15 +205,17 @@ describe('media saves', () => {
 
 describe('older careers', () => {
   it('keep the format-34 press and boards without a media assessment, and load from format 62 unchanged', () => {
-    let plain = beforeSavedIdeas(createSeason({ seed: 8, managedClubId: CLUB, injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, ...BEFORE_SAVED_IDEAS }));
+    const start = beforeSavedIdeas(createSeason({ seed: 8, managedClubId: CLUB, injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, ...BEFORE_SAVED_IDEAS }));
+    let plain = start;
     for (let step = 0; step < 6; step += 1) plain = advanceMatchday(plain);
     expect(plain.media).toBeUndefined();
     expect(plain.board.reviews.every(review => Object.values(review.clubs).every(club => club.mediaImpact === undefined))).toBe(true);
     const question = getPressQuestion(plain);
     if (question) { expect(['winning-run', 'losing-run']).toContain(question.topic); expect(question.subjectIds).toBeUndefined(); expect(question.answers).toHaveLength(3); }
     expect(mediaReputation(plain)).toEqual({ value: 50, label: 'Neutral', history: [] });
-    // A genuine format-62 career also had the fixed rivalries (format 68).
-    const fixed = withFixedRivalries(plain), file = JSON.parse(serializeSeason(fixed));
+    // A genuine format-62 career also had the fixed rivalries (format 68). Its first week is used: from format 73 the
+    // weeks after it lighten earlier records (step 3.7), which format 62 would refuse.
+    const fixed = withFixedRivalries(start), file = JSON.parse(serializeSeason(fixed));
     file.formatVersion = 62; file.state.schemaVersion = 62;
     expect(parseSeason(JSON.stringify(file))).toEqual(fixed);
   });

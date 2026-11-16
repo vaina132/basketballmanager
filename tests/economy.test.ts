@@ -3,7 +3,7 @@ import type { CareerWorld, EconomyBand } from '../src/domain/world';
 import type { SeasonState } from '../src/domain/season';
 import { economyPack } from './helpers/economy-pack';
 import { worldFromPack } from '../src/world/real-world';
-import { knownClubBudget, REAL_ECONOMY_RULES, revenueMixFor } from '../src/world/economy';
+import { knownClubBudget, REAL_ECONOMY_RULES, revenueMixFor, scaledMoney, staffFee } from '../src/world/economy';
 import { overallRating } from '../src/world/overall-rating';
 import { requireWorldContexts, validateWorld } from '../src/world/career-world';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
@@ -14,8 +14,10 @@ import { getMarketStartReason } from '../src/world/market-policy';
 import { ANNUAL_SPONSORSHIP, DEFAULT_TICKET_PRICE, defaultTicketPriceFor, fundingSourceId, getFinanceBalance, MAX_TICKET_PRICE, maxTicketPriceFor, OPENING_CASH, ROUND_OPERATING_COST } from '../src/world/finance';
 import { financeLedgerEntries } from '../src/world/finance-ledger';
 import { staffAllocation, STAFF_BUDGET } from '../src/world/staff-policy';
-import { FACILITY_AUTOMATION_BUFFER, facilityAutomationBuffer } from '../src/world/facilities-policy';
-import { MAX_CONTRACT_WAGE, maxContractWage } from '../src/world/employment-policy';
+import { addedArenaSeats, FACILITY_AUTOMATION_BUFFER, facilityAutomationBuffer, upgradeAutomationCushion, upkeepAllowsAutomaticUpgrade } from '../src/world/facilities-policy';
+import { MAX_CONTRACT_WAGE, maxContractWage, MIN_CONTRACT_WAGE, MIN_ROSTER_WAGE_RESERVE, minimumSquadWage } from '../src/world/employment-policy';
+import { academyWage } from '../src/world/player-catalog';
+import { seasonRounds } from '../src/world/career-world';
 import { MAX_TRANSFER_FEE, maxTransferFee } from '../src/world/transfers-policy';
 import { sponsorshipReferenceFee, SPONSORSHIP_REFERENCE_FEE } from '../src/world/commercial-policy';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
@@ -181,7 +183,8 @@ describe('realistic money for real-club worlds (format 62)', () => {
     expect(parseSeason(serializeSeason(state))).toEqual(state);
     const envelope = JSON.parse(serializeSeason(state));
     envelope.formatVersion = 61; envelope.state.schemaVersion = 61;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/economy requires format 62/);
+    // Format 73 refuses every older real-club career (closed money gaps) before any older format rule.
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/start a new career/);
   }, 300_000);
 
   it('replaces the strength placement with a published budget, matched on the whole club name', () => {
@@ -207,6 +210,61 @@ describe('realistic money for real-club worlds (format 62)', () => {
     expect(() => validateWorld({ ...world, finances: world.finances.map(item => item === club ? plain : item) })).toThrow(/finances/);
     const { economy: _id, ...noEconomy } = world;
     expect(() => validateWorld(noEconomy)).toThrow(/finances/);
+  });
+});
+
+describe('money gaps: staff pay, scaled amounts and automatic upgrades (16 November 2026)', () => {
+  afterAll(() => requireWorldContexts(false));
+  const world = worldFromPack(pack, ['acb', 'feb', 'lnb', 'a2', 'bsl', 'gbl']);
+  const at = { world, seasonNumber: 1 };
+  const top = world.finances.map(item => item.clubId).find(id => economyOf(world, id).band === 'euroleague-top')!;
+  const third = world.finances.map(item => item.clubId).find(id => economyOf(world, id).band === 'third')!;
+
+  it('pays staff by the square root of a money level above the development one, in proportion below it', () => {
+    const fee = 8_000_000;
+    expect(economyOf(world, top).scale).toBeGreaterThan(10_000);
+    expect(staffFee(at, top, fee)).toBe(Math.round(fee * Math.sqrt(economyOf(world, top).scale / 1000) / 10_000) * 10_000);
+    // A EuroLeague club's best training coach costs less than a fifth of what the money level alone would give.
+    expect(staffFee(at, top, fee)).toBeLessThan(scaledMoney(at, top, fee) / 4);
+    expect(economyOf(world, third).scale).toBeLessThan(1000);
+    expect(staffFee(at, third, fee)).toBe(scaledMoney(at, third, fee));
+    expect(staffFee({}, DEVELOPMENT_WORLD.clubs[0]!.id, fee)).toBe(fee);
+  });
+
+  it('scales the minimum-squad reserve, academy wages and added arena seats to each club', () => {
+    // The reserve is a cheap squad player at the club's level: its band's bench minimum at Spain's gross cost.
+    expect(minimumSquadWage(at, top)).toBe(REAL_ECONOMY_RULES.benchFloor['euroleague-top'] * 2 * EURO);
+    expect(minimumSquadWage(at, third)).toBe(Math.max(MIN_CONTRACT_WAGE, REAL_ECONOMY_RULES.benchFloor.third * 2 * EURO));
+    expect(minimumSquadWage({}, DEVELOPMENT_WORLD.clubs[0]!.id)).toBe(MIN_ROSTER_WAGE_RESERVE);
+    // Academy prospects ask their catalog wage at their club's opening money level.
+    expect(academyWage(at, { clubId: top, seasonWage: 600_000 })).toBe(scaledMoney({ world }, top, 600_000, 50_000));
+    expect(academyWage(at, { clubId: third, seasonWage: 600_000 })).toBeGreaterThanOrEqual(MIN_CONTRACT_WAGE);
+    expect(academyWage({}, { clubId: DEVELOPMENT_WORLD.clubs[0]!.id, seasonWage: 650_000 })).toBe(650_000);
+    // Arena levels add the development proportions of the club's own arena.
+    const big = world.finances.reduce((best, item) => item.capacity > best.capacity ? item : best), small = world.finances.reduce((least, item) => item.capacity < least.capacity ? item : least);
+    expect(addedArenaSeats(at, big.clubId, 4)).toBe(Math.round(2600 * big.capacity / 3700 / 100) * 100);
+    expect(addedArenaSeats(at, big.clubId, 4)).toBeGreaterThan(2600);
+    expect(addedArenaSeats(at, small.clubId, 2)).toBeLessThan(500);
+    expect(addedArenaSeats({}, DEVELOPMENT_WORLD.clubs[0]!.id, 3)).toBe(1400);
+  });
+
+  it('keeps the rest of the season\'s running costs before an automatic upgrade, and a tenth of the budget at its end', () => {
+    requireWorldContexts(true);
+    const german = worldFromPack(economyPack([{ id: 'bbl', name: 'easyCredit BBL', country: 'Germany', tier: 1, levels: [16, 14, 13, 12, 11, 10, 9, 8] }]), 'bbl');
+    const state = createSeason({ seed: 5, world: german, managedClubId: 'bbl-5', ...NEW_CAREER_SYSTEMS });
+    const economy = economyOf(german, 'bbl-1'), rules = REAL_ECONOMY_RULES.automaticSpending;
+    const opening = upgradeAutomationCushion(state, 'bbl-1'), late = upgradeAutomationCushion({ ...state, round: seasonRounds(state) }, 'bbl-1');
+    expect(opening).toBeGreaterThan(economy.operatingCost / 2);
+    expect(opening).toBeGreaterThan(late);
+    expect(late).toBeGreaterThan(economy.budget * rules.seasonEndCashShare);
+    expect(upgradeAutomationCushion({ ...state, status: 'complete' }, 'bbl-1')).toBe(Math.round(economy.budget * rules.seasonEndCashShare / 10_000) * 10_000);
+    // Upgraded facilities' upkeep, paid every season from the budget's reserve, stays within its share of the budget.
+    const limit = Math.floor(economy.budget * rules.upkeepShare / seasonRounds(state));
+    expect([upkeepAllowsAutomaticUpgrade(state, 'bbl-1', limit), upkeepAllowsAutomaticUpgrade(state, 'bbl-1', limit + 100)]).toEqual([true, false]);
+    // The development world keeps its cushion and has no upkeep limit.
+    const development = createSeason({ seed: 3, managedClubId: DEVELOPMENT_WORLD.clubs[0]!.id, ...NEW_CAREER_SYSTEMS });
+    expect(upgradeAutomationCushion(development, DEVELOPMENT_WORLD.clubs[1]!.id)).toBe(FACILITY_AUTOMATION_BUFFER);
+    expect(upkeepAllowsAutomaticUpgrade(development, DEVELOPMENT_WORLD.clubs[1]!.id, 10_000_000)).toBe(true);
   });
 });
 

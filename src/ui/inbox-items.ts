@@ -66,7 +66,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
       const judged = managedClubFor(season, year, false), verdict = seasonVerdict(season.board, judged, year, seasonRounds(season))
       if (!verdict) continue
       if (judged !== clubId) { items.push({ id: `verdict-${year}`, date: verdict.date, category: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `${season.clubs.find(club => club.id === judged)!.name}'s board after ${seasonLabel(year)}.`, needsAction: false, target: 'board' }); continue }
-      const budgets = verdictBudgets(clubId, verdict.verdict, worldOf(season))
+      const budgets = verdictBudgets(season, clubId, verdict.verdict, year + 1)
       items.push({ id: `verdict-${year}`, date: verdict.date, category: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `${seasonLabel(year + 1)}: ${money(budgets.staff)} staff budget and ${money(budgets.capital)} owner capital.`, needsAction: false, target: 'board' })
     }
   }

@@ -76,7 +76,8 @@ export interface BoardMandate extends BoardAnchor {
 }
 
 export interface BoardClubReview {
-  fixtureIds: string[];
+  /** The games counted; absent from reviews of sealed seasons (format 73), where they follow from the season's results. */
+  fixtureIds?: string[];
   played: number;
   wins: number;
   targetPace: number;

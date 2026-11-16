@@ -1,10 +1,12 @@
 ﻿import type { RelationshipAnchor, RelationshipEvent, SeasonRelationships } from '../domain/relationships';
 import type { SeasonFixture, SeasonState } from '../domain/season';
-import { applyRelationshipEvent, createRelationships, enableRelationships, getPreparedRelationshipMorale } from '../world/relationships';
+import { applyRelationshipEvent, createRelationships, enableRelationships, getPreparedRelationshipMorale, preparationValues } from '../world/relationships';
 import { dateForRound } from '../world/season';
 import { rosterForRound } from '../world/rosters';
 import { managedClubAtRound, managedClubFor } from '../world/career';
 import { fullWorldClubsIn, roundOrdinal, seasonRounds } from '../world/career-world';
+import { SEALED_HISTORY_FORMAT } from '../world/sealed-history';
+import type { RelationshipEvent as Command } from '../domain/relationships';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'contractCount', 'rosterCount'] as const;
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
@@ -115,6 +117,24 @@ export function validateRelationships(state: SeasonState, version: number): void
   if (second) replay = { ...replay, relationships: { ...replay.relationships, squadRanks: source.squadRanks! } };
   let previous = anchor, negotiationCount = 0;
   const prepared = new Map<number, number>();
+  // Format 73: games of sealed seasons keep no per-player participation, which morale reads. Commands recorded before
+  // the current season are kept as recorded (shape, anchors and order checked); the current season's are replayed.
+  const replayFrom = version >= SEALED_HISTORY_FORMAT && state.seasonNumber >= 3 ? state.seasonNumber : 0;
+  let kept: RelationshipEvent[] = [];
+  const emptiedEvents = new Set<number>();
+  // Format 73: only the latest morale snapshot frozen before a matchday keeps its values; nothing reads earlier ones.
+  let lastPrepare = -1;
+  for (let index = fields.events.length - 1; index >= 0; index -= 1) if ((fields.events[index] as Command | null)?.type === 'prepare') { lastPrepare = index; break; }
+  const keepRecorded = () => { if (kept.length) { replay = { ...replay, relationships: { ...replay.relationships, events: [...replay.relationships.events, ...kept.map(item => structuredClone(item))] } }; kept = []; } };
+  const recordedAnchor = (event: RelationshipEvent, path: string): RelationshipAnchor => {
+    integer(event.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber);
+    integer(event.round, `${path}.round`, 1, seasonRounds(state));
+    integer(event.completedRounds, `${path}.completedRounds`, 0, completedNow);
+    integer(event.contractCount, `${path}.contractCount`, 0, state.employment.contracts.length);
+    integer(event.rosterCount, `${path}.rosterCount`, 0, seasonRecords(state, event.seasonNumber).rosters.length);
+    if (typeof event.date !== 'string' || event.date > state.date) fail(`${path}.date`, 'must identify a calendar date actually visited');
+    return Object.fromEntries(ANCHOR_KEYS.map(key => [key, event[key]])) as unknown as RelationshipAnchor;
+  };
   for (const [index, raw] of fields.events.entries()) {
     const path = `relationships.events[${index}]`, type = raw && typeof raw === 'object' ? raw.type : undefined;
     // Format 34 adds press answers to the same chronological journal; format 67 (careers with media) names players and the standing.
@@ -123,7 +143,8 @@ export function validateRelationships(state: SeasonState, version: number): void
       : type === 'contract-request' && second ? ['clubId', 'playerId', 'trigger', 'negotiationCount'] : type === 'contract-reply' && second ? ['clubId', 'playerId', 'requestId', 'reply', 'negotiationCount'] : null;
     if (!extra) fail(path, 'must identify a supported player relationship command');
     const event = record(raw, path, [...ANCHOR_KEYS, 'id', 'type', ...extra]) as unknown as RelationshipEvent;
-    const current = checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, event[key]])), path);
+    const sealed = typeof event.seasonNumber === 'number' && event.seasonNumber < replayFrom;
+    const current = sealed ? recordedAnchor(event, path) : checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, event[key]])), path);
     if (current.date < previous.date || current.completedRounds < previous.completedRounds || current.contractCount < previous.contractCount || ordinal(current.seasonNumber, current.round, seasonRounds(state)) < ordinal(previous.seasonNumber, previous.round, seasonRounds(state)) || current.seasonNumber === previous.seasonNumber && current.rosterCount < previous.rosterCount) fail(path, 'must preserve chronological result, registration and contract prefixes');
     const boundary = ordinal(current.seasonNumber, current.round, seasonRounds(state));
     if (event.type === 'prepare') {
@@ -131,6 +152,18 @@ export function validateRelationships(state: SeasonState, version: number): void
       prepared.set(boundary, index);
       if (source.events.slice(0, index).some(item => item.type !== 'prepare' && item.clubId === managedClubAtRound(state, item.seasonNumber, item.round) && ordinal(item.seasonNumber, item.round, seasonRounds(state)) === boundary)) fail(path, 'must freeze the prepared match before subsequent manager conversations');
     }
+    // Format 73: an earlier snapshot is stored emptied (one kept in full stays valid). The replay freezes it again, so
+    // later commands of its matchday (a contract request reads the frozen morale) see what the game saw; the history is
+    // compared in its stored, lightened form below.
+    const emptied = event.type === 'prepare' && index !== lastPrepare && !Object.keys(event.rosterIds ?? {}).length && !Object.keys(event.values ?? {}).length;
+    if (sealed) {
+      if (event.id !== `relationship-event-${index + 1}`) fail(`${path}.id`, 'must retain sequential identities');
+      if (event.type === 'contract-request' || event.type === 'contract-reply') negotiationCount = integer(event.negotiationCount, `${path}.negotiationCount`, negotiationCount, state.negotiations.records.length);
+      kept.push(event);
+      previous = current;
+      continue;
+    }
+    keepRecorded();
     replay = contextAt(state, current, replay.relationships);
     if (event.type === 'contract-request' || event.type === 'contract-reply') {
       // Contract offers made at the same boundary are ordered by the recorded count of negotiation records.
@@ -139,10 +172,14 @@ export function validateRelationships(state: SeasonState, version: number): void
       negotiationCount = count;
       replay = { ...replay, negotiations: { ...replay.negotiations, records: records.slice(0, count) } };
     }
-    try { replay = applyRelationshipEvent(replay, event); } catch (error) { fail(path, `does not follow the relationship rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
+    if (emptied) emptiedEvents.add(index);
+    const applied = emptied ? { ...event, ...preparationValues(replay) } as RelationshipEvent : event;
+    try { replay = applyRelationshipEvent(replay, applied); } catch (error) { fail(path, `does not follow the relationship rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     previous = current;
   }
-  if (!equal(replay.relationships, source)) fail('relationships', 'must exactly preserve the validated player command history');
+  keepRecorded();
+  const replayed = emptiedEvents.size ? { ...replay.relationships, events: replay.relationships.events.map((item, index) => emptiedEvents.has(index) && item.type === 'prepare' ? { ...item, rosterIds: {}, values: {} } : item) } : replay.relationships;
+  if (!equal(replayed, source)) fail('relationships', 'must exactly preserve the validated player command history');
   for (let boundary = ordinal(anchor.seasonNumber, anchor.round, seasonRounds(state)) + 1; boundary <= ordinal(state.seasonNumber, state.round, seasonRounds(state)); boundary += 1) {
     if (!prepared.has(boundary)) fail('relationships.events', 'must freeze player morale at every new prepared matchday after activation');
   }

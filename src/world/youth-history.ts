@@ -55,7 +55,8 @@ export function summarizeYouthHistory(state: SeasonState): SeasonState {
   const seasons = state.youthCompetition.seasons.map(season => {
     let seasonChanged = false;
     const fixtures = season.fixtures.map(fixture => {
-      if (isYouthOutcome(fixture) || !canSummarizeYouthFixture(context, fixture)) return fixture;
+      // Format 73: a sealed result (`detail: 'season'`) has no squads left to project.
+      if (isYouthOutcome(fixture) || 'detail' in fixture || !canSummarizeYouthFixture(context, fixture)) return fixture;
       seasonChanged = true;
       return summarizeYouthFixture(fixture);
     });

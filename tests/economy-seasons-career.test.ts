@@ -16,6 +16,9 @@ import { requireWorldContexts } from '../src/world/career-world';
 import { currentSeasonFile } from './helpers/season-format';
 import { withLowerDivisions } from '../src/world/lower-division';
 import { seasonExchangesOf } from '../src/world/season';
+import { clubSalaryBudget } from '../src/world/club-roster-policy';
+import { governingVerdict, ownerCapital, presidentCapital, staffAllocation, verdictBudgets } from '../src/world/board-consequences';
+import { clubPresident } from '../src/world/career-world';
 
 /**
  * One test country with two divisions (six clubs each: the first's last two relegated, the second's first two promoted
@@ -45,10 +48,20 @@ describe('club money across a real rollover with promotion and relegation (forma
       // three's opening then refuses its scouting office's squad memories (reported separately; a save-check matter).
       let state = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
       expect(state.economySeasons).toEqual({ model: 'economy-seasons-1', seasons: [] });
-      while (state.status === 'active') state = advanceSeason(play(state));
+      // An older career (no per-season records) plays the same final week and offseason without them.
+      let older: SeasonState | null = null;
+      while (state.status === 'active') {
+        if (!older && state.round === seasonRounds(state)) { const { economySeasons: _records, ...rest } = state; older = rest as SeasonState; }
+        state = advanceSeason(play(state));
+      }
+      while (older!.status === 'active') older = advanceSeason(play(older!));
+      for (let steps = 0; steps < 120 && getMarketStartReason(older!); steps += 1) older = advanceMarket(older!);
+      // Money gaps fix: the complete season has decided season two's figures, so offseason offers and budgets use them.
+      expect(state.economySeasons!.seasons.map(item => item.seasonNumber)).toEqual([2]);
+      const foreseen = state.economySeasons!.seasons[0]!;
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
-      // An older career (no per-season records) completes the same season and offseason identically.
-      const { economySeasons: _records, ...older } = state;
+      expect(roundTrip(state)).toEqual(state);
+      const offseason = state;
       const [top, lower] = getPostseasons(state, 1);
       const relegated = top!.outcome.relegated.map(entry => entry.clubId).filter((id): id is string => id !== null), promoted = lower!.outcome.promoted.filter((id): id is string => id !== null);
       expect([relegated.length, promoted.length]).toEqual([2, 2]);
@@ -58,6 +71,18 @@ describe('club money across a real rollover with promotion and relegation (forma
       state = { ...state, finance: { ...state.finance, plans: { ...state.finance.plans, [priced]: { ...state.finance.plans[priced]!, price: oldMaximum } } } };
       state = rolloverSeason(state);
       const table = state.economySeasons!.seasons[0]!;
+      // The rollover computes exactly the figures the complete season foresaw; offseason budgets were the season's own.
+      expect(table).toEqual(foreseen);
+      for (const clubId of [...promoted, ...relegated]) {
+        expect(clubSalaryBudget(offseason, clubId, 2)).toBe(clubSalaryBudget(state, clubId, 2));
+        expect(verdictBudgets(offseason, clubId, null, 2)).toEqual(verdictBudgets(state, clubId, null));
+        // Owner capital and the staff allocation follow the season's money level, for every club.
+        const verdict = governingVerdict(state, clubId, 2)?.verdict ?? null;
+        expect([ownerCapital(state, clubId), staffAllocation(state, clubId)]).toEqual([verdictBudgets(state, clubId, verdict).capital, verdictBudgets(state, clubId, verdict).staff]);
+        expect(Math.sign(presidentCapital(state, clubId) - clubPresident(world, clubId).seasonCapital)).toBe(Math.sign(table.clubs[clubId]!.scale - opening(world, clubId).scale));
+      }
+      for (const clubId of promoted) expect(clubSalaryBudget(offseason, clubId, 2)).toBeGreaterThan(clubSalaryBudget(offseason, clubId, 1));
+      for (const clubId of relegated) expect(clubSalaryBudget(offseason, clubId, 2)).toBeLessThan(clubSalaryBudget(offseason, clubId, 1));
       expect(state.finance.plans[priced]!.price).toBe(maxTicketPriceFor(state, priced));
       expect(maxTicketPriceFor(state, priced)).toBeLessThan(oldMaximum);
       expect(table.seasonNumber).toBe(2);
@@ -78,6 +103,8 @@ describe('club money across a real rollover with promotion and relegation (forma
       expect(table.clubs[joined]).toMatchObject({ band: 'second', reasons: ['promoted'] });
       expect(table.clubs[joined]!.budget).toBeGreaterThan(opening(world, joined).budget);
       expect(ledgerAmount(state, joined, 'opening-s2')).toBe(table.clubs[joined]!.openingCash);
+      // It could sign no main sponsor for its first season, so its season funding also covers the sponsorship figure.
+      expect(table.clubs[joined]!.funding).toBeGreaterThanOrEqual(table.clubs[joined]!.sponsorship);
       expect(table.clubs[exchange!.leaving[0]!]).toBeUndefined();
       // Season two's opening money follows the new figures; season one's stays at the world's.
       for (const clubId of [...promoted, ...relegated]) {
@@ -90,7 +117,7 @@ describe('club money across a real rollover with promotion and relegation (forma
       // The strict check replays season one at its figures and season two at the new ones.
       expect(roundTrip(state)).toEqual(state);
 
-      const previous = rolloverSeason(older as SeasonState);
+      const previous = rolloverSeason(older!);
       expect(previous.economySeasons).toBeUndefined();
       for (const clubId of [...promoted, ...relegated]) expect(ledgerAmount(previous, clubId, fundingSourceId(2))).toBe(opening(world, clubId).funding);
       expect(roundTrip(previous)).toEqual(previous);
@@ -104,7 +131,8 @@ describe('club money across a real rollover with promotion and relegation (forma
       expect(() => parseSeason(currentSeasonFile(tampered))).toThrow(/economySeasons/);
       const envelope = JSON.parse(serializeSeason(state));
       envelope.formatVersion = 68; envelope.state.schemaVersion = 68;
-      expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/requires format (69|7[0-2]) or later/);
+      // Format 73 refuses every older real-club career (closed money gaps) before any older format rule.
+      expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/start a new career/);
 
       // Season two's sponsorship offers, board reviews and offseason use its figures; season three moves on again.
       while (state.status === 'active') state = advanceSeason(play(state));

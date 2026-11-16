@@ -5,6 +5,7 @@ import { dateForRound } from './season';
 import { rosterForRound } from './rosters';
 import { isRecovering } from './health';
 import { fixturePlayerEvidence } from './senior-history';
+import { withoutEarlierMorale } from './sealed-history';
 import { getPlayerRetirement } from './lifecycle-policy';
 import { getPressQuestion, pressAnswerLabel, pressEventFields, pressEventMatches, pressImpact, pressMoraleValue } from './press-policy';
 import { governingDerby, RIVALRY_MORALE_WEIGHT } from './rivalries';
@@ -362,7 +363,8 @@ export function answerPress(state: SeasonState, answer: PressAnswer): SeasonStat
   if (!question) throw new Error('There is no open press question.');
   return applyRelationshipEvent(state, { ...relationshipEventAnchor(state), id: eventId(state), type: 'press', clubId: question.clubId, topic: question.topic, triggerRound: question.triggerRound, answer, playerIds: question.playerIds, coreIds: question.coreIds, ...pressEventFields(question) });
 }
-function preparationValues(state: SeasonState): { rosterIds: Record<string, string>; values: Record<string, number> } {
+/** The morale frozen before the current matchday; the save check re-freezes earlier, emptied snapshots (format 73). */
+export function preparationValues(state: SeasonState): { rosterIds: Record<string, string>; values: Record<string, number> } {
   return { rosterIds: Object.fromEntries(state.clubs.map(club => [club.id, rosterForRound(state.rosters, club.id, state.round).id])), values: Object.fromEntries(state.clubs.flatMap(club => getSquadRelationships(state, club.id).map(row => [row.player.id, row.morale]))) };
 }
 /**
@@ -384,7 +386,9 @@ export function prepareRelationshipsRound(state: SeasonState): SeasonState {
   if (!state.relationships.enabledSince) return state;
   const next = rankSquads(state);
   if (next.relationships.events.some(event => event.type === 'prepare' && event.seasonNumber === next.seasonNumber && event.round === next.round)) return next;
-  return applyRelationshipEvent(next, { ...relationshipEventAnchor(next), id: eventId(next), type: 'prepare', ...preparationValues(next) });
+  const prepared = applyRelationshipEvent(next, { ...relationshipEventAnchor(next), id: eventId(next), type: 'prepare', ...preparationValues(next) });
+  // Format 73: earlier snapshots are no longer read once a new matchday is frozen.
+  return { ...prepared, relationships: { ...prepared.relationships, events: withoutEarlierMorale(prepared.relationships.events) } };
 }
 /** `relationships-2`: a player's rank in his club's registered squad now (1 = best), or null when unranked. */
 export function getSquadRank(state: SeasonState, playerId: string, clubId = state.managedClubId): number | null {

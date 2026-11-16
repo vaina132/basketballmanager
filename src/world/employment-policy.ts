@@ -11,9 +11,9 @@ import { getInSeasonOffers } from './recruitment-policy';
 import { offerOptionsReason } from './release-clauses';
 import { retirementContractReason } from './lifecycle-policy';
 import type { WorldContext } from '../domain/world';
-import { clubRosterLimitText, clubRosterLimit } from './club-roster-policy';
+import { clubRosterLimitText, clubRosterLimit, clubSalaryCeiling } from './club-roster-policy';
 import { seasonSalaryBudget } from './board-consequences';
-import { REAL_ECONOMY_RULES, worldEconomy } from './economy';
+import { benchWage, knownMoneySeason, moneyAt, REAL_ECONOMY_RULES, worldEconomy } from './economy';
 import { refusedContractMinimum, refusedContractPremium } from './contract-requests-policy';
 
 export const EMPLOYMENT_BUDGET = 24_000_000;
@@ -24,8 +24,26 @@ export const MIN_CONTRACT_WAGE = 500_000;
 export const MAX_CONTRACT_WAGE = 5_000_000;
 export const WAGE_STEP = 50_000;
 export const MAX_CONTRACT_SEASONS = 3;
-/** Retain room for eight players even if every remaining signing asks the catalog maximum. */
+/** Retain room for eight players: the development economy's wage kept free for each missing place (EUR 18,000). */
 export const MIN_ROSTER_WAGE_RESERVE = 1_800_000;
+/**
+ * The wage kept free for each missing place of the eight-player minimum squad for contracts of `seasonNumber`: EUR
+ * 18,000 in the development economy; in worlds with an economy the wage of a cheap squad player at the club's level
+ * (its band's researched bench minimum, `benchWage`, from the figures known for that season), never below the minimum
+ * contract wage (money gaps fix, 16 November 2026).
+ */
+export function minimumSquadWage(context: WorldContext & { status?: SeasonState['status'] }, clubId: string, seasonNumber = context.seasonNumber): number {
+  if (!worldEconomy(context)) return MIN_ROSTER_WAGE_RESERVE;
+  const known = seasonNumber === undefined ? undefined : Math.min(seasonNumber, knownMoneySeason(context, seasonNumber));
+  return Math.max(MIN_CONTRACT_WAGE, benchWage(moneyAt(context, known), clubId) ?? MIN_ROSTER_WAGE_RESERVE);
+}
+/** The smallest minimum-squad wage a club can have had for contracts of a season: the save check's bound. */
+export function lowestMinimumSquadWage(context: WorldContext, clubId: string, seasonNumber: number): number {
+  if (!worldEconomy(context) || !context.economySeasons) return minimumSquadWage(context, clubId, seasonNumber);
+  let lowest = Infinity;
+  for (let known = 1; known <= seasonNumber; known += 1) lowest = Math.min(lowest, minimumSquadWage({ ...moneyAt(context, known), seasonNumber: known }, clubId, known));
+  return lowest;
+}
 /**
  * The largest annual wage a contract may carry: EUR 50,000 in the development economy; with a researched economy
  * (format 62) EUR 15 million, above any real salary. Wages are the club's gross cost.
@@ -90,13 +108,14 @@ export function contractForRound(employment: SeasonEmployment, playerId: string,
 }
 
 /** Approved sales cannot spend the cheap departing player's replacement allowance elsewhere. */
-export function outgoingReplacementReserve(state: Pick<SeasonState, 'employment' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'recruitment'>>, clubId: string, year: number): number {
+export function outgoingReplacementReserve(state: Pick<SeasonState, 'employment' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'recruitment' | 'status'>> & WorldContext, clubId: string, year: number): number {
   const outgoing = new Set([...getLiveMarketOffers(state).filter(offer => offer.transfer?.sellerClubId === clubId && offer.transfer.clubStatus === 'accepted' && offer.seasonNumber + 1 <= year), ...getInSeasonOffers(state, undefined, true).filter(offer => offer.transfer?.sellerClubId === clubId && offer.transfer.clubStatus === 'accepted' && offer.seasonNumber <= year)].map(offer => offer.playerId));
   if (!outgoing.size) return 0;
-  return clubContractsForSeason(state.employment, clubId, year).filter(contract => outgoing.has(contract.playerId)).reduce((total, contract) => total + Math.max(0, MIN_ROSTER_WAGE_RESERVE - contract.seasonWage), 0);
+  const reserveWage = minimumSquadWage(state, clubId, year);
+  return clubContractsForSeason(state.employment, clubId, year).filter(contract => outgoing.has(contract.playerId)).reduce((total, contract) => total + Math.max(0, reserveWage - contract.seasonWage), 0);
 }
 
-export function getClubContractSummary(state: Pick<SeasonState, 'employment' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'recruitment'>> & WorldContext, clubId: string, seasonNumber = state.seasonNumber + 1, excludeOfferId?: string): ClubContractSummary {
+export function getClubContractSummary(state: Pick<SeasonState, 'employment' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'recruitment' | 'status' | 'board'>> & WorldContext, clubId: string, seasonNumber = state.seasonNumber + 1, excludeOfferId?: string): ClubContractSummary {
   const contracts = [...clubContractsForSeason(state.employment, clubId, seasonNumber)];
   const rosterSize = contracts.length, seasonWages = contracts.reduce((total, contract) => total + contract.seasonWage, 0);
   const inSeasonReserved = getInSeasonOffers(state, clubId, true).filter(offer => offer.id !== excludeOfferId && offer.seasonNumber <= seasonNumber && offer.seasonNumber + offer.seasons - 1 >= seasonNumber);
@@ -104,11 +123,16 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
   const reservedWages = reserved.reduce((total, offer) => total + offer.seasonWage, 0), reservedRosterSize = reserved.length;
   // Format 70 (board-2): the season verdict changes the player salary budget (`seasonSalaryBudget`); otherwise the standard budget.
   const budget = seasonSalaryBudget(state, clubId, seasonNumber), remainingBudget = budget - seasonWages - reservedWages;
+  const reserveWage = minimumSquadWage(state, clubId, seasonNumber);
   // A rival can win any pending player. Keep enough to replace a cheap held slot
   // until that player actually signs, so losing a bid cannot strand the club.
-  const pendingShortfalls = (isCompetitiveMarket(state) ? reserved : inSeasonReserved).reduce((total, offer) => total + Math.max(0, MIN_ROSTER_WAGE_RESERVE - offer.seasonWage), 0);
-  const minimumReserve = Math.max(0, MIN_ROSTER_SIZE - rosterSize - reservedRosterSize) * MIN_ROSTER_WAGE_RESERVE + pendingShortfalls + outgoingReplacementReserve(state, clubId, seasonNumber);
-  return { clubId, seasonNumber, rosterSize, seasonWages, reservedWages, reservedRosterSize, budget, remainingBudget, minimumReserve, spendableBudget: Math.max(0, remainingBudget - minimumReserve), contracts };
+  const pendingShortfalls = (isCompetitiveMarket(state) ? reserved : inSeasonReserved).reduce((total, offer) => total + Math.max(0, reserveWage - offer.seasonWage), 0);
+  const minimumReserve = Math.max(0, MIN_ROSTER_SIZE - rosterSize - reservedRosterSize) * reserveWage + pendingShortfalls + outgoingReplacementReserve(state, clubId, seasonNumber);
+  // Format 72: a club whose money fell keeps its agreed wages; cheap signings (at most the reserve wage) it still needs
+  // for the minimum squad may use the highest allocation it has had for the season, which reserved room for them when
+  // the earlier terms were agreed. Without this, a relegated club could be unable to field eight players.
+  const minimumSquadBudget = rosterSize + reservedRosterSize < MIN_ROSTER_SIZE && state.economySeasons ? Math.max(budget, clubSalaryCeiling(state, clubId, seasonNumber)) : budget;
+  return { clubId, seasonNumber, rosterSize, seasonWages, reservedWages, reservedRosterSize, budget, remainingBudget, minimumReserve, spendableBudget: Math.max(0, remainingBudget - minimumReserve), contracts, reserveWage, minimumSquadBudget };
 }
 
 /** Public offers and automation share ownership, term, roster and annual-budget guards. */
@@ -121,7 +145,9 @@ export type PlayerContractQuoter = (playerId: string, seasonWage: number, season
 /**
  * The contract guard for many players of one club at one unchanged moment (step 3.7): club figures that do not depend on
  * the player (season summaries, pending reserves, replacement reserves, live and in-season offers) are worked out once,
- * on first use, in the same order of checks as a single quote. Automatic recruitment asks it for every candidate.
+ * on first use, in the same order of checks as a single quote. Automatic recruitment asks it for every candidate. The
+ * minimum-squad wage (format 72, `minimumSquadWage`) depends only on the club, the season of the contract and this state,
+ * so the per-season reserves below stay valid for every candidate.
  */
 export function playerContractQuoter(state: SeasonState, clubId = state.managedClubId): PlayerContractQuoter {
   const liveOffers = getLiveMarketOffers(state);
@@ -137,11 +163,12 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
     if (!summary) { summary = getClubContractSummary(state, clubId, year, excludeOfferId); summaries.set(key, summary); }
     return summary;
   };
-  const pendingShortfallsFor = (year: number, openOfferId: string | undefined) => {
+  // `reserveWage` is the season's minimum-squad wage (`summary.reserveWage`), the same for every key of one season.
+  const pendingShortfallsFor = (year: number, openOfferId: string | undefined, reserveWage: number) => {
     const key = `${year}|${openOfferId ?? ''}`;
     let total = shortfalls.get(key);
     if (total === undefined) {
-      total = (competitive() ? liveOffers.filter(offer => offer.clubId === clubId && offer.id !== openOfferId && offer.seasonNumber + 1 <= year && offer.seasonNumber + offer.seasons >= year) : []).reduce((sum, offer) => sum + Math.max(0, MIN_ROSTER_WAGE_RESERVE - offer.seasonWage), 0) + clubInSeasonOffers().filter(offer => offer.seasonNumber <= year && offer.seasonNumber + offer.seasons - 1 >= year).reduce((sum, offer) => sum + Math.max(0, MIN_ROSTER_WAGE_RESERVE - offer.seasonWage), 0);
+      total = (competitive() ? liveOffers.filter(offer => offer.clubId === clubId && offer.id !== openOfferId && offer.seasonNumber + 1 <= year && offer.seasonNumber + offer.seasons >= year) : []).reduce((sum, offer) => sum + Math.max(0, reserveWage - offer.seasonWage), 0) + clubInSeasonOffers().filter(offer => offer.seasonNumber <= year && offer.seasonNumber + offer.seasons - 1 >= year).reduce((sum, offer) => sum + Math.max(0, reserveWage - offer.seasonWage), 0);
       shortfalls.set(key, total);
     }
     return total;
@@ -185,10 +212,13 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
     if (reason === null) for (let year = startsSeason; year <= endsSeason; year += 1) {
       const summary = summaryFor(year, openOffer?.clubId === clubId ? openOffer.id : undefined), size = summary.rosterSize + summary.reservedRosterSize + 1;
       if (size > clubRosterLimit(state)) { reason = `The squad already has ${clubRosterLimitText(state)} contracted players for season ${year}.`; break; }
-      const pendingShortfalls = pendingShortfallsFor(year, openOffer?.id);
-      const proposalShortfall = competitive() && !resolving ? Math.max(0, MIN_ROSTER_WAGE_RESERVE - seasonWage) : 0;
-      const reserve = Math.max(0, MIN_ROSTER_SIZE - size) * MIN_ROSTER_WAGE_RESERVE + pendingShortfalls + proposalShortfall + outgoingFor(year);
-      if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > summary.budget) { reason = `This offer exceeds the season ${year} wage budget after protecting space for eight players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
+      const reserveWage = summary.reserveWage;
+      const pendingShortfalls = pendingShortfallsFor(year, openOffer?.id, reserveWage);
+      const proposalShortfall = competitive() && !resolving ? Math.max(0, reserveWage - seasonWage) : 0;
+      const reserve = Math.max(0, MIN_ROSTER_SIZE - size) * reserveWage + pendingShortfalls + proposalShortfall + outgoingFor(year);
+      // A cheap signing still needed for the minimum squad may use the season's highest allocation (format 72, see the summary).
+      const limit = size <= MIN_ROSTER_SIZE && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
+      if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > limit) { reason = `This offer exceeds the season ${year} wage budget after protecting space for eight players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
     }
     return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
   };

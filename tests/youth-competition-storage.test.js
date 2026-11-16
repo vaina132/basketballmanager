@@ -102,18 +102,23 @@ describe('youth competition persistence and chronological academy replay', () =>
     expect(archived.fixtures.map(fixture => fixture.id)).toEqual(originalSeason.fixtures.map(fixture => fixture.id));
     const latestByClub = new Map();
     for (const fixture of originalSeason.fixtures) for (const id of [fixture.homeClubId, fixture.awayClubId]) latestByClub.set(id, fixture.id);
+    // Format 73: the completed season is sealed; other clubs' games keep their results and diagnoses only.
     let outcomes = 0;
     for (const [index, fixture] of archived.fixtures.entries()) {
       const original = originalSeason.fixtures[index];
-      expect(getYouthFixtureTeams(fixture, careers.opening)).toEqual({ home: original.home, away: original.away });
-      if (fixture.detail === 'outcome') {
+      if (fixture.detail === 'season') {
         expect([fixture.homeClubId, fixture.awayClubId]).not.toContain(careers.complete.managedClubId);
-        expect([fixture.homeClubId, fixture.awayClubId].some(id => latestByClub.get(id) === fixture.id)).toBe(false);
-        expect(fixture).toEqual({ ...original, home: null, away: null, startingConditions: null, detail: 'outcome', playerIds: { home: original.home.players.map(player => player.id), away: original.away.players.map(player => player.id) } });
+        expect(getYouthFixtureTeams(fixture, careers.opening)).toBeNull();
+        const { home: _home, away: _away, startingConditions: _conditions, ...identity } = original;
+        expect(fixture).toEqual({ ...identity, home: null, away: null, startingConditions: null, detail: 'season', result: { ...original.result, stats: {} } });
         outcomes += 1;
-      } else expect(fixture).toEqual(original);
+      } else {
+        expect(getYouthFixtureTeams(fixture, careers.opening)).toEqual({ home: original.home, away: original.away });
+        expect(fixture).toEqual(original);
+      }
     }
     expect(outcomes).toBeGreaterThan(0);
+    expect(latestByClub.size).toBeGreaterThan(0);
     expect(getYouthFixtures(careers.opening).every(item => item.result === null)).toBe(true);
     for (const club of careers.opening.clubs) expect(getClubAcademy(careers.opening, club.id)).toHaveLength(8);
     expect(rolloverSeason(restore(careers.complete))).toEqual(careers.opening);

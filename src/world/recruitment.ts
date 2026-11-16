@@ -4,7 +4,7 @@ import type { ContractOfferOptions, EmploymentContract, EmploymentTransfer } fro
 import type { InSeasonEvent, InSeasonEventAnchor, InSeasonOffer, SeasonRecruitment } from '../domain/recruitment';
 import type { SeasonState } from '../domain/season';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
-import { getCareerPlayer, getCareerWage } from './player-catalog';
+import { academyWage, getCareerPlayer, getCareerWage } from './player-catalog';
 import { graduateAcademyProspect } from './academy';
 import { getClubAcademy } from './academy-policy';
 import { effectiveContractsForRound } from './employment-policy';
@@ -236,8 +236,8 @@ export function scheduleInSeasonRecruitment(state: SeasonState): SeasonState {
         positions.set(position, (positions.get(position) ?? 0) + 1);
       }
       const assessed = (playerId: string): number => next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, playerId) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, playerId) : getCareerPlayer(next, playerId).attributes).reduce((sum, value) => sum + value, 0);
-      const academy = next.academy?.enabledSince ? getClubAcademy(next, club.id).filter(row => !pending.some(offer => offer.playerId === row.player.id)).sort((left, right) => (positions.get(left.player.position) ?? 0) - (positions.get(right.player.position) ?? 0) || Object.values(right.player.attributes).reduce((a, b) => a + b, 0) - Object.values(left.player.attributes).reduce((a, b) => a + b, 0) || left.player.id.localeCompare(right.player.id, 'en')).find(row => quoteInSeasonOffer(next, row.player.id, row.prospect.seasonWage, club.id, undefined, {}, row.player.id).canOffer) : null;
-      if (academy) { next = submitInSeasonOffer(next, academy.player.id, academy.prospect.seasonWage, club.id, {}, academy.player.id); continue; }
+      const academy = next.academy?.enabledSince ? getClubAcademy(next, club.id).filter(row => !pending.some(offer => offer.playerId === row.player.id)).sort((left, right) => (positions.get(left.player.position) ?? 0) - (positions.get(right.player.position) ?? 0) || Object.values(right.player.attributes).reduce((a, b) => a + b, 0) - Object.values(left.player.attributes).reduce((a, b) => a + b, 0) || left.player.id.localeCompare(right.player.id, 'en')).find(row => quoteInSeasonOffer(next, row.player.id, academyWage(next, row.prospect), club.id, undefined, {}, row.player.id).canOffer) : null;
+      if (academy) { next = submitInSeasonOffer(next, academy.player.id, academyWage(next, academy.prospect), club.id, {}, academy.player.id); continue; }
       const candidates = getInSeasonCandidates(next).filter(player => !pending.some(offer => offer.playerId === player.id) && !next.injuries.some(injury => injury.playerId === player.id && isRecovering(injury, responseOn, knownMedical))).sort((left, right) => (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || assessed(right.id) - assessed(left.id) || left.id.localeCompare(right.id, 'en'));
       const player = candidates.find(player => quoteInSeasonOffer(next, player.id, getCareerWage(next, player.id), club.id).canOffer);
       if (player) { next = submitInSeasonOffer(next, player.id, getCareerWage(next, player.id), club.id); continue; }

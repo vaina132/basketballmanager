@@ -90,7 +90,7 @@ describe('facility review: asking the board', () => {
   it('points older careers to the Board view when requests are off', () => {
     const html = ask(generous.quote, false);
     expect(html).toContain('data-board-funding="off"');
-    expect(html).toContain('Board funding requests are off in this career. You can turn them on under Club › Board.');
+    expect(html).toContain('Board funding requests are off in this career. You can switch them on from the Board page.');
     expect(html).not.toContain('id="facility-board-request"');
   });
 });

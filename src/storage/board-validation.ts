@@ -1,4 +1,5 @@
-import type { BoardAnchor, BoardMandate, SeasonBoard } from '../domain/board';
+import type { BoardAnchor, BoardMandate, BoardRestart, SeasonBoard } from '../domain/board';
+import { usesCareerRules } from '../world/career-rules';
 import type { SeasonFixture, SeasonState } from '../domain/season';
 import { buildBoardMandate, buildBoardReview, createBoard, type BoardCalculationContext } from '../world/board';
 import { validationReplayCache } from './replay-cache';
@@ -78,11 +79,15 @@ export function validateBoard(state: SeasonState, version: number): void {
   const consequences = version >= 33;
   const { consequencesSince: _unused, ...legacyEmpty } = createBoard();
   const empty: SeasonBoard = consequences ? createBoard() : legacyEmpty;
-  const fields = record(state.board, 'board', ['model', 'enabledSince', 'mandates', 'reviews', ...(consequences ? ['consequencesSince'] : [])]);
+  // Format 63: career-2 careers record each new coach's fresh start (checked against the career's decisions later).
+  const fresh = version >= 63 && usesCareerRules(state.career);
+  const fields = record(state.board, 'board', ['model', 'enabledSince', 'mandates', 'reviews', ...(consequences ? ['consequencesSince'] : []), ...(fresh ? ['restarts'] : [])]);
   if (fields.model !== 'board-1') fail('board.model', 'is unsupported');
+  if (fresh && (!Array.isArray(fields.restarts) || fields.restarts.length > state.clubs.length * (seasonRounds(state) + 2) * state.seasonNumber + 1)) fail('board.restarts', 'must be a bounded list of fresh starts');
+  const restarts = fresh ? fields.restarts as BoardRestart[] : undefined;
   if (!Array.isArray(fields.mandates) || fields.mandates.length > state.seasonNumber || !Array.isArray(fields.reviews) || fields.reviews.length > seasonRounds(state) * state.seasonNumber) fail('board', 'must retain bounded chronological objectives and reviews');
   if (fields.enabledSince === null) {
-    if (!equal(fields, empty)) fail('board', 'must remain empty while disabled');
+    if (fresh || !equal(fields, empty)) fail('board', 'must remain empty while disabled');
     return;
   }
   const completedNow = ordinal(state.seasonNumber, state.status === 'complete' ? state.round : state.round - 1, seasonRounds(state));
@@ -154,6 +159,8 @@ export function validateBoard(state: SeasonState, version: number): void {
       if (reviewAnchor.seasonNumber !== year || reviewAnchor.round !== round) fail(reviewPath, 'must retain one review after every eligible committed matchday');
       chronological(reviewAnchor, reviewPath);
       let review;
+      // A new coach's fresh start recorded before this review is where its confidence moves from (format 63).
+      if (restarts) board = { ...board, restarts: restarts.filter(restart => restart.reviewCount <= reviewIndex) };
       try { review = validationReplayCache.calculate('board-review', { state: contextAt(state, reviewAnchor, board), mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
       if (!equal(reviewRaw, review)) fail(reviewPath, 'must exactly reproduce results, inherited costs, injury context and bounded confidence');
       board = { ...board, reviews: [...board.reviews, review] }; reviewIndex += 1;
@@ -164,5 +171,6 @@ export function validateBoard(state: SeasonState, version: number): void {
     if (since.date < enabled.date || since.completedRounds < enabled.completedRounds || since.ledgerCount < enabled.ledgerCount || ordinal(since.seasonNumber, since.round, seasonRounds(state)) < ordinal(enabled.seasonNumber, enabled.round, seasonRounds(state))) fail('board.consequencesSince', 'cannot precede board reviews');
     board = { ...board, consequencesSince: since };
   }
+  if (restarts) board = { ...board, restarts };
   if (!equal(board, source)) fail('board', 'must retain exactly the complete objective and review history without added or missing records');
 }

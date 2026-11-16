@@ -18,13 +18,15 @@ import { getMarketStartReason } from '../src/world/market-policy';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, previewSeasonEnd, rolloverSeason } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
+import { asCareer1 } from './helpers/career-rules';
 
 const FROM = 'rhine-falcons';
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 // Seed 8 (6 before the match calibration of sprint 4): Rhine Falcons keep their job and Aegean Waves' season ends Under
 // pressure, so Aegean Waves offer their job.
 const OFFER_SEED = 8;
-const career = (careerMoves = true, seed = OFFER_SEED) => createSeason({ seed, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves });
+// The Level 7 move rules that careers created before format 63 keep (`career-1`); tests/career-board-rules.test.ts covers new careers.
+const career = (careerMoves = true, seed = OFFER_SEED) => asCareer1(createSeason({ seed, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves }));
 /** Take the best job offered at the end of the season being finished; the test fails if nobody offers one. */
 function takeBestOffer(finished: SeasonState): SeasonState {
   const offer = previewSeasonEnd(finished)?.offers[0];

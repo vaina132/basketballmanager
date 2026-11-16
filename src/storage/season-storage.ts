@@ -87,7 +87,7 @@ import type { SeasonRivalries } from '../domain/rivalries';
 import { createRivalries } from '../world/rivalries';
 import { validateRivalries } from './rivalries-validation';
 import type { SeasonCareer } from '../domain/career';
-import { createCareer, deferCareerDecisions, managedClubAtLedger, managedClubFor, matchClubFor, releaseAcademyFocus } from '../world/career';
+import { createCareer, deferCareerDecisions, managedClubAtLedger, managedClubAtRound, managedClubFor, matchClubFor, releaseAcademyFocus } from '../world/career';
 import { validateCareer, validateCareerDecisions } from './career-validation';
 import { createNegotiations } from '../world/negotiations';
 import { applyMarketEvent, createMarket } from '../world/market';
@@ -116,7 +116,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
@@ -990,9 +990,8 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
   for (let year = anchor.seasonNumber; year <= state.seasonNumber; year += 1) {
     const firstRound = year === anchor.seasonNumber ? anchor.round : 1, lastRound = year === state.seasonNumber ? state.round : seasonRounds(state);
     if (year > anchor.seasonNumber) {
-      // A move at the previous season's end released that club's prospects before the opening graduations.
-      const move = state.career?.moves.find(item => item.seasonNumber === year - 1);
-      if (move) replay = { ...replay, academy: releaseAcademyFocus(replay.academy, move.fromClubId) };
+      // A move at the previous season's end (or in its offseason, format 63) released that club's prospects before the opening graduations.
+      for (const move of state.career?.moves.filter(item => item.seasonNumber === year - 1 && item.phase !== 'season') ?? []) replay = { ...replay, academy: releaseAcademyFocus(replay.academy, move.fromClubId) };
       // Each season's own full-world clubs run academies (step 3.4d-2).
       replay = { ...replay, clubs: fullWorldClubsIn(state, year), seasonNumber: year, round: 1, date: dateForRound(1, year), divisions: divisionsInSeason(state, year) };
       replay = prepareAcademySeason(replay);
@@ -1000,6 +999,8 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
       replay = activateYouthReplay(replay, state);
     }
     for (let round = firstRound + 1; round <= lastRound; round += 1) {
+      // Format 63: a mid-season move before the previous week's games released the former club's prospects then.
+      for (const move of state.career?.moves.filter(item => item.seasonNumber === year && item.phase === 'season' && item.round === round - 1) ?? []) replay = { ...replay, academy: releaseAcademyFocus(replay.academy, move.fromClubId) };
       replay = replayYouthRound(replay, state, youthHistoryContext);
       const raw = academy.weeks[weekIndex], path = `academy.weeks[${weekIndex}]`, afterRound = round - 1;
       if (!raw) fail(path, 'must retain every completed academy interval');
@@ -1017,7 +1018,7 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
           if (entry.clubId !== prospect.clubId || !canSummarizeAcademyReport(historyContext!, raw, raw.players[id]!)) fail(`${path}.players.${id}`, 'must retain full detail for current, manager and latest club development reports');
           outcomes.add(id);
         }
-        if (!TRAINING_FOCUSES.includes(entry.focus as TrainingPlan['focus']) || prospect.clubId !== managedClubFor(state, year, false) && entry.focus !== 'balanced') fail(`${path}.players.${id}.focus`, 'must retain a supported instruction for this club');
+        if (!TRAINING_FOCUSES.includes(entry.focus as TrainingPlan['focus']) || prospect.clubId !== managedClubAtRound(state, year, afterRound) && entry.focus !== 'balanced') fail(`${path}.players.${id}.focus`, 'must retain a supported instruction for this club');
         historicalFocus[id] = entry.focus as TrainingPlan['focus'];
       }
       replay = { ...replay, academy: processAcademyWeek({ rounds: seasonRounds(state), ...(state.world ? { world: state.world } : {}), facilities: state.facilities, academy: { ...replay.academy, focus: historicalFocus }, youth: state.youth, youthCompetition: replay.youthCompetition, clubs: fullWorldClubsIn(state, year).map(({ id }) => ({ id })), seasonNumber: year, afterRound, fromDate: dateForRound(afterRound, year), toDate: dateForRound(round, year) }, input => validationReplayCache.calculate('academy-week', input, buildAcademyWeek)), seasonNumber: year, round, date: dateForRound(round, year) };
@@ -1108,7 +1109,7 @@ function validateLifecycleHistory(state: SeasonState, recruitmentHolds: Recruitm
     const offers = recruitmentEventCount ? recruitmentHolds.find(hold => hold.eventCount === recruitmentEventCount)?.offers : [];
     if (!offers) fail(`${path}.recruitmentEventCount`, 'must reference a replayed in-season command boundary');
     const context: SeasonState = {
-      ...state, managedClubId: managedClubFor(state, year, false), seasonNumber: year, round, date: review.date, status: 'active', academy, lifecycle: replayed, youthCompetition, employment,
+      ...state, managedClubId: managedClubAtRound(state, year, round), seasonNumber: year, round, date: review.date, status: 'active', academy, lifecycle: replayed, youthCompetition, employment,
       clubs: clubsForEmploymentYear(employment, year, round, { world: worldOf(state), academy, lifecycle: replayed, seasonNumber: year, round, background: state.background }),
       finance, negotiations: { ...state.negotiations, records: replies },
       recruitment: { ...state.recruitment, events: state.recruitment.events.slice(0, recruitmentEventCount), offers }, market: { ...state.market, windows },
@@ -1791,7 +1792,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     const clubs = clubsForEmploymentYear(employment, year, round, catalogContext);
     const rosters = rostersForEmploymentYear(employment, year, round, catalogContext);
     const catalogIds = new Set(getCareerPlayers(catalogContext).map(player => player.id));
-    let replay: SeasonState = { ...state, managedClubId: managedClubFor(state, year, false), academy, lifecycle, youthCompetition, conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => catalogIds.has(id))), training: { ...state.training, points: Object.fromEntries(Object.entries(state.training.points).filter(([id]) => catalogIds.has(id))) }, seasonNumber: year, round, date: event.date as string, status: 'active', clubs, rosters, employment, recruitment, finance, payroll: { ...state.payroll, agreements: state.payroll.agreements.filter(agreement => agreement.seasonNumber < year || agreement.seasonNumber === year && agreement.startsRound <= round && contractForRound(employment, agreement.playerId, year, agreement.startsRound)?.clubId === agreement.clubId) }, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, negotiationCount) }, market: createMarket() };
+    let replay: SeasonState = { ...state, managedClubId: managedClubAtRound(state, year, round), academy, lifecycle, youthCompetition, conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => catalogIds.has(id))), training: { ...state.training, points: Object.fromEntries(Object.entries(state.training.points).filter(([id]) => catalogIds.has(id))) }, seasonNumber: year, round, date: event.date as string, status: 'active', clubs, rosters, employment, recruitment, finance, payroll: { ...state.payroll, agreements: state.payroll.agreements.filter(agreement => agreement.seasonNumber < year || agreement.seasonNumber === year && agreement.startsRound <= round && contractForRound(employment, agreement.playerId, year, agreement.startsRound)?.clubId === agreement.clubId) }, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, negotiationCount) }, market: createMarket() };
     try { replay = applyInSeasonEvent(replay, event as unknown as InSeasonEvent); }
     catch (error) { fail(path, `does not follow recruitment rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     if (!sameData(replay.employment.contracts, state.employment.contracts.slice(0, replay.employment.contracts.length)) || !sameData(replay.negotiations.records, state.negotiations.records.slice(0, replay.negotiations.records.length))) fail(path, 'must preserve the exact agreements and player replies generated at this boundary');
@@ -1869,7 +1870,7 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
     if (previous?.offeredWage === offeredWage && previous.offeredSeasons === offeredSeasons && previous.releaseFee === releaseFee && previous.boundary === boundary && previous.date === entry.date) fail(path, 'duplicates the unchanged latest offer in this negotiation at this boundary');
     if (entry.contractCountBefore !== prefix.length) fail(`${path}.contractCountBefore`, 'must identify the complete employment history when this offer was submitted');
     const replay: SeasonState = {
-      ...state, managedClubId: managedClubFor(state, year, entry.status === 'complete'), academy: academyAtBoundary(state.academy, year, round, prefix.length), lifecycle: lifecycleAtBoundary(state.lifecycle, year, round, prefix.length, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, index), seasonNumber: year, round, date: entry.date as string, status: entry.status,
+      ...state, managedClubId: entry.status === 'complete' ? managedClubFor(state, year, true) : managedClubAtRound(state, year, round), academy: academyAtBoundary(state.academy, year, round, prefix.length), lifecycle: lifecycleAtBoundary(state.lifecycle, year, round, prefix.length, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, index), seasonNumber: year, round, date: entry.date as string, status: entry.status,
       employment: { ...state.employment, contracts: prefix, transfers: (state.employment.transfers ?? []).filter(transfer => prefix.some(contract => contract.id === transfer.contractId)), buyouts: (state.employment.buyouts ?? []).filter(buyout => buyout.negotiationCountBefore <= index && buyout.completedOn <= (entry.date as string)), market: entry.status === 'complete' ? { seasonNumber: year + 1 } : null },
       negotiations: { model: 'negotiations-1', enabledSince: { seasonNumber: firstYear, round: firstRound, contractCount }, records: entries },
       market: createMarket(),
@@ -2726,6 +2727,9 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 60 && (Object.hasOwn(world, 'europeanPlaces') || Object.hasOwn(world, 'backgroundLeagues') || world.europeanCompetitions?.some(competition => Object.hasOwn(competition, 'oneYear')))) fail('world.europeanPlaces', 'requires format 60 or later');
   // Format 62 (sprint 4): researched club money; older careers keep the development economy's constants.
   if (version < 62 && Object.hasOwn(world, 'economy')) fail('world.economy', 'requires format 62 or later');
+  // Format 63: the career-2 rules (protected first season, fresh confidence, mid-season moves, resignations) need it.
+  const careerModel = state.career !== null && typeof state.career === 'object' ? (state.career as { model?: unknown }).model : undefined;
+  if (version < 63 && (careerModel === 'career-2' || state.board !== null && typeof state.board === 'object' && Object.hasOwn(state.board, 'restarts'))) fail('career.model', 'requires format 63 or later');
   const usesEurope = version >= 60 && Object.hasOwn(world, 'europeanPlaces');
   if (usesEurope !== Object.hasOwn(state, 'europe')) fail('europe', usesEurope ? 'must record this season\'s European places' : 'requires format 60 and a world with European places');
   const seasonEurope = usesEurope ? validateEuropeShape(state.europe, world, 'europe') : undefined;

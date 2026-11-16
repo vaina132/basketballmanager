@@ -11,6 +11,7 @@ import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS } from './rival
 import { roundKey, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
 import { seasonLeagues } from './divisions';
 import { scaledMoney } from './economy';
+import { startingConfidence } from './career-rules';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
@@ -122,7 +123,8 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     const derbyBalance = derbies.reduce((sum, fixture) => sum + (fixture.result!.winnerClubId === club.id ? 1 : -1), 0);
     const rivalryImpact = clamp(derbyBalance * RIVALRY_BOARD_POINTS, -RIVALRY_BOARD_CAP, RIVALRY_BOARD_CAP) || 0;
     const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact + rivalryImpact, 0, 100);
-    const previousConfidence = state.board.reviews.at(-1)?.clubs[club.id]?.confidence ?? 50;
+    // Format 63: a new coach's board starts from the fresh confidence recorded after the latest review.
+    const previousConfidence = startingConfidence(state.board, club.id);
     const confidence = previousConfidence + clamp(assessment - previousConfidence, -BOARD_REVIEW_STEP, BOARD_REVIEW_STEP);
     clubs[club.id] = { fixtureIds: games.map(fixture => fixture.id), played, wins, targetPace: rounded(targetPace), carriedAbsences, rosterPlaces, unpaid, resultsImpact, injuryRelief, financeImpact, ...(rivalriesCount ? { rivalryImpact } : {}), assessment, previousConfidence, confidence };
   }
@@ -149,7 +151,7 @@ export function getBoardSummary(state: SeasonState, clubId = state.managedClubId
   const mandate = state.board.mandates.find(mandate => mandate.seasonNumber === state.seasonNumber) ?? null;
   const objective = mandate?.clubs[clubId] ?? null;
   const latest = history.find(review => review.mandateId === mandate?.id) ?? null;
-  const confidence = history[0]?.club.confidence ?? 50;
+  const confidence = startingConfidence(state.board, clubId);
   const nextFixture = mandate ? state.fixtures.find(fixture => fixture.round >= mandate.startsRound && !fixture.result && [fixture.homeClubId, fixture.awayClubId].includes(clubId)) : undefined;
   let sportingStatus: BoardSummary['sportingStatus'] = 'waiting';
   if (latest && objective) {
@@ -157,5 +159,6 @@ export function getBoardSummary(state: SeasonState, clubId = state.managedClubId
     sportingStatus = result.played === objective.games ? result.wins >= objective.targetWins ? 'met' : 'missed' : result.played < BOARD_SPORTING_GRACE_GAMES ? 'building' : result.wins + BOARD_WIN_TOLERANCE >= result.targetPace ? 'on-track' : 'behind';
   }
   const financeStatus: BoardSummary['financeStatus'] = !objective || objective.startingUnpaid === null ? 'unassessed' : !latest ? 'waiting' : latest.club.unpaid !== null && latest.club.unpaid > objective.startingUnpaid ? 'behind' : 'on-track';
-  return { enabled: state.board.enabledSince !== null, confidence, confidenceLabel: boardConfidenceLabel(confidence), mandate, objective, latest, history, nextReviewDate: nextFixture?.date ?? null, sportingStatus, financeStatus };
+  const restarts = (state.board.restarts ?? []).filter(restart => restart.clubId === clubId);
+  return { enabled: state.board.enabledSince !== null, confidence, confidenceLabel: boardConfidenceLabel(confidence), mandate, objective, latest, history, nextReviewDate: nextFixture?.date ?? null, sportingStatus, financeStatus, restarts };
 }

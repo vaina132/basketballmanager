@@ -6,6 +6,7 @@ import { answerPress, getPlayerRelationship } from '../src/world/relationships';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
 import { currentSeasonFile } from './helpers/season-format';
+import { asCareer1 } from './helpers/career-rules';
 
 const morale = (state: SeasonState, playerId: string) => getPlayerRelationship(state, playerId).morale;
 let start: SeasonState, open: SeasonState;
@@ -75,7 +76,8 @@ describe('press questions in a career', () => {
 
   it('rejects press answers in a format-33 file', () => {
     // A genuine format-33 career had no rivalries, so its derby crowds were never enlarged.
-    let plain = createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, rivalries: false, facilityMaintenance: false });
+    // Format 33 also predates the format-63 career rules (`career-1`).
+    let plain = asCareer1(createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, rivalries: false, facilityMaintenance: false }));
     for (let step = 0; step < 10 && !getPressQuestion(plain); step += 1) plain = advanceMatchday(plain);
     const file = JSON.parse(serializeSeason(answerPress(plain, 'routine')));
     file.formatVersion = 33; file.state.schemaVersion = 33;

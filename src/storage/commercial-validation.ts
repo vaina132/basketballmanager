@@ -150,7 +150,7 @@ export function validateCommercial(state: SeasonState, version: number): void {
   const consumeMove = (boundary: Extract<Boundary, { kind: 'move' }>) => {
     const { move } = boundary;
     replay = { ...replay, plans: { ...replay.plans, [move.fromClubId]: { delegated: true }, [move.toClubId]: { delegated: false } } };
-    consumeAutomation({ seasonNumber: move.seasonNumber, round: seasonRounds(state), date: move.date, ledgerCount: move.ledgerCount });
+    consumeAutomation({ seasonNumber: move.seasonNumber, round: move.round ?? seasonRounds(state), date: move.date, ledgerCount: move.ledgerCount });
   };
   const consumeExpiry = (boundary: Extract<Boundary, { kind: 'expire' }>) => {
     const expired = replay.offers.filter(offer => offer.status === 'open' && offer.forSeason <= boundary.seasonNumber).map(offer => offer.id);
@@ -193,9 +193,12 @@ export function validateCommercial(state: SeasonState, version: number): void {
   for (let season = activation.seasonNumber; season <= state.seasonNumber; season += 1) {
     if (season > activation.seasonNumber) boundaries.push({ kind: 'expire', seasonNumber: season, date: dateForRound(1, season), key: [ordinal(season, 1, seasonRounds(state)), -1] });
     if ((season > activation.seasonNumber || activation.round < SPONSORSHIP_RENEWAL_ROUND) && (season < state.seasonNumber || state.round >= SPONSORSHIP_RENEWAL_ROUND)) boundaries.push({ kind: 'window', window: 'renewal', seasonNumber: season, round: SPONSORSHIP_RENEWAL_ROUND, date: dateForRound(SPONSORSHIP_RENEWAL_ROUND, season), completedRounds: SPONSORSHIP_RENEWAL_ROUND - 1, activation: false, key: [ordinal(season, SPONSORSHIP_RENEWAL_ROUND, seasonRounds(state)), -1] });
-    for (const move of state.career?.moves ?? []) if (move.seasonNumber === season && move.ledgerCount >= activation.ledgerCount) boundaries.push({ kind: 'move', move, key: [ordinal(season, seasonRounds(state), seasonRounds(state)), 0.5] });
+    // Format 63 (career-2): a mid-season move follows its week's opening and precedes the new manager's commands; an
+    // offseason resignation follows the season's completion.
+    for (const move of state.career?.moves ?? []) if (move.seasonNumber === season && move.ledgerCount >= activation.ledgerCount) boundaries.push({ kind: 'move', move, key: move.phase === 'season' ? [ordinal(season, move.round!, seasonRounds(state)), -0.5] : [ordinal(season, seasonRounds(state), seasonRounds(state)), move.phase === 'offseason' ? 1.5 : 0.5] });
     if (season < state.seasonNumber || state.status === 'complete') boundaries.push({ kind: 'window', window: 'second-round', seasonNumber: season, round: seasonRounds(state), date: dateForRound(seasonRounds(state), season), completedRounds: seasonRounds(state), activation: false, key: [ordinal(season, seasonRounds(state), seasonRounds(state)), 1] });
   }
+  boundaries.sort((a, b) => a.key[0] - b.key[0] || a.key[1] - b.key[1]);
   for (const boundary of boundaries) {
     while (index < events.length && before(keyOf(eventAt(index)), boundary.key)) consumeManual();
     if (boundary.kind === 'window') consumeWindow(boundary); else if (boundary.kind === 'move') consumeMove(boundary); else consumeExpiry(boundary);

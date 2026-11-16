@@ -222,10 +222,15 @@ export function postseasonSlots(format: PostseasonFormat): Map<string, number> {
   return starts;
 }
 
-/** Reserved postseason weeks of a format (three slots a week). */
+/** Reserved postseason weeks of a format (three slots a week); formats are constants, so each is worked out once. */
+const postseasonWeeksCache = new WeakMap<PostseasonFormat, number>();
 export function postseasonWeeks(format: PostseasonFormat): number {
+  const known = postseasonWeeksCache.get(format);
+  if (known !== undefined) return known;
   const starts = postseasonSlots(format);
-  return Math.ceil(Math.max(...format.series.map(spec => starts.get(spec.id)! + spec.bestOf - 1)) / POSTSEASON_SLOT_OFFSETS.length);
+  const weeks = Math.ceil(Math.max(...format.series.map(spec => starts.get(spec.id)! + spec.bestOf - 1)) / POSTSEASON_SLOT_OFFSETS.length);
+  postseasonWeeksCache.set(format, weeks);
+  return weeks;
 }
 
 /** A postseason game: an ordinary season fixture with its stage, series and game number. */

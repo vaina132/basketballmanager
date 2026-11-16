@@ -95,15 +95,39 @@ export function getPotentialKnowledge(state: SeasonState, playerId: string, club
   return { ...knowledge, ranges };
 }
 
+// Step 3.7: lookups built once per immutable array instead of once per player (large worlds evaluate thousands of
+// players for every club each week). Arrays in the state are replaced, never edited, so these caches stay correct.
+const ownerIndexCache = new WeakMap<readonly SeasonState['clubs'][number][], Map<string, SeasonState['clubs'][number]>>();
+function clubOfPlayer(clubs: SeasonState['clubs'], playerId: string): SeasonState['clubs'][number] | undefined {
+  let index = ownerIndexCache.get(clubs);
+  if (!index) {
+    index = new Map();
+    for (const club of clubs) for (const player of club.players) if (!index.has(player.id)) index.set(player.id, club);
+    ownerIndexCache.set(clubs, index);
+  }
+  return index.get(playerId);
+}
+
+const observedReviewCache = new WeakMap<readonly ScoutingReview[], Map<string, ScoutingReview[]>>();
+function observedReviews(reviews: readonly ScoutingReview[], playerId: string): ScoutingReview[] {
+  let index = observedReviewCache.get(reviews);
+  if (!index) {
+    index = new Map();
+    for (const review of reviews) if (review.outcome === 'observed') { const list = index.get(review.playerId); if (list) list.push(review); else index.set(review.playerId, [review]); }
+    observedReviewCache.set(reviews, index);
+  }
+  return index.get(playerId) ?? [];
+}
+
 export function getPlayerKnowledge(state: SeasonState, playerId: string, clubId = state.managedClubId): PlayerKnowledge {
   getCareerPlayer(state, playerId);
-  const owner = state.clubs.find(club => club.players.some(player => player.id === playerId));
+  const owner = clubOfPlayer(state.clubs, playerId);
   if (owner?.id === clubId) return { playerId, kind: 'own', level: 3, attributes: scoutingActualAttributes(state, playerId), ranges: null, observedOn: state.date, observedClubId: clubId, ageDays: 0, freshness: 'current', source: 'squad', observations: 0 };
   const empty: PlayerKnowledge = { playerId, kind: 'unknown', level: 0, attributes: null, ranges: null, observedOn: null, observedClubId: null, ageDays: null, freshness: 'unknown', source: null, observations: 0 };
   if (!state.scouting.enabledSince) return empty;
   const knowledge = state.scouting.clubs[clubId];
   if (!knowledge) return empty;
-  const reviews = knowledge.reviews.filter(review => review.playerId === playerId && review.outcome === 'observed');
+  const reviews = observedReviews(knowledge.reviews, playerId);
   const review = reviews.at(-1), own = knowledge.squadKnowledge[playerId];
   const useOwn = own && (!review || own.date >= review.date);
   const source = useOwn ? own : review;
@@ -122,23 +146,39 @@ export function getMatchPlayerKnowledge(state: SeasonState, playerId: string): P
 }
 
 export function quoteScoutingAssignment(state: SeasonState, playerId: string, clubId = state.managedClubId, scoutContractId?: string | null): ScoutingAssignmentQuote {
+  return scoutingQuoter(state, clubId, scoutContractId)(playerId);
+}
+
+/**
+ * The assignment check for many players of one club at one moment (step 3.7): everything that does not depend on the
+ * player (observers, career players, this week's fixtures, pending and reviewed players) is worked out once.
+ */
+export function scoutingQuoter(state: SeasonState, clubId = state.managedClubId, scoutContractId?: string | null): (playerId: string) => ScoutingAssignmentQuote {
   const club = state.scouting.clubs[clubId];
-  const owner = state.clubs.find(club => club.players.some(player => player.id === playerId));
   const observers = getScoutingObservers(state, clubId);
   const selected = scoutContractId === undefined ? observers.filter(observer => observer.available).sort((left, right) => right.evidence - left.evidence || (left.contractId ?? '').localeCompare(right.contractId ?? '', 'en'))[0] : observers.find(observer => observer.contractId === scoutContractId);
-  let reason: string | null = null;
-  if (!state.scouting.enabledSince) reason = 'Enable scouting before assigning observations.';
-  else if (!club || !getCareerPlayers(state).some(player => player.id === playerId)) reason = 'Choose a club and player in this league.';
-  else if (isPlayerRetired(state, playerId)) reason = 'This player has retired from playing.';
-  else if (state.status !== 'active') reason = 'New observations become available when the next season starts.';
-  else if (!owner) reason = 'This player needs a registered club and a scheduled match before he can be observed.';
-  else if (owner.id === clubId) reason = 'Your own squad already has exact skill assessments.';
-  else if (!state.fixtures.some(fixture => fixture.round === state.round && [fixture.homeClubId, fixture.awayClubId].includes(owner.id))) reason = 'This player has a rest week. Keep him shortlisted and assign an observation when his next match opens.';
-  else if (club.assignments.some(assignment => assignment.playerId === playerId)) reason = 'This player already has a pending assignment.';
-  else if (!selected) reason = scoutContractId !== undefined && scoutContractId !== null ? 'Choose an active scout at this club.' : state.scouts.enabledSince ? 'All observation slots are occupied for this matchday.' : 'Both scouting assignments are occupied for this matchday.';
-  else if (!selected.available) reason = selected.reason;
-  else if (club.reviews.some(review => review.playerId === playerId && review.seasonNumber === state.seasonNumber && review.round === state.round)) reason = 'This player has already been reviewed on this matchday.';
-  return { playerId, clubId, canAssign: reason === null, reason, ...(state.scouts.enabledSince && selected ? { observer: { contractId: selected.contractId, scoutId: selected.scoutId, evidence: selected.evidence, assignedLedgerIndex: financeLedgerCount(state.finance) } } : {}) };
+  let careerIds: Set<string> | null = null;
+  const playingClubs = new Set<string>();
+  for (const fixture of state.fixtures) if (fixture.round === state.round) { playingClubs.add(fixture.homeClubId); playingClubs.add(fixture.awayClubId); }
+  const pending = new Set(club?.assignments.map(assignment => assignment.playerId) ?? []);
+  const reviewedNow = new Set(club?.reviews.filter(review => review.seasonNumber === state.seasonNumber && review.round === state.round).map(review => review.playerId) ?? []);
+  const observer = state.scouts.enabledSince && selected ? { observer: { contractId: selected.contractId, scoutId: selected.scoutId, evidence: selected.evidence, assignedLedgerIndex: financeLedgerCount(state.finance) } } : {};
+  return playerId => {
+    const owner = clubOfPlayer(state.clubs, playerId);
+    let reason: string | null = null;
+    if (!state.scouting.enabledSince) reason = 'Enable scouting before assigning observations.';
+    else if (!club || !(careerIds ??= new Set(getCareerPlayers(state).map(player => player.id))).has(playerId)) reason = 'Choose a club and player in this league.';
+    else if (isPlayerRetired(state, playerId)) reason = 'This player has retired from playing.';
+    else if (state.status !== 'active') reason = 'New observations become available when the next season starts.';
+    else if (!owner) reason = 'This player needs a registered club and a scheduled match before he can be observed.';
+    else if (owner.id === clubId) reason = 'Your own squad already has exact skill assessments.';
+    else if (!playingClubs.has(owner.id)) reason = 'This player has a rest week. Keep him shortlisted and assign an observation when his next match opens.';
+    else if (pending.has(playerId)) reason = 'This player already has a pending assignment.';
+    else if (!selected) reason = scoutContractId !== undefined && scoutContractId !== null ? 'Choose an active scout at this club.' : state.scouts.enabledSince ? 'All observation slots are occupied for this matchday.' : 'Both scouting assignments are occupied for this matchday.';
+    else if (!selected.available) reason = selected.reason;
+    else if (reviewedNow.has(playerId)) reason = 'This player has already been reviewed on this matchday.';
+    return { playerId, clubId, canAssign: reason === null, reason, ...observer };
+  };
 }
 
 /** Unknown outsiders receive a neutral prior, never a peek at catalog skill ratings. */

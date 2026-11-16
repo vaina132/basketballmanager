@@ -38,8 +38,32 @@ export function agreementCommittedFromLedger(agreement: PlayerWageAgreement, thr
 }
 
 /** Original wage terms and prepaid charges remain intact; a sale ends unposted liability. */
+// Step 3.7: indexes built once per immutable array (state arrays are replaced, never edited), because large worlds ask
+// for every club's reserve many times a week and each ask used to scan the whole career.
+type EmploymentTransfer = SeasonState['employment']['transfers'][number];
+const transfersByPlayerCache = new WeakMap<readonly EmploymentTransfer[], Map<string, EmploymentTransfer[]>>();
+function transfersOfPlayer(transfers: readonly EmploymentTransfer[], playerId: string): readonly EmploymentTransfer[] {
+  let index = transfersByPlayerCache.get(transfers);
+  if (!index) {
+    index = new Map();
+    for (const transfer of transfers) { const list = index.get(transfer.playerId); if (list) list.push(transfer); else index.set(transfer.playerId, [transfer]); }
+    transfersByPlayerCache.set(transfers, index);
+  }
+  return index.get(playerId) ?? [];
+}
+const agreementsByClubSeasonCache = new WeakMap<readonly PlayerWageAgreement[], Map<string, PlayerWageAgreement[]>>();
+function clubSeasonAgreements(agreements: readonly PlayerWageAgreement[], clubId: string, seasonNumber: number): readonly PlayerWageAgreement[] {
+  let index = agreementsByClubSeasonCache.get(agreements);
+  if (!index) {
+    index = new Map();
+    for (const agreement of agreements) { const key = `${agreement.clubId}\u0000${agreement.seasonNumber}`, list = index.get(key); if (list) list.push(agreement); else index.set(key, [agreement]); }
+    agreementsByClubSeasonCache.set(agreements, index);
+  }
+  return index.get(`${clubId}\u0000${seasonNumber}`) ?? [];
+}
+
 export function agreementThroughRound(state: Partial<Pick<SeasonState, 'employment'>> & WorldContext, agreement: PlayerWageAgreement): number {
-  const departure = state.employment?.transfers.find(transfer => transfer.playerId === agreement.playerId && transfer.fromClubId === agreement.clubId && transfer.startsSeason === agreement.seasonNumber && transfer.startsRound > agreement.startsRound);
+  const departure = state.employment ? transfersOfPlayer(state.employment.transfers, agreement.playerId).find(transfer => transfer.fromClubId === agreement.clubId && transfer.startsSeason === agreement.seasonNumber && transfer.startsRound > agreement.startsRound) : undefined;
   return departure ? departure.startsRound - 1 : seasonRounds(state);
 }
 
@@ -47,7 +71,7 @@ export function getPayrollReserve(state: Pick<SeasonState, 'payroll' | 'finance'
   if (!state.payroll.enabledSince) return 0;
   const rounds = seasonRounds(state);
   const readPayroll = payrollLedgerReader(state.finance);
-  return state.payroll.agreements.filter(agreement => agreement.clubId === clubId && agreement.seasonNumber === state.seasonNumber && agreement.startsRound <= (state.round ?? rounds)).reduce((sum, agreement) => sum + agreementCommittedFromLedger(agreement, agreementThroughRound(state, agreement), rounds, readPayroll), 0);
+  return clubSeasonAgreements(state.payroll.agreements, clubId, state.seasonNumber).filter(agreement => agreement.startsRound <= (state.round ?? rounds)).reduce((sum, agreement) => sum + agreementCommittedFromLedger(agreement, agreementThroughRound(state, agreement), rounds, readPayroll), 0);
 }
 
 /**

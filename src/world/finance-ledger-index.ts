@@ -10,6 +10,7 @@ const CLUB_TOTALS = Symbol('validation club financial prefixes');
 const WAGE_TOTALS = Symbol('validation wage financial prefixes');
 const emptyClub = (): ClubTotals => ({ cash: 0, unpaid: 0, net: 0 });
 const emptyWage = (): LedgerPayrollTotals => ({ gross: 0, amount: 0, discount: 0, prepaid: false });
+const wageTotalsCache = new WeakMap<FinanceLedgerSource, Map<string, LedgerPayrollTotals>>();
 
 function addAmount(previous: ClubTotals, amount: number): ClubTotals {
   if (amount >= 0) {
@@ -92,9 +93,16 @@ function wageIndex(finance: FinanceLedgerSource): Map<string, Point<LedgerPayrol
 export function payrollLedgerReader(finance: FinanceLedgerSource): PayrollLedgerReader {
   const scoped = scopedFinanceLedgerIndex(finance, WAGE_TOTALS, wageIndex);
   if (scoped) return id => ({ ...(atBoundary(scoped.index.get(id), scoped.through) ?? emptyWage()) });
-  const wages = new Map<string, LedgerPayrollTotals>();
-  for (const payroll of financeLedgerPayrollCharges(finance)) {
-    for (const [id, charge] of wagesInCharge(payroll)) wages.set(id, addWages(wages.get(id) ?? emptyWage(), charge));
+  // Step 3.7: a finance record is replaced, never edited, so its wage totals are summed once (they were summed again for
+  // every club and agreement asked about, many times a week in large worlds).
+  let wages = wageTotalsCache.get(finance);
+  if (!wages) {
+    wages = new Map<string, LedgerPayrollTotals>();
+    for (const payroll of financeLedgerPayrollCharges(finance)) {
+      for (const [id, charge] of wagesInCharge(payroll)) wages.set(id, addWages(wages.get(id) ?? emptyWage(), charge));
+    }
+    wageTotalsCache.set(finance, wages);
   }
-  return id => ({ ...(wages.get(id) ?? emptyWage()) });
+  const totals = wages;
+  return id => ({ ...(totals.get(id) ?? emptyWage()) });
 }

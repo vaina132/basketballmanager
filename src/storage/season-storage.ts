@@ -2839,7 +2839,9 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const seasonNumber = career ? number(state.seasonNumber, 'seasonNumber', 1, MAX_SEASON_NUMBER) : 1;
   const injuryMode = legacy ? 'off' : state.injuryMode;
   if (!['standard', 'reduced', 'off'].includes(injuryMode as string)) fail('injuryMode', 'must be standard, reduced or off');
-  if (!legacy && (!Array.isArray(state.injuries) || state.injuries.length > 600 * seasonNumber)) fail('injuries', 'must be a bounded injury history');
+  // The bound scales with the games recorded (step 3.7): realistic injuries in a 70-club world with Europe pass 600 a season.
+  const recordedGames = (Array.isArray(state.fixtures) ? state.fixtures.length : 0) + (Array.isArray(state.history) ? state.history.reduce((count: number, archive: unknown) => count + (archive && typeof archive === 'object' && Array.isArray((archive as { fixtures?: unknown }).fixtures) ? (archive as { fixtures: unknown[] }).fixtures.length : 0), 0) : 0);
+  if (!legacy && (!Array.isArray(state.injuries) || state.injuries.length > 600 * seasonNumber + 3 * recordedGames)) fail('injuries', 'must be a bounded injury history');
   if (state.status !== 'active' && state.status !== 'complete') fail('status', 'must be active or complete');
   if (state.status === 'complete' && round !== worldRounds(world)) fail('round', 'must reach the final matchday before completion');
   if (typeof state.managedClubId !== 'string' || !unemployed && !isWorldClub(world, state.managedClubId)) fail('managedClubId', 'must identify a club in this league');

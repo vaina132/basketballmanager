@@ -5,7 +5,7 @@ import type { Player, Team } from '../domain/types';
 import { isPlayerRetired } from './lifecycle-policy';
 import { getCareerPlayers } from './player-catalog';
 import { rosterForRound } from './rosters';
-import { getPlayerKnowledge, getScoutingCapacity, quoteScoutingAssignment, scoutingActualAttributes } from './scouting-policy';
+import { getPlayerKnowledge, getScoutingCapacity, quoteScoutingAssignment, scoutingActualAttributes, scoutingQuoter } from './scouting-policy';
 
 export function createScouting(clubs: readonly Team[], managedClubId: string): SeasonScouting {
   return { model: 'scouting-1', enabledSince: null, clubs: Object.fromEntries(clubs.map(club => [club.id, { delegated: club.id !== managedClubId, shortlist: [], assignments: [], reviews: [], squadKnowledge: {} }])) };
@@ -83,7 +83,9 @@ function candidates(state: SeasonState, clubId: string): Player[] {
   const club = state.scouting.clubs[clubId]!;
   const positionCounts = new Map<string, number>();
   for (const player of state.clubs.find(team => team.id === clubId)!.players) positionCounts.set(player.position, (positionCounts.get(player.position) ?? 0) + 1);
-  const rows = state.clubs.flatMap(team => team.players).filter(player => quoteScoutingAssignment(state, player.id, clubId).canAssign).map(player => ({ player, knowledge: getPlayerKnowledge(state, player.id, clubId), shortlisted: club.shortlist.includes(player.id) }));
+  // Step 3.7: one shared quote context for every player of this club's decision.
+  const quote = scoutingQuoter(state, clubId), shortlist = new Set(club.shortlist);
+  const rows = state.clubs.flatMap(team => team.players).filter(player => quote(player.id).canAssign).map(player => ({ player, knowledge: getPlayerKnowledge(state, player.id, clubId), shortlisted: shortlist.has(player.id) }));
   return rows.filter(row => row.knowledge.level < 3 || (row.knowledge.ageDays ?? 0) >= 28).sort((left, right) =>
     Number(right.shortlisted) - Number(left.shortlisted)
     || (positionCounts.get(left.player.position) ?? 0) - (positionCounts.get(right.player.position) ?? 0)
@@ -100,10 +102,18 @@ export function prepareScoutingAssignments(state: SeasonState): SeasonState {
   for (const team of state.clubs) {
     const club = next.scouting.clubs[team.id]!;
     if (!club.delegated) continue;
+    // Step 3.7: the club's ordered candidates are worked out once. An assignment changes no knowledge, position count or
+    // order; it only makes that player pending and may use up observers, which can only exclude players. So the next
+    // assignable player in the same order is exactly the first candidate a fresh list would give.
+    let ordered: Player[] | null = null, cursor = 0;
     while (next.scouting.clubs[team.id]!.assignments.length < getScoutingCapacity(next, team.id)) {
-      const player = candidates(next, team.id)[0];
+      ordered ??= candidates(next, team.id);
+      const quote = scoutingQuoter(next, team.id);
+      while (cursor < ordered.length && !quote(ordered[cursor]!.id).canAssign) cursor += 1;
+      const player = ordered[cursor];
       if (!player) break;
       next = assignForClub(next, team.id, player.id);
+      cursor += 1;
     }
   }
   return next;

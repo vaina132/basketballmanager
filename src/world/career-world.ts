@@ -57,9 +57,15 @@ export function postseasonWorldWeeks(world: CareerWorld): number {
   return Math.max(0, ...(world.domesticLeagues ?? []).map(league => league.postseason ? postseasonWeeks(POSTSEASON_FORMATS[league.postseason]) : 0));
 }
 
+// Step 3.7: a world never changes after creation, so its season length is worked out once (it was recomputed, with every
+// league's postseason slots, many thousands of times a week in large worlds).
+const worldRoundsCache = new WeakMap<CareerWorld, number>();
 export function worldRounds(world: CareerWorld): number {
-  if (world.domesticLeagues) return regularWorldRounds(world) + postseasonWorldWeeks(world);
-  return 2 * (world.clubs.length - 1);
+  const known = worldRoundsCache.get(world);
+  if (known !== undefined) return known;
+  const rounds = world.domesticLeagues ? regularWorldRounds(world) + postseasonWorldWeeks(world) : 2 * (world.clubs.length - 1);
+  worldRoundsCache.set(world, rounds);
+  return rounds;
 }
 
 /** Matchdays in a season of the career's world (10 in the built-in six-club league). */

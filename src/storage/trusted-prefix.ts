@@ -1,5 +1,6 @@
 import type { SeasonState } from '../domain/season';
 import { roundKey } from '../world/career-world';
+import { dateForRound } from '../world/season';
 
 /**
  * Incremental checkpoint checks (16 November 2026). A checkpoint the save worker has accepted is a trusted prefix for the
@@ -139,30 +140,64 @@ export function sameJson(left: unknown, right: unknown): boolean {
 type Dated = { seasonNumber: number; round: number };
 interface Journal {
   items: (state: SeasonState) => readonly unknown[] | undefined;
+  /** The record's calendar position as a `roundKey`: records before the cut's are trusted. */
   at: (item: never) => number;
+  /** Equality of a trusted record (default: exact). */
+  same?: (left: never, right: never, cut: PrefixCut) => boolean;
 }
 const dated = (item: Dated) => roundKey(item.seasonNumber, item.round);
 const dated1 = (item: Dated) => roundKey(item.seasonNumber, item.round + 1);
+/** Offseason records (a season's recruitment window follows its final matchday): after every matchday of that season. */
+const OFFSEASON = 99;
+/** A career point (moves, fresh starts): its week during the season, after every matchday at its end or offseason. */
+const careerPoint = (item: { seasonNumber: number; round?: number; phase?: string }) => roundKey(item.seasonNumber, item.phase === 'season' && typeof item.round === 'number' ? item.round : OFFSEASON);
+/** Whether a date falls before the cut's week (weeks run from their Saturday, `state.date`, to the next Friday). */
+const datedOn = (cut: PrefixCut, date: unknown) => typeof date === 'string' && date < dateForRound(cut.round, cut.seasonNumber);
 
 /**
- * Journals whose earlier records validators may skip. Each must be append-only in a live game for records dated before
- * the current week; records of the current week may still be rewritten (they are never trusted).
+ * Journals that must keep their records dated before the cut, and validators may skip (those named in `prefixPlan`
+ * calls). Each must be append-only in a live game for records dated before the current week; records of the current
+ * week may still be rewritten (they are never trusted).
  */
 const JOURNALS = new Map<string, Journal>([
   ['employment.contracts', { items: state => state.employment?.contracts, at: (item: { signedSeason: number; signedRound: number }) => roundKey(item.signedSeason, item.signedRound) }],
+  // A transfer's in-season arrival week, or its offseason window; later installments are added to its payments.
+  ['employment.transfers', { items: state => state.employment?.transfers, at: (item: { seasonNumber: number; startsRound: number }) => roundKey(item.seasonNumber, item.startsRound > 1 ? item.startsRound : OFFSEASON), same: sameTransfer }],
+  ['employment.buyouts', { items: state => state.employment?.buyouts, at: (item: { seasonNumber: number }) => roundKey(item.seasonNumber, OFFSEASON) }],
   ['negotiations.records', { items: state => state.negotiations?.records, at: dated }],
   ['recruitment.events', { items: state => state.recruitment?.events, at: dated }],
   ['facilities.events', { items: state => state.facilities?.events, at: dated }],
   ['relationships.events', { items: state => state.relationships?.events, at: dated }],
   ['finance.ledger', { items: state => state.finance?.ledger, at: dated }],
-  // A season's recruitment window follows its final matchday: dated after every matchday of that season.
-  ['market.windows', { items: state => state.market?.windows, at: (window: { seasonNumber: number }) => roundKey(window.seasonNumber, 99) }],
+  ['market.windows', { items: state => state.market?.windows, at: (window: { seasonNumber: number }) => roundKey(window.seasonNumber, OFFSEASON) }],
   ['commercial.events', { items: state => state.commercial?.events, at: dated }],
   // A board review follows its matchday's results, and the latest one is still rewritten (format 73).
   ['board.reviews', { items: state => state.board?.reviews, at: dated1 }],
+  ['board.restarts', { items: state => state.board?.restarts ?? [], at: careerPoint }],
+  ['career.moves', { items: state => state.career?.moves ?? [], at: careerPoint }],
   // A week's report is written at the next week's start, and the latest one is still rewritten (format 73 summaries).
   ['academy.weeks', { items: state => state.academy?.weeks, at: (week: { seasonNumber: number; afterRound: number }) => roundKey(week.seasonNumber, week.afterRound + 1) }],
+  // Treatment of a week is recorded at the next week's start.
+  ['physio.rehabilitation', { items: state => state.physio?.rehabilitation ?? [], at: (item: { seasonNumber: number; afterRound: number }) => roundKey(item.seasonNumber, item.afterRound + 1) }],
 ]);
+
+/** A trusted transfer keeps every term and its installments paid before the cut; later installments are new records. */
+function sameTransfer(left: Record<string, unknown>, right: Record<string, unknown>, cut: PrefixCut): boolean {
+  const a = Object.keys(left), b = Object.keys(right);
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    const key = a[index]!;
+    if (key !== b[index]) return false;
+    if (key !== 'payments') { if (!sameJson(left[key], right[key])) return false; continue; }
+    const old = left.payments, next = right.payments;
+    if (!Array.isArray(old) || !Array.isArray(next)) return false;
+    const count = leadingBefore(old, dated, cut);
+    if (count !== old.length || next.length < count) return false;
+    for (let item = 0; item < count; item += 1) if (!sameJson(old[item], next[item])) return false;
+    for (let item = count; item < next.length; item += 1) if (next[item] === null || typeof next[item] !== 'object' || dated(next[item] as Dated) < cutKey(cut)) return false;
+  }
+  return true;
+}
 
 /** Top-level parts that cannot change during a season (season-end exchanges, money and archives change at the rollover). */
 const SEASON_CONSTANTS = ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'world', 'manager', 'injuryMode', 'history', 'divisions', 'europe', 'background', 'economySeasons'] as const;
@@ -186,11 +221,20 @@ export function trustedPrefixMismatch(trusted: CheckRecord, state: SeasonState):
   for (const [name, journal] of JOURNALS) {
     const old = journal.items(before), next = journal.items(state);
     if (!Array.isArray(old) || !Array.isArray(next)) return name;
-    const at = journal.at as (item: unknown) => number;
+    const at = journal.at as (item: unknown) => number, same = (journal.same ?? sameJson) as (left: unknown, right: unknown, cut: PrefixCut) => boolean;
     const count = leadingBefore(old, at, cut);
     if (next.length < count) return name;
-    for (let index = 0; index < count; index += 1) if (!sameJson(old[index], next[index])) return `${name}[${index}]`;
+    for (let index = 0; index < count; index += 1) if (!same(old[index], next[index], cut)) return `${name}[${index}]`;
     for (let index = count; index < next.length; index += 1) if (next[index] !== null && typeof next[index] === 'object' && at(next[index]) < limit) return `${name}[${index}] back-dated`;
+  }
+  // Injuries are dated by their game: those of earlier weeks are unchanged and none is added to an earlier week.
+  if (!Array.isArray(before.injuries) || !Array.isArray(state.injuries)) return 'injuries';
+  {
+    let count = 0;
+    while (count < before.injuries.length && datedOn(cut, before.injuries[count]?.occurredOn)) count += 1;
+    if (state.injuries.length < count) return 'injuries';
+    for (let index = 0; index < count; index += 1) if (!sameJson(before.injuries[index], state.injuries[index])) return `injuries[${index}]`;
+    for (let index = count; index < state.injuries.length; index += 1) if (state.injuries[index] === null || typeof state.injuries[index] !== 'object' || datedOn(cut, state.injuries[index]!.occurredOn)) return `injuries[${index}] back-dated`;
   }
   // Games of earlier weeks are unchanged. Postseason and knockout games are added as results make them due, in calendar
   // order, so they are matched by identity; an added game must belong to the cut's week or later.

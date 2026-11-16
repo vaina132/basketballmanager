@@ -3,7 +3,7 @@ import { PlayerCareerStatus } from './PlayerLifecycle'
 import { getPlayerRetirement } from '../world/lifecycle-policy'
 import { getCareerPlayer, getCareerWage } from '../world/player-catalog'
 import type { ContractOfferOptions } from '../domain/employment'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SeasonState } from '../domain/season'
 import type { TransferPaymentPlan } from '../domain/transfer-payments'
 import type { Position } from '../domain/types'
@@ -65,8 +65,8 @@ const seasonLabel = (number: number) => number > MAX_SEASON_NUMBER ? 'Calendar l
 const positions: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
 const PAGE_SIZE = 30
 const STAR_OPTIONS = [2, 3, 3.5, 4, 4.5]
-const WAGE_OPTIONS = [10_000_000, 25_000_000, 50_000_000, 100_000_000, 200_000_000, 400_000_000]
-const FEE_OPTIONS = [25_000_000, 50_000_000, 100_000_000, 250_000_000, 500_000_000, 1_000_000_000]
+const WAGE_OPTIONS = [5_000_000, 10_000_000, 25_000_000, 50_000_000, 100_000_000, 200_000_000, 400_000_000]
+const FEE_OPTIONS = [5_000_000, 10_000_000, 25_000_000, 50_000_000, 100_000_000, 250_000_000, 500_000_000, 1_000_000_000]
 const SORTS: { id: TransferSort; label: string }[] = [{ id: 'rating', label: 'Best rated' }, { id: 'wage', label: 'Lowest wage' }, { id: 'fee', label: 'Lowest fee' }, { id: 'age', label: 'Youngest' }, { id: 'contract', label: 'Contract ending soonest' }, { id: 'name', label: 'Name' }]
 const optionalNumber = (value: string) => value === '' ? null : Number(value)
 
@@ -97,7 +97,8 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
   const selected = offerId ? getCareerPlayer(season, offerId) : null
   const inSeasonPlayer = inSeasonPlayerId ? getCareerPlayer(season, inSeasonPlayerId) : null
   const inSeasonOffers = getInSeasonOffers(season, club.id, true)
-  const search = getTransferSearch(season)
+  // Recomputed only when the career changes, not on every filter keystroke.
+  const search = useMemo(() => getTransferSearch(season), [season])
   const rows = sortTransferRows(filterTransferRows(search.rows, filters), filters.sort)
   const rowById = new Map(search.rows.map(row => [row.player.id, row]))
   const filtered = JSON.stringify({ ...filters, sort: 'rating' }) !== JSON.stringify(DEFAULT_TRANSFER_FILTERS)

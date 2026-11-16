@@ -83,13 +83,16 @@ export function getTransferSearch(season: SeasonState): TransferSearch {
   const groups: [TransferRowKind, readonly Player[]][] = phase === 'season'
     ? [['season-free', getInSeasonCandidates(season)], ['season-transfer', getInSeasonTransferCandidates(season)]]
     : phase === 'offseason' ? [['offseason-free', getAvailablePlayers(season)], ['offseason-transfer', season.market.enabledSince ? getTransferCandidates(season) : []]] : []
-  const candidates = groups.flatMap(([kind, players]) => players.map(player => ({ kind, player })))
+  // The own squad's unrenewed players are renewals, on Squad > Contracts, not transfer targets.
+  const ownSquad = new Set(season.clubs.find(club => club.id === season.managedClubId)?.players.map(player => player.id) ?? [])
+  const candidates = groups.flatMap(([kind, players]) => players.filter(player => !ownSquad.has(player.id)).map(player => ({ kind, player })))
   const scouted = season.scouting.enabledSince !== null
   const visible = scouted ? new Set(getScoutingDiscovery(season).playerIds) : null
   const listed = visible ? candidates.filter(entry => visible.has(entry.player.id)) : candidates
   const leagues = seasonLeagues(worldOf(season), season.divisions)
   const leagueOf = (clubId: string | null) => clubId ? leagues.find(league => league.clubIds.includes(clubId)) ?? null : null
-  const currentClubOf = (playerId: string) => season.clubs.find(club => club.players.some(player => player.id === playerId))?.id ?? null
+  const clubOfPlayer = new Map(season.clubs.flatMap(club => club.players.map(player => [player.id, club.id] as const)))
+  const currentClubOf = (playerId: string) => clubOfPlayer.get(playerId) ?? null
   const rows = listed.map(({ kind, player }): TransferSearchRow => {
     const contract = kind === 'season-transfer' ? contractForRound(season.employment, player.id, season.seasonNumber, season.round) : kind === 'offseason-transfer' ? contractForSeason(season.employment, player.id, nextYear) : null
     const currentClubId = currentClubOf(player.id)

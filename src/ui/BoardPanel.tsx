@@ -78,7 +78,7 @@ function PresidentSection({ season, busy, onEnableFunding }: { season: SeasonSta
   const capital = ownerCapital(season, clubId)
   const left = Math.max(0, capital - boardCapitalGranted(season.facilities, clubId, season.seasonNumber))
   const requests = season.facilities.events.flatMap((event, index) => event.type === 'funding' && event.clubId === clubId ? [{ event: event as FundingRequest, index }] : []).reverse()
-  const enableReason = !season.facilities.enabledSince ? 'Enable club facilities first, under Club › Operations.' : null
+  const enableReason = !season.facilities.enabledSince ? 'Enable club facilities first, on the Club page.' : null
   return <>
     <h3 className="board-section-heading"><Icon name="people" size={16} />President &amp; owner capital</h3>
     <div className="board-president" data-board-president={president.clubId}>

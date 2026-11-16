@@ -47,7 +47,7 @@ describe('board panel: president and capital', () => {
     expect(legacy).toContain('Rival clubs can ask their boards under the same rules once this is on.');
     expect(legacy).not.toContain('decides capital requests');
     const noFacilities = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', finance: true, board: true }));
-    expect(noFacilities).toContain('Enable club facilities first, under Club › Operations.');
+    expect(noFacilities).toContain('Enable club facilities first, on the Club page.');
     expect(noFacilities).toMatch(/id="enable-board-funding"[^>]*disabled/);
   });
 

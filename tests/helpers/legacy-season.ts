@@ -199,9 +199,9 @@ export function withOpeningMoney<T extends Partial<Pick<SeasonState, 'economySea
   return older as T;
 }
 
-/** An untouched new career's squad dynamics on the original rules (`relationships-1`, before format 66). */
+/** An untouched new career's squad dynamics on the original rules (`relationships-1`, before format 66; new careers use `relationships-3`). */
 export function withLegacyRelationships(state: SeasonState): SeasonState {
-  if (state.relationships.model !== 'relationships-2') return state;
+  if (state.relationships.model === 'relationships-1') return state;
   if (state.relationships.events.some(event => event.type !== 'prepare')) throw new Error('Convert only an untouched new career.');
   const { squadRanks: _ranks, ...relationships } = state.relationships;
   return { ...state, relationships: { ...relationships, model: 'relationships-1' } };

@@ -7,7 +7,7 @@
 .squad-role-flag{color:var(--accent)}
 .squad-role-note{color:var(--muted)}
 .game-shell .roster th.squad-role-head,.game-shell .roster td.squad-role-cell,.game-shell .roster td.squad-role-cell+td,.game-shell .roster th.squad-role-head+th{text-align:left}
-.contract-role-choice{margin:4px 0 0;padding:0;border:0;min-width:0}
+.contract-role-choice{margin:4px 0 0;padding:0 0 12px;border:0;border-bottom:1px solid var(--border);min-width:0}
 .contract-role-choice legend{font-size:13px;margin-bottom:8px}
 .contract-role-options{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .contract-role-options label{display:grid;gap:3px;align-content:start;padding:8px 7px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:12px;line-height:1.35}
@@ -20,3 +20,5 @@
 .contract-role-options .refuses small:last-child{color:var(--accent)}
 .contract-role-choice>p{margin:8px 0 0;font-size:12px;line-height:1.5;color:var(--muted)}
 @media(max-width:650px){.contract-role-options{grid-template-columns:repeat(3,minmax(0,1fr))}}
+/* Phones hide the squad table's third column: keep the Role column and hide the status next to it instead. */
+@media(max-width:650px){.game-shell .roster th.squad-role-head.squad-role-head,.game-shell .roster td.squad-role-cell.squad-role-cell{display:table-cell}.game-shell .roster th.squad-role-head+th,.game-shell .roster td.squad-role-cell+td{display:none}.squad-role,.squad-role-select{min-width:88px}}

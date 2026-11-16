@@ -24,7 +24,7 @@ export function roleChangeMessage(season: SeasonState, playerId: string, role: S
   if (!row) return `${definition.label} role agreed.`
   const quote = quoteSquadRole(season, playerId, role, season.managedClubId, [...squadRows(season).values()])
   const lower = definition.minMinutes < row.minMinutes
-  return `${row.player.name} is now ${definition.label === 'Reserve' ? 'a Reserve' : definition.label === 'Rotation' ? 'in the Rotation' : `a ${definition.label}`}: he expects ${definition.minMinutes}–${definition.maxMinutes} minutes a game.${lower ? ` He accepts the smaller role unhappily (trust ${quote.trustChange}).` : ''}`
+  return `${row.player.name} is now ${definition.label === 'Reserve' ? 'a Reserve' : definition.label === 'Rotation' ? 'in the Rotation' : `a ${definition.label}`}: he expects ${definition.minMinutes}–${definition.maxMinutes} minutes a game.${lower ? ` He accepts the smaller role unhappily (trust −${Math.abs(quote.trustChange)}).` : ''}`
 }
 
 /**

@@ -82,8 +82,8 @@ export function contractRoleReason(context: ContractRoleContext, clubId: string,
   return null;
 }
 
-/** Player-facing wording of a role's wage effect, for example "+15%" or "no change". */
+/** Player-facing wording of a role's wage effect, for example "+15%" or "unchanged". */
 export function roleWageText(role: SquadRole): string {
   const percent = RULES.wagePercent[role];
-  return percent ? `${percent > 0 ? '+' : '−'}${Math.abs(percent)}%` : 'no change';
+  return percent ? `${percent > 0 ? '+' : '−'}${Math.abs(percent)}%` : 'unchanged';
 }

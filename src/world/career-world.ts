@@ -191,11 +191,38 @@ export function clubsEverInFullWorld(context: WorldContext & { background?: { ex
 }
 
 /** Players of next-division clubs that joined the full world by `seasonNumber` (they stay in the catalog afterwards). */
+// Step 3.7: worked out once per world, exchange list and season (lists are replaced, never edited); every player lookup
+// asked for it again once clubs had joined from a next division, so later seasons slowed down.
+const joinedCache = new WeakMap<CareerWorld, WeakMap<object, Map<number, readonly Player[]>>>();
+const NO_PLAYERS: readonly Player[] = Object.freeze([]);
 export function joinedPlayers(context: WorldContext & { background?: { exchanges?: readonly ClubExchange[] } }, seasonNumber: number): readonly Player[] {
   const exchanges = context.background?.exchanges ?? NO_EXCHANGES;
-  const world = worldOf(context), lower = lowerDivisionClubIds(world);
+  if (!exchanges.length) return NO_PLAYERS;
+  const world = worldOf(context);
+  let byExchanges = joinedCache.get(world);
+  if (!byExchanges) { byExchanges = new WeakMap(); joinedCache.set(world, byExchanges); }
+  let bySeason = byExchanges.get(exchanges);
+  if (!bySeason) { bySeason = new Map(); byExchanges.set(exchanges, bySeason); }
+  const known = bySeason.get(seasonNumber);
+  if (known) return known;
+  const lower = lowerDivisionClubIds(world);
   const joined = new Set(exchanges.filter(exchange => exchange.seasonNumber < seasonNumber).flatMap(exchange => exchange.joining).filter(id => lower.has(id)));
-  return joined.size ? world.clubs.filter(club => joined.has(club.id)).flatMap(club => club.players) : [];
+  const players = joined.size ? Object.freeze(world.clubs.filter(club => joined.has(club.id)).flatMap(club => club.players)) : NO_PLAYERS;
+  bySeason.set(seasonNumber, players);
+  return players;
+}
+
+const playerIdIndexes = new WeakMap<readonly Player[], { length: number; index: ReadonlyMap<string, Player> }>();
+/** The first player with this id in a catalog list, as `list.find` gives it; indexed once per list. */
+export function playerInList(players: readonly Player[], playerId: string): Player | undefined {
+  let known = playerIdIndexes.get(players);
+  if (!known || known.length !== players.length) {
+    const index = new Map<string, Player>();
+    for (const player of players) if (!index.has(player.id)) index.set(player.id, player);
+    known = { length: players.length, index };
+    playerIdIndexes.set(players, known);
+  }
+  return known.index.get(playerId);
 }
 
 // The built-in league keeps its long-standing catalog array, so existing identity checks and caches still hold.

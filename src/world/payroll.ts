@@ -8,7 +8,7 @@ import { contractForSeason } from './employment-policy';
 import { getFinanceBalance, recordPayrollCharge } from './finance';
 import { agreementCommittedFromLedger, agreementThroughRound, getPayrollReserve, getSpendableCash, PAYROLL_AUTOMATION_CUSHION, PAYROLL_INSTALLMENTS, payrollInstallment, PREPAYMENT_DISCOUNT_PERCENT } from './payroll-policy';
 import { seasonRounds } from './career-world';
-import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
+import { financeLedgerCount, financeLedgerHasEvent } from './finance-ledger';
 import { payrollLedgerReader, type PayrollLedgerReader } from './finance-ledger-index';
 import { automationCushion } from './economy';
 
@@ -38,10 +38,7 @@ function seasonAgreements(state: SeasonState, startsRound: number): PlayerWageAg
 }
 
 function installmentRecorded(state: SeasonState, clubId: string): boolean {
-  for (const entry of financeLedgerEntries(state.finance)) {
-    if (entry.clubId === clubId && entry.kind === 'payroll' && entry.sourceId === `payroll-s${state.seasonNumber}-r${state.round}`) return true;
-  }
-  return false;
+  return financeLedgerHasEvent(state.finance, clubId, 'payroll', `payroll-s${state.seasonNumber}-r${state.round}`);
 }
 
 export function getPlayerPayroll(state: SeasonState, playerId: string): PlayerPayroll | null {

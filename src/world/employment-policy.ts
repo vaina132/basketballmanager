@@ -3,7 +3,7 @@ import type { ClubContractSummary, ContractOfferOptions, EmploymentContract, Pla
 import type { SeasonState } from '../domain/season';
 import type { Player, Team } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
-import { fullWorldClubsIn, MAX_SEASON_ROUNDS, seasonRounds, worldOf } from './career-world';
+import { fullWorldClubsIn, MAX_SEASON_ROUNDS, playerInList, seasonRounds, worldOf } from './career-world';
 import { getCareerPlayers, getActiveCareerPlayers, getCareerWage, type CareerPlayerContext } from './player-catalog';
 import { getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { transferOfferReason } from './transfers-policy';
@@ -58,6 +58,21 @@ function contractsAt(employment: SeasonEmployment, seasonNumber: number, round: 
   return contracts;
 }
 
+const contractsByClubCache = new WeakMap<readonly EmploymentContract[], Map<string, readonly EmploymentContract[]>>();
+const NO_CONTRACTS: readonly EmploymentContract[] = Object.freeze([]);
+/** One club's contracts in force at the end of a season, in journal order (shared: callers must copy before changing). */
+function clubContractsForSeason(employment: SeasonEmployment, clubId: string, seasonNumber: number): readonly EmploymentContract[] {
+  const contracts = contractsAt(employment, seasonNumber, MAX_SEASON_ROUNDS);
+  let byClub = contractsByClubCache.get(contracts);
+  if (!byClub) {
+    const groups = new Map<string, EmploymentContract[]>();
+    for (const contract of contracts) { const list = groups.get(contract.clubId); if (list) list.push(contract); else groups.set(contract.clubId, [contract]); }
+    byClub = groups;
+    contractsByClubCache.set(contracts, byClub);
+  }
+  return byClub.get(clubId) ?? NO_CONTRACTS;
+}
+
 /** Registration at one matchday, without applying a later arrival to earlier fixtures. */
 export function effectiveContractsForRound(employment: SeasonEmployment, seasonNumber: number, round: number): EmploymentContract[] {
   return [...contractsAt(employment, seasonNumber, round)];
@@ -77,11 +92,12 @@ export function contractForRound(employment: SeasonEmployment, playerId: string,
 /** Approved sales cannot spend the cheap departing player's replacement allowance elsewhere. */
 export function outgoingReplacementReserve(state: Pick<SeasonState, 'employment' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'recruitment'>>, clubId: string, year: number): number {
   const outgoing = new Set([...getLiveMarketOffers(state).filter(offer => offer.transfer?.sellerClubId === clubId && offer.transfer.clubStatus === 'accepted' && offer.seasonNumber + 1 <= year), ...getInSeasonOffers(state, undefined, true).filter(offer => offer.transfer?.sellerClubId === clubId && offer.transfer.clubStatus === 'accepted' && offer.seasonNumber <= year)].map(offer => offer.playerId));
-  return effectiveContractsForSeason(state.employment, year).filter(contract => contract.clubId === clubId && outgoing.has(contract.playerId)).reduce((total, contract) => total + Math.max(0, MIN_ROSTER_WAGE_RESERVE - contract.seasonWage), 0);
+  if (!outgoing.size) return 0;
+  return clubContractsForSeason(state.employment, clubId, year).filter(contract => outgoing.has(contract.playerId)).reduce((total, contract) => total + Math.max(0, MIN_ROSTER_WAGE_RESERVE - contract.seasonWage), 0);
 }
 
 export function getClubContractSummary(state: Pick<SeasonState, 'employment' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'recruitment'>> & WorldContext, clubId: string, seasonNumber = state.seasonNumber + 1, excludeOfferId?: string): ClubContractSummary {
-  const contracts = effectiveContractsForSeason(state.employment, seasonNumber).filter(contract => contract.clubId === clubId);
+  const contracts = [...clubContractsForSeason(state.employment, clubId, seasonNumber)];
   const rosterSize = contracts.length, seasonWages = contracts.reduce((total, contract) => total + contract.seasonWage, 0);
   const inSeasonReserved = getInSeasonOffers(state, clubId, true).filter(offer => offer.id !== excludeOfferId && offer.seasonNumber <= seasonNumber && offer.seasonNumber + offer.seasons - 1 >= seasonNumber);
   const reserved = [...getLiveMarketOffers(state).filter(offer => offer.clubId === clubId && offer.id !== excludeOfferId && offer.seasonNumber + 1 <= seasonNumber && offer.seasonNumber + offer.seasons >= seasonNumber), ...inSeasonReserved];
@@ -97,7 +113,7 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
 
 /** Public offers and automation share ownership, term, roster and annual-budget guards. */
 export function quotePlayerContract(state: SeasonState, playerId: string, seasonWage: number, seasons: number, clubId = state.managedClubId, resolvingOfferId?: string, transferFee?: number, transferPaymentPlan: TransferPaymentPlan = 'upfront', options: ContractOfferOptions = {}): PlayerContractQuote {
-  const player = getCareerPlayers(state).find(candidate => candidate.id === playerId);
+  const player = playerInList(getCareerPlayers(state), playerId);
   const startsSeason = state.seasonNumber + 1, endsSeason = startsSeason + seasons - 1;
   const askingWage = player ? getCareerWage(state, playerId) : 0;
   const current = contractForSeason(state.employment, playerId, state.seasonNumber);

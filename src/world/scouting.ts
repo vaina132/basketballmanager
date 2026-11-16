@@ -86,12 +86,15 @@ function candidates(state: SeasonState, clubId: string): Player[] {
   // Step 3.7: one shared quote context for every player of this club's decision.
   const quote = scoutingQuoter(state, clubId), shortlist = new Set(club.shortlist);
   const rows = state.clubs.flatMap(team => team.players).filter(player => quote(player.id).canAssign).map(player => ({ player, knowledge: getPlayerKnowledge(state, player.id, clubId), shortlisted: shortlist.has(player.id) }));
+  // Each player's tie-break hash is worked out once rather than in every comparison (same values, same order).
+  const order = new Map<string, number>();
+  const tieBreak = (playerId: string) => { let value = order.get(playerId); if (value === undefined) { value = candidateOrder(state.seed, clubId, playerId); order.set(playerId, value); } return value; };
   return rows.filter(row => row.knowledge.level < 3 || (row.knowledge.ageDays ?? 0) >= 28).sort((left, right) =>
     Number(right.shortlisted) - Number(left.shortlisted)
     || (positionCounts.get(left.player.position) ?? 0) - (positionCounts.get(right.player.position) ?? 0)
     || left.knowledge.level - right.knowledge.level
     || (right.knowledge.ageDays ?? 0) - (left.knowledge.ageDays ?? 0)
-    || candidateOrder(state.seed, clubId, left.player.id) - candidateOrder(state.seed, clubId, right.player.id)
+    || tieBreak(left.player.id) - tieBreak(right.player.id)
     || (left.player.id < right.player.id ? -1 : 1)
   ).map(row => row.player);
 }

@@ -43,12 +43,22 @@ export function lastPrefixSkips(): Readonly<Record<string, number>> { return las
 export const cutOf = (state: Pick<SeasonState, 'seasonNumber' | 'round'>): PrefixCut => ({ seasonNumber: state.seasonNumber, round: state.round });
 const cutKey = (cut: PrefixCut) => roundKey(cut.seasonNumber, cut.round);
 
+/**
+ * A record's calendar position: a `roundKey` (its week) or an ISO date (the day of its game). Records before the cut's
+ * week are trusted; weeks run from their Saturday (`state.date`) to the next Friday.
+ */
+type Position = number | string;
+const beforeCut = (cut: PrefixCut) => {
+  const limit = cutKey(cut), day = dateForRound(cut.round, cut.seasonNumber);
+  return (position: Position) => typeof position === 'number' ? position < limit : typeof position === 'string' && position < day;
+};
+
 /** Leading records dated before the cut (journals are chronological in any state the check accepted). */
-function leadingBefore<T>(items: readonly T[], at: (item: T) => number, cut: PrefixCut): number {
-  const limit = cutKey(cut);
+function leadingBefore<T>(items: readonly T[], at: (item: T) => Position, cut: PrefixCut): number {
+  const before = beforeCut(cut);
   let count = 0;
   // Malformed records end the prefix; the validators report them with their own messages.
-  while (count < items.length && items[count] !== null && typeof items[count] === 'object' && at(items[count]!) < limit) count += 1;
+  while (count < items.length && items[count] !== null && typeof items[count] === 'object' && before(at(items[count]!))) count += 1;
   return count;
 }
 
@@ -73,15 +83,18 @@ export interface PrefixPlan {
 }
 
 /**
- * The plan for one validator loop over a registered journal. `items` must be the array the loop walks and `at` its records'
- * `roundKey`. A skip is granted only for journals `matchesTrustedPrefix` compared and only when the trusted check recorded
- * the same count, so the skipped records are exactly the trusted state's records dated before its cut.
+ * The plan for one validator loop over a registered journal: `items` must be the array the loop walks. Records are dated
+ * by the journal's registered position (never the caller's), so a skip is granted only for records `matchesTrustedPrefix`
+ * compared, and only when the trusted check recorded the same count: the skipped records are exactly the trusted state's
+ * records dated before its cut.
  */
-export function prefixPlan<T>(name: string, items: readonly T[], at: (item: T) => number): PrefixPlan {
-  if (!active) return { skip: 0, record: -1 };
+export function prefixPlan<T>(name: string, items: readonly T[], _at?: (item: T) => number): PrefixPlan {
+  const journal = journalFor(name);
+  if (!active || !journal) return { skip: 0, record: -1 };
+  const at = journal.at as (item: T) => Position;
   let skip = 0;
   const trusted = active.trusted;
-  if (trusted && JOURNALS.has(name)) {
+  if (trusted) {
     const count = trusted.counts.get(name);
     if (count !== undefined && count <= items.length && count === leadingBefore(items, at, trusted.cut)) skip = count;
     if (skip) active.skipped[name] = skip;
@@ -140,8 +153,8 @@ export function sameJson(left: unknown, right: unknown): boolean {
 type Dated = { seasonNumber: number; round: number };
 interface Journal {
   items: (state: SeasonState) => readonly unknown[] | undefined;
-  /** The record's calendar position as a `roundKey`: records before the cut's are trusted. */
-  at: (item: never) => number;
+  /** The record's calendar position: records before the cut's week are trusted. */
+  at: (item: never) => Position;
   /** Equality of a trusted record (default: exact). */
   same?: (left: never, right: never, cut: PrefixCut) => boolean;
 }
@@ -151,8 +164,6 @@ const dated1 = (item: Dated) => roundKey(item.seasonNumber, item.round + 1);
 const OFFSEASON = 99;
 /** A career point (moves, fresh starts): its week during the season, after every matchday at its end or offseason. */
 const careerPoint = (item: { seasonNumber: number; round?: number; phase?: string }) => roundKey(item.seasonNumber, item.phase === 'season' && typeof item.round === 'number' ? item.round : OFFSEASON);
-/** Whether a date falls before the cut's week (weeks run from their Saturday, `state.date`, to the next Friday). */
-const datedOn = (cut: PrefixCut, date: unknown) => typeof date === 'string' && date < dateForRound(cut.round, cut.seasonNumber);
 
 /**
  * Journals that must keep their records dated before the cut, and validators may skip (those named in `prefixPlan`
@@ -179,7 +190,14 @@ const JOURNALS = new Map<string, Journal>([
   ['academy.weeks', { items: state => state.academy?.weeks, at: (week: { seasonNumber: number; afterRound: number }) => roundKey(week.seasonNumber, week.afterRound + 1) }],
   // Treatment of a week is recorded at the next week's start.
   ['physio.rehabilitation', { items: state => state.physio?.rehabilitation ?? [], at: (item: { seasonNumber: number; afterRound: number }) => roundKey(item.seasonNumber, item.afterRound + 1) }],
+  // Injuries are dated by their game's day.
+  ['injuries', { items: state => state.injuries, at: (item: { occurredOn: string }) => item.occurredOn }],
 ]);
+
+/** Each observing club's scouting reports (`scouting.reviews:<club id>`), compared office by office. */
+export const SCOUTING_REVIEWS = 'scouting.reviews:';
+const SCOUTING_JOURNAL: Journal = { items: () => undefined, at: dated };
+const journalFor = (name: string): Journal | undefined => JOURNALS.get(name) ?? (name.startsWith(SCOUTING_REVIEWS) ? SCOUTING_JOURNAL : undefined);
 
 /** A trusted transfer keeps every term and its installments paid before the cut; later installments are new records. */
 function sameTransfer(left: Record<string, unknown>, right: Record<string, unknown>, cut: PrefixCut): boolean {
@@ -213,7 +231,7 @@ export function matchesTrustedPrefix(trusted: CheckRecord, state: SeasonState): 
 
 /** Why `state` does not keep the trusted state's past (`matchesTrustedPrefix`), or null when it does. */
 export function trustedPrefixMismatch(trusted: CheckRecord, state: SeasonState): string | null {
-  const before = trusted.state, cut = trusted.cut, limit = cutKey(cut);
+  const before = trusted.state, cut = trusted.cut, limit = cutKey(cut), trustedBefore = beforeCut(cut);
   if (!state || typeof state !== 'object' || state.seasonNumber !== before.seasonNumber || typeof state.round !== 'number' || state.round < before.round) return 'season or matchday';
   if (typeof state.date !== 'string' || state.date < before.date || state.round === before.round && before.status === 'complete' && state.status !== 'complete') return 'calendar';
   for (const key of SEASON_CONSTANTS) if (Object.hasOwn(before, key) !== Object.hasOwn(state, key) || !sameJson(before[key], state[key])) return key;
@@ -221,20 +239,21 @@ export function trustedPrefixMismatch(trusted: CheckRecord, state: SeasonState):
   for (const [name, journal] of JOURNALS) {
     const old = journal.items(before), next = journal.items(state);
     if (!Array.isArray(old) || !Array.isArray(next)) return name;
-    const at = journal.at as (item: unknown) => number, same = (journal.same ?? sameJson) as (left: unknown, right: unknown, cut: PrefixCut) => boolean;
+    const at = journal.at as (item: unknown) => Position, same = (journal.same ?? sameJson) as (left: unknown, right: unknown, cut: PrefixCut) => boolean;
     const count = leadingBefore(old, at, cut);
     if (next.length < count) return name;
     for (let index = 0; index < count; index += 1) if (!same(old[index], next[index], cut)) return `${name}[${index}]`;
-    for (let index = count; index < next.length; index += 1) if (next[index] !== null && typeof next[index] === 'object' && at(next[index]) < limit) return `${name}[${index}] back-dated`;
+    for (let index = count; index < next.length; index += 1) if (next[index] !== null && typeof next[index] === 'object' && trustedBefore(at(next[index]))) return `${name}[${index}] back-dated`;
   }
-  // Injuries are dated by their game: those of earlier weeks are unchanged and none is added to an earlier week.
-  if (!Array.isArray(before.injuries) || !Array.isArray(state.injuries)) return 'injuries';
-  {
-    let count = 0;
-    while (count < before.injuries.length && datedOn(cut, before.injuries[count]?.occurredOn)) count += 1;
-    if (state.injuries.length < count) return 'injuries';
-    for (let index = 0; index < count; index += 1) if (!sameJson(before.injuries[index], state.injuries[index])) return `injuries[${index}]`;
-    for (let index = count; index < state.injuries.length; index += 1) if (state.injuries[index] === null || typeof state.injuries[index] !== 'object' || datedOn(cut, state.injuries[index]!.occurredOn)) return `injuries[${index}] back-dated`;
+  // Each scouting office's reports, by observing club (the season's full-world clubs keep their offices all season).
+  const offices = (before.scouting as { clubs?: Record<string, { reviews?: unknown }> } | undefined)?.clubs ?? {}, nextOffices = (state.scouting as { clubs?: Record<string, { reviews?: unknown }> } | undefined)?.clubs;
+  for (const clubId of Object.keys(offices)) {
+    const old = offices[clubId]?.reviews, next = nextOffices?.[clubId]?.reviews, name = `${SCOUTING_REVIEWS}${clubId}`;
+    if (!Array.isArray(old) || !Array.isArray(next)) return name;
+    const count = leadingBefore(old, dated as (item: unknown) => Position, cut);
+    if (next.length < count) return name;
+    for (let index = 0; index < count; index += 1) if (!sameJson(old[index], next[index])) return `${name}[${index}]`;
+    for (let index = count; index < next.length; index += 1) if (next[index] !== null && typeof next[index] === 'object' && dated(next[index] as Dated) < limit) return `${name}[${index}] back-dated`;
   }
   // Games of earlier weeks are unchanged. Postseason and knockout games are added as results make them due, in calendar
   // order, so they are matched by identity; an added game must belong to the cut's week or later.

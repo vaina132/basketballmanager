@@ -77,7 +77,7 @@ import { createPhysio } from '../world/physio';
 import { createAssistant } from '../world/assistant';
 import { academyAtBoundary, buildAcademyWeek, createAcademy, enableAcademy, graduateAcademyProspect, prepareAcademySeason, processAcademyWeek } from '../world/academy';
 import { validationReplayCache } from './replay-cache';
-import { prefixPlan, recall, remember, trustedCutKey, trustedPrefixMismatch, withPrefixCheck, type CheckRecord } from './trusted-prefix';
+import { prefixPlan, recall, remember, SCOUTING_REVIEWS, trustedCutKey, trustedPrefixMismatch, withPrefixCheck, type CheckRecord } from './trusted-prefix';
 import { canSummarizeAcademyReport, createAcademyHistoryContext, isAcademyOutcome, summarizeAcademyHistory, summarizeAcademyPlayer } from '../world/academy-history';
 import { createYouth } from '../world/youth';
 import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, prepareYouthFixture, settleYouthFixture, getYouthPlayerStatus, youthCompetitionAtBoundary, youthInjuryHistory, YOUTH_RECURRENCE_MODEL } from '../world/youth-competition';
@@ -1232,6 +1232,17 @@ function validateLifecycleHistory(state: SeasonState, recruitmentHolds: Recruitm
   if (!sameData(replayed, lifecycle)) fail('lifecycle.notices', 'must preserve deterministic ages, population protection, existing agreements, pending terms and immutable retirement dates');
 }
 
+/** One check's background sides: a pure function of the career context, the club and the season, worked out once each. */
+function backgroundSides(context: Parameters<typeof backgroundSide>[0]): (clubId: string, seasonNumber: number) => Team {
+  const sides = new Map<string, Team>();
+  return (clubId, seasonNumber) => {
+    const key = `${seasonNumber}/${clubId}`;
+    let side = sides.get(key);
+    if (!side) { side = backgroundSide(context, clubId, seasonNumber); sides.set(key, side); }
+    return side;
+  };
+}
+
 /** Rebuild treatment before using it to decide any historical fixture availability. */
 function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employment: SeasonEmployment | undefined): void {
   if (!physio.enabledSince) return;
@@ -1242,9 +1253,14 @@ function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employ
   for (let year = 1; year <= state.seasonNumber; year += 1) for (const fixture of canonicalFixtures({ clubs: state.clubs, fixtures: year === state.seasonNumber ? state.fixtures : state.history[year - 1]?.fixtures, world: worldOf(state), divisions: year === state.seasonNumber ? state.divisions : state.history[year - 1]?.divisions, seed: state.seed, ...((year === state.seasonNumber ? state.europe : state.history[year - 1]?.europe) ? { europe: year === state.seasonNumber ? state.europe : state.history[year - 1]!.europe } : {}) }, year, 'injuries')) { schedules.set(fixture.id, fixture); years.set(fixture.id, year); }
   const players = new Set(getCareerPlayers(state).map(player => player.id));
   // Step 3.5b: a background side's player injured in a European game.
-  const backgroundPlayer = (fixture: SeasonFixture, clubId: string, playerId: string) => !!fixture.competition && !fullWorldClubsIn(state, years.get(fixture.id)!).some(club => club.id === clubId) && backgroundSide(state, clubId, years.get(fixture.id)!).players.some(player => player.id === playerId);
+  const sides = backgroundSides(state);
+  const backgroundPlayer = (fixture: SeasonFixture, clubId: string, playerId: string) => !!fixture.competition && !fullWorldClubsIn(state, years.get(fixture.id)!).some(club => club.id === clubId) && sides(clubId, years.get(fixture.id)!).players.some(player => player.id === playerId);
+  // Incremental checkpoint checks (`trusted-prefix.ts`): injuries of games before the trusted checkpoint's week are
+  // unchanged, and their diagnoses read only earlier injuries, those games and the medical facilities of their days.
+  const injuryPlan = prefixPlan('injuries', state.injuries);
   for (const [index, value] of state.injuries.entries()) {
     const path = `injuries[${index}]`, injury = record(value, path, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);
+    if (index < injuryPlan.skip) continue;
     const fixture = schedules.get(injury.fixtureId as string);
     if (!fixture || !players.has(injury.playerId as string) && !backgroundPlayer(fixture, injury.clubId as string, injury.playerId as string) || ![fixture.homeClubId, fixture.awayClubId].includes(injury.clubId as string) || !isInjuryKind(injury.kind)) fail(path, 'must identify a supported diagnosis and originating fixture');
     if (!sameData(injury, createSeasonInjury(state.seed, fixture, injury.clubId as string, injury.playerId as string, injury.kind as SeasonInjury['kind'], state.injuries, medicalRecoveryPercent(state, injury.clubId as string, fixture.date)))) fail(path, 'must retain the original diagnosis and recovery date');
@@ -2236,7 +2252,31 @@ function validateScouting(value: unknown, state: SeasonState, version: number): 
     if (!Array.isArray(office.reviews) || office.reviews.length > 20_000) fail(`${path}.reviews`, 'must retain a bounded report history');
     const missions = new Set<string>(), perRound = new Map<number, number>();
     let previousBoundary = firstBoundary;
+    // Incremental checkpoint checks (`trusted-prefix.ts`): reports of matchdays before the trusted checkpoint's week are
+    // unchanged and passed its check, which read only their own records, registrations, results and appointments of those
+    // weeks. Their observed ratings are recalled for the cross-checks below, and the one bound that reads today's state
+    // (ratings within the player's current development) is checked again. Later reports are checked in full.
+    const journal = `${SCOUTING_REVIEWS}${club.id}`, firstRating = observedRatings.length;
+    const plan = version === SEASON_SCHEMA_VERSION ? prefixPlan(journal, office.reviews as { seasonNumber: number; round: number }[]) : { skip: 0, record: -1 };
+    const saved = plan.skip > 0 ? recall<{ count: number; ratings: typeof observedRatings }>(journal, 'ratings') : undefined;
+    const resume = saved && saved.count === plan.skip ? saved : undefined;
+    if (resume) {
+      const last = office.reviews[plan.skip - 1] as { seasonNumber: number; round: number };
+      previousBoundary = roundKey(last.seasonNumber, last.round);
+      for (const rating of resume.ratings) {
+        const player = catalogById.get(rating.playerId);
+        if (!player) fail(`${rating.path}.playerId`, 'must identify a player in the stable catalog');
+        for (const attribute of TRAINING_ATTRIBUTES) {
+          const points = state.training.points[player.id]![attribute], loss = rating.loss[attribute];
+          number(rating.attributes[attribute], `${rating.path}.attributes.${attribute}`, Math.max(1, player.attributes[attribute] - loss), Math.max(1, Math.min(20, player.attributes[attribute] + Math.floor(points / 100)) - loss));
+        }
+        observedRatings.push(rating);
+      }
+    }
+    const rememberRatings = (count: number) => remember(journal, 'ratings', { count, ratings: observedRatings.slice(firstRating) });
     for (const [index, value] of office.reviews.entries()) {
+      if (resume && index < plan.skip) continue;
+      if (index === plan.record) rememberRatings(index);
       const location = `${path}.reviews[${index}]`, report = observation(value, location, true);
       if (report.snapshot.clubId === club.id) fail(location, 'must observe an outsider at the recorded boundary');
       const boundary = roundKey(report.year, report.round);
@@ -2250,6 +2290,7 @@ function validateScouting(value: unknown, state: SeasonState, version: number): 
         if (count > 2) fail(location, 'exceeds the two baseline observations for this matchday');
       }
     }
+    if (plan.record === office.reviews.length) rememberRatings(plan.record);
     // Own-squad memories survive departure at their last actual observation boundary.
     const lastOwned = new Map<string, { year: number; round: number }>();
     for (let year = firstYear; year <= state.seasonNumber; year += 1) {
@@ -2991,7 +3032,9 @@ function validateState(value: unknown, version: SeasonFormatVersion): void {
   const workload = candidate && Array.isArray(candidate.clubs) && Number.isSafeInteger(candidate.seasonNumber) && candidate.seasonNumber! > 0 ? candidate.clubs.length * candidate.seasonNumber! : Infinity;
   // Legacy full-detail evidence can be much larger than its migrated representation. Check it normally;
   // only the current-format replay may populate/exhaust the reusable cache.
-  const checked = (run: () => void) => version === SEASON_SCHEMA_VERSION ? validationReplayCache.run(() => withCalculationCache(run), workload) : withCalculationCache(run);
+  // An incremental checkpoint check (`trusted-prefix.ts`) replays only the latest weeks: identifying its large inputs for
+  // reuse would cost more than it saves, so it runs without the replay cache (which never holds verdicts).
+  const checked = (run: () => void) => version === SEASON_SCHEMA_VERSION && trustedCutKey() === -Infinity ? validationReplayCache.run(() => withCalculationCache(run), workload) : withCalculationCache(run);
   // Never keep a second full ledger in live state, or carry a cached acceptance across mutable inputs.
   if (version >= 44 && value !== null && typeof value === 'object' && !Array.isArray(value)) {
     const state = value as Record<string, unknown>;
@@ -3134,8 +3177,9 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     }
   }
   // Step 3.5b: a background side's selection follows from its season's squad and the injuries committed before the game.
+  const sides = backgroundSides(careerContext);
   const backgroundSelection = (year: number, fixture: SeasonFixture): BackgroundSelection => clubId => {
-    const squad = backgroundSide(careerContext, clubId, year), ids = new Set(squad.players.map(player => player.id));
+    const squad = sides(clubId, year), ids = new Set(squad.players.map(player => player.id));
     return { rosterId: backgroundRosterId(clubId, year), team: selectBackgroundMatchday(squad, new Set(history.filter(injury => injury.fixtureId !== fixture.id && ids.has(injury.playerId) && isRecovering(injury, fixture.date, physio)).map(injury => injury.playerId))) };
   };
   // Format 73: a sealed game's new diagnoses are its stored injuries, in their original order (its players' per-game
@@ -3181,7 +3225,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
           const managed = managedClubFor(state as unknown as SeasonState, archiveIndex + 1, false);
           if (expected.homeClubId === managed || expected.awayClubId === managed) fail(`${location}.result`, 'must retain the full box score of the club managed in this season');
           // A sealed game's sides are the clubs' registrations at that round (a background side's season squad).
-          const side = (clubId: string): Team => fixture.competition && !archiveClubs.some(club => club.id === clubId) ? backgroundSide(careerContext, clubId, archiveIndex + 1)
+          const side = (clubId: string): Team => fixture.competition && !archiveClubs.some(club => club.id === clubId) ? sides(clubId, archiveIndex + 1)
             : { ...archiveClubs.find(club => club.id === clubId)!, players: rosterForRound(archivedRosters!, clubId, expected.round).players };
           const home = side(expected.homeClubId), away = side(expected.awayClubId);
           const sealed = record(fixture.result, `${location}.result`, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'injuries', 'stats', 'fouls']);
@@ -3202,7 +3246,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
         }
         recordFixtureInjuries(result, expected, home, away, location, version >= 9 ? result.stats ?? undefined : undefined);
       }
-      if (version >= SEALED_HISTORY_FORMAT && (archive.fixtures as ArchivedFixture[]).some(fixture => isSealedSeniorResult(fixture.result))) validateSealedSeniorSummary(archive as unknown as SeasonState['history'][number], path, clubId => fullWorldClubsIn(careerContext, archiveIndex + 1).some(club => club.id === clubId) ? null : backgroundSide(careerContext, clubId, archiveIndex + 1).players.map(player => player.id));
+      if (version >= SEALED_HISTORY_FORMAT && (archive.fixtures as ArchivedFixture[]).some(fixture => isSealedSeniorResult(fixture.result))) validateSealedSeniorSummary(archive as unknown as SeasonState['history'][number], path, clubId => fullWorldClubsIn(careerContext, archiveIndex + 1).some(club => club.id === clubId) ? null : sides(clubId, archiveIndex + 1).players.map(player => player.id));
       else if (version >= 45) validateSeniorSummary(archive as unknown as SeasonState['history'][number], managedClubFor(state as unknown as SeasonState, archiveIndex + 1, false), path);
     }
     remember('history', 'injuries', { history: history.slice(), latest: [...latestInjuries] });

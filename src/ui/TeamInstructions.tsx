@@ -1,6 +1,7 @@
 import type { MatchState, Side, Tactics } from '../domain/types'
 import { setAutoSubstitutions, setTactics } from '../engine/match'
 import { Icon } from './Icon'
+import { automaticChoiceLabels } from './automatic-choice'
 
 type Apply = (action: (state: MatchState) => MatchState) => void
 
@@ -10,6 +11,8 @@ interface TeamInstructionsProps {
   apply: Apply
   idPrefix?: string
   includeRotation?: boolean
+  /** The hired assistant coach's name; without one, automatic rotation is labelled as the manager's own rules. */
+  assistantName?: string
 }
 
 const instructions: { key: keyof Tactics; id: string; label: string; low: string; high: string }[] = [
@@ -18,9 +21,11 @@ const instructions: { key: keyof Tactics; id: string; label: string; low: string
   { key: 'pressure', id: 'defensive-pressure', label: 'Defensive pressure', low: 'Contain', high: 'Aggressive' },
 ]
 
-export function TeamInstructions({ match, managedSide = 'home', apply, idPrefix = '', includeRotation = false }: TeamInstructionsProps) {
+export function TeamInstructions({ match, managedSide = 'home', apply, idPrefix = '', includeRotation = false, assistantName }: TeamInstructionsProps) {
   const disabled = match.status === 'finished'
-  const assistant = match.autoSubstitutions[managedSide]
+  const automatic = match.autoSubstitutions[managedSide]
+  const labels = automaticChoiceLabels(assistantName)
+  const rotation = automatic ? labels.policy : 'Manual'
 
   function changeTactic(key: keyof Tactics, value: number) {
     apply(state => state.tactics[managedSide][key] === value ? state : setTactics(state, managedSide, { [key]: value }))
@@ -38,12 +43,13 @@ export function TeamInstructions({ match, managedSide = 'home', apply, idPrefix 
       </div>
     })}
     {includeRotation && <div className="tactic tactic-rotation">
-      <div className="tactic-heading"><label htmlFor={`${idPrefix}rotation-control`}>Rotation control</label><span className="instruction-value">{assistant ? 'Assistant' : 'Manual'}</span></div>
-      <input id={`${idPrefix}rotation-control`} type="range" min={0} max={1} step={1} value={assistant ? 1 : 0} aria-valuetext={assistant ? 'Assistant' : 'Manual'} onChange={event => {
+      <div className="tactic-heading"><label htmlFor={`${idPrefix}rotation-control`}>Rotation control</label><span className="instruction-value" data-rotation-policy={rotation}>{rotation}</span></div>
+      <input id={`${idPrefix}rotation-control`} type="range" min={0} max={1} step={1} value={automatic ? 1 : 0} aria-valuetext={rotation} aria-describedby={`${idPrefix}rotation-hint`} onChange={event => {
         const enabled = event.target.value === '1'
         apply(state => state.autoSubstitutions[managedSide] === enabled ? state : setAutoSubstitutions(state, managedSide, enabled))
       }} disabled={disabled} />
-      <div className="range-labels"><span>Manual</span><span>Assistant</span></div>
+      <div className="range-labels"><span>Manual</span><span>{labels.policy}</span></div>
+      <p className="coach-help rotation-hint" id={`${idPrefix}rotation-hint`}>{labels.hint}</p>
     </div>}
   </div>
 }

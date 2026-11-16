@@ -16,6 +16,7 @@ import { recentClubRetirements } from './PlayerLifecycle'
 import { careerNotices } from './career-text'
 import type { AssistantCoach } from '../domain/assistant'
 import { AssistantPortrait } from './AssistantPortrait'
+import { automaticChoiceLabels } from './automatic-choice'
 import type { SeasonState } from '../domain/season'
 import { getPlayerHealth, getPlayerMedicalSummary } from '../world/health'
 import { injuryLabel } from '../domain/injuries'
@@ -211,7 +212,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
       <div><dt>{complete ? 'Eligible at final whistle' : 'Eligible players'}</dt><dd>{eligible.length}<small> / {team.players.length}</small></dd></div>
       <div><dt>{complete ? 'Final reserves' : 'Available reserves'}</dt><dd>{availableBench.length}</dd></div>
       <div><dt>{complete ? 'Final lineup stamina' : 'Lineup stamina'}</dt><dd>{lineupEnergy === null ? '—' : `${lineupEnergy}%`}</dd></div>
-      <div><dt>Substitutions</dt><dd className="desk-policy-value">{match.autoSubstitutions[managedSide] ? 'Assistant' : 'Manual'}</dd></div>
+      <div><dt>Substitutions</dt><dd className="desk-policy-value">{match.autoSubstitutions[managedSide] ? automaticChoiceLabels(assistant?.name).policy : 'Manual'}</dd></div>
     </dl>
 
     <div className="desk-columns">
@@ -242,7 +243,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
 
         <section className="desk-instructions panel" aria-labelledby="desk-instructions-heading">
           <div className="desk-panel-heading"><h2 id="desk-instructions-heading"><Icon name="target" size={16} />Team instructions</h2><button className="text-button" onClick={onOpenCoaching}>Match coaching<Icon name="chevron" size={15} /></button></div>
-          <TeamInstructions match={match} managedSide={managedSide} apply={apply} idPrefix="desk-" includeRotation />
+          <TeamInstructions match={match} managedSide={managedSide} apply={apply} idPrefix="desk-" includeRotation assistantName={assistant?.name} />
         </section>
       </div>
     </div>

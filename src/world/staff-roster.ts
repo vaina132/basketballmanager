@@ -94,3 +94,17 @@ export function staffChangeNotice(state: Pick<SeasonState, 'coaching'>, role: St
   const kept = usesClubLevelStaff(state) ? 'Their paid fee is not refunded.' : 'Their paid fee is not refunded and stays in this season\'s staff budget.';
   return incoming ? `${incoming} replaces ${outgoing} as ${roleName(role)}. ${kept}` : `${outgoing} has left the club. ${kept}`;
 }
+
+const DIRECTORIES: Readonly<Record<StaffRole, readonly { id: string; name: string }[]>> = { coaches: COACH_DIRECTORY, scouts: SCOUT_DIRECTORY, fitness: FITNESS_DIRECTORY, physio: PHYSIO_DIRECTORY, assistant: ASSISTANT_DIRECTORY, youth: YOUTH_COACH_DIRECTORY };
+/** The person a contract of this season names (released contracts are kept), or undefined. */
+function contractPerson(state: SeasonState, role: StaffRole, contractId: string): string | undefined {
+  const contract: object | undefined = role === 'coaches' ? state.coaching.contracts.find(item => item.id === contractId) : role === 'scouts' ? state.scouts.contracts.find(item => item.id === contractId) : role === 'fitness' ? state.fitness.contracts.find(item => item.id === contractId) : role === 'physio' ? state.physio.contracts.find(item => item.id === contractId) : role === 'assistant' ? state.assistant.contracts.find(item => item.id === contractId) : state.youth.contracts.find(item => item.id === contractId);
+  const fields = contract as { coachId?: string; scoutId?: string; physioId?: string; assistantId?: string } | undefined;
+  const personId = fields && (fields.coachId ?? fields.scoutId ?? fields.physioId ?? fields.assistantId);
+  return typeof personId === 'string' ? staffMember(DIRECTORIES[role], personId)?.name : undefined;
+}
+/** The notice after a sacking (`personId` absent) or a replacement, read from the state after the change. */
+export function staffChangeNoticeAfter(next: SeasonState, role: StaffRole, contractId: string, personId?: string): string {
+  const outgoing = contractPerson(next, role, contractId) ?? 'The previous appointment';
+  return staffChangeNotice(next, role, outgoing, personId === undefined ? undefined : staffMember(DIRECTORIES[role], personId)?.name ?? 'The new appointment');
+}

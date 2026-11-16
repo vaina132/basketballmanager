@@ -135,3 +135,35 @@
 .staff-role-selector>.segmented{flex-wrap:wrap}.staff-role-selector>.segmented button{min-height:38px}.staff-role-selector>.segmented button span{white-space:nowrap}
 .staff-role-selector{flex-wrap:wrap}.staff-role-selector>span{white-space:nowrap}
 @media(max-width:650px){.staff-role-selector>.segmented{width:100%}.staff-role-selector>.segmented button{flex:1 0 auto;justify-content:center}.staff-role-selector{align-items:stretch}}
+
+/* Format 74: current staff first; candidates and replacements on request. */
+.staff-overview-budget{white-space:nowrap}
+.staff-overview-budget strong{margin-left:6px;color:var(--text);font-variant-numeric:tabular-nums}
+.staff-overview-list{margin:0;padding:0;list-style:none}
+.staff-overview-row{display:grid;grid-template-columns:minmax(130px,.8fr) minmax(0,1.6fr) minmax(120px,.7fr) auto;align-items:center;gap:6px 14px;padding:8px 14px;border-top:1px solid var(--border);font-size:13px}
+.staff-overview-row:first-child{border-top:0}
+.staff-overview-role{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}
+.staff-overview-role svg{flex:none;color:var(--accent)}
+.staff-overview-name{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;min-width:0}
+.staff-overview-name strong{font-size:14px;font-weight:600}
+.staff-overview-row.vacant .staff-overview-name strong{color:var(--muted);font-weight:500}
+.staff-overview-row.vacant .staff-overview-actions{grid-column:3/-1}
+.staff-overview-fee{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.staff-overview-fee small{font-size:11px;font-weight:400;color:var(--muted)}
+.staff-overview-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px}
+.staff-overview-actions .button{min-height:32px;font-size:12px}
+.staff-overview-actions .text-button{font-size:12px}
+.staff-overview-confirm{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:10px 12px;border:1px solid var(--border);border-left:2px solid var(--accent);background:var(--surface-2)}
+.staff-overview-confirm p{flex:1;margin:0;font-size:12px;line-height:1.5;color:var(--muted)}
+.staff-overview-confirm p strong{color:var(--text);font-weight:600}
+.staff-replacing{display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:13px;border-left:2px solid var(--accent)!important}
+.staff-replacing>span{flex:1}
+.staff-replacing>svg{flex:none;color:var(--accent)}
+.staff-show-candidates{display:flex;justify-content:flex-start;padding:10px 14px}
+.staff-show-candidates .button{gap:6px;min-height:34px}
+.staff-replacement-offer{display:flex;flex-direction:column;gap:10px}
+.staff-replacement-choice{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+.staff-hire-controls .staff-replacement-warning{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border:1px solid var(--accent);border-radius:3px;background:#e5aa5514;color:var(--text);font-size:13px;line-height:1.45}
+.staff-replacement-warning svg{flex:none;margin-top:2px;color:var(--accent)}
+@media(max-width:800px){.staff-overview-row{grid-template-columns:minmax(0,1fr) auto}.staff-overview-role{grid-column:1/-1}.staff-overview-name{grid-column:1}.staff-overview-fee{grid-column:2;grid-row:2;text-align:right}.staff-overview-actions{grid-column:1/-1;justify-content:flex-start}.staff-overview-row.vacant .staff-overview-actions{grid-column:1/-1}.staff-overview-confirm{flex-direction:column;align-items:flex-start}}
+@media(max-width:650px){.staff-overview-row{padding:8px 10px}.staff-overview-budget{white-space:normal}}

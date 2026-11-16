@@ -6,6 +6,12 @@ The entries below were moved here unchanged on 15 November 2026, when HANDOVER.m
 
 ---
 
+## Owner feedback fixes and restored old-save tests (16 November 2026)
+
+Black screen on a page opened after a deploy (page error boundary with Save and reload), no "est." next to OVR on the club step, "Not played · table simulated" wording, a close-while-saving warning, swapping two players on the court (`swapActivePlayers`), a duplicate React key on Competitions. Every paused or removed old-save continuation test restored as a valid-week check (`tests/helpers/old-save-week.ts`); a parallel quick run passed (2,535 tests).
+
+---
+
 # Project handover
 
 ## Sprint 4 summary, archived (moved from HANDOVER.md on 16 November 2026)

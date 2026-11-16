@@ -12,11 +12,8 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Owner feedback after a first play (16 November 2026; "not to tackle immediately ... in the rightful time"):**
 - Safety and gaps level (before the play test):
-  - (3) Inbox opens an empty black screen right after starting a career: a crash to fix first.
-  - (1) Remove "est." after the OVR figure (owner decision; the club step shows "79 est.").
-  - (2) "Estimated table" means nothing to the owner: reword the countries that are not played game by game. The owner chose only Turkey and saw five other leagues plus three European competitions.
+  - **Done (16 November):** (3) the black Inbox screen (most likely a page file removed by a new deploy while the game was open; every page now shows a plain message with Save and reload instead of going blank, `src/ui/PageErrorBoundary.tsx`); (1) no "est." next to OVR on the club step; (2) "Not played · table simulated" with a one-line explanation; (9) dragging or selecting two players on the court swaps them at once (`swapActivePlayers`); a warning when closing the page while saving.
   - (6) Money realism: some staff earn a lot. The owner's sentence was cut off; ask for the rest. Fits the economy gaps.
-  - (9) Match lineup: drag and drop also between two players on the court, to swap them (today only bench-court swaps work).
 - Interface simplification (after the play test):
   - (4) Facilities: six levels for every facility (Very Poor, Poor, Average, Good, Very Good, Excellent) instead of four. The arena becomes a seat capacity, expanded for a fee over several weeks depending on the size. Loans become a simple bank loan usable for anything. Replace the Full/Reduced and automatic/manual controls with something simpler. This changes game rules and needs a new format.
   - (5) Board gets its own left menu item.
@@ -111,10 +108,9 @@ The game reads real club data from the owner's Supabase project (public storage 
 **Before release** (deferred work to bring back)
 - Old-save support: capture fixtures, continuation and migration tests for the formats released to players.
 - Full save replay checks for features added in development mode.
-- Removed continuation tests (injuries changed later weeks): whole files `tests/season39`, `40`, `46`, `47`, `48`, `50`-`56-continuation.test.js`; next-week comparisons inside `physio-storage` (format 22), `academy-storage` (24), `lifecycle-storage` (25), `facilities-storage` (27), `relationships-storage` (28) and `division-changes` (49), now "migrates and continues a valid week". Fixtures stay in the repository.
+- Old-save tests restored (16 November 2026) as "continues a valid week" checks (`tests/helpers/old-save-week.ts`: strict check, one week, the career's rules and every past event kept, the captured next week's schedule); exact comparisons stay where no match is simulated.
 - Saved ideas gaps (development mode): naming-rights offers and sponsor exit decisions are checked for plausibility, not recomputed; president requests and resignation offers get shape checks only; youth matches have no injury recurrence; owner capital and the verdict's staff-budget preview still use opening money; offseason offers use the completed season's money figures; a move through unemployment adds no rivalry; AI clubs never lease, end sponsor deals early or chase youth/culture objectives.
 - Economy gaps (format 62; promotion and relegation money fixed by format 72): consistently weak clubs end seasons with little cash (2-4% of budget) and may drift into unpaid costs in long careers; the empty-roster wage reserve, academy prospects' wages and added arena seats are not rescaled; staff fees and facility costs follow one per-club scale.
-- Paused by match calibration (`it.skip`, simulated results after old saves differ; recapture before release): the "continues … exactly" tests in `tests/season30`-`38`, `41`, `42-continuation.test.js` and the old-save next-week comparisons in `assistant-storage`, `board-storage`, `division-changes`, `fitness-storage`, `full-roster-legacy`, `release-clauses-migration`, `scouts-storage`, `youth-competition-storage`.
 - Paused tests (`it.skip`, development mode): `tests/save-seal.test.js` (checkpoints validated before writing, no unchecked shortcut, strict saving without crypto) and `tests/career-saves.test.ts` (malformed state refused before writing). Checkpoints skip the full career check (`serializeSeasonCompact(state, { check: false })`), which took 17 s a matchday in a 36-club world with Europe.
 
 ## Local-only work
@@ -154,6 +150,8 @@ Browser checks still to do locally (by the owner, or by a local Claude session w
 - Owner decisions of 15 November 2026 (unemployed seasons yes, contract estimates kept, European places confirmed, browser checks waived for now) are in `docs/decisions.md`, "Owner decisions for the saved ideas level".
 
 - Show regular-season and playoff player statistics separately on the Competition screen.
+- Vercel's protection against missing page files after a deploy ("skew protection") would stop the download failure behind the black screen; the game now recovers with Save and reload. It may be a paid option, so it needs the owner's decision.
+- Pre-existing layout points found on 16 November: on a phone, the Competitions table heading's picker is unstyled and "0 / 24 fixtures complete" is cut off; on the desktop club step the "Playable countries" and "Game speed" boxes are wider than their column; dragging needs a mouse (tapping two players works on phones).
 - Play Primera FEB's one-venue final stage without home advantage.
 - Optionally copy the two older fixture capture scripts from `.artifacts` (`capture-postseason-baseline.mjs`, `capture-divisions-baseline.mjs`) into `scripts/` for the record. Cloud sessions now use the committed `scripts/capture-format-baseline.mjs`.
 - Make creating and checking large worlds faster before 3.7, because large worlds are slow today (see "Known open points").

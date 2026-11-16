@@ -71,6 +71,19 @@ const LEAGUE_RULES = {
   },
 } as const
 
+/**
+ * The matchday Fixtures & results opens on: the current one when the shown competition plays in it, else the last one
+ * with results (a finished season, or a league whose season ended before the others'), else the next one with games
+ * (browser play-through, 16 November 2026: a finished season opened on an empty matchday 44).
+ */
+export function defaultFixtureRound(fixtures: readonly { round: number; result: unknown }[], current: number): string {
+  if (fixtures.some(fixture => fixture.round === current)) return String(current)
+  const played = fixtures.filter(fixture => fixture.round <= current && fixture.result).map(fixture => fixture.round)
+  if (played.length) return String(Math.max(...played))
+  const upcoming = fixtures.filter(fixture => fixture.round > current).map(fixture => fixture.round)
+  return upcoming.length ? String(Math.min(...upcoming)) : 'all'
+}
+
 function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, busy = false }: SeasonWorkspaceProps & { season: SeasonState; onNewGame: () => void }) {
   const [selectedSeason, setSelectedSeason] = useState(season.seasonNumber)
   // Step 3.4c: the selected season's own divisions (clubs move between divisions from season to season).
@@ -79,7 +92,9 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   const [leagueId, setLeagueId] = useState(() => leagues?.find(league => league.clubIds.includes(season.managedClubId))?.id ?? '')
   const league = leagues?.find(league => league.id === leagueId)
   const leagueName = league?.name ?? (worldOf(season).source === 'fictional-development' ? 'the development league' : worldOf(season).name)
-  const [round, setRound] = useState(String(season.round))
+  // The player's matchday choice; until one is made (or after another season or competition is chosen), a matchday
+  // with games is shown (`defaultFixtureRound`).
+  const [roundChoice, setRound] = useState<string | null>(null)
   const [ownFixtures, setOwnFixtures] = useState(false)
   const [reviewId, setReviewId] = useState<string | null>(null)
   const reviewTrigger = useRef<HTMLButtonElement | null>(null)
@@ -89,6 +104,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
   // European games (step 3.5b) are not part of a domestic league's calendar.
   const selectedFixtures = (archive?.fixtures ?? season.fixtures).filter(fixture => isDomesticFixture(fixture) && (!league || league.clubIds.includes(fixture.homeClubId)))
   const selectedNumber = archive?.seasonNumber ?? season.seasonNumber
+  const round = roundChoice ?? defaultFixtureRound(selectedFixtures, archived ? Infinity : season.round)
   // Step 3.4a: during a week with several game days, show the current game day.
   const selectedDate = archived ? selectedFixtures.at(-1)!.date : currentGameDay(season) ?? season.date
   const standings = getStandings({ ...season, fixtures: archive?.fixtures ?? season.fixtures, divisions: shownDivisions }).filter(row => !league || league.clubIds.includes(row.clubId))
@@ -120,6 +136,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
 
   function selectSeason(number: number) {
     setSelectedSeason(number)
+    setRound(null)
     setReviewId(null)
     reviewTrigger.current = null
   }
@@ -156,7 +173,7 @@ function ActiveSeason({ season, onOpenMatch, onAdvance, onRollover, onNewGame, b
     </section>
 
     <section className="season-standings panel" aria-labelledby="season-table-title">
-      <header className="season-panel-heading"><div><h2 id="season-table-title">{leagues ? 'Regular-season table' : 'League table'}</h2>{leagues && <label>Competition <select aria-label="Competition" value={leagueId} onChange={event => { setLeagueId(event.target.value); setReviewId(null) }} disabled={busy}>{leagues.map(item => <option key={item.id} value={item.id}>{item.country} · {item.name}</option>)}</select></label>}<p>{leagueName} · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
+      <header className="season-panel-heading"><div><h2 id="season-table-title">{leagues ? 'Regular-season table' : 'League table'}</h2>{leagues && <label>Competition <select aria-label="Competition" value={leagueId} onChange={event => { setLeagueId(event.target.value); setRound(null); setReviewId(null) }} disabled={busy}>{leagues.map(item => <option key={item.id} value={item.id}>{item.country} · {item.name}</option>)}</select></label>}<p>{leagueName} · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
       <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th>{lnbRanking && <th scope="col" title="Wins divided by games played">Win %</th>}{fibaRanking && <th scope="col" title="Classification points: 2 for a win, 1 for a loss">Pts</th>}{leagueRule?.points && <th scope="col" title={leagueRule.pointsTitle}>Pts</th>}<th scope="col" title="Points for">PF</th><th scope="col" title="Points against">PA</th><th scope="col" title="Point difference">Diff</th></tr></thead><tbody>{standings.map(row => <tr key={row.clubId} data-club-id={row.clubId} className={row.clubId === season.managedClubId ? 'season-managed-row' : ''}>
         <td>{row.position}{row.rankingTie === 'unresolved' && <span className="season-tie-mark" title="Still tied on sporting criteria; display order only" aria-label="Still tied">=</span>}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} />{row.rankingTie === 'draw' && <span className="season-draw-label" title="Equal after all sporting tie-breaks; position decided by a reproducible draw">Draw</span>}</th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td>{lnbRanking && <td>{row.played ? `${(row.wins / row.played * 100).toFixed(1)}%` : '—'}</td>}{fibaRanking && <td className="season-wins">{classificationPoints(row)}</td>}{leagueRule?.points && <td className="season-wins">{leagueRule.points(row)}</td>}<td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
       </tr>)}</tbody></table></div>

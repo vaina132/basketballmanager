@@ -66,7 +66,8 @@ export function UnemployedDesk({ season, busy, onContinue, onNextDay, onStartSea
   const careerStart = season.career.enabledSince?.date ?? season.date
   const periods = careerPeriods(season, careerStart).reverse()
   const daysOut = reputation?.days ?? 0
-  const status = (vacancy: JobVacancy) => vacancy.offered ? 'Offers you the job' : `Looks for ${vacancy.requirement}`
+  // Only the best fits offer the job (CAREER_RULES.maxJobOffers); another club within reach chose other candidates.
+  const status = (vacancy: JobVacancy) => vacancy.offered ? 'Offers you the job' : market && vacancy.requirement <= market.reputation.value ? 'Chose other candidates' : `Looks for ${vacancy.requirement}`
   const placeText = (vacancy: JobVacancy) => vacancy.opened === 'season' ? `${ordinal(vacancy.position)} after matchday ${vacancy.round}` : `Finished ${ordinal(vacancy.position)}`
 
   return <div className="unemployed-desk" data-unemployed-desk>
@@ -102,7 +103,7 @@ export function UnemployedDesk({ season, busy, onContinue, onNextDay, onStartSea
             </div>
           </li>
         })}</ul> : <p className="unemployed-empty">No club is looking for a coach right now. Boards replace their coach after a review below {CAREER_RULES.midSeasonDismissalBelow} once a third of the season is played, and when a season ends Under pressure; those jobs appear here.</p>}
-        <p className="unemployed-note">Clubs look for a reputation of {VACANCY_BASE_REQUIREMENT} for last place and {VACANCY_STEP} more for each place higher. {CAREER_RULES_TEXT.unemployed}</p>
+        <p className="unemployed-note">Clubs look for a reputation of {VACANCY_BASE_REQUIREMENT} for last place and {VACANCY_STEP} more for each place higher. {CAREER_RULES_TEXT.offers} {CAREER_RULES_TEXT.unemployed}</p>
       </section>
 
       <div className="unemployed-side">

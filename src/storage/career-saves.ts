@@ -184,7 +184,8 @@ interface QueuedCheckpoint {
  */
 export function createCheckpointQueue(options: {
   revision: () => number | Promise<number>;
-  written?: (checkpoint: SeasonCheckpoint) => void;
+  /** Called once a checkpoint is written, with the career state it holds. */
+  written?: (checkpoint: SeasonCheckpoint, state: SeasonState) => void;
   busy?: (busy: boolean) => void;
   codec?: SeasonCodec;
 }): CheckpointQueue {
@@ -205,7 +206,7 @@ export function createCheckpointQueue(options: {
         waiting = null;
         try {
           const checkpoint = await writeCheckedCheckpoint(job.state, options.revision, job.reason, codec);
-          options.written?.(checkpoint);
+          options.written?.(checkpoint, job.state);
           job.resolve(checkpoint);
         } catch (error) { job.reject(error); }
       }

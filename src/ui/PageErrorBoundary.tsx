@@ -12,6 +12,16 @@ export function isLoadFailure(error: unknown): boolean {
   return /dynamically imported module|Importing a module script failed|Unable to preload CSS|Failed to load module script/i.test(message)
 }
 
+/**
+ * A background worker failed before it could answer: its file could not be downloaded or started. The game's workers
+ * report every error of their own work as a message, so an error event from the worker itself means its code is
+ * missing (a new version went live while the game was open) or the connection dropped. Retrying cannot help.
+ */
+export function isWorkerLoadFailure(event: Event): boolean {
+  const message = typeof ErrorEvent !== 'undefined' && event instanceof ErrorEvent ? event.message : ''
+  return !message || isLoadFailure(message) || /Unexpected token '<'|MIME type|NetworkError|Failed to fetch/i.test(message)
+}
+
 interface PageErrorProps {
   /** What failed, as the player knows it: a page name, or "This screen". */
   title: string
@@ -21,16 +31,22 @@ interface PageErrorProps {
   savesFirst: boolean
   /** Show the page again (an unexpected error may not repeat). Omitted when only a reload can help. */
   onRetry?: () => void
+  /**
+   * A failure outside page display, always a download failure: what could not be done ("could not be played") and the
+   * part of the game that could not be downloaded ("the part of the game that plays matchdays").
+   */
+  step?: { failed: string; part: string }
 }
 
 /** Says plainly what failed and what to do next; a page that fails to show never changes the career. */
-export function PageError({ title, error, onReload, savesFirst, onRetry }: PageErrorProps) {
-  const download = isLoadFailure(error)
+export function PageError({ title, error, onReload, savesFirst, onRetry, step }: PageErrorProps) {
+  const download = !!step || isLoadFailure(error)
   const detail = error instanceof Error && error.message ? error.message : String(error)
   const retry = !download && onRetry
-  return <section className="panel page-error" role="alert" aria-labelledby="page-error-title" data-page-error={download ? 'download' : 'render'}>
-    <h2 id="page-error-title"><Icon name="close" size={17} />{title} could not be opened</h2>
-    <p>{download ? 'The game could not download this page. A new version of the game may have been published while it was open, or the internet connection dropped.' : 'Something on this page failed while it was being shown. Nothing in your career was changed.'}</p>
+  const id = step ? 'step-error-title' : 'page-error-title'
+  return <section className="panel page-error" role="alert" aria-labelledby={id} data-page-error={step ? 'worker' : download ? 'download' : 'render'}>
+    <h2 id={id}><Icon name="close" size={17} />{title} {step?.failed ?? 'could not be opened'}</h2>
+    <p>{download ? `The game could not download ${step?.part ?? 'this page'}. A new version of the game may have been published while it was open, or the internet connection dropped.${step ? ' Trying again cannot help; your career has not changed.' : ''}` : 'Something on this page failed while it was being shown. Nothing in your career was changed.'}</p>
     <p>{savesFirst ? 'Choose Save and reload: your career is saved first, then the game reloads and you continue from that save.' : 'Reload the page. A saved career carries on from its last save: choose Continue saved career.'}{retry ? ' Try again shows this page once more.' : ''}</p>
     <div className="page-error-actions">
       <button type="button" className="button primary" onClick={onReload}><Icon name="restart" size={15} />{savesFirst ? 'Save and reload' : 'Reload page'}</button>

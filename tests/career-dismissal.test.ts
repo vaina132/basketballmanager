@@ -34,14 +34,15 @@ function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number,
   }
   return finish(state);
 }
-// Seeds chosen after the match calibration of sprint 4 (the earlier seeds 67, 35 and 20 no longer produce these seasons);
-// the change and offer seeds were chosen again for the relationships-2 rules of format 66 (they were 4 and 102).
-/** Rhine Falcons end Under pressure (25); Aegean Waves are also Under pressure and need a coach. */
-const SACKED_SEED = 154;
-/** Rhine Falcons are dismissed (29) and no other season ended Under pressure. */
-const CHANGE_SEED = 16;
+// Seeds chosen after the match calibration of sprint 4 (the earlier seeds 67, 35 and 20 no longer produce these seasons),
+// again for the relationships-2 rules of format 66 (change and offer seeds 4 and 102), and again on 16 November 2026, when
+// the manager's next game started from the planned five instead of the closing five (they were 154, 16 and 2).
+/** Rhine Falcons end Under pressure (27); Aegean Waves are also Under pressure and need a coach. */
+const SACKED_SEED = 30;
+/** Rhine Falcons are dismissed (20) and no other season ended Under pressure. */
+const CHANGE_SEED = 12;
 /** Rhine Falcons end steady (50) while Aegean Waves' season ends Under pressure. */
-const OFFERED_SEED = 2;
+const OFFERED_SEED = 33;
 let sackedDay: SeasonState, sacked: SeasonState, changeDay: SeasonState, offeredDay: SeasonState;
 
 beforeAll(() => {
@@ -54,9 +55,9 @@ beforeAll(() => {
 describe('dismissal at a season end', () => {
   it('previews the verdict, the vacancy and the offer before the final matchday is committed', () => {
     const outlook = previewSeasonEnd(sackedDay)!;
-    expect(outlook).toMatchObject({ seasonNumber: 1, clubId: CLUB, dismissed: true, verdict: { verdict: 'pressure', confidence: 25 } });
-    expect(outlook.reputation).toEqual({ value: 25, seasons: [{ seasonNumber: 1, clubId: CLUB, confidence: 25, weight: 3 }] });
-    expect(outlook.vacancies).toEqual([{ clubId: 'aegean-waves', position: 5, requirement: 31, reason: 'pressure', confidence: 29 }]);
+    expect(outlook).toMatchObject({ seasonNumber: 1, clubId: CLUB, dismissed: true, verdict: { verdict: 'pressure', confidence: 27 } });
+    expect(outlook.reputation).toEqual({ value: 27, seasons: [{ seasonNumber: 1, clubId: CLUB, confidence: 27, weight: 3 }] });
+    expect(outlook.vacancies).toEqual([{ clubId: 'aegean-waves', position: 5, requirement: 31, reason: 'pressure', confidence: 19 }]);
     // Below the requirement, a dismissed manager still receives the job asking for the least.
     expect(outlook.offers.map(offer => offer.clubId)).toEqual(['aegean-waves']);
   });
@@ -72,7 +73,7 @@ describe('dismissal at a season end', () => {
   it('opens a vacancy at the least confident board when no other season ended Under pressure', () => {
     const outlook = previewSeasonEnd(changeDay)!;
     expect(outlook.dismissed).toBe(true);
-    expect(outlook.vacancies).toEqual([expect.objectContaining({ clubId: 'adriatic-comets', reason: 'change', confidence: 45 })]);
+    expect(outlook.vacancies).toEqual([expect.objectContaining({ clubId: 'adriatic-comets', reason: 'change', confidence: 39 })]);
     expect(outlook.offers.map(offer => offer.clubId)).toEqual(['adriatic-comets']);
     const moved = advanceSeason(changeDay);
     expect([moved.managedClubId, moved.career.moves[0]!.reason]).toEqual(['adriatic-comets', 'dismissed']);

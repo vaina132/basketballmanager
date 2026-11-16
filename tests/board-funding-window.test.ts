@@ -11,11 +11,11 @@ import { advanceMatchday } from './helpers/board-funding';
 let secondSeasonEnd: SeasonState;
 
 beforeAll(() => {
-  // Seed 28 (4 before format 66's squad-rank roles and contract requests, 32 with facilities alone, 26 with naming
-  // rights alone, 6 before sprint 4's match calibration), all automatic: when the second offseason window opens, one club
-  // starts a project and another then receives board capital for its own, so a capital receipt follows construction
-  // booked inside the window.
-  let state = setEmploymentDelegation(setFacilityDelegation(createSeason({ seed: 28, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true), true);
+  // Seed 5 (28 before the manager's planned starting five of 16 November 2026, 4 before format 66's squad-rank roles
+  // and contract requests, 32 with facilities alone, 26 with naming rights alone, 6 before sprint 4's match calibration),
+  // all automatic: when the second offseason window opens, one club starts a project and another then receives board
+  // capital for its own, so a capital receipt follows construction booked inside the window.
+  let state = setEmploymentDelegation(setFacilityDelegation(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true), true);
   while (state.status === 'active') state = advanceMatchday(state);
   for (let step = 0; step < 80 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
   state = rolloverSeason(state);

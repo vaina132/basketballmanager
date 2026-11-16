@@ -1,12 +1,35 @@
-.rest-week { padding: 16px; }
-.rest-week .section-heading h2 { display: flex; align-items: center; gap: 8px; }
-.rest-week table { width: 100%; border-collapse: collapse; margin-top: 16px; text-align: left; }
-.rest-week th, .rest-week td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
-.rest-week tbody th { font-weight: 500; font-size: 14px; }
-.rest-week td { font-size: 14px; }
-.rest-week td:last-child { width: 200px; }
-.rest-week-player { display: flex; align-items: center; gap: 9px; }
+/* A day without the manager's match, in the desk's compact panel style (manager-desk.css). */
+.rest-week { padding: 10px 14px; }
+.rest-week-label { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
+.rest-week-label > span { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 600; }
+.rest-week-label time { padding-left: 10px; border-left: 1px solid var(--border); color: var(--text); font-weight: 500; }
+.rest-week-content { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.rest-week-message { min-width: 0; }
+.rest-week-message h2 { font-size: 15px; font-weight: 600; line-height: 1.35; }
+.rest-week-message p { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.rest-week-message .rest-week-next { color: var(--text); }
+.rest-week-message .rest-week-next strong { font-weight: 600; }
+.rest-week-actions { display: flex; flex: none; gap: 8px; }
+.rest-week-actions .button { font-size: 12px; min-height: 34px; padding: 7px 10px; }
+.rest-week + .rest-week-squad { margin-top: 10px; }
+.rest-week-squad { min-width: 0; overflow: hidden; }
+.rest-week-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); min-height: 36px; }
+.rest-week-heading h2 { font-size: 13px; font-weight: 600; }
+.rest-week-heading span { font-size: 11px; color: var(--muted); }
+.rest-week-scroll { overflow-x: auto; }
+.rest-week-squad table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+.rest-week-squad th, .rest-week-squad td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.rest-week-squad thead th { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.rest-week-squad th:first-child, .rest-week-squad td:first-child { padding-left: 12px; }
+.rest-week-squad tbody th { font-weight: 500; font-size: 13px; }
+.rest-week-squad td:last-child { width: 200px; padding-right: 12px; }
+.rest-week-player { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.rest-week-player small { font-size: 10px; color: var(--accent); }
 .career-country-options label { display: inline-flex; align-items: center; gap: 6px; padding: 8px; }
 fieldset.career-country-options { border: 1px solid var(--border); margin: 0 12px; padding: 4px; }
 .career-country-options legend { padding: 0 6px; }
-@media (max-width: 800px) { .rest-week { padding: 12px; } .rest-week td:last-child { width: 140px; } }
+@media (max-width: 800px) {
+  .rest-week { padding: 10px 12px; }
+  .rest-week-content { flex-direction: column; gap: 10px; }
+  .rest-week-squad td:last-child { width: 130px; }
+}

@@ -92,8 +92,8 @@ describe('domestic careers on a shared weekly calendar', () => {
   it('renders a compact rest workspace with real condition, without presenting the squad adapter as a match', () => {
     const state = createSeason({ world: calendarWorld() }), before = JSON.stringify(state);
     const markup = renderToStaticMarkup(createElement(RestWeek, { season: state, busy: false, onContinue() {}, onTraining() {} }));
-    expect(markup).toContain('No match for');
-    expect(markup).toContain('Next match:');
+    expect(markup).toContain('No game for');
+    expect(markup).toContain('Your next game:');
     expect(markup.match(/role="meter"/g)).toHaveLength(state.clubs[0].players.length);
     expect(markup).not.toContain('scoreboard');
     expect(JSON.stringify(state)).toBe(before);

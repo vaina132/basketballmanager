@@ -2,6 +2,7 @@ import type { SeasonState } from '../domain/season';
 import type { EconomyChangeReason } from '../domain/world';
 import { CLUB_ECONOMY_KEYS, computeEconomySeasons, ECONOMY_BANDS, MAX_ECONOMY_AMOUNT } from '../world/economy';
 import { worldOf } from '../world/career-world';
+import { economyForesight } from '../world/season';
 
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
 const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -22,7 +23,8 @@ export function validateEconomySeasonsShape(state: Record<string, unknown>, vers
   const value = state.economySeasons;
   if (!isObject(value) || !exactKeys(value, ['model', 'seasons']) || value.model !== 'economy-seasons-1') fail('economySeasons', 'must use the supported per-season club money model');
   const seasonNumber = state.seasonNumber as number;
-  if (!Array.isArray(value.seasons) || value.seasons.length !== seasonNumber - 1) fail('economySeasons.seasons', 'must hold one table for each season after the first');
+  // A complete season also holds the next season's table (money gaps fix); saves made before it may lack that table.
+  if (!Array.isArray(value.seasons) || value.seasons.length !== seasonNumber - 1 && !(state.status === 'complete' && value.seasons.length === seasonNumber)) fail('economySeasons.seasons', 'must hold one table for each season after the first');
   for (const [index, table] of value.seasons.entries()) {
     const path = `economySeasons.seasons[${index}]`;
     if (!isObject(table) || !exactKeys(table, ['seasonNumber', 'clubs']) || table.seasonNumber !== index + 2 || !isObject(table.clubs)) fail(path, 'must name its season and hold each club\'s figures');
@@ -48,5 +50,8 @@ function sameData(left: unknown, right: unknown): boolean {
  */
 export function validateEconomyHistory(state: SeasonState): void {
   if (!state.economySeasons) return;
-  if (!sameData(state.economySeasons.seasons, computeEconomySeasons(state))) fail('economySeasons.seasons', 'must match the club money that follows each season\'s divisions and European places');
+  // A complete season has decided the next season's figures; an older save of a complete season may not hold them yet.
+  const next = state.economySeasons.seasons.length === state.seasonNumber ? economyForesight(state) : undefined;
+  if (state.economySeasons.seasons.length === state.seasonNumber && !next) fail('economySeasons.seasons', 'may hold the next season\'s table only once the season is complete');
+  if (!sameData(state.economySeasons.seasons, computeEconomySeasons(state, next))) fail('economySeasons.seasons', 'must match the club money that follows each season\'s divisions and European places');
 }

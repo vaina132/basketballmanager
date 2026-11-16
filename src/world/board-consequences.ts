@@ -3,7 +3,7 @@ import type { SeasonState } from '../domain/season';
 import type { CareerWorld, WorldContext } from '../domain/world';
 import { clubPresident, seasonRounds, worldOf } from './career-world';
 import { STAFF_BUDGET } from './staff-constants';
-import { scaledMoney } from './economy';
+import { clubEconomy, moneyAt, scaledMoney } from './economy';
 import { clubSalaryBudget, clubSalaryCeiling } from './club-roster-policy';
 import { salaryVerdictPercent, usesPresidentBoard } from './presidents';
 
@@ -63,11 +63,30 @@ export function governingVerdict(state: Partial<Pick<SeasonState, 'board'>> & Wo
 
 const scaled = (amount: number, percent: number) => Math.round(amount * percent / 100);
 
-/** The budgets a verdict gives a club; standard budgets without one. Also used to preview an unfinished season. */
-export function verdictBudgets(clubId: string, verdict: BoardVerdict | null, world: CareerWorld): { staff: number; capital: number } {
-  const effect = BOARD_VERDICT_EFFECTS[verdict ?? 'steady'];
-  return { staff: scaled(scaledMoney({ world }, clubId, STAFF_BUDGET), effect.staffPercent), capital: scaled(clubPresident(world, clubId).seasonCapital, effect.capitalPercent) };
+/**
+ * The owner's standard capital for a season, before any verdict. The world records it at the club's opening money
+ * level; with per-season club money (format 72) it follows the season's money level in the same proportion, in
+ * EUR 100 steps, as the staff allocation does.
+ */
+export function presidentCapital(context: WorldContext, clubId: string, seasonNumber = context.seasonNumber): number {
+  const world = worldOf(context), opening = clubPresident(world, clubId).seasonCapital;
+  const before = clubEconomy({ world }, clubId), now = clubEconomy(moneyAt(context, seasonNumber), clubId);
+  if (!before || !now || now.scale === before.scale) return opening;
+  return Math.max(10_000, Math.round(opening * now.scale / before.scale / 10_000) * 10_000);
 }
+
+/**
+ * The budgets a verdict gives a club for `seasonNumber`; standard budgets without one. Also used to preview an
+ * unfinished season. Format 72: both follow the money figures known for that season (a season not yet decided reads
+ * the latest figures known), for every club alike.
+ */
+export function verdictBudgets(context: WorldContext, clubId: string, verdict: BoardVerdict | null, seasonNumber = context.seasonNumber): { staff: number; capital: number } {
+  const effect = BOARD_VERDICT_EFFECTS[verdict ?? 'steady'];
+  return { staff: scaled(standardStaffAllocation(context, clubId, seasonNumber), effect.staffPercent), capital: scaled(presidentCapital(context, clubId, seasonNumber), effect.capitalPercent) };
+}
+
+/** Format 62: the standard staff allocation at the club's money level; format 72: the level of the season in question. */
+const standardStaffAllocation = (context: WorldContext, clubId: string, seasonNumber: number | undefined): number => scaledMoney(moneyAt(context, seasonNumber), clubId, STAFF_BUDGET);
 
 /** Format 70 (board-2): the player salary budget percent change a verdict brings, scaled by the president's generosity. */
 export function verdictSalaryPercent(world: CareerWorld, clubId: string, verdict: BoardVerdict | null): number {
@@ -113,9 +132,9 @@ export function salaryBudgetBasis(context: SalaryBudgetContext, clubId: string, 
 /** The most a season's salary budget can be under any verdict: the save check's bound for terms signed before a verdict. */
 export function seasonSalaryCeiling(context: SalaryBudgetContext, clubId: string, seasonNumber: number): number {
   let ceiling = Math.max(clubSalaryBudget(context, clubId), clubSalaryCeiling(context, clubId, seasonNumber), seasonSalaryBudget({ ...context, seasonNumber: undefined, status: undefined }, clubId, seasonNumber));
-  // Step 3.7: format 72 money figures change at each rollover, so terms signed earlier met the verdict applied to the
-  // budget known then (for example a renewal in the offseason before a relegated club's money fell).
-  if (context.economySeasons) for (let known = 1; known <= seasonNumber; known += 1) ceiling = Math.max(ceiling, seasonSalaryBudget({ ...context, seasonNumber: known, status: 'complete' }, clubId, seasonNumber));
+  // Step 3.7: format 72 money figures change, so terms signed earlier met the verdict applied to the budget known then:
+  // during a season its own figures, and once it is complete the next season's figures it decided.
+  if (context.economySeasons) for (let known = 1; known <= seasonNumber; known += 1) for (const status of ['active', 'complete'] as const) ceiling = Math.max(ceiling, seasonSalaryBudget({ ...context, seasonNumber: known, status }, clubId, seasonNumber));
   return ceiling;
 }
 
@@ -123,13 +142,11 @@ export type SalaryBudgetContext = WorldContext & { board?: Pick<SeasonBoard, 'mo
 
 /** The shared annual staff allocation for a club and season, in euro cents. */
 export function staffAllocation(state: Partial<Pick<SeasonState, 'board'>> & Pick<SeasonState, 'seasonNumber'> & WorldContext, clubId: string, seasonNumber = state.seasonNumber): number {
-  const verdict = governingVerdict(state, clubId, seasonNumber);
-  // Format 62: the standard allocation sits at the club's money level.
-  const standard = scaledMoney(state, clubId, STAFF_BUDGET);
+  const verdict = governingVerdict(state, clubId, seasonNumber), standard = standardStaffAllocation(state, clubId, seasonNumber);
   return verdict ? scaled(standard, BOARD_VERDICT_EFFECTS[verdict.verdict].staffPercent) : standard;
 }
 
-/** The owner's capital for facility projects in a season, in euro cents. */
+/** The owner's capital for facility projects in a season, in euro cents (format 72: at that season's money level). */
 export function ownerCapital(state: Partial<Pick<SeasonState, 'board'>> & Pick<SeasonState, 'seasonNumber'> & WorldContext, clubId: string, seasonNumber = state.seasonNumber): number {
-  return verdictBudgets(clubId, governingVerdict(state, clubId, seasonNumber)?.verdict ?? null, worldOf(state)).capital;
+  return verdictBudgets(state, clubId, governingVerdict(state, clubId, seasonNumber)?.verdict ?? null, seasonNumber).capital;
 }

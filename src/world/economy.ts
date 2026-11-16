@@ -164,10 +164,29 @@ export const REAL_ECONOMY_RULES = Object.freeze({
    * arena and usual crowd stay its own. Every amount then moves `share` of the way from last season's figure to the
    * target (rounded on the change): half the gap in the first season, three quarters after two, so relegation hurts
    * but not overnight. Agreed contracts keep their wages; the player salary budget follows the season's player wage
-   * bill (`playerBill`) against the opening one. New figures apply from the rollover: offseason offers are planned
-   * with the completed season's figures. Older careers keep the world's opening figures.
+   * bill (`playerBill`) against the opening one. New figures are known once the season is complete (its divisions and
+   * European places are decided): offseason offers and budgets for the next season use them, and its money moves by
+   * them from the rollover. A season's main sponsorship deal is priced a season earlier, so when a club's sponsorship
+   * figure rises its season funding also covers the rise, and a club joining the full world (no deal possible for its
+   * first season) has its whole sponsorship figure added to its funding. Older careers keep the world's opening figures.
    */
   seasons: Object.freeze({ share: 0.5 }),
+  /**
+   * [E] Staff pay (money gaps, 16 November 2026): above the development money level a staff member's fee grows with the
+   * square root of the club's money level (`staffScale`), not in proportion like facility costs, because real staff pay
+   * varies far less between clubs than budgets do (an assistant coach costs a EuroLeague club about EUR 0.2-0.5M gross,
+   * a mid-table domestic club EUR 60-150k). Below it fees stay in proportion (part-time staff of small clubs). Facility
+   * costs, upkeep and the staff allocation keep the money level (`scale`).
+   */
+  staffPayExponent: 0.5,
+  /**
+   * [E] Automatic facility upgrades (every club run automatically, money gaps fix): an upgrade keeps the rest of the
+   * season's operating costs and upkeep, less `gateCautionShare` of the gate income the figures expect for the same
+   * weeks (the cash outlook's cautious scenario), plus `seasonEndCashShare` of the budget as cash at the season's end;
+   * and the extra upkeep of upgraded facilities, paid every season from the budget's reserve (`reservePercent`), stays
+   * within `upkeepShare` of the budget.
+   */
+  automaticSpending: Object.freeze({ gateCautionShare: 0.75, seasonEndCashShare: 0.1, upkeepShare: 0.02 }),
 });
 
 type RevenueMix = { tickets: number; sponsorship: number; central: number; public: number; owner: number; other: number };
@@ -231,6 +250,24 @@ export function scaledMoney(context: WorldContext | undefined, clubId: string, a
 }
 
 /**
+ * A context reading the money figures of `seasonNumber` (format 72): the latest figures known up to that season. The
+ * context itself when it already names that season.
+ */
+export function moneyAt<T extends WorldContext>(context: T, seasonNumber: number | undefined): T | WorldContext {
+  if (seasonNumber === undefined || seasonNumber === context.seasonNumber || !context.economySeasons) return context;
+  return { ...(context.world ? { world: context.world } : {}), ...(context.dataPackId ? { dataPackId: context.dataPackId } : {}), seasonNumber, economySeasons: context.economySeasons };
+}
+
+/**
+ * Format 72: the latest season whose money figures a context knows. A completed season has decided the next season's
+ * figures (`foreseeEconomy` stores them), so a context of a complete season knows one season further.
+ */
+export function knownMoneySeason(context: WorldContext & { status?: SeasonState['status'] }, fallback: number): number {
+  const year = context.seasonNumber ?? fallback;
+  return context.status === 'complete' ? year + 1 : year;
+}
+
+/**
  * The cash automatic control keeps back (facility upgrades, wage prepayments). Spendable cash protects wages and
  * fees but not operating costs; the development cushions are about one season of the development club's operating
  * cost, whose ticket income alone covers it. Real clubs' gates cover far less, so with an economy the cushion is at
@@ -242,8 +279,42 @@ export function automationCushion(context: WorldContext | undefined, clubId: str
   return Math.max(scaledMoney(context, clubId, amount), Math.round(economy.operatingCost * REAL_ECONOMY_RULES.operatingCushionShare / 10_000) * 10_000);
 }
 
-/** A staff member's season fee for a club: the catalog fee at the club's money level (format 62), unchanged otherwise. */
-export const staffFee = (context: WorldContext | undefined, clubId: string, fee: number): number => scaledMoney(context, clubId, fee);
+/** The per-mille multiplier of staff fees for a per-mille money level: the level itself up to 1000 (the development level), then its `staffPayExponent` power. */
+export const staffScale = (scale: number): number => scale <= PER_MILLE ? scale : Math.round(PER_MILLE * (scale / PER_MILLE) ** REAL_ECONOMY_RULES.staffPayExponent);
+
+/**
+ * A staff member's season fee for a club, unchanged in worlds without an economy. Format 62 put it at the club's money
+ * level; since the money gaps fix (16 November 2026) it follows `staffScale` (the square root of a level above the
+ * development one), rounded to EUR 100.
+ */
+export function staffFee(context: WorldContext | undefined, clubId: string, fee: number): number {
+  const economy = clubEconomy(context, clubId);
+  if (!economy || fee === 0) return fee;
+  return Math.max(10_000, Math.round(fee * staffScale(economy.scale) / PER_MILLE / 10_000) * 10_000);
+}
+
+/**
+ * The wage of a cheap squad player at a club's level (format 62's researched bench minimum of its band, at its country's
+ * gross cost, in EUR 500 steps), from the figures of the context's season; null in worlds without an economy.
+ */
+export function benchWage(context: WorldContext | undefined, clubId: string): number | null {
+  const economy = clubEconomy(context, clubId);
+  if (!economy || !context?.world) return null;
+  return Math.round(REAL_ECONOMY_RULES.benchFloor[economy.band] * bandFor(REAL_ECONOMY_RULES.costPerNet, moneyCountry(context.world, clubId)) * CENTS / 50_000) * 50_000;
+}
+const moneyCountries = new WeakMap<CareerWorld, Map<string, string>>();
+/** A club's country for its money rules (its league's, a next division's or 'Other'; Monaco plays by France's), cached per world. */
+function moneyCountry(world: CareerWorld, clubId: string): string {
+  let index = moneyCountries.get(world);
+  if (!index) { index = new Map(); moneyCountries.set(world, index); }
+  let country = index.get(clubId);
+  if (country === undefined) {
+    const found = clubCountry(world, clubId) ?? world.lowerDivisions?.find(list => 'clubIds' in list && list.clubIds.includes(clubId))?.country ?? 'Other';
+    country = REAL_ECONOMY_RULES.countryAliases[found] ?? found;
+    index.set(clubId, country);
+  }
+  return country;
+}
 
 /** Best-eight average overall rating (as in career setup). */
 function strengthOf(players: readonly Team['players'][number][]): number {
@@ -524,14 +595,23 @@ function changeReasons(before: { tier: number; kind: EuropeanCompetitionKind | n
 }
 
 /** What a season's figures are computed from: the world, every completed season and this season's divisions, places and exchanges. */
-export type EconomySeasonsContext = WorldContext & Pick<SeasonState, 'seasonNumber' | 'history'> & Partial<Pick<SeasonState, 'divisions' | 'europe' | 'background'>>;
+export type EconomySeasonsContext = WorldContext & Pick<SeasonState, 'seasonNumber' | 'history'> & Partial<Pick<SeasonState, 'divisions' | 'europe' | 'background' | 'rosters'>>;
+/** The next season's divisions and European entrants, decided by a complete season (`nextSeasonDivisions`, `europeanPlacesAfter`). */
+export interface EconomyForesight { divisions: DomesticDivisions | undefined; europe: SeasonEurope | undefined }
 
 /**
  * Format 72: every season's club figures from the second season to the current one, derived only from recorded
  * evidence (the world, each season's divisions and European entrants, the clubs joining or leaving the full world and
  * each completed season's latest registrations), so a save re-derives them exactly. See `REAL_ECONOMY_RULES.seasons`.
+ * With `next` (a complete season), the next season's figures follow as well, from this season's registrations and the
+ * divisions and places it decided: exactly the table the rollover computes.
  */
-export function computeEconomySeasons(context: EconomySeasonsContext): SeasonEconomyTable[] {
+export function computeEconomySeasons(context: EconomySeasonsContext, next?: EconomyForesight): SeasonEconomyTable[] {
+  if (next) {
+    // The completed season as the rollover archives it: its divisions, European entrants and registrations.
+    const archive = { seasonNumber: context.seasonNumber, divisions: context.divisions, europe: context.europe, rosters: context.rosters ?? [], fixtures: [] } as unknown as SeasonState['history'][number];
+    return computeEconomySeasons({ ...context, seasonNumber: context.seasonNumber + 1, history: [...context.history, archive], divisions: next.divisions, europe: next.europe });
+  }
   const world = worldOf(context);
   if (!world.economy || context.seasonNumber < 2) return [];
   const share = REAL_ECONOMY_RULES.seasons.share;
@@ -549,6 +629,7 @@ export function computeEconomySeasons(context: EconomySeasonsContext): SeasonEco
     if (!archive) throw new Error('Club money needs every completed season.');
     const layout = seasonLayout(world, divisionsOf(year), europeOf(year), strengthAfter(world, archive.rosters));
     const clubs: Record<string, SeasonClubEconomy> = {};
+    const members = new Set(fullWorldClubsIn(context, year - 1).map(club => club.id));
     for (const club of fullWorldClubsIn(context, year)) {
       const clubId = club.id, item = layout.place.get(clubId)!, band = layout.band.get(clubId)!, prior = latest.get(clubId)!;
       const opening = openingEconomy(world, clubId)!, known = knownClubBudget(names.get(clubId)!);
@@ -561,11 +642,15 @@ export function computeEconomySeasons(context: EconomySeasonsContext): SeasonEco
       const gate = { capacity: definition.capacity, referenceDemand: definition.referenceDemand, ticketPrice: gateFor(item, band, layout.gateT.get(clubId)!).ticketPrice };
       const target = clubFigures(band, item, layout.competition.get(clubId), budget, gate);
       const before = previous.place.get(clubId)!;
+      const sponsorship = Math.max(0, move(prior.sponsorship, target.economy.sponsorship, 10_000));
+      // Money gaps fix: a season's main sponsorship deal is priced a season earlier, so when the sponsorship figure rises
+      // the season's funding also covers the rise; a club joining the full world could sign no deal for its first season.
+      const lag = members.has(clubId) ? Math.max(0, sponsorship - prior.sponsorship) : sponsorship;
       clubs[clubId] = {
         band,
         budget: Math.max(1_000_000, move(prior.budget, target.economy.budget, 1_000_000)),
-        sponsorship: Math.max(0, move(prior.sponsorship, target.economy.sponsorship, 10_000)),
-        funding: Math.max(0, move(prior.funding, target.economy.funding, 10_000)),
+        sponsorship,
+        funding: Math.max(0, move(prior.funding, target.economy.funding, 10_000)) + lag,
         openingCash: Math.max(0, move(prior.openingCash, target.economy.openingCash, 10_000)),
         ticketPrice: Math.max(100, move(prior.ticketPrice, target.economy.ticketPrice, 100)),
         operatingCost: Math.max(0, move(prior.operatingCost, target.economy.operatingCost, 10_000)),
@@ -606,7 +691,7 @@ export function growEconomy(state: SeasonState): SeasonState {
  * player wage bill against the opening one, from the figures known by `knownThrough` (a later season reads the latest
  * known figures). 1 for every career without per-season figures.
  */
-export function salaryBudgetRatio(context: WorldContext, clubId: string, seasonNumber: number, knownThrough = context.seasonNumber ?? seasonNumber): number {
+export function salaryBudgetRatio(context: WorldContext & { status?: SeasonState['status'] }, clubId: string, seasonNumber: number, knownThrough = knownMoneySeason(context, seasonNumber)): number {
   const world = context.world;
   if (!world?.economy || !context.economySeasons) return 1;
   const year = Math.min(seasonNumber, knownThrough);

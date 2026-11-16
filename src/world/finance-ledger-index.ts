@@ -1,6 +1,7 @@
 import type { FinanceBalance, FinanceEntry } from '../domain/finance';
 import type { PayrollCharge } from '../domain/payroll';
 import { archivedFinanceIndex, financeLedgerCount, financeLedgerEntries, scopedFinanceLedgerIndex, type FinanceLedgerSource } from './finance-ledger';
+import { scopedCalculation } from './pure-cache';
 
 interface Point<T> { through: number; value: T }
 interface ClubTotals extends FinanceBalance { net: number }
@@ -65,8 +66,12 @@ function clubIndex(finance: FinanceLedgerSource): PrefixIndex<ClubTotals> {
  * (`[...ledger, entry]`), so a new array that begins with exactly the entries of a recently folded one (same objects, in
  * order) continues from that fold instead of reading the season again; the result equals a fold from the start. The
  * value maps are shared: callers must not change them.
+ * Inside a calculation scope (`withCalculationCache`) inputs may have been edited since an earlier batch, so there only
+ * folds made in the same scope are reused: the first reading of a ledger in each scope folds it afresh. Outside scopes
+ * ledgers are replaced, never edited, and every fold is reused.
  */
-interface LedgerFold<T> { ledger: readonly FinanceEntry[]; length: number; start: unknown; values: ReadonlyMap<string, T> }
+interface LedgerFold<T> { ledger: readonly FinanceEntry[]; length: number; start: unknown; values: ReadonlyMap<string, T>; scope: object | undefined }
+const FOLD_SCOPE_OWNER = {}, FOLD_SCOPE = Symbol('ledger fold calculation scope');
 function ledgerFold<T>(add: (values: Map<string, T>, entry: FinanceEntry, start: unknown) => void): (ledger: readonly FinanceEntry[], start: unknown) => ReadonlyMap<string, T> {
   const known = new WeakMap<readonly FinanceEntry[], LedgerFold<T>>();
   let recent: LedgerFold<T>[] = [];
@@ -76,13 +81,16 @@ function ledgerFold<T>(add: (values: Map<string, T>, entry: FinanceEntry, start:
     return true;
   };
   return (ledger, start) => {
+    // One token per calculation scope (undefined outside scopes).
+    const scope = scopedCalculation(FOLD_SCOPE_OWNER, FOLD_SCOPE, '', () => ({}));
+    const usable = (fold: LedgerFold<T>) => !scope || fold.scope === scope;
     const cached = known.get(ledger);
-    if (cached && cached.length === ledger.length && cached.start === start) return cached.values;
+    if (cached && usable(cached) && cached.length === ledger.length && cached.start === start) return cached.values;
     let base: LedgerFold<T> | undefined;
-    for (const fold of recent) if (fold.start === start && (!base || fold.length > base.length) && extendsFold(ledger, fold)) base = fold;
+    for (const fold of recent) if (usable(fold) && fold.start === start && (!base || fold.length > base.length) && extendsFold(ledger, fold)) base = fold;
     const values = new Map(base?.values);
     for (let index = base?.length ?? 0; index < ledger.length; index += 1) add(values, ledger[index]!, start);
-    const fold: LedgerFold<T> = { ledger, length: ledger.length, start, values };
+    const fold: LedgerFold<T> = { ledger, length: ledger.length, start, values, scope };
     known.set(ledger, fold);
     recent = [...recent.filter(item => item.ledger !== ledger).slice(-3), fold];
     return values;

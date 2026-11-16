@@ -7,7 +7,7 @@ import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { dateForRound, MAX_SEASON_NUMBER } from './season';
 import { memoizePure } from './pure-cache';
-import { automationCushion, scaledMoney } from './economy';
+import { automationCushion, clubEconomy, REAL_ECONOMY_RULES, scaledMoney, worldEconomy } from './economy';
 import { activeLease } from './facility-debt';
 
 /** The three facilities of `facilities-1` careers (formats 28-64). */
@@ -21,6 +21,33 @@ export const FACILITY_MAX_LEVEL = 4;
 export const FACILITY_AUTOMATION_BUFFER = 15_000_000;
 /** The cash automatic control keeps after an upgrade, at the club's money level (format 62). */
 export const facilityAutomationBuffer = (context: WorldContext, clubId: string): number => automationCushion(context, clubId, FACILITY_AUTOMATION_BUFFER);
+
+/**
+ * The cash automatic control and rival clubs keep after starting a facility upgrade (money gaps fix, 16 November
+ * 2026). In worlds with an economy, spendable cash already protects wages and fees but not the operating costs and
+ * facility upkeep still to come this season, which the season's sponsorship and funding (paid at its opening) are meant
+ * to cover. So an upgrade must leave those costs for the rest of the season, less a cautious share of the gate income
+ * the club's figures expect for the same weeks, plus `seasonEndCashShare` of the budget: a club run automatically ends
+ * every season with cash, and invests what its season leaves over. Without an economy, the development cushion.
+ */
+export function upgradeAutomationCushion(context: FacilitiesContext & Partial<Pick<SeasonState, 'round' | 'status'>>, clubId: string): number {
+  const base = facilityAutomationBuffer(context, clubId), economy = clubEconomy(context, clubId);
+  if (!economy) return base;
+  const rules = REAL_ECONOMY_RULES.automaticSpending, rounds = seasonRounds(context);
+  const weeksLeft = context.status !== 'active' || context.round === undefined ? 0 : Math.max(0, rounds - context.round + 1);
+  const expectedGate = Math.max(0, economy.budget - economy.sponsorship - economy.funding);
+  const costs = weeksLeft * (economy.operatingCost / rounds + getFacilityUpkeep(context, clubId)), gate = weeksLeft * expectedGate / rounds * rules.gateCautionShare;
+  return Math.max(scaledMoney(context, clubId, FACILITY_AUTOMATION_BUFFER), Math.round((economy.budget * rules.seasonEndCashShare + Math.max(0, costs - gate)) / 10_000) * 10_000);
+}
+/**
+ * Whether automatic control and rival clubs may take on a facility upkeep of `upkeepPerMatchday` (money gaps fix): in
+ * worlds with an economy, upgraded facilities' upkeep is paid every season from the budget's small reserve, so it must
+ * stay within `upkeepShare` of the club's budget over a season; always without an economy.
+ */
+export function upkeepAllowsAutomaticUpgrade(context: WorldContext, clubId: string, upkeepPerMatchday: number): boolean {
+  const economy = clubEconomy(context, clubId);
+  return !economy || upkeepPerMatchday * seasonRounds(context) <= economy.budget * REAL_ECONOMY_RULES.automaticSpending.upkeepShare;
+}
 /** An upgrade's construction cost and a level's weekly upkeep at the club's money level (format 62; unchanged otherwise). */
 const facilityCost = (context: WorldContext, clubId: string, type: FacilityType, level: number): number => scaledMoney(context, clubId, COSTS[type][level - 1]!);
 const facilityUpkeep = (context: WorldContext, clubId: string, type: FacilityType, level: number): number => scaledMoney(context, clubId, UPKEEP[type][level - 1]!, 100);
@@ -76,7 +103,21 @@ const UPKEEP: Record<FacilityType, readonly number[]> = { arena: [0, 50_000, 90_
 const BUILD_DAYS = [0, 21, 28, 42] as const;
 const BONUS_PERCENT = [0, 5, 8, 10] as const;
 const ADDED_SEATS = [0, 500, 1400, 2600] as const;
+/** The development arenas' average size (3,200-4,200 seats), the base of `ADDED_SEATS`. */
+const ADDED_SEATS_BASE = 3_700;
 export type FacilitiesContext = { facilities?: SeasonFacilities; date?: string } & WorldContext;
+
+/**
+ * The seats an arena level adds (before its condition). The development figures add 14%, 38% and 70% to a typical
+ * development arena; in worlds with an economy each club's expansion keeps those proportions of its own arena, in
+ * 100-seat steps (money gaps fix, 16 November 2026), so a 12,000-seat EuroLeague arena grows as much in proportion as
+ * a 2,000-seat second-division hall while the cost follows the club's money level.
+ */
+export function addedArenaSeats(context: WorldContext, clubId: string, level: number): number {
+  const seats = ADDED_SEATS[level - 1]!;
+  if (!worldEconomy(context) || seats === 0) return seats;
+  return Math.max(100, Math.round(seats * clubFinanceDefinition(worldOf(context), clubId).capacity / ADDED_SEATS_BASE / 100) * 100);
+}
 
 /** Condition of an upgraded facility moves once per senior matchday under the plan in force before that matchday. */
 export const FACILITY_WEAR_PER_MATCHDAY = 5;
@@ -264,7 +305,7 @@ export function getFacilityUpkeep(state: FacilitiesContext, clubId: string, onDa
 
 export function getArenaFullCapacity(state: FacilitiesContext, clubId: string, onDate = state.date): number {
   // Sections of a worn arena expansion are closed for safety.
-  return clubFinanceDefinition(worldOf(state), clubId).capacity + Math.floor(ADDED_SEATS[getFacilityLevel(state, 'arena', clubId, onDate) - 1]! * facilityEffectPercent(state, 'arena', clubId, onDate ?? '9999-12-31') / 100);
+  return clubFinanceDefinition(worldOf(state), clubId).capacity + Math.floor(addedArenaSeats(state, clubId, getFacilityLevel(state, 'arena', clubId, onDate)) * facilityEffectPercent(state, 'arena', clubId, onDate ?? '9999-12-31') / 100);
 }
 
 /**
@@ -309,7 +350,7 @@ export function quoteFacilityUpgrade(state: SeasonState, type: FacilityType, clu
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before funding construction.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before funding construction.';
   else if (available < cost) reason = FACILITY_FUNDS_REASON;
-  return { clubId, type, fromLevel, toLevel, cost, durationDays, dueOn: facilityCompletionDate(state.date, durationDays), remainingBudgetAfter: Math.max(0, available - cost), upkeepAfter, totalUpkeepAfter: currentUpkeep - facilityUpkeep(state, clubId, type, fromLevel) + upkeepAfter, bonusAfter: type === 'arena' ? 0 : facilityLevelBenefit(type, toLevel), capacityAfter: type === 'arena' ? clubFinanceDefinition(worldOf(state), clubId).capacity + ADDED_SEATS[toLevel - 1]! : 0, canStart: reason === null, reason };
+  return { clubId, type, fromLevel, toLevel, cost, durationDays, dueOn: facilityCompletionDate(state.date, durationDays), remainingBudgetAfter: Math.max(0, available - cost), upkeepAfter, totalUpkeepAfter: currentUpkeep - facilityUpkeep(state, clubId, type, fromLevel) + upkeepAfter, bonusAfter: type === 'arena' ? 0 : facilityLevelBenefit(type, toLevel), capacityAfter: type === 'arena' ? clubFinanceDefinition(worldOf(state), clubId).capacity + addedArenaSeats(state, clubId, toLevel) : 0, canStart: reason === null, reason };
 }
 
 /** `facilities-2`: the cost of restoring `missing` condition points of a facility at a level, at the club's money level. */

@@ -128,10 +128,10 @@ const FORMAT = 'basketball-manager-season';
 type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
- * The format that introduced six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
- * Built while the schema was 73; set to 74 when the schema version moves to 74 for the interface-simplification round.
+ * The format that introduced six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`):
+ * format 74. Built while the schema was 73, so until the schema moves to 74 the current format carries it.
  */
-const SIX_LEVEL_FORMAT = 73;
+const SIX_LEVEL_FORMAT = Math.min(74, SEASON_SCHEMA_VERSION);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
   'secondsPlayed', 'points', 'fieldGoalsMade', 'fieldGoalsAttempted', 'threePointersMade',

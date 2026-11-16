@@ -140,7 +140,9 @@ export function validateCommercial(state: SeasonState, version: number): void {
   /** Format 64: sponsors leaving under their clause at a season end, recorded before that season's second-round offers. */
   const consumeExits = (boundary: Extract<Boundary, { kind: 'window' }>) => {
     const seasonClubs = new Set(fullWorldClubsIn(state, boundary.seasonNumber).map(club => club.id));
-    while (index < events.length && eventAt(index).type === 'exit') {
+    // Step 3.7: only this season's exits. With no other sponsorship event in between (no second-round offers this season
+    // end, none in the next season until its end), the next exit is a later season's and waits for its own boundary.
+    while (index < events.length && eventAt(index).type === 'exit' && eventAt(index).seasonNumber === boundary.seasonNumber) {
       const path = `commercial.events[${index}]`, event = eventAt(index) as Extract<CommercialEvent, { type: 'exit' }>;
       if (event.seasonNumber !== boundary.seasonNumber || event.round !== boundary.round || event.date !== boundary.date || event.ledgerCount < completionStart(boundary.seasonNumber)) fail(path, 'must occur at its season end');
       const agreement = replay.agreements.find(item => item.id === event.agreementId);

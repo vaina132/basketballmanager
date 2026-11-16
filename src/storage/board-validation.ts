@@ -12,7 +12,7 @@ import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financ
 import { boardDebtImpacts } from '../world/facility-debt';
 import { PRESIDENT_RULES, usesPresidentBoard } from '../world/presidents';
 import { REQUEST_KINDS } from '../world/board-requests';
-import { managedClubFor } from '../world/career';
+import { managedClubAtRound } from '../world/career';
 import { maxTicketPriceFor, TICKET_PRICE_STEP } from '../world/finance';
 import { SEALED_HISTORY_FORMAT, withoutCountedGames } from '../world/sealed-history';
 
@@ -62,7 +62,8 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard):
     injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
     finance: { ...finance, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
     // Format 70 (board-2): the academy, the previous season's squads, the managed club and the president's requests.
-    ...(usesPresidentBoard(board) ? { academy: state.academy, history: history.filter(archive => archive.seasonNumber === anchor.seasonNumber - 1), managedClubId: managedClubFor(state, anchor.seasonNumber, false), boardRequests: (state.board.requests ?? []) as BoardRequest[] } : {}),
+    // Step 3.7: the club managed at the anchor's own week (a season opening before a mid-season dismissal kept the club).
+    ...(usesPresidentBoard(board) ? { academy: state.academy, history: history.filter(archive => archive.seasonNumber === anchor.seasonNumber - 1), managedClubId: managedClubAtRound(state, anchor.seasonNumber, anchor.round), boardRequests: (state.board.requests ?? []) as BoardRequest[] } : {}),
   };
 }
 
@@ -85,7 +86,9 @@ function validateBoardRequests(state: SeasonState, raw: unknown): BoardRequest[]
     const year = integer(entry.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber);
     const round = integer(entry.round, `${path}.round`, rules.firstRound, rounds - rules.deadlineWeeks);
     if (entry.date !== dateForRound(round, year) || entry.deadlineRound !== round + rules.deadlineWeeks) fail(path, 'must record its review date and deadline');
-    if (entry.clubId !== managedClubFor(state, year, false)) fail(`${path}.clubId`, 'must be the club the manager ran that season');
+    // Step 3.7: a request belongs to the club managed at its own review, so one made before a mid-season dismissal or move
+    // names the former club (the season's final club, or none while unemployed, refused a real career in season five).
+    if (entry.clubId !== managedClubAtRound(state, year, round)) fail(`${path}.clubId`, 'must be the club the manager ran that season');
     const at = ordinal(year, round, rounds);
     if (at < previous) fail(path, 'must keep chronological order');
     previous = at;

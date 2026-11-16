@@ -208,3 +208,15 @@
 .squad-contracts-table{min-width:840px}
 @media(max-width:1150px){.transfer-search-layout{grid-template-columns:1fr}.transfer-shortlist{position:static}.transfer-shortlist-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));max-height:none}.transfer-shortlist-list>li{border-right:1px solid var(--border)}}
 @media(max-width:650px){.transfer-search-filters{display:grid;grid-template-columns:1fr 1fr;padding:10px}.transfer-search-filters .transfer-filter-name{grid-column:1/-1}.transfer-search-filters .transfer-filter-name input{width:100%}.transfer-search-filters select{width:100%}.transfer-filter-age input{flex:1;width:0}.transfer-search-range,.transfer-search-more,.transfers-squad-line,.transfers-alert{padding-inline:10px}.transfer-search-scroll{max-height:none}.transfer-shortlist-list{grid-template-columns:1fr}}
+/* Phones: search results and squad contracts become one card per player, so the action stays in view. */
+@media(max-width:650px){
+.transfer-search-table,.squad-contracts-table{min-width:0}
+.transfer-search-table thead,.squad-contracts-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.transfer-search-table tbody,.squad-contracts-table tbody{display:block}
+.transfer-search-table tr,.squad-contracts-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;padding:10px;border-bottom:1px solid var(--border)}
+.transfer-search-table tbody th,.transfer-search-table td,.squad-contracts-table tbody th,.squad-contracts-table td{display:block;min-width:0;padding:0;border:0}
+.transfer-search-table tbody th,.squad-contracts-table tbody th,.transfer-search-table .transfers-action,.squad-contracts-table .transfers-action,.transfer-search-table .transfers-empty,.squad-contracts-table .transfers-empty{grid-column:1/-1}
+.transfer-search-table td[data-label]::before,.squad-contracts-table td[data-label]::before{content:attr(data-label);display:block;margin-bottom:2px;font-size:11px;color:var(--muted)}
+.transfer-search-table .transfers-action,.squad-contracts-table .transfers-action{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;min-width:0}
+.transfer-search-table .transfer-shortlist-toggle{margin-top:0}
+}

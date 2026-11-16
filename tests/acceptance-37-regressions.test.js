@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testWorld } from './world-fixtures';
-import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
+import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, resignManager, rolloverSeason } from '../src/world/season';
+import { NO_CLUB } from '../src/world/career-rules';
 import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { setEmploymentDelegation } from '../src/world/employment';
@@ -12,7 +13,7 @@ import { getClubContractSummary, MIN_ROSTER_SIZE } from '../src/world/employment
 import { withRealEconomy } from '../src/world/economy';
 import { leavingClubIds } from '../src/world/background';
 
-// Step 3.7 acceptance regressions: season ends that live play reaches and the strict save check must accept.
+// Step 3.7 acceptance regressions: careers that live play reaches and the strict save check must accept.
 const play = state => advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
 const roundTrip = state => parseSeason(serializeSeasonCompact(state));
 
@@ -34,7 +35,7 @@ function greekWorld() {
   ] }, [{ country: 'Greece', tier: 2, name: 'Second division', clubs: [1, 2].map(index => ({ id: `second-${index}`, name: `Second Club ${index}`, shortName: `SC${index}`, color: '#336699' })) }]);
 }
 
-describe('season ends in the strict save check (step 3.7)', () => {
+describe('step 3.7 acceptance careers in the strict save check', () => {
   it('accepts sponsor exits and second-round offers when the final was settled before the last reserved week', () => {
     const world = greekWorld();
     expect(() => validateWorld(world)).not.toThrow();
@@ -75,4 +76,19 @@ describe('season ends in the strict save check (step 3.7)', () => {
     expect(after.contracts.filter(contract => !agreed.has(contract.id)).every(contract => contract.seasonWage <= short[0].reserveWage)).toBe(true);
     expect(roundTrip(state)).toEqual(state);
   }, 900_000);
+  it('keeps a president\'s requests to the manager\'s club after the manager leaves it mid-season', () => {
+    // Real-data acceptance, season five: the manager was dismissed in week 37 without a new club, and the check took the
+    // season's final club (none) for the president's earlier requests and the season-opening objectives.
+    let state;
+    for (let seed = 1; seed <= 30 && !state; seed += 1) {
+      let career = setEmploymentDelegation(createSeason({ seed, managedClubId: 'adriatic-comets', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true);
+      while (career.status === 'active' && !(career.board.requests ?? []).length) career = play(career);
+      if (career.status === 'active') state = career;
+    }
+    expect(state.board.requests[0].clubId).toBe('adriatic-comets');
+    state = play(state);
+    const left = resignManager(state, NO_CLUB);
+    expect(left.career.moves.at(-1)).toMatchObject({ phase: 'season', fromClubId: 'adriatic-comets', toClubId: NO_CLUB });
+    expect(roundTrip(left)).toEqual(left);
+  }, 600_000);
 });

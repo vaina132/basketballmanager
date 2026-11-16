@@ -1,4 +1,5 @@
-export type FacilityType = 'arena' | 'training' | 'youth';
+/** Medical and scouting facilities exist only in `facilities-2` careers (format 65). */
+export type FacilityType = 'arena' | 'training' | 'youth' | 'medical' | 'scouting';
 /** Full upkeep keeps upgraded facilities in condition; reduced upkeep halves the cost while they wear. */
 export type MaintenancePlan = 'full' | 'reduced';
 
@@ -27,6 +28,10 @@ export interface FacilityProject {
   completedOn: string | null;
   cancelledOn: string | null;
   startEventIndex: number;
+  /** `facilities-2` (format 65): a repair restores condition to 100 at the same level; upgrades omit this field. */
+  kind?: 'repair';
+  /** A repair's condition when it was commissioned. */
+  conditionBefore?: number;
 }
 
 /** A board capital decision for one facility upgrade; an approval is immediately followed by that upgrade's start. */
@@ -42,10 +47,14 @@ export interface FacilityFundingDecision {
   confidence: number;
   requiredConfidence: number;
   capitalRemaining: number;
+  /** `facilities-2` (format 65): present when the capital funds a repair, which then starts at once. */
+  project?: 'repair';
 }
 
 export type FacilityEvent = FacilityAnchor & (
   | { type: 'start'; projectId: string; clubId: string; facilityType: FacilityType }
+  /** `facilities-2` (format 65): a repair project, paid in full on approval like an upgrade. */
+  | { type: 'repair'; projectId: string; clubId: string; facilityType: FacilityType }
   | { type: 'cancel'; projectId: string }
   | { type: 'delegate'; clubId: string; delegated: boolean }
   | { type: 'process' }
@@ -55,7 +64,11 @@ export type FacilityEvent = FacilityAnchor & (
 );
 
 export interface SeasonFacilities {
-  model: 'facilities-1';
+  /**
+   * `facilities-1`: arena, training and youth; condition only under reduced upkeep. `facilities-2` (new careers, format
+   * 65): adds medical and scouting facilities, seasonal wear of every upgraded facility and the arena, and repairs.
+   */
+  model: 'facilities-1' | 'facilities-2';
   enabledSince: FacilityAnchor | null;
   delegated: Record<string, boolean>;
   projects: FacilityProject[];
@@ -85,8 +98,23 @@ export interface FacilityUpgradeQuote {
   reason: string | null;
 }
 
+/** `facilities-2`: the terms of restoring one facility's condition to 100. */
+export interface FacilityRepairQuote {
+  clubId: string;
+  type: FacilityType;
+  level: number;
+  conditionBefore: number;
+  cost: number;
+  durationDays: number;
+  dueOn: string;
+  remainingBudgetAfter: number;
+  canStart: boolean;
+  reason: string | null;
+}
+
 export interface ClubFacilities {
   enabled: boolean;
+  model: SeasonFacilities['model'];
   /** Upkeep choices (format 36): the plan chosen and the plan in force for the current matchday. */
   maintenance: { enabled: boolean; chosen: MaintenancePlan; current: MaintenancePlan };
   clubId: string;
@@ -105,7 +133,11 @@ export interface ClubFacilities {
     upkeepPerRound: number;
     project: FacilityProject | null;
     quote: FacilityUpgradeQuote;
-    /** 0-100; standard facilities stay at 100. */
+    /** 0-100; standard facilities stay at 100 (except the arena in `facilities-2`). */
     condition: number;
+    /** Share of the facility's benefit that its condition still delivers (100 when not worn). */
+    effectPercent: number;
+    /** `facilities-2` only; null in older careers. */
+    repair: FacilityRepairQuote | null;
   }[];
 }

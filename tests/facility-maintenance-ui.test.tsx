@@ -8,7 +8,9 @@ import { advanceMatchday } from './helpers/board-funding';
 
 const noop = () => {};
 const render = (season: SeasonState) => renderToStaticMarkup(<FacilitiesPanel season={season} onEnableFacilities={noop} onFacilityUpgrade={noop} onCancelFacilityUpgrade={noop} onFacilityDelegation={noop} onRequestBoardFunding={noop} onEnableMaintenance={noop} onMaintenancePlan={noop} />);
-const career = (facilityMaintenance: boolean) => createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', manager: { name: 'Upkeep Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, facilityMaintenance });
+/** These are the upkeep rules of older careers (`facilities-1`); new careers wear and repair instead (tests/facility-repairs.test.ts). */
+const legacy = (state: SeasonState): SeasonState => ({ ...state, facilities: { ...state.facilities, model: 'facilities-1' } });
+const career = (facilityMaintenance: boolean) => legacy(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', manager: { name: 'Upkeep Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, facilityMaintenance }));
 let chosen: SeasonState, worn: SeasonState;
 
 beforeAll(() => {

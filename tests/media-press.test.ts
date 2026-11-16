@@ -1,3 +1,4 @@
+import { withLegacyFacilities } from './helpers/legacy-season';
 import { asCareer1 } from './helpers/career-rules';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { PressStyle } from '../src/domain/media';
@@ -195,7 +196,7 @@ describe('media saves', () => {
     file.formatVersion = 62; file.state.schemaVersion = 62;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/Invalid season save/);
     // Format 68 rivalries are older-format safe only as fixed rivalries; the media guard is the one under test.
-    const opening = JSON.parse(serializeSeason(withFixedRivalries(asCareer1(start))));
+    const opening = JSON.parse(serializeSeason(withLegacyFacilities(withFixedRivalries(asCareer1(start)))));
     opening.formatVersion = 62; opening.state.schemaVersion = 62;
     expect(() => parseSeason(JSON.stringify(opening))).toThrow(/media requires format 67/);
   });
@@ -203,7 +204,7 @@ describe('media saves', () => {
 
 describe('older careers', () => {
   it('keep the format-34 press and boards without a media assessment, and load from format 62 unchanged', () => {
-    let plain = asCareer1(createSeason({ seed: 8, managedClubId: CLUB, injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, media: false }));
+    let plain = withLegacyFacilities(asCareer1(createSeason({ seed: 8, managedClubId: CLUB, injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, media: false })));
     for (let step = 0; step < 6; step += 1) plain = advanceMatchday(plain);
     expect(plain.media).toBeUndefined();
     expect(plain.board.reviews.every(review => Object.values(review.clubs).every(club => club.mediaImpact === undefined))).toBe(true);

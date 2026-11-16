@@ -1,4 +1,4 @@
-import { stripRosterHistory } from './helpers/legacy-season';
+import { stripRosterHistory, withLegacyFacilities } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
@@ -158,14 +158,14 @@ describe('explicit injury-free legacy migration', () => {
     expect(restored.plans).toEqual(snapshot.plans);
     expect(restored.fixtures.filter(fixture => fixture.result).every(fixture => Object.keys(fixture.result!.injuries).length === 0)).toBe(true);
     expect(JSON.parse(text).state).toEqual(snapshot);
-    expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(previous)));
+    expect(advanceSeason(finish(restored))).toEqual(advanceSeason(finish(withLegacyFacilities(previous))));
     expect(JSON.parse(serializeSeason(restored)).formatVersion).toBe(SEASON_SCHEMA_VERSION);
   });
 
   it('migrates completed seasons without changing the retained final replay', () => {
     let season = createSeason(5, clubId, 'off', false, false, false);
     while (season.status !== 'complete') season = advanceSeason(finish(season));
-    expect(parseSeason(legacyText(season))).toEqual(season);
+    expect(parseSeason(legacyText(season))).toEqual(withLegacyFacilities(season));
   }, 30_000);
 
   it('runs strict original validation before adding default health fields', () => {

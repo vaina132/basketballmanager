@@ -1,5 +1,5 @@
 import { restoreSeniorDetail } from './helpers/senior-reference';
-import { stripInSeasonRecruitment } from './helpers/legacy-season';
+import { stripInSeasonRecruitment, withLegacyFacilities } from './helpers/legacy-season';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
@@ -82,7 +82,7 @@ describe('employment persistence across registrations', () => {
     const old = restoreSeniorDetail(previous, legacy) as unknown as Record<string, unknown>;
     stripInSeasonRecruitment(old); delete old.market; delete old.employment; delete old.scouting; delete old.negotiations; old.schemaVersion = 9;
     const restored = parseSeason(envelope(old, 9));
-    expect(restored).toEqual(previous);
+    expect(restored).toEqual(withLegacyFacilities(previous));
     expect(restored.employment.enabledSince).toBeNull();
     expect(restored.history[0]!.fixtures[0]!.result.stats).not.toBeNull();
     const enabled = enableEmployment(restored);

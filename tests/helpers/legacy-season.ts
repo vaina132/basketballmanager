@@ -74,6 +74,11 @@ export function stripAcademy(value: object): void {
   delete (value as Record<string, unknown>).youth;
 }
 
+/** Careers saved before format 65 keep the `facilities-1` model: three facilities and no repairs. */
+export function withLegacyFacilities(state: SeasonState): SeasonState {
+  return { ...state, facilities: { ...state.facilities, model: 'facilities-1' } };
+}
+
 /** Past player statistics cannot be recovered from an old-format archive. */
 export function withUnavailableArchivedStats(state: SeasonState): SeasonState {
   const result = structuredClone(state);

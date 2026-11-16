@@ -18,8 +18,10 @@ const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(s
 // season); tests/career-board-rules.test.ts covers the rules of new careers.
 const start = (seed: number, careerMoves = true, media = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, media }), true), true));
 /** An all-automatic Rhine Falcons season, played to the finished final match. */
-function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number, media = true): SeasonState {
-  let state = start(seed, careerMoves, media);
+function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number, legacy = false): SeasonState {
+  // `legacy`: a career as saved before format 65 and 67, without the media record and on `facilities-1`.
+  let state = start(seed, careerMoves, !legacy);
+  if (legacy) state = { ...state, facilities: { ...state.facilities, model: 'facilities-1' } };
   while (state.round < 10) {
     if (state.round === enableAtRound) state = enableCareerMoves(state);
     state = advanceMatchday(state);
@@ -102,8 +104,9 @@ describe('dismissal at a season end', () => {
 
 describe('careers saved in format 37, before dismissal existed', () => {
   it('keep a season that ended Under pressure without a move, and judge only later season ends', () => {
-    // A genuine format-37 career had no press and media record (format 67): the same season without it.
-    const legacyDay = finalMatchday(SACKED_SEED, true, undefined, false), legacySacked = advanceSeason(legacyDay);
+    // A genuine format-37 career had no press and media record (format 67) and used `facilities-1` (format 65).
+    const legacyDay = finalMatchday(SACKED_SEED, true, undefined, true), legacySacked = advanceSeason(legacyDay);
+    expect(previewSeasonEnd(legacyDay)).toMatchObject({ dismissed: true, verdict: { verdict: 'pressure' } });
     // The format-37 runtime recorded the switch but never dismissed: the same season end, without a move.
     // Format 68: files older than 68 hold the fixed rivalries (identical derbies in season one).
     const stayed = withFixedRivalries({ ...advanceSeason({ ...legacyDay, career: { ...legacyDay.career, enabledSince: null } }), career: legacyDay.career });

@@ -36,9 +36,10 @@ const roundTrip = (state: SeasonState) => expect(parseSeason(serializeSeason(sta
 const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={season} onEnable={noop} onEnableFunding={noop} onEnableConsequences={noop} onEnableRivalries={noop} onEnableCareerMoves={noop} onResign={noop} />);
 
 // Seeds found after this feature (format 63): seed 4 ends Rhine Falcons' first season Under pressure (29); seed 8 drops
-// Danube Lynx below 20 after week 6 of its second season.
+// Danube Lynx below 20 after week 6 of its second season. Re-seeded after the facilities-2 merge (AI clubs now build
+// medical and scouting facilities and repair, which changes their seasons): seed 14 dismisses at week 7.
 const WARNING_SEED = 4;
-const MID_SEASON_SEED = 8, MID_SEASON_CLUB = 'danube-lynx';
+const MID_SEASON_SEED = 14, MID_SEASON_CLUB = 'danube-lynx', DISMISSAL_WEEK = 7;
 let warningDay: SeasonState, warned: SeasonState, beforeDismissal: SeasonState, dismissed: SeasonState;
 
 beforeAll(() => {
@@ -47,7 +48,7 @@ beforeAll(() => {
   warningDay = finish(state);
   warned = advanceSeason(warningDay);
   state = throughOffseason((() => { let first = start(MID_SEASON_SEED, MID_SEASON_CLUB); while (first.status === 'active') first = advanceMatchday(first); return first; })());
-  while (state.round < 6) state = advanceMatchday(state);
+  while (state.round < DISMISSAL_WEEK) state = advanceMatchday(state);
   beforeDismissal = finish(state);
   dismissed = advanceSeason(beforeDismissal);
 }, 240_000);
@@ -122,7 +123,7 @@ describe('mid-season dismissal', () => {
     const offer = previewSeasonEnd(beforeDismissal)!.offers.at(-1)!;
     const chosen = advanceSeason(beforeDismissal, { moveTo: offer.clubId });
     expect(chosen.managedClubId).toBe(offer.clubId);
-    expect(chosen.career.moves.at(-1)).toMatchObject({ seasonNumber: 2, round: 7, phase: 'season', reason: 'dismissed', fromClubId: MID_SEASON_CLUB, toClubId: offer.clubId });
+    expect(chosen.career.moves.at(-1)).toMatchObject({ seasonNumber: 2, round: DISMISSAL_WEEK + 1, phase: 'season', reason: 'dismissed', fromClubId: MID_SEASON_CLUB, toClubId: offer.clubId });
     expect(chosen.board.restarts!.slice(-2).map(item => [item.clubId, item.coach, item.confidence])).toEqual([[MID_SEASON_CLUB, 'ai', CAREER_RULES.freshConfidence], [offer.clubId, 'manager', CAREER_RULES.freshConfidence]]);
     expect(getBoardSummary(chosen).confidence).toBe(CAREER_RULES.freshConfidence);
     if (chosen.activeMatch) expect([chosen.activeMatch.home.id, chosen.activeMatch.away.id]).toContain(offer.clubId);

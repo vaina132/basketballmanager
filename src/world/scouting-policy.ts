@@ -8,12 +8,22 @@ import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { getClubScouts, scoutEvidence } from './scout-policy';
 import { SCOUT_DIRECTORY } from '../data/staff-directory';
 import { potentialAttributes, trainingHeadroom } from './potential';
+import { scoutingEvidencePercent } from './facilities-policy';
 
 export const SCOUTING_CAPACITY = 2;
 export const MAX_KNOWLEDGE_LEVEL = 3;
 export const SCOUTING_ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 
 export function getScoutingEvidence(review: ScoutingReview): number { return review.outcome === 'observed' ? review.observer?.evidence ?? 100 : 0; }
+
+/**
+ * The evidence an observation gives the observing club: its recorded evidence plus the club's scouting office on the
+ * review date (format 65, `scoutingEvidencePercent`). Recorded reviews keep their original evidence.
+ */
+export function clubScoutingEvidence(state: SeasonState, clubId: string, review: ScoutingReview): number {
+  const evidence = getScoutingEvidence(review), bonus = evidence ? scoutingEvidencePercent(state, clubId, review.date) : 0;
+  return bonus > 0 ? Math.floor(evidence * (100 + bonus) / 100) : evidence;
+}
 
 export function getScoutingCapacity(state: SeasonState, clubId = state.managedClubId): number {
   return SCOUTING_CAPACITY + (state.scouts.enabledSince ? getClubScouts(state, clubId).length : 0);
@@ -98,7 +108,7 @@ export function getPlayerKnowledge(state: SeasonState, playerId: string, clubId 
   const useOwn = own && (!review || own.date >= review.date);
   const source = useOwn ? own : review;
   if (!source?.attributes) return empty;
-  const level = (useOwn || own ? 3 : Math.min(3, Math.floor(reviews.reduce((sum, review) => sum + getScoutingEvidence(review), 0) / 100))) as 1 | 2 | 3;
+  const level = (useOwn || own ? 3 : Math.min(3, Math.floor(reviews.reduce((sum, review) => sum + clubScoutingEvidence(state, clubId, review), 0) / 100))) as 1 | 2 | 3;
   const ageDays = Math.max(0, Math.round((Date.parse(`${state.date}T00:00:00Z`) - Date.parse(`${source.date}T00:00:00Z`)) / 86_400_000));
   return { playerId, kind: 'report', level, attributes: null, ranges: scoutingRanges(state.seed, clubId, playerId, source.attributes, level, ageDays), observedOn: source.date, observedClubId: source.clubId, ageDays, freshness: ageDays <= 28 ? 'recent' : ageDays <= 84 ? 'aging' : 'stale', source: useOwn ? 'squad' : 'observation', observations: reviews.length };
 }

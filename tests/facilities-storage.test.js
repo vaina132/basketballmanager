@@ -88,7 +88,7 @@ describe('funded facility history and format27 compatibility', () => {
     expect(advance(restore(started))).toEqual(second);
     for (const state of [started, second, fourth, fifth]) expect(restore(state)).toEqual(state);
     const upkeep = fifth.finance.ledger.find(entry => entry.kind === 'facility-upkeep' && entry.clubId === id);
-    expect(upkeep.facilityUpkeep).toEqual({ arena: 50_000, training: 0, youth: 0 });
+    expect(upkeep.facilityUpkeep).toEqual({ arena: 50_000, training: 0, youth: 0, medical: 0, scouting: 0 });
     expect(upkeep.amount).toBe(-50_000);
   });
 

@@ -26,7 +26,8 @@ export interface FinanceEntry {
   assistant?: { contractId: string; assistantId: string };
   youth?: { contractId: string; coachId: string };
   facility?: { projectId: string; type: FacilityType };
-  facilityUpkeep?: { arena: number; training: number; youth: number };
+  /** `facilities-2` (format 65) adds `medical` and `scouting`. */
+  facilityUpkeep?: { arena: number; training: number; youth: number; medical?: number; scouting?: number };
   /** Present on sponsorship payments made under a negotiated agreement (format 31). */
   sponsorship?: SponsorshipPayment;
   /** One-off owner capital for the facility upgrade that starts immediately afterwards (format 32). */

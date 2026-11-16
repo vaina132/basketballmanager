@@ -2,7 +2,8 @@ import { getPlayerRetirement } from '../world/lifecycle-policy'
 import { getSquadRelationships } from '../world/relationships'
 import { getBoardSummary } from '../world/board'
 import { getPressQuestion } from '../world/press-policy'
-import { FACILITY_TYPES, getFacilityCondition, getFacilityLevel } from '../world/facilities-policy'
+import { facilityTypes, FACILITY_RULES_2, getFacilityCondition, hasFacilityCondition, usesFacilityRepairs } from '../world/facilities-policy'
+import { FACILITY_LABELS } from './FacilitiesPanel'
 import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
 import { rivalryNote } from './rivalry-text'
 import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/board-consequences'
@@ -87,10 +88,12 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     const home = derbyFixture.homeClubId === season.managedClubId, rival = season.clubs.find(club => club.id === (home ? derbyFixture.awayClubId : derbyFixture.homeClubId))!
     notices.push({ key: 'derby', title: `Derby next · ${derby.name}`, detail: `${home ? 'Home' : 'Away'} against ${rival.name}. ${home ? `Crowd demand +${RIVALRY_CROWD_PERCENT * derby.intensity}%. ` : ''}The board and the squad weigh this result more than usual.${rivalryNote(season, rival.id)}`, action: 'View rivalry', open: onOpenBoard })
   }
-  const worn = season?.facilities.maintenanceSince ? FACILITY_TYPES.filter(type => getFacilityLevel(season, type, season.managedClubId) > 1).map(type => ({ type, condition: getFacilityCondition(season, type, season.managedClubId) })).filter(item => item.condition < 60) : []
+  // Older careers: upgraded facilities under upkeep choices; format 65: the arena and every upgraded facility.
+  const repairs = usesFacilityRepairs(season?.facilities)
+  const worn = season?.facilities.enabledSince && (repairs || season.facilities.maintenanceSince) ? facilityTypes(season.facilities).filter(type => hasFacilityCondition(season, type, season.managedClubId)).map(type => ({ type, condition: getFacilityCondition(season, type, season.managedClubId) })).filter(item => item.condition < (repairs ? FACILITY_RULES_2.automaticRepairBelow : 60)) : []
   // Job notices: the current risk (or a protected first season), a recent club change and a standing final warning.
   if (season) for (const notice of careerNotices(season)) notices.push({ ...notice, action: 'View board', open: onOpenBoard ?? onOpenClub })
-  if (season && worn.length) notices.push({ key: 'facilities-worn', title: 'Facilities wearing', detail: `${worn.map(item => `${({ arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure' })[item.type]} ${item.condition}/100`).join(', ')}. Their benefit shrinks while condition is low; full upkeep restores it.`, action: 'Review facilities', open: onOpenClub })
+  if (season && worn.length) notices.push({ key: 'facilities-worn', title: 'Facilities wearing', detail: `${worn.map(item => `${FACILITY_LABELS[item.type]} ${item.condition}/100`).join(', ')}. ${repairs ? 'Their benefit shrinks while condition is low; a repair restores it.' : 'Their benefit shrinks while condition is low; full upkeep restores it.'}`, action: 'Review facilities', open: onOpenClub })
   const press = season && onOpenInbox ? getPressQuestion(season) : null
   if (press && !press.answered && onOpenInbox) notices.push({ key: 'press', title: 'Press conference', detail: `${press.question} Answer in the Inbox before the next match, or your assistant ${press.subjectIds ? 'gives no comment' : 'keeps it routine'}.`, action: 'Open inbox', open: onOpenInbox })
 

@@ -2,7 +2,7 @@ import type { FacilityDebt, FacilityType, SeasonFacilities } from '../domain/fac
 import type { FinanceEntry } from '../domain/finance';
 import type { WorldContext } from '../domain/world';
 import { roundKey, seasonRounds } from './career-world';
-import { scaledMoney } from './economy';
+import { clubEconomy, scaledMoney } from './economy';
 import { financeLedgerCount, financeLedgerEntries, type FinanceLedgerSource } from './finance-ledger';
 import { dateForRound } from './season';
 
@@ -64,8 +64,43 @@ export const FACILITY_FINANCING_RULES = Object.freeze({
   // money rules of automatic upgrades instead (upkeep limit and season-aware cushion), as an automatic arena loan does.
 });
 
-/** Careers started with facility financing (format 71). */
+/**
+ * The simple bank loan of new careers (format 74, `bank-1`; owner request, 16 November 2026: "if I get a loan, I get
+ * it to my budget"). A loan is not tied to any project: its money is added to the club's Remaining budget at once and
+ * can pay for anything. Provisional, reversible game defaults, not real bank terms. Money is in euro cents.
+ */
+export const BANK_LOAN_RULES = Object.freeze({
+  /** Terms a club can choose, in seasons of repayments (two payments a season, as `FACILITY_FINANCING_RULES`). */
+  termSeasons: Object.freeze([1, 2, 3, 4]) as readonly number[],
+  /** The most a club may owe: this share of its season budget in real-data worlds, and EUR 300,000 without an economy. */
+  limitBudgetPercent: 20,
+  developmentLimit: 30_000_000,
+  /** The smallest loan, at the club's money level (EUR 1,000 in the development economy); amounts are whole euros. */
+  minimumPrincipal: 100_000,
+  /**
+   * Repayments start in the first payment week of the next season, so the whole loan adds to this season's Remaining
+   * budget; each later season's payments are kept back from that season's start. The yearly rate is the facility loan
+   * rate (`loanRateBasisPoints`: 4%, up to 2 points more the more of the limit the club will owe, 1 point more while
+   * Remaining budget is below the automatic cash cushion; at most 7%). Early repayment: the principal left plus 2%.
+   */
+  firstPaymentNextSeason: true,
+  /**
+   * Computer-run clubs (and the manager's club when the board handles facilities) borrow only to expand an arena whose
+   * last two home games sold out when the budget cannot pay for the smallest expansion: one bank loan at a time, the
+   * shortfall only, at most half the limit owed in all, over three seasons, keeping their cash cushion.
+   */
+  automaticMaxDebtPercent: 50,
+  automaticTermSeasons: 3,
+});
+
+/** Careers started with facility financing (format 71): loans for projects and leases. */
 export const usesFacilityFinancing = (facilities: Pick<SeasonFacilities, 'financing'> | undefined): boolean => facilities?.financing === 'loans-1';
+/** Careers started with the simple bank loan (format 74). */
+export const usesBankLoans = (facilities: Pick<SeasonFacilities, 'financing'> | undefined): boolean => facilities?.financing === 'bank-1';
+/** Careers that can owe money at all (formats 71 and 74): debts are reserved, paid and seen by the board alike. */
+export const hasClubDebts = (facilities: Pick<SeasonFacilities, 'financing'> | undefined): boolean => usesFacilityFinancing(facilities) || usesBankLoans(facilities);
+/** Whether a debt amortizes like a loan (a facility loan or a bank loan) rather than paying a lease's equal parts. */
+export const isLoanDebt = (debt: Pick<FacilityDebt, 'kind'>): boolean => debt.kind !== 'lease';
 
 /** What the debt calculations read: the debts, the ledger prefix they are judged at, and the season. */
 export type DebtContext = { facilities?: Pick<SeasonFacilities, 'financing' | 'debts'>; finance: FinanceLedgerSource; seasonNumber: number } & WorldContext;
@@ -91,10 +126,11 @@ export function paymentRounds(rounds: number): number[] {
   return [...new Set(FACILITY_FINANCING_RULES.paymentWeekPercents.map(percent => Math.max(1, Math.min(rounds, Math.ceil(rounds * percent / 100)))))].sort((a, b) => a - b);
 }
 
-/** The payment weeks after a start, `count` of them, in calendar order. */
-function paymentSlots(seasonNumber: number, round: number, count: number, rounds: number): { seasonNumber: number; round: number }[] {
+/** The payment weeks after a start, `count` of them, in calendar order; a bank loan's start from next season (format 74). */
+function paymentSlots(seasonNumber: number, round: number, count: number, rounds: number, nextSeason = false): { seasonNumber: number; round: number }[] {
   const weeks = paymentRounds(rounds), slots: { seasonNumber: number; round: number }[] = [];
-  for (let season = seasonNumber; slots.length < count; season += 1) for (const week of weeks) if (slots.length < count && roundKey(season, week) > roundKey(seasonNumber, round)) slots.push({ seasonNumber: season, round: week });
+  const after = nextSeason ? roundKey(seasonNumber, rounds) : roundKey(seasonNumber, round);
+  for (let season = seasonNumber; slots.length < count; season += 1) for (const week of weeks) if (slots.length < count && roundKey(season, week) > after) slots.push({ seasonNumber: season, round: week });
   return slots;
 }
 
@@ -122,8 +158,8 @@ export function debtSchedule(terms: DebtTerms, rounds: number): readonly DebtPay
   const known = byRounds?.get(rounds);
   if (known) return known;
   const count = terms.seasons * paymentRounds(rounds).length, rate = perPaymentRate(terms.rateBasisPoints, rounds);
-  let balance = terms.kind === 'loan' ? terms.principal : terms.total;
-  const payments = paymentSlots(terms.seasonNumber, terms.round, count, rounds).map((slot, index): DebtPayment => {
+  let balance = terms.kind === 'lease' ? terms.total : terms.principal;
+  const payments = paymentSlots(terms.seasonNumber, terms.round, count, rounds, terms.kind === 'bank').map((slot, index): DebtPayment => {
     const last = index === count - 1;
     if (terms.kind === 'lease') {
       const amount = last ? balance : Math.min(balance, terms.payment);
@@ -139,10 +175,10 @@ export function debtSchedule(terms: DebtTerms, rounds: number): readonly DebtPay
   return payments;
 }
 
-/** The regular payment and total of a loan started now. */
-export function loanTerms(principal: number, rateBasisPoints: number, seasons: number, seasonNumber: number, round: number, rounds: number): { payment: number; total: number; payments: number } {
+/** The regular payment and total of a loan (or, format 74, a bank loan) started now. */
+export function loanTerms(principal: number, rateBasisPoints: number, seasons: number, seasonNumber: number, round: number, rounds: number, kind: 'loan' | 'bank' = 'loan'): { payment: number; total: number; payments: number } {
   const payments = seasons * paymentRounds(rounds).length, payment = loanPayment(principal, rateBasisPoints, payments, rounds);
-  const total = debtSchedule({ kind: 'loan', principal, rateBasisPoints, seasons, payment, total: 0, seasonNumber, round }, rounds).reduce((sum, item) => sum + item.amount, 0);
+  const total = debtSchedule({ kind, principal, rateBasisPoints, seasons, payment, total: 0, seasonNumber, round }, rounds).reduce((sum, item) => sum + item.amount, 0);
   return { payment, total, payments };
 }
 
@@ -190,7 +226,7 @@ export function debtPosition(context: DebtContext, debt: FacilityDebt): DebtPosi
   const count = financeLedgerCount(context.finance), settled = debt.settled !== null && debt.settled.ledgerIndex < count;
   const bookedMax = bookedInSeason(context.finance, context.seasonNumber).get(debt.id) ?? 0;
   const booked = schedule.filter(item => item.seasonNumber < context.seasonNumber || item.seasonNumber === context.seasonNumber && item.number <= bookedMax).length;
-  const remaining = debt.kind === 'loan' ? booked === 0 ? debt.principal : schedule[booked - 1]!.balanceAfter : schedule.slice(booked).reduce((sum, item) => sum + item.amount, 0);
+  const remaining = isLoanDebt(debt) ? booked === 0 ? debt.principal : schedule[booked - 1]!.balanceAfter : schedule.slice(booked).reduce((sum, item) => sum + item.amount, 0);
   const dueThisSeason = settled ? 0 : schedule.slice(booked).filter(item => item.seasonNumber === context.seasonNumber).reduce((sum, item) => sum + item.amount, 0);
   return { debt, schedule, settled, booked, outstanding: settled ? 0 : remaining, dueThisSeason, next: settled ? null : schedule[booked] ?? null };
 }
@@ -216,9 +252,18 @@ export function debtReserve(context: DebtContext, clubId: string): number {
 /** The most a club may owe on loans and leases together, at its money level. */
 export const borrowingLimit = (context: WorldContext, clubId: string): number => scaledMoney(context, clubId, FACILITY_FINANCING_RULES.borrowingLimit);
 
-/** Outstanding debt as a whole percentage of the borrowing limit. */
+/** Format 74: the most a club may owe the bank: a share of its season budget, or the development limit without an economy. */
+export function bankLoanLimit(context: WorldContext, clubId: string): number {
+  const economy = clubEconomy(context, clubId);
+  return economy ? Math.max(1_000_000, Math.floor(economy.budget * BANK_LOAN_RULES.limitBudgetPercent / 100 / 1_000_000) * 1_000_000) : BANK_LOAN_RULES.developmentLimit;
+}
+
+/** The limit a career's debts are judged against: the bank limit with the simple bank loan, the borrowing limit otherwise. */
+export const debtLimit = (context: DebtContext, clubId: string): number => usesBankLoans(context.facilities) ? bankLoanLimit(context, clubId) : borrowingLimit(context, clubId);
+
+/** Outstanding debt as a whole percentage of the career's limit. */
 export function debtRatioPercent(context: DebtContext, clubId: string): number {
-  return Math.round(outstandingDebt(context, clubId) * 100 / borrowingLimit(context, clubId));
+  return Math.round(outstandingDebt(context, clubId) * 100 / debtLimit(context, clubId));
 }
 
 /** The board-review effect of a debt ratio: 0 up to 40%, then -1 per started 15 points, at most -4. */
@@ -227,9 +272,9 @@ export function boardDebtImpactFor(ratioPercent: number): number {
   return ratioPercent <= boardDebtFreePercent ? 0 : -Math.min(boardDebtImpactMax, Math.ceil((ratioPercent - boardDebtFreePercent) / boardDebtStepPercent));
 }
 
-/** Format 71: each club's debt effect on a board review at this boundary (nonzero only); undefined without facility financing. */
+/** Format 71: each club's debt effect on a board review at this boundary (nonzero only); undefined without club debts (format 74 too). */
 export function boardDebtImpacts(context: DebtContext & { clubs: readonly { id: string }[] }): Record<string, number> | undefined {
-  if (!usesFacilityFinancing(context.facilities)) return undefined;
+  if (!hasClubDebts(context.facilities)) return undefined;
   const impacts: Record<string, number> = {};
   for (const club of context.clubs) {
     if (!clubDebts(context, club.id).length) continue;
@@ -241,7 +286,7 @@ export function boardDebtImpacts(context: DebtContext & { clubs: readonly { id: 
 
 /** Format 71: extra confidence the board requires for capital while the club's debt ratio is high (0, 5 or 10). */
 export function boardCapitalSurcharge(context: DebtContext, clubId: string): number {
-  if (!usesFacilityFinancing(context.facilities) || !clubDebts(context, clubId).length) return 0;
+  if (!hasClubDebts(context.facilities) || !clubDebts(context, clubId).length) return 0;
   const ratio = debtRatioPercent(context, clubId);
   return FACILITY_FINANCING_RULES.boardCapitalSurcharge.find(([from]) => ratio >= from)?.[1] ?? 0;
 }

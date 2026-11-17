@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SeasonState } from '../src/domain/season';
+import { SEASON_SCHEMA_VERSION, type SeasonState } from '../src/domain/season';
 import type { FinanceArchiveRow } from '../src/domain/finance';
 import { compactJson2 } from '../src/storage/compact-json';
 import { packSeasonForSave, unpackSavedSeason } from '../src/storage/save-packing';
@@ -54,7 +54,7 @@ describe('record packing in compact saves (format 73)', () => {
     expect(compactLength(packed)).toBeLessThan(compactLength(state));
     // The writer packs, every reader restores; plain files stay unpacked.
     const saved = serializeSeasonCompact(state, { check: false });
-    expect(JSON.parse(saved).formatVersion).toBe(73);
+    expect(JSON.parse(saved).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(parseSealedSeason(saved)).toEqual(state);
     expect(text(parseSealedSeason(saved))).toBe(text(state));
     expect(JSON.parse(serializeSeason(state)).state).not.toHaveProperty('packing');

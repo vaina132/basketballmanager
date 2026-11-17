@@ -77,6 +77,7 @@ export function validateRelationships(state: SeasonState, version: number): void
   const third = raw !== null && typeof raw === 'object' && raw.model === 'relationships-3';
   const second = raw !== null && typeof raw === 'object' && raw.model === 'relationships-2' || third;
   if (second && version < 66) fail('relationships.model', 'requires format 66 or later');
+  if (third && version < 74) fail('relationships.model', 'requires format 74 or later');
   const fields = record(state.relationships, 'relationships', ['model', 'enabledSince', 'events', ...(second ? ['squadRanks'] : [])]);
   if (fields.model !== 'relationships-1' && !second) fail('relationships.model', 'is unsupported');
   if (!Array.isArray(fields.events) || fields.events.length > 20000) fail('relationships.events', 'must retain a bounded chronological command history');

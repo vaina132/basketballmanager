@@ -127,13 +127,14 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
- * The format that introduced six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`):
- * format 74. Built while the schema was 73, so until the schema moves to 74 the current format carries it.
+ * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
+ * They went live while the schema was still 73, so format-73 careers started with them stay valid; format 74 adds the
+ * opening staff and squad roles on top.
  */
-const SIX_LEVEL_FORMAT = Math.min(74, SEASON_SCHEMA_VERSION);
+const SIX_LEVEL_FORMAT = Math.min(73, SEASON_SCHEMA_VERSION);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
   'secondsPlayed', 'points', 'fieldGoalsMade', 'fieldGoalsAttempted', 'threePointersMade',
@@ -469,11 +470,12 @@ function completedDevelopmentWeeks(anchor: { seasonNumber: number; round: number
 }
 
 /** Current-year contracts retain released appointments so expenditure and past weeks reconcile. */
-function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: number, round: number, rounds: number): SeasonCoaching {
+function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: number, round: number, rounds: number, version: number): SeasonCoaching {
   const fields = record(value, 'coaching', ['model', 'enabledSince', 'contracts']);
   // Format 74 ('coaching-2'): every club starts staffed and a sacked coach's fee stops counting against the limits.
   if (fields.model !== 'coaching-1' && fields.model !== 'coaching-2') fail('coaching.model', 'is unsupported');
   const levelled = fields.model === 'coaching-2';
+  if (levelled && version < 74) fail('coaching.model', 'requires format 74 or later');
   let earliestRound = 1;
   if (fields.enabledSince !== null) {
     const anchor = record(fields.enabledSince, 'coaching.enabledSince', ['seasonNumber', 'round']);
@@ -3106,7 +3108,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     if (typeof plan.autoSubstitutions !== 'boolean' || club.id !== state.managedClubId && !plan.autoSubstitutions) fail(`plans.${club.id}.autoSubstitutions`, 'must be boolean and enabled for opponent clubs');
     for (const player of club.players) number(conditions[player.id], `conditions.${player.id}`, 0, 100, false);
   }
-  const coaching = version >= 5 ? validateCoaching(state.coaching, clubs, seasonNumber, round, worldRounds(world)) : undefined;
+  const coaching = version >= 5 ? validateCoaching(state.coaching, clubs, seasonNumber, round, worldRounds(world), version) : undefined;
   const scouts = version >= 21 ? validateScouts(state.scouts, state as unknown as SeasonState, coaching!) : createScouts();
   const fitness = version >= 22 ? validateFitness(state.fitness, state as unknown as SeasonState, coaching!, scouts) : createFitness();
   const physio = version >= 23 ? validatePhysio(state.physio, state as unknown as SeasonState, coaching!, scouts, fitness) : createPhysio();

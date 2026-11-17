@@ -72,8 +72,10 @@ export function validateRelationships(state: SeasonState, version: number): void
     return;
   }
   const raw = state.relationships as unknown as Record<string, unknown> | null;
-  // Format 66 adds the relationships-2 model (squad-rank default roles and contract requests) for new careers.
-  const second = raw !== null && typeof raw === 'object' && raw.model === 'relationships-2';
+  // Format 66 adds the relationships-2 model (squad-rank default roles and contract requests) for new careers;
+  // relationships-3 (squad roles everywhere) keeps both and adds five roles, contract roles and role requests.
+  const third = raw !== null && typeof raw === 'object' && raw.model === 'relationships-3';
+  const second = raw !== null && typeof raw === 'object' && raw.model === 'relationships-2' || third;
   if (second && version < 66) fail('relationships.model', 'requires format 66 or later');
   const fields = record(state.relationships, 'relationships', ['model', 'enabledSince', 'events', ...(second ? ['squadRanks'] : [])]);
   if (fields.model !== 'relationships-1' && !second) fail('relationships.model', 'is unsupported');
@@ -140,7 +142,9 @@ export function validateRelationships(state: SeasonState, version: number): void
     // Format 34 adds press answers to the same chronological journal; format 67 (careers with media) names players and the standing.
     const extra = type === 'role' ? ['clubId', 'playerId', 'role'] : type === 'talk' ? ['clubId', 'playerId', 'choice'] : type === 'prepare' ? ['rosterIds', 'values'] : type === 'press' && version >= 34 ? ['clubId', 'topic', 'triggerRound', 'answer', 'playerIds', 'coreIds', ...(version >= 67 && Object.hasOwn(raw, 'subjectIds') ? ['subjectIds', 'standing'] : [])]
       // Format 66 (relationships-2): contract requests and the club's replies.
-      : type === 'contract-request' && second ? ['clubId', 'playerId', 'trigger', 'negotiationCount'] : type === 'contract-reply' && second ? ['clubId', 'playerId', 'requestId', 'reply', 'negotiationCount'] : null;
+      : type === 'contract-request' && second ? ['clubId', 'playerId', 'trigger', 'negotiationCount'] : type === 'contract-reply' && second ? ['clubId', 'playerId', 'requestId', 'reply', 'negotiationCount']
+      // relationships-3: an unmet role's requests for talks or to leave, and their settling.
+      : type === 'role-request' && third ? ['clubId', 'playerId', 'stage'] : null;
     if (!extra) fail(path, 'must identify a supported player relationship command');
     const event = record(raw, path, [...ANCHOR_KEYS, 'id', 'type', ...extra]) as unknown as RelationshipEvent;
     const sealed = typeof event.seasonNumber === 'number' && event.seasonNumber < replayFrom;

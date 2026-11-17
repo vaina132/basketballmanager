@@ -22,7 +22,8 @@ beforeAll(() => {
   legacy = parseSeason(fixture('season28-facilities-career'));
   enabled = enableRelationships(legacy); promoted = advance(enabled);
   initial = createSeason(227, 'rhine-falcons', 'off', true, true, true, true, null, true, true, true, true, true, true, true, true, true, true, true, true, true, true);
-  role = agreeSquadRole(initial, playerId, 'starter'); concern = role;
+  // Squad roles everywhere (new careers): a Star expects 24 minutes, as the original Starter did.
+  role = agreeSquadRole(initial, playerId, 'star'); concern = role;
   while (concern.round < 5) concern = advance(concern);
   promised = talkToPlayer(concern, playerId, 'minutes-promise'); answered = promised;
   while (answered.round < 9) answered = advance(answered);
@@ -68,7 +69,7 @@ describe('relationship journal, frozen morale and genuine format28 compatibility
   it('retains a role decision and its future evidence without rewriting the current match snapshot', () => {
     expect(role.activeMatch).toBe(initial.activeMatch);
     expect(role.activeMatch.morale.eventCount).toBe(1);
-    expect(role.relationships.events.at(-1)).toMatchObject({ type: 'role', playerId, role: 'starter' });
+    expect(role.relationships.events.at(-1)).toMatchObject({ type: 'role', playerId, role: 'star' });
     expect(restore(role)).toEqual(role);
     expect(getPlayerRelationship(concern, playerId).concern).toBeTruthy();
     expect(restore(concern)).toEqual(concern);
@@ -103,8 +104,8 @@ describe('relationship journal, frozen morale and genuine format28 compatibility
   });
 
   const cases = [
-    ['unsupported model', () => role, state => { state.relationships.model = 'relationships-3'; }],
-    ['relationships-2 without squad ranks', () => role, state => { delete state.relationships.squadRanks; }],
+    ['unsupported model', () => role, state => { state.relationships.model = 'relationships-4'; }],
+    ['relationships-3 without squad ranks', () => role, state => { delete state.relationships.squadRanks; }],
     ['relationships-1 with squad ranks', () => role, state => { state.relationships.model = 'relationships-1'; }],
     ['invented aggregate morale', () => role, state => { state.relationships.morale = 100; }],
     ['disabled journal', () => role, state => { state.relationships.enabledSince = null; }],

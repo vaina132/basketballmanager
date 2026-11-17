@@ -7,11 +7,12 @@ import { overallRating } from '../src/world/overall-rating';
 import { scoutingActualAttributes } from '../src/world/scouting-policy';
 import { enableRelationships, getClubContractRequests, getContractRequest, getPlayerRelationship, getSquadRelationships, replyToContractRequest } from '../src/world/relationships';
 import { contractRequestOutcome, type ContractReplyEvent, type ContractRequestEvent } from '../src/world/contract-requests-policy';
-import { RELATIONSHIP_RULES } from '../src/world/relationship-rules';
+import { RELATIONSHIP_RULES, SQUAD_ROLE_RULES } from '../src/world/relationship-rules';
+import { contractAskingWage, offeredContractRole } from '../src/world/contract-roles';
 import { contractForSeason, quotePlayerContract } from '../src/world/employment-policy';
 import { offerPlayerContract } from '../src/world/employment';
 import { requiredNegotiationWage } from '../src/world/negotiations-policy';
-import { getCareerWage } from '../src/world/player-catalog';
+import { getCareerPlayerAge, getCareerWage } from '../src/world/player-catalog';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { getInboxItems } from '../src/ui/inbox-items';
 import { InboxWorkspace } from '../src/ui/InboxWorkspace';
@@ -53,16 +54,18 @@ beforeAll(() => {
   while (legacy.round < 6) legacy = advanceMatchday(legacy);
 }, 240_000);
 
-describe('default squad roles by recorded squad rank (relationships-2)', () => {
-  it('records each registration by overall rating and defaults the top nine to Rotation, the rest to Reserve', () => {
-    expect(start.relationships.model).toBe('relationships-2');
+describe('default squad roles by recorded squad rank (relationships-2, kept by relationships-3)', () => {
+  it('records each registration by overall rating and defaults roles by rank and age (squad roles everywhere)', () => {
+    expect(start.relationships.model).toBe('relationships-3');
     const roster = rosterForRound(start.rosters, clubId, 1), order = start.relationships.squadRanks![roster.id]!;
     expect([...order].sort()).toEqual(roster.players.map(player => player.id).sort());
     const ratings = order.map(id => overallRating(scoutingActualAttributes(start, id), roster.players.find(player => player.id === id)!.position));
     expect(ratings).toEqual([...ratings].sort((a, b) => b - a));
+    const rules = SQUAD_ROLE_RULES.defaults;
     for (const row of getSquadRelationships(start)) {
-      expect(row.squadRank).toBe(order.indexOf(row.player.id) + 1);
-      expect(row.role).toBe(row.squadRank! <= RELATIONSHIP_RULES.defaultRoles.rotationMaxRank ? 'rotation' : 'development');
+      const rank = order.indexOf(row.player.id) + 1, age = getCareerPlayerAge(start, row.player.id, dateForRound(1));
+      expect(row.squadRank).toBe(rank);
+      expect(row.role).toBe(rank > rules.prospectOutsideRank && age !== null && age <= rules.prospectMaxAge ? 'prospect' : rank <= rules.starMaxRank ? 'star' : rank <= rules.starterMaxRank ? 'starter' : rank <= rules.rotationMaxRank ? 'rotation' : 'development');
     }
     expect(Object.keys(start.relationships.squadRanks!)).toHaveLength(start.clubs.length);
   });
@@ -127,7 +130,8 @@ describe('players asking about new contracts', () => {
   });
 
   it('declining costs morale and trust within bounds and makes him harder to re-sign; renewing restores them', () => {
-    const playerId = getClubContractRequests(middle)[0]!.playerId, asking = getCareerWage(middle, playerId);
+    // The renewal offers his natural role at the club (relationships-3), which sets the asking wage.
+    const playerId = getClubContractRequests(middle)[0]!.playerId, asking = contractAskingWage(middle, clubId, playerId);
     expect(quotePlayerContract(middle, playerId, asking, 1).reason ?? '').not.toMatch(/turned down/);
     const declined = replyToContractRequest(middle, playerId, 'decline');
     expect(getContractRequest(declined, playerId)).toMatchObject({ status: 'declined', reply: 'decline', premiumPercent: 15 });
@@ -136,7 +140,7 @@ describe('players asking about new contracts', () => {
     expect(quotePlayerContract(declined, playerId, asking, 1).reason).toMatch(/turned down his contract request/);
     expect(() => replyToContractRequest(declined, playerId, 'talks')).toThrow(/already been answered/);
     expect(parseSeason(serializeSeason(declined))).toEqual(declined);
-    const minimum = Math.ceil(asking * 1.15 / 50_000) * 50_000, wage = Math.max(minimum, requiredNegotiationWage(playerId, 1, undefined, declined));
+    const minimum = Math.ceil(asking * 1.15 / 50_000) * 50_000, wage = Math.max(minimum, requiredNegotiationWage(playerId, 1, undefined, declined, offeredContractRole(declined, clubId, playerId)));
     const renewed = offerPlayerContract(declined, playerId, wage, 1);
     expect(getContractRequest(renewed, playerId)).toMatchObject({ status: 'renewed', premiumPercent: 0 });
     expect(reason(renewed, playerId)).toBe(4);
@@ -148,7 +152,7 @@ describe('players asking about new contracts', () => {
     const [first, second] = getClubContractRequests(middle).map(request => request.playerId) as [string, string];
     const talks = replyToContractRequest(middle, first, 'talks');
     expect(getContractRequest(talks, first)).toMatchObject({ status: 'talks', deadlineDate: dateForRound(8) });
-    const signed = offerPlayerContract(talks, first, requiredNegotiationWage(first, 1, undefined, talks), 1);
+    const signed = offerPlayerContract(talks, first, requiredNegotiationWage(first, 1, undefined, talks, offeredContractRole(talks, clubId, first)), 1);
     expect(getContractRequest(signed, first)!.status).toBe('renewed');
     let quiet = talks;
     for (let round = 0; round < RELATIONSHIP_RULES.contractRequests.talksRounds; round += 1) quiet = advanceMatchday(quiet);

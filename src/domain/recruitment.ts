@@ -10,6 +10,8 @@ export interface InSeasonOffer {
   seasonWage: number;
   academyProspectId?: string;
   releaseFee?: number;
+  /** `relationships-3`: the squad role offered. */
+  role?: SquadRole;
   seasons: number;
   transfer: TransferProposal | null;
   remainingWages: number;
@@ -31,7 +33,7 @@ export interface InSeasonEventAnchor {
 }
 
 export type InSeasonEvent = InSeasonEventAnchor & (
-  | { type: 'offer'; id: string; clubId: string; playerId: string; seasonWage: number; seasons?: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan; releaseFee?: number; transferMode?: 'release-clause'; academyProspectId?: string }
+  | { type: 'offer'; id: string; clubId: string; playerId: string; seasonWage: number; seasons?: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan; releaseFee?: number; transferMode?: 'release-clause'; academyProspectId?: string; role?: SquadRole }
   | { type: 'enable-transfers' }
   | { type: 'club-decision'; offerId: string; response: 'accept' | 'reject' | 'counter' }
   | { type: 'withdraw'; offerId: string }
@@ -72,6 +74,7 @@ export interface InSeasonBudget {
   spendableCash: number;
 }
 import type { TransferProposal } from './market';
+import type { SquadRole } from './relationships';
 import type { TransferInstallment, TransferPaymentPlan } from './transfer-payments';
 
 

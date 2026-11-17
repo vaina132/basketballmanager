@@ -2,6 +2,7 @@ import { PlayerCareerStatus } from './PlayerLifecycle'
 import { GeneratedTag } from './GeneratedTag'
 import { getPlayerRetirement } from '../world/lifecycle-policy'
 import { getCareerPlayer, getCareerWage, getCareerPlayerAge, getCareerPlayers } from '../world/player-catalog'
+import { offeredContractRole } from '../world/contract-roles'
 import { ReleaseClauseValue, transferEntryQuote } from './ReleaseClause'
 import { useEffect, useRef, useState } from 'react'
 import type { ScoutingObserver } from '../domain/scouts'
@@ -82,7 +83,7 @@ export function ScoutingWorkspace({ season, disabled, selectedPlayerId, onSelect
   const quote = selected ? quoteScoutingAssignment(season, selected.id, club.id, observerContractId) : null
   const shortlisted = selected ? scouting.shortlist.includes(selected.id) : false
   const pending = selected ? scouting.assignments.some(assignment => assignment.playerId === selected.id) : false
-  const askingWage = selected ? season.negotiations.enabledSince ? getNegotiationDemands(selected.id, undefined, season).terms[0]!.seasonWage : getCareerWage(season, selected.id) : 0
+  const askingWage = selected ? season.negotiations.enabledSince ? getNegotiationDemands(selected.id, undefined, season, offeredContractRole(season, season.managedClubId, selected.id)).terms[0]!.seasonWage : getCareerWage(season, selected.id) : 0
   const selectedContract = selected ? contractForSeason(season.employment, selected.id, season.seasonNumber) : null
   const futureContract = selected ? contractForSeason(season.employment, selected.id, season.seasonNumber + 1) : null
   const offseasonPaid = selected && season.status === 'complete' && futureContract && futureContract.clubId !== club.id

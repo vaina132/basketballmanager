@@ -9,7 +9,7 @@ import { getCareerPlayer } from '../world/player-catalog'
 import { getPressQuestion, PRESS_ANSWER_TEXT, pressAnswerLabel, pressQuote } from '../world/press-policy'
 import { PRESS_TOPIC_TITLES } from '../world/media'
 import { awaitsContractReply, getClubContractRequests, getSquadRelationships } from '../world/relationships'
-import { CONTRACT_REQUEST_TEXT as TEXT } from '../world/relationship-rules'
+import { CONTRACT_REQUEST_TEXT as TEXT, SQUAD_ROLE_RULES } from '../world/relationship-rules'
 import { seasonLabel } from '../world/season'
 import { governingDerby } from '../world/rivalries'
 import { rivalClubName, rivalryInboxItems } from './rivalry-text'
@@ -90,9 +90,20 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     }
   }
 
-  if (season.relationships.enabledSince) for (const row of getSquadRelationships(season)) {
+  const squadRows = season.relationships.enabledSince ? getSquadRelationships(season) : []
+  for (const row of squadRows) {
     if (row.concern) items.push({ id: `concern-${row.player.id}`, date: season.date, category: 'players', title: `${row.player.name}: playing-time concern`, detail: `${row.concern}. Averaging ${row.averageMinutes} minutes against an agreed minimum of ${row.minMinutes}.`, needsAction: row.canTalk, target: 'dynamics', playerId: row.player.id })
     for (const promise of row.promises) if (promise.outcomeDate && (promise.status === 'kept' || promise.status === 'broken')) items.push({ id: `${promise.id}-outcome`, date: promise.outcomeDate, category: 'players', title: `Promise ${promise.status} · ${row.player.name}`, detail: `${promise.averageMinutes} minutes per eligible game against ${promise.targetMinutes} promised.`, needsAction: false, target: 'dynamics', playerId: row.player.id })
+  }
+  // relationships-3: an unmet role's requests for talks or to leave, from the recorded journal.
+  const openRoleRequests = new Map(squadRows.flatMap(row => row.roleRequest ? [[row.player.id, row.roleRequest] as const] : []))
+  for (const event of season.relationships.events) {
+    if (event.type !== 'role-request' || event.clubId !== clubId) continue
+    const name = getCareerPlayer(season, event.playerId).name, open = openRoleRequests.get(event.playerId)
+    const current = !!open && (event.stage === 'talks' ? open.id === event.id && open.stage === 'talks' : event.stage === 'leave' && open.stage === 'leave' && open.leaveOn === event.date)
+    if (event.stage === 'talks') items.push({ id: event.id, date: event.date, category: 'players', title: `${name} asks for talks about his role`, detail: `His playing time has stayed below his role for ${SQUAD_ROLE_RULES.escalation.talksAfterGames} eligible games. Promise minutes, explain the competition or agree a different role; if nothing changes within ${SQUAD_ROLE_RULES.escalation.leaveAfterRounds} club games he asks to leave.`, needsAction: current && !open!.answered, target: 'dynamics', playerId: event.playerId })
+    else if (event.stage === 'leave') items.push({ id: event.id, date: event.date, category: 'players', title: `${name} asks to leave`, detail: `Still below his role, he wants a move. His morale is ${SQUAD_ROLE_RULES.escalation.leaveMorale} lower until his minutes meet his role again or he is sold.`, needsAction: current, target: 'dynamics', playerId: event.playerId })
+    else items.push({ id: event.id, date: event.date, category: 'players', title: `Role request settled · ${name}`, detail: 'His playing time meets his role again.', needsAction: false, target: 'dynamics', playerId: event.playerId })
   }
   // Format 66: contract requests at the managed club and what became of them.
   for (const request of getClubContractRequests(season, clubId)) {

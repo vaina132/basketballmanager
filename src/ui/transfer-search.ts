@@ -4,7 +4,8 @@ import { worldOf } from '../world/career-world'
 import { seasonLeagues } from '../world/divisions'
 import { contractForRound, contractForSeason, getAvailablePlayers } from '../world/employment-policy'
 import { abilityRating, type AbilityRating } from '../world/performance-rating'
-import { getCareerPlayerAge, getCareerWage } from '../world/player-catalog'
+import { getCareerPlayerAge } from '../world/player-catalog'
+import { contractAskingWage } from '../world/contract-roles'
 import { getInSeasonCandidates, getInSeasonTransferCandidates, requiredInSeasonTransferFee } from '../world/recruitment-policy'
 import { getApplicableReleaseClause } from '../world/release-clauses'
 import { getScoutingDiscovery } from '../world/scouting-discovery'
@@ -106,7 +107,8 @@ export function getTransferSearch(season: SeasonState): TransferSearch {
       player, kind, clubId, currentClubId, leagueId: league?.id ?? null, country: league?.country ?? null,
       age: getCareerPlayerAge(season, player.id, season.date),
       rating: abilityRating(getPlayerKnowledge(season, player.id), { position: player.position }),
-      wage: getCareerWage(season, player.id),
+      // relationships-3: the asking wage for his natural squad role at the manager's club.
+      wage: contractAskingWage(season, season.managedClubId, player.id),
       fee: kind === 'season-transfer' ? requiredInSeasonTransferFee(season, player.id) : kind === 'offseason-transfer' ? requiredTransferFee(season, player.id) : null,
       releaseFee: kind === 'season-transfer' ? getApplicableReleaseClause(season, player.id).fee : contract?.releaseFee ?? null,
       contractEnds: contract?.endsSeason ?? null,

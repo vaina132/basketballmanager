@@ -1,6 +1,7 @@
 import { clubRosterLimitText, clubRosterLimit } from './club-roster-policy';
 import type { InSeasonSaleQuote, InSeasonTransferQuote } from '../domain/recruitment';
 import type { ContractOfferOptions } from '../domain/employment';
+import { contractRoleReason } from './contract-roles';
 import type { SeasonState } from '../domain/season';
 import { financeLedgerEntries } from './finance-ledger';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
@@ -100,6 +101,8 @@ export function quoteInSeasonTransferOffer(state: SeasonState, playerId: string,
   else if (!feeValid) reason = transferFeeRuleText(state, 'EUR ');
   else if (!planValid || paymentPlan !== 'upfront' && state.seasonNumber >= 7974) reason = 'Choose a payment plan within the supported career calendar.';
   else if (options.transferMode === 'release-clause' && releaseClauseTriggerReason(state, playerId, fee, paymentPlan)) reason = releaseClauseTriggerReason(state, playerId, fee, paymentPlan);
+  // relationships-3: a player refuses a role below his standing at the buying club.
+  else if (contractRoleReason(state, clubId, playerId, options.role)) reason = contractRoleReason(state, clubId, playerId, options.role);
   else if (resolving && (!own?.transfer || own.transfer.clubStatus !== 'accepted' || own.transfer.contractId !== current.id || own.transfer.sellerClubId !== current.clubId || own.seasonWage !== seasonWage || own.seasons !== seasons || own.releaseFee !== options.releaseFee || own.transfer.fee !== fee || own.transfer.paymentPlan !== paymentPlan || (own.transfer.mode ?? 'negotiated') !== (options.transferMode ?? 'negotiated'))) reason = 'The selling club must approve these transfer terms before the player can join.';
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before offering a transfer fee.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before offering another transfer fee.';

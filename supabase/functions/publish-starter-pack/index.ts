@@ -2,7 +2,8 @@
 // can start real-club careers on any device (owner decision, 15 November 2026). It mirrors `buildPack` in
 // scripts/real-data-pack.mjs for the ratings of dataset version 2026.11-world-1 and applies the reviewed profile
 // corrections in `manual_overrides` (owner permission, 16 November 2026: exact positions from official sources;
-// broad official roles choose within the group from the player's statistics, as the ratings do).
+// broad official roles choose within the group from the player's statistics, as the ratings do). Positions marked
+// `community` (Wikipedia, 17 November 2026) are shown as reported, not as official.
 //
 // It acts only on an authorised request: a pending, unexpired `publish-pack` row in `data_change_requests` (written
 // only by the service role or the owner's dashboard), which names the new version. `preview` returns the built pack
@@ -129,7 +130,7 @@ Deno.serve(async request => {
         ...(rating && Number.isFinite(rating.method?.weightedMinutes) ? { ratingMinutes: Math.round(rating.method.weightedMinutes) } : {}),
         estimated,
         ...(born ? { birthDate: born } : {}),
-        ...(fix ? { profileEvidence: { observedAt, positionSource: resolution.estimated ? 'estimated' : official?.value ? 'official' : 'provider', membership: registered ? 'official-registration-observed' : 'provider-observed', sources } } : {}),
+        ...(fix ? { profileEvidence: { observedAt, positionSource: resolution.estimated ? 'estimated' : official?.value && !official.community ? 'official' : 'provider', membership: registered ? 'official-registration-observed' : 'provider-observed', sources } } : {}),
       };
     }).sort((a, b) => a.clubId.localeCompare(b.clubId) || a.name.localeCompare(b.name));
     const assemble = (packPlayers: any[]) => {
@@ -148,7 +149,7 @@ Deno.serve(async request => {
     const recorded = await sha256(JSON.stringify({ format: 'basketball-manager-data-pack', formatVersion: 1, version: VERSION, season: SEASON, source, notice: 'Private evaluation data from API-SPORTS. Rights for publication or distribution are not cleared; do not upload or share.', competitions: plainParts.packCompetitions, clubs: plainParts.packClubs, players: plain }));
     const packPlayers = buildPlayers(true), { packCompetitions, packClubs } = assemble(packPlayers);
     const corrected = packPlayers.filter(player => player.profileEvidence);
-    const profileCorrections = { model: 'profile-overrides-1', players: corrected.length, exactPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'official').length, estimatedPositions: packPlayers.filter(player => player.estimated.includes('game_position')).length, note: 'Official EuroLeague/EuroCup registrations and official roster pages; a broad official role (Guard, Forward) keeps the exact position an estimate.' };
+    const profileCorrections = { model: 'profile-overrides-1', players: corrected.length, exactPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'official').length, reportedPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'provider').length, estimatedPositions: packPlayers.filter(player => player.estimated.includes('game_position')).length, note: 'Official EuroLeague/EuroCup registrations and official league and club roster pages; Wikipedia rosters and player articles (CC BY-SA 4.0) where no official page gives an exact position, shown as reported; a broad role (Guard, Forward) keeps the exact position an estimate.' };
     const pack = { format: 'basketball-manager-data-pack', formatVersion: 1, version: ask.version, season: SEASON, source: { ...source, profileCorrections }, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026). Player positions, heights, birth dates and names corrected from official competition and club sources where available (16 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
     const checksum = await sha256(JSON.stringify(pack));
     const summary = { version: pack.version, checksum, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, profileCorrections, cut, matchesRecordedChecksum: recorded === versionRow.checksum, replaces: existingVersion };

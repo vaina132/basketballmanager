@@ -55,7 +55,7 @@ const NOT_COUNTRIES = new Set(['Apoel BC', 'Bayern', 'Gran Canaria', 'Mega Baske
 const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().trim();
 
 /** Two-position labels whose meaning is narrower than their words ("Ala/Centro" is a power forward or centre). */
-const COMBOS = Object.freeze({ 'ala/centro': ['PF', 'C'], 'guardia/ala': ['SG', 'SF'], 'play/guardia': ['PG', 'SG'], 'g/f': ['SG', 'SF'], 'f/c': ['PF', 'C'], 'f/g': ['SF', 'SG'], 'c/f': ['C', 'PF'] });
+const COMBOS = Object.freeze({ 'ala/centro': ['PF', 'C'], 'guardia/ala': ['SG', 'SF'], 'play/guardia': ['PG', 'SG'], 'g/f': ['SG', 'SF'], 'f/c': ['PF', 'C'], 'f/g': ['SF', 'SG'], 'c/f': ['C', 'PF'], gf: ['SG', 'SF'], fc: ['PF', 'C'], 'sg/sf': ['SG', 'SF'], 'pf/c': ['PF', 'C'], 'pg/sg': ['PG', 'SG'], 'sf/pf': ['SF', 'PF'] });
 
 /** A roster label as exact options and/or a broad group; unknown labels give nothing. */
 export function rosterPosition(label) {
@@ -148,6 +148,15 @@ export function matchName(name, number, rows) {
  * Builds the override rows. `clubCodeOf` maps pack club IDs to official competition club codes; `clubUuidOf` strips
  * the pack prefix. Returns { rows, report }.
  */
+/** Community sources (Wikipedia) are not official: their label is used only inside an official broad role. */
+export const COMMUNITY_SOURCES = new Set(['en.wikipedia.org']);
+function communityParsed(row, parsed, group, report, player) {
+  if (!COMMUNITY_SOURCES.has(row.sourceName) || !group) return parsed;
+  const options = parsed.options.filter(position => GROUP_POSITIONS[group].includes(position));
+  if (parsed.options.length && !options.length) report.conflicts.push({ playerId: player.id, name: player.name, officialGroup: group, roster: `${row.sourceName}: ${row.position}`, chosen: `${group} (Wikipedia label ignored)` });
+  return { options, group: options.length ? group : parsed.group === group ? group : null };
+}
+
 /** The audit's matcher first; then the extra rules of `matchName` over the club's registrations. */
 function officialFallback(player, candidates) {
   const rows = candidates.map(row => ({ name: displayName(row), surname: row.person.name.split(',')[0], number: /^\d{1,2}$/.test(row.dorsal ?? '') ? Number(row.dorsal) : null, row }));
@@ -167,6 +176,12 @@ export function profileOverrides({ pack, officialDocuments = [], clubLinks = [],
     const rows = club.players.map(player => ({ ...player, sources, observedOn: file.observedOn, sourceName: file.sourceName ?? null }));
     rosterOf.set(club.clubId, [...(rosterOf.get(club.clubId) ?? []), rows]);
   }
+  // Players the pack keeps at a club whose current roster no longer lists them: the same full name, found once in all
+  // rosters and once in the pack, gives their position only (their club is not changed).
+  const fullKey = name => { const words = nameTokens(name).filter(token => !SUFFIXES.has(token)); return words.length >= 2 && words.every(token => !token.endsWith('.')) ? [...words].sort().join(' ') : null; };
+  const everywhere = new Map(), inPack = new Map();
+  for (const lists of rosterOf.values()) for (const list of lists) for (const row of list) { const key = fullKey(row.name); if (key) everywhere.set(key, [...(everywhere.get(key) ?? []), row]); }
+  for (const player of pack.players) { const key = fullKey(player.name); if (key) inPack.set(key, (inPack.get(key) ?? 0) + 1); }
   const report = { observedOn, batch, players: pack.players.length, officialClubs: codeOf.size, officialMatched: 0, rosterMatched: 0, exactPositions: 0, groupPositions: 0, conflicts: [], ambiguousOrMissing: [], byMethod: {}, bySource: {} };
   const rows = [];
   const uuid = id => id.replace(/^player-/, '');
@@ -179,7 +194,12 @@ export function profileOverrides({ pack, officialDocuments = [], clubLinks = [],
     // first that settles one exact position is used, otherwise the first that says anything.
     const rosterLists = rosterOf.get(player.clubId) ?? [], group = match && GROUP_POSITIONS[match.row.positionName] ? match.row.positionName : null;
     const found = rosterLists.map(rows => matchName(player.name, player.number, rows) ?? (match ? matchName(displayName(match.row), Number(match.row.dorsal), rows) : null)).filter(Boolean)
-      .map(item => ({ ...item, parsed: rosterPosition(item.row.position) })).map(item => ({ ...item, combined: combinePosition(group ?? item.parsed.group, item.parsed.options) }));
+      .map(item => ({ ...item, parsed: communityParsed(item.row, rosterPosition(item.row.position), group, report, player) })).map(item => ({ ...item, combined: combinePosition(group ?? item.parsed.group, item.parsed.options) }));
+    if (!found.some(item => item.combined.position && item.parsed.options.length)) {
+      const key = fullKey(match ? displayName(match.row) : player.name) ?? fullKey(player.name), elsewhere = key && inPack.get(fullKey(player.name) ?? key) === 1 ? everywhere.get(key) ?? [] : [];
+      const distinct = [...new Set(elsewhere.map(row => row.position))];
+      if (elsewhere.length && distinct.length === 1) { const parsed = communityParsed(elsewhere[0], rosterPosition(elsewhere[0].position), group, report, player); found.push({ row: elsewhere[0], method: 'same-full-name-other-club-roster', positionOnly: true, parsed, combined: combinePosition(group ?? parsed.group, parsed.options) }); }
+    }
     const settled = found.filter(item => item.combined.position && item.parsed.options.length);
     const roster = settled[0] ?? found.find(item => item.parsed.options.length || item.parsed.group) ?? found[0] ?? null;
     if (new Set(settled.map(item => item.combined.position)).size > 1) report.conflicts.push({ playerId: player.id, name: player.name, officialGroup: group, roster: settled.map(item => `${item.row.sourceName}: ${item.row.position}`).join(' / '), chosen: settled[0].combined.position });
@@ -192,18 +212,21 @@ export function profileOverrides({ pack, officialDocuments = [], clubLinks = [],
     if (combined.conflict || group && parsed.group && group !== parsed.group && !parsed.options.length) report.conflicts.push({ playerId: player.id, name: player.name, officialGroup: group, roster: roster.row.position, chosen: combined.position ?? group });
     const sources = [...new Set([...(match ? [match.row.sourceUrl] : []), ...(roster ? roster.row.sources : [])])];
     const finalGroup = group ?? parsed.group;
-    if (combined.position || finalGroup) {
+    // A roster's broad label never replaces an exact position the provider already gave (API-Sports "Center").
+    const keepProvider = !combined.position && !group && !player.estimated.includes('game_position');
+    if (!keepProvider && (combined.position || finalGroup)) {
       const exact = !!combined.position;
       const method = exact ? (roster && parsed.options.length ? (parsed.options.length === 1 ? 'official-roster-exact' : 'official-roster-narrowed-by-role') : 'official-competition-center') : 'official-group-statistics';
       report.byMethod[method] = (report.byMethod[method] ?? 0) + 1;
       const source = exact ? (roster && parsed.options.length ? roster.row.sourceName ?? 'roster' : 'euroleague-eurocup') : (group ? 'euroleague-eurocup' : roster.row.sourceName ?? 'roster');
       report.bySource[source] = (report.bySource[source] ?? 0) + 1;
       if (exact) report.exactPositions += 1; else report.groupPositions += 1;
-      add(player, 'position', { value: combined.position, group: finalGroup, method, sources, ...(match ? { officialPersonCode: match.row.person.code, matchMethod: match.method } : {}), ...(roster ? { rosterLabel: String(roster.row.position), rosterMatch: roster.method } : {}) },
+      add(player, 'position', { value: combined.position, group: finalGroup, method, sources, ...(exact && roster && parsed.options.length && COMMUNITY_SOURCES.has(roster.row.sourceName) ? { community: true } : {}), ...(match ? { officialPersonCode: match.row.person.code, matchMethod: match.method } : {}), ...(roster ? { rosterLabel: String(roster.row.position), rosterMatch: roster.method } : {}) },
         `${exact ? 'Exact' : 'Broad'} position from ${source === 'euroleague-eurocup' ? 'the official EuroLeague/EuroCup registration' : `the official roster (${source})`}; matched by ${(match ?? roster).method}.`);
     }
     if (roster) report.rosterMatched += 1;
-    if (!match) {
+    if (!match && roster.positionOnly) continue;
+    if (!match && !roster.positionOnly) {
       // Official league rosters also give heights and birth dates; competition registrations come first.
       const sourced = { sources: roster.row.sources, rosterMatch: roster.method }, why = `Official roster (${roster.row.sourceName ?? 'league'}); matched by ${roster.method}.`;
       if (Number.isInteger(roster.row.heightCm) && roster.row.heightCm >= 150 && roster.row.heightCm <= 240) add(player, 'height_cm', { value: roster.row.heightCm, ...sourced }, why);

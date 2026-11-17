@@ -39,7 +39,7 @@ const displayName = row => { const [surname, given] = row.person.name.split(',')
 const LABELS = Object.freeze({
   PG: ['pg', 'point guard', 'base', 'meneur', 'playmaker', 'play', 'aufbau', 'aufbauspieler', 'point', 'oyun kurucu', 'πλέι μέικερ', 'πλεϊμέικερ', '1'],
   SG: ['sg', 'shooting guard', 'escolta', 'arriere', 'arrière', 'guardia', 'shooting', 'sutor', 'şutör', 'σούτινγκ γκαρντ', '2'],
-  SF: ['sf', 'small forward', 'alero', 'ailier', 'ala piccola', 'small', 'kanat', 'σμολ φόργουορντ', '3'],
+  SF: ['sf', 'small forward', 'alero', 'ailier', 'ala piccola', 'small', 'kanat', 'kisa forvet', 'kısa forvet', 'σμολ φόργουορντ', '3'],
   PF: ['pf', 'power forward', 'a-pivot', 'ala-pivot', 'ala-pívot', 'ala pivot', 'ala pívot', 'ailier fort', 'ala grande', 'power', 'uzun forvet', 'πάουερ φόργουορντ', '4'],
   C: ['c', 'center', 'centre', 'pivot', 'pívot', 'centro', 'pivot', 'pivô', 'σέντερ', '5'],
 });
@@ -55,7 +55,7 @@ const NOT_COUNTRIES = new Set(['Apoel BC', 'Bayern', 'Gran Canaria', 'Mega Baske
 const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().trim();
 
 /** Two-position labels whose meaning is narrower than their words ("Ala/Centro" is a power forward or centre). */
-const COMBOS = Object.freeze({ 'ala/centro': ['PF', 'C'], 'guardia/ala': ['SG', 'SF'], 'play/guardia': ['PG', 'SG'], 'g/f': ['SG', 'SF'], 'f/c': ['PF', 'C'], 'f/g': ['SF', 'SG'], 'c/f': ['C', 'PF'], gf: ['SG', 'SF'], fc: ['PF', 'C'], 'sg/sf': ['SG', 'SF'], 'pf/c': ['PF', 'C'], 'pg/sg': ['PG', 'SG'], 'sf/pf': ['SF', 'PF'] });
+const COMBOS = Object.freeze({ 'ala/centro': ['PF', 'C'], 'guardia/ala': ['SG', 'SF'], 'play/guardia': ['PG', 'SG'], 'g/f': ['SG', 'SF'], 'f/c': ['PF', 'C'], 'f/g': ['SF', 'SG'], 'c/f': ['C', 'PF'], interieur: ['PF', 'C'], 'ailier fort/pivot': ['PF', 'C'], 'meneur/arriere': ['PG', 'SG'], 'arriere/ailier': ['SG', 'SF'], gf: ['SG', 'SF'], fc: ['PF', 'C'], 'sg/sf': ['SG', 'SF'], 'pf/c': ['PF', 'C'], 'pg/sg': ['PG', 'SG'], 'sf/pf': ['SF', 'PF'] });
 
 /** A roster label as exact options and/or a broad group; unknown labels give nothing. */
 export function rosterPosition(label) {

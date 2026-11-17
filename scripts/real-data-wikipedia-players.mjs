@@ -61,8 +61,11 @@ async function main() {
   const overrides = JSON.parse(await readFile(argument('--overrides'), 'utf8'));
   const exact = new Set(overrides.rows.filter(row => row.field === 'position' && row.value.value).map(row => `player-${row.entity_id}`));
   const names = new Map(overrides.rows.filter(row => row.field === 'full_name').map(row => [`player-${row.entity_id}`, row.value.value]));
-  const todo = pack.players.filter(player => player.estimated.includes('game_position') && !exact.has(player.id)).map(player => ({ player, name: names.get(player.id) ?? player.name }))
-    .filter(({ name }) => !/(^|\s)\p{L}\.(\s|$)/u.test(name) && name.split(/\s+/).length >= 2);
+  // --list FILE: [{ id, rosterName }] players a current roster lists, looked up by the roster's full name.
+  const listed = argument('--list') ? JSON.parse(await readFile(argument('--list'), 'utf8')) : null;
+  const byId = new Map(pack.players.map(player => [player.id, player]));
+  const todo = (listed ? listed.map(item => ({ player: byId.get(item.id), name: item.rosterName })) : pack.players.filter(player => player.estimated.includes('game_position') && !exact.has(player.id)).map(player => ({ player, name: names.get(player.id) ?? player.name })))
+    .filter(({ player, name }) => player && name && !/(^|\s)\p{L}\.(\s|$)/u.test(name) && name.split(/\s+/).length >= 2);
   const observedOn = new Date().toISOString().slice(0, 10);
   const result = { source: WIKI, sourceName: 'en.wikipedia.org', license: 'CC BY-SA 4.0 (facts only, with page links)', observedOn, clubs: [], rejected: [], notFound: 0 };
   for (const [index, { player, name }] of todo.entries()) {
@@ -72,7 +75,8 @@ async function main() {
     const namesClub = !!matchClub(bio.clubs.replace(/\[\[(?:[^|\]]*\|)?([^\]]*)\]\]/g, '$1'), [club]);
     const sameYear = bio.birthYear && player.age && Math.abs(2026 - bio.birthYear - player.age) <= 1;
     if (!bio.position || !(namesClub || sameYear)) { result.rejected.push({ name, title: page.title, position: bio.position, namesClub, birthYear: bio.birthYear }); continue; }
-    result.clubs.push({ clubId: player.clubId, sources: [`${WIKI}/wiki/${encodeURIComponent(page.title.replace(/ /g, '_'))}`], players: [{ name, number: player.number, position: bio.position }] });
+    // The row carries the pack's own name so the profile matcher pairs it with this player.
+    result.clubs.push({ clubId: player.clubId, sources: [`${WIKI}/wiki/${encodeURIComponent(page.title.replace(/ /g, '_'))}`], players: [{ name: listed ? player.name : name, number: player.number, position: bio.position }] });
     if (index % 50 === 0) await writeFile(out + '.partial', JSON.stringify(result));
   }
   await writeFile(out, JSON.stringify(result, null, 1));

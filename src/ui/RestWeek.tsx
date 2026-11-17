@@ -9,9 +9,10 @@ import { careerDay, gameDate, gamesText, nextGameText } from './career-text';
 
 /**
  * A day without the manager's match: a real calendar gap ("Rest week") or another game day of a week the club plays in
- * ("No game today": midweek European games, or a playoff day). No match score, appearance or simulated opponent.
+ * ("No game today": midweek European games, or a playoff day). No match score, appearance or simulated opponent. The one
+ * Continue on the top bar plays the day (owner request, 16 November 2026).
  */
-export function RestWeek({ season, busy, onContinue, onTraining }: { season: SeasonState; busy: boolean; onContinue: () => void; onTraining: () => void }) {
+export function RestWeek({ season, busy, onTraining }: { season: SeasonState; busy: boolean; onTraining: () => void }) {
   const club = season.clubs.find(club => club.id === season.managedClubId)!;
   const day = careerDay(season);
   const complete = season.status === 'complete';
@@ -29,7 +30,7 @@ export function RestWeek({ season, busy, onContinue, onTraining }: { season: Sea
           {!complete && day.playedThisWeek && <p>Your game this week: {nextGameText(season, day.playedThisWeek)}, played.</p>}
           {day.next && <p className="rest-week-next">Your next game: <strong>{nextGameText(season, day.next)}</strong></p>}
         </div>
-        {season.status === 'active' && <div className="rest-week-actions"><button className="button primary" disabled={busy} onClick={onContinue}>Continue<Icon name="next" size={16} /></button><button className="button" disabled={busy} onClick={onTraining}>Training<Icon name="training" size={16} /></button></div>}
+        {season.status === 'active' && <div className="rest-week-actions"><button className="button" disabled={busy} onClick={onTraining}>Training<Icon name="training" size={16} /></button></div>}
       </div>
     </section>
     <section className="panel rest-week-squad" aria-labelledby="rest-week-squad-title">

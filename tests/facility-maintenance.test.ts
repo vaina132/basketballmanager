@@ -11,7 +11,7 @@ const club = 'rhine-falcons';
 const upkeepAt = (state: SeasonState, round: number) => state.finance.ledger.find(entry => entry.kind === 'facility-upkeep' && entry.clubId === club && entry.seasonNumber === 1 && entry.round === round)?.amount;
 /** These are the upkeep rules of older careers (`facilities-1`); new careers wear and repair instead (tests/facility-repairs.test.ts). */
 const legacy = (state: SeasonState): SeasonState => ({ ...state, facilities: { ...state.facilities, model: 'facilities-1' } });
-const career = (facilityMaintenance: boolean) => legacy(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager: { name: 'Upkeep Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, facilityMaintenance }));
+const career = (facilityMaintenance: boolean) => legacy(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager: { name: 'Upkeep Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, simpleFacilities: false, facilityMaintenance }));
 let worn: SeasonState, restored: SeasonState;
 
 beforeAll(() => {

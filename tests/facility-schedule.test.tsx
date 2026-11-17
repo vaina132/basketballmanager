@@ -17,7 +17,7 @@ const render = (season: SeasonState) => renderToStaticMarkup(<FacilitiesPanel se
 let started: SeasonState, nextWeek: SeasonState;
 
 beforeAll(() => {
-  started = startFacilityUpgrade(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager: { name: 'Schedule Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS }), 'training');
+  started = startFacilityUpgrade(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager: { name: 'Schedule Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, simpleFacilities: false }), 'training');
   nextWeek = advanceMatchday(started);
 }, 300_000);
 

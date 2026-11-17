@@ -65,7 +65,7 @@ function LevelBar({ level, maximum, name }: { level: number; maximum: number; na
 }
 
 export function FacilityBoardFunding({ quote, enabled, busy, onRequest }: { quote: BoardFundingQuote; enabled: boolean; busy: boolean; onRequest: () => void }) {
-  if (!enabled) return <section className="facility-board" data-board-funding="off" aria-labelledby="facility-board-title"><h4 id="facility-board-title"><Icon name="shield" size={15} />Ask the board</h4><p>Board funding requests are off in this career. You can turn them on under Club › Board.</p></section>
+  if (!enabled) return <section className="facility-board" data-board-funding="off" aria-labelledby="facility-board-title"><h4 id="facility-board-title"><Icon name="shield" size={15} />Ask the board</h4><p>Board funding requests are off in this career. You can switch them on from the Board page.</p></section>
   const work = quote.project === 'repair' ? 'the repair' : 'construction'
   const outlook = !quote.eligible ? quote.reason : quote.approved ? `On these figures the board approves. Its capital is recorded and ${work} starts at once.` : `${quote.refusal} If the board refuses, you can ask again after ${quote.cooldown} ${quote.cooldown === 1 ? 'matchday' : 'matchdays'}.`
   return <section className="facility-board" data-board-funding={!quote.eligible ? 'unavailable' : quote.approved ? 'approve' : 'refuse'} aria-labelledby="facility-board-title">

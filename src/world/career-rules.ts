@@ -129,7 +129,7 @@ export function resignationsCounting(career: Pick<SeasonCareer, 'moves'> | undef
     && careerPointKey(move.seasonNumber, move.round ?? 0, move.phase ?? 'end') < before);
 }
 
-/** Plain-English summary of the rules, shared by Club > Board and the desk. */
+/** Plain-English summary of the rules, shared by the Board page and the desk. */
 export const CAREER_RULES_TEXT = {
   protectedSeason: 'Your first season at a club is protected: the board will not dismiss you. If that season still ends Under pressure (below 30), you get a final warning instead, and the next season counts.',
   freshStart: `A new coach starts with board confidence ${CAREER_RULES.freshConfidence}, whatever the previous coach left behind.`,

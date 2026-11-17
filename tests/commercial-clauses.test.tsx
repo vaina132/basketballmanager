@@ -163,7 +163,7 @@ describe('naming rights and early termination in a new career', () => {
     expect(arenaNameFor(nextOpening, club, 1)).toBe('RHF Arena');
     expect(clubFinanceDefinition(worldOf(nextOpening), club).venue).toBe('RHF Arena');
     expect(renderNaming(nextOpening)).toContain(`data-arena-name="${agreement.arenaName}"`);
-    const fixtures = renderToStaticMarkup(<SeasonWorkspace season={nextOpening} onNewCareer={noop} onOpenMatch={noop} onAdvance={noop} onRollover={noop} onLoad={noop} />);
+    const fixtures = renderToStaticMarkup(<SeasonWorkspace season={nextOpening} onNewCareer={noop} onOpenMatch={noop} onLoad={noop} />);
     expect(fixtures).toContain(agreement.arenaName);
     // Matchday six of the first covered season: the first installment, once.
     const paid = nextRenewal.finance.ledger.filter(entry => entry.kind === 'naming-rights' && entry.clubId === club);
@@ -276,7 +276,8 @@ describe('automatic control leaving a poor agreement (format 64)', () => {
     ] }, [{ country: 'Testland', tier: 3, name: 'Third division', clubs: Array.from({ length: 4 }, (_, index) => ({ id: `third-${index + 1}`, name: `Third Club ${index + 1}`, shortName: `TC${index + 1}`, color: '#336699' })) }]));
     requireWorldContexts(true);
     try {
-      let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+      // Seed 9 was found under the facilities-2 money flows; six-level facilities (format 74) change computer clubs' spending.
+      let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, simpleFacilities: false }), true);
       state = rolloverSeason(finishSeason(state));
       const before = advanceTo(state, 5), renewal = advanceTo(before, 6);
       const exits = renewal.commercial.agreements.filter(agreement => agreement.exit?.by === 'club');

@@ -22,7 +22,8 @@ export function getScoutingEvidence(review: ScoutingReview): number { return rev
  */
 export function clubScoutingEvidence(state: SeasonState, clubId: string, review: ScoutingReview): number {
   const evidence = getScoutingEvidence(review), bonus = evidence ? scoutingEvidencePercent(state, clubId, review.date) : 0;
-  return bonus > 0 ? Math.floor(evidence * (100 + bonus) / 100) : evidence;
+  // Format 74: a Very Poor or Poor scouting office (a negative percent) gives less evidence.
+  return bonus !== 0 ? Math.floor(evidence * (100 + bonus) / 100) : evidence;
 }
 
 export function getScoutingCapacity(state: SeasonState, clubId = state.managedClubId): number {

@@ -161,7 +161,9 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
 
   // The picked or dragged item: it is highlighted and the places it can go are marked.
   const active = dragging ?? pick
+  const required = match.requiredSubstitutions.find(request => request.side === side)
   const help = complete ? 'Match finished · substitutions closed.'
+    : required ? `Replacement needed: tap a reserve, then the circle of ${name(required.playerId)} (${required.reason === 'injured' ? 'injured' : 'fouled out'}).`
     : pregame ? 'Drag a player onto a circle, or tap a player and then a circle. Changes before tip-off apply at once.'
       : 'Drag or tap a reserve onto a circle: he comes on at the next legal stoppage. Players on court swap circles at once.'
 

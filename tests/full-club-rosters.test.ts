@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { offeredContractRole } from '../src/world/contract-roles';
 import { createSeason, advanceSeason, rolloverSeason, NEW_CAREER_SYSTEMS, managedSide, setMatchdaySelection } from '../src/world/season';
 import { simulateToEnd, setAutoSubstitutions, stepMatch } from '../src/engine/match';
 import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
@@ -90,7 +91,7 @@ describe('full club rosters and separate matchday selection', () => {
     const selected = state.activeMatch![managedSide(state)].players.map(player => player.id);
     state = setMatchdaySelection(state, selected);
     const seller = state.clubs[1]!, target = seller.players[0]!.id;
-    const wage = requiredNegotiationWage(target, 1, undefined, state), fee = requiredInSeasonTransferFee(state, target);
+    const wage = requiredNegotiationWage(target, 1, undefined, state, offeredContractRole(state, state.managedClubId, target)), fee = requiredInSeasonTransferFee(state, target);
     const pending = submitInSeasonTransferOffer(state, target, wage, 1, fee);
     const next = completeRound(pending);
     expect(contractForRound(next.employment, target, 1, 2)?.clubId).toBe(state.managedClubId);

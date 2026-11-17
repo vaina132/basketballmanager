@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { offeredContractRole } from '../src/world/contract-roles';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
@@ -60,7 +61,8 @@ describe('board expectations in the actual career calendar', () => {
     let state = initial();
     const playerId = state.clubs.find(club => club.id === 'aegean-waves')!.players[0]!.id;
     const mandate = structuredClone(state.board.mandates[0]!);
-    state = submitInSeasonTransferOffer(state, playerId, requiredNegotiationWage(playerId, 1), 1, requiredInSeasonTransferFee(state, playerId));
+    // The offer carries his natural role at the buying club (squad roles everywhere), which sets his demand.
+    state = submitInSeasonTransferOffer(state, playerId, requiredNegotiationWage(playerId, 1, undefined, state, offeredContractRole(state, state.managedClubId, playerId)), 1, requiredInSeasonTransferFee(state, playerId));
     const finished = finish(state);
     expect(finished.board.reviews).toHaveLength(0);
     expect(parseSeason(serializeSeason(finished))).toEqual(finished);

@@ -482,6 +482,12 @@ Phase 2 result (17 November 2026): `2026.11-world-5-online` is live with exact p
 
 "Please implement now the full starting staff for every club, the court picture starting 5, squad roles in the squad list and contract ops, 6 facility levels and arena seat expansion, a simple bank loan process ... when I get a loan, it's added to my budget directly ... Board as its own menu item, a day-by-day continue button, and transfers as a player search ... I would prefer to play test when these things are implemented." The play test now follows these items. Their defaults are recorded here as each lands.
 
+Landed 17 November 2026 (reversible defaults):
+- **Transfers search** lists every player the manager could sign or approach; players outside the scouting range show no rating until scouted. Own contracts and renewals are on Squad > Contracts; Board is a menu item.
+- **Facilities (`facilities-3`, new careers):** six levels, Very Poor to Excellent, for training, youth, medical and scouting; Average equals the old base and Excellent the old top level; one level per upgrade, paid from Remaining budget, 3-8 weeks, upkeep only above the starting level; starting levels follow the club's money band; no wear, repairs, leases or board capital. Tables in `FACILITY_RULES_3` (`src/world/facilities-policy.ts`).
+- **Arena:** expansions of +500, +1,000, +2,500 or +5,000 seats (EUR 90,000 to 750,000 at the development scale, 4 to 16 weeks), at most half the current seats per project, 22,000 seats at most, EUR 0.40 a week per added seat.
+- **Bank loan (`bank-1`, `BANK_LOAN_RULES` in `src/world/facility-debt.ts`):** up to 20% of the season budget; 1 to 4 seasons; added to Remaining budget at once; two payments a season from the next season; 4% to 7% a year; early repayment costs 2%. Computer clubs and "Let the board handle facilities" borrow only for a shortfall, one loan at a time, with debt at most half the limit.
+
 ## Two safety items alongside the play test (owner decision, 16 November 2026)
 
 The exact save checks for the newest features (sponsor exits, naming-rights offers, president requests and resignation offers, recomputed instead of checked for plausibility) and a faster checkpoint check for long careers run alongside the owner's play test instead of before it. The play test starts once step 3.7, the money fixes and the browser-cycle fixes are live.

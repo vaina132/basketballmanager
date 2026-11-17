@@ -31,6 +31,8 @@ interface ActiveCheck {
   counts: Map<string, number> | null;
   values: Map<string, unknown> | null;
   skipped: Record<string, number>;
+  /** Node counts of the parts `knownTrees` walked or recalled in this check. */
+  trees?: Map<object, number>;
 }
 
 let active: ActiveCheck | null = null;
@@ -113,6 +115,33 @@ export function trustedCutKey(): number {
   return active?.trusted ? cutKey(active.trusted.cut) : -Infinity;
 }
 
+/** Top-level parts the trusted prefix compares whole (`SEASON_CONSTANTS`), whose JSON tree checks carry over. */
+const TREE_PARTS = ['world', 'history'] as const;
+
+/**
+ * The node counts of a state's whole-compared parts for its JSON tree check (`checkJsonTree` in `season-storage.ts`),
+ * which then adds each count instead of walking that part again. In an incremental check the parts equal the trusted
+ * state's exactly (plain data of the same shape at the same depth), so its walk's count and verdict carry over; otherwise
+ * `walk` checks each part once (at depth 1) and the count is remembered for the next checkpoint. Undefined outside a
+ * checkpoint check.
+ */
+export function knownTrees(root: unknown, walk: (part: object, depth: number) => number): ReadonlyMap<object, number> | undefined {
+  if (!active || root === null || typeof root !== 'object') return undefined;
+  const trees = active.trees ??= new Map();
+  const known = new Map<object, number>();
+  for (const key of TREE_PARTS) {
+    const part = (root as Record<string, unknown>)[key];
+    if (part === null || typeof part !== 'object') continue;
+    let nodes = trees.get(part);
+    if (nodes === undefined) nodes = active.trusted?.values.get(`tree:${key}`) as number | undefined;
+    if (nodes === undefined) nodes = walk(part, 1);
+    trees.set(part, nodes);
+    active.values?.set(`tree:${key}`, nodes);
+    known.set(part, nodes);
+  }
+  return known;
+}
+
 /** Remember a replay value at this journal's record index. Store copies of anything the loop mutates later. */
 export function remember(name: string, key: string, value: unknown): void {
   active?.values?.set(`${name}:${key}`, value);
@@ -131,10 +160,14 @@ export function recalled(name: string, key: string): boolean {
 // ---------------------------------------------------------------------------------------------------------------------
 // The trusted prefix: which parts of a new state must equal the trusted state's.
 
-/** Exact structural equality of JSON-like save data, including key order (which iteration order can depend on). */
+/**
+ * Exact structural equality of JSON-like save data, including key order (which iteration order can depend on) and
+ * prototypes (so a part equal to plain trusted data is plain data too).
+ */
 export function sameJson(left: unknown, right: unknown): boolean {
   if (left === right) return true;
   if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') return Number.isNaN(left) && Number.isNaN(right);
+  if (Object.getPrototypeOf(left) !== Object.getPrototypeOf(right)) return false;
   if (Array.isArray(left)) {
     if (!Array.isArray(right) || left.length !== right.length) return false;
     for (let index = 0; index < left.length; index += 1) if (!sameJson(left[index], right[index])) return false;

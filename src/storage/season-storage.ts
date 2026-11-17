@@ -77,7 +77,7 @@ import { createPhysio } from '../world/physio';
 import { createAssistant } from '../world/assistant';
 import { academyAtBoundary, buildAcademyWeek, createAcademy, enableAcademy, graduateAcademyProspect, prepareAcademySeason, processAcademyWeek } from '../world/academy';
 import { validationReplayCache } from './replay-cache';
-import { prefixPlan, recall, remember, SCOUTING_REVIEWS, trustedCutKey, trustedPrefixMismatch, withPrefixCheck, type CheckRecord } from './trusted-prefix';
+import { knownTrees, prefixPlan, recall, remember, SCOUTING_REVIEWS, trustedCutKey, trustedPrefixMismatch, withPrefixCheck, type CheckRecord } from './trusted-prefix';
 import { canSummarizeAcademyReport, createAcademyHistoryContext, isAcademyOutcome, summarizeAcademyHistory, summarizeAcademyPlayer } from '../world/academy-history';
 import { createYouth } from '../world/youth';
 import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, prepareYouthFixture, settleYouthFixture, getYouthPlayerStatus, youthCompetitionAtBoundary, youthInjuryHistory, YOUTH_RECURRENCE_MODEL } from '../world/youth-competition';
@@ -287,13 +287,18 @@ function score(value: unknown, path: string): Record<Side, number> {
 function checkSize(text: string): void {
   if (text.length > MAX_SEASON_SAVE_BYTES || new TextEncoder().encode(text).byteLength > MAX_SEASON_SAVE_BYTES) throw new Error('The season file is too large. The season save limit is 32 MB.');
 }
-function checkJsonTree(root: unknown): void {
-  const pending: { value: unknown; depth: number }[] = [{ value: root, depth: 0 }];
+/**
+ * Bounds and plain-data checks of a save's JSON tree; returns its node count. `known` parts (`knownTrees`) add their
+ * recorded node counts instead of being walked again.
+ */
+function checkJsonTree(root: unknown, known?: ReadonlyMap<object, number>, startDepth = 0): number {
+  const pending: { value: unknown; depth: number }[] = [{ value: root, depth: startDepth }];
   let count = 0;
   while (pending.length) {
     const { value, depth } = pending.pop()!;
-    if (++count > MAX_SEASON_SAVE_VALUES || depth > 40) throw new Error('The season file has too many values or nested objects.');
-    if (value === null || typeof value !== 'object') continue;
+    const nodes = known && value !== null && typeof value === 'object' ? known.get(value) : undefined;
+    if ((count += nodes ?? 1) > MAX_SEASON_SAVE_VALUES || depth > 40) throw new Error('The season file has too many values or nested objects.');
+    if (nodes !== undefined || value === null || typeof value !== 'object') continue;
     if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) throw new Error('The season must contain plain save data.');
     const entries = Object.entries(value);
     if (entries.length > MAX_SEASON_COLLECTION_ENTRIES) throw new Error('The season file contains an oversized collection.');
@@ -302,7 +307,10 @@ function checkJsonTree(root: unknown): void {
       pending.push({ value: child, depth: depth + 1 });
     }
   }
+  return count;
 }
+/** A checkpoint check's tree walk, reusing what the trusted check (or an earlier walk of this check) counted. */
+const checkStateTree = (value: unknown) => checkJsonTree(value, knownTrees(value, (part, depth) => checkJsonTree(part, undefined, depth)));
 
 /** Both full current results and compact career archives retain official result rules. */
 function validateResultSummary(fields: Record<string, unknown>, path: string, home: Team, away: Team) {
@@ -3038,7 +3046,7 @@ function validateState(value: unknown, version: SeasonFormatVersion): void {
   // Never keep a second full ledger in live state, or carry a cached acceptance across mutable inputs.
   if (version >= 44 && value !== null && typeof value === 'object' && !Array.isArray(value)) {
     const state = value as Record<string, unknown>;
-    if (state.finance && typeof state.finance === 'object' && Object.hasOwn(state.finance, 'archives')) checkJsonTree(value);
+    if (state.finance && typeof state.finance === 'object' && Object.hasOwn(state.finance, 'archives')) checkStateTree(value);
     const finance = expandFinanceForValidation(state.finance, state.seasonNumber);
     checked(() => validateStateUncached(finance === state.finance ? state : { ...state, finance }, version));
   } else checked(() => validateStateUncached(value, version));
@@ -3046,7 +3054,7 @@ function validateState(value: unknown, version: SeasonFormatVersion): void {
 
 function validateStateUncached(value: unknown, version: SeasonFormatVersion): void {
   const legacy = version === 1, career = version >= 3;
-  checkJsonTree(value);
+  checkStateTree(value);
   const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 53 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'background') ? ['background'] : []), ...(version >= 60 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'europe') ? ['europe'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'media') ? ['media'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'economySeasons') ? ['economySeasons'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
   if (state.schemaVersion !== version || state.engineVersion !== 'possession-3') fail('state', 'uses an unsupported schema or engine');
   // Format 39: careers outside the built-in league carry their world, which must be complete and named by dataPackId.

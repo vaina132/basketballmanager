@@ -44,12 +44,10 @@ interface TransfersWorkspaceProps {
   onOpenMatch: () => void
   onOpenAcademy: () => void
   onEnableMarket: () => void
-  onAdvanceMarket: () => void
   onWithdrawOffer: (offerId: string) => void
   onDelegation: (delegated: boolean) => void
   onOffer: (playerId: string, seasonWage: number, seasons: number, transferFee?: number, paymentPlan?: TransferPaymentPlan, options?: ContractOfferOptions) => void
   onClubDecision: (offerId: string, response: 'accept' | 'reject' | 'counter') => void
-  onStartSeason: () => void
   focusedPlayerId: string | null
   onClearFocusedPlayer: () => void
   onOpenScouting: (playerId: string) => void
@@ -76,7 +74,7 @@ interface RowAction { label: string; disabled: boolean; reason: string | null; o
  * Transfers (owner, 16 November 2026): a player search to bring players in, with the shortlist beside it. Offers for
  * your players, your open offers and sales stay below; the own squad's contracts are on Squad > Contracts.
  */
-export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotiations, onEnableInSeason, onEnableInSeasonTransfers, onInSeasonTransferOffer, onInSeasonClubDecision, onInSeasonOffer, onWithdrawInSeasonOffer, onOpenMatch, onOpenAcademy, onEnableMarket, onAdvanceMarket, onWithdrawOffer, onDelegation, onOffer, onClubDecision, onStartSeason, focusedPlayerId, onClearFocusedPlayer, onOpenScouting, onShortlist, onOpenContracts, onOpenScoutingPage }: TransfersWorkspaceProps) {
+export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotiations, onEnableInSeason, onEnableInSeasonTransfers, onInSeasonTransferOffer, onInSeasonClubDecision, onInSeasonOffer, onWithdrawInSeasonOffer, onOpenMatch, onOpenAcademy, onEnableMarket, onWithdrawOffer, onDelegation, onOffer, onClubDecision, focusedPlayerId, onClearFocusedPlayer, onOpenScouting, onShortlist, onOpenContracts, onOpenScoutingPage }: TransfersWorkspaceProps) {
   const [filters, setFilters] = useState<TransferSearchFilters>(DEFAULT_TRANSFER_FILTERS)
   const [shown, setShown] = useState(PAGE_SIZE)
   const [offerId, setOfferId] = useState<string | null>(null)
@@ -108,7 +106,6 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
   const expiring = enabled ? club.players.filter(player => (getPlayerRetirement(season, player.id).notice?.lastSeason ?? Infinity) > season.seasonNumber && contractForSeason(season.employment, player.id, season.seasonNumber)?.endsSeason === season.seasonNumber && !contractForSeason(season.employment, player.id, nextYear)).length : 0
   const startReason = datedMarket ? getMarketStartReason(season) : summary.rosterSize < MIN_ROSTER_SIZE ? `Sign ${MIN_ROSTER_SIZE - summary.rosterSize} more ${MIN_ROSTER_SIZE - summary.rosterSize === 1 ? 'player' : 'players'} for next season.` : summary.rosterSize > clubRosterLimit(season) ? `The squad must contain no more than ${clubRosterLimit(season)} players.` : null
   // Browser play-through (16 November 2026): when offers or other squads hold up the next season, continuing the offseason is the next step.
-  const continueFirst = datedMarket && !!startReason && offseasonContinueFirst(season)
   const focused = focusedPlayerId ? getCareerPlayer(season, focusedPlayerId) : null
   const focusedContract = focused ? contractForSeason(season.employment, focused.id, nextYear) : null
   const focusedTransfer = marketOpen && datedMarket && focusedContract && focusedContract.clubId !== club.id
@@ -199,7 +196,7 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
 
   return <div className="transfers-workspace" onFocusCapture={event => { if (event.target instanceof HTMLElement) lastFocus.current = event.target }}>
     <section className="transfers-overview panel" aria-labelledby="transfers-heading">
-      <header className="transfers-heading"><div><h2 id="transfers-heading" tabIndex={-1}>{club.name} · Transfers</h2><span>{seasonLabel(season.seasonNumber)}{marketOpen ? ' · Offseason recruitment' : season.status === 'active' ? ' · Season transfer window' : ''}</span></div>{enabled && marketOpen && <div className="transfers-start"><div className="transfers-start-actions">{continueFirst && <button id="advance-offseason-start" className="button primary" onClick={onAdvanceMarket} disabled={disabled} aria-describedby="contract-season-reason">Continue offseason<Icon name="next" size={15} /></button>}<button id="start-contract-season" className={continueFirst ? 'button' : 'button primary'} onClick={onStartSeason} disabled={disabled || !!startReason} aria-describedby={startReason ? 'contract-season-reason' : undefined}>Start {seasonLabel(nextYear)}<Icon name="chevron" size={15} /></button></div>{startReason && <small id="contract-season-reason">{startReason}</small>}</div>}</header>
+      <header className="transfers-heading"><div><h2 id="transfers-heading" tabIndex={-1}>{club.name} · Transfers</h2><span>{seasonLabel(season.seasonNumber)}{marketOpen ? ' · Offseason recruitment' : season.status === 'active' ? ' · Season transfer window' : ''}</span></div>{enabled && marketOpen && <div className="transfers-start"><small id="contract-season-reason">{startReason ?? `Recruitment is complete: Continue starts ${seasonLabel(nextYear)}.`}</small></div>}</header>
       {enabled && hasNextYear && <div className="transfers-squad-line"><span><Icon name="people" size={16} /><strong data-next-contract-roster={summary.rosterSize}>{summary.rosterSize}</strong> / {MIN_ROSTER_SIZE}–{clubRosterLimit(season)} signed for {seasonLabel(nextYear)}{summary.reservedRosterSize ? ` · ${summary.reservedRosterSize} ${summary.reservedRosterSize === 1 ? 'offer holding a place' : 'offers holding places'}` : ''}</span><button id="transfers-open-contracts" className="text-button" onClick={onOpenContracts} disabled={disabled}>{expiring ? `${expiring} expiring ${expiring === 1 ? 'contract' : 'contracts'} · ` : ''}Your contracts<Icon name="chevron" size={13} /></button></div>}
       {(incoming > 0 || counters > 0) && <div className="transfers-alert" role="status" data-transfer-alert><Icon name="mail" size={16} /><span>{[incoming ? `${incoming} ${incoming === 1 ? 'offer' : 'offers'} for your players ${incoming === 1 ? 'needs' : 'need'} your decision` : '', counters ? `${counters} ${counters === 1 ? 'counteroffer' : 'counteroffers'} to review` : ''].filter(Boolean).join(' · ')}</span><button className="button small" onClick={() => document.getElementById('transfer-business')?.scrollIntoView({ block: 'start' })} disabled={disabled}>Review<Icon name="chevron" size={13} /></button></div>}
     </section>
@@ -262,7 +259,7 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
       <section id="transfer-business" className="transfer-business" aria-labelledby="transfer-business-title">
         <h2 id="transfer-business-title" className="transfer-business-title"><Icon name="swap" size={16} />Offers and sales</h2>
         <InSeasonRecruitmentPanel onOpenAcademy={onOpenAcademy} season={season} disabled={disabled} onEnable={onEnableInSeason} onEnableTransfers={onEnableInSeasonTransfers} onClubDecision={onInSeasonClubDecision} onReview={setInSeasonPlayerId} onWithdraw={onWithdrawInSeasonOffer} onOpenMatch={onOpenMatch} onBrowse={() => showSearch({ freeOnly: true })} />
-        {datedMarket && <OffseasonMarketPanel season={season} disabled={disabled} onAdvance={onAdvanceMarket} onWithdraw={onWithdrawOffer} onReview={playerId => openOffer(playerId)} onClubDecision={onClubDecision} />}
+        {datedMarket && <OffseasonMarketPanel season={season} disabled={disabled} onWithdraw={onWithdrawOffer} onReview={playerId => openOffer(playerId)} onClubDecision={onClubDecision} />}
         {!negotiations && hasNextYear && <section className="transfers-negotiations-enable panel" aria-labelledby="negotiations-enable-title"><div><h2 id="negotiations-enable-title">Player responses</h2><p>Enable counteroffers, rejections and a saved conversation history for future offers. Longer contracts can carry higher wage demands. Existing signed terms remain binding.</p></div><button id="enable-negotiations" className="button" onClick={onEnableNegotiations} disabled={disabled}>Enable contract negotiations</button></section>}
         {negotiations && !datedMarket && hasNextYear && <section className="transfers-negotiations-enable panel" aria-labelledby="market-enable-title"><div><h2 id="market-enable-title">Offseason calendar</h2><p>Give offseason offers a reply date, an expiry date and reserved salary budget. Current contracts stay signed.</p></div><button id="enable-market" className="button" onClick={onEnableMarket} disabled={disabled}>Enable dated offseason<Icon name="calendar" size={15} /></button></section>}
         {hasNextYear && <ContractDelegation season={season} disabled={disabled} onDelegation={onDelegation} />}

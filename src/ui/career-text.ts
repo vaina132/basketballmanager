@@ -172,19 +172,28 @@ export function nextGameText(season: SeasonState, fixture: SeasonFixture): strin
 export const gamesText = (count: number, kind: CareerDay['kind']) => `${count} ${kind === 'European' ? 'European ' : kind === 'playoff' ? 'playoff ' : ''}${count === 1 ? 'game' : 'games'}`
 
 /**
- * The notice after Continue: what was just recorded (the club's game day, another game day of the week, or the whole
+ * What a committed week changed for the manager: a club change or a dismissal into a period without a club (career-3),
+ * or the season's end. Shared by the notice after one game day and the notice when a Continue run stops.
+ */
+export function seasonChangeText(before: SeasonState, after: SeasonState): string {
+  const name = (id: string) => after.clubs.find(club => club.id === id)?.name ?? id
+  const move = after.career.moves.length > before.career.moves.length ? after.career.moves.at(-1) : undefined
+  if (move && move.toClubId === NO_CLUB) return `${name(move.fromClubId)}'s board dismissed you, and you are now without a club. Jobs that open appear on your desk.`
+  if (move) return after.status === 'complete' ? `You now manage ${name(move.toClubId)}, including its offseason.` : `The board dismissed you; you now manage ${name(move.toClubId)}.`
+  return isUnemployed(after) ? 'Every club\'s offseason runs automatically; open jobs are on your desk.' : 'Final standings and all results are available.'
+}
+
+/**
+ * The notice after one game day: what was just recorded (the club's game day, another game day of the week, or the whole
  * week) and what comes next. A week with midweek game days takes one Continue per game day, so "Matchday N recorded"
  * appears only once the week is complete. Also the club change a week brought, or a dismissal into a period without a
  * club (career-3).
  */
 export function roundNotice(before: SeasonState, after: SeasonState): string {
-  const name = (id: string) => after.clubs.find(club => club.id === id)?.name ?? id
   const move = after.career.moves.length > before.career.moves.length ? after.career.moves.at(-1) : undefined
   const week = before.round
-  if (move && move.toClubId === NO_CLUB) return after.status === 'complete' ? `Season complete. ${name(move.fromClubId)}'s board dismissed you, and you are now without a club. Jobs that open appear on your desk.` : `Matchday ${week} recorded. ${name(move.fromClubId)}'s board dismissed you, and you are now without a club. Jobs that open appear on your desk.`
-  if (move) return after.status === 'complete' ? `Season complete. You now manage ${name(move.toClubId)}, including its offseason.` : `Matchday ${week} recorded. The board dismissed you; you now manage ${name(move.toClubId)}.`
-  if (isUnemployed(after)) return after.status === 'complete' ? 'Season complete. Every club\'s offseason runs automatically; open jobs are on your desk.' : `Matchday ${week} recorded across every competition.`
-  if (after.status === 'complete') return 'Season complete. Final standings and all results are available.'
+  if (move || after.status === 'complete') return `${after.status === 'complete' ? 'Season complete.' : `Matchday ${week} recorded.`} ${seasonChangeText(before, after)}`
+  if (isUnemployed(after)) return `Matchday ${week} recorded across every competition.`
   // What was recorded: the whole week, or one game day of a week that has more game days to come.
   const played = currentGameDay(before) ?? before.date
   const playedGames = before.fixtures.filter(fixture => fixture.round === before.round && fixture.date === played && !fixture.result)

@@ -163,7 +163,7 @@ describe('naming rights and early termination in a new career', () => {
     expect(arenaNameFor(nextOpening, club, 1)).toBe('RHF Arena');
     expect(clubFinanceDefinition(worldOf(nextOpening), club).venue).toBe('RHF Arena');
     expect(renderNaming(nextOpening)).toContain(`data-arena-name="${agreement.arenaName}"`);
-    const fixtures = renderToStaticMarkup(<SeasonWorkspace season={nextOpening} onNewCareer={noop} onOpenMatch={noop} onAdvance={noop} onRollover={noop} onLoad={noop} />);
+    const fixtures = renderToStaticMarkup(<SeasonWorkspace season={nextOpening} onNewCareer={noop} onOpenMatch={noop} onLoad={noop} />);
     expect(fixtures).toContain(agreement.arenaName);
     // Matchday six of the first covered season: the first installment, once.
     const paid = nextRenewal.finance.ledger.filter(entry => entry.kind === 'naming-rights' && entry.clubId === club);

@@ -47,7 +47,7 @@ describe('board panel: president and capital', () => {
     expect(legacy).toContain('Rival clubs can ask their boards under the same rules once this is on.');
     expect(legacy).not.toContain('decides capital requests');
     const noFacilities = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', finance: true, board: true }));
-    expect(noFacilities).toContain('Enable club facilities first, under Club › Operations.');
+    expect(noFacilities).toContain('Enable club facilities first, on the Club page.');
     expect(noFacilities).toMatch(/id="enable-board-funding"[^>]*disabled/);
   });
 
@@ -90,7 +90,7 @@ describe('facility review: asking the board', () => {
   it('points older careers to the Board view when requests are off', () => {
     const html = ask(generous.quote, false);
     expect(html).toContain('data-board-funding="off"');
-    expect(html).toContain('Board funding requests are off in this career. You can turn them on under Club › Board.');
+    expect(html).toContain('Board funding requests are off in this career. You can switch them on from the Board page.');
     expect(html).not.toContain('id="facility-board-request"');
   });
 });

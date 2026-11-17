@@ -18,7 +18,7 @@ export const NOT_PLAYED_LEAGUE = {
   table: 'its final table is simulated from squad strength to decide who plays in Europe next season.',
 } as const
 
-/** Plain wording for a recorded club change, shared by the manager's desk, Club > Board and the Inbox. */
+/** Plain wording for a recorded club change, shared by the manager's desk, the Board page and the Inbox. */
 export function careerMoveText(season: Pick<SeasonState, 'clubs'>, move: CareerMove): { title: string; detail: string } {
   const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? id
   const from = name(move.fromClubId), to = name(move.toClubId)

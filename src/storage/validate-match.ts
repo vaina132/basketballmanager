@@ -459,23 +459,24 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     if (state.status === 'finished' && (requests.length > 0 || timeoutRequested[side])) fail('pending commands', 'must be cleared when the match finishes');
   }
   if (state.status === 'finished' && required.length > 0) fail('requiredSubstitutions', 'must be cleared when the match finishes');
-  // Format 74: the court picture's circles, one different position for each player on court of a side that has them;
-  // the circles when the clock first ran are kept once play has started.
+  // Format 74: the court picture's chosen circles, for players on court (one different position each) and reserves
+  // queued for a circle; the chosen circles when the clock first ran are kept once play has started.
   if (Object.hasOwn(state, 'slots')) {
     const slots = record(state.slots, 'slots');
-    if (!Object.keys(slots).length || Object.keys(slots).some(side => !SIDES.includes(side as Side))) fail('slots', 'must name the teams that play the court picture');
+    if (!Object.keys(slots).length || Object.keys(slots).some(side => !SIDES.includes(side as Side))) fail('slots', 'must name the teams that use the court picture');
     for (const [side, value] of Object.entries(slots)) {
-      const circles = record(value, `slots.${side}`, lineups[side] as string[]);
-      if (new Set(Object.values(circles)).size !== Object.keys(circles).length || Object.values(circles).some(position => !COURT_POSITIONS.includes(position as Position))) fail(`slots.${side}`, 'must give each player on court a different court position');
+      const circles = record(value, `slots.${side}`), onCourt = Object.keys(circles).filter(playerId => (lineups[side] as string[]).includes(playerId));
+      const queued = ((pending as Record<string, unknown>)[side] as { inId: string }[]).map(request => request.inId);
+      if (Object.keys(circles).some(playerId => !onCourt.includes(playerId) && !queued.includes(playerId)) || new Set(onCourt.map(playerId => circles[playerId])).size !== onCourt.length || Object.values(circles).some(position => !COURT_POSITIONS.includes(position as Position))) fail(`slots.${side}`, 'must give players on court a different court position each, or a queued reserve his circle');
     }
   }
   if (Object.hasOwn(state, 'startingSlots')) {
     const starting = record(state.startingSlots, 'startingSlots');
     if (steps === 0 || !Object.hasOwn(state, 'slots')) fail('startingSlots', 'are kept only once play has started with the court picture');
     for (const [side, value] of Object.entries(starting)) {
-      if (!SIDES.includes(side as Side) || !Object.hasOwn(state.slots as object, side)) fail('startingSlots', 'must name a team that plays the court picture');
+      if (!SIDES.includes(side as Side) || !Object.hasOwn(state.slots as object, side)) fail('startingSlots', 'must name a team that uses the court picture');
       const circles = record(value, `startingSlots.${side}`);
-      if (Object.keys(circles).length < 2 || Object.keys(circles).length > 5 || Object.keys(circles).some(playerId => !playerIds[side as Side].has(playerId)) || new Set(Object.values(circles)).size !== Object.keys(circles).length || Object.values(circles).some(position => !COURT_POSITIONS.includes(position as Position))) fail(`startingSlots.${side}`, 'must give two to five players of the team different court positions');
+      if (Object.keys(circles).length > 5 || Object.keys(circles).some(playerId => !playerIds[side as Side].has(playerId)) || new Set(Object.values(circles)).size !== Object.keys(circles).length || Object.values(circles).some(position => !COURT_POSITIONS.includes(position as Position))) fail(`startingSlots.${side}`, 'must give up to five players of the team different court positions');
     }
   }
   if (modern) possessionPlay(state.possessionPlay, state, lineups as Record<Side, string[]>);

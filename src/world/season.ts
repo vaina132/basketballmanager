@@ -65,7 +65,7 @@ import { getMarketStartReason, getMarketWindow } from './market-policy';
 import { memoizePure } from './pure-cache';
 import { ASSISTANT_DIRECTORY } from '../data/staff-directory';
 import { usesFullClubRoster } from './club-roster-policy';
-import { canSelectMatchday, captureMatchdaySelection, planCircles, reconcileMatchdayPlan, selectedTeam, teamForMatchday } from './matchday-selection';
+import { canSelectMatchday, captureMatchdaySelection, reconcileMatchdayPlan, selectedTeam, teamForMatchday, withPlanCircles } from './matchday-selection';
 import type { WorldContext } from '../domain/world';
 
 export const ROUND_INTERVAL_DAYS = 7;
@@ -316,9 +316,9 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
     return full && club.id !== season.managedClubId && isRegularFixture(fixture) ? objectiveStartingFive(season, { clubId: club.id, seasonNumber: season.seasonNumber ?? 1, players: developed.players, planned, unavailable }) : planned;
   };
   const homeFive = startingFive(home, developedHome, homePlan, !!homeClub), awayFive = startingFive(away, developedAway, awayPlan, !!awayClub);
-  // Format 74: the manager's side plays the court picture's circles (the plan's, or the best fit for a new starter);
-  // computer clubs play their listed positions.
-  const circles = (club: Team, plan: ClubPlan, five: readonly string[]) => club.id === season.managedClubId ? Object.fromEntries(five.flatMap(id => plan.slots?.[id] ? [[id, plan.slots[id]!]] : [])) : undefined;
+  // Format 74: the manager's starters play the circles he chose on the court picture; everyone else, and computer
+  // clubs, play their listed positions.
+  const circles = (club: Team, plan: ClubPlan, five: readonly string[]) => { const chosen = club.id === season.managedClubId ? Object.fromEntries(five.flatMap(id => plan.slots?.[id] ? [[id, plan.slots[id]!]] : [])) : {}; return Object.keys(chosen).length ? chosen : undefined; };
   const homeCircles = circles(home, homePlan, homeFive), awayCircles = circles(away, awayPlan, awayFive);
   let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), developedHome, developedAway, {
     ...(morale ? { morale } : {}),
@@ -350,9 +350,8 @@ export function setMatchdaySelection(state: SeasonState, playerIds: readonly str
   // Keep pre-match tactics and lineup edits already made on the prepared match.
   if (!state.activeMatch) throw new Error('Select the matchday squad when your next fixture opens.');
   const side = managedSide(state), edited = state.activeMatch, lineup = [...edited.lineups[side]];
-  // The circles set on the court picture stay with their players (format 74).
-  const slots = edited.slots?.[side] ? { slots: planCircles(lineup, club.players, edited.slots[side]!, plan.slots ?? {}) } : {};
-  const next = { ...state, plans: { ...state.plans, [club.id]: { ...plan, tactics: { ...edited.tactics[side] }, autoSubstitutions: edited.autoSubstitutions[side], lineup, ...slots, matchday: ids } } };
+  // The circles chosen on the court picture stay with their players (format 74).
+  const next = { ...state, plans: { ...state.plans, [club.id]: withPlanCircles({ ...plan, tactics: { ...edited.tactics[side] }, autoSubstitutions: edited.autoSubstitutions[side], lineup, matchday: ids }, edited.slots?.[side]) } };
   return { ...next, activeMatch: prepareMatch(next, getActiveFixture(next)) };
 }
 
@@ -542,11 +541,11 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
     // buzzer (a closing or garbage-time five is not the next game's starters; browser play-through, 16 November 2026).
     // The manager's plan takes any change made before tip-off. Vacancies come from the roster's stable order.
     const lineup = [...new Set([...(club.id === season.managedClubId ? plannedFiveAfter(match, side, previous.lineup) : []), ...previous.lineup, ...club.players.map(player => player.id)])].slice(0, 5);
-    // Format 74: the manager's plan keeps the circles set before tip-off; computer clubs play listed positions.
-    const { slots: previousCircles, ...kept } = previous;
-    const fullClub = season.clubs.find(candidate => candidate.id === club.id) ?? club;
-    const circles = club.id === season.managedClubId && match.slots?.[side] ? { slots: planCircles(lineup, fullClub.players, match.startingSlots?.[side] ?? match.slots[side]!, previousCircles ?? {}) } : {};
-    season.plans[club.id] = { ...kept, tactics: { ...match.tactics[side] }, lineup, ...circles, autoSubstitutions: club.id === season.managedClubId ? match.autoSubstitutions[side] : true };
+    // Format 74: the manager's plan keeps the circles he chose before tip-off; computer clubs play listed positions.
+    // A planned starter who missed this game keeps the circle he had.
+    const started = new Set(preTipoffLineup(match, side).five);
+    const chosen = club.id === season.managedClubId ? { ...Object.fromEntries(Object.entries(previous.slots ?? {}).filter(([id]) => !started.has(id))), ...(match.stepCount === 0 ? match.slots?.[side] : match.startingSlots?.[side]) } : undefined;
+    season.plans[club.id] = withPlanCircles({ ...previous, tactics: { ...match.tactics[side] }, lineup, autoSubstitutions: club.id === season.managedClubId ? match.autoSubstitutions[side] : true }, chosen);
     for (const player of club.players) season.conditions[player.id] = match.stats[player.id]!.condition;
   }
 }

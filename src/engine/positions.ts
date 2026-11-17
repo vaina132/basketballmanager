@@ -1,8 +1,9 @@
 /**
  * Court positions played (owner request, 16 November 2026: the starting five on a court picture with PG, SG, SF, PF
- * and C circles). A side with circles (`MatchState.slots`) plays each player on court in his circle's position; a
- * side without circles plays everyone in his own listed position, as computer clubs do. Pure and deterministic: no
- * random draws, so arranging circles never changes the match's random sequence.
+ * and C circles). A player the manager puts in a circle (`MatchState.slots`) plays that circle's position while on
+ * court; everyone else plays his own listed position: computer clubs, the automatic rotation's changes and a five the
+ * manager never arranged. Pure and deterministic: no random draws, so arranging circles never changes the match's
+ * random sequence.
  */
 import type { MatchState, Player, PlayerAttributes, Position, Side } from '../domain/types';
 
@@ -45,14 +46,11 @@ export function asPlayedIn(player: Player, position: Position): Player {
   return byPosition[position] ??= { ...player, position, attributes: playedAttributes(player.attributes, player.position, position) };
 }
 
-/** The circle a player plays on a side with circles; undefined on a side without them or for a reserve. */
-export const circleOf = (state: Pick<MatchState, 'slots'>, side: Side, id: string): Position | undefined => state.slots?.[side]?.[id];
-
-/** A roster player as the simulation sees him now: in his circle when his side has circles, otherwise as listed. */
-export function matchPlayer(state: Pick<MatchState, 'home' | 'away' | 'slots'>, side: Side, id: string): Player | undefined {
+/** A roster player as the simulation sees him now: in the circle the manager chose while he is on court, otherwise as listed. */
+export function matchPlayer(state: Pick<MatchState, 'home' | 'away' | 'slots' | 'lineups'>, side: Side, id: string): Player | undefined {
   const player = state[side].players.find(candidate => candidate.id === id);
-  const circle = player && circleOf(state, side, id);
-  return player && circle ? asPlayedIn(player, circle) : player;
+  const circle = player && state.slots?.[side]?.[id];
+  return player && circle && state.lineups[side].includes(id) ? asPlayedIn(player, circle) : player;
 }
 
 type Listed = Pick<Player, 'id' | 'position'>;
@@ -84,7 +82,11 @@ export function arrangeCircles(players: readonly Listed[], keep: readonly Readon
   return result;
 }
 
-/** The total out-of-position percentage of a side's circles (0 when everyone plays his own position). */
-export function circlesCost(players: readonly Listed[], circles: Readonly<Record<string, Position>>): number {
-  return players.reduce((sum, player) => sum + (circles[player.id] ? outOfPositionPercent(player.position, circles[player.id]!) : 0), 0);
+/**
+ * The court picture: the circle each player on court is shown in. Players the manager placed are in their chosen
+ * circles; the others fill the free circles at the smallest distance from their listed positions (they play as listed).
+ */
+export function courtCircles(state: Pick<MatchState, 'home' | 'away' | 'slots' | 'lineups'>, side: Side): Record<string, Position> {
+  const players = [...new Set(state.lineups[side])].flatMap(id => state[side].players.filter(player => player.id === id)).slice(0, COURT_POSITIONS.length);
+  return arrangeCircles(players, [state.slots?.[side] ?? {}]);
 }

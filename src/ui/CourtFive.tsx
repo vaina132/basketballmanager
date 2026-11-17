@@ -3,7 +3,7 @@ import type { DragEvent } from 'react'
 import type { MatchState, Position, Side } from '../domain/types'
 import type { PlayerKnowledge } from '../domain/scouting'
 import { arrangeBestFive, cancelSubstitution, isPlayerEligible, placeInCircle } from '../engine/match'
-import { arrangeCircles, COURT_POSITIONS } from '../engine/positions'
+import { arrangeCircles, courtCircles, COURT_POSITIONS } from '../engine/positions'
 import { occupantOf, outOfPositionWarning, resolveCourtPick, samePick, type CourtMove, type CourtPick } from './court-five-moves'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
@@ -49,7 +49,8 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
   const editable = !disabled && !complete
   const pregame = match.stepCount === 0
   const team = match[side]
-  const circles = match.slots?.[side] ?? {}
+  // Where each player on court is shown, and the circles the manager chose (only those change the position played).
+  const circles = courtCircles(match, side), chosen = match.slots?.[side] ?? {}
   const identity = `${match.seed}:${match.home.id}:${match.away.id}:${side}`
   const playerById = (id: string) => team.players.find(player => player.id === id)
   const name = (id: string | undefined) => (id && playerById(id)?.name) ?? 'nobody'
@@ -58,7 +59,8 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
   const snapshot = pick || dragging ? match : displayMatch
   const shown = new Set(snapshot.lineups[side]).size === snapshot.lineups[side].length && snapshot.lineups[side].length <= COURT_POSITIONS.length ? snapshot : match
   const shownPlayers = shown.lineups[side].flatMap(id => team.players.filter(player => player.id === id))
-  const shownCircles = arrangeCircles(shownPlayers, [shown.slots?.[side] ?? {}, circles])
+  const shownChosen = shown.slots?.[side] ?? chosen
+  const shownCircles = shown === match ? circles : arrangeCircles(shownPlayers, [shownChosen])
   const bench = team.players.filter(player => !shown.lineups[side].includes(player.id))
   const usable = (id: string) => editable && !match.lineups[side].includes(id) && isPlayerEligible(match, id)
   const pending = match.pendingSubstitutions[side]
@@ -173,7 +175,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
     </div>
     <p ref={status} className={`court-five-status${announcement ? '' : ' visually-hidden'}`} tabIndex={-1} role="status" aria-live="polite">{announcement}</p>
     {pending.length > 0 && <ul className="lineup-queued-changes court-five-queued" aria-label="Pending substitutions">{pending.map(request => <li key={request.outId}><span><strong>Queued</strong> {name(request.inId)} for {name(request.outId)}{circles[request.outId] ? ` at ${circles[request.outId]}` : ''}</span><button type="button" className="text-button" data-cancel-lineup-sub={request.outId} aria-label={`Cancel substitution of ${name(request.inId)} for ${name(request.outId)}`} onClick={() => cancel(request.outId)} disabled={disabled || complete}>Cancel</button></li>)}</ul>}
-    <div className="court-five-layout">
+    <div className="court-five-layout" onPointerDownCapture={editable ? onInteractionStart : undefined}>
       <div ref={court} className="court-five-court" role="group" aria-label={`${team.name} ${pregame ? 'starting five' : 'on court'}: five positions`}>
         <svg className="court-five-lines" viewBox="0 0 150 150" aria-hidden="true" focusable="false" preserveAspectRatio="none">
           <rect x="1" y="1" width="148" height="148" rx="2" />
@@ -189,14 +191,17 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
           const occupantId = occupantOf(shownCircles, position), player = occupantId ? playerById(occupantId) : undefined
           const target: CourtPick = { kind: 'circle', position }, key = pickKey(target)
           const stats = player ? shown.stats[player.id] : undefined
-          const warning = player ? outOfPositionWarning(player.position, position) : null
+          // Only a player the manager placed plays the circle's position; anyone else plays his listed position.
+          const placed = !!player && shownChosen[player.id] === position
+          const warning = player && placed ? outOfPositionWarning(player.position, position) : null
+          const listedNote = player && !placed && player.position !== position ? `Plays ${player.position}` : null
           const unavailable = player && stats ? match.injuries[player.id] ? 'Injured' : stats.fouls >= 5 ? 'Fouled out' : null : null
           const queued = player ? pending.find(request => request.outId === player.id) : undefined
           const isSelected = pick?.kind === 'circle' && pick.position === position
           const move = pick && !isSelected ? resolveCourtPick(circles, pick, target) : null
           const live = editable && (!!move || !!occupantOf(circles, position))
           const condition = stats ? Math.round(stats.condition) : 0
-          const description = player ? `${position}, ${POSITION_NAMES[position]}: ${player.name}, number ${player.number}, listed ${player.position}${warning ? `, ${warning.toLowerCase()}` : ''}, ${condition}% stamina${unavailable ? `, ${unavailable.toLowerCase()}` : ''}` : `${position}, ${POSITION_NAMES[position]}: empty`
+          const description = player ? `${position}, ${POSITION_NAMES[position]}: ${player.name}, number ${player.number}, listed ${player.position}${warning ? `, ${warning.toLowerCase()}` : listedNote ? ', plays his listed position until you place him' : ''}, ${condition}% stamina${unavailable ? `, ${unavailable.toLowerCase()}` : ''}` : `${position}, ${POSITION_NAMES[position]}: empty`
           const action = !editable ? null : move ? move.playerId === occupantId ? `Move ${name(occupantId)} to ${position}` : occupantId && pick?.kind === 'circle' ? `Swap: ${name(move.playerId)} to ${position}, ${name(occupantId)} to ${pick.position}` : `Put ${name(move.playerId)} in ${position}${occupantId ? ` for ${name(occupantId)}` : ''}` : isSelected ? 'Deselect' : occupantId ? 'Select' : null
           return <div key={position} className={`court-five-spot court-five-spot-${position.toLowerCase()}${isSelected ? ' is-selected' : ''}${move ? ' is-target' : ''}${dropKey === key ? ' is-drop' : ''}${warning ? ' is-out-of-position' : ''}${unavailable ? ' is-unavailable' : ''}`} data-court-spot={position} {...(editable ? dropHandlers(target) : {})}>
             <button type="button" className="court-five-circle" data-court-circle={position} data-player-id={player?.id} aria-pressed={live && !move ? isSelected : undefined} aria-label={action ? `${action}. ${description}` : description} title={player?.name} disabled={!live} draggable={editable && !!occupantOf(circles, position)} onClick={event => choose(target, event.detail === 0)} onDragStart={event => beginDrag(event, target)} onDragEnd={dragEnd}>
@@ -206,6 +211,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
             {player && stats && <StaminaMeter value={stats.condition} label={`${player.name} stamina`} compact />}
             {player && stats && !pregame && stats.fouls > 0 && <span className={`court-five-fouls${stats.fouls >= 4 ? ' is-trouble' : ''}`}>{stats.fouls} {stats.fouls === 1 ? 'foul' : 'fouls'}</span>}
             {warning && <span className="court-five-warning" data-out-of-position={position}>{warning}</span>}
+            {listedNote && <span className="court-five-listed" title="The automatic choice: he plays his listed position without a penalty. Put him in a circle yourself to change the position he plays.">{listedNote}</span>}
             {unavailable && <span className="court-five-unavailable">{unavailable}</span>}
             {queued && <span className="court-five-queued-label">Sub queued: {shortName(name(queued.inId))}</span>}
           </div>

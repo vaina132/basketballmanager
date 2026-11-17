@@ -21,6 +21,8 @@ interface MatchLineupProps {
   apply: Apply
   onInteractionStart: () => void
   knowledgeForPlayer?: (id: string) => PlayerKnowledge
+  /** Career matches: the manager's side is shown on the court picture with PG, SG, SF, PF and C circles. */
+  courtPicture?: boolean
 }
 
 interface LineupPlayerProps {
@@ -69,7 +71,7 @@ function LineupPlayer({ player, match, side, active, pickLabel, pressed, selecte
  * Pairs: a reserve and an on-court player make a substitution (it waits for a legal stoppage); two on-court players
  * swap places at once (owner feedback, 16 November 2026: nobody enters or leaves, so no stoppage is needed).
  */
-export function MatchLineup({ match, displayMatch = match, managedSide = 'home', disabled = false, apply, onInteractionStart, knowledgeForPlayer }: MatchLineupProps) {
+export function MatchLineup({ match, displayMatch = match, managedSide = 'home', disabled = false, apply, onInteractionStart, knowledgeForPlayer, courtPicture: useCourtPicture = false }: MatchLineupProps) {
   const [showOpponent, setShowOpponent] = useState(false)
   const [benchOpen, setBenchOpen] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -92,8 +94,8 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
   const selected = editable ? usableBench.find(player => player.id === selectedId) ?? null : null
   const selectedActive = editable && selectedId && onCourt.includes(selectedId) ? currentTeam.players.find(player => player.id === selectedId) ?? null : null
   const shownMatch = selected || selectedActive || draggedId ? match : displayMatch
-  // Format 74: the manager's side with the court picture's circles (every career game) uses the court picture.
-  const courtPicture = own && !!match.slots?.[managedSide]
+  // Format 74: the manager's side is arranged on the court picture (career matches).
+  const courtPicture = own && useCourtPicture && match.engineVersion === 'possession-3'
   const team = shownMatch[side]
   const active = shownMatch.lineups[side].flatMap(id => team.players.filter(player => player.id === id))
   const bench = team.players.filter(player => !shownMatch.lineups[side].includes(player.id))

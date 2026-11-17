@@ -7,7 +7,7 @@ import { actionScene, freeThrowPosition, passScene, reboundScene, setupScene, sh
 import { basketPoint, courtDistance, createPossessionPlay, matchedDefender, moveForAction, positionOf, possessionFormation, primaryHandler, shotContext } from './possession';
 import { ACTION_SECONDS, BLOCKS, DEFENDER_ROLES, DEFENSIVE_FOULS, LATE_GAME, REBOUNDS, ROTATION, SHOOTING_FOULS, SHOT_MAKING, SHOT_SELECTION, TEAM_REBOUND_OFFENSIVE_SHARE, TEAM_REBOUND_SHARE, TURNOVERS } from './calibration';
 import { overallRating } from '../world/overall-rating';
-import { arrangeCircles, asPlayedIn, circlesCost, COURT_POSITIONS, isCourtPosition } from './positions';
+import { asPlayedIn, courtCircles, COURT_POSITIONS, isCourtPosition } from './positions';
 export const MAX_MATCH_PERIODS = 24;
 const MAX_SIMULATION_STEPS = 20_000;
 const SIDES: readonly Side[] = ['home', 'away'];
@@ -58,28 +58,17 @@ function copy(state: MatchState): MatchState {
 function copySlots(slots: NonNullable<MatchState['slots']>): NonNullable<MatchState['slots']> {
   return Object.fromEntries(Object.entries(slots).map(([side, circles]) => [side, { ...circles }]));
 }
-/** A player on a side with circles plays his circle's position; reserves and sides without circles are as listed. */
+/** A player the manager put in a circle plays that circle's position while on court; everyone else plays as listed. */
 function circlePlayer(state: MatchState, side: Side, result: Player): Player {
   const circle = state.slots?.[side]?.[result.id];
-  return circle ? asPlayedIn(result, circle) : result;
+  return circle && state.lineups[side].includes(result.id) ? asPlayedIn(result, circle) : result;
 }
-/** A change on court: the incoming player takes the circle of the player he replaces. */
-function passCircle(state: MatchState, side: Side, outId: string, inId: string): void {
-  const circles = state.slots?.[side];
-  if (!circles || !Object.hasOwn(circles, outId)) return;
-  circles[inId] = circles[outId]!; delete circles[outId];
-}
-function dropCircle(state: MatchState, side: Side, id: string): void { if (state.slots?.[side]) delete state.slots[side]![id]; }
-/**
- * After a change the manager did not choose (the automatic rotation or an automatic replacement), the five on the
- * floor is arranged to the smallest total out-of-position cost; circles that cost nothing to keep stay as they are.
- */
-function rearrangeCircles(state: MatchState, side: Side): void {
-  const circles = state.slots?.[side];
-  if (!circles) return;
-  const listed = state.lineups[side].map(id => state[side].players.find(p => p.id === id)!);
-  const arranged = arrangeCircles(listed, [], circles);
-  if (circlesCost(listed, arranged) < circlesCost(listed, circles)) state.slots![side] = arranged;
+/** Chosen circles belong to players on court and to reserves queued for a circle; anything else is dropped. */
+function pruneCircles(state: MatchState): void {
+  for (const side of SIDES) {
+    const circles = state.slots?.[side];
+    if (circles) for (const id of Object.keys(circles)) if (!state.lineups[side].includes(id) && !state.pendingSubstitutions[side].some(request => request.inId === id)) delete circles[id];
+  }
 }
 function draw(state: MatchState): number { const next = nextRandom(state.rngState); state.rngState = next.state; return next.value; }
 function emit(state: MatchState, event: Omit<MatchEvent, 'id' | 'period' | 'clockSeconds' | 'score'>): void { state.events.push({ ...event, id: state.events.length + 1, period: state.period, clockSeconds: state.clockSeconds, score: { ...state.score } }); }
@@ -154,12 +143,14 @@ function exposure(state: MatchState, seconds: number): void {
   }
 }
 function recovery(state: MatchState, amount: number): void { for (const stats of Object.values(state.stats)) stats.condition = Math.min(100, stats.condition + amount); }
-function applySubstitution(state: MatchState, side: Side, outId: string, inId: string, mandatory = false, automatic = false): void {
+function applySubstitution(state: MatchState, side: Side, outId: string, inId: string, mandatory = false): void {
   const outgoing = player(state, side, outId), incoming = player(state, side, inId), index = state.lineups[side].indexOf(outId);
   if (index < 0 || state.lineups[side].includes(inId) || !isPlayerEligible(state, inId)) throw new Error('Substitution no longer matches the available lineup.');
+  // A reserve the manager queued for a circle (court picture) takes the circle the outgoing player is shown in; any
+  // other incoming player plays his listed position.
+  const circles = state.slots?.[side], circle = circles && Object.hasOwn(circles, inId) ? courtCircles(state, side)[outId] : undefined;
   state.lineups[side][index] = inId;
-  passCircle(state, side, outId, inId);
-  if (automatic) rearrangeCircles(state, side);
+  if (circles) { delete circles[outId]; if (circle) circles[inId] = circle; else delete circles[inId]; }
   if (mandatory && state.freeThrows?.shooterId === outId) state.freeThrows.shooterId = inId;
   // Before tip-off the starting five is still being chosen (court picture, format 74): a change then locks nobody, so
   // a player brought in can be moved out again at once. Locks apply from the first live action. The legacy exhibition
@@ -250,8 +241,8 @@ function clearCommands(state: MatchState): void { state.pendingSubstitutions = {
 function finishDefault(state: MatchState, losing: Side): void {
   clearPossessionPlay(state);
   const winner = other(losing), officialScore = state.score[winner] > state.score[losing] ? { ...state.score } : { [winner]: 2, [losing]: 0 } as Record<Side, number>;
-  for (const side of SIDES) { for (const id of state.lineups[side]) if (!isPlayerEligible(state, id)) dropCircle(state, side, id); state.lineups[side] = state.lineups[side].filter(id => isPlayerEligible(state, id)); }
-  state.result = { winner, kind: 'default', officialScore }; state.status = 'finished'; state.freeThrows = null; state.stoppage = null; state.phase = 'dead-ball'; clearCommands(state);
+  for (const side of SIDES) state.lineups[side] = state.lineups[side].filter(id => isPlayerEligible(state, id));
+  state.result = { winner, kind: 'default', officialScore }; state.status = 'finished'; state.freeThrows = null; state.stoppage = null; state.phase = 'dead-ball'; clearCommands(state); pruneCircles(state);
   emit(state, { type: 'final', side: winner, text: `${state[losing].name} have fewer than two eligible players. ${state[winner].name} win by default, official score ${officialScore.home}–${officialScore.away}. Recorded player statistics are retained.` });
 }
 function resolveEligibility(state: MatchState): void {
@@ -260,10 +251,10 @@ function resolveEligibility(state: MatchState): void {
     for (const outId of [...state.lineups[side]]) {
       if (isPlayerEligible(state, outId)) continue;
       const reason = state.stats[outId]!.fouls >= 5 ? 'fouled-out' : 'injured', incoming = bestReplacement(state, side, player(state, side, outId));
-      if (incoming && state.autoSubstitutions[side]) applySubstitution(state, side, outId, incoming.id, true, true);
+      if (incoming && state.autoSubstitutions[side]) applySubstitution(state, side, outId, incoming.id, true);
       else if (incoming) state.requiredSubstitutions.push({ side, playerId: outId, reason });
       else {
-        state.lineups[side] = state.lineups[side].filter(id => id !== outId); dropCircle(state, side, outId);
+        state.lineups[side] = state.lineups[side].filter(id => id !== outId); pruneCircles(state);
         emit(state, { type: 'substitution', side, outgoingPlayerId: outId, text: `${player(state, side, outId).name} leaves; no eligible substitute remains.`, ...(SIDES.every(team => state.lineups[team].length >= 2) ? { scene: state.engineVersion === 'possession-3' ? lineupScene(state) : setupScene(state, state.possession, state.lineups[state.possession][0]!) } : {}) });
         if (state.freeThrows?.shooterId === outId) { const replacement = state.lineups[side].find(id => isPlayerEligible(state, id)); if (replacement) state.freeThrows.shooterId = replacement; }
       }
@@ -290,6 +281,7 @@ function serviceStoppage(state: MatchState): void {
     for (const side of first) for (const request of [...state.pendingSubstitutions[side]]) {
       if (!state.lineups[side].includes(request.outId) || state.lineups[side].includes(request.inId) || !isPlayerEligible(state, request.inId)) {
         state.pendingSubstitutions[side] = state.pendingSubstitutions[side].filter(r => r.outId !== request.outId);
+        pruneCircles(state);
         emit(state, { type: 'command', side, text: 'A queued substitution is cancelled because the lineup or eligibility changed.' }); changed = true; continue;
       }
       const mandatory = !isPlayerEligible(state, request.outId);
@@ -315,7 +307,7 @@ function serviceStoppage(state: MatchState): void {
       if (rotated.has(side) || !state.autoSubstitutions[side] || !canSubstituteNow(state, side) || state.stepCount === 0) continue;
       const swaps = automaticSwaps(state, side);
       if (!swaps.length) continue;
-      for (const [out, incoming] of swaps) applySubstitution(state, side, out.id, incoming.id, false, true);
+      for (const [out, incoming] of swaps) applySubstitution(state, side, out.id, incoming.id);
       rotated.add(side); changed = true;
       if (state.stoppage!.reason === 'made-basket') whistle(state);
     }
@@ -334,7 +326,7 @@ function legacyRotation(state: MatchState, side: Side, rotated: Set<Side>): bool
   const needsRest = reserve && current.condition < 85 && reserve.condition >= current.condition + 7;
   const foulTrouble = reserve && current.fouls >= foulLimit && reserve.fouls < current.fouls && reserve.condition >= current.condition - 3;
   if (!incoming || state.substitutionLocks.includes(incoming.id) || !(needsRest || foulTrouble)) return false;
-  applySubstitution(state, side, tired.id, incoming.id, false, true); rotated.add(side);
+  applySubstitution(state, side, tired.id, incoming.id); rotated.add(side);
   if (state.stoppage!.reason === 'made-basket') whistle(state);
   return true;
 }
@@ -391,7 +383,8 @@ function finishPeriod(state: MatchState): void {
   emit(state, { type: 'period-end', text: state.period <= 4 ? `End of quarter ${state.period}.` : `End of overtime ${state.period - 4}.` });
   if (state.period >= 4 && state.score.home !== state.score.away) {
     const winner = state.score.home > state.score.away ? 'home' : 'away'; state.status = 'finished'; state.result = { winner, kind: 'normal', officialScore: { ...state.score } }; clearCommands(state);
-    for (const side of SIDES) { for (const id of state.lineups[side]) if (!isPlayerEligible(state, id)) dropCircle(state, side, id); state.lineups[side] = state.lineups[side].filter(id => isPlayerEligible(state, id)); }
+    for (const side of SIDES) state.lineups[side] = state.lineups[side].filter(id => isPlayerEligible(state, id));
+    pruneCircles(state);
     emit(state, { type: 'final', side: winner, text: `${state[winner].name} win ${state.score[winner]}–${state.score[other(winner)]}.` });
   }
 }
@@ -708,9 +701,8 @@ export interface FixtureMatchOptions {
   /** Career fixtures: per-kind risk multipliers from each player's earlier injuries. Omit for normal risk. */
   injuryRisk?: Readonly<Record<string, InjuryRisk>>;
   /**
-   * Format 74: the planned circles of a side that plays the court picture (the manager's). Its starting five keep these
-   * circles; any other starter takes a free circle at the smallest out-of-position cost. A side without circles plays
-   * everyone in his listed position.
+   * Format 74: the circles the manager chose on the court picture for his planned five. A starter named here plays
+   * that circle's position; everyone else plays his listed position.
    */
   slots?: Partial<Record<Side, Readonly<Record<string, Position>>>>;
 }
@@ -737,7 +729,8 @@ function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team,
   }
   for (const side of SIDES) {
     const planned = options.slots?.[side];
-    if (planned) state.slots = { ...state.slots, [side]: arrangeCircles(state.lineups[side].map(id => state[side].players.find(p => p.id === id)!), [planned]) };
+    const chosen = planned ? Object.fromEntries(state.lineups[side].flatMap(id => planned[id] ? [[id, planned[id]!]] : [])) : {};
+    if (Object.keys(chosen).length) state.slots = { ...state.slots, [side]: chosen };
   }
   const risks = Object.entries(options.injuryRisk ?? {}).filter(([, risk]) => Object.keys(risk).length);
   if (risks.length) state.injuryRisk = Object.fromEntries(risks.map(([id, risk]) => [id, { ...risk }]));
@@ -811,7 +804,7 @@ export function stepMatch(state: MatchState): MatchState {
   if (next.status === 'finished') return next;
   serviceStoppage(next); if (next.requiredSubstitutions.length) return next;
   // The circles set before tip-off are kept for the next game (format 74).
-  if (next.stepCount === 0 && next.slots && !next.startingSlots) next.startingSlots = copySlots(next.slots);
+  if (next.stepCount === 0 && next.slots && !next.startingSlots) { pruneCircles(next); next.startingSlots = Object.fromEntries(Object.entries(next.slots).map(([side, circles]) => [side, Object.fromEntries(Object.entries(circles).filter(([id]) => next.lineups[side as Side].includes(id)))])); }
   if (next.phase === 'period-end' || next.clockSeconds === 0 && !next.freeThrows) beginPeriod(next);
   next.status = 'playing';
   if (next.freeThrows) { if (next.engineVersion === 'possession-3') resolvePossessionFreeThrow(next); else resolveFreeThrow(next); }
@@ -845,10 +838,12 @@ export function substitutePlayer(state: MatchState, side: Side, outId: string, i
   if (!isPlayerEligible(state, inId)) throw new Error('The incoming player is excluded or injured.');
   if (state.pendingSubstitutions[side].some(r => r.inId === inId && r.outId !== outId)) throw new Error('The incoming player already has a queued substitution.');
   const next = copy(state); next.pendingSubstitutions[side] = next.pendingSubstitutions[side].filter(r => r.outId !== outId); next.pendingSubstitutions[side].push({ outId, inId });
+  pruneCircles(next);
   emit(next, { type: 'command', side, text: `${player(next, side, inId).name} is requested for ${player(next, side, outId).name}; changes apply at a legal opportunity.` }); serviceStoppage(next); return next;
 }
 export function cancelSubstitution(state: MatchState, side: Side, outId: string): MatchState {
   assertSide(side); assertOpen(state); const next = copy(state); next.pendingSubstitutions[side] = next.pendingSubstitutions[side].filter(r => r.outId !== outId);
+  pruneCircles(next);
   emit(next, { type: 'command', side, text: 'Queued substitution cancelled.' }); return next;
 }
 /**
@@ -862,46 +857,42 @@ export function swapActivePlayers(state: MatchState, side: Side, firstId: string
   if (first < 0 || second < 0) throw new Error('Both players must be on the court.');
   if (first === second) throw new Error('Choose two different players on the court.');
   const next = copy(state); next.lineups[side][first] = secondId; next.lineups[side][second] = firstId;
-  // With the court picture's circles the two also trade positions (format 74).
-  const circles = next.slots?.[side];
-  if (circles && circles[firstId] && circles[secondId]) {
-    [circles[firstId], circles[secondId]] = [circles[secondId]!, circles[firstId]!];
-    emit(next, { type: 'command', side, text: `${player(next, side, firstId).name} and ${player(next, side, secondId).name} swap places on the floor: ${player(next, side, firstId).name} plays ${circles[firstId]}, ${player(next, side, secondId).name} ${circles[secondId]}.` }); return next;
-  }
   emit(next, { type: 'command', side, text: `${player(next, side, firstId).name} and ${player(next, side, secondId).name} swap places on the floor.` }); return next;
 }
 /**
- * The court picture (format 74): an on-court player moves to a circle. The circle's player, if any, takes his circle
- * (as `swapActivePlayers`); an empty circle (fewer than five on court) is simply taken. No stoppage is needed.
+ * The court picture (format 74): a player on court is put in a circle and plays that position from the next action
+ * (nobody enters or leaves, so no stoppage is needed). The player shown in that circle, if any, takes the mover's
+ * circle. Both are then players the manager placed: out of their listed position they play with the penalty.
  */
 export function setCourtPosition(state: MatchState, side: Side, playerId: string, position: Position): MatchState {
   assertSide(side); assertOpen(state); assertBoundary(state);
-  const circles = state.slots?.[side];
-  if (!circles) throw new Error('This team plays its listed positions.');
   if (!state.lineups[side].includes(playerId)) throw new Error('The player must be on the court.');
   if (!isCourtPosition(position)) throw new Error('Choose a court position.');
-  if (circles[playerId] === position) return state;
-  const occupant = Object.keys(circles).find(id => circles[id] === position);
-  if (occupant) return swapActivePlayers(state, side, playerId, occupant);
-  const next = copy(state); next.slots![side]![playerId] = position;
-  emit(next, { type: 'command', side, text: `${player(next, side, playerId).name} moves to ${position}.` }); return next;
+  const shown = courtCircles(state, side);
+  if (shown[playerId] === position) return state;
+  const occupant = Object.keys(shown).find(id => shown[id] === position);
+  const next = copy(state), circles = (next.slots ??= {})[side] ??= {};
+  circles[playerId] = position;
+  if (occupant) circles[occupant] = shown[playerId]!;
+  emit(next, { type: 'command', side, text: occupant ? `${player(next, side, playerId).name} moves to ${position}; ${player(next, side, occupant).name} takes ${shown[playerId]}.` : `${player(next, side, playerId).name} moves to ${position}.` }); return next;
 }
 /**
- * The court picture (format 74): a player is put in a circle. A player on court moves there (`setCourtPosition`: the
- * circle's player takes his circle). A reserve replaces the circle's player through the normal substitution queue and
- * takes his circle: at once before tip-off, otherwise at the next legal stoppage. A reserve already queued for another
- * player is re-queued for this circle.
+ * The court picture (format 74): a player is put in a circle. A player on court moves there (`setCourtPosition`). A
+ * reserve replaces the player shown in the circle through the normal substitution queue and takes his circle: at
+ * once before tip-off, otherwise at the next legal stoppage. A reserve already queued for another player is re-queued.
  */
 export function placeInCircle(state: MatchState, side: Side, playerId: string, position: Position): MatchState {
   assertSide(side); assertOpen(state); assertBoundary(state);
-  const circles = state.slots?.[side];
-  if (!circles) throw new Error('This team plays its listed positions.');
   if (!isCourtPosition(position)) throw new Error('Choose a court position.');
   if (state.lineups[side].includes(playerId)) return setCourtPosition(state, side, playerId, position);
-  const occupant = Object.keys(circles).find(id => circles[id] === position);
+  if (!state[side].players.some(p => p.id === playerId)) throw new Error('The incoming player must belong to this team.');
+  const shown = courtCircles(state, side), occupant = Object.keys(shown).find(id => shown[id] === position);
   if (!occupant) throw new Error('Bring a reserve on for a player on the court.');
   const earlier = state.pendingSubstitutions[side].find(request => request.inId === playerId && request.outId !== occupant);
-  return substitutePlayer(earlier ? cancelSubstitution(state, side, earlier.outId) : state, side, occupant, playerId);
+  // The reserve is marked for a circle before the request is queued: he takes the outgoing player's circle when he comes on.
+  const marked = copy(earlier ? cancelSubstitution(state, side, earlier.outId) : state);
+  ((marked.slots ??= {})[side] ??= {})[playerId] = position;
+  return substitutePlayer(marked, side, occupant, playerId);
 }
 /**
  * The court picture's "Best five" (format 74): one healthy, eligible player for each circle, the highest total of
@@ -911,7 +902,7 @@ export function placeInCircle(state: MatchState, side: Side, playerId: string, p
 export function bestCircles(state: MatchState, side: Side): Record<string, Position> {
   assertSide(side);
   const candidates = state[side].players.filter(p => isPlayerEligible(state, p.id)), circles = COURT_POSITIONS;
-  const current = state.slots?.[side] ?? {}, onCourt = new Set(state.lineups[side]);
+  const current = courtCircles(state, side), onCourt = new Set(state.lineups[side]);
   const value = (p: Player, circle: Position) => overallRating(asPlayedIn(p, circle).attributes, circle) * (.55 + .45 * (state.stats[p.id]?.condition ?? 100) / 100) + (current[p.id] === circle ? .001 : 0) + (onCourt.has(p.id) ? .001 : 0);
   // Five candidates per circle are enough: a better choice for one circle can be taken by at most four other circles.
   const shortlist = circles.map(circle => [...candidates].sort((a, b) => value(b, circle) - value(a, circle) || candidates.indexOf(a) - candidates.indexOf(b)).slice(0, circles.length));
@@ -926,22 +917,21 @@ export function bestCircles(state: MatchState, side: Side): Record<string, Posit
   return Object.fromEntries((best as { ids: string[] } | null)?.ids.flatMap((id, index) => id ? [[id, circles[index]!]] : []) ?? []);
 }
 /**
- * Fills the court picture's circles with `bestCircles`: players already on court move circles at once; each reserve
- * comes on for the player in his circle through the normal substitution queue (at once before tip-off, otherwise at
- * the next legal stoppage). Queued changes for this side are replaced.
+ * Fills the court picture's circles with `bestCircles`: players already on court take their circles at once; each
+ * reserve comes on for the player shown in his circle through the normal substitution queue (at once before tip-off,
+ * otherwise at the next legal stoppage). Queued changes for this side are replaced. Already the best five: no change.
  */
 export function arrangeBestFive(state: MatchState, side: Side): MatchState {
   assertSide(side); assertOpen(state); assertBoundary(state);
-  if (!state.slots?.[side]) throw new Error('This team plays its listed positions.');
-  const target = bestCircles(state, side);
-  let next = state.pendingSubstitutions[side].length ? copy(state) : state;
-  if (next !== state) { next.pendingSubstitutions[side] = []; emit(next, { type: 'command', side, text: 'Queued substitutions are replaced by the best five.' }); }
-  for (const [id, circle] of Object.entries(target)) if (next.lineups[side].includes(id) && next.slots![side]![id] !== circle) next = setCourtPosition(next, side, id, circle);
-  for (const [id, circle] of Object.entries(target)) {
-    if (next.lineups[side].includes(id)) continue;
-    const occupant = Object.keys(next.slots![side]!).find(other => next.slots![side]![other] === circle);
-    if (occupant) next = substitutePlayer(next, side, occupant, id);
-  }
+  const target = bestCircles(state, side), shown = courtCircles(state, side), chosen = state.slots?.[side] ?? {};
+  const listed = (id: string) => state[side].players.find(p => p.id === id)!.position;
+  const staying = Object.entries(target).filter(([id]) => state.lineups[side].includes(id));
+  if (!state.pendingSubstitutions[side].length && staying.length === Object.keys(target).length && staying.every(([id, circle]) => shown[id] === circle && (circle === listed(id) || chosen[id] === circle))) return state;
+  let next = copy(state);
+  if (next.pendingSubstitutions[side].length) { next.pendingSubstitutions[side] = []; emit(next, { type: 'command', side, text: 'Queued substitutions are replaced by the best five.' }); }
+  (next.slots ??= {})[side] = Object.fromEntries(staying);
+  emit(next, { type: 'command', side, text: `${next[side].name} take their best five's circles.` });
+  for (const [id, circle] of Object.entries(target)) if (!next.lineups[side].includes(id)) next = placeInCircle(next, side, id, circle);
   return next;
 }
 export function requestTimeout(state: MatchState, side: Side): MatchState {

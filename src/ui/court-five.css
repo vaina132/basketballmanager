@@ -33,11 +33,11 @@
 .court-five-circle:not(:disabled):hover .court-five-name{color:var(--accent)}
 .court-five-spot .stamina-meter-compact{width:min(76px,100%);margin:0}
 .court-five-spot .stamina-reading{margin-bottom:3px}
-.court-five-warning,.court-five-unavailable,.court-five-queued-label,.court-five-fouls{display:block;max-width:100%;font-size:12px;line-height:1.3}
+.court-five-warning,.court-five-unavailable,.court-five-queued-label,.court-five-fouls,.court-five-listed{display:block;max-width:100%;font-size:12px;line-height:1.3}
 .court-five-warning{color:var(--accent)}
 .court-five-unavailable{color:#e69588}
 .court-five-queued-label{color:var(--accent)}
-.court-five-fouls{color:var(--muted)}
+.court-five-fouls,.court-five-listed{color:var(--muted)}
 .court-five-fouls.is-trouble{color:var(--accent)}
 .court-five-spot.is-out-of-position .court-five-ring{border-color:var(--accent);border-style:dashed}
 .court-five-spot.is-unavailable .court-five-ring{border-color:#e69588}

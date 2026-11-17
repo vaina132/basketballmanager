@@ -3002,10 +3002,10 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     for (const key of ['tempo', 'outsideShare', 'pressure']) number(tactics[key], `plans.${club.id}.tactics.${key}`, 0, 1, false);
     const lineup = array(plan.lineup, `plans.${club.id}.lineup`, 5);
     if (new Set(lineup).size !== 5 || lineup.some(id => !club.players.some(player => player.id === id))) fail(`plans.${club.id}.lineup`, 'must select five distinct players from its club');
-    // Format 74: the planned five's circles on the court picture, one different position for each lineup player.
+    // Format 74: the circles the manager chose for planned starters, one different position each.
     if (circled) {
-      const circles = record(plan.slots, `plans.${club.id}.slots`, lineup as string[]);
-      if (new Set(Object.values(circles)).size !== 5 || Object.values(circles).some(value => !isCourtPosition(value))) fail(`plans.${club.id}.slots`, 'must give each planned starter a different court position');
+      const circles = (plan.slots !== null && typeof plan.slots === 'object' && !Array.isArray(plan.slots) ? plan.slots : fail(`plans.${club.id}.slots`, 'must be an object')) as Record<string, unknown>, chosen = Object.keys(circles);
+      if (!chosen.length || chosen.some(id => !lineup.includes(id)) || new Set(Object.values(circles)).size !== chosen.length || Object.values(circles).some(value => !isCourtPosition(value))) fail(`plans.${club.id}.slots`, 'must give planned starters a different court position each');
     }
     if (typeof plan.autoSubstitutions !== 'boolean' || club.id !== state.managedClubId && !plan.autoSubstitutions) fail(`plans.${club.id}.autoSubstitutions`, 'must be boolean and enabled for opponent clubs');
     for (const player of club.players) number(conditions[player.id], `conditions.${player.id}`, 0, 100, false);
@@ -3220,7 +3220,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (!sameData(match.home, developed(home, homeBackground)) || !sameData(match.away, developed(away, awayBackground))) fail('activeMatch', 'must use the fixture home and away squads with their current development');
   const opposition: Side = active.homeClubId === matchClub ? 'away' : 'home';
   if (!match.autoSubstitutions[opposition]) fail('activeMatch.autoSubstitutions', 'must enable opponent substitutions');
-  // Format 74: only the manager's side plays the court picture's circles; computer clubs play listed positions.
+  // Format 74: only the manager chooses circles on the court picture; computer clubs play listed positions.
   if (match.slots?.[opposition] || match.startingSlots?.[opposition]) fail('activeMatch.slots', 'must leave the opponent in its listed positions');
   if (match.injuryMode !== injuryMode) fail('activeMatch.injuryMode', 'must match the season-wide injury setting');
   if (legacy) {

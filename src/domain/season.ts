@@ -37,8 +37,8 @@ export interface ClubPlan {
   /** Explicit preference for the next matchday; null delegates selection. Present only in full-roster careers. */
   matchday?: string[] | null;
   /**
-   * Format 74: the planned five's circles on the court picture (each lineup player's position played, one circle each).
-   * Kept for the managed club once its first game is prepared; computer clubs play their listed positions.
+   * Format 74: the circles the manager chose on the court picture for players of the planned five (the position each
+   * plays). Absent until the manager places a player; the other starters and computer clubs play listed positions.
    */
   slots?: Record<string, Position>;
 }

@@ -89,11 +89,12 @@ describe('Transfers', () => {
     expect(html).not.toContain('Current squad contracts');
   });
 
-  it('lists only players the scouts know and filters and sorts them', () => {
+  it('lists the whole market, counts the players the scouts know, and filters and sorts', () => {
     const search = getTransferSearch(opening);
     expect(search.phase).toBe('season');
     expect(search.scouted).toBe(true);
-    expect(search.rows.length).toBeLessThan(search.marketCount);
+    expect(search.rows.length).toBe(search.marketCount);
+    expect(search.knownCount).toBeLessThan(search.marketCount);
     const rows = search.rows;
     const centres = filterTransferRows(rows, filtersOf({ position: 'C' }));
     expect(centres.length).toBeGreaterThan(0);

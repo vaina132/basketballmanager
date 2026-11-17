@@ -15,8 +15,8 @@ import { getTransferCandidates, requiredTransferFee } from '../world/transfers-p
 /**
  * Transfers' player search (owner, 16 November 2026: "the place where I can search and try to find the players to
  * transfer to my team"). It lists the players the existing market rules let the manager sign or approach now, within
- * the scouting rules: only identities in the club's scouting range, shortlist and reports are shown, and ratings are
- * the manager's knowledge (unscouted players stay unknown). Reading only; no rule or randomness lives here.
+ * the scouting rules: every signable or approachable player is listed, and ratings are the manager's knowledge
+ * (unscouted players stay unknown). Reading only; no rule or randomness lives here.
  */
 export type TransferMarketPhase = 'season' | 'offseason' | 'closed'
 export type TransferRowKind = 'season-free' | 'season-transfer' | 'offseason-free' | 'offseason-transfer'
@@ -64,9 +64,11 @@ export const DEFAULT_TRANSFER_FILTERS: TransferSearchFilters = { query: '', posi
 export interface TransferSearch {
   phase: TransferMarketPhase
   rows: TransferSearchRow[]
-  /** Signable or approachable players before the scouting range is applied. */
+  /** Signable or approachable players (all are listed). */
   marketCount: number
-  /** Whether the scouting range limits the list (scouting enabled). */
+  /** How many of them are inside the club's scouting range. */
+  knownCount: number
+  /** Whether scouting is on (ratings of players outside the range stay unknown). */
   scouted: boolean
 }
 
@@ -88,7 +90,9 @@ export function getTransferSearch(season: SeasonState): TransferSearch {
   const candidates = groups.flatMap(([kind, players]) => players.filter(player => !ownSquad.has(player.id)).map(player => ({ kind, player })))
   const scouted = season.scouting.enabledSince !== null
   const visible = scouted ? new Set(getScoutingDiscovery(season).playerIds) : null
-  const listed = visible ? candidates.filter(entry => visible.has(entry.player.id)) : candidates
+  // Owner decision (17 November 2026): Transfers is the place to find players, so the whole market is listed, as the
+  // page did before the search; ratings stay the manager's knowledge, and the scouting range only counts known players.
+  const listed = candidates
   const leagues = seasonLeagues(worldOf(season), season.divisions)
   const leagueOf = (clubId: string | null) => clubId ? leagues.find(league => league.clubIds.includes(clubId)) ?? null : null
   const clubOfPlayer = new Map(season.clubs.flatMap(club => club.players.map(player => [player.id, club.id] as const)))
@@ -108,7 +112,7 @@ export function getTransferSearch(season: SeasonState): TransferSearch {
       contractEnds: contract?.endsSeason ?? null,
     }
   })
-  return { phase, rows, marketCount: candidates.length, scouted }
+  return { phase, rows, marketCount: candidates.length, knownCount: visible ? candidates.filter(entry => visible.has(entry.player.id)).length : candidates.length, scouted }
 }
 
 export function filterTransferRows(rows: readonly TransferSearchRow[], filters: TransferSearchFilters): TransferSearchRow[] {

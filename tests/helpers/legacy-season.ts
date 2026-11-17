@@ -175,7 +175,8 @@ export function stripBackground(value: object): void {
 }
 
 /** createSeason options for a new career as created before the saved ideas level (formats 63-71). */
-export const BEFORE_SAVED_IDEAS = { media: false, namingRights: false, presidents: false, simpleFacilities: false } as const;
+/** Also without the opening staff of format 74 (`coaching-2`), which only newer formats accept. */
+export const BEFORE_SAVED_IDEAS = { media: false, namingRights: false, presidents: false, simpleFacilities: false, staffing: false } as const;
 
 /**
  * An untouched new career on the rules saved before the saved ideas level: Level 7 career rules (`career-1`), the

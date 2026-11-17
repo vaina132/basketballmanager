@@ -44,7 +44,8 @@ describe('facility financing rules (format 71)', () => {
     expect(quoteFacilityLoan(legacy, 'arena').reason).toMatch(/facility financing/);
     expect(quoteFacilityLease(legacy, 'arena').reason).toMatch(/facility financing/);
     expect(() => takeFacilityLoan(legacy, 'arena')).toThrow(/facility financing/);
-    const older = beforeSavedIdeas(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS, ...BEFORE_SAVED_IDEAS }));
+    // Same opening staff as `career()`, so only the financing differs.
+    const older = beforeSavedIdeas(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS, ...BEFORE_SAVED_IDEAS, staffing: true }));
     expect(older.facilities.financing).toBeUndefined();
     expect(getSpendableCash(older, club)).toBe(getSpendableCash(state, club));
   });

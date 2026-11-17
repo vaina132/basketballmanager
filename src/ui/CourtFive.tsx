@@ -54,7 +54,9 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
   const playerById = (id: string) => team.players.find(player => player.id === id)
   const name = (id: string | undefined) => (id && playerById(id)?.name) ?? 'nobody'
   // While the manager picks, the authoritative match is shown; otherwise the playback snapshot (no later boundary).
-  const shown = pick || dragging ? match : displayMatch
+  // A snapshot taken mid-substitution can list six players for a moment; the circles then show the match itself.
+  const snapshot = pick || dragging ? match : displayMatch
+  const shown = new Set(snapshot.lineups[side]).size === snapshot.lineups[side].length && snapshot.lineups[side].length <= COURT_POSITIONS.length ? snapshot : match
   const shownPlayers = shown.lineups[side].flatMap(id => team.players.filter(player => player.id === id))
   const shownCircles = arrangeCircles(shownPlayers, [shown.slots?.[side] ?? {}, circles])
   const bench = team.players.filter(player => !shown.lineups[side].includes(player.id))

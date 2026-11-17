@@ -162,8 +162,9 @@ function applySubstitution(state: MatchState, side: Side, outId: string, inId: s
   if (automatic) rearrangeCircles(state, side);
   if (mandatory && state.freeThrows?.shooterId === outId) state.freeThrows.shooterId = inId;
   // Before tip-off the starting five is still being chosen (court picture, format 74): a change then locks nobody, so
-  // a player brought in can be moved out again at once. Locks apply from the first live action.
-  if (state.stepCount > 0) state.substitutionLocks = [...new Set([...state.substitutionLocks, outId, inId])];
+  // a player brought in can be moved out again at once. Locks apply from the first live action. The legacy exhibition
+  // engine keeps its original contract.
+  if (state.stepCount > 0 || state.engineVersion === 'rules-2') state.substitutionLocks = [...new Set([...state.substitutionLocks, outId, inId])];
   const scene = state.engineVersion === 'possession-3' ? lineupScene(state, outId, inId) : setupScene(state, state.possession, state.lineups[state.possession][0]!);
   emit(state, { type: 'substitution', side, playerId: inId, outgoingPlayerId: outId, text: `${incoming.name} replaces ${outgoing.name}${mandatory ? ' after becoming ineligible' : ''}.`, scene });
 }

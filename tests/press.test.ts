@@ -15,7 +15,8 @@ let start: SeasonState, open: SeasonState;
 beforeAll(() => {
   // Seed 14 (8 before the manager's next game started from the planned five instead of the closing five, 16 November
   // 2026): three losses in the first three matchdays.
-  start = createSeason({ seed: 14, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Press Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, media: false });
+// Seed-found scenario from before every club started with staff (format 74): it keeps the earlier staffing.
+  start = createSeason({ seed: 14, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Press Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, staffing: false, media: false });
   open = start;
   for (let step = 0; step < 10 && !getPressQuestion(open); step += 1) open = advanceMatchday(open);
 }, 120_000);

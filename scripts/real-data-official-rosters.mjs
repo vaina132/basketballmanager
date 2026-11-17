@@ -79,7 +79,7 @@ export const SOURCES = {
     teams: html => [...new Set([...html.matchAll(/href="\/serie-a2\/([a-z0-9-]+)"/g)].map(match => match[1]))].filter(slug => !['calendario-dirette'].includes(slug) && !slug.startsWith('supercoppa')).map(slug => ({ name: slug.replace(/-/g, ' '), url: `https://www.legapallacanestro.com/serie-a2/${slug}` })),
     players: html => {
       const text = cells(html), roster = text.slice(text.indexOf('|N°|Atleta|Ruolo|'));
-      return [...roster.matchAll(/\|(\d{1,2})\|([^|]+)\|(Play|Play\/Guardia|Guardia|Guardia\/Ala|Ala|Ala\/Centro|Centro|Pivot)\|(\d\d?)\/(\d\d?)\/(\d{4})\|(\d{3})\|/g)].map(match => ({ name: match[2].replace(/\s+/g, ' ').trim(), number: number(match[1]), position: match[3], birthDate: dmy(match[4], match[5], match[6]), heightCm: cm(match[7]) }));
+      return [...roster.matchAll(/\|(\d{1,2})\|([^|]+)\|(Play|Play\/Guardia|Guardia|Guardia\/Ala|Ala|Ala\/Centro|Centro|Pivot)\|(\d\d?)\/(\d\d?)\/(\d{4})\|(\d{3})\|/g)].map(match => ({ name: match[2].replace(/\s+/g, ' ').trim(), surnameFirst: true, number: number(match[1]), position: match[3], birthDate: dmy(match[4], match[5], match[6]), heightCm: cm(match[7]) }));
     },
   },
   bcl: {

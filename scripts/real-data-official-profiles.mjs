@@ -116,6 +116,18 @@ export function matchName(name, number, rows) {
     });
     if (candidates.length === 1) return { row: candidates[0], method: 'unique-initial-surname-and-club' };
     if (candidates.length > 1) return null;
+    // Rosters with full legal names ("Isaiah Stone Rivera Carroll") or surname-first names ("Curry Keshawn"): the
+    // given name starts with the initial and the other words contain the whole surname.
+    if (initial) {
+      const surname = own.slice(1), loose = rows.filter(row => {
+        const other = words(row.name).filter(token => !token.endsWith('.'));
+        if (other.length < 2) return false;
+        const [given, rest] = row.surnameFirst ? [other.at(-1), other.slice(0, -1)] : [other[0], other.slice(1)];
+        return given.startsWith(initial) && surname.every(token => rest.includes(token));
+      });
+      if (loose.length === 1) return { row: loose[0], method: 'unique-initial-surname-and-club' };
+      if (loose.length > 1) return null;
+    }
     const full = list => list.filter(token => !token.endsWith('.'));
     const subset = rows.filter(row => {
       const a = full(own), b = full(words(row.name)), [small, large] = a.length <= b.length ? [a, b] : [b, a];
@@ -153,7 +165,7 @@ export function profileOverrides({ pack, officialDocuments = [], clubLinks = [],
     const sources = club.sources ?? [file.source];
     if (!sources.length || sources.some(url => !/^https:\/\//.test(url ?? ''))) throw new Error(`Roster evidence for ${club.clubId} needs https sources.`);
     const rows = club.players.map(player => ({ ...player, sources, observedOn: file.observedOn, sourceName: file.sourceName ?? null }));
-    rosterOf.set(club.clubId, [...(rosterOf.get(club.clubId) ?? []), ...rows]);
+    rosterOf.set(club.clubId, [...(rosterOf.get(club.clubId) ?? []), rows]);
   }
   const report = { observedOn, batch, players: pack.players.length, officialClubs: codeOf.size, officialMatched: 0, rosterMatched: 0, exactPositions: 0, groupPositions: 0, conflicts: [], ambiguousOrMissing: [], byMethod: {}, bySource: {} };
   const rows = [];
@@ -163,14 +175,20 @@ export function profileOverrides({ pack, officialDocuments = [], clubLinks = [],
     const code = codeOf.get(player.clubId);
     const candidates = code ? official.filter(row => row.club.code === code) : [];
     const match = code ? matchOfficialProfile(player.name, candidates) ?? officialFallback(player, candidates) : null;
-    const rosterRows = rosterOf.get(player.clubId) ?? [];
-    const roster = rosterRows.length ? matchName(player.name, player.number, rosterRows) ?? (match ? matchName(displayName(match.row), Number(match.row.dorsal), rosterRows) : null) : null;
+    // A club can have several roster sources (its league, then a European competition), in the order given: the
+    // first that settles one exact position is used, otherwise the first that says anything.
+    const rosterLists = rosterOf.get(player.clubId) ?? [], group = match && GROUP_POSITIONS[match.row.positionName] ? match.row.positionName : null;
+    const found = rosterLists.map(rows => matchName(player.name, player.number, rows) ?? (match ? matchName(displayName(match.row), Number(match.row.dorsal), rows) : null)).filter(Boolean)
+      .map(item => ({ ...item, parsed: rosterPosition(item.row.position) })).map(item => ({ ...item, combined: combinePosition(group ?? item.parsed.group, item.parsed.options) }));
+    const settled = found.filter(item => item.combined.position && item.parsed.options.length);
+    const roster = settled[0] ?? found.find(item => item.parsed.options.length || item.parsed.group) ?? found[0] ?? null;
+    if (new Set(settled.map(item => item.combined.position)).size > 1) report.conflicts.push({ playerId: player.id, name: player.name, officialGroup: group, roster: settled.map(item => `${item.row.sourceName}: ${item.row.position}`).join(' / '), chosen: settled[0].combined.position });
+    const rosterRows = rosterLists;
     if (code && !match) report.ambiguousOrMissing.push({ playerId: player.id, name: player.name, clubId: player.clubId, source: 'official-competition' });
     if (rosterRows.length && !roster) report.ambiguousOrMissing.push({ playerId: player.id, name: player.name, clubId: player.clubId, source: 'roster' });
     if (!match && !roster) continue;
-    const group = match && GROUP_POSITIONS[match.row.positionName] ? match.row.positionName : null;
-    const parsed = roster ? rosterPosition(roster.row.position) : { options: [], group: null };
-    const combined = combinePosition(group ?? parsed.group, parsed.options);
+    const parsed = roster ? roster.parsed : { options: [], group: null };
+    const combined = roster ? roster.combined : combinePosition(group, []);
     if (combined.conflict || group && parsed.group && group !== parsed.group && !parsed.options.length) report.conflicts.push({ playerId: player.id, name: player.name, officialGroup: group, roster: roster.row.position, chosen: combined.position ?? group });
     const sources = [...new Set([...(match ? [match.row.sourceUrl] : []), ...(roster ? roster.row.sources : [])])];
     const finalGroup = group ?? parsed.group;

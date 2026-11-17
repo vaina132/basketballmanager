@@ -134,7 +134,7 @@ export function buildAcademyWeek(input: AcademyWeekCalculation): AcademyWeek {
     const facilitiesActive = !!input.facilities?.enabledSince && input.facilities.enabledSince.date <= fromDate;
     // Format 74 (`facilities-3`): Very Poor and Poor infrastructure costs practice, rounded towards zero like a gain.
     const facilityUnits = facilitiesActive ? eligibleDates.reduce((sum, date) => sum + 4 * facilityPracticeBonusPercent(input, 'youth', prospect.clubId, date), 0) : 0;
-    const facilitySign = facilityUnits < 0 ? -1 : 1, facilityPoints = facilitySign * Math.floor(Math.abs(facilityUnits) / 100);
+    const facilityMagnitude = Math.floor(Math.abs(facilityUnits) / 100), facilitySign = facilityUnits < 0 && facilityMagnitude > 0 ? -1 : 1, facilityPoints = facilitySign * facilityMagnitude;
     const facilityDesired = emptyAcademyPoints(), facilityGains = emptyAcademyPoints();
     allocate(Math.abs(facilityPoints), facilityDesired, ordinaryPoints % TRAINING_ATTRIBUTES.length);
     if (facilitySign < 0) for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = -facilityDesired[key];

@@ -196,7 +196,7 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       for (let index = 0; index < extra; index += 1) bonusDesired[priority[index]!.attribute] += 1;
       // Format 74 (`facilities-3`): Very Poor and Poor facilities cost practice. Lost points are whole points, rounded
       // towards zero like earned ones, spread like earned ones, and never take away progress already made.
-      const facilitySign = facilityUnits < 0 ? -1 : 1, facilityPoints = facilitySign * Math.floor(Math.abs(facilityUnits) / 1_000_000), facilityMagnitude = Math.abs(facilityPoints);
+      const facilityMagnitude = Math.floor(Math.abs(facilityUnits) / 1_000_000), facilitySign = facilityUnits < 0 && facilityMagnitude > 0 ? -1 : 1, facilityPoints = facilitySign * facilityMagnitude;
       const facilityDesired = emptyPoints(), facilityGains = emptyPoints();
       if (focus === 'balanced') {
         for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = facilitySign * Math.floor(facilityMagnitude / TRAINING_ATTRIBUTES.length);

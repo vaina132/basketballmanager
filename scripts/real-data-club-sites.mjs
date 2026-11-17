@@ -21,6 +21,7 @@ const fold = text => String(text).normalize('NFKD').replace(/\p{M}/gu, '').repla
 /** Whole-cell position labels; the profile script maps them to positions or broad groups. */
 const LABELS = ['oyun kurucu', 'sutor', 'kisa forvet', 'uzun forvet', 'pivot', 'forvet', 'guard', 'kanat', 'meneur', 'arriere', 'ailier', 'ailier fort', 'interieur', 'meneur/arriere', 'arriere/ailier', 'ailier/ailier fort', 'ailier fort/pivot', 'point guard', 'shooting guard', 'small forward', 'power forward', 'center', 'centre', 'forward', 'pg', 'sg', 'sf', 'pf', 'c', 'g', 'f', 'g/f', 'f/c'];
 const LINK_WORDS = ['kadro', 'takim', 'oyuncular', 'a-takim', 'roster', 'squad', 'team', 'players', 'effectif', 'equipe', 'joueurs', 'pro', 'basketbol'];
+const COMMON_PATHS = ['/effectif', '/equipe', '/equipe-pro', '/les-pros/equipe', '/joueurs', '/l-equipe', '/equipe/effectif', '/club/effectif', '/team', '/roster', '/kadro', '/takim', '/a-takim', '/takimlar/a-takim', '/basketbol/kadro'];
 const NAME = /^[\p{Lu}][\p{L}'’.-]+(?:\s+[\p{L}'’.-]+){1,3}$/u;
 
 /** Rows of { name, position, number } read from a page: each label with the closest name-like cell before or after it. */
@@ -46,14 +47,14 @@ export function readRoster(html) {
 }
 
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function get(url) {
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+async function get(url, attempts = 2) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; roster-check)', Accept: 'text/html' }, redirect: 'follow', signal: AbortSignal.timeout(30_000) });
+      const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; roster-check)', Accept: 'text/html' }, redirect: 'follow', signal: AbortSignal.timeout(20_000) });
       if (response.ok) return { url: response.url, html: await response.text() };
-      if (response.status === 401 || response.status === 403) return null;
+      if (response.status === 401 || response.status === 403 || response.status === 404) return null;
     } catch { /* try once more */ }
-    await pause(3000);
+    if (attempt < attempts) await pause(3000);
   }
   return null;
 }
@@ -77,12 +78,14 @@ async function main() {
     const club = pack.clubs.find(item => item.name === name);
     if (!club || !entry.site) { result.skipped.push({ club: name, reason: 'no website known' }); continue; }
     const home = entry.roster ? null : await get(entry.site);
-    const pages = entry.roster ? [entry.roster] : home ? [home.url, ...rosterLinks(home)] : [];
+    // Common roster paths are tried after the home page's own links (one attempt each).
+    const common = home ? COMMON_PATHS.map(path => new URL(path, home.url).href) : [];
+    const pages = entry.roster ? [entry.roster] : home ? [...new Set([home.url, ...rosterLinks(home), ...common])] : [];
     if (!pages.length) { result.skipped.push({ club: name, site: entry.site, reason: 'site did not answer (two attempts) or refused' }); continue; }
     let done = false;
     for (const url of pages) {
       await pause(1500);
-      const page = url === home?.url ? home : await get(url);
+      const page = url === home?.url ? home : await get(url, common.includes(url) ? 1 : 2);
       if (!page) continue;
       const players = readRoster(page.html);
       if (players.length < 3) continue;
@@ -93,6 +96,7 @@ async function main() {
       break;
     }
     if (!done) result.skipped.push({ club: name, site: entry.site, reason: 'no roster with position labels found in the page text (it may render in the browser)', tried: pages });
+    await writeFile(`${out}.partial`, JSON.stringify(result));
   }
   await writeFile(out, JSON.stringify(result, null, 1));
   console.log(`Club websites: ${result.clubs.length} rosters read, ${result.skipped.length} skipped.`);

@@ -133,7 +133,8 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
   function beginDrag(event: DragEvent<HTMLElement>, source: CourtPick) {
     if (!selectable(source)) { event.preventDefault(); return }
     onInteractionStart()
-    setPick(source); setDragging(source); setAnnouncement('')
+    // Nothing above the court may change height while a drag starts: a moving drag source cancels the drag.
+    setPick(null); setDragging(source)
     event.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ identity, source }))
     event.dataTransfer.effectAllowed = 'move'
   }
@@ -158,22 +159,21 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
   })
   const dragEnd = () => { setDragging(null); setDropKey(null) }
 
-  const selectedPlayer = pick?.kind === 'bench' ? playerById(pick.playerId) : pick ? playerById(occupantOf(circles, pick.position) ?? '') : undefined
+  // The picked or dragged item: it is highlighted and the places it can go are marked.
+  const active = dragging ?? pick
   const help = complete ? 'Match finished · substitutions closed.'
-    : pick?.kind === 'bench' ? `${selectedPlayer?.name ?? 'Reserve'} selected. Tap a circle to put him there.`
-      : pick ? `${pick.position} selected. Tap another circle to swap, or a reserve to bring on.`
-        : pregame ? 'Drag a player onto a circle, or tap a player and then a circle. Changes before tip-off apply at once.'
-          : 'Drag or tap a reserve onto a circle: he comes on at the next legal stoppage. Players on court swap circles at once.'
+    : pregame ? 'Drag a player onto a circle, or tap a player and then a circle. Changes before tip-off apply at once.'
+      : 'Drag or tap a reserve onto a circle: he comes on at the next legal stoppage. Players on court swap circles at once.'
 
   return <div className="court-five" onKeyDown={event => { if (event.key === 'Escape' && pick) { event.preventDefault(); clearSelection() } }}>
     <div className="court-five-controls">
       <p className="court-five-help">{help}</p>
       <div className="court-five-actions">
-        {pick && <button type="button" className="text-button" onClick={clearSelection} disabled={disabled}><Icon name="close" size={13} />Clear</button>}
+        <button type="button" className="text-button court-five-clear" onClick={clearSelection} disabled={disabled || !pick}><Icon name="close" size={13} />Clear</button>
         <button type="button" className="button small court-five-best" data-best-five onClick={bestFive} disabled={!editable} title="Fill the five circles with your best healthy players, each in a fitting position">Best five</button>
       </div>
     </div>
-    <p ref={status} className={`court-five-status${announcement ? '' : ' visually-hidden'}`} tabIndex={-1} role="status" aria-live="polite">{announcement}</p>
+    <p ref={status} className="court-five-status" tabIndex={-1} role="status" aria-live="polite">{announcement}</p>
     {pending.length > 0 && <ul className="lineup-queued-changes court-five-queued" aria-label="Pending substitutions">{pending.map(request => <li key={request.outId}><span><strong>Queued</strong> {name(request.inId)} for {name(request.outId)}{circles[request.outId] ? ` at ${circles[request.outId]}` : ''}</span><button type="button" className="text-button" data-cancel-lineup-sub={request.outId} aria-label={`Cancel substitution of ${name(request.inId)} for ${name(request.outId)}`} onClick={() => cancel(request.outId)} disabled={disabled || complete}>Cancel</button></li>)}</ul>}
     <div className="court-five-layout" onPointerDownCapture={editable ? onInteractionStart : undefined}>
       <div ref={court} className="court-five-court" role="group" aria-label={`${team.name} ${pregame ? 'starting five' : 'on court'}: five positions`}>
@@ -197,12 +197,12 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
           const listedNote = player && !placed && player.position !== position ? `Plays ${player.position}` : null
           const unavailable = player && stats ? match.injuries[player.id] ? 'Injured' : stats.fouls >= 5 ? 'Fouled out' : null : null
           const queued = player ? pending.find(request => request.outId === player.id) : undefined
-          const isSelected = pick?.kind === 'circle' && pick.position === position
-          const move = pick && !isSelected ? resolveCourtPick(circles, pick, target) : null
+          const isSelected = active?.kind === 'circle' && active.position === position
+          const move = active && !isSelected ? resolveCourtPick(circles, active, target) : null
           const live = editable && (!!move || !!occupantOf(circles, position))
           const condition = stats ? Math.round(stats.condition) : 0
           const description = player ? `${position}, ${POSITION_NAMES[position]}: ${player.name}, number ${player.number}, listed ${player.position}${warning ? `, ${warning.toLowerCase()}` : listedNote ? ', plays his listed position until you place him' : ''}, ${condition}% stamina${unavailable ? `, ${unavailable.toLowerCase()}` : ''}` : `${position}, ${POSITION_NAMES[position]}: empty`
-          const action = !editable ? null : move ? move.playerId === occupantId ? `Move ${name(occupantId)} to ${position}` : occupantId && pick?.kind === 'circle' ? `Swap: ${name(move.playerId)} to ${position}, ${name(occupantId)} to ${pick.position}` : `Put ${name(move.playerId)} in ${position}${occupantId ? ` for ${name(occupantId)}` : ''}` : isSelected ? 'Deselect' : occupantId ? 'Select' : null
+          const action = !editable ? null : move ? move.playerId === occupantId ? `Move ${name(occupantId)} to ${position}` : occupantId && active?.kind === 'circle' ? `Swap: ${name(move.playerId)} to ${position}, ${name(occupantId)} to ${active.position}` : `Put ${name(move.playerId)} in ${position}${occupantId ? ` for ${name(occupantId)}` : ''}` : isSelected ? 'Deselect' : occupantId ? 'Select' : null
           return <div key={position} className={`court-five-spot court-five-spot-${position.toLowerCase()}${isSelected ? ' is-selected' : ''}${move ? ' is-target' : ''}${dropKey === key ? ' is-drop' : ''}${warning ? ' is-out-of-position' : ''}${unavailable ? ' is-unavailable' : ''}`} data-court-spot={position} {...(editable ? dropHandlers(target) : {})}>
             <button type="button" className="court-five-circle" data-court-circle={position} data-player-id={player?.id} aria-pressed={live && !move ? isSelected : undefined} aria-label={action ? `${action}. ${description}` : description} title={player?.name} disabled={!live} draggable={editable && !!occupantOf(circles, position)} onClick={event => choose(target, event.detail === 0)} onDragStart={event => beginDrag(event, target)} onDragEnd={dragEnd}>
               <span className="court-five-ring"><span className="court-five-position">{position}</span><span className="court-five-number">{player ? player.number : '—'}</span></span>
@@ -223,8 +223,8 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
           const target: CourtPick = { kind: 'bench', playerId: player.id }, key = pickKey(target), stats = shown.stats[player.id]
           const unavailable = match.injuries[player.id] ? 'Injured' : stats && stats.fouls >= 5 ? 'Fouled out' : null
           const queued = pending.find(request => request.inId === player.id)
-          const isSelected = pick?.kind === 'bench' && pick.playerId === player.id
-          const move = pick && !isSelected ? resolveCourtPick(circles, pick, target) : null
+          const isSelected = active?.kind === 'bench' && active.playerId === player.id
+          const move = active && !isSelected ? resolveCourtPick(circles, active, target) : null
           const live = usable(player.id)
           const condition = stats ? Math.round(stats.condition) : 0
           const action = !live ? null : move ? `Bring on ${player.name} at ${move.position} for ${name(occupantOf(circles, move.position))}` : `${isSelected ? 'Deselect' : 'Select'} ${player.name}, ${player.position}, ${condition}% stamina, then choose a circle`

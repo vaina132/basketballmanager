@@ -40,7 +40,7 @@ const LABELS = Object.freeze({
   PG: ['pg', 'point guard', 'base', 'meneur', 'playmaker', 'play', 'aufbau', 'aufbauspieler', 'point', 'oyun kurucu', 'πλέι μέικερ', 'πλεϊμέικερ', '1'],
   SG: ['sg', 'shooting guard', 'escolta', 'arriere', 'arrière', 'guardia', 'shooting', 'sutor', 'şutör', 'σούτινγκ γκαρντ', '2'],
   SF: ['sf', 'small forward', 'alero', 'ailier', 'ala piccola', 'small', 'kanat', 'σμολ φόργουορντ', '3'],
-  PF: ['pf', 'power forward', 'ala-pivot', 'ala-pívot', 'ala pivot', 'ala pívot', 'ailier fort', 'ala grande', 'power', 'uzun forvet', 'πάουερ φόργουορντ', '4'],
+  PF: ['pf', 'power forward', 'a-pivot', 'ala-pivot', 'ala-pívot', 'ala pivot', 'ala pívot', 'ailier fort', 'ala grande', 'power', 'uzun forvet', 'πάουερ φόργουορντ', '4'],
   C: ['c', 'center', 'centre', 'pivot', 'pívot', 'centro', 'pivot', 'pivô', 'σέντερ', '5'],
 });
 const GROUP_LABELS = Object.freeze({
@@ -54,10 +54,15 @@ const COUNTRY_NAMES = Object.freeze({ 'United States of America': 'USA', Turkiye
 const NOT_COUNTRIES = new Set(['Apoel BC', 'Bayern', 'Gran Canaria', 'Mega Basket', 'Merkezefendi', 'Partizan', 'Real Madrid', 'Rio Breogan', 'Runa Moscow', 'Saratov', 'Split', 'Studentski Centar']);
 const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().trim();
 
+/** Two-position labels whose meaning is narrower than their words ("Ala/Centro" is a power forward or centre). */
+const COMBOS = Object.freeze({ 'ala/centro': ['PF', 'C'], 'guardia/ala': ['SG', 'SF'], 'play/guardia': ['PG', 'SG'], 'g/f': ['SG', 'SF'], 'f/c': ['PF', 'C'], 'f/g': ['SF', 'SG'], 'c/f': ['C', 'PF'] });
+
 /** A roster label as exact options and/or a broad group; unknown labels give nothing. */
 export function rosterPosition(label) {
   const text = fold(String(label ?? ''));
   if (!text) return { options: [], group: null };
+  const combo = COMBOS[text.replace(/\s+/g, '')];
+  if (combo) { const groups = new Set(combo.map(position => Object.keys(GROUP_POSITIONS).find(group => GROUP_POSITIONS[group].includes(position)))); return { options: [...combo], group: groups.size === 1 ? [...groups][0] : null }; }
   for (const [group, labels] of Object.entries(GROUP_LABELS)) if (labels.map(fold).includes(text)) return { options: [], group };
   const parts = text.split(/\s*[/,|]\s*|\s+-\s+|\s+o\s+|\s+e\s+/u).filter(Boolean);
   const options = [];
@@ -180,7 +185,15 @@ export function profileOverrides({ pack, officialDocuments = [], clubLinks = [],
         `${exact ? 'Exact' : 'Broad'} position from ${source === 'euroleague-eurocup' ? 'the official EuroLeague/EuroCup registration' : `the official roster (${source})`}; matched by ${(match ?? roster).method}.`);
     }
     if (roster) report.rosterMatched += 1;
-    if (!match) continue;
+    if (!match) {
+      // Official league rosters also give heights and birth dates; competition registrations come first.
+      const sourced = { sources: roster.row.sources, rosterMatch: roster.method }, why = `Official roster (${roster.row.sourceName ?? 'league'}); matched by ${roster.method}.`;
+      if (Number.isInteger(roster.row.heightCm) && roster.row.heightCm >= 150 && roster.row.heightCm <= 240) add(player, 'height_cm', { value: roster.row.heightCm, ...sourced }, why);
+      const born = roster.row.birthDate, opening = `${pack.season.slice(0, 4)}-09-05`;
+      const age = date(born) ? Number(opening.slice(0, 4)) - Number(born.slice(0, 4)) - Number(opening.slice(5) < born.slice(5)) : null;
+      if (age !== null && age >= 14 && age <= 60) add(player, 'birth_date', { value: born, ...sourced }, why);
+      continue;
+    }
     report.officialMatched += 1;
     const person = match.row.person, sourced = { sources: [match.row.sourceUrl], officialPersonCode: person.code, matchMethod: match.method };
     const why = `Official ${match.row.season.code} registration (person ${person.code}); matched by ${match.method}.`;

@@ -30,7 +30,7 @@ const step = (state: SeasonState) => advanceSeason(finish(state));
 const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, staffing: false, presidents: false }), true), true);
 const throughMarket = (state: SeasonState) => { let next = state; for (let day = 0; day < 80 && getMarketStartReason(next); day += 1) next = advanceMarket(next); return next; };
 const roundTrip = (state: SeasonState) => expect(parseSeason(serializeSeason(state))).toEqual(state);
-const desk = (season: SeasonState) => renderToStaticMarkup(<UnemployedDesk season={season} busy={false} onContinue={noop} onNextDay={noop} onStartSeason={noop} onAccept={noop} onOpenCompetitions={noop} onOpenCalendar={noop} />);
+const desk = (season: SeasonState) => renderToStaticMarkup(<UnemployedDesk season={season} busy={false} onAccept={noop} onOpenCompetitions={noop} onOpenCalendar={noop} />);
 /** A new career whose manager resigns without a new job before the games of week `week`. */
 const resignedAt = (seed: number, week: number) => { let state = start(seed); while (state.round < week) state = step(state); return resignManager(state, NO_CLUB); };
 
@@ -88,7 +88,8 @@ describe('declining every offer', () => {
     expect(html).toContain(`Dismissed (matchday ${DISMISSAL_WEEK + 1}) · no new club`);
     expect(html).toContain('data-career-period="unemployed"');
     expect(html).toContain('No club is looking for a coach right now.');
-    expect(html).toContain('id="unemployed-continue"');
+    // The one Continue on the top bar plays the week (owner request, 16 November 2026).
+    expect(html).toMatch(/data-unemployed-next="true">Continue plays (every club&#x27;s games this week|the final week and finishes the season)\./);
     expect(getInboxItems(unemployed).find(item => item.id === 'career-move-2')).toMatchObject({ title: 'Dismissed by Danube Lynx · without a club', target: 'jobs' });
     expect(careerNotices(unemployed).map(notice => notice.key)).toEqual(['career', 'career-unemployed']);
   });
@@ -146,7 +147,7 @@ describe('seasons without a club', () => {
 
   it('runs the offseason market for every club and rolls over into a new season without a club', () => {
     expect(getMarketStartReason(offseason)).toBeNull();
-    expect(desk(offseason)).toContain('id="unemployed-start-season"');
+    expect(desk(offseason)).toMatch(/data-unemployed-next="true">Recruitment is complete: Continue starts \d{4}\/\d{2}\./);
     roundTrip(offseason);
     const next = rolloverSeason(offseason);
     expect([next.seasonNumber, next.managedClubId, next.activeMatch]).toEqual([3, NO_CLUB, null]);

@@ -53,6 +53,8 @@ interface ManagerDeskProps {
   onOpenClub: () => void
   onOpenPayroll: () => void
   onOpenTransfers: () => void
+  /** Squad > Contracts: the own squad's renewals (owner, 16 November 2026: moved out of Transfers). */
+  onOpenContracts?: () => void
   onOpenScouting: () => void
   onOpenRelationships?: (playerId?: string) => void
   onOpenBoard?: () => void
@@ -63,7 +65,7 @@ const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.fl
 const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
 const money = (cents: number) => formatEuros(cents)
 
-export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenScouting, onOpenRelationships, onOpenBoard, onOpenInbox }: ManagerDeskProps) {
+export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenContracts, onOpenScouting, onOpenRelationships, onOpenBoard, onOpenInbox }: ManagerDeskProps) {
   const team = match[managedSide]
   const market = season && isMarketActive(season) ? getMarketWindow(season) : null
   const marketOffers = market && season ? getMarketOffers(season, season.managedClubId, true) : []
@@ -142,7 +144,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     const nextSquad = getClubContractSummary(season, season.managedClubId)
     const expiring = team.players.filter(player => (getPlayerRetirement(season, player.id).notice?.lastSeason ?? Infinity) > season.seasonNumber && !contractForSeason(season.employment, player.id, season.seasonNumber + 1)).length
     if (season.status === 'complete') notices.push({ key: 'offseason', title: 'Prepare next season’s squad', detail: `${nextSquad.rosterSize} players signed for next season. ${Math.max(0, MIN_ROSTER_SIZE - nextSquad.rosterSize)} more needed to reach the minimum squad.`, urgent: nextSquad.rosterSize < MIN_ROSTER_SIZE, action: 'Review offseason', open: onOpenTransfers })
-    else if (expiring) notices.push({ key: 'contracts', title: `${expiring} contracts awaiting renewal`, detail: 'Unrenewed players leave at the end of this season. Renewals take effect next season.', action: 'Review contracts', open: onOpenTransfers })
+    else if (expiring) notices.push({ key: 'contracts', title: `${expiring} contracts awaiting renewal`, detail: 'Unrenewed players leave at the end of this season. Renewals take effect next season.', action: 'Review contracts', open: onOpenContracts ?? onOpenTransfers })
   }
   if (season?.lifecycle.enabledSince) {
     const retirements = team.players.flatMap(player => { const retirement = getPlayerRetirement(season, player.id); return retirement.status === 'announced' && retirement.notice ? [{ player, notice: retirement.notice }] : [] })
@@ -204,7 +206,8 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
         <div className="desk-fixture-team"><span className="desk-club-code" style={{ color: match.home.color }}>{match.home.shortName}</span><div><strong>{match.home.name}</strong><span>{managedSide === 'home' ? 'Home · Your team' : 'Home'}</span></div></div>
         <div className="desk-fixture-score"><strong aria-label={`Score: ${score.home} to ${score.away}`}>{score.home}<span>:</span>{score.away}</strong><span>{ready ? 'Awaiting tipoff' : complete ? match.result?.kind === 'default' ? 'Awarded by default' : `${period(match.period)} · Final` : `${period(match.period)} · ${clock(match.clockSeconds)}`}</span></div>
         <div className="desk-fixture-team desk-fixture-away"><span className="desk-club-code" style={{ color: match.away.color }}>{match.away.shortName}</span><div><strong>{match.away.name}</strong><span>{managedSide === 'away' ? 'Away · Your team' : 'Away'}</span></div></div>
-        <button className="button primary desk-match-action" onClick={needsReplacement ? onOpenCoaching : onOpenMatch}>{complete ? 'View result' : needsReplacement ? 'Resolve replacement' : 'Go to match'}<Icon name="arrow" size={16} /></button>
+        {/* The one Continue on the top bar opens the match (owner request, 16 November 2026: no separate "Go to match"). */}
+        {(complete || needsReplacement) && <button className="button primary desk-match-action" onClick={needsReplacement ? onOpenCoaching : onOpenMatch}>{complete ? 'View result' : 'Resolve replacement'}<Icon name="arrow" size={16} /></button>}
       </div>
     </section>
 

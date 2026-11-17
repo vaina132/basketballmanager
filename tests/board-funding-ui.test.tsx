@@ -26,7 +26,7 @@ beforeAll(() => {
 
 describe('board panel: president and capital', () => {
   it('introduces the president, the capital left this season and the confidence the board needs', () => {
-    const html = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS }));
+    const html = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, simpleFacilities: false }));
     expect(html).toContain('data-board-president="rhine-falcons"');
     expect(html).toContain('Helena Varga');
     expect(html).toContain('Club president · Measured investor');
@@ -41,13 +41,13 @@ describe('board panel: president and capital', () => {
   });
 
   it('offers prospective activation to older careers and explains when facilities must come first', () => {
-    const legacy = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, boardFunding: false }));
+    const legacy = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, simpleFacilities: false, boardFunding: false }));
     expect(legacy).toMatch(/id="enable-board-funding"[^>]*>Enable funding requests/);
     expect(legacy).not.toMatch(/id="enable-board-funding"[^>]*disabled/);
     expect(legacy).toContain('Rival clubs can ask their boards under the same rules once this is on.');
     expect(legacy).not.toContain('decides capital requests');
     const noFacilities = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', finance: true, board: true }));
-    expect(noFacilities).toContain('Enable club facilities first, under Club › Operations.');
+    expect(noFacilities).toContain('Enable club facilities first, on the Club page.');
     expect(noFacilities).toMatch(/id="enable-board-funding"[^>]*disabled/);
   });
 
@@ -90,7 +90,7 @@ describe('facility review: asking the board', () => {
   it('points older careers to the Board view when requests are off', () => {
     const html = ask(generous.quote, false);
     expect(html).toContain('data-board-funding="off"');
-    expect(html).toContain('Board funding requests are off in this career. You can turn them on under Club › Board.');
+    expect(html).toContain('Board funding requests are off in this career. You can switch them on from the Board page.');
     expect(html).not.toContain('id="facility-board-request"');
   });
 });

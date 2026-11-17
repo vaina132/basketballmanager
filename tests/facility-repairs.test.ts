@@ -22,7 +22,7 @@ import { FacilitiesPanel } from '../src/ui/FacilitiesPanel';
 
 const club = 'rhine-falcons';
 const opening = dateForRound(1, 1);
-const career = (managedClubId = club) => createSeason({ seed: 227, managedClubId, injuryMode: 'off', manager: { name: 'Repair Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS });
+const career = (managedClubId = club) => createSeason({ seed: 227, managedClubId, injuryMode: 'off', manager: { name: 'Repair Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, simpleFacilities: false });
 
 /** A synthetic `facilities-2` history: one completed project per facility, at the given level, on the opening day. */
 function built(levels: Partial<Record<FacilityType, number>>, extra: Partial<SeasonFacilities> = {}): { facilities: SeasonFacilities } {

@@ -25,7 +25,7 @@ import { getPayrollReserve, getSpendableCash } from './payroll-policy';
 import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransferPaymentSummary, payTransferInstallment } from './transfer-payments';
 import { quoteContractBuyout } from './buyouts';
 import { staffAllocation, staffCommitted } from './staff-policy';
-import { arenaComfortPercent, getArenaCapacity, getFacilityUpkeepBreakdown, quoteFacilityRepair, quoteFacilityUpgrade } from './facilities-policy';
+import { arenaComfortPercent, getArenaCapacity, getFacilityUpkeepBreakdown, quoteArenaExpansion, quoteFacilityRepair, quoteFacilityUpgrade } from './facilities-policy';
 import { governingDerby, RIVALRY_CROWD_PERCENT } from './rivalries';
 import { agreementFor, commercialGovernsSeason, openingSponsorshipClubs, sponsorshipInstallment, sponsorshipSourceId, type DueSponsorshipPayment } from './commercial-policy';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
@@ -139,6 +139,12 @@ export function recordFacilityInvestment(state: SeasonState, project: FacilityPr
   if (project.kind === 'repair') {
     const repair = quoteFacilityRepair(before, project.type, project.clubId);
     if (!repair.canStart || repair.cost !== project.cost || repair.level !== project.fromLevel || repair.level !== project.toLevel || repair.conditionBefore !== project.conditionBefore || repair.dueOn !== project.dueOn) throw new Error(repair.reason ?? 'Fund exactly the approved repair terms.');
+    return append(state, { clubId: project.clubId, kind: 'facility', amount: -project.cost, sourceId: project.id, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, facility: { projectId: project.id, type: project.type } });
+  }
+  if (project.kind === 'expansion') {
+    // Format 74 (`facilities-3`): an arena expansion of a supported size.
+    const expansion = quoteArenaExpansion(before, project.seats ?? 0, project.clubId);
+    if (!expansion.canStart || expansion.cost !== project.cost || expansion.seats !== project.seats || project.fromLevel !== 1 || project.toLevel !== 1 || expansion.dueOn !== project.dueOn) throw new Error(expansion.reason ?? 'Fund exactly the approved expansion terms.');
     return append(state, { clubId: project.clubId, kind: 'facility', amount: -project.cost, sourceId: project.id, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, facility: { projectId: project.id, type: project.type } });
   }
   const quote = quoteFacilityUpgrade(before, project.type, project.clubId);
@@ -386,7 +392,7 @@ export function processFinanceRound(state: SeasonState): SeasonState {
     if (total) next = append(next, { clubId: club.id, kind: 'facility-upkeep', amount: -total, sourceId: `facility-upkeep-s${state.seasonNumber}-r${state.round}`, seasonNumber: state.seasonNumber, round: state.round, ticket: null, coach: null, payroll: null, facilityUpkeep });
   }
   // Format 71: scheduled loan and lease payments are mandatory; whatever cash cannot cover becomes unpaid costs.
-  for (const { debt, payment } of dueDebtPayments(state)) next = recordDebtEntry(next, { clubId: debt.clubId, kind: debt.kind === 'loan' ? 'loan-repayment' : 'lease', amount: -payment.amount, debt: { debtId: debt.id, payment: payment.number } });
+  for (const { debt, payment } of dueDebtPayments(state)) next = recordDebtEntry(next, { clubId: debt.clubId, kind: debt.kind === 'lease' ? 'lease' : 'loan-repayment', amount: -payment.amount, debt: { debtId: debt.id, payment: payment.number } });
   return next;
 }
 

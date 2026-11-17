@@ -3,7 +3,7 @@ import type { FacilityFundingDecision, FacilityType, SeasonFacilities } from '..
 import type { SeasonState } from '../domain/season';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import { clubPresident, roundOrdinal, seasonRounds, worldOf } from './career-world';
-import { facilityAutomationBuffer, upgradeAutomationCushion, FACILITY_FUNDS_REASON, FACILITY_REPAIR_FUNDS_REASON, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs } from './facilities-policy';
+import { facilityAutomationBuffer, upgradeAutomationCushion, FACILITY_FUNDS_REASON, FACILITY_REPAIR_FUNDS_REASON, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs, usesSixLevels } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
 import { ownerCapital } from './board-consequences';
 import { boardCapitalSurcharge } from './facility-debt';
@@ -102,7 +102,9 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   const refused = [...state.facilities.events].reverse().find(event => event.type === 'funding' && !event.approved && event.clubId === clubId);
   const wait = refused ? ordinal(refused.seasonNumber, refused.round, seasonRounds(state)) + cooldown - ordinal(state.seasonNumber, state.round, seasonRounds(state)) : 0;
   let reason: string | null = null;
-  if (!state.facilities.fundingSince) reason = 'Enable board funding requests first.';
+  // Format 74 (`facilities-3`): projects are paid from Remaining budget; the bank lends what it cannot pay.
+  if (usesSixLevels(state.facilities)) reason = 'Facility projects are paid from Remaining budget; a bank loan on Club can add to it.';
+  else if (!state.facilities.fundingSince) reason = 'Enable board funding requests first.';
   else if (!state.board.enabledSince) reason = 'Enable board reviews before asking for capital.';
   else if (repair && !usesFacilityRepairs(state.facilities)) reason = repair.reason;
   else if (upgrade && upgrade.fromLevel === upgrade.toLevel) reason = 'This facility is already at the highest development level.';

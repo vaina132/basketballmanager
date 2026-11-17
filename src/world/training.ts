@@ -194,11 +194,13 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       const rotation = (afterRound - 1) % TRAINING_ATTRIBUTES.length;
       const priority = TRAINING_ATTRIBUTES.map((attribute, index) => ({ attribute, remainder: bonusUnits[index]! % 80, order: (index - rotation + TRAINING_ATTRIBUTES.length) % TRAINING_ATTRIBUTES.length })).sort((left, right) => right.remainder - left.remainder || left.order - right.order);
       for (let index = 0; index < extra; index += 1) bonusDesired[priority[index]!.attribute] += 1;
-      const facilityPoints = Math.floor(facilityUnits / 1_000_000);
+      // Format 74 (`facilities-3`): Very Poor and Poor facilities cost practice. Lost points are whole points, rounded
+      // towards zero like earned ones, spread like earned ones, and never take away progress already made.
+      const facilityMagnitude = Math.floor(Math.abs(facilityUnits) / 1_000_000), facilitySign = facilityUnits < 0 && facilityMagnitude > 0 ? -1 : 1, facilityPoints = facilitySign * facilityMagnitude;
       const facilityDesired = emptyPoints(), facilityGains = emptyPoints();
       if (focus === 'balanced') {
-        for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = Math.floor(facilityPoints / TRAINING_ATTRIBUTES.length);
-        for (let index = 0; index < facilityPoints % TRAINING_ATTRIBUTES.length; index += 1) facilityDesired[TRAINING_ATTRIBUTES[(afterRound - 1 + budget % TRAINING_ATTRIBUTES.length + index) % TRAINING_ATTRIBUTES.length]!] += 1;
+        for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = facilitySign * Math.floor(facilityMagnitude / TRAINING_ATTRIBUTES.length);
+        for (let index = 0; index < facilityMagnitude % TRAINING_ATTRIBUTES.length; index += 1) facilityDesired[TRAINING_ATTRIBUTES[(afterRound - 1 + budget % TRAINING_ATTRIBUTES.length + index) % TRAINING_ATTRIBUTES.length]!] += facilitySign;
       } else facilityDesired[focus] = facilityPoints;
       const progress = emptyPoints(), headroom = trainingHeadroom(input, player.id);
       for (const attribute of TRAINING_ATTRIBUTES) {
@@ -206,7 +208,7 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
         if (!Number.isInteger(points) || points < 0 || points > cap) throw new Error('Training progress is outside its supported development limits.');
         const baseProgress = Math.min(cap, points + desired[attribute]);
         const coached = Math.min(cap, baseProgress + bonusDesired[attribute]);
-        progress[attribute] = Math.min(cap, coached + facilityDesired[attribute]);
+        progress[attribute] = Math.max(points, Math.min(cap, coached + facilityDesired[attribute]));
         coachingGains[attribute] = coached - baseProgress;
         facilityGains[attribute] = progress[attribute] - coached;
         gains[attribute] = progress[attribute] - points;

@@ -24,7 +24,7 @@ export function processRehabilitationWeek(input: RehabilitationWeekInput): Seaso
     if (!contract) continue;
     const staff = staffMember(PHYSIO_DIRECTORY, contract.physioId)!;
     // Format 65: the medical centre's condition-scaled boost on the review's first day; older careers get none.
-    const boost = medicalPhysioPercent(input, club.id, fromDate), creditPerDay = boost > 0 ? Math.round(physioEffects(staff).creditPerDay * (100 + boost) / 100) : physioEffects(staff).creditPerDay;
+    const boost = medicalPhysioPercent(input, club.id, fromDate), creditPerDay = boost !== 0 ? Math.round(physioEffects(staff).creditPerDay * (100 + boost) / 100) : physioEffects(staff).creditPerDay;
     const roster = rosterForRound(input.rosters, club.id, afterRound);
     const registered = new Set(roster.players.map(player => player.id));
     if (club.players.length !== registered.size || club.players.some(player => !registered.has(player.id))) throw new Error('Treatment must use the registered squad for its completed interval.');

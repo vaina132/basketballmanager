@@ -470,6 +470,24 @@ Chosen as recommended defaults under the owner's instruction to finish the level
 
 "Let's remove the selling and marketing related work. We'll come to this later, after making the game a playable and enjoyable one." Roadmap: step 3.7, safety checks and gaps, the owner's play test, interface simplification, player data, release preparation (old-save support and a final full check). The selling ideas (free first season, EUR 15 unlock, Steam, data-rights review) are not planned until the owner brings them back.
 
+## Player positions: Supabase permission and free official sources (owner decision, 16 November 2026)
+
+The owner allowed this session to use Supabase to publish corrected player positions ("you do it with supabase permission") and chose free official sources first for exact positions ("let's first try official free sources if possible ... any website that gives info on player positions should have this data somewhere"), before any paid provider. All player data comes from API-Sports; it gives only Guard/Forward/Center (sometimes wrong) or nothing, and the pack guesses exact positions from statistics. A backup of the published pack is kept before any replacement.
+
+Phase 1 result (16 November 2026): `2026.11-world-4-online` is live. Official exact positions win; an official Guard/Forward/Center role keeps the estimate inside that group (statistics rule); Center is exact. Matches are made within a club only (exact name, unique initial and surname, contained name words, or unique surname with the same shirt number); ambiguous names are left alone. Official heights, weights, birth dates, shirt numbers and full names are applied; nationalities only where the pack had none.
+
+Phase 2 result (17 November 2026): `2026.11-world-5-online` is live with exact positions from official league sites (ACB, Primera FEB, BBL, ESAKE, Lega Basket A and A2, BCL); a domestic league's exact label wins over a EuroLeague or BCL broad role. **Open for the owner:** ACB, FEB, BBL and FIBA (BCL) reserve their content in their terms (personal or press use, or no copying without permission); positions are plain facts and each carries its source link, and any source's rows can be removed and the pack republished. France (lnb.fr data needs a login token; not worked around) and Turkey (tbf.org.tr refuses automated access) are not covered.
+
+## Simplification before the play test (owner decision, 16 November 2026)
+
+"Please implement now the full starting staff for every club, the court picture starting 5, squad roles in the squad list and contract ops, 6 facility levels and arena seat expansion, a simple bank loan process ... when I get a loan, it's added to my budget directly ... Board as its own menu item, a day-by-day continue button, and transfers as a player search ... I would prefer to play test when these things are implemented." The play test now follows these items. Their defaults are recorded here as each lands.
+
+Landed 17 November 2026 (reversible defaults):
+- **Transfers search** lists every player the manager could sign or approach; players outside the scouting range show no rating until scouted. Own contracts and renewals are on Squad > Contracts; Board is a menu item.
+- **Facilities (`facilities-3`, new careers):** six levels, Very Poor to Excellent, for training, youth, medical and scouting; Average equals the old base and Excellent the old top level; one level per upgrade, paid from Remaining budget, 3-8 weeks, upkeep only above the starting level; starting levels follow the club's money band; no wear, repairs, leases or board capital. Tables in `FACILITY_RULES_3` (`src/world/facilities-policy.ts`).
+- **Arena:** expansions of +500, +1,000, +2,500 or +5,000 seats (EUR 90,000 to 750,000 at the development scale, 4 to 16 weeks), at most half the current seats per project, 22,000 seats at most, EUR 0.40 a week per added seat.
+- **Bank loan (`bank-1`, `BANK_LOAN_RULES` in `src/world/facility-debt.ts`):** up to 20% of the season budget; 1 to 4 seasons; added to Remaining budget at once; two payments a season from the next season; 4% to 7% a year; early repayment costs 2%. Computer clubs and "Let the board handle facilities" borrow only for a shortfall, one loan at a time, with debt at most half the limit.
+
 ## Two safety items alongside the play test (owner decision, 16 November 2026)
 
 The exact save checks for the newest features (sponsor exits, naming-rights offers, president requests and resignation offers, recomputed instead of checked for plausibility) and a faster checkpoint check for long careers run alongside the owner's play test instead of before it. The play test starts once step 3.7, the money fixes and the browser-cycle fixes are live.

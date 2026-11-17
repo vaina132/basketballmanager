@@ -1,0 +1,30 @@
+/* The one Continue control: the career's day and the primary action, always at the top bar's right end. */
+.continue-control { display: flex; align-items: center; gap: 10px; padding-left: 14px; border-left: 1px solid var(--border); }
+.continue-day { display: grid; justify-items: end; line-height: 1.25; white-space: nowrap; }
+.continue-day time { font-size: 12px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.continue-day span { font-size: 10px; color: var(--muted); }
+.game-shell .topbar .continue-button { min-width: 104px; font-size: 13px; }
+.continue-control[data-continue-state="running"] .continue-day span { color: var(--accent); }
+
+/* A run's progress: a thin strip under the top bar; the page above and below stays usable. */
+.continue-progress { position: sticky; top: 48px; z-index: 11; display: grid; grid-template-columns: minmax(0, auto) minmax(120px, 1fr) auto; align-items: center; gap: 14px; min-height: 38px; padding: 7px 16px; border-bottom: 1px solid var(--border); background: var(--surface-3); font-size: 12px; }
+.continue-progress-text { display: flex; gap: 10px; min-width: 0; margin: 0; }
+.continue-progress-text time { font-weight: 600; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.continue-progress-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.continue-progress-bar { height: 6px; border-radius: 3px; background: var(--surface); overflow: hidden; }
+.continue-progress-bar > span { display: block; height: 100%; background: var(--accent); transition: width .2s ease-out; }
+.continue-progress-count { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .continue-progress-bar > span { transition: none; } }
+
+@media (max-width: 850px) {
+  .continue-control { padding-left: 10px; gap: 8px; }
+  .continue-progress { padding-inline: 12px; }
+}
+@media (max-width: 650px) {
+  /* Phones: the control keeps its place at the end of the first row of the wrapped top bar. */
+  .continue-control { order: -1; padding-left: 0; border-left: 0; }
+  .continue-day span { display: none; }
+  .game-shell .topbar .continue-button { min-width: 92px; }
+  .continue-progress { top: 0; position: relative; grid-template-columns: 1fr auto; gap: 6px 10px; padding: 7px 10px; }
+  .continue-progress-bar { grid-column: 1 / -1; grid-row: 2; }
+}

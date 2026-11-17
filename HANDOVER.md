@@ -9,8 +9,7 @@ This file holds only the current state, the next steps and the rules that must n
 **Paused (owner, 17 November 2026): the weekly usage limit is used up; development rests until it resets.** Resume here.
 
 **Active level:** simplification before the play test (owner, 16 November 2026). **Live on main:** Board as a menu item, Transfers as a player search of the whole market (ratings unknown until scouted), contracts on Squad > Contracts, six facility levels, arena seat expansion, the bank loan added to the budget (`facilities-3` with `bank-1`; quick tier 2,591 passed). **Not merged, only in local worktree branches on the cloud machine (lost if the machine is reclaimed; ask the owner before pushing backup branches, the no-branch rule stands):**
-- `worktree-agent-ab4762dfe0968ad64` day-by-day Continue: **finished and tested** (quick tier passed, browser cycle passed); merge next; conflicts expected in `src/App.tsx` and `src/ui/TransfersWorkspace.tsx` (it removed `onAdvanceMarket`/`onStartSeason`).
-- `worktree-agent-a285a17e97b22fb68` court-picture starting five (out-of-position rule): built, in final tests and browser check.
+- Day-by-day Continue and the court-picture starting five: **live** (17 November).
 - `worktree-agent-a5fc16fc8b011d411` squad roles in the Squad list and contract talks: built, in final tests.
 - `worktree-agent-aaec1517fbddffe5e` starting staff for every club (`coaching-2`): built, in final tests.
 - `worktree-agent-aa1ded15181adfc17` incremental checkpoint check: in progress (alongside the play test).

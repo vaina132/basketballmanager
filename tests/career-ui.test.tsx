@@ -16,7 +16,8 @@ const noop = () => {};
 const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={season} onEnable={noop} onEnableFunding={noop} onEnableConsequences={noop} onEnableRivalries={noop} onEnableCareerMoves={noop} />);
 const choice = (season: SeasonState, outlook: SeasonEndOutlook) => renderToStaticMarkup(<SeasonEndChoice season={season} outlook={outlook} onChoose={noop} onClose={noop} />);
 // The Level 7 rules that careers created before format 63 keep (`career-1`); tests/career-board-rules.test.ts covers new careers.
-const career = (seed: number, careerMoves = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, presidents: false }), true), true));
+// Seed-found scenario from before every club started with staff (format 74): it keeps the earlier staffing.
+const career = (seed: number, careerMoves = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, staffing: false, careerMoves, presidents: false }), true), true));
 function finalMatchday(seed: number): SeasonState {
   let state = career(seed);
   while (state.round < 10) state = advanceMatchday(state);

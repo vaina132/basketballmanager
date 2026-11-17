@@ -145,8 +145,8 @@ describe('historical youth fixture retention', () => {
   it('preserves the former managed club after a real accepted job offer, offseason and validated rollover', () => {
     const from = 'rhine-falcons';
     // Seed 8 (2 before the planned starting five of 16 November 2026, 10 before the relationships-2 rules of format 66):
-    // Aegean Waves offer Rhine Falcons' manager their job.
-    let state = createSeason({ seed: 8, managedClubId: from, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves: true, presidents: false });
+    // Aegean Waves offer Rhine Falcons' manager their job. Found before every club started with staff (format 74).
+    let state = createSeason({ seed: 8, managedClubId: from, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves: true, presidents: false, staffing: false });
     while (state.round < 10) state = advanceMatchday(state);
     const finished = { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
     const offer = previewSeasonEnd(finished)?.offers[0];

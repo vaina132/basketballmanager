@@ -40,6 +40,7 @@ import { createFixtureMatch, preTipoffLineup, simulateToEnd } from '../engine/ma
 import { clubRecoveryPercent, injuriesFromMatch, injuryRiskMap, isRecovering, withMedicalRecurrence } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
+import { planComputerStaffRenewals } from './staff-levels';
 import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
 import { createInSeasonRecruitment, enableInSeasonRecruitment, enableInSeasonTransfers, resolveInSeasonRecruitment, scheduleInSeasonRecruitment } from './recruitment';
@@ -63,7 +64,7 @@ import { createNegotiations, enableNegotiations } from './negotiations';
 import { createMarket, enableMarket } from './market';
 import { getMarketStartReason, getMarketWindow } from './market-policy';
 import { memoizePure } from './pure-cache';
-import { ASSISTANT_DIRECTORY } from '../data/staff-directory';
+import { ASSISTANT_DIRECTORY, staffMember } from '../data/staff-directory';
 import { usesFullClubRoster } from './club-roster-policy';
 import { canSelectMatchday, captureMatchdaySelection, reconcileMatchdayPlan, selectedTeam, teamForMatchday, withPlanCircles } from './matchday-selection';
 import type { WorldContext } from '../domain/world';
@@ -334,7 +335,7 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   if (season.assistant?.enabledSince) for (const side of SIDES) {
     if (match[side].id === season.managedClubId) continue;
     const contract = season.assistant.contracts.find(contract => contract.clubId === match[side].id && contract.seasonNumber === season.seasonNumber && contract.startedRound <= fixture.round && contract.releasedRound === null);
-    const coach = contract && ASSISTANT_DIRECTORY.find(coach => coach.id === contract.assistantId);
+    const coach = contract && staffMember(ASSISTANT_DIRECTORY, contract.assistantId);
     if (coach && match.status !== 'finished') match = applyAssistantTactics(match, side, coach);
   }
   return match;
@@ -371,6 +372,12 @@ export interface SeasonSystems {
    */
   presidents?: boolean;
   /**
+   * Format 74: every club (the manager's and every computer club) starts with one person in each enabled staff role,
+   * rated to the club's level and paid within its staff budget; computer clubs fill empty roles the same way and a
+   * sacked person's fee no longer counts against the staff budget (`coaching-2`; requires coaching and finances).
+   */
+  staffing?: boolean;
+  /**
    * Format 74 (owner request, 16 November 2026): six named levels for every facility from a starting level that fits the
    * club, the arena as seats expanded by size, and the simple bank loan for anything (`facilities-3`, `bank-1`), with no
    * upkeep plans, repairs, leases or board capital for projects. New careers only; requires club facilities.
@@ -388,7 +395,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, simpleFacilities: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -404,17 +411,19 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.media && !options.relationships) throw new Error('Press topics and media standing require squad relationships.');
   if (options.presidents !== undefined && typeof options.presidents !== 'boolean') throw new Error('Choose a valid president personalities setting.');
   if (options.presidents && !options.board) throw new Error('President personalities require board reviews.');
+  if (options.staffing !== undefined && typeof options.staffing !== 'boolean') throw new Error('Choose a valid opening staff setting.');
+  if (options.staffing && (options.coaching === false || !finance)) throw new Error('Opening staff for every club require coaching and club finances.');
   if (options.simpleFacilities !== undefined && typeof options.simpleFacilities !== 'boolean') throw new Error('Choose a valid facilities setting.');
   if (options.simpleFacilities && !options.facilities) throw new Error('Six-level facilities and the bank loan require club facilities.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
-  const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false, options.simpleFacilities ?? false);
+  const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false, options.simpleFacilities ?? false, options.staffing ?? false);
   const pressed = options.media ? enableMedia(created) : created;
   // Format 70: the board's president personalities and objectives apply from the opening; the opening match is unchanged.
   return options.presidents ? enablePresidentBoard(pressed) : pressed;
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.
-function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD, namingRightsEnabled = false, simpleFacilities = false): SeasonState {
+function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD, namingRightsEnabled = false, simpleFacilities = false, staffingEnabled = false): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   validateWorld(world);
   managedClubId ??= fullWorldClubs(world)[0]!.id;
@@ -456,7 +465,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const fixtures = scheduledFixtures({ clubs, fixtures: [], world, divisions, seed, ...(europe ? { europe } : {}) }, 1);
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId));
   const preparation = {
-    ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled),
+    ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled, staffingEnabled ? { world, seed } : undefined),
     plans: Object.fromEntries(clubs.map(club => [club.id, { ...defaultPlan(club, club.id !== managedClubId), ...(usesFullClubRoster({ world }) ? { matchday: null } : {}) }])),
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
@@ -471,15 +480,16 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const paid = payrollEnabled ? preparePayrollRound(enablePayroll(funded)) : funded;
   const contracted = employmentEnabled ? enableEmployment(paid) : paid;
   const observed = scoutingEnabled ? enableScouting(contracted) : contracted;
-  const staffed = scoutsEnabled ? enableScouts(observed) : observed;
-  const fitnessReady = fitnessEnabled ? enableFitness(staffed) : staffed;
-  const medicalReady = physioEnabled ? enablePhysio(fitnessReady) : fitnessReady;
-  const assisted = assistantEnabled ? enableAssistant(medicalReady) : medicalReady;
+  // Format 74: with opening staff the manager's club is staffed in every role too, like every computer club.
+  const staffed = scoutsEnabled ? enableScouts(observed, staffingEnabled) : observed;
+  const fitnessReady = fitnessEnabled ? enableFitness(staffed, staffingEnabled) : staffed;
+  const medicalReady = physioEnabled ? enablePhysio(fitnessReady, staffingEnabled) : fitnessReady;
+  const assisted = assistantEnabled ? enableAssistant(medicalReady, staffingEnabled) : medicalReady;
   const negotiated = negotiationsEnabled ? enableNegotiations(assisted) : assisted;
   const marketReady = marketEnabled ? enableMarket(negotiated) : negotiated;
   const ready = employmentEnabled && negotiationsEnabled ? enableInSeasonTransfers(enableInSeasonRecruitment(marketReady)) : marketReady;
   const academyReady = academyEnabled ? enableAcademy(ready) : ready;
-  const academyStaffed = youthEnabled ? enableYouth(academyReady) : academyReady;
+  const academyStaffed = youthEnabled ? enableYouth(academyReady, staffingEnabled) : academyReady;
   const developed = lifecycleEnabled ? enableLifecycle(academyStaffed) : academyStaffed;
   const youthReady = youthCompetitionEnabled ? enableYouthCompetition(developed) : developed;
   const built = facilitiesEnabled ? enableFacilities(youthReady) : youthReady;
@@ -965,7 +975,9 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = startPayrollSeason(next);
   next = resolveInSeasonRecruitment(next);
   next = processTransferPayments(next);
-  next = renewSeasonCoaching(next, state.coaching);
+  // Format 74: computer clubs first decide which staff to keep at the new season's money level.
+  const renewals = planComputerStaffRenewals(next, state.coaching);
+  next = renewSeasonCoaching(renewals.state, renewals.coaching);
   next = renewSeasonScouts(next);
   next = renewSeasonFitness(next);
   next = renewSeasonPhysio(next);

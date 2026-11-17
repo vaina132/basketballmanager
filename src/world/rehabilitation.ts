@@ -6,7 +6,7 @@ import { effectiveReturnOn, latestRehabilitation, rehabilitationCreditCap, REHAB
 import { rosterForRound } from './rosters';
 import { seasonRounds } from './career-world';
 import { medicalPhysioPercent } from './facilities-policy';
-import { PHYSIO_DIRECTORY } from '../data/staff-directory';
+import { PHYSIO_DIRECTORY, staffMember } from '../data/staff-directory';
 
 const DAY_MS = 86_400_000;
 /** One dated review before training; care cannot change eligibility before this boundary. */
@@ -22,7 +22,7 @@ export function processRehabilitationWeek(input: RehabilitationWeekInput): Seaso
   for (const club of input.clubs) {
     const contract = physio.contracts.find(contract => contract.clubId === club.id && contract.seasonNumber === seasonNumber && contract.startedRound <= afterRound && (contract.releasedRound === null || contract.releasedRound > afterRound));
     if (!contract) continue;
-    const staff = PHYSIO_DIRECTORY.find(staff => staff.id === contract.physioId)!;
+    const staff = staffMember(PHYSIO_DIRECTORY, contract.physioId)!;
     // Format 65: the medical centre's condition-scaled boost on the review's first day; older careers get none.
     const boost = medicalPhysioPercent(input, club.id, fromDate), creditPerDay = boost !== 0 ? Math.round(physioEffects(staff).creditPerDay * (100 + boost) / 100) : physioEffects(staff).creditPerDay;
     const roster = rosterForRound(input.rosters, club.id, afterRound);

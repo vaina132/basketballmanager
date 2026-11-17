@@ -22,7 +22,7 @@ const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(s
 // season); tests/career-board-rules.test.ts covers the rules of new careers. They are also relabelled as format-37 saves
 // below, so they keep the sponsorship model from before format 64 (naming rights and exits pay nothing in a first season)
 // and the board from before format 70 (president patience would move the Under pressure line).
-const start = (seed: number, careerMoves = true, media = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, media, namingRights: false, presidents: false, simpleFacilities: media }), true), true));
+const start = (seed: number, careerMoves = true, media = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, staffing: false, careerMoves, media, namingRights: false, presidents: false, simpleFacilities: media }), true), true));
 /** An all-automatic Rhine Falcons season, played to the finished final match. */
 function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number, legacy = false): SeasonState {
   // `legacy`: a career as saved before formats 65-71: no media record, `facilities-1` paid upfront and `relationships-1`.

@@ -24,7 +24,8 @@ import { economyPack } from './helpers/economy-pack';
 /** Owner request (16 November 2026): six levels, the arena as seats, a simple bank loan and no confusing controls. */
 const club = 'rhine-falcons';
 const manager = { name: 'Six Level Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-const career = () => createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS });
+// Its cash and calendar scenarios were set before every club started with staff (format 74): it keeps the earlier staffing.
+const career = () => createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS, staffing: false });
 /** Rule fixtures only: an artificial cost or sold-out gate, without claiming to be a valid career export. */
 function entry(state: SeasonState, fields: Partial<FinanceEntry>): SeasonState {
   const item: FinanceEntry = { id: `finance-${state.finance.ledger.length + 1}`, clubId: club, seasonNumber: state.seasonNumber, round: state.round, kind: 'operations', amount: 0, sourceId: `test-${state.finance.ledger.length}`, ticket: null, coach: null, payroll: null, ...fields };

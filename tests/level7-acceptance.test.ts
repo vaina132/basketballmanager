@@ -44,7 +44,7 @@ beforeAll(() => {
   // Seed 3 (4 before AI clubs followed their president's youth objectives and youth injuries recurred, 67 before the
   // match calibration of sprint 4): an all-automatic Rhine Falcons season ends Under pressure, so the board dismisses
   // the manager. These are the Level 7 rules (`career-1`); new careers protect the first season.
-  firstSeasonEnd = playSeason(asCareer1(createSeason({ seed: 3, managedClubId: FIRST, injuryMode: 'standard', manager: { name: 'Acceptance Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, simpleFacilities: false })));
+  firstSeasonEnd = playSeason(asCareer1(createSeason({ seed: 3, managedClubId: FIRST, injuryMode: 'standard', manager: { name: 'Acceptance Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, staffing: false, simpleFacilities: false })));
   secondSeasonEnd = playSeason(nextSeason(firstSeasonEnd));
   thirdSeason = nextSeason(secondSeasonEnd);
   for (let round = 0; round < 2; round += 1) thirdSeason = advanceMatchday(thirdSeason);

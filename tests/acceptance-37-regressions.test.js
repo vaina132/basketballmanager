@@ -41,7 +41,8 @@ describe('step 3.7 acceptance careers in the strict save check', () => {
     expect(() => validateWorld(world)).not.toThrow();
     // Seed 5 (11 before the planned starting five of 16 November 2026): the final ends in a sweep, so the season's last
     // week has no game; sponsors leave at the season end.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 5, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    // Seed-found scenario from before every club started with staff (format 74): it keeps the earlier staffing.
+    let state = setEmploymentDelegation(createSeason({ world, seed: 5, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS, staffing: false }), true);
     while (state.status === 'active') state = play(state);
     const rounds = seasonRounds(state);
     expect(state.fixtures.some(fixture => fixture.round === rounds)).toBe(false);

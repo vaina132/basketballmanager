@@ -178,7 +178,7 @@ describe('format 4 migration without coaching side effects', () => {
 describe('strict coaching contract and training provenance validation', () => {
   const mutations: Array<[string, (season: SeasonState) => void]> = [
     ['missing coaching', season => { delete (season as Partial<SeasonState>).coaching; }],
-    ['unknown model', season => { Object.assign(season.coaching, { model: 'coaching-2' }); }],
+    ['unknown model', season => { Object.assign(season.coaching, { model: 'coaching-9' }); }],
     ['extra metadata', season => { Object.assign(season.coaching, { balance: 0 }); }],
     ['disabled anchor with appointments', season => { season.coaching.enabledSince = null; }],
     ['future activation season', season => { season.coaching.enabledSince!.seasonNumber = 2; }],

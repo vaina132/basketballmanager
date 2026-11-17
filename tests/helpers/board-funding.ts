@@ -13,7 +13,7 @@ export const advanceMatchday = (state: SeasonState) => advanceSeason({ ...state,
 /** Seed-227 Rhine career with automatic contracts and facilities, played to the end of the first offseason market. */
 export function playFirstSeason(boardConsequences: boolean): SeasonState {
   const manager = { name: 'Verdict Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-  let state = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, boardConsequences });
+  let state = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, simpleFacilities: false, boardConsequences });
   state = setEmploymentDelegation(setFacilityDelegation(state, true), true);
   while (state.status === 'active') state = advanceMatchday(state);
   for (let step = 0; step < 80 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
@@ -22,7 +22,7 @@ export function playFirstSeason(boardConsequences: boolean): SeasonState {
 
 /** The manager upgrades the most expensive affordable facility whenever idle, until an upgrade needs board capital. */
 export function driveToFundingRequest(clubId: string, seed: number): { state: SeasonState; quote: BoardFundingQuote } {
-  let state = createSeason({ seed, managedClubId: clubId, injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
+  let state = createSeason({ seed, managedClubId: clubId, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, simpleFacilities: false });
   for (let step = 0; step < 40; step += 1) {
     if (!getActiveFacilityProject(state, clubId)) {
       const affordable = FACILITY_TYPES.map(type => quoteFacilityUpgrade(state, type, clubId)).filter(quote => quote.canStart).sort((a, b) => b.cost - a.cost)[0];

@@ -15,7 +15,6 @@ import { formatEuros } from './money-format'
 interface OffseasonMarketPanelProps {
   season: SeasonState
   disabled: boolean
-  onAdvance: () => void
   onWithdraw: (offerId: string) => void
   onReview: (playerId: string) => void
   onClubDecision: (offerId: string, response: 'accept' | 'reject' | 'counter') => void
@@ -42,7 +41,7 @@ export function RivalOfferBadge({ season, playerId, onReview, disabled }: { seas
   return <button className="market-rival-badge" onClick={onReview} disabled={disabled} data-rival-player={playerId} data-rival-count={rivals.length} aria-label={`Review ${rivals.length === 1 ? 'rival offer' : `${rivals.length} rival offers`} for ${getCareerPlayer(season, playerId).name}: ${clubs.map(club => club.name).join(', ')}`} title={clubs.map(club => club.name).join(', ')}><Icon name="people" size={14} />{rivals.length === 1 ? `Rival offer · ${clubs[0]!.shortName}` : `${rivals.length} rival offers`}<Icon name="chevron" size={12} /></button>
 }
 
-export function OffseasonMarketPanel({ season, disabled, onAdvance, onWithdraw, onReview, onClubDecision }: OffseasonMarketPanelProps) {
+export function OffseasonMarketPanel({ season, disabled, onWithdraw, onReview, onClubDecision }: OffseasonMarketPanelProps) {
   const window = getMarketWindow(season)
   if (!window || season.status !== 'complete') return null
   const offers = getMarketOffers(season)
@@ -58,7 +57,7 @@ export function OffseasonMarketPanel({ season, disabled, onAdvance, onWithdraw, 
     <header className="transfers-heading"><div><h2 id="offseason-market-title"><Icon name="calendar" size={17} />Offseason</h2><span>{daysLeft ? `${daysLeft} days left to recruit` : 'Final recruitment decisions'}</span></div><strong className="market-current-date" data-market-date={window.date}><time dateTime={window.date}>{scoutingDate(window.date)}</time></strong></header>
     <div className="market-calendar">
       <div className="market-window-track"><div><span>Window opens</span><strong><time dateTime={window.openedOn}>{scoutingDate(window.openedOn)}</time></strong></div><progress value={Math.min(duration, elapsed)} max={duration} aria-label={`${daysLeft} days remaining in the recruitment window`} /><div><span>Window closes</span><strong><time dateTime={window.closesOn}>{scoutingDate(window.closesOn)}</time></strong></div></div>
-      <div className="market-next-decision"><span><Icon name="clock" size={17} />{nextDate ? <>Next decisions <strong><time dateTime={nextDate}>{scoutingDate(nextDate)}</time></strong></> : 'No further decision dates'}</span><button id="advance-offseason" className="button primary" onClick={onAdvance} disabled={disabled || !nextDate}>Continue offseason<Icon name="next" size={15} /></button></div>
+      <div className="market-next-decision"><span><Icon name="clock" size={17} />{nextDate ? <>Next decisions <strong><time dateTime={nextDate}>{scoutingDate(nextDate)}</time></strong></> : 'No further decision dates'}</span></div>
     </div>
     {decisions.length > 0 && <div className="market-decisions" role="status" aria-label="Recruitment decisions">{decisions.map(offer => {
       const selected = chosenMarketOffer(season, offer)

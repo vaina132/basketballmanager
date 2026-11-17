@@ -370,6 +370,12 @@ export interface SeasonSystems {
    * culture objectives and the president's requests (board model 'board-2'; new careers only; requires board reviews).
    */
   presidents?: boolean;
+  /**
+   * Format 74 (owner request, 16 November 2026): six named levels for every facility from a starting level that fits the
+   * club, the arena as seats expanded by size, and the simple bank loan for anything (`facilities-3`, `bank-1`), with no
+   * upkeep plans, repairs, leases or board capital for projects. New careers only; requires club facilities.
+   */
+  simpleFacilities?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -382,7 +388,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true,
+  media: true, presidents: true, simpleFacilities: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -398,15 +404,17 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.media && !options.relationships) throw new Error('Press topics and media standing require squad relationships.');
   if (options.presidents !== undefined && typeof options.presidents !== 'boolean') throw new Error('Choose a valid president personalities setting.');
   if (options.presidents && !options.board) throw new Error('President personalities require board reviews.');
+  if (options.simpleFacilities !== undefined && typeof options.simpleFacilities !== 'boolean') throw new Error('Choose a valid facilities setting.');
+  if (options.simpleFacilities && !options.facilities) throw new Error('Six-level facilities and the bank loan require club facilities.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
-  const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false);
+  const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false, options.simpleFacilities ?? false);
   const pressed = options.media ? enableMedia(created) : created;
   // Format 70: the board's president personalities and objectives apply from the opening; the opening match is unchanged.
   return options.presidents ? enablePresidentBoard(pressed) : pressed;
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.
-function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD, namingRightsEnabled = false): SeasonState {
+function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD, namingRightsEnabled = false, simpleFacilities = false): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   validateWorld(world);
   managedClubId ??= fullWorldClubs(world)[0]!.id;
@@ -453,7 +461,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId, { world }), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(youthCompetitionEnabled ? YOUTH_RECURRENCE_MODEL : 'youth-competition-1'), facilities: createFacilities(clubs, managedClubId, facilitiesEnabled ? 'facilities-2' : 'facilities-1', facilitiesEnabled ? 'loans-1' : undefined), relationships: createRelationships(), board: createBoard(), rivalries: rivalriesEnabled ? createGrownRivalries(world) : createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId, namingRightsEnabled ? 'commercial-2' : 'commercial-1'), negotiations: createNegotiations(), market: createMarket(),
+    schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId, { world }), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(youthCompetitionEnabled ? YOUTH_RECURRENCE_MODEL : 'youth-competition-1'), facilities: createFacilities(clubs, managedClubId, facilitiesEnabled ? simpleFacilities ? 'facilities-3' : 'facilities-2' : 'facilities-1', facilitiesEnabled ? simpleFacilities ? 'bank-1' : 'loans-1' : undefined), relationships: createRelationships(), board: createBoard(), rivalries: rivalriesEnabled ? createGrownRivalries(world) : createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId, namingRightsEnabled ? 'commercial-2' : 'commercial-1'), negotiations: createNegotiations(), market: createMarket(),
     ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), ...(europe ? { europe } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
     // Format 72: club money follows promotion and relegation in new careers of real-data worlds that start with finances.
     ...(world.economy && financeEnabled ? { economySeasons: createEconomySeasons() } : {}),

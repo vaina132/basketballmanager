@@ -28,7 +28,7 @@ const noop = () => {};
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 // The format-63 rules (`career-2`, careers created before format 69): a dismissed or resigning manager always receives an
 // offer. New careers (`career-3`, unemployed seasons) are covered by tests/career-unemployment.test.tsx.
-const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(asCareer2(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, presidents: false, staffing: false })), true), true);
+const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(asCareer2(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, presidents: false })), true), true);
 const throughOffseason = (state: SeasonState) => {
   let next = setEmploymentDelegation(state, true);
   for (let step = 0; step < 80 && getMarketStartReason(next); step += 1) next = advanceMarket(next);
@@ -43,10 +43,10 @@ const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={
 // squad-rank roles and contract requests, seed 17 dismisses at week 9; with recurring youth injuries (format 72, which
 // change academy development and so later seasons), seed 19 dismisses at week 7; once the manager's next game started
 // from the planned five instead of the closing five (16 November 2026), seed 35 dismisses at week 9; with squad roles
-// everywhere (relationships-3), seed 41 dismisses at week 6.
-// These scenarios were found before every club started with staff (format 74), so they keep the earlier staffing.
-const WARNING_SEED = 4;
-const MID_SEASON_SEED = 41, MID_SEASON_CLUB = 'danube-lynx', DISMISSAL_WEEK = 6;
+// everywhere (relationships-3), seed 41 dismisses at week 6; with opening staff for every club as well (format 74), seed
+// 26 ends the first season Under pressure (29) and seed 7 dismisses at week 7.
+const WARNING_SEED = 26;
+const MID_SEASON_SEED = 7, MID_SEASON_CLUB = 'danube-lynx', DISMISSAL_WEEK = 7;
 let warningDay: SeasonState, warned: SeasonState, beforeDismissal: SeasonState, dismissed: SeasonState;
 
 beforeAll(() => {

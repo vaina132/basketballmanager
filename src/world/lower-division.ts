@@ -4,6 +4,7 @@ import type { CareerWorld } from '../domain/world';
 import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import { derivePresidentTraits } from './presidents';
+import { presidentName } from '../data/people-names';
 import type { DevelopmentPlayerProfile } from '../data/development-player-profiles';
 import { NO_LOWER_DIVISION_COUNTRIES, validateWorld } from './career-world';
 import type { DomesticLeague } from './divisions';
@@ -173,6 +174,7 @@ export function withLowerDivisions(world: CareerWorld, lists: readonly LowerDivi
   const capital = Math.min(...world.presidents.map(president => president.seasonCapital));
   const { arena } = REAL_WORLD_RULES;
   const clubs: Team[] = [], finances: ClubFinanceDefinition[] = [], presidents: DevelopmentPresident[] = [];
+  const presidentNames = new Set(world.presidents.map(president => president.name));
   const profiles: Record<string, DevelopmentPlayerProfile> = {}, wages: Record<string, number> = {}, contracts: Record<string, number> = {};
   const lowerDivisions = lists.map(list => {
     const own = world.domesticLeagues?.filter(league => league.country === list.country) ?? [];
@@ -185,7 +187,7 @@ export function withLowerDivisions(world: CareerWorld, lists: readonly LowerDivi
       Object.assign(profiles, squad.profiles); Object.assign(wages, squad.wages); Object.assign(contracts, squad.contracts);
       const capacity = arena.smallest, h = hash(seed, `club:${identity.id}`);
       finances.push({ clubId: identity.id, venue: `${identity.name} Arena`, sponsor: world.sponsors[h % world.sponsors.length]!.name, capacity, referenceDemand: Math.round(capacity * arena.fillFrom / arena.step) * arena.step });
-      presidents.push({ clubId: identity.id, name: `${FIRST[(h >>> 4) % FIRST.length]} ${LAST[(h >>> 12) % LAST.length]}`, generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital, traits: derivePresidentTraits(identity.id) });
+      presidents.push({ clubId: identity.id, name: presidentName(identity.id, list.country, presidentNames), generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital, traits: derivePresidentTraits(identity.id) });
     }
     return { country: list.country, tier: list.tier, name: list.name, clubIds: list.clubs.map(club => club.id) };
   });

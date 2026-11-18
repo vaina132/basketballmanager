@@ -7,7 +7,7 @@ import { seasonRounds } from './career-world';
 import type { AssistantCoach } from '../domain/assistant';
 import { assistantRating } from './assistant-policy';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
-import { clubsByStaffLevel, fittingStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
+import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
 import { remainingStaffBudget } from './staff-policy';
 import { staffFee } from './economy';
 import { withCalculationCache } from './pure-cache';
@@ -68,7 +68,7 @@ export function recruitAiAssistants(state: SeasonState, includeManaged = false):
 let range: readonly [number, number] | undefined;
 /** Format 74: the assistant coach fitting a club's staff level and its share of the staff budget (`src/world/staff-levels.ts`). */
 function fittingAssistantCoach(state: SeasonState, clubId: string): AssistantCoach | undefined {
-  const choice = withCalculationCache(() => fittingStaffChoice(availableAssistants(state), {
+  const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'assistant', availableAssistants(state), {
     rating: assistantRating, fee: member => staffFee(state, clubId, member.fee), target: staffTargetRating(state, clubId, 'assistant', range ??= ratingRange(DEVELOPMENT_ASSISTANTS, assistantRating)), cap: staffShareCap(state, clubId, 'assistant'), budget: remainingStaffBudget(state, clubId),
   }));
   return choice && quoteAssistantHire(state, choice.id, clubId).canHire ? choice : undefined;

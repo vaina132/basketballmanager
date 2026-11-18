@@ -10,7 +10,7 @@ import { seasonRounds } from './career-world';
 import { SCOUT_DIRECTORY } from '../data/staff-directory';
 import type { Scout } from '../domain/scouts';
 import { scoutRating } from './scout-policy';
-import { clubsByStaffLevel, fittingStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
+import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
 import { remainingStaffBudget } from './staff-policy';
 import { staffFee } from './economy';
 
@@ -77,7 +77,7 @@ export function recruitAiScouts(state: SeasonState, includeManaged = false): Sea
 let range: readonly [number, number] | undefined;
 /** Format 74: the scout fitting a club's staff level and its share of the staff budget (`src/world/staff-levels.ts`). */
 function fittingScout(state: SeasonState, clubId: string): Scout | undefined {
-  const choice = withCalculationCache(() => fittingStaffChoice(availableScouts(state), {
+  const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'scouts', availableScouts(state), {
     rating: scoutRating, fee: scout => staffFee(state, clubId, scout.fee), target: staffTargetRating(state, clubId, 'scouts', range ??= ratingRange(DEVELOPMENT_SCOUTS, scoutRating)), cap: staffShareCap(state, clubId, 'scouts'), budget: remainingStaffBudget(state, clubId),
   }));
   return choice && quoteScoutHire(state, choice.id, clubId).canHire ? choice : undefined;

@@ -16,7 +16,7 @@ import { COACH_DIRECTORY, staffMarket, staffMember } from '../data/staff-directo
 import type { CareerWorld } from '../domain/world';
 import { staffFee } from './economy';
 import type { WorldContext } from '../domain/world';
-import { clubsByStaffLevel, fittingStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
+import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffMarketWorld, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
 
 export const COACHING_BUDGET = STAFF_BUDGET;
 export const MAX_COACHES = 3;
@@ -44,19 +44,19 @@ let coachRange: readonly [number, number] | undefined;
 /** The coaches' rating range a club's staff level is placed on (format 74). */
 export const coachRatingRange = (): readonly [number, number] => coachRange ??= ratingRange(DEVELOPMENT_COACHES, coachRating);
 /** The league's coaching market (sized to its clubs) without the coaches under contract. */
-export function availableCoaches(coaching: SeasonCoaching, world: Pick<CareerWorld, 'clubs'>): Coach[] {
+export function availableCoaches(coaching: SeasonCoaching, world: Pick<CareerWorld, 'clubs'> & WorldContext): Coach[] {
   const active = new Set(coaching.contracts.filter(contract => contract.releasedRound === null).map(contract => contract.coachId));
-  return staffMarket(COACH_DIRECTORY, world).filter(coach => !active.has(coach.id));
+  return staffMarket(COACH_DIRECTORY, staffMarketWorld({ ...world, coaching })).filter(coach => !active.has(coach.id));
 }
 
 /** The same commitment, vacancy and availability checks serve human and AI clubs. */
-function hireForClub(coaching: SeasonCoaching, clubs: readonly Team[], clubId: string, seasonNumber: number, round: number, coachId: string, focus: TrainingFocus): SeasonCoaching {
+function hireForClub(coaching: SeasonCoaching, clubs: readonly Team[], clubId: string, seasonNumber: number, round: number, coachId: string, focus: TrainingFocus, context: WorldContext = {}): SeasonCoaching {
   if (!coaching.enabledSince) throw new Error('Enable coaching staff before recruiting.');
   validateBoundary(seasonNumber, round); validateFocus(focus);
   if (!clubs.some(club => club.id === clubId)) throw new Error('The coaching contract needs a club in this league.');
   const coach = coachById(coachId);
   if (getClubCoaching(coaching, clubId).length >= MAX_COACHES) throw new Error('All three coaching positions are occupied.');
-  if (!availableCoaches(coaching, { clubs }).some(available => available.id === coachId)) throw new Error('This coach already has an active club contract.');
+  if (!availableCoaches(coaching, { ...context, clubs }).some(available => available.id === coachId)) throw new Error('This coach already has an active club contract.');
   if (coachingCommitted(coaching, clubId) + coach.fee > COACHING_BUDGET) throw new Error(usesClubLevelStaff({ coaching }) ? 'This contract exceeds the coaching budget for the coaches employed now.' : 'This contract exceeds the remaining coaching budget. Released contracts remain committed for the season.');
   return { ...coaching, contracts: [...coaching.contracts, { id: `coach-s${seasonNumber}-c${coaching.contracts.length + 1}`, coachId, clubId, seasonNumber, startedRound: round, releasedRound: null, focus, renew: true }] };
 }
@@ -76,10 +76,10 @@ export function createCoaching(clubs: readonly Team[], seasonNumber = 1, round =
   const context = { ...levels, clubs, seasonNumber };
   for (const club of clubsByStaffLevel(context, clubs)) {
     const fee = (coach: Coach) => staffFee(context, club.id, coach.fee);
-    const choice = fittingStaffChoice(availableCoaches(coaching, { clubs }).filter(coach => coach.fee <= COACHING_BUDGET), {
+    const choice = fittingLocalStaffChoice({ ...context, coaching }, club.id, 'coaches', availableCoaches(coaching, context).filter(coach => coach.fee <= COACHING_BUDGET), {
       rating: coachRating, fee, target: staffTargetRating(context, club.id, 'coaches', coachRatingRange()), cap: staffShareCap(context, club.id, 'coaches'), budget: staffAllocation(context, club.id),
     });
-    if (choice) coaching = hireForClub(coaching, clubs, club.id, seasonNumber, round, choice.id, 'balanced');
+    if (choice) coaching = hireForClub(coaching, clubs, club.id, seasonNumber, round, choice.id, 'balanced', levels);
   }
   return coaching;
 }
@@ -110,7 +110,7 @@ function canPayCoach(state: SeasonState, clubId: string, coach: Coach): boolean 
 function hireContractForClub(state: SeasonState, clubId: string, coachId: string, focus: TrainingFocus): SeasonState {
   if (usesClubLevelStaff(state) && staffCommitted(state, clubId) + staffFee(state, clubId, coachById(coachId).fee) > staffLimit(state, clubId)) throw new Error('This contract costs more than your Wages left for this season.');
   if (staffCommitted(state, clubId) > coachingCommitted(state.coaching, clubId) && staffCommitted(state, clubId) + staffFee(state, clubId, coachById(coachId).fee) > staffLimit(state, clubId)) throw new Error('This contract exceeds the shared staff budget. Released staff fees remain committed for the season.');
-  const coaching = hireForClub(state.coaching, state.clubs, clubId, state.seasonNumber, state.round, coachId, focus);
+  const coaching = hireForClub(state.coaching, state.clubs, clubId, state.seasonNumber, state.round, coachId, focus, state);
   return recordCoachFee({ ...state, coaching }, coaching.contracts.at(-1)!);
 }
 
@@ -199,7 +199,7 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
 function appointFittingCoach(state: SeasonState, clubId: string): SeasonState {
   const remaining = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   const budget = !state.finance.enabledSince ? remaining : getFinanceBalance(state.finance, clubId).unpaid || getTransferPaymentSummary(state, clubId).overdue ? 0 : Math.min(remaining, getSpendableCash(state, clubId));
-  const choice = withCalculationCache(() => fittingStaffChoice(availableCoaches(state.coaching, state).filter(coach => coachingCommitted(state.coaching, clubId) + coach.fee <= COACHING_BUDGET), {
+  const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'coaches', availableCoaches(state.coaching, state).filter(coach => coachingCommitted(state.coaching, clubId) + coach.fee <= COACHING_BUDGET), {
     rating: coachRating, fee: coach => staffFee(state, clubId, coach.fee), target: staffTargetRating(state, clubId, 'coaches', coachRatingRange()), cap: staffShareCap(state, clubId, 'coaches'), budget,
   }));
   return choice && canPayCoach(state, clubId, choice) ? hireContractForClub(state, clubId, choice.id, 'balanced') : state;

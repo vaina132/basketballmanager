@@ -1,11 +1,11 @@
 import type { SeasonCoaching } from '../domain/coaching';
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
-import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
-import type { CareerWorld, WorldContext } from '../domain/world';
+import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, realAssistantOf, staffMember, staffNationality, type StaffMarketScope } from '../data/staff-directory';
+import type { WorldContext } from '../domain/world';
 import { clubEconomy, staffFee } from './economy';
 import { overallRating } from './overall-rating';
-import { worldOf } from './career-world';
+import { clubCountry, worldOf } from './career-world';
 import { staffAllocation } from './board-consequences';
 
 /** The six staff areas every club fills (format 74). */
@@ -41,8 +41,43 @@ export function usesClubLevelStaff(state: { coaching?: Pick<SeasonCoaching, 'mod
  * The clubs a staff market serves (format 74): the season's full-world clubs when known, otherwise the world's clubs.
  * Background and lower-division clubs employ no one, so they no longer widen the market.
  */
-export function staffMarketWorld(context: WorldContext & { clubs?: readonly Team[] }): Pick<CareerWorld, 'clubs'> {
-  return context.clubs ? { clubs: context.clubs } : worldOf(context);
+export function staffMarketWorld(context: WorldContext & { clubs?: readonly Team[]; coaching?: Pick<SeasonCoaching, 'model'> }): StaffMarketScope {
+  const clubs = context.clubs ?? worldOf(context).clubs, world = context.world;
+  // Owner feedback (18 November 2026): club-level staff in a world whose countries are known also meet local pools.
+  if (!world || !usesClubLevelStaff(context)) return { clubs };
+  let byWorld = marketScopes.get(clubs);
+  if (!byWorld) { byWorld = new Map(); marketScopes.set(clubs, byWorld); }
+  let scope = byWorld.get(world.id);
+  if (!scope) {
+    const countries = clubs.map(club => clubCountry(world, club.id));
+    scope = countries.some(country => country !== null) ? { clubs, countries } : { clubs };
+    byWorld.set(world.id, scope);
+  }
+  return scope;
+}
+const marketScopes = new WeakMap<readonly { id: string }[], Map<string, StaffMarketScope>>();
+
+/** Owner feedback (18 November 2026): most staff come from the club's country, a minority from abroad. */
+export const STAFF_NATIONALITY_RULES = Object.freeze({ localShare: 0.75 });
+
+/**
+ * `fittingStaffChoice` for club-level staff in a real-club world: a club's real assistant coach when the real-people
+ * list names one and he is free and affordable; otherwise, by a fixed draw from the career seed, club, role and season,
+ * a candidate of the club's country (`localShare`) or one from abroad, falling back to every candidate when that group
+ * has no one affordable.
+ */
+export function fittingLocalStaffChoice<T extends { id: string }>(context: WorldContext & { seed: number; seasonNumber?: number; coaching?: Pick<SeasonCoaching, 'model'> }, clubId: string, role: StaffRole, candidates: readonly T[], options: Parameters<typeof fittingStaffChoice<T>>[1]): T | undefined {
+  const world = context.world;
+  if (!world || !usesClubLevelStaff(context)) return fittingStaffChoice(candidates, options);
+  if (role === 'assistant') {
+    const realId = realAssistantOf(clubId)?.id, real = realId === undefined ? undefined : candidates.find(member => member.id === realId);
+    if (real && options.fee(real) <= options.budget) return real;
+  }
+  const country = clubCountry(world, clubId);
+  if (country === null) return fittingStaffChoice(candidates, options);
+  const local = unitHash(`${context.seed}|${clubId}|${role}|${context.seasonNumber ?? 1}|nationality`) < STAFF_NATIONALITY_RULES.localShare;
+  const group = candidates.filter(member => staffNationality(member.id) !== null && (staffNationality(member.id) === country) === local && (role !== 'assistant' || !member.id.startsWith('assistant-real-')));
+  return fittingStaffChoice(group, options) ?? fittingStaffChoice(candidates.filter(member => !member.id.startsWith('assistant-real-')), options);
 }
 
 const strengths = new WeakMap<readonly Team['players'][number][], number>();

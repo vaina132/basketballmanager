@@ -1,5 +1,18 @@
-import type { Position } from '../domain/types'
-import { outOfPositionPercent } from '../engine/positions'
+import type { Player, PlayerStats, Position } from '../domain/types'
+import { COURT_POSITIONS, outOfPositionPercent } from '../engine/positions'
+import { playerMatchRating } from '../world/performance-rating'
+
+export type BenchSort = 'position' | 'rating'
+/**
+ * The bench order (owner request, 18 November 2026): by position (PG to C) or by match rating so far, best first and
+ * players who have not played last. Ties keep the position order, then the squad order.
+ */
+export function sortBench(players: readonly Player[], stats: Readonly<Record<string, PlayerStats | undefined>>, sort: BenchSort): Player[] {
+  const rating = (id: string) => playerMatchRating(stats[id]) ?? -1
+  return players.map((player, index) => ({ player, index }))
+    .sort((a, b) => (sort === 'rating' ? rating(b.player.id) - rating(a.player.id) : 0) || COURT_POSITIONS.indexOf(a.player.position) - COURT_POSITIONS.indexOf(b.player.position) || a.index - b.index)
+    .map(entry => entry.player)
+}
 
 /** What the manager has picked on the court picture: a circle (with or without a player) or a reserve on the bench. */
 export type CourtPick = { kind: 'circle'; position: Position } | { kind: 'bench'; playerId: string }

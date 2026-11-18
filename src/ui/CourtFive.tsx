@@ -4,10 +4,11 @@ import type { MatchState, Position, Side } from '../domain/types'
 import type { PlayerKnowledge } from '../domain/scouting'
 import { arrangeBestFive, cancelSubstitution, isPlayerEligible, placeInCircle } from '../engine/match'
 import { arrangeCircles, courtCircles, COURT_POSITIONS } from '../engine/positions'
-import { COURT_PICTURE_SPOTS, occupantOf, outOfPositionWarning, resolveCourtPick, samePick, type CourtMove, type CourtPick } from './court-five-moves'
+import { COURT_PICTURE_SPOTS, occupantOf, outOfPositionWarning, resolveCourtPick, samePick, sortBench, type BenchSort, type CourtMove, type CourtPick } from './court-five-moves'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
-import { PlayerRating } from './PlayerRating'
+import { MatchRating, PlayerRating } from './PlayerRating'
+import { playerMatchRating } from '../world/performance-rating'
 import { StaminaMeter } from './StaminaMeter'
 import './court-five.css'
 
@@ -45,6 +46,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
   const [dropKey, setDropKey] = useState<string | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [focusCircles, setFocusCircles] = useState(false)
+  const [benchSort, setBenchSort] = useState<BenchSort>('position')
   const status = useRef<HTMLParagraphElement>(null)
   const court = useRef<HTMLDivElement>(null)
   const complete = match.status === 'finished'
@@ -63,7 +65,9 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
   const shownPlayers = shown.lineups[side].flatMap(id => team.players.filter(player => player.id === id))
   const shownChosen = shown.slots?.[side] ?? chosen
   const shownCircles = shown === match ? circles : arrangeCircles(shownPlayers, [shownChosen])
-  const bench = team.players.filter(player => !shown.lineups[side].includes(player.id))
+  // Live match ratings (owner request, 18 November 2026) appear once the game is under way; never on the Squad page.
+  const showRatings = !pregame && !planning
+  const bench = sortBench(team.players.filter(player => !shown.lineups[side].includes(player.id)), shown.stats, showRatings ? benchSort : 'position')
   const usable = (id: string) => editable && !match.lineups[side].includes(id) && isPlayerEligible(match, id)
   const pending = match.pendingSubstitutions[side]
   const selectable = (target: CourtPick) => editable && (target.kind === 'bench' ? usable(target.playerId) : !!occupantOf(circles, target.position))
@@ -209,11 +213,13 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
           const move = active && !isSelected ? resolveCourtPick(circles, active, target) : null
           const live = editable && (!!move || !!occupantOf(circles, position))
           const condition = stats ? Math.round(stats.condition) : 0
-          const description = player ? `${position}, ${POSITION_NAMES[position]}: ${player.name}, number ${player.number}, listed ${player.position}${warning ? `, ${warning.toLowerCase()}` : listedNote ? ', plays his listed position until you place him' : ''}, ${condition}% stamina${unavailable ? `, ${unavailable.toLowerCase()}` : ''}` : `${position}, ${POSITION_NAMES[position]}: empty`
+          const rating = showRatings && stats ? playerMatchRating(stats) : null
+          const ratingNote = showRatings && stats ? `, match rating ${rating === null ? 'not yet' : rating.toFixed(1)}` : ''
+          const description = player ? `${position}, ${POSITION_NAMES[position]}: ${player.name}, number ${player.number}, listed ${player.position}${warning ? `, ${warning.toLowerCase()}` : listedNote ? ', plays his listed position until you place him' : ''}, ${condition}% stamina${ratingNote}${unavailable ? `, ${unavailable.toLowerCase()}` : ''}` : `${position}, ${POSITION_NAMES[position]}: empty`
           const action = !editable ? null : move ? move.playerId === occupantId ? `Move ${name(occupantId)} to ${position}` : occupantId && active?.kind === 'circle' ? `Swap: ${name(move.playerId)} to ${position}, ${name(occupantId)} to ${active.position}` : `Put ${name(move.playerId)} in ${position}${occupantId ? ` for ${name(occupantId)}` : ''}` : isSelected ? 'Deselect' : occupantId ? 'Select' : null
           return <div key={position} className={`court-five-spot court-five-spot-${position.toLowerCase()}${isSelected ? ' is-selected' : ''}${move ? ' is-target' : ''}${dropKey === key ? ' is-drop' : ''}${warning ? ' is-out-of-position' : ''}${unavailable ? ' is-unavailable' : ''}`} data-court-spot={position} style={{ left: `${left}%`, top: `${top}%` }} {...(editable ? dropHandlers(target) : {})}>
             <button type="button" className="court-five-circle" data-court-circle={position} data-player-id={player?.id} aria-pressed={live && !move ? isSelected : undefined} aria-label={action ? `${action}. ${description}` : description} title={player?.name} disabled={!live} draggable={editable && !!occupantOf(circles, position)} onClick={event => choose(target, event.detail === 0)} onDragStart={event => beginDrag(event, target)} onDragEnd={dragEnd}>
-              <span className="court-five-ring"><span className="court-five-position">{position}</span><span className="court-five-number">{player ? player.number : '—'}</span></span>
+              <span className="court-five-ring"><span className="court-five-position">{position}</span><span className="court-five-number">{player ? player.number : '—'}</span>{player && stats && showRatings && <MatchRating stats={stats} live compact className="court-five-rating" label={player.name} />}</span>
               <strong className="court-five-name">{player ? shortName(player.name) : 'Empty'}</strong>
             </button>
             {player && stats && <StaminaMeter value={stats.condition} label={`${player.name} stamina`} compact />}
@@ -227,6 +233,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
       </div>
       <div id={benchId} className="court-five-bench" hidden={!benchOpen}>
         <div className="court-five-bench-heading"><h4>Bench</h4><span>{bench.length} {bench.length === 1 ? 'player' : 'players'} · stamina recovers while resting</span></div>
+        {showRatings && bench.length > 1 && <div className="court-five-sort" role="group" aria-label="Sort the bench"><span aria-hidden="true">Sort:</span>{([['position', 'Position'], ['rating', 'Match rating']] as const).map(([value, text]) => <button key={value} type="button" className={benchSort === value ? 'selected' : ''} aria-pressed={benchSort === value} data-bench-sort={value} onClick={() => setBenchSort(value)}>{text}</button>)}</div>}
         {bench.length ? <ul aria-label={`${team.name} bench`}>{bench.map(player => {
           const target: CourtPick = { kind: 'bench', playerId: player.id }, key = pickKey(target), stats = shown.stats[player.id]
           const unavailable = match.injuries[player.id] ? 'Injured' : stats && stats.fouls >= 5 ? 'Fouled out' : null
@@ -239,7 +246,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
           const identityMarkup = <><span aria-hidden="true"><Avatar player={player} color={team.color} size={30} /></span><span className="court-five-reserve-identity"><strong>{player.name}</strong><span>#{player.number} · {player.position}{stats && stats.fouls > 0 ? <span className={stats.fouls >= 4 ? 'lineup-foul-trouble' : ''}> · {stats.fouls} {stats.fouls === 1 ? 'foul' : 'fouls'}</span> : null}</span></span></>
           return <li key={player.id} className={`court-five-reserve${isSelected ? ' is-selected' : ''}${move ? ' is-target' : ''}${dropKey === key ? ' is-drop' : ''}${unavailable ? ' is-unavailable' : ''}`} data-player-id={player.id} {...(live ? dropHandlers(target) : {})}>
             {live ? <button type="button" className="court-five-reserve-pick" data-court-reserve={player.id} aria-pressed={move ? undefined : isSelected} aria-label={action!} draggable onClick={event => choose(target, event.detail === 0)} onDragStart={event => beginDrag(event, target)} onDragEnd={dragEnd}>{identityMarkup}</button> : <div className="court-five-reserve-pick">{identityMarkup}</div>}
-            <PlayerRating attributes={player.attributes} position={player.position} knowledge={knowledgeForPlayer?.(player.id)} compact label={`${player.name} ability`} />
+            <span className="court-five-reserve-ratings"><PlayerRating attributes={player.attributes} position={player.position} knowledge={knowledgeForPlayer?.(player.id)} compact label={`${player.name} ability`} />{showRatings && stats && <MatchRating stats={stats} live compact label={player.name} />}</span>
             {stats && <StaminaMeter value={stats.condition} label={`${player.name} stamina`} compact />}
             {(unavailable || queued) && <span className={unavailable ? 'court-five-unavailable' : 'court-five-queued-label'}>{unavailable ?? `Queued on for ${shortName(name(queued!.outId))}`}</span>}
           </li>

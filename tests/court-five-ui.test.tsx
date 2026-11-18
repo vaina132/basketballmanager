@@ -7,7 +7,7 @@ import { createSeason } from '../src/world/season';
 import { SquadStartingFive } from '../src/ui/SquadStartingFive';
 import { courtCircles } from '../src/engine/positions';
 import { MatchLineup } from '../src/ui/MatchLineup';
-import { outOfPositionWarning, resolveCourtPick, type CourtPick } from '../src/ui/court-five-moves';
+import { outOfPositionWarning, resolveCourtPick, sortBench, type CourtPick } from '../src/ui/court-five-moves';
 
 const noop = () => {};
 const ready = (seed = 7) => setInjuryMode(createFixtureMatch(seed, FICTIONAL_HOME, FICTIONAL_AWAY), 'off');
@@ -61,6 +61,34 @@ describe('the court picture on the match screen (owner request, 16 November 2026
     expect(complete(start, circle('PG'), circle('PG'))).toBe(start);
     expect(outOfPositionWarning('PG', 'C')).toBe('Out of position: −25%');
     expect(outOfPositionWarning('C', 'C')).toBeNull();
+  });
+
+  it('shows each player\'s live match rating on his circle and bench row, "–" before he has played, and sorts the bench by it', () => {
+    let match = ready();
+    for (let i = 0; i < 6; i += 1) match = stepMatch(match);
+    expect(match.stepCount).toBeGreaterThan(0);
+    // A known box score for the point guard: 12 pts, 5 reb, 3 ast, 2 TO on 5/9 FG and 2/2 FT = PIR 14, rating 7.4.
+    const pg = { ...match.stats['rhf-1'], points: 12, rebounds: 5, assists: 3, steals: 0, blocks: 0, turnovers: 2, fouls: 0, fieldGoalsMade: 5, fieldGoalsAttempted: 9, freeThrowsMade: 2, freeThrowsAttempted: 2 };
+    // A reserve who came on and played well, and one who has not played.
+    const reserve = { ...match.stats['rhf-9'], secondsPlayed: 120, points: 4, fieldGoalsMade: 2, fieldGoalsAttempted: 2, rebounds: 1 };
+    match = { ...match, stats: { ...match.stats, 'rhf-1': pg, 'rhf-9': reserve } };
+    const html = render(match);
+    expect(html).toContain('Match rating so far: 7.4 · 12 pts, 5 reb, 3 ast, 2 TO · PIR 14');
+    expect(html).toMatch(/data-court-circle="PG"[^>]*>.*?data-match-rating="7.4"/);
+    expect(html).toContain(', 100% stamina, match rating 7.4'.replace('100', String(Math.round(pg.condition))));
+    // Reserves who have not played show "–"; the one who played shows his rating.
+    const unrated = html.match(/data-match-rating="unrated"[^>]*><span aria-hidden="true">–<\/span>/g) ?? [];
+    expect(unrated.length).toBeGreaterThanOrEqual(1);
+    expect(html).toContain('Match rating so far: – (not played yet)');
+    expect(html).toContain('data-match-rating="6.5"');
+    expect(html).toContain('data-bench-sort="rating"');
+    // Sorted by match rating, the reserve who played comes first; by position the bench runs PG to C.
+    const reserves = match.home.players.filter(player => !match.lineups.home.includes(player.id));
+    expect(sortBench(reserves, match.stats, 'rating')[0].id).toBe('rhf-9');
+    const order = sortBench(reserves, match.stats, 'position').map(player => ['PG', 'SG', 'SF', 'PF', 'C'].indexOf(player.position));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    // Before tip-off and on the Squad page there are no match ratings.
+    expect(render(ready())).not.toContain('data-match-rating');
   });
 
   it('closes the circles when the match is finished and keeps the old lists for matches without circles', () => {

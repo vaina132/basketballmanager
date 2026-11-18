@@ -24,6 +24,7 @@
 .court-five-circle:focus-visible .court-five-ring{outline:2px solid var(--accent);outline-offset:3px}
 .court-five-ring{position:relative;display:grid;place-items:center;width:var(--circle);height:var(--circle);border-radius:50%;background:var(--surface-3);border:2px solid var(--green);box-shadow:0 1px 0 #0006;transition:box-shadow .15s ease,border-color .15s ease}
 .court-five-position{position:absolute;top:-9px;left:50%;transform:translateX(-50%);padding:1px 5px;border-radius:2px;background:var(--sidebar);border:1px solid var(--border);font-size:11px;font-weight:700;letter-spacing:.4px;line-height:1.3;color:var(--text)}
+.court-five-ring .court-five-rating{position:absolute;right:-12px;bottom:-5px;min-width:30px;min-height:18px;padding:0 3px;font-size:11px;line-height:1.2;box-shadow:0 1px 0 #0008}
 .court-five-number{font-size:clamp(15px,5.4cqw,22px);font-weight:700;font-variant-numeric:tabular-nums;color:var(--text)}
 .court-five-name{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;line-height:1.25}
 .court-five-circle:not(:disabled):hover .court-five-name{color:var(--accent)}
@@ -47,6 +48,10 @@
 .court-five-bench-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:7px}
 .court-five-bench-heading h4{margin:0;font-size:12px;font-weight:600;color:var(--text)}
 .court-five-bench-heading span{font-size:12px;color:var(--muted)}
+.court-five-sort{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0 0 7px;font-size:12px;color:var(--muted)}
+.court-five-sort button{min-height:28px;padding:2px 9px;border:1px solid var(--border);border-radius:2px;background:var(--surface-2);color:var(--muted);font-size:12px}
+.court-five-sort button.selected{border-color:var(--accent);color:var(--text);background:var(--surface-3)}
+.court-five-reserve-ratings{display:flex;align-items:center;gap:8px}
 .court-five-bench ul{display:grid;margin:0;padding:0;list-style:none;border:1px solid var(--border);border-radius:2px;background:var(--surface-2)}
 .court-five-reserve{display:grid;grid-template-columns:minmax(0,1fr) auto 76px;align-items:center;gap:6px 12px;padding:7px 10px;min-height:48px}
 .court-five-reserve+.court-five-reserve{border-top:1px solid var(--border)}
@@ -69,5 +74,5 @@ button.court-five-reserve-pick:hover strong{color:var(--accent)}
 .court-five-reserve-pick:focus-visible{outline:none}
 
 @media(max-width:900px){.court-five-layout{grid-template-columns:minmax(0,1fr)}.court-five-court{max-width:440px;margin-inline:auto;margin-bottom:16px}}
-@media(max-width:650px){.court-five-status{min-height:36px}.court-five-court{aspect-ratio:1/1.22;margin-bottom:24px}.court-five-controls{align-items:flex-start;flex-direction:column;gap:7px}.court-five-actions{width:100%;justify-content:space-between}.court-five-reserve{grid-template-columns:minmax(0,1fr) 72px;padding:7px 8px}.court-five-reserve .player-rating{grid-column:1;grid-row:2;justify-self:start}.court-five-reserve .stamina-meter-compact{grid-column:2;grid-row:1/3;width:72px}.court-five-name{font-size:12px}}
+@media(max-width:650px){.court-five-status{min-height:36px}.court-five-court{aspect-ratio:1/1.22;margin-bottom:24px}.court-five-controls{align-items:flex-start;flex-direction:column;gap:7px}.court-five-actions{width:100%;justify-content:space-between}.court-five-reserve{grid-template-columns:minmax(0,1fr) 72px;padding:7px 8px}.court-five-reserve-ratings{grid-column:1;grid-row:2;justify-self:start}.court-five-reserve .stamina-meter-compact{grid-column:2;grid-row:1/3;width:72px}.court-five-name{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.court-five-ring{transition:none}}

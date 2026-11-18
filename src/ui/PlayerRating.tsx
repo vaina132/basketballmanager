@@ -1,6 +1,6 @@
 import type { PlayerKnowledge } from '../domain/scouting';
 import type { PlayerAttributes, SkillAttributes, Position } from '../domain/types';
-import { ABILITY_RATING_DESCRIPTION, MATCH_RATING_DESCRIPTION, abilityRating, exactAbilityRating, playerMatchRating, type AbilityRating, type PlayerBoxStats } from '../world/performance-rating';
+import { ABILITY_RATING_DESCRIPTION, MATCH_RATING_DESCRIPTION, abilityRating, exactAbilityRating, playerMatchRating, playerPIR, type AbilityRating, type PlayerBoxStats } from '../world/performance-rating';
 import './player-rating.css';
 
 interface PlayerRatingProps {
@@ -37,12 +37,26 @@ export function PlayerRating({ attributes, knowledge, attribute, position, compa
   </span>;
 }
 
-interface MatchRatingProps { stats?: PlayerBoxStats | null; value?: number | null; compact?: boolean; label?: string }
-export function MatchRating({ stats, value, compact = false, label = 'Match' }: MatchRatingProps) {
+/** The tooltip of a live match rating (owner request, 18 November 2026): the rating so far and the box score behind it. */
+export function liveMatchRatingSummary(stats: PlayerBoxStats | null | undefined): string {
+  const rating = playerMatchRating(stats);
+  if (rating === null || !stats) return 'Match rating so far: – (not played yet)';
+  return `Match rating so far: ${rating.toFixed(1)} · ${stats.points} pts, ${stats.rebounds} reb, ${stats.assists} ast, ${stats.turnovers} TO · PIR ${playerPIR(stats)}`;
+}
+
+interface MatchRatingProps {
+  stats?: PlayerBoxStats | null; value?: number | null; compact?: boolean; label?: string
+  /** Live: the tooltip shows the rating so far with points, rebounds, assists and turnovers. */
+  live?: boolean
+  /** Extra class for placement (the court circles use a smaller badge). */
+  className?: string
+}
+export function MatchRating({ stats, value, compact = false, label = 'Match', live = false, className }: MatchRatingProps) {
   const rating = stats === undefined ? value ?? null : playerMatchRating(stats);
   const accessible = rating === null ? `${label}: unrated, no appearance` : `${label}: ${rating.toFixed(1)} out of 10`;
   const tone = rating === null ? 'unrated' : rating >= 7 ? 'good' : rating < 5 ? 'poor' : 'neutral';
-  return <span className={`match-rating match-rating--${tone}${compact ? ' match-rating--compact' : ''}`} role="img" aria-label={accessible} title={`${accessible}. ${MATCH_RATING_DESCRIPTION}`}>
-    <span aria-hidden="true">{rating === null ? '—' : rating.toFixed(1)}</span>
+  const title = live ? liveMatchRatingSummary(stats) : `${accessible}. ${MATCH_RATING_DESCRIPTION}`;
+  return <span className={`match-rating match-rating--${tone}${compact ? ' match-rating--compact' : ''}${className ? ` ${className}` : ''}`} role="img" aria-label={live ? `${label}: ${title.replace(/^Match rating so far: /, 'match rating so far ')}` : accessible} title={title} data-match-rating={rating === null ? 'unrated' : rating.toFixed(1)}>
+    <span aria-hidden="true">{rating === null ? (live ? '–' : '—') : rating.toFixed(1)}</span>
   </span>;
 }

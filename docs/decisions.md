@@ -494,6 +494,13 @@ Landed 17 November 2026 (reversible defaults):
 - **Opening staff (`coaching-2`, career option `staffing`):** every club starts with one training coach, scout, fitness coach, physio, assistant and youth coach, rated to its level (rank by season budget, or squad strength without money data; up to 15% spread); each role uses at most its share of the staff budget (training 30%, others 15%, youth 10%). A sacked person's paid fee is not refunded but stops counting against the season's staff budget from the day they leave. Computer clubs renew one training coach and refill roles at their new level each season; the manager's empty roles stay vacant with a Find button. Replacing someone for a filled role shows "This replaces X as <role>. X leaves the club; their fee is not refunded."
 - **Squad roles (`relationships-3`):** Star 24-34 minutes, Starter 20-30, Rotation 12-20, Reserve 0-8, Prospect 0-15; defaults by squad rank (1-2 Star, 3-5 Starter, 6-9 Rotation, 10+ Reserve; 20 or younger outside the top 8 Prospect). Wage effect of the role offered: Star +15%, Starter +5%, Rotation 0, Reserve -10%, Prospect -15%. A player in his club's top 2 by wage refuses below Starter, top 5 refuses Reserve and Prospect; only under-23s accept Prospect. The agreed role is a contract term. Below his role for 6 games he asks for talks; still so 4 matchdays later with no promise running, he asks to leave (-10 morale until resolved). Computer clubs offer each player his natural role.
 
+## Play-test round 1 decisions (owner, 18 November 2026)
+
+- **Two budgets:** Wages left (players and staff, one pool) and Spending left (transfers, facilities, arena; bank loans add here). Format 75, `coaching-3`. Budget bar on Desk, Transfers, Squad > Contracts, Staff and Club only. Wages paid automatically.
+- **Inbox:** one list, All and Unread filters.
+- **People:** one person per job; staff names about 75% from the club's country, generated presidents about 90%; real presidents and first assistant coaches from Wikipedia where listed (`src/data/real-club-people.ts`).
+- **Five attributes** (names chosen by the owner): Blocking, Stealing, Intelligence, Mental, Discipline; 1-20, estimated for real players; engine effects centred on 12 (blocks near the rim, steals on passes and drives, fewer turnovers, late close-game shooting, +2% training per Discipline point above 10). Calibration stays in range (points 85.9, turnovers 13.5, steals 6.9, blocks 2.7).
+
 ## No visible estimate markings (owner decision, 18 November 2026)
 
 "Dont mark est. Remove the markings." Positions show no "est." anywhere; the hover text still says whether a position is official, reported or estimated (`PositionLabel`, `estimateMark` brings the marking back if a screen needs it).

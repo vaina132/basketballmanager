@@ -4,10 +4,11 @@ import { PositionLabel } from '../src/ui/PositionLabel';
 import { DataPackDetails } from '../src/ui/DataPackDetails';
 
 describe('profile uncertainty in the game', () => {
-  it('shows and names uncertain positions without marking official roles as estimates', () => {
+  it('shows no visible estimate marking (owner, 18 November 2026) but keeps the source in the hover text', () => {
     const uncertain = renderToStaticMarkup(<PositionLabel position="SF" profile={{ source: 'estimated-from-age' }} />);
-    expect(uncertain).toContain('SF, estimated position');
-    expect(uncertain).toContain('est.');
+    expect(uncertain).not.toContain('est.');
+    expect(uncertain).toContain('has not been checked');
+    expect(renderToStaticMarkup(<PositionLabel position="SF" profile={{ source: 'estimated-from-age' }} estimateMark />)).toContain('est.');
     const official = renderToStaticMarkup(<PositionLabel position="C" profile={{ source: 'official-profile', positionSource: 'official' }} />);
     expect(official).not.toContain('est.');
   });

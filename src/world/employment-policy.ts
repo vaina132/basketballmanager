@@ -1,3 +1,4 @@
+import { staffRoomForWages } from './wage-pool';
 import { leavingClubIds } from './background';
 import type { ClubContractSummary, ContractOfferOptions, EmploymentContract, PlayerContractQuote, SeasonEmployment } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
@@ -137,7 +138,8 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
   const reserved = [...getLiveMarketOffers(state).filter(offer => offer.clubId === clubId && offer.id !== excludeOfferId && offer.seasonNumber + 1 <= seasonNumber && offer.seasonNumber + offer.seasons >= seasonNumber), ...inSeasonReserved];
   const reservedWages = reserved.reduce((total, offer) => total + offer.seasonWage, 0), reservedRosterSize = reserved.length;
   // Format 70 (board-2): the season verdict changes the player salary budget (`seasonSalaryBudget`); otherwise the standard budget.
-  const budget = seasonSalaryBudget(state, clubId, seasonNumber), remainingBudget = budget - seasonWages - reservedWages;
+  // Format 75 (`coaching-3`): the wage pool adds the staff budget the employed staff leave unused.
+  const budget = seasonSalaryBudget(state, clubId, seasonNumber) + staffRoomForWages(state, clubId, seasonNumber), remainingBudget = budget - seasonWages - reservedWages;
   const reserveWage = minimumSquadWage(state, clubId, seasonNumber);
   // A rival can win any pending player. Keep enough to replace a cheap held slot
   // until that player actually signs, so losing a bid cannot strand the club.

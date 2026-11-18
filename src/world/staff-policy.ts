@@ -1,3 +1,4 @@
+import { staffLimit } from './wage-pool';
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
@@ -43,7 +44,7 @@ export function staffAllocationShortfall(state: Pick<SeasonState, 'coaching'>): 
 
 /** Matches cash, salary/transfer reservations and arrears guards used by all staff roles. */
 export function remainingStaffBudget(state: SeasonState, clubId = state.managedClubId): number {
-  const allocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
+  const allocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   if (!state.finance.enabledSince) return allocation;
   if (getFinanceBalance(state.finance, clubId).unpaid || getTransferPaymentSummary(state, clubId).overdue) return 0;
   return Math.min(allocation, getSpendableCash(state, clubId));

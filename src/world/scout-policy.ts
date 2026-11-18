@@ -1,3 +1,4 @@
+import { staffLimit } from './wage-pool';
 import type { Scout, ScoutContract, ScoutHireQuote } from '../domain/scouts';
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
@@ -23,7 +24,7 @@ export function availableScouts(state: Pick<SeasonState, 'scouts' | 'seasonNumbe
 }
 export function quoteScoutHire(state: SeasonState, scoutId: string, clubId = state.managedClubId): ScoutHireQuote {
   const scout = staffMember(SCOUT_DIRECTORY, scoutId);
-  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
+  const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.scouts.enabledSince) reason = 'Enable scout recruitment before hiring a scout.';

@@ -1,3 +1,4 @@
+import { staffLimit } from './wage-pool';
 import type { FitnessCoach, FitnessContract, FitnessEffects, FitnessHireQuote, FitnessWeekAssignment, SeasonFitness } from '../domain/fitness';
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
@@ -34,7 +35,7 @@ export function getClubFitnessEffects(state: Pick<SeasonState, 'fitness' | 'trai
 
 export function quoteFitnessHire(state: SeasonState, coachId: string, clubId = state.managedClubId): FitnessHireQuote {
   const coach = staffMember(FITNESS_DIRECTORY, coachId);
-  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
+  const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.fitness.enabledSince) reason = 'Enable fitness coach recruitment before hiring.';

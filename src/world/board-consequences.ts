@@ -146,6 +146,12 @@ export function staffAllocation(state: Partial<Pick<SeasonState, 'board'>> & Pic
   return verdict ? scaled(standard, BOARD_VERDICT_EFFECTS[verdict.verdict].staffPercent) : standard;
 }
 
+/** Format 75: the most a season's staff budget can be under any verdict (the save check's bound for the wage pool). */
+export function staffAllocationCeiling(context: WorldContext, clubId: string, seasonNumber: number): number {
+  const standard = standardStaffAllocation(context, clubId, seasonNumber);
+  return Math.max(...Object.values(BOARD_VERDICT_EFFECTS).map(effect => scaled(standard, Math.max(100, effect.staffPercent))));
+}
+
 /** The owner's capital for facility projects in a season, in euro cents (format 72: at that season's money level). */
 export function ownerCapital(state: Partial<Pick<SeasonState, 'board'>> & Pick<SeasonState, 'seasonNumber'> & WorldContext, clubId: string, seasonNumber = state.seasonNumber): number {
   return verdictBudgets(state, clubId, governingVerdict(state, clubId, seasonNumber)?.verdict ?? null, seasonNumber).capital;

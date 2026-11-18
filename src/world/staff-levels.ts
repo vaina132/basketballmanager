@@ -34,7 +34,7 @@ export const STAFF_LEVEL_RULES = Object.freeze({
 
 /** Format 74: the career staffs every club to its level and sacked fees stop counting against the staff budget. */
 export function usesClubLevelStaff(state: { coaching?: Pick<SeasonCoaching, 'model'> }): boolean {
-  return state.coaching?.model === 'coaching-2';
+  return state.coaching?.model === 'coaching-2' || state.coaching?.model === 'coaching-3';
 }
 
 /**

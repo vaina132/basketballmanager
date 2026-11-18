@@ -1,3 +1,4 @@
+import { staffLimit } from './wage-pool';
 import type { AssistantCoach, AssistantContract, AssistantHireQuote } from '../domain/assistant';
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
@@ -26,7 +27,7 @@ export function availableAssistants(state: Pick<SeasonState, 'assistant' | 'seas
 }
 export function quoteAssistantHire(state: SeasonState, assistantId: string, clubId = state.managedClubId): AssistantHireQuote {
   const coach = staffMember(ASSISTANT_DIRECTORY, assistantId);
-  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
+  const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.assistant.enabledSince) reason = 'Enable assistant-coach recruitment before hiring.';

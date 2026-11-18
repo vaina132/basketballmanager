@@ -170,3 +170,56 @@ export function payrollLedgerReader(finance: FinanceLedgerSource): PayrollLedger
 const activeWageTotals = ledgerFold<LedgerPayrollTotals>((wages, row) => {
   if (row.payroll) for (const [id, charge] of wagesInCharge(row.payroll)) wages.set(id, addWages(wages.get(id) ?? emptyWage(), charge));
 });
+
+/** One staff appointment as its ledger entry records it (format 76: amount 0, the person in the entry's details). */
+export interface StaffAppointmentEvidence { kind: FinanceEntry['kind']; contractId: string; personId: string; round: number }
+type StaffEvidence = number | readonly StaffAppointmentEvidence[];
+function appointmentPerson(row: FinanceEntry): { contractId: string; personId: string } | undefined {
+  switch (row.kind) {
+    case 'coaching': return row.coach ? { contractId: row.coach.contractId, personId: row.coach.coachId } : undefined;
+    case 'scouting': return row.scout ? { contractId: row.scout.contractId, personId: row.scout.scoutId } : undefined;
+    case 'fitness': return row.fitness ? { contractId: row.fitness.contractId, personId: row.fitness.coachId } : undefined;
+    case 'physio': return row.physio ? { contractId: row.physio.contractId, personId: row.physio.physioId } : undefined;
+    case 'assistant': return row.assistant ? { contractId: row.assistant.contractId, personId: row.assistant.assistantId } : undefined;
+    case 'youth': return row.youth ? { contractId: row.youth.contractId, personId: row.youth.coachId } : undefined;
+    default: return undefined;
+  }
+}
+/**
+ * Format 76 (`coaching-4`): the staff money evidence of a ledger, read by the staff salary reserve. Keys: `a` + season +
+ * club for the season's appointments in ledger order, `c` + season + club + compensation source for the week of an
+ * early release, and `w` + season for the last week whose staff salaries were paid (any club). Values are never edited
+ * (folds share them), so an appointment list is copied when it grows.
+ */
+const activeStaffEvidence = ledgerFold<StaffEvidence>((values, row) => {
+  if (row.kind === 'staff-wages') {
+    const key = `w\u0000${row.seasonNumber}`;
+    if (row.round > ((values.get(key) as number | undefined) ?? 0)) values.set(key, row.round);
+  } else if (row.kind === 'staff-compensation') values.set(`c\u0000${row.seasonNumber}\u0000${row.clubId}\u0000${row.sourceId}`, row.round);
+  else {
+    const person = appointmentPerson(row);
+    if (!person) return;
+    const key = `a\u0000${row.seasonNumber}\u0000${row.clubId}`;
+    values.set(key, [...((values.get(key) as readonly StaffAppointmentEvidence[] | undefined) ?? []), { kind: row.kind, ...person, round: row.round }]);
+  }
+});
+export interface StaffLedgerEvidence {
+  /** A club's appointments booked in a season, in ledger order. */
+  appointments: (seasonNumber: number, clubId: string) => readonly StaffAppointmentEvidence[];
+  /** The week of a booked compensation (an early release), if any. */
+  releasedRound: (seasonNumber: number, clubId: string, sourceId: string) => number | undefined;
+  /** The last week of the season whose staff salaries were paid (0 before the first). */
+  paidThrough: (seasonNumber: number) => number;
+}
+/**
+ * Read from the ledger alone, so a ledger cut at a past decision (strict replays, even of earlier seasons whose staff
+ * contracts are no longer kept) gives that moment's evidence. A live ledger holds the current season in its active part.
+ */
+export function staffLedgerEvidence(finance: FinanceLedgerSource): StaffLedgerEvidence {
+  const values = activeStaffEvidence(finance.ledger, undefined);
+  return {
+    appointments: (seasonNumber, clubId) => (values.get(`a\u0000${seasonNumber}\u0000${clubId}`) as readonly StaffAppointmentEvidence[] | undefined) ?? [],
+    releasedRound: (seasonNumber, clubId, sourceId) => values.get(`c\u0000${seasonNumber}\u0000${clubId}\u0000${sourceId}`) as number | undefined,
+    paidThrough: seasonNumber => (values.get(`w\u0000${seasonNumber}`) as number | undefined) ?? 0,
+  };
+}

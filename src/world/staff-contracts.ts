@@ -3,10 +3,11 @@ import type { SeasonCoaching, StaffTerm } from '../domain/coaching';
 import type { WorldContext } from '../domain/world';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
 import { staffFee } from './economy';
-import { getSpendableCash, payrollInstallment } from './payroll-policy';
+import { getSpendablePosition, payrollInstallment } from './payroll-policy';
 import { seasonRounds } from './career-world';
 import { formatEuros } from '../ui/money-format';
 import { appendFinanceLedgerEntry } from './finance-ledger';
+import { staffLedgerEvidence } from './finance-ledger-index';
 import type { StaffRole } from './staff-levels';
 
 /**
@@ -16,9 +17,9 @@ import type { StaffRole } from './staff-levels';
  *   of 1-3 seasons from the career seed; the manager chooses 1, 2 or 3 seasons when hiring; computer clubs sign
  *   `computerSeasons` seasons. A hire without a chosen length runs to the end of the current season.
  * - The catalog fee at the club's money level is the person's **annual salary**. It counts against Wages left like a
- *   player's wage and is paid in weekly installments, like player wages (no up-front fee). Unlike player wages, the
- *   salary still to come is not held back from Spending left in advance (the strict check replays many money decisions
- *   from Spending left as it was); each week's salaries are paid from cash when due, like running costs.
+ *   player's wage and is paid in weekly installments, like player wages (no up-front fee). The salary still to pay
+ *   this season is held back from Spending left like player wages (`staffWageReserve`, read from the ledger, so strict
+ *   replays of past money decisions see the reserve of their moment).
  * - Contracts end at a season end. A person under contract stays; at the contract's end the Renew choice decides, and a
  *   renewal runs for the same length again.
  * - Sacking (or replacing) someone costs compensation, paid at once from Spending left: the rest of this season's
@@ -154,12 +155,34 @@ export function staffWeekWages(state: StaffState & WorldContext, clubId: string,
     .reduce((sum, contract) => sum + installment(staffFee(state, clubId, contract.catalogFee), round, rounds), 0);
 }
 
-/** The staff salaries still to pay this season (this week's included); shown to the manager, not held back from Spending left. */
-export function staffWageReserve(state: Partial<StaffState> & Partial<Pick<SeasonState, 'round' | 'status'>> & WorldContext, clubId: string): number {
-  if (!state.coaching || !usesStaffContracts(state) || state.round === undefined || state.status === 'complete') return 0;
-  const rounds = seasonRounds(state), from = state.round;
-  return seasonStaffContracts(state as StaffState).filter(contract => contract.clubId === clubId)
-    .reduce((sum, contract) => sum + installmentsBetween(staffFee(state, clubId, contract.catalogFee), Math.max(from, contract.startedRound), contract.releasedRound === null ? rounds : contract.releasedRound - 1, rounds), 0);
+/** Each appointment entry kind's role and the catalog its person comes from. */
+const APPOINTMENTS: Readonly<Record<string, { role: StaffRole; directory: readonly { id: string; fee: number }[] }>> = Object.freeze({
+  coaching: { role: 'coaches', directory: COACH_DIRECTORY }, scouting: { role: 'scouts', directory: SCOUT_DIRECTORY }, fitness: { role: 'fitness', directory: FITNESS_DIRECTORY },
+  physio: { role: 'physio', directory: PHYSIO_DIRECTORY }, assistant: { role: 'assistant', directory: ASSISTANT_DIRECTORY }, youth: { role: 'youth', directory: YOUTH_COACH_DIRECTORY },
+});
+
+/**
+ * The staff salaries still to pay this season, held back from Spending left like player wages (owner, 18 November
+ * 2026; `coaching-4` only, the same rule for every club). Read from the ledger alone, so a strict check that cuts the
+ * ledger at a past decision gets the reserve the game used then, even in an earlier season whose staff contracts are
+ * no longer kept: every appointment booked this season (its entry names the person and its week, the contract's first
+ * week) counts its salary installments from the week after the last week whose staff salaries were paid (so a computer
+ * club's appointment made after a week's payments starts with the next week, as it is paid) to the season's end, or to
+ * the week before an early release once its compensation is booked (a release booked with no compensation leaves no
+ * salary to pay).
+ */
+export function staffWageReserve(state: Partial<Pick<SeasonState, 'coaching' | 'finance'>> & Pick<SeasonState, 'seasonNumber'> & WorldContext, clubId: string): number {
+  if (!state.coaching || !usesStaffContracts(state) || !state.finance?.enabledSince) return 0;
+  const rounds = seasonRounds(state), evidence = staffLedgerEvidence(state.finance), year = state.seasonNumber, paidThrough = evidence.paidThrough(year);
+  if (paidThrough >= rounds) return 0;
+  let reserve = 0;
+  for (const appointment of evidence.appointments(year, clubId)) {
+    const source = APPOINTMENTS[appointment.kind], catalogFee = source ? staffMember(source.directory, appointment.personId)?.fee : undefined;
+    if (!source || catalogFee === undefined) continue;
+    const released = evidence.releasedRound(year, clubId, staffCompensationSourceId(source.role, appointment.contractId));
+    reserve += installmentsBetween(staffFee(state, clubId, catalogFee), Math.max(paidThrough + 1, appointment.round), released === undefined ? rounds : released - 1, rounds);
+  }
+  return reserve;
 }
 
 /** The kinds of staff money entries format 76 books. */
@@ -194,7 +217,8 @@ export function payStaffCompensation(released: SeasonState, role: StaffRole, con
   const contract = seasonStaffContracts(released).find(item => item.role === role && item.contractId === contractId);
   if (!contract) return released;
   const compensation = staffCompensation(released, contract);
-  const spending = released.finance.enabledSince ? getSpendableCash(released, contract.clubId) : null;
+  // The reserve still holds the released person's salary until the compensation is booked; it is freed here.
+  const spending = released.finance.enabledSince ? Math.max(0, getSpendablePosition(released, contract.clubId) + compensation.rest) : null;
   if (spending !== null && compensation.amount > spending) throw new Error(`Not enough Spending left: sacking costs ${formatEuros(compensation.amount)} compensation, you have ${formatEuros(spending)} to spend.`);
   let next: SeasonState = { ...released, coaching: withoutTerm(released.coaching, contract.personId) };
   if (compensation.amount > 0 && next.finance.enabledSince) next = bookEntry(next, contract.clubId, STAFF_COMPENSATION_KIND, -compensation.amount, staffCompensationSourceId(role, contractId));

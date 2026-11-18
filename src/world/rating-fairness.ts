@@ -1,5 +1,5 @@
 import type { DataPack, DataPackPlayer } from './data-pack';
-import type { PlayerAttributes } from '../domain/types';
+import type { PlayerAttributes, SkillAttributes } from '../domain/types';
 import { OVR_POSITION_WEIGHTS } from './overall-rating';
 
 /**
@@ -16,7 +16,7 @@ import { OVR_POSITION_WEIGHTS } from './overall-rating';
  */
 export const FAIRNESS_MINUTES = 600;
 export const FAIRNESS_SQUAD_STEP = 1;
-const KEYS: readonly (keyof PlayerAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
+const KEYS: readonly (keyof SkillAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
 
 const minutesOf = (player: DataPackPlayer): number | undefined => player.estimated.includes('all-abilities') ? 0 : player.ratingMinutes;
 

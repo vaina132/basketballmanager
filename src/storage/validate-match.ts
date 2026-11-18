@@ -2,6 +2,7 @@ import type { CourtScene, MatchEvent, MatchState, Position, Side } from '../doma
 import { INJURY_KINDS, MATCH_INJURY_KINDS } from '../domain/injuries';
 import { MAX_INJURY_RISK, MAX_MATCH_PERIODS } from '../engine/match';
 import { COURT_POSITIONS } from '../engine/positions';
+import { abilityShapeProblem } from '../world/extra-attributes';
 
 const SIDES = ['home', 'away'] as const;
 const ATTRIBUTE_KEYS = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
@@ -320,8 +321,8 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
       number(player.weightKg, `${path}.weightKg`, 35, 250, false);
       color(player.skinTone, `${path}.skinTone`);
       color(player.hairColor, `${path}.hairColor`);
-      const attributes = record(player.attributes, `${path}.attributes`, ATTRIBUTE_KEYS);
-      for (const key of ATTRIBUTE_KEYS) number(attributes[key], `${path}.attributes.${key}`, 1, 20);
+      const problem = abilityShapeProblem(player.attributes, ATTRIBUTE_KEYS);
+      if (problem) fail(`${path}.attributes`, problem);
     }
   }
 

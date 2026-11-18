@@ -120,6 +120,7 @@ import { expandFinanceForValidation } from './finance-archive-validation';
 import { fixturePlayerEvidence, summarizeSeniorHistory } from '../world/senior-history';
 import { validateArchivedAppearances, validateSealedSeniorSummary, validateSeniorSummary } from './senior-history-validation';
 import { isSealedSeniorResult, sealCompletedHistory, SEALED_HISTORY_FORMAT, seniorSealedThrough } from '../world/sealed-history';
+import { abilityShapeProblem } from '../world/extra-attributes';
 import { ACADEMY_GRADUATION_AGE, academyPointCap, developAcademyPlayer, emptyAcademyPoints } from '../world/academy-policy';
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { staffFee } from '../world/economy';
@@ -859,7 +860,8 @@ function validateAcademyShape(value: unknown, state: SeasonState, version: numbe
     const player = record(prospect.player, `${path}.player`, ['id', 'name', 'number', 'position', 'heightCm', 'weightKg', 'skinTone', 'hairColor', 'attributes']);
     if (typeof player.id !== 'string' || identities.has(player.id) || worldPlayer(worldOf(state), player.id)) fail(`${path}.player.id`, 'must identify a unique prospect outside the original player catalog');
     identities.add(player.id);
-    record(player.attributes, `${path}.player.attributes`, TRAINING_ATTRIBUTES);
+    const abilityProblem = abilityShapeProblem(player.attributes, TRAINING_ATTRIBUTES);
+    if (abilityProblem) fail(`${path}.player.attributes`, abilityProblem);
   }
   for (const [index, item] of (fields.intakes as unknown[]).entries()) record(item, `academy.intakes[${index}]`, ['id', 'clubId', 'seasonNumber', 'round', 'date', 'initial', 'prospectIds', ...(version >= 27 && item !== null && typeof item === 'object' && Object.hasOwn(item, 'source') ? ['source'] : [])]);
   for (const [index, item] of (fields.weeks as unknown[]).entries()) {

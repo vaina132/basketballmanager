@@ -1,11 +1,14 @@
 import type { PlayerKnowledge } from '../domain/scouting'
 import type { Position } from '../domain/types'
 import { SCOUTING_ATTRIBUTES } from '../world/scouting-policy'
+import { EXTRA_ATTRIBUTE_LABELS, EXTRA_ATTRIBUTES } from '../world/extra-attributes'
 import { POTENTIAL_RATING_DESCRIPTION } from '../world/potential'
 import { PlayerRating } from './PlayerRating'
 import './scouting-knowledge.css'
 
-const labels = { twoPoint: 'Two-point shot', threePoint: 'Three-point shot', freeThrow: 'Free throws', passing: 'Passing', defense: 'Defense', rebounding: 'Rebounding', stamina: 'Stamina' }
+const labels = { twoPoint: 'Two-point shot', threePoint: 'Three-point shot', freeThrow: 'Free throws', passing: 'Passing', defense: 'Defense', rebounding: 'Rebounding', stamina: 'Stamina', ...EXTRA_ATTRIBUTE_LABELS }
+/** The seven skills, then the five further abilities when the knowledge carries them. */
+const shownAttributes = (knowledge: PlayerKnowledge) => [...SCOUTING_ATTRIBUTES, ...EXTRA_ATTRIBUTES.filter(key => knowledge.attributes?.[key] !== undefined || knowledge.ranges?.[key] !== undefined)]
 const dates = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 export const scoutingDate = (date: string) => dates.format(new Date(`${date}T00:00:00Z`))
 
@@ -24,7 +27,7 @@ export function ScoutingKnowledge({ knowledge, potential, position, compact = fa
     <div className="scouting-knowledge-overall"><span>Overall ability</span><PlayerRating knowledge={knowledge} position={position} label="Overall ability" /></div>
     {potential && <div className="scouting-knowledge-overall scouting-knowledge-potential" data-potential-kind={potential.kind}><span>Potential</span><PlayerRating knowledge={potential} position={position} label="Potential" description={POTENTIAL_RATING_DESCRIPTION} /></div>}
     <div className="scouting-knowledge-status"><strong>{knowledgeLabel(knowledge)}</strong><span>{knowledge.kind === 'own' ? 'Current squad assessment' : knowledge.kind === 'unknown' ? 'No skill assessment available' : `${knowledge.freshness === 'recent' ? 'Recent' : knowledge.freshness === 'aging' ? 'Aging' : 'Stale'} · ${knowledge.ageDays} ${knowledge.ageDays === 1 ? 'day' : 'days'} old`}</span></div>
-    {knowledge.kind !== 'unknown' && <dl className="scouting-knowledge-ratings">{SCOUTING_ATTRIBUTES.map(attribute => {
+    {knowledge.kind !== 'unknown' && <dl className="scouting-knowledge-ratings">{shownAttributes(knowledge).map(attribute => {
       const exact = knowledge.kind === 'own' ? knowledge.attributes?.[attribute] : undefined
       const range = knowledge.kind === 'report' ? knowledge.ranges?.[attribute] : undefined
       const low = exact ?? range?.min ?? 1, high = exact ?? range?.max ?? 20

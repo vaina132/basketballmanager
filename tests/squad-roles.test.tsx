@@ -30,7 +30,8 @@ const row = (state: SeasonState, playerId: string, club = clubId) => getPlayerRe
 
 let start: SeasonState, promoted: SeasonState, talks: SeasonState, leave: SeasonState;
 beforeAll(() => {
-  start = createSeason({ seed: 5, world, managedClubId: clubId, injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
+  // Seed 1 (5 before new careers stored the five further abilities, 18 November 2026).
+  start = createSeason({ seed: 1, world, managedClubId: clubId, injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
   // The deepest reserve is promoted to Starter; the automatic rotation keeps him on the bench.
   promoted = agreeSquadRole(start, deep, 'starter');
   let state = promoted;

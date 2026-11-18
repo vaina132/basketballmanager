@@ -2,10 +2,10 @@
  * The position-weighted overall rating (1-99) and its stars. Dependency-free on purpose: the real-data scripts
  * import this file directly with Node, so their human-check reports show the same numbers as the game.
  */
-import type { PlayerAttributes, Position } from '../domain/types';
+import type { PlayerAttributes, SkillAttributes, Position } from '../domain/types';
 
-type SkillWeights = Readonly<Record<keyof PlayerAttributes, number>>;
-const SKILLS: readonly (keyof PlayerAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
+type SkillWeights = Readonly<Record<keyof SkillAttributes, number>>;
+const SKILLS: readonly (keyof SkillAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
 
 /** What each position needs most; every row sums to 1. Guards lean on passing and shooting, bigs on inside scoring and rebounding. */
 export const OVR_POSITION_WEIGHTS: Readonly<Record<Position, SkillWeights>> = {

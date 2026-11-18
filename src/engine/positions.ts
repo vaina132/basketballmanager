@@ -5,7 +5,7 @@
  * manager never arranged. Pure and deterministic: no random draws, so arranging circles never changes the match's
  * random sequence.
  */
-import type { MatchState, Player, PlayerAttributes, Position, Side } from '../domain/types';
+import type { MatchState, Player, PlayerAttributes, SkillAttributes, Position, Side } from '../domain/types';
 
 /** The court picture's circles, in the order they are listed. */
 export const COURT_POSITIONS: readonly Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
@@ -18,7 +18,7 @@ const ORDER: Readonly<Record<Position, number>> = { PG: 0, SG: 1, SF: 2, PF: 3, 
  */
 export const OUT_OF_POSITION_PERCENT: readonly number[] = [0, 5, 12, 25, 25];
 /** The skills reduced out of position. Free throws and stamina do not depend on the position played. */
-export const POSITIONAL_SKILLS: readonly (keyof PlayerAttributes)[] = ['twoPoint', 'threePoint', 'passing', 'defense', 'rebounding'];
+export const POSITIONAL_SKILLS: readonly (keyof SkillAttributes)[] = ['twoPoint', 'threePoint', 'passing', 'defense', 'rebounding'];
 
 export const isCourtPosition = (value: unknown): value is Position => typeof value === 'string' && Object.hasOwn(ORDER, value);
 export const positionSteps = (a: Position, b: Position): number => Math.abs(ORDER[a] - ORDER[b]);
@@ -29,7 +29,7 @@ export const outOfPositionPercent = (listed: Position, played: Position): number
 export function playedAttributes(attributes: PlayerAttributes, listed: Position, played: Position): PlayerAttributes {
   const factor = 1 - outOfPositionPercent(listed, played) / 100;
   if (factor === 1) return attributes;
-  const result = { ...attributes } as Record<keyof PlayerAttributes, number>;
+  const result = { ...attributes } as Record<keyof SkillAttributes, number>;
   for (const key of POSITIONAL_SKILLS) result[key] = attributes[key] * factor;
   return result;
 }

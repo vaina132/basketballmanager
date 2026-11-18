@@ -1,12 +1,12 @@
 import type { AcademyProspect } from '../domain/academy';
-import type { PlayerAttributes, Position } from '../domain/types';
+import type { PlayerAttributes, SkillAttributes, Position } from '../domain/types';
 import { DEVELOPMENT_START_DATE } from '../data/development-league';
 import { MAX_SEASON_ROUNDS } from './career-world';
 
 const firstNames = ['Arin', 'Lio', 'Emir', 'Noel', 'Ivo', 'Miro', 'Luca', 'Sami', 'Niko', 'Theo', 'Eren', 'Milo', 'Ruben', 'Deni', 'Elian', 'Leon'];
 const surnames = ['Varen', 'Talin', 'Berin', 'Soren', 'Meren', 'Dalin', 'Feran', 'Neris', 'Selan', 'Korin', 'Arven', 'Leris', 'Vellis', 'Rovan', 'Toren', 'Sarin'];
 const positions: readonly Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
-const attributes: readonly (keyof PlayerAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
+const attributes: readonly (keyof SkillAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
 function hash(seed: number, key: string): number { let value = (2166136261 ^ seed) >>> 0; for (const character of key) value = Math.imul(value ^ character.charCodeAt(0), 16777619) >>> 0; return value; }
 
 /** Fictional identities from a separate stable stream; generation never consumes match RNG. */

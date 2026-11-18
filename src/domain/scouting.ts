@@ -1,4 +1,4 @@
-import type { PlayerAttributes } from './types';
+import type { ExtraAttributes, PlayerAttributes, SkillAttributes } from './types';
 import type { ScoutingObserver } from './scouts';
 
 export interface ScoutingAssignment { playerId: string; seasonNumber: number; round: number; observer?: ScoutingObserver }
@@ -31,7 +31,7 @@ export interface SeasonScouting {
   clubs: Record<string, ClubScouting>;
 }
 export interface ScoutingRange { min: number; max: number }
-export type ScoutingRanges = Record<keyof PlayerAttributes, ScoutingRange>;
+export type ScoutingRanges = Record<keyof SkillAttributes, ScoutingRange> & Partial<Record<keyof ExtraAttributes, ScoutingRange>>;
 /** Safe UI/AI projection: frozen observation ratings never leave this boundary. */
 export interface PlayerKnowledge {
   playerId: string;

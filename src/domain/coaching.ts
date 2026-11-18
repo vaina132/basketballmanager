@@ -1,10 +1,10 @@
-import type { PlayerAttributes } from './types';
+import type { ExtraAttributes, PlayerAttributes, SkillAttributes } from './types';
 import type { TrainingFocus } from './training';
 
 export interface Coach {
   id: string;
   name: string;
-  skills: Record<keyof PlayerAttributes, number>;
+  skills: Record<keyof SkillAttributes, number>;
   /** Full-season commitment in euro cents, including contracts signed midseason. */
   fee: number;
 }

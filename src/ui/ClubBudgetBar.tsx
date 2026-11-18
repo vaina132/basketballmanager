@@ -8,6 +8,7 @@ import { getTransferPaymentSummary } from '../world/transfer-payments'
 import { getPayrollReserve, getSpendableCash } from '../world/payroll'
 import { getClubContractSummary } from '../world/employment-policy'
 import { usesWagePool, wagesLeft } from '../world/wage-pool'
+import { staffWageReserve, usesStaffContracts } from '../world/staff-contracts'
 import { seasonLabel } from '../world/season'
 import { Icon } from './Icon'
 import './club-budget-bar.css'
@@ -47,6 +48,7 @@ export function ClubBudgetBar({ season, disabled, onOpenClub, onOpenStaff }: Clu
   const pooled = usesWagePool(season)
   const balance = getFinanceBalance(season.finance, clubId)
   const reserve = getPayrollReserve(season, clubId)
+  const staffReserve = staffWageReserve(season, clubId)
   const cash = getSpendableCash(season, clubId)
   const pendingFees = getReservedInSeasonFees(season, clubId) + getReservedTransferFees(season, clubId)
   const transferPayments = getTransferPaymentSummary(season, clubId)
@@ -75,12 +77,13 @@ export function ClubBudgetBar({ season, disabled, onOpenClub, onOpenStaff }: Clu
       <div><h3><Icon name="wallet" size={16} />Spending left</h3>{finance ? <dl>
         <div><dt>Money in the bank</dt><dd>{money(balance.cash)}</dd></div>
         <div><dt>Wages still to pay</dt><dd>−{money(reserve)}</dd></div>
+        {staffReserve > 0 && <div><dt>Staff salaries still to pay</dt><dd data-budget-staff-reserve={staffReserve}>−{money(staffReserve)}</dd></div>}
         {pendingFees > 0 && <div><dt>Transfer offers waiting</dt><dd data-budget-transfer-fees={pendingFees}>−{money(pendingFees)}</dd></div>}
         {transferPayments.outgoingRemaining > 0 && <div><dt>Transfer fees still to pay</dt><dd data-budget-transfer-outstanding={transferPayments.outgoingRemaining}>−{money(transferPayments.outgoingRemaining)}</dd></div>}
         {balance.unpaid > 0 && <div><dt>Unpaid costs</dt><dd>{money(balance.unpaid)}</dd></div>}
         <div><dt>Spending left</dt><dd>{money(cash)}</dd></div>
       </dl> : <p>Club finances are off in this career.</p>}</div>
-      <p>Wages left: player wages and staff fees share one budget. Staff fees are paid when you hire, so a hire also needs Spending left. Spending left pays transfer fees, facilities and arena seats; money from a sale counts when it arrives.</p>
+      <p>Wages left: player wages and staff fees share one budget. {usesStaffContracts(season) ? 'Staff salaries are paid weekly; the rest of this season is set aside from Spending left.' : 'Staff fees are paid when you hire, so a hire also needs Spending left.'} Spending left pays transfer fees, facilities and arena seats; money from a sale counts when it arrives.</p>
     </div></details>
   </section>
 }

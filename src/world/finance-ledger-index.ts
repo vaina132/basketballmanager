@@ -170,3 +170,22 @@ export function payrollLedgerReader(finance: FinanceLedgerSource): PayrollLedger
 const activeWageTotals = ledgerFold<LedgerPayrollTotals>((wages, row) => {
   if (row.payroll) for (const [id, charge] of wagesInCharge(row.payroll)) wages.set(id, addWages(wages.get(id) ?? emptyWage(), charge));
 });
+
+/**
+ * Format 76 (`coaching-4`): the staff money evidence of a ledger, read by the staff salary reserve. Keys: `e` + club +
+ * kind + source for staff appointments and compensation, and `w` + season for the last week whose staff salaries were
+ * paid (any club). Read from the ledger alone, so a ledger cut at a past decision gives that moment's evidence.
+ */
+const STAFF_EVIDENCE_KINDS: ReadonlySet<string> = new Set(['coaching', 'scouting', 'fitness', 'physio', 'assistant', 'youth', 'staff-compensation']);
+const activeStaffEvidence = ledgerFold<number>((values, row) => {
+  if (row.kind === 'staff-wages') {
+    const key = `w\u0000${row.seasonNumber}`;
+    if (row.round > (values.get(key) ?? 0)) values.set(key, row.round);
+  } else if (STAFF_EVIDENCE_KINDS.has(row.kind)) values.set(`e\u0000${row.clubId}\u0000${row.kind}\u0000${row.sourceId}`, 1);
+});
+export interface StaffLedgerEvidence { has: (clubId: string, kind: FinanceEntry['kind'], sourceId: string) => boolean; paidThrough: (seasonNumber: number) => number }
+/** Current-season evidence only: completed seasons are archived and never hold this season's staff entries. */
+export function staffLedgerEvidence(finance: FinanceLedgerSource): StaffLedgerEvidence {
+  const values = activeStaffEvidence(finance.ledger, undefined);
+  return { has: (clubId, kind, sourceId) => values.has(`e\u0000${clubId}\u0000${kind}\u0000${sourceId}`), paidThrough: seasonNumber => values.get(`w\u0000${seasonNumber}`) ?? 0 };
+}

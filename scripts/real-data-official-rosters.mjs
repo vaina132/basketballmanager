@@ -51,7 +51,7 @@ export const SOURCES = {
     teamName: html => cells(html).match(/\|([^|]+)\|Datos del Club\|/)?.[1] ?? '',
     players: html => {
       const text = cells(html), roster = text.slice(text.indexOf('|Nombre|Puesto|Dorsal|'), text.indexOf('|Datos del Club|'));
-      return [...roster.matchAll(/\|([^|]+)\|(Base|Escolta|Alero|A-Pivot|Ala-Pívot|Pívot|-)\|(\d{1,2}|-)?\|?(\d\d)\/(\d\d)\/(\d{4})[^|]*\|[^|]+\|(?:SI|NO)\|(\d{3}|-)\|/g)].map(match => ({ name: title(match[1].replace(/\s+/g, ' ').trim()), number: number(match[3]), position: match[2] === '-' ? null : match[2], birthDate: dmy(match[4], match[5], match[6]), heightCm: cm(match[7]) })).filter(player => player.position);
+      return [...roster.matchAll(/\|([^|]+)\|([^|]{1,12})\|(?:(\d{1,2}|-)\|)?(\d\d)\/(\d\d)\/(\d{4})[^|]*\|[^|]+\|(?:SI|NO)\|(\d{3}|-)\|/g)].map(match => ({ name: title(match[1].replace(/\s+/g, ' ').trim()), number: number(match[3]), position: match[2] === '-' ? null : match[2], birthDate: dmy(match[4], match[5], match[6]), heightCm: cm(match[7]) }));
     },
   },
   bbl: {
@@ -72,7 +72,7 @@ export const SOURCES = {
   lba: {
     competition: 'Lega Basket Serie A', name: 'legabasket.it', list: 'https://www.legabasket.it/api/teams/get-teams?year=2026', json: true,
     teams: data => data.teams.map(team => ({ name: team.name, url: `https://www.legabasket.it/api/teams/get-team-roster?id=${team.id}` })),
-    players: data => data.players.map(player => ({ name: `${player.name} ${player.surname}`, number: number(player.player_number), position: player.player_role === '-' ? null : player.player_role, birthDate: /^\d{4}-\d{2}-\d{2}$/.test(player.birth_date ?? '') ? player.birth_date : undefined, heightCm: cm(player.height) })).filter(player => player.position),
+    players: data => data.players.map(player => ({ name: `${player.name} ${player.surname}`, number: number(player.player_number), position: player.player_role === '-' ? null : player.player_role, birthDate: /^\d{4}-\d{2}-\d{2}$/.test(player.birth_date ?? '') ? player.birth_date : undefined, heightCm: cm(player.height) })),
   },
   lnp: {
     competition: 'Serie A2', name: 'legapallacanestro.com', list: 'https://www.legapallacanestro.com/serie/1/squadre',
@@ -90,7 +90,7 @@ export const SOURCES = {
       for (const match of html.replace(/\\"/g, '"').matchAll(/\{"playerId":(\d+),"firstName":"([^"]*)","lastName":"([^"]*)","uniformNumber":"([^"]*)","positionCode":"([A-Z]*)"[^{}]*?"dateOfBirth":"(\d{4}-\d{2}-\d{2})?"?/g)) {
         if (!seen.has(match[1])) seen.set(match[1], { name: `${match[2].trim()} ${match[3].trim()}`, number: number(match[4]), position: match[5] || null, birthDate: match[6] || undefined });
       }
-      return [...seen.values()].filter(player => player.position);
+      return [...seen.values()];
     },
   },
 };

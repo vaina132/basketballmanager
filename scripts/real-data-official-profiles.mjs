@@ -40,7 +40,7 @@ const LABELS = Object.freeze({
   PG: ['pg', 'point guard', 'base', 'meneur', 'playmaker', 'play', 'aufbau', 'aufbauspieler', 'point', 'oyun kurucu', 'πλέι μέικερ', 'πλεϊμέικερ', '1'],
   SG: ['sg', 'shooting guard', 'escolta', 'arriere', 'arrière', 'guardia', 'shooting', 'sutor', 'şutör', 'σούτινγκ γκαρντ', '2'],
   SF: ['sf', 'small forward', 'alero', 'ailier', 'ala piccola', 'small', 'kanat', 'kisa forvet', 'kısa forvet', 'σμολ φόργουορντ', '3'],
-  PF: ['pf', 'power forward', 'a-pivot', 'ala-pivot', 'ala-pívot', 'ala pivot', 'ala pívot', 'ailier fort', 'ala grande', 'power', 'uzun forvet', 'πάουερ φόργουορντ', '4'],
+  PF: ['pf', 'power forward', 'a-pivot', 'a-piv', 'ala-pivot', 'ala-pívot', 'ala pivot', 'ala pívot', 'ailier fort', 'ala grande', 'power', 'uzun forvet', 'πάουερ φόργουορντ', '4'],
   C: ['c', 'center', 'centre', 'pivot', 'pívot', 'centro', 'pivot', 'pivô', 'σέντερ', '5'],
 });
 const GROUP_LABELS = Object.freeze({

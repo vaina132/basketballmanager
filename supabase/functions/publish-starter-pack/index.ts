@@ -3,7 +3,9 @@
 // scripts/real-data-pack.mjs for the ratings of dataset version 2026.11-world-1 and applies the reviewed profile
 // corrections in `manual_overrides` (owner permission, 16 November 2026: exact positions from official sources;
 // broad official roles choose within the group from the player's statistics, as the ratings do). Positions marked
-// `community` (Wikipedia, 17 November 2026) are shown as reported, not as official.
+// `community` (Wikipedia, 17 November 2026) are shown as reported, not as official. Current squads (18 November
+// 2026): `club_id` moves a player, `squad_status` 'left' removes him, and club `added_players` adds current players
+// with estimated abilities ('all-abilities'; the game lifts them to their club's level).
 //
 // It acts only on an authorised request: a pending, unexpired `publish-pack` row in `data_change_requests` (written
 // only by the service role or the owner's dashboard), which names the new version. `preview` returns the built pack
@@ -73,6 +75,8 @@ Deno.serve(async request => {
     const players = await all('players', 'id,full_name,nationality,position,age_observed,merged_into');
     const ratings = await all('player_ratings', '*', query => query.eq('dataset_version_id', VERSION));
     const overrideRows = await all('manual_overrides', 'entity_id,field,value', query => query.eq('entity_type', 'player').order('id'));
+    // Current squads (18 November 2026): players on a club's current roster who are not in the provider's data.
+    const clubRows = await all('manual_overrides', 'entity_id,field,value', query => query.eq('entity_type', 'club').eq('field', 'added_players').order('id'));
     const rules = [...new Set(ratings.map(rating => rating.method?.rules).filter(Boolean))].sort().join(', ');
     const source = { provider: 'API-SPORTS (API-BASKETBALL)', importRun: versionRow.source_run_id, ratings: rules || 'unknown', ratingsNote: versionRow.notes };
 
@@ -103,9 +107,11 @@ Deno.serve(async request => {
     for (const row of overrideRows) overridesOf.set(row.entity_id, { ...(overridesOf.get(row.entity_id) ?? {}), [row.field]: row.value });
     const opening = `${SEASON.slice(0, 4)}-09-05`;
 
-    const buildPlayers = (useOverrides: boolean) => [...latest.values()].map(row => {
+    // A player missing from his club's current roster leaves; one listed by another club's roster moves there.
+    const buildPlayers = (useOverrides: boolean) => [...[...latest.values()].filter(row => !useOverrides || overridesOf.get(row.player_id)?.squad_status?.value !== 'left').map(row => {
       const player = playerById.get(row.player_id), rating = ratingById.get(row.player_id);
       const fix = useOverrides ? overridesOf.get(row.player_id) : undefined;
+      if (fix?.club_id?.value && clubById.has(fix.club_id.value)) row = { ...row, club_id: fix.club_id.value };
       const official = fix?.position;
       const resolution = official?.value ? { position: official.value as string, estimated: false } : official?.group ? { position: withinGroup(official.group, rating), estimated: true } : resolvePosition(player.position, rating?.game_position ?? UNRATED.position[player.position] ?? 'SF');
       const position = resolution.position;
@@ -132,7 +138,11 @@ Deno.serve(async request => {
         ...(born ? { birthDate: born } : {}),
         ...(fix ? { profileEvidence: { observedAt, positionSource: resolution.estimated ? 'estimated' : official?.value && !official.community ? 'official' : 'provider', membership: registered ? 'official-registration-observed' : 'provider-observed', sources } } : {}),
       };
-    }).sort((a, b) => a.clubId.localeCompare(b.clubId) || a.name.localeCompare(b.name));
+    }), ...(useOverrides ? clubRows.filter(row => clubById.has(row.entity_id)).flatMap(row => row.value.value.map((added: any) => ({
+      id: added.id, name: decode(added.name), clubId: `club-${row.entity_id}`, number: added.number ?? null, position: added.position, nationality: added.nationality ?? null, age: added.age ?? null,
+      heightCm: added.heightCm, weightKg: added.weightKg, attributes: added.attributes, estimated: added.estimated, ...(added.birthDate ? { birthDate: added.birthDate } : {}),
+      profileEvidence: { observedAt: String(row.value.observedOn), positionSource: added.positionSource, membership: 'official-registration-observed', sources: row.value.sources },
+    }))) : [])].sort((a, b) => a.clubId.localeCompare(b.clubId) || a.name.localeCompare(b.name));
     const assemble = (packPlayers: any[]) => {
       const squads = new Map<string, string[]>();
       for (const player of packPlayers) squads.set(player.clubId, [...(squads.get(player.clubId) ?? []), player.id]);
@@ -149,7 +159,7 @@ Deno.serve(async request => {
     const recorded = await sha256(JSON.stringify({ format: 'basketball-manager-data-pack', formatVersion: 1, version: VERSION, season: SEASON, source, notice: 'Private evaluation data from API-SPORTS. Rights for publication or distribution are not cleared; do not upload or share.', competitions: plainParts.packCompetitions, clubs: plainParts.packClubs, players: plain }));
     const packPlayers = buildPlayers(true), { packCompetitions, packClubs } = assemble(packPlayers);
     const corrected = packPlayers.filter(player => player.profileEvidence);
-    const profileCorrections = { model: 'profile-overrides-1', players: corrected.length, exactPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'official').length, reportedPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'provider').length, estimatedPositions: packPlayers.filter(player => player.estimated.includes('game_position')).length, note: 'Official EuroLeague/EuroCup registrations and official league and club roster pages; Wikipedia rosters and player articles (CC BY-SA 4.0) where no official page gives an exact position, shown as reported; a broad role (Guard, Forward) keeps the exact position an estimate.' };
+    const profileCorrections = { model: 'profile-overrides-1', players: corrected.length, currentSquads: { moved: overrideRows.filter(row => row.field === 'club_id').length, left: overrideRows.filter(row => row.field === 'squad_status').length, added: clubRows.reduce((sum, row) => sum + row.value.value.length, 0) }, exactPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'official').length, reportedPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'provider').length, estimatedPositions: packPlayers.filter(player => player.estimated.includes('game_position')).length, note: 'Official EuroLeague/EuroCup registrations and official league and club roster pages; Wikipedia rosters and player articles (CC BY-SA 4.0) where no official page gives an exact position, shown as reported; a broad role (Guard, Forward) keeps the exact position an estimate.' };
     const pack = { format: 'basketball-manager-data-pack', formatVersion: 1, version: ask.version, season: SEASON, source: { ...source, profileCorrections }, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026). Player positions, heights, birth dates and names corrected from official competition and club sources where available (16 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
     const checksum = await sha256(JSON.stringify(pack));
     const summary = { version: pack.version, checksum, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, profileCorrections, cut, matchesRecordedChecksum: recorded === versionRow.checksum, replaces: existingVersion };

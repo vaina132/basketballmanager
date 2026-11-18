@@ -2,7 +2,7 @@ import type { Coach, CoachingContract, CoachingWeekAssignment, SeasonCoaching } 
 import { withCalculationCache } from './pure-cache';
 import type { SeasonState } from '../domain/season';
 import type { TrainingFocus } from '../domain/training';
-import type { PlayerAttributes, Team } from '../domain/types';
+import type { PlayerAttributes, SkillAttributes, Team } from '../domain/types';
 import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { getFinanceBalance, recordCoachFee } from './finance';
 import { getSpendableCash } from './payroll-policy';
@@ -153,7 +153,7 @@ export function coachingAssignments(coaching: SeasonCoaching, clubs: readonly Te
   return Object.fromEntries(clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === seasonNumber && contract.startedRound <= afterRound && (contract.releasedRound === null || contract.releasedRound > afterRound)).map(contract => ({ contractId: contract.id, coachId: contract.coachId, focus: contract.focus }))]));
 }
 
-export function coachingRatingForAttribute(assignments: readonly CoachingWeekAssignment[], attribute: keyof PlayerAttributes): number {
+export function coachingRatingForAttribute(assignments: readonly CoachingWeekAssignment[], attribute: keyof SkillAttributes): number {
   return assignments.reduce((rating, assignment) => {
     const skill = coachById(assignment.coachId).skills[attribute];
     return Math.max(rating, assignment.focus === attribute ? skill : assignment.focus === 'balanced' ? skill / 2 : 0);
@@ -170,7 +170,7 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
     // Format 74: a club without a coach first appoints one that fits its level, as at the career's start.
     if (levelled && !getClubCoaching(next.coaching, club.id).length) next = appointFittingCoach(next, club.id);
     const plan = state.training.plans[club.id]!;
-    const demand = Object.fromEntries(ATTRIBUTES.map(attribute => [attribute, 0])) as Record<keyof PlayerAttributes, number>;
+    const demand = Object.fromEntries(ATTRIBUTES.map(attribute => [attribute, 0])) as Record<keyof SkillAttributes, number>;
     for (const player of club.players) {
       const individual = plan.individual[player.id]!;
       const focus = individual === 'team' ? plan.delegated ? 'balanced' : plan.focus : individual;

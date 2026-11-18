@@ -1,7 +1,7 @@
 import { facilityPracticeBonusPercent } from './facilities-policy';
 import type { SeasonInjury, SeasonState } from '../domain/season';
 import type { SeasonTraining, TrainingFocus, TrainingIntensity, TrainingPlan, TrainingPoints, TrainingWeekReport } from '../domain/training';
-import type { Player, PlayerAttributes, Team } from '../domain/types';
+import type { Player, PlayerAttributes, SkillAttributes, Team } from '../domain/types';
 import { isRecovering } from './health';
 import type { SeasonCoaching } from '../domain/coaching';
 import type { RosterSnapshot } from '../domain/roster';
@@ -35,7 +35,7 @@ const copyPlan = (plan: TrainingPlan): TrainingPlan => ({ ...plan, individual: {
  * Training points one skill may hold: 100 per rating point of headroom, never above 20. New careers (`training-2`) use
  * each player's hidden potential (sprint 4, `src/world/potential.ts`); older careers keep the fixed two rating points.
  */
-export function trainingPointCap(context: PotentialContext & { training: Pick<SeasonTraining, 'model'> }, player: Pick<Player, 'id' | 'attributes'>, attribute: keyof PlayerAttributes): number {
+export function trainingPointCap(context: PotentialContext & { training: Pick<SeasonTraining, 'model'> }, player: Pick<Player, 'id' | 'attributes'>, attribute: keyof SkillAttributes): number {
   return potentialPointCap(trainingHeadroom(context, player.id), player.attributes[attribute]);
 }
 

@@ -1,4 +1,5 @@
 import type { CourtPoint, CourtPosition, MatchState, Player, Position, PossessionPlay, Side } from '../domain/types';
+import { EXTRA_MATCH, extraAttribute } from '../world/extra-attributes';
 import { HOME_COURT_MAKE_BONUS, SCORE_EFFECT, SHOT_MAKING } from './calibration';
 import { matchPlayer } from './positions';
 
@@ -118,6 +119,12 @@ export function moveForAction(state: MatchState, play: PossessionPlay, action: '
   return positions.map(point => ({ ...point, x: round(point.x), y: round(point.y) }));
 }
 
+/** Mental: in the last minutes of a close fourth quarter or overtime, composed shooters make a little more and nervous ones a little less. */
+export function clutchAdjustment(state: Pick<MatchState, 'period' | 'clockSeconds' | 'score'>, shooter: Player): number {
+  if (state.period < 4 || state.clockSeconds > EXTRA_MATCH.clutchSeconds || Math.abs(state.score.home - state.score.away) > EXTRA_MATCH.clutchMargin) return 0;
+  return (extraAttribute(shooter, 'mental') - EXTRA_MATCH.centre) * EXTRA_MATCH.clutch;
+}
+
 export function shotContext(state: MatchState, play: PossessionPlay): { defenderId: string; distanceM: number; separationM: number; contest: 'open' | 'pressured' | 'contested'; value: 2 | 3; makeChance: number } {
   const shooter = matchPlayer(state, play.offense, play.handlerId)!;
   const defender = matchedDefender(state, play);
@@ -136,6 +143,6 @@ export function shotContext(state: MatchState, play: PossessionPlay): { defender
   const lead = clamp(state.score[play.offense] - state.score[play.offense === 'home' ? 'away' : 'home'], -SCORE_EFFECT.cap, SCORE_EFFECT.cap);
   const base = value === 3 ? SHOT_MAKING.threeBase + skill * SHOT_MAKING.threeSkill : SHOT_MAKING.twoBase + skill * SHOT_MAKING.twoSkill;
   const scoreEffect = lead * SCORE_EFFECT.perPoint * (state.period >= 4 ? SCORE_EFFECT.fourthQuarter : 1);
-  const makeChance = clamp(base + space - defense - height - range - fatigue * .07 + home - scoreEffect, .08, value === 3 ? .65 : .82);
+  const makeChance = clamp(base + space - defense - height - range - fatigue * .07 + home - scoreEffect + clutchAdjustment(state, shooter), .08, value === 3 ? .65 : .82);
   return { defenderId: defender.id, distanceM: Math.round(distance * 100) / 100, separationM, contest, value, makeChance };
 }

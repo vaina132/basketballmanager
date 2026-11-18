@@ -1,4 +1,4 @@
-import type { Player, PlayerAttributes, Position, Team } from '../domain/types';
+import type { Player, PlayerAttributes, SkillAttributes, Position, Team } from '../domain/types';
 import { overallRating } from './performance-rating';
 
 /**
@@ -33,7 +33,7 @@ export interface DataPack {
 }
 
 const POSITIONS: readonly Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
-const ATTRIBUTES: readonly (keyof PlayerAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
+const ATTRIBUTES: readonly (keyof SkillAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/u;
 const COLOR = /^#[0-9a-f]{6}$/u;
 

@@ -3,7 +3,8 @@ export type Side = 'home' | 'away';
 export type EngineVersion = 'rules-2' | 'possession-3';
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 
-export interface PlayerAttributes {
+/** The seven trained skills (1-20): every player record has them; training, potential and the overall rating use them. */
+export interface SkillAttributes {
   readonly twoPoint: number;
   readonly threePoint: number;
   readonly freeThrow: number;
@@ -12,6 +13,22 @@ export interface PlayerAttributes {
   readonly rebounding: number;
   readonly stamina: number;
 }
+
+/**
+ * Five further abilities (owner decision, 18 November 2026), 1-20 like the skills: Blocking, Stealing, Intelligence
+ * (decisions, fewer turnovers), Mental (close games, late in the game) and Discipline (faster training progress).
+ * New careers store them on every player; records without them (exhibition teams, older careers) use the values
+ * `extraAttributes` in `src/world/extra-attributes.ts` estimates from the player's other details.
+ */
+export interface ExtraAttributes {
+  readonly blocking: number;
+  readonly stealing: number;
+  readonly intelligence: number;
+  readonly mental: number;
+  readonly discipline: number;
+}
+
+export interface PlayerAttributes extends SkillAttributes, Partial<ExtraAttributes> {}
 
 export interface Player {
   readonly id: string;

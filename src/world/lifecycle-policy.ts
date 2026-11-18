@@ -1,6 +1,6 @@
 import type { PlayerAging, RetirementNotice } from '../domain/lifecycle';
 import type { SeasonState } from '../domain/season';
-import type { PlayerAttributes } from '../domain/types';
+import type { PlayerAttributes, SkillAttributes } from '../domain/types';
 import type { TrainingPoints } from '../domain/training';
 import type { WorldContext } from '../domain/world';
 import { playerAgeOnDate } from '../data/development-player-profiles';
@@ -14,7 +14,7 @@ const ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense',
 const DAY_MS = 86_400_000;
 export const MIN_LIFECYCLE_POPULATION = 60;
 export const MAX_PENDING_CLUB_RETIREMENTS = 2;
-export const AGING_RATES: Readonly<Record<keyof PlayerAttributes, { fromAge: number; annualPoints: number }>> = {
+export const AGING_RATES: Readonly<Record<keyof SkillAttributes, { fromAge: number; annualPoints: number }>> = {
   twoPoint: { fromAge: 35, annualPoints: 10 }, threePoint: { fromAge: 35, annualPoints: 10 },
   freeThrow: { fromAge: 35, annualPoints: 10 }, passing: { fromAge: 35, annualPoints: 10 },
   defense: { fromAge: 32, annualPoints: 20 }, rebounding: { fromAge: 32, annualPoints: 20 },

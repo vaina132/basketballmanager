@@ -1,12 +1,12 @@
 import type { PlayerKnowledge } from '../domain/scouting';
-import type { PlayerAttributes, Position } from '../domain/types';
+import type { PlayerAttributes, SkillAttributes, Position } from '../domain/types';
 import { ABILITY_RATING_DESCRIPTION, MATCH_RATING_DESCRIPTION, abilityRating, exactAbilityRating, playerMatchRating, type AbilityRating, type PlayerBoxStats } from '../world/performance-rating';
 import './player-rating.css';
 
 interface PlayerRatingProps {
   attributes?: PlayerAttributes;
   knowledge?: PlayerKnowledge;
-  attribute?: keyof PlayerAttributes;
+  attribute?: keyof SkillAttributes;
   /** Weights the overall rating by what the position needs; omitted, the five positions count equally. */
   position?: Position | null;
   compact?: boolean;

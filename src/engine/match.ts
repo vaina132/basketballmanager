@@ -1,12 +1,13 @@
 ﻿/** Deterministic FIBA-2024 rules subset. Probability and fatigue parameters remain uncalibrated; injury rates follow research (sprint 4). */
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../data/fictional-teams';
-import type { CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, Position, PossessionPlay, Side, Tactics, Team } from '../domain/types';
+import type { CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, Position, PossessionPlay, Side, SkillAttributes, Tactics, Team } from '../domain/types';
 import { nextRandom, normalizeSeed } from './random';
 import { injuryPhrase, injuryRiskTotal, isInjuryKind, isMatchInjuryKind, pickInjuryKind, type InjuryKind, type InjuryRisk } from '../domain/injuries';
 import { actionScene, freeThrowPosition, passScene, reboundScene, setupScene, shotScene, turnoverScene } from './court-events';
-import { basketPoint, courtDistance, createPossessionPlay, matchedDefender, moveForAction, positionOf, possessionFormation, primaryHandler, shotContext } from './possession';
+import { basketPoint, clutchAdjustment, courtDistance, createPossessionPlay, matchedDefender, moveForAction, positionOf, possessionFormation, primaryHandler, shotContext } from './possession';
 import { ACTION_SECONDS, BLOCKS, DEFENDER_ROLES, DEFENSIVE_FOULS, LATE_GAME, REBOUNDS, ROTATION, SHOOTING_FOULS, SHOT_MAKING, SHOT_SELECTION, TEAM_REBOUND_OFFENSIVE_SHARE, TEAM_REBOUND_SHARE, TURNOVERS } from './calibration';
 import { overallRating } from '../world/overall-rating';
+import { EXTRA_MATCH, extraAttribute } from '../world/extra-attributes';
 import { asPlayedIn, courtCircles, COURT_POSITIONS, isCourtPosition } from './positions';
 export const MAX_MATCH_PERIODS = 24;
 const MAX_SIMULATION_STEPS = 20_000;
@@ -85,7 +86,7 @@ function assertBoundary(state: MatchState): void {
 }
 function player(state: MatchState, side: Side, id: string): Player { const result = state[side].players.find(p => p.id === id); if (!result) throw new Error('A player is missing from the roster.'); return circlePlayer(state, side, result); }
 function activePlayers(state: MatchState, side: Side): Player[] { return state.lineups[side].map(id => player(state, side, id)); }
-function mean(players: readonly Player[], skill: keyof Player['attributes']): number { return players.reduce((sum, player) => sum + player.attributes[skill], 0) / Math.max(1, players.length); }
+function mean(players: readonly Player[], skill: keyof SkillAttributes): number { return players.reduce((sum, player) => sum + player.attributes[skill], 0) / Math.max(1, players.length); }
 function choose(state: MatchState, players: readonly Player[], weight: (player: Player) => number): Player {
   if (!players.length) throw new Error('Cannot choose a player from an empty lineup.');
   const weights = players.map(player => Math.max(0.01, weight(player))); let target = draw(state) * weights.reduce((sum, value) => sum + value, 0);
@@ -506,9 +507,11 @@ function installControl(state: MatchState, side: Side, handlerId: string, positi
   state.possessionPlay.positions = positions.map(point => ({ ...point }));
   state.phase = 'live-ball'; state.stoppage = null;
 }
-function possessionTurnover(state: MatchState, play: PossessionPlay, shotClock = false): void {
+function possessionTurnover(state: MatchState, play: PossessionPlay, shotClock = false, action?: 'advance' | 'pass' | 'drive' | 'shot'): void {
   const offense = play.offense, defense = other(offense), handler = player(state, offense, play.handlerId), defender = matchedDefender(state, play);
-  const stolen = !shotClock && draw(state) < TURNOVERS.stealShare;
+  // On passes and drives a good stealer turns more of the defense's forced turnovers into steals.
+  const stealShare = action === 'pass' || action === 'drive' ? clamp(TURNOVERS.stealShare + (extraAttribute(defender, 'stealing') - EXTRA_MATCH.centre) * EXTRA_MATCH.stealShare, .3, .85) : TURNOVERS.stealShare;
+  const stolen = !shotClock && draw(state) < stealShare;
   state.stats[handler.id]!.turnovers += 1;
   if (stolen) state.stats[defender.id]!.steals += 1;
   const from = ballAt(positionOf(play, handler.id)), to = stolen ? ballAt(positionOf(play, defender.id)) : { ...from, y: from.y < .5 ? 0 : 1, height: .2 };
@@ -544,8 +547,11 @@ function resolvePossessionShot(state: MatchState, play: PossessionPlay, rushed: 
   const fouled = draw(state) < clamp(SHOOTING_FOULS.base + state.tactics[defense].pressure * SHOOTING_FOULS.pressure + (three ? 0 : SHOOTING_FOULS.twoPoint) - Math.max(0, context.separationM - 1.5) * SHOOTING_FOULS.separation, SHOOTING_FOULS.min, SHOOTING_FOULS.max);
   // Inside, help defenders (mostly bigs) foul and block as well as the shooter's own defender; threes stay with him.
   const defenders = activePlayers(state, defense), helper = (weights: Readonly<Record<Player['position'], number>>, matched: number, careful: boolean) => three ? defender : choose(state, defenders, p => weights[p.position] * (p.id === defender.id ? matched : 1) * (careful ? foulCaution(state, p) : 1));
-  const fouler = fouled ? helper(DEFENDER_ROLES.foul, DEFENDER_ROLES.matchedFoul, true) : defender, blocker = fouled ? defender : helper(DEFENDER_ROLES.block, DEFENDER_ROLES.matchedBlock, false);
-  const blockChance = clamp(BLOCKS.base + blocker.attributes.defense * BLOCKS.defense + Math.max(0, blocker.heightCm - shooter.heightCm) * BLOCKS.height - Math.max(0, context.separationM - .75) * BLOCKS.separation, BLOCKS.min, BLOCKS.max) * (three ? BLOCKS.threeFactor : 1);
+  const blockerWeight = (p: Player) => Math.max(.2, 1 + (extraAttribute(p, 'blocking') - EXTRA_MATCH.centre) * EXTRA_MATCH.blockerChoice);
+  const fouler = fouled ? helper(DEFENDER_ROLES.foul, DEFENDER_ROLES.matchedFoul, true) : defender, blocker = fouled ? defender : three ? defender : choose(state, defenders, p => DEFENDER_ROLES.block[p.position] * (p.id === defender.id ? DEFENDER_ROLES.matchedBlock : 1) * blockerWeight(p));
+  // Blocking adds to two-point shots, fully near the rim and half further out; threes keep the defense-only chance.
+  const blocking = three ? 0 : (extraAttribute(blocker, 'blocking') - EXTRA_MATCH.centre) * EXTRA_MATCH.block * (context.distanceM <= EXTRA_MATCH.rimDistance ? 1 : .5);
+  const blockChance = clamp(BLOCKS.base + blocker.attributes.defense * BLOCKS.defense + blocking + Math.max(0, blocker.heightCm - shooter.heightCm) * BLOCKS.height - Math.max(0, context.separationM - .75) * BLOCKS.separation, BLOCKS.min, BLOCKS.max) * (three ? BLOCKS.threeFactor : 1);
   const blocked = !fouled && draw(state) < blockChance;
   const made = !blocked && draw(state) < context.makeChance * (fouled ? SHOT_MAKING.andOne : 1) - (rushed ? SHOT_MAKING.rushed : 0);
   const origin = positionOf(play, shooter.id), hoop = basketPoint(state, offense);
@@ -589,7 +595,10 @@ function resolvePossessionAction(state: MatchState): void {
   else {
     const roll = draw(state), shootChance = distance < 4.5 ? SHOT_SELECTION.closeRange : clamp(SHOT_SELECTION.base + (play.actions - 1) * SHOT_SELECTION.perAction + tactics.outsideShare * SHOT_SELECTION.outsideShare, SHOT_SELECTION.base, SHOT_SELECTION.max);
     const passShare = clamp(SHOT_SELECTION.passBase - (play.actions - 1) * SHOT_SELECTION.passDecay + tactics.outsideShare * SHOT_SELECTION.passOutside, .15, .9);
-    action = roll < shootChance ? 'shot' : roll < shootChance + (1 - shootChance) * passShare ? 'pass' : 'drive';
+    // Intelligence: a smart handler takes open looks a little more often and contested ones a little less.
+    const separation = courtDistance(positionOf(play, handler.id), positionOf(play, defender.id)), look = separation > 1.75 ? 1 : separation <= .85 ? -1 : 0;
+    const chosen = distance < 4.5 ? shootChance : clamp(shootChance * (1 + look * (extraAttribute(handler, 'intelligence') - EXTRA_MATCH.centre) * EXTRA_MATCH.selection), SHOT_SELECTION.base * .8, SHOT_SELECTION.max);
+    action = roll < chosen ? 'shot' : roll < chosen + (1 - chosen) * passShare ? 'pass' : 'drive';
   }
   // Include organizing, reading the defense and executing each action. Tempo
   // changes these windows modestly; animation duration is unrelated to them.
@@ -612,11 +621,14 @@ function resolvePossessionAction(state: MatchState): void {
   } else {
     // Every action can end in a turnover or a whistle (the advance: backcourt pressure); the rates are calibrated.
     const fatigue = (100 - state.stats[handler.id]!.condition) / 100;
-    const turnoverChance = clamp(TURNOVERS[action] + pressure * TURNOVERS.pressure + (defender.attributes.defense - handler.attributes.passing) * TURNOVERS.skillGap + fatigue * TURNOVERS.fatigue + moraleTurnoverAdjustment(state, handler.id), .006, TURNOVERS.max);
+    // On passes and drives the defender's Stealing takes part of his defense's share; the handler's Intelligence lowers turnovers.
+    const defending = action === 'pass' || action === 'drive' ? defender.attributes.defense * (1 - EXTRA_MATCH.stealSkill) + extraAttribute(defender, 'stealing') * EXTRA_MATCH.stealSkill : defender.attributes.defense;
+    const decisions = (extraAttribute(handler, 'intelligence') - EXTRA_MATCH.turnoverCentre) * EXTRA_MATCH.turnover;
+    const turnoverChance = clamp(TURNOVERS[action] + pressure * TURNOVERS.pressure + (defending - handler.attributes.passing) * TURNOVERS.skillGap - decisions + fatigue * TURNOVERS.fatigue + moraleTurnoverAdjustment(state, handler.id), .006, TURNOVERS.max);
     const offensiveFoul = action === 'advance' ? 0 : TURNOVERS.offensiveFoul, heldBall = action === 'advance' ? 0 : .004;
     const foulChance = stopClock ? 1 : DEFENSIVE_FOULS[action] + pressure * DEFENSIVE_FOULS.pressure;
     const roll = draw(state);
-    if (roll < turnoverChance) possessionTurnover(state, play);
+    if (roll < turnoverChance) possessionTurnover(state, play, false, action);
     else if (roll < turnoverChance + offensiveFoul) {
       personalFoul(state, offense, handler, `${handler.name} commits a team-control offensive foul. No free throws.`);
       state.stats[handler.id]!.turnovers += 1; resetPossession(state, defense); whistle(state);
@@ -668,7 +680,7 @@ function resolvePossessionFreeThrow(state: MatchState): void {
   const play = { ...createPossessionPlay({ ...state, possession: sequence.side }, shooter.id), positions };
   emit(state, { type: 'command', side: sequence.side, playerId: shooter.id, text: `${shooter.name} sets at the free-throw line.`,
     scene: actionScene('setup', sequence.side, visualStart(state, positions), positions, visualBallStart(state, location), ballAt(location)) });
-  const made = draw(state) < clamp(.45 + shooter.attributes.freeThrow * .025 - (100 - stats.condition) / 100 * .021, .4, .95);
+  const made = draw(state) < clamp(.45 + shooter.attributes.freeThrow * .025 - (100 - stats.condition) / 100 * .021 + clutchAdjustment(state, shooter), .4, .95);
   stats.freeThrowsAttempted += 1; if (made) { stats.freeThrowsMade += 1; creditPoints(state, sequence.side, shooter, 1); }
   const hoop = basketPoint(state, sequence.side), landing = made ? hoop : { x: hoop.x - attackingDirection(state, sequence.side) / 28, y: .46 + draw(state) * .08 };
   const index = sequence.total - sequence.remaining + 1;

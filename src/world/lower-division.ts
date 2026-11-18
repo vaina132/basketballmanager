@@ -1,5 +1,5 @@
 import type { BackgroundClub, LowerDivisionIdentities, LowerDivisionMembers } from '../domain/background';
-import type { Player, PlayerAttributes, Position, Team } from '../domain/types';
+import type { Player, PlayerAttributes, SkillAttributes, Position, Team } from '../domain/types';
 import type { CareerWorld } from '../domain/world';
 import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPresident } from '../data/development-presidents';
@@ -96,9 +96,9 @@ export function lowerDivisionExchanges(input: {
 
 const FIRST = ['Aren', 'Bero', 'Calin', 'Dario', 'Edin', 'Faro', 'Goran', 'Hale', 'Ilan', 'Jaro', 'Kian', 'Loren', 'Matei', 'Nevin', 'Oren', 'Pavo', 'Rion', 'Stavo', 'Tarin', 'Valen'];
 const LAST = ['Adrel', 'Brenik', 'Casol', 'Delmar', 'Ervan', 'Fennor', 'Galit', 'Harlen', 'Istov', 'Jorvik', 'Kestel', 'Lunar', 'Morvin', 'Nardel', 'Ostrin', 'Pellar', 'Quorin', 'Restan', 'Solvar', 'Tevrin'];
-const ATTRIBUTES: readonly (keyof PlayerAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
+const ATTRIBUTES: readonly (keyof SkillAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
 /** Position emphasis on the 1-20 scale, matching the authored squads' shape. */
-const EMPHASIS: Readonly<Record<Position, Partial<Record<keyof PlayerAttributes, number>>>> = {
+const EMPHASIS: Readonly<Record<Position, Partial<Record<keyof SkillAttributes, number>>>> = {
   PG: { passing: 2, threePoint: 1, rebounding: -2 }, SG: { threePoint: 2, passing: 1, rebounding: -1 }, SF: { twoPoint: 1, defense: 1 },
   PF: { rebounding: 2, twoPoint: 1, threePoint: -1 }, C: { rebounding: 3, defense: 1, threePoint: -2, passing: -1 },
 };
@@ -108,7 +108,7 @@ function attributesFor(target: number, position: Position, variation: (key: stri
   const uniform = (level: number) => overallRating(Object.fromEntries(ATTRIBUTES.map(key => [key, level])) as unknown as PlayerAttributes, position);
   let level = 1;
   while (level < 20 && uniform(level + 1) <= target) level += 1;
-  const skills = Object.fromEntries(ATTRIBUTES.map(key => [key, Math.max(1, Math.min(20, level + (EMPHASIS[position][key] ?? 0) + variation(key)))])) as unknown as Record<keyof PlayerAttributes, number>;
+  const skills = Object.fromEntries(ATTRIBUTES.map(key => [key, Math.max(1, Math.min(20, level + (EMPHASIS[position][key] ?? 0) + variation(key)))])) as unknown as Record<keyof SkillAttributes, number>;
   // Nudge one ability at a time towards the target, rotating through the abilities; bounded and deterministic.
   for (let step = 0; step < 140; step += 1) {
     const current = overallRating(skills, position);

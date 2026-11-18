@@ -1,10 +1,10 @@
-import type { PlayerAttributes } from './types';
+import type { ExtraAttributes, PlayerAttributes, SkillAttributes } from './types';
 import type { CoachingWeekAssignment } from './coaching';
 import type { FitnessWeekAssignment } from './fitness';
 
-export type TrainingFocus = 'balanced' | keyof PlayerAttributes;
+export type TrainingFocus = 'balanced' | keyof SkillAttributes;
 export type TrainingIntensity = 'recovery' | 'light' | 'standard' | 'heavy';
-export type TrainingPoints = Record<keyof PlayerAttributes, number>;
+export type TrainingPoints = Record<keyof SkillAttributes, number>;
 
 export interface TrainingPlan {
   delegated: boolean;

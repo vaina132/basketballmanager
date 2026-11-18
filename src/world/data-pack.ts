@@ -1,5 +1,6 @@
 import type { Player, PlayerAttributes, SkillAttributes, Position, Team } from '../domain/types';
 import { overallRating } from './performance-rating';
+import { withExtraAttributes } from './extra-attributes';
 
 /**
  * Real-data game packs (scripts/real-data-pack.mjs). A pack is a private file loaded from the player's own computer;
@@ -120,7 +121,7 @@ export function matchdayTeam(pack: DataPack, clubId: string, size = MATCHDAY_SQU
     let number = player.number !== null && player.number >= 0 && player.number <= 99 && !used.has(player.number) ? player.number : -1;
     if (number < 0) { number = 0; while (used.has(number)) number += 1; }
     used.add(number);
-    return Object.freeze({ id: player.id, name: player.name, number, position: player.position, heightCm: player.heightCm, weightKg: player.weightKg, ...NEUTRAL_APPEARANCE, attributes: Object.freeze({ ...player.attributes }) }) satisfies Player;
+    return Object.freeze({ id: player.id, name: player.name, number, position: player.position, heightCm: player.heightCm, weightKg: player.weightKg, ...NEUTRAL_APPEARANCE, attributes: Object.freeze(withExtraAttributes({ id: player.id, position: player.position, heightCm: player.heightCm, attributes: { ...player.attributes }, age: player.age, minutes: player.ratingMinutes })) }) satisfies Player;
   });
   return Object.freeze({ id: club.id, name: club.name, shortName: club.shortName, color: club.color ?? NEUTRAL_CLUB_COLOR, players: Object.freeze(numbered) });
 }

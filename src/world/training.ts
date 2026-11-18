@@ -12,6 +12,7 @@ import { createRosterSnapshots, rosterForRound } from './rosters';
 import { fitnessAssignments } from './fitness-policy';
 import { ageTrainingRate, applyAgingAttributes, type LifecycleContext } from './lifecycle-policy';
 import { seasonRounds } from './career-world';
+import { EXTRA_MATCH, storedExtras } from './extra-attributes';
 import type { CareerWorld } from '../domain/world';
 import { potentialPointCap, trainingHeadroom, type PotentialContext } from './potential';
 
@@ -59,6 +60,11 @@ export function withTrainingPoints(training: SeasonTraining, players: readonly P
   return missing.length ? { ...training, points: { ...training.points, ...Object.fromEntries(missing.map(player => [player.id, emptyPoints()])) } } : training;
 }
 
+/** Weekly practice points after Discipline (`EXTRA_MATCH.trainingPerPoint` percent per point above or below 10), rounded down. */
+export function disciplinedPractice(points: number, discipline: number): number {
+  return Math.max(0, Math.floor(points * (100 + (discipline - 10) * EXTRA_MATCH.trainingPerPoint) / 100));
+}
+
 /** Project training progress into a new match squad; authored identities stay immutable. */
 export function developClub(club: Team, training: SeasonTraining, context: PotentialContext & LifecycleContext): Team {
   return {
@@ -66,11 +72,11 @@ export function developClub(club: Team, training: SeasonTraining, context: Poten
     players: club.players.map(player => {
       const headroom = trainingHeadroom({ ...context, training }, player.id);
       return {
-        ...player, attributes: applyAgingAttributes(context, player.id, Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => {
+        ...player, attributes: applyAgingAttributes(context, player.id, { ...Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => {
           const points = training.points[player.id]?.[attribute];
           if (!Number.isInteger(points) || points < 0 || points > potentialPointCap(headroom, player.attributes[attribute])) throw new Error('Training progress is outside its supported development limits.');
           return [attribute, Math.min(20, player.attributes[attribute] + Math.floor(points / 100))];
-        })) as unknown as PlayerAttributes, context.date ?? ''),
+        })), ...storedExtras(player.attributes) } as PlayerAttributes, context.date ?? ''),
       };
     }),
   };
@@ -180,6 +186,8 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       const ordinaryPracticePoints = budget;
       if (agingActive) budget = Math.floor(weightedBudget / 10_000);
       const aging = agingActive ? { ordinaryPracticePoints, adjustedPracticePoints: budget, rateBasisPoints: ordinaryPracticePoints > 0 ? Math.floor(weightedBudget / ordinaryPracticePoints) : ageTrainingRate(input, player.id, toDate) } : undefined;
+      // Discipline (stored in careers started with the five abilities): 2% more practice per point above 10, less below.
+      if (player.attributes.discipline !== undefined) budget = disciplinedPractice(budget, player.attributes.discipline);
       const desired = emptyPoints(), gains = emptyPoints(), coachingGains = emptyPoints(), previous = training.points[player.id];
       if (focus === 'balanced') {
         for (const key of TRAINING_ATTRIBUTES) desired[key] = Math.floor(budget / TRAINING_ATTRIBUTES.length);

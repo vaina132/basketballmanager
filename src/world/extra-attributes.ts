@@ -119,3 +119,37 @@ export const EXTRA_MATCH = {
   /** Training progress per Discipline point above or below 10 (2% a point: 20 gives +20%, 1 gives -18%). */
   trainingPerPoint: 2,
 } as const;
+
+const worldFlags = new WeakMap<object, boolean>();
+/**
+ * Whether a career's world stores the five on its players: true for careers started with them (real-club worlds from
+ * the pack), false for older careers and the fictional development world, whose new prospects then keep the old shape.
+ */
+export function storesExtraAttributes(world: { clubs: readonly { players: readonly Pick<Player, 'attributes'>[] }[] }): boolean {
+  let known = worldFlags.get(world);
+  if (known === undefined) { const first = world.clubs.find(club => club.players.length)?.players[0]; known = !!first && hasExtraAttributes(first.attributes); worldFlags.set(world, known); }
+  return known;
+}
+
+/** New academy and youth-squad prospects of a world that stores the five get them by the same rules (no recorded minutes). */
+export function prospectsWithExtras<T extends { player: Player; dateOfBirth: string }>(world: Parameters<typeof storesExtraAttributes>[0], prospects: readonly T[], onDate: string): T[] {
+  if (!storesExtraAttributes(world)) return [...prospects];
+  return prospects.map(prospect => {
+    const birth = prospect.dateOfBirth, age = Number(onDate.slice(0, 4)) - Number(birth.slice(0, 4)) - (onDate.slice(5) < birth.slice(5) ? 1 : 0);
+    return { ...prospect, player: { ...prospect.player, attributes: withExtraAttributes({ ...prospect.player, age, minutes: 0 }) } };
+  });
+}
+
+/**
+ * Save shape for an ability record: the seven skills, and either none or all five further abilities, each a whole
+ * number from 1 to 20. Returns a reason when the record does not fit, otherwise null.
+ */
+export function abilityShapeProblem(value: unknown, skills: readonly string[]): string | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return 'must be an object';
+  const record = value as Record<string, unknown>, keys = Object.keys(record);
+  const extras = EXTRA_ATTRIBUTES.filter(key => Object.hasOwn(record, key));
+  if (extras.length !== 0 && extras.length !== EXTRA_ATTRIBUTES.length) return 'must hold all five further abilities or none';
+  if (skills.some(key => !Object.hasOwn(record, key)) || keys.length !== skills.length + extras.length) return 'must hold the seven skills and only supported abilities';
+  if (keys.some(key => !Number.isInteger(record[key]) || (record[key] as number) < 1 || (record[key] as number) > 20)) return 'must hold abilities from 1 to 20';
+  return null;
+}

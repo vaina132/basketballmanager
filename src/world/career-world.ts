@@ -1,3 +1,4 @@
+import { abilityShapeProblem } from './extra-attributes';
 import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import type { Rivalry } from '../domain/rivalries';
@@ -308,7 +309,8 @@ export function checkPlayerShape(value: unknown, path: string, ids: Set<string>,
   if (!isText(player.name) || !isWhole(player.number, 0, 99) || numbers.has(player.number) || !['PG', 'SG', 'SF', 'PF', 'C'].includes(player.position as string)) fail(path, 'needs a name, a unique shirt number and a position');
   numbers.add(player.number);
   if (!isWhole(player.heightCm, 120, 260) || typeof player.weightKg !== 'number' || !(player.weightKg >= 35 && player.weightKg <= 250) || typeof player.skinTone !== 'string' || !COLOUR.test(player.skinTone) || typeof player.hairColor !== 'string' || !COLOUR.test(player.hairColor)) fail(path, 'needs a supported build and appearance');
-  if (!exactKeys(player.attributes, ATTRIBUTE_KEYS) || ATTRIBUTE_KEYS.some(key => !isWhole((player.attributes as Record<string, unknown>)[key], 1, 20))) fail(`${path}.attributes`, 'must hold seven abilities from 1 to 20');
+  // Careers started with the five further abilities store them on every player (`src/world/extra-attributes.ts`).
+  if (abilityShapeProblem(player.attributes, ATTRIBUTE_KEYS)) fail(`${path}.attributes`, 'must hold seven abilities from 1 to 20, and the five further abilities or none');
 }
 
 /** Countries without a lower-division list (owner decision, 15 November 2026): no club leaves their full world for now. */

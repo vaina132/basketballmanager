@@ -8,6 +8,7 @@ import type { DevelopmentPlayerProfile } from '../data/development-player-profil
 import { NO_LOWER_DIVISION_COUNTRIES, validateWorld } from './career-world';
 import type { DomesticLeague } from './divisions';
 import { overallRating } from './overall-rating';
+import { withExtraAttributes } from './extra-attributes';
 import { REAL_WORLD_RULES, realWorldWage } from './real-world';
 
 /**
@@ -146,10 +147,13 @@ export function generateLowerDivisionSquad(seed: number, clubId: string, seasonN
     const id = `${clubId}-generated-s${seasonNumber}-${slot + 1}`.slice(0, 80);
     const value = (key: string, count: number) => hash(seed, `${id}:${key}`) % count;
     const target = Math.round(targetStrength) + LOWER_DIVISION_RULES.playerOffsets[slot]!;
-    const attributes = attributesFor(target, position, key => value(key, 3) - 1);
+    const skills = attributesFor(target, position, key => value(key, 3) - 1);
     const positionIndex = ['PG', 'SG', 'SF', 'PF', 'C'].indexOf(position);
     const age = youngest + value('age', oldest - youngest + 1);
-    squad.players.push({ id, name: `${FIRST[value('first', FIRST.length)]} ${LAST[value('last', LAST.length)]}`, number: 4 + slot, position, heightCm: 182 + positionIndex * 6 + value('height', 9), weightKg: 78 + positionIndex * 7 + value('weight', 10),
+    const heightCm = 182 + positionIndex * 6 + value('height', 9);
+    // The five further abilities follow the same rules as real players', with the generated age and no recorded minutes.
+    const attributes = withExtraAttributes({ id, position, heightCm, attributes: skills, age, minutes: 0 });
+    squad.players.push({ id, name: `${FIRST[value('first', FIRST.length)]} ${LAST[value('last', LAST.length)]}`, number: 4 + slot, position, heightCm, weightKg: 78 + positionIndex * 7 + value('weight', 10),
       skinTone: ['#e8b58e', '#c98c62', '#a96f49', '#774d35', '#edc5a1'][value('skin', 5)]!, hairColor: ['#29201b', '#553b29', '#191919', '#8b6744'][value('hair', 4)]!, attributes });
     // Exactly `age` on the season's first day: born that many years earlier, a year more if the birthday is still to come.
     const birthday = `${String(1 + value('month', 12)).padStart(2, '0')}-${String(1 + value('day', 28)).padStart(2, '0')}`;

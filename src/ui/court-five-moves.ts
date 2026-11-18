@@ -17,7 +17,7 @@ export const COURT_PICTURE_SPOTS: readonly { position: Position; left: number; t
   { position: 'PF', left: 67, top: 24 },
   { position: 'SF', left: 16, top: 54 },
   { position: 'SG', left: 84, top: 54 },
-  { position: 'PG', left: 50, top: 78 },
+  { position: 'PG', left: 50, top: 75 },
 ]
 
 export const occupantOf = (circles: Readonly<Record<string, Position>>, position: Position): string | undefined => Object.keys(circles).find(id => circles[id] === position)

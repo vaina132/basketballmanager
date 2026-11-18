@@ -42,3 +42,19 @@ export const DEVELOPMENT_COACHES: readonly Coach[] = Object.freeze([
 ]);
 
 export const COACHES = DEVELOPMENT_COACHES;
+
+/**
+ * Top coaches for club-level careers (owner play-test feedback, 18 November 2026: "There are no 5-star coaches").
+ * A coach's overall is the average of his seven skills, and the authored coaches above top out at 8 (4 stars), so no
+ * coach could ever show more than 4 stars. These terms add two 5-star, two 4.5-star and two 4-star coaches at high
+ * fees; each market repeats them by its size (`src/data/staff-directory.ts`). Names are generated; ids are
+ * `coach-elite-NN`, so the authored coaches and every saved appointment keep their identity and terms.
+ */
+export const ELITE_COACH_TERMS: readonly Omit<Coach, 'id' | 'name'>[] = Object.freeze([
+  [15_000_000, [10, 9, 10, 10, 9, 10, 10]],
+  [15_000_000, [9, 10, 9, 10, 10, 10, 9]],
+  [12_000_000, [9, 9, 9, 10, 9, 9, 8]],
+  [12_000_000, [10, 9, 8, 9, 9, 10, 8]],
+  [9_500_000, [8, 9, 8, 8, 9, 8, 8]],
+  [9_500_000, [9, 8, 8, 9, 8, 8, 8]],
+].map(([fee, values]) => Object.freeze({ fee: fee as number, skills: Object.freeze(Object.fromEntries(attributes.map((key, index) => [key, (values as number[])[index]!])) as Coach['skills']) })));

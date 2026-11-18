@@ -209,7 +209,9 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
     }
     while (getClubCoaching(next.coaching, club.id).length < MAX_COACHES) {
       const assignments = coachingAssignments(next.coaching, state.clubs, state.seasonNumber, state.round)![club.id]!;
-      const remaining = staffLimit(next, club.id) - staffCommitted(next, club.id);
+      // Club-level careers: like every computer appointment, an extra coach costs at most the role's share of the staff
+      // budget (`STAFF_LEVEL_RULES`), so computer clubs do not empty the market's top coaches.
+      const remaining = Math.min(staffLimit(next, club.id) - staffCommitted(next, club.id), levelled ? staffShareCap(next, club.id, 'coaches') : Infinity);
       const candidates = withCalculationCache(() => availableCoaches(next.coaching, next).filter(coach => staffFee(next, club.id, coach.fee) <= remaining && canPayCoach(next, club.id, coach))).flatMap(coach => FOCUSES.map(focus => ({ coach, focus, utility: ATTRIBUTES.reduce((sum, attribute) => {
         const current = coachingRatingForAttribute(assignments, attribute);
         const next = coachingRatingForAttribute([{ contractId: '', coachId: coach.id, focus }], attribute);

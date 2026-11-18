@@ -6,6 +6,12 @@ import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS } from '..
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { staffFee, withRealEconomy } from '../src/world/economy';
+import { availableScouts, scoutRating } from '../src/world/scout-policy';
+import { availableFitnessCoaches, fitnessRating } from '../src/world/fitness-policy';
+import { availablePhysios, physioRating } from '../src/world/physio-policy';
+import { availableAssistants, assistantRating } from '../src/world/assistant-policy';
+import { availableYouthCoaches, youthCoachRating } from '../src/world/youth-policy';
+import { coachRating } from '../src/world/coaching';
 import { availableCoaches, coachHireReason, coachingCommitted, COACHING_BUDGET, getClubCoaching, hireCoach } from '../src/world/coaching';
 import { staffCommitted, staffMoneyReason } from '../src/world/staff-policy';
 import { staffLimit } from '../src/world/wage-pool';
@@ -73,5 +79,44 @@ describe('coach hiring in club-level careers (no fixed catalog cap)', () => {
     const cheap = () => availableCoaches(state.coaching, state).filter(coach => coachHireReason(state, coach.id) === null).sort((left, right) => left.fee - right.fee)[0];
     while (getClubCoaching(state.coaching, clubId).length < 3 && cheap()) state = hireCoach(state, cheap()!.id);
     if (getClubCoaching(state.coaching, clubId).length === 3) expect(coachHireReason(state, availableCoaches(state.coaching, state)[0]!.id)).toBe('All three coaching places are filled. Release a coach first.');
+  }, 300_000);
+});
+
+/** Candidates by stars (a rating of 10 is 5 stars) in each staff role's market. */
+function marketStars(state: SeasonState): Record<string, { five: number; four: number; fees: { top: number; modest: number } }> {
+  const roles: Record<string, { rating: number; fee: number }[]> = {
+    coaches: availableCoaches(state.coaching, state).map(coach => ({ rating: coachRating(coach), fee: coach.fee })),
+    scouts: availableScouts(state).map(scout => ({ rating: scoutRating(scout), fee: scout.fee })),
+    fitness: availableFitnessCoaches(state).map(coach => ({ rating: fitnessRating(coach), fee: coach.fee })),
+    physio: availablePhysios(state).map(physio => ({ rating: physioRating(physio), fee: physio.fee })),
+    assistant: availableAssistants(state).map(coach => ({ rating: assistantRating(coach), fee: coach.fee })),
+    youth: availableYouthCoaches(state).map(coach => ({ rating: youthCoachRating(coach), fee: coach.fee })),
+  };
+  return Object.fromEntries(Object.entries(roles).map(([role, list]) => [role, {
+    five: list.filter(item => item.rating >= 10).length, four: list.filter(item => item.rating === 8).length,
+    fees: { top: Math.min(...list.filter(item => item.rating >= 10).map(item => item.fee)), modest: Math.max(...list.filter(item => item.rating <= 5).map(item => item.fee)) },
+  }]));
+}
+
+describe('top staff in the market of a new real-club career', () => {
+  it('offers 5-star and 4-star candidates in every role, at higher fees than modest ones, also after computer clubs recruit', () => {
+    let state = career('richest');
+    for (const [role, stars] of Object.entries(marketStars(state))) {
+      expect(stars.five, `${role} 5-star`).toBeGreaterThanOrEqual(2);
+      expect(stars.four, `${role} 4-star`).toBeGreaterThanOrEqual(2);
+      expect(stars.fees.top, `${role} fees`).toBeGreaterThan(stars.fees.modest);
+    }
+    // Two sets of top coaches for 36 clubs: four 5-star coaches, none taken by the opening staff.
+    expect(marketStars(state).coaches.five).toBe(4);
+    // Computer clubs hire extra coaches within the role's share of their staff budget, so the top coaches stay.
+    for (let week = 0; week < 8; week += 1) state = play(state);
+    expect(marketStars(state).coaches.five).toBeGreaterThanOrEqual(2);
+    expect(marketStars(state).coaches.four).toBeGreaterThanOrEqual(2);
+    // The richest club can hire a 5-star coach, and the save passes the strict check.
+    const top = availableCoaches(state.coaching, state).filter(coach => coachRating(coach) === 10).sort((left, right) => left.id < right.id ? -1 : 1)[0]!;
+    if (getClubCoaching(state.coaching, state.managedClubId).length < 3 && coachHireReason(state, top.id) === null) {
+      state = hireCoach(state, top.id);
+      expect(roundTrip(state)).toEqual(state);
+    }
   }, 300_000);
 });

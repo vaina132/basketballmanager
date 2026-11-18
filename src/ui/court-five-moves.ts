@@ -6,6 +6,20 @@ export type CourtPick = { kind: 'circle'; position: Position } | { kind: 'bench'
 /** A completed pick: this player goes to this circle (`placeInCircle`). */
 export interface CourtMove { playerId: string; position: Position }
 
+/**
+ * The court picture with the basket at the top (owner request, 18 November 2026): the centre and power forward by the
+ * basket, the forwards' and guards' wings below them, the point guard at the bottom. Circles are listed top to bottom
+ * and left to right, the order they are read and reached with the keyboard. `left` and `top` are the circle's centre in
+ * percent of the court.
+ */
+export const COURT_PICTURE_SPOTS: readonly { position: Position; left: number; top: number }[] = [
+  { position: 'C', left: 33, top: 19 },
+  { position: 'PF', left: 67, top: 24 },
+  { position: 'SF', left: 16, top: 54 },
+  { position: 'SG', left: 84, top: 54 },
+  { position: 'PG', left: 50, top: 78 },
+]
+
 export const occupantOf = (circles: Readonly<Record<string, Position>>, position: Position): string | undefined => Object.keys(circles).find(id => circles[id] === position)
 export const samePick = (a: CourtPick | null, b: CourtPick | null): boolean => !!a && !!b && (a.kind === 'circle' && b.kind === 'circle' ? a.position === b.position : a.kind === 'bench' && b.kind === 'bench' && a.playerId === b.playerId)
 

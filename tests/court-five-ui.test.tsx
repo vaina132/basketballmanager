@@ -71,3 +71,19 @@ describe('the court picture on the match screen (owner request, 16 November 2026
     expect(exhibition).toContain('Drag or select two on-court players to swap their places at once.');
   });
 });
+
+describe('the court picture upside down (owner request, 18 November 2026)', () => {
+  it('puts the basket and the centre at the top and the point guard at the bottom, in reading order', () => {
+    const html = render(ready());
+    const order = [...html.matchAll(/data-court-spot="([A-Z]+)" style="left:(\d+)%;top:(\d+)%"/g)].map(([, position, left, top]) => ({ position, left: Number(left), top: Number(top) }));
+    expect(order.map(spot => spot.position)).toEqual(['C', 'PF', 'SF', 'SG', 'PG']);
+    const top = Object.fromEntries(order.map(spot => [spot.position, spot.top]));
+    expect(Math.min(...order.map(spot => spot.top))).toBe(top.C);
+    expect(Math.max(...order.map(spot => spot.top))).toBe(top.PG);
+    // The bigs by the basket, the wings below them, the point guard below the wings.
+    expect(Math.max(top.C!, top.PF!)).toBeLessThan(Math.min(top.SF!, top.SG!));
+    expect(Math.max(top.SF!, top.SG!)).toBeLessThan(top.PG!);
+    // The basket is drawn near the top: the court lines are turned upside down.
+    expect(html).toContain('transform="matrix(1 0 0 -1 0 150)"');
+  });
+});

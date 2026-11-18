@@ -10,17 +10,12 @@
 .court-five-queued{margin:0 0 10px;font-size:12px;line-height:1.5}
 .court-five-layout{display:grid;grid-template-columns:minmax(260px,440px) minmax(0,1fr);gap:14px;align-items:start}
 
-/* The half court: basket at the bottom, the five circles where each position usually stands. */
+/* The half court: basket at the top, the five circles where each position usually stands (places in court-five-moves.ts). */
 .court-five-court{position:relative;width:100%;aspect-ratio:1;container-type:inline-size;margin-bottom:14px;background:#1b2129;border:1px solid var(--border);border-radius:2px;--circle:clamp(46px,15cqw,68px)}
 .court-five-lines{position:absolute;inset:0;width:100%;height:100%;fill:none;stroke:#3b4654;stroke-width:1.1;vector-effect:non-scaling-stroke}
 .court-five-lines .court-five-paint{fill:#e5aa550d}
 .court-five-lines circle{stroke:var(--accent);opacity:.7}
 .court-five-spot{position:absolute;display:flex;flex-direction:column;align-items:center;gap:3px;width:34cqw;transform:translate(-50%,calc(var(--circle) / -2));text-align:center}
-.court-five-spot-pg{left:50%;top:11%}
-.court-five-spot-sg{left:83%;top:30%}
-.court-five-spot-sf{left:17%;top:30%}
-.court-five-spot-pf{left:66%;top:65%}
-.court-five-spot-c{left:32%;top:71%}
 .court-five-circle{display:flex;flex-direction:column;align-items:center;gap:3px;max-width:100%;padding:0;background:none;color:var(--text);touch-action:manipulation}
 .court-five-circle:disabled{opacity:1;cursor:default}
 .court-five-circle[draggable=true]:not(:disabled){cursor:grab}

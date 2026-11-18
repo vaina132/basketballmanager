@@ -4,7 +4,7 @@ import type { MatchState, Position, Side } from '../domain/types'
 import type { PlayerKnowledge } from '../domain/scouting'
 import { arrangeBestFive, cancelSubstitution, isPlayerEligible, placeInCircle } from '../engine/match'
 import { arrangeCircles, courtCircles, COURT_POSITIONS } from '../engine/positions'
-import { occupantOf, outOfPositionWarning, resolveCourtPick, samePick, type CourtMove, type CourtPick } from './court-five-moves'
+import { COURT_PICTURE_SPOTS, occupantOf, outOfPositionWarning, resolveCourtPick, samePick, type CourtMove, type CourtPick } from './court-five-moves'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { PlayerRating } from './PlayerRating'
@@ -181,15 +181,18 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
       <div ref={court} className="court-five-court" role="group" aria-label={`${team.name} ${pregame ? 'starting five' : 'on court'}: five positions`}>
         <svg className="court-five-lines" viewBox="0 0 150 150" aria-hidden="true" focusable="false" preserveAspectRatio="none">
           <rect x="1" y="1" width="148" height="148" rx="2" />
-          <rect className="court-five-paint" x="50.5" y="92" width="49" height="57" />
-          <path d="M57 92a18 18 0 0 0 36 0" />
-          <path d="M57 92a18 18 0 0 1 36 0" strokeDasharray="3 3" />
-          <path d="M9 149V118A67.5 67.5 0 0 1 141 118V149" />
-          <path d="M57 1a18 18 0 0 0 36 0" />
-          <circle cx="75" cy="135" r="2.6" />
-          <path d="M68 140h14" />
+          {/* Drawn with the basket at the bottom and turned upside down: the basket is at the top of the picture. */}
+          <g transform="matrix(1 0 0 -1 0 150)">
+            <rect className="court-five-paint" x="50.5" y="92" width="49" height="57" />
+            <path d="M57 92a18 18 0 0 0 36 0" />
+            <path d="M57 92a18 18 0 0 1 36 0" strokeDasharray="3 3" />
+            <path d="M9 149V118A67.5 67.5 0 0 1 141 118V149" />
+            <path d="M57 1a18 18 0 0 0 36 0" />
+            <circle cx="75" cy="135" r="2.6" />
+            <path d="M68 140h14" />
+          </g>
         </svg>
-        {COURT_POSITIONS.map(position => {
+        {COURT_PICTURE_SPOTS.map(({ position, left, top }) => {
           const occupantId = occupantOf(shownCircles, position), player = occupantId ? playerById(occupantId) : undefined
           const target: CourtPick = { kind: 'circle', position }, key = pickKey(target)
           const stats = player ? shown.stats[player.id] : undefined
@@ -205,7 +208,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
           const condition = stats ? Math.round(stats.condition) : 0
           const description = player ? `${position}, ${POSITION_NAMES[position]}: ${player.name}, number ${player.number}, listed ${player.position}${warning ? `, ${warning.toLowerCase()}` : listedNote ? ', plays his listed position until you place him' : ''}, ${condition}% stamina${unavailable ? `, ${unavailable.toLowerCase()}` : ''}` : `${position}, ${POSITION_NAMES[position]}: empty`
           const action = !editable ? null : move ? move.playerId === occupantId ? `Move ${name(occupantId)} to ${position}` : occupantId && active?.kind === 'circle' ? `Swap: ${name(move.playerId)} to ${position}, ${name(occupantId)} to ${active.position}` : `Put ${name(move.playerId)} in ${position}${occupantId ? ` for ${name(occupantId)}` : ''}` : isSelected ? 'Deselect' : occupantId ? 'Select' : null
-          return <div key={position} className={`court-five-spot court-five-spot-${position.toLowerCase()}${isSelected ? ' is-selected' : ''}${move ? ' is-target' : ''}${dropKey === key ? ' is-drop' : ''}${warning ? ' is-out-of-position' : ''}${unavailable ? ' is-unavailable' : ''}`} data-court-spot={position} {...(editable ? dropHandlers(target) : {})}>
+          return <div key={position} className={`court-five-spot court-five-spot-${position.toLowerCase()}${isSelected ? ' is-selected' : ''}${move ? ' is-target' : ''}${dropKey === key ? ' is-drop' : ''}${warning ? ' is-out-of-position' : ''}${unavailable ? ' is-unavailable' : ''}`} data-court-spot={position} style={{ left: `${left}%`, top: `${top}%` }} {...(editable ? dropHandlers(target) : {})}>
             <button type="button" className="court-five-circle" data-court-circle={position} data-player-id={player?.id} aria-pressed={live && !move ? isSelected : undefined} aria-label={action ? `${action}. ${description}` : description} title={player?.name} disabled={!live} draggable={editable && !!occupantOf(circles, position)} onClick={event => choose(target, event.detail === 0)} onDragStart={event => beginDrag(event, target)} onDragEnd={dragEnd}>
               <span className="court-five-ring"><span className="court-five-position">{position}</span><span className="court-five-number">{player ? player.number : '—'}</span></span>
               <strong className="court-five-name">{player ? shortName(player.name) : 'Empty'}</strong>

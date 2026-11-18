@@ -79,7 +79,7 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before offering another salary.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before offering another salary.';
   else if (budget.rosterSize + budget.reservedRosterSize + 1 > clubRosterLimit(state)) reason = `The squad already has ${clubRosterLimitText(state)} registered players or reserved places.`;
-  else if (budget.seasonWages + budget.reservedWages + seasonWage > budget.budget) reason = 'This offer exceeds the current season player salary budget.';
+  else if (budget.seasonWages + budget.reservedWages + seasonWage > budget.budget) reason = 'This offer exceeds the current season player wages budget.';
   else if (budget.spendableCash < remainingWages) reason = 'The remaining salary exceeds the available budget after existing commitments.';
   return { playerId, clubId, seasonWage, remainingWages, responseRound, responseOn, remainingBudgetAfter: Math.max(0, budget.spendableCash - remainingWages), annualBudgetRemaining: Math.max(0, budget.budget - budget.seasonWages - budget.reservedWages - (validWage ? seasonWage : 0)), rosterSize: budget.rosterSize + budget.reservedRosterSize + 1, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
 }

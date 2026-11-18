@@ -37,6 +37,6 @@ export function quotePhysioHire(state: SeasonState, physioId: string, clubId = s
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a physio.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a physio.';
   else if (staffFee(state, clubId, physio.fee) > remainingAllocation) reason = staffAllocationShortfall(state);
-  else if (staffFee(state, clubId, physio.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
+  else if (staffFee(state, clubId, physio.fee) > remainingBudget) reason = 'Not enough Spending left in the club budget after protected wages and transfer commitments.';
   return { physioId, clubId, fee: staffFee(state, clubId, physio?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

@@ -39,7 +39,7 @@ export function staffCommitted(state: Pick<SeasonState, 'coaching' | 'seasonNumb
 
 /** Why an appointment does not fit the season's staff budget, in the career's own budget rule. */
 export function staffAllocationShortfall(state: Pick<SeasonState, 'coaching'>): string {
-  return usesClubLevelStaff(state) ? 'This appointment costs more than the remaining staff budget for this season.' : 'This appointment exceeds the shared staff allocation. Released staff fees remain committed for this season.';
+  return usesClubLevelStaff(state) ? 'This appointment costs more than your Wages left for this season.' : 'This appointment exceeds the shared staff budget. Released staff fees remain committed for this season.';
 }
 
 /** Matches cash, salary/transfer reservations and arrears guards used by all staff roles. */

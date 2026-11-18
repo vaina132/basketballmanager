@@ -50,7 +50,7 @@ describe('six facility levels (format 74 model)', () => {
     expect(view.rows.map(row => [row.type, row.maxLevel, row.levelName])).toEqual([['arena', 6, null], ['training', 6, 'Average'], ['youth', 6, 'Average'], ['medical', 6, 'Average'], ['scouting', 6, 'Average']]);
     expect(view.rows.find(row => row.type === 'arena')!.quote.reason).toMatch(/seats instead of levels/);
     expect(view.expansions.map(item => item.seats)).toEqual([500, 1_000]);
-    expect(quoteBoardFunding(state, 'training').reason).toMatch(/paid from Remaining budget/);
+    expect(quoteBoardFunding(state, 'training').reason).toMatch(/paid from Spending left/);
     expect(() => takeFacilityLoan(state, 'training')).toThrow();
   });
 

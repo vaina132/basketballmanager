@@ -78,7 +78,7 @@ describe('physio recruitment and four-role staff allocation', () => {
     const full = hireFitnessCoach(hireCoach(initial, 'coach-07'), 'fitness-07');
     expect(quotePhysioHire(full, 'physio-06').reason).toMatch(/shared staff/i);
     const poor = freeze(expense(initial, getSpendableCash(initial, club) - 1_000_000));
-    expect(quotePhysioHire(poor, 'physio-06').reason).toMatch(/remaining budget/i);
+    expect(quotePhysioHire(poor, 'physio-06').reason).toMatch(/Spending left/i);
     const unpaid = freeze(expense(initial, getFinanceBalance(initial.finance, club).cash + 1));
     expect(quotePhysioHire(unpaid, 'physio-06').reason).toMatch(/unpaid/i);
     expect(remainingStaffBudget(unpaid)).toBe(0);

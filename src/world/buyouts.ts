@@ -56,12 +56,12 @@ export function quoteContractBuyout(state: SeasonState, playerId: string, clubId
   else if (getLiveMarketOffers(state).some(offer => offer.playerId === playerId)) reason = 'Resolve or withdraw all open offers for this player before buying out the contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before buying out a contract.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before buying out a contract.';
-  else if (cash < amount) reason = 'The buyout exceeds the remaining budget after protecting salaries and transfer commitments.';
+  else if (cash < amount) reason = 'The buyout exceeds your Spending left after protecting salaries and transfer commitments.';
   else if (rosterSizeAfter < MIN_ROSTER_SIZE && addMarketDays(state.date, 1) > window.closesOn) reason = 'Keep a reply day available to sign a replacement before recruitment closes.';
   if (reason === null) for (let year = startsSeason; year <= endsSeason; year += 1) {
     const summary = getClubContractSummary(after, clubId, year);
     if (summary.seasonWages + summary.reservedWages + summary.minimumReserve > summary.budget) {
-      reason = `The buyout would leave too little salary budget to complete an eight-player squad in season ${year}.`;
+      reason = `The buyout would leave too little wages budget to complete an eight-player squad in season ${year}.`;
       break;
     }
   }

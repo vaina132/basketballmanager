@@ -103,7 +103,7 @@ export function quoteBoardFunding(state: SeasonState, type: FacilityType, clubId
   const wait = refused ? ordinal(refused.seasonNumber, refused.round, seasonRounds(state)) + cooldown - ordinal(state.seasonNumber, state.round, seasonRounds(state)) : 0;
   let reason: string | null = null;
   // Format 74 (`facilities-3`): projects are paid from Remaining budget; the bank lends what it cannot pay.
-  if (usesSixLevels(state.facilities)) reason = 'Facility projects are paid from Remaining budget; a bank loan on Club can add to it.';
+  if (usesSixLevels(state.facilities)) reason = 'Facility projects are paid from Spending left; a bank loan on Club can add to it.';
   else if (!state.facilities.fundingSince) reason = 'Enable board funding requests first.';
   else if (!state.board.enabledSince) reason = 'Enable board reviews before asking for capital.';
   else if (repair && !usesFacilityRepairs(state.facilities)) reason = repair.reason;

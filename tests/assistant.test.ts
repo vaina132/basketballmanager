@@ -103,8 +103,8 @@ describe('assistant appointments and shared five-role staff allocation', () => {
     const poor = freeze(expense(initial, getSpendableCash(initial, club) - 1_000_000));
     expect(getFinanceBalance(poor.finance, club).cash).toBeGreaterThan(2_000_000);
     expect(quoteAssistantHire(poor, 'assistant-06')).toMatchObject({ remainingBudget: 1_000_000, canHire: false });
-    expect(quoteAssistantHire(poor, 'assistant-06').reason).toMatch(/protected wages|remaining budget/i);
-    expect(() => hireAssistant(poor, 'assistant-06')).toThrow(/remaining budget/i);
+    expect(quoteAssistantHire(poor, 'assistant-06').reason).toMatch(/protected wages|Spending left/i);
+    expect(() => hireAssistant(poor, 'assistant-06')).toThrow(/Spending left/i);
     const unpaid = freeze(expense(initial, getFinanceBalance(initial.finance, club).cash + 1));
     expect(quoteAssistantHire(unpaid, 'assistant-06').reason).toMatch(/unpaid/i);
     expect(remainingStaffBudget(unpaid)).toBe(0);

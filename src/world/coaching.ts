@@ -108,8 +108,8 @@ function canPayCoach(state: SeasonState, clubId: string, coach: Coach): boolean 
 
 /** Contracts and their cash payment are one immutable operation for every club. */
 function hireContractForClub(state: SeasonState, clubId: string, coachId: string, focus: TrainingFocus): SeasonState {
-  if (usesClubLevelStaff(state) && staffCommitted(state, clubId) + staffFee(state, clubId, coachById(coachId).fee) > staffLimit(state, clubId)) throw new Error('This contract costs more than the remaining staff budget for this season.');
-  if (staffCommitted(state, clubId) > coachingCommitted(state.coaching, clubId) && staffCommitted(state, clubId) + staffFee(state, clubId, coachById(coachId).fee) > staffLimit(state, clubId)) throw new Error('This contract exceeds the shared staff allocation. Released staff fees remain committed for the season.');
+  if (usesClubLevelStaff(state) && staffCommitted(state, clubId) + staffFee(state, clubId, coachById(coachId).fee) > staffLimit(state, clubId)) throw new Error('This contract costs more than your Wages left for this season.');
+  if (staffCommitted(state, clubId) > coachingCommitted(state.coaching, clubId) && staffCommitted(state, clubId) + staffFee(state, clubId, coachById(coachId).fee) > staffLimit(state, clubId)) throw new Error('This contract exceeds the shared staff budget. Released staff fees remain committed for the season.');
   const coaching = hireForClub(state.coaching, state.clubs, clubId, state.seasonNumber, state.round, coachId, focus);
   return recordCoachFee({ ...state, coaching }, coaching.contracts.at(-1)!);
 }

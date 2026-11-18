@@ -47,7 +47,7 @@ export function quoteFitnessHire(state: SeasonState, coachId: string, clubId = s
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a fitness coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a fitness coach.';
   else if (staffFee(state, clubId, coach.fee) > remainingAllocation) reason = staffAllocationShortfall(state);
-  else if (staffFee(state, clubId, coach.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
+  else if (staffFee(state, clubId, coach.fee) > remainingBudget) reason = 'Not enough Spending left in the club budget after protected wages and transfer commitments.';
   return { coachId, clubId, fee: staffFee(state, clubId, coach?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }
 

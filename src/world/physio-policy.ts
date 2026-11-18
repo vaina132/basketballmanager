@@ -4,7 +4,7 @@ import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { getFinanceBalance } from './finance';
 import { MAX_REHABILITATION_REDUCTION_PERCENT } from './rehabilitation-policy';
-import { remainingStaffBudget, staffAllocation, staffAllocationShortfall, staffCommitted } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCommitted, staffMoneyReason } from './staff-policy';
 import { staffMarketWorld } from './staff-levels';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { seasonRounds, worldOf } from './career-world';
@@ -36,7 +36,6 @@ export function quotePhysioHire(state: SeasonState, physioId: string, clubId = s
   else if (!availablePhysios(state).some(available => available.id === physioId)) reason = 'This physio already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a physio.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a physio.';
-  else if (staffFee(state, clubId, physio.fee) > remainingAllocation) reason = staffAllocationShortfall(state);
-  else if (staffFee(state, clubId, physio.fee) > remainingBudget) reason = 'Not enough Spending left in the club budget after protected wages and transfer commitments.';
+  else reason = staffMoneyReason(state, 'physio', staffFee(state, clubId, physio.fee), remainingAllocation, remainingBudget);
   return { physioId, clubId, fee: staffFee(state, clubId, physio?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

@@ -472,6 +472,14 @@ function completedDevelopmentWeeks(anchor: { seasonNumber: number; round: number
   return anchor ? (seasonNumber - anchor.seasonNumber) * (rounds - 1) + Math.min(round - 1, rounds - 1) - (anchor.round - 1) : 0;
 }
 
+/**
+ * A bound on one season's coaching contracts. `coaching-1` careers are bounded by the catalog coaching limit; club-level
+ * careers by money only (hires, sackings and rehires), so they get a generous fixed bound.
+ */
+function maximumCoachingContracts(clubs: number, levelled: boolean): number {
+  return levelled ? Math.max(20_000, clubs * MAX_COACHES * 4) : clubs * Math.floor(COACHING_BUDGET / Math.min(...DEVELOPMENT_COACHES.map(coach => coach.fee)));
+}
+
 /** Current-year contracts retain released appointments so expenditure and past weeks reconcile. */
 function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: number, round: number, rounds: number, version: number): SeasonCoaching {
   const fields = record(value, 'coaching', ['model', 'enabledSince', 'contracts']);
@@ -488,7 +496,7 @@ function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: 
     const enabledRound = number(anchor.round, 'coaching.enabledSince.round', 1, year === seasonNumber ? round : rounds);
     if (year === seasonNumber) earliestRound = enabledRound;
   }
-  const maximumContracts = clubs.length * Math.floor(COACHING_BUDGET / Math.min(...DEVELOPMENT_COACHES.map(coach => coach.fee)));
+  const maximumContracts = maximumCoachingContracts(clubs.length, levelled);
   if (!Array.isArray(fields.contracts) || fields.contracts.length > maximumContracts) fail('coaching.contracts', 'must be a bounded contract history');
   if (fields.enabledSince === null && fields.contracts.length !== 0) fail('coaching.contracts', 'must be empty while coaching is disabled');
   const expenses = new Map(clubs.map(club => [club.id, 0]));
@@ -516,8 +524,8 @@ function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: 
     for (const club of clubs) {
       const employed = appointments.filter(contract => contract.clubId === club.id);
       if (employed.length > MAX_COACHES) fail(`coaching.contracts.${club.id}`, 'exceeds the coaching staff limit');
-      // Format 74: the coaches employed at each boundary stay within the catalog coaching limit.
-      if (levelled && employed.reduce((sum, contract) => sum + staffMember(COACH_DIRECTORY, contract.coachId)!.fee, 0) > COACHING_BUDGET) fail(`coaching.contracts.${club.id}`, 'exceeds the coaching budget for the coaches employed');
+      // Club-level careers (format 74 and later) have no catalog coaching limit: their coaches' fees are checked against
+      // the club's own staff limit (Wages left) with every ledger payment.
     }
   }
   return coaching;
@@ -2531,7 +2539,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   const currentContracts = new Map(coaching.contracts.map(contract => [contract.id, contract]));
   // Clubs that were in the full world at some point keep their ledgers (step 3.4d-2).
   const balances = new Map<string, FinanceBalance>((world ? [...fullWorldClubs(world), ...world.clubs.filter(club => (background?.exchanges ?? []).some(exchange => exchange.joining.includes(club.id)))] : clubs).map(club => [club.id, { cash: 0, unpaid: 0 }]));
-  const maximumContracts = clubs.length * Math.floor(COACHING_BUDGET / Math.min(...DEVELOPMENT_COACHES.map(coach => coach.fee)));
+  const maximumContracts = maximumCoachingContracts(clubs.length, usesClubLevelStaff({ coaching }));
   let previousDate = roundKey(firstYear, firstRound), entryYear = firstYear, yearIndex = 0;
   const operatingClubs = new Set<string>();
   let payrollStarted = false;

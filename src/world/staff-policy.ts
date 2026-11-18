@@ -14,6 +14,7 @@ import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTO
 import type { WorldContext } from '../domain/world';
 import { staffFee } from './economy';
 import { usesClubLevelStaff } from './staff-levels';
+import { formatEuros } from '../ui/money-format';
 
 export { STAFF_BUDGET } from './staff-constants';
 export { staffAllocation } from './board-consequences';
@@ -37,9 +38,15 @@ export function staffCommitmentsByRole(state: Pick<SeasonState, 'coaching' | 'se
 
 export function staffCommitted(state: Pick<SeasonState, 'coaching' | 'seasonNumber'> & Partial<Pick<SeasonState, 'scouts' | 'fitness' | 'physio' | 'assistant' | 'youth'>> & WorldContext, clubId: string): number { return staffCommitmentsByRole(state, clubId).total; }
 
-/** Why an appointment does not fit the season's staff budget, in the career's own budget rule. */
-export function staffAllocationShortfall(state: Pick<SeasonState, 'coaching'>): string {
-  return usesClubLevelStaff(state) ? 'This appointment costs more than your Wages left for this season.' : 'This appointment exceeds the shared staff budget. Released staff fees remain committed for this season.';
+/**
+ * Why an appointment's season fee does not fit, in plain words naming the real limit and the amounts, or null when it
+ * fits. `remainingAllocation` is what the season's staff limit leaves (Wages left in club-level careers) and
+ * `remainingBudget` what the club can also pay now (Spending left, the fee is paid in full when hired).
+ */
+export function staffMoneyReason(state: Pick<SeasonState, 'coaching'>, person: string, fee: number, remainingAllocation: number, remainingBudget: number): string | null {
+  if (fee > remainingAllocation) return usesClubLevelStaff(state) ? `Not enough Wages left: this ${person} costs ${formatEuros(fee)} a season, you have ${formatEuros(remainingAllocation)} left.` : 'This appointment exceeds the shared staff budget. Released staff fees remain committed for this season.';
+  if (fee > remainingBudget) return `Not enough Spending left: the ${formatEuros(fee)} season fee is paid when hired, you have ${formatEuros(remainingBudget)} to spend.`;
+  return null;
 }
 
 /** Matches cash, salary/transfer reservations and arrears guards used by all staff roles. */

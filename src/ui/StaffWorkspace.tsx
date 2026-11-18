@@ -5,10 +5,9 @@ import type { SeasonState } from '../domain/season'
 import type { Coach } from '../domain/coaching'
 import type { TrainingFocus } from '../domain/training'
 import { COACH_DIRECTORY as COACHES } from '../data/staff-directory'
-import { availableCoaches, coachRating, getClubCoaching, MAX_COACHES } from '../world/coaching'
+import { availableCoaches, coachHireReason, coachRating, getClubCoaching, MAX_COACHES } from '../world/coaching'
 import { getFinanceBalance } from '../world/finance'
 import { getPayrollReserve, getSpendableCash } from '../world/payroll'
-import { getTransferPaymentSummary } from '../world/transfer-payments'
 import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES, TRAINING_FOCUS_LABELS } from '../world/training'
 import { ScoutStaff, type ScoutStaffProps } from './ScoutStaff'
 import { FitnessStaff, type FitnessStaffProps } from './FitnessStaff'
@@ -18,7 +17,8 @@ import { getClubAssistant } from '../world/assistant-policy'
 import { getClubPhysio } from '../world/physio-policy'
 import { getClubFitnessCoach } from '../world/fitness-policy'
 import { getClubScouts } from '../world/scout-policy'
-import { staffAllocation, staffCommitted, remainingStaffBudget } from '../world/staff-policy'
+import { staffCommitted, remainingStaffBudget } from '../world/staff-policy'
+import { staffLimit } from '../world/wage-pool'
 import { StaffStars } from './StaffRating'
 import { CoachPortrait } from './CoachPortrait'
 import { Icon } from './Icon'
@@ -104,12 +104,11 @@ function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRe
   const contracts = getClubCoaching(season.coaching, club.id)
   const released = season.coaching.contracts.filter(contract => contract.clubId === club.id && contract.releasedRound !== null)
   const committed = staffCommitted(season, club.id)
-  const allocation = staffAllocation(season, season.managedClubId) - committed
+  const allocation = staffLimit(season, season.managedClubId) - committed
   const finances = season.finance.enabledSince === null ? null : getFinanceBalance(season.finance, club.id)
   const payrollEnabled = season.payroll.enabledSince !== null
   const wageReserve = getPayrollReserve(season, club.id)
   const spendable = getSpendableCash(season, club.id)
-  const overdueTransfers = getTransferPaymentSummary(season, club.id).overdue
   const staffBudget = remainingStaffBudget(season, club.id)
   const available = availableCoaches(season.coaching, season)
   const candidates = available.filter(coach => coach.name.toLowerCase().includes(query.trim().toLowerCase())).sort((left, right) => {
@@ -139,14 +138,10 @@ function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRe
     releaseRegion.current?.scrollIntoView({ block: 'nearest' })
   }, [releaseId, releaseContract?.id])
 
+  /** The same rules and plain reasons as the hire itself (human and computer clubs). */
   function hiringReason(coach: Coach): string | null {
     if (season.status === 'complete') return 'Recruitment opens next season.'
-    if (contracts.length >= MAX_COACHES) return 'Release a coach to open a position.'
-    if (feeOf(coach.fee) > allocation) return `${money(feeOf(coach.fee) - allocation)} above the staff hiring limit.`
-    if (finances && finances.unpaid > 0) return `Settle ${money(finances.unpaid)} of unpaid costs before recruiting.`
-    if (overdueTransfers > 0) return `${money(overdueTransfers)} in transfer payments is overdue. Payments are collected automatically as funds become available.`
-    if (finances && feeOf(coach.fee) > spendable) return `${money(feeOf(coach.fee) - spendable)} more available cash is needed.`
-    return null
+    return coachHireReason(season, coach.id)
   }
 
   function closeCandidate() {
@@ -197,7 +192,7 @@ function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRe
       {showCandidates && <>{selected && <section ref={candidateRegion} id="coach-candidate-detail" className="staff-candidate-detail panel" tabIndex={-1} aria-labelledby="coach-candidate-title" data-selected-coach={selected.id} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && !busy) { event.preventDefault(); event.stopPropagation(); closeCandidate() } }}>
         <header className="staff-heading"><div><h2 id="coach-candidate-title">Recruit {selected.name}</h2><span>Training coach</span></div><button className="text-button" aria-label="Close coach details" onClick={closeCandidate} disabled={busy}><Icon name="close" size={14} />Close</button></header>
         <div className="staff-candidate-body"><div className="staff-candidate-profile"><div className="staff-profile-portrait"><CoachPortrait coach={selected} color={club.color} size={104} /><StaffStars rating={coachRating(selected)} /></div><CoachSkills coach={selected} /></div><div className="staff-hire-controls">
-          <div className="staff-offer-fee"><span>Season fee</span><strong>{money(feeOf(selected.fee))}</strong></div><div className="staff-after-hire"><span>{staffBudget >= feeOf(selected.fee) ? 'Wages left after hire' : 'Wages left shortfall'}</span><strong>{money(Math.abs(staffBudget - selected.fee))}</strong></div>
+          <div className="staff-offer-fee"><span>Season fee</span><strong>{money(feeOf(selected.fee))}</strong></div><div className="staff-after-hire"><span>{staffBudget >= feeOf(selected.fee) ? 'Wages left after hire' : 'Wages left shortfall'}</span><strong>{money(Math.abs(staffBudget - feeOf(selected.fee)))}</strong></div>
           {!replacement && <><label htmlFor="coach-hire-focus">Initial assignment</label><select id="coach-hire-focus" value={hireFocus} onChange={event => setHireFocus(event.target.value as TrainingFocus)} disabled={busy}><FocusOptions /></select></>}
           <span className="staff-renewal-note"><Icon name="check" size={14} />Renewal selected for next season</span>
           {replacement ? <StaffReplacementOffer key={selected.id} season={season} role="coaches" personId={selected.id} personName={selected.name} fee={feeOf(selected.fee)} target={replacement} busy={busy} onReplaceStaff={onReplaceStaff} /> : <>{hiringReason(selected) && <p id="coach-hire-reason" className="staff-hire-reason">{hiringReason(selected)}</p>}

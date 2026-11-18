@@ -114,3 +114,23 @@
   .match-screen .text-match-view { min-height: 320px; }
   .match-screen .boxscore .stamina-cell { min-width: 90px; }
 }
+/* Live court: compact score bug over the empty far corner, one-line play text, no layout jumps. */
+.court-presentation { position: relative; }
+.score-bug { position: absolute; top: 8px; left: 10px; z-index: 1; min-width: 150px; padding: 4px 0 0; border: 1px solid var(--border); border-radius: 2px; background: rgba(20, 26, 24, .88); color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; pointer-events: none; }
+.score-bug .bug-row { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto auto; align-items: center; gap: 6px; padding: 2px 8px 2px 6px; }
+.score-bug .bug-row i { width: 4px; height: 14px; border-radius: 1px; }
+.score-bug .bug-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.score-bug .bug-score { min-width: 26px; text-align: right; font-size: 15px; font-weight: 800; }
+.score-bug .bug-meta { min-width: 64px; text-align: right; font-size: 10px; color: var(--muted); }
+.score-bug .bug-clock { display: flex; justify-content: space-between; margin-top: 3px; padding: 2px 8px; border-top: 1px solid var(--border); font-size: 11px; font-weight: 700; color: var(--accent); }
+.match-screen .court-caption.play-line { height: 34px; min-height: 34px; overflow: hidden; }
+.match-screen .court-caption.play-line p { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.court-mark { pointer-events: none; }
+@media (max-width: 650px) {
+  .score-bug { top: 4px; left: 4px; min-width: 0; font-size: 10px; }
+  .score-bug .bug-row { gap: 4px; padding: 1px 5px 1px 4px; }
+  .score-bug .bug-score { min-width: 20px; font-size: 12px; }
+  .score-bug .bug-meta { min-width: 0; font-size: 9px; }
+  .score-bug .bug-clock { font-size: 10px; padding: 1px 5px; }
+  .match-screen .court-caption.play-line p { font-size: 12px; }
+}

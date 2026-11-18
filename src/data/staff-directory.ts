@@ -73,8 +73,9 @@ function countryPools<T extends { id: string; name: string }>(authored: readonly
 }
 /** The clubs' real assistant coaches, on an authored assistant's terms (the stronger one for a top division). */
 function realAssistants(): readonly (AssistantCoach & { clubId: string })[] {
-  return Object.freeze(REAL_CLUB_PEOPLE.filter(person => person.role === 'assistant-coach').map((person, index) => {
-    const id = `assistant-real-${String(index + 1).padStart(2, '0')}`;
+  return Object.freeze(REAL_CLUB_PEOPLE.filter(person => person.role === 'assistant-coach').map(person => {
+    // Keyed by club, so later edits to the list never move a saved appointment to another person.
+    const id = `assistant-real-${person.clubId.replace(/^club-/, '').slice(0, 8)}`;
     nationalities.set(id, (person.nationality && NATIONALITY_CODES[person.nationality]) ?? person.country);
     const terms = DEVELOPMENT_ASSISTANTS[Math.min(DEVELOPMENT_ASSISTANTS.length - 1, person.tier === 1 ? 8 : 6)]!;
     return Object.freeze({ ...terms, id, name: person.name, clubId: person.clubId });

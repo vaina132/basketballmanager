@@ -28,7 +28,8 @@ beforeAll(() => { start = createSeason({ seed: 9, world, managedClubId: 'acb-2',
 
 describe('real-looking club people', () => {
   it('gives every name in the six staff directories to one person only', () => {
-    const names = [COACH_DIRECTORY, SCOUT_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, ASSISTANT_DIRECTORY, YOUTH_COACH_DIRECTORY].flat().map(person => person.name);
+    const people = [COACH_DIRECTORY, SCOUT_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, ASSISTANT_DIRECTORY, YOUTH_COACH_DIRECTORY].flat(), names = people.map(person => person.name);
+    expect(new Set(people.map(person => person.id)).size).toBe(people.length);
     expect(new Set(names).size).toBe(names.length);
   });
 

@@ -28,6 +28,8 @@ interface CourtFiveProps {
   apply: (action: (state: MatchState) => MatchState) => void
   onInteractionStart: () => void
   knowledgeForPlayer?: (id: string) => PlayerKnowledge
+  /** Squad page (owner request, 18 November 2026): the five for the next game is planned; the help text says so. */
+  planning?: boolean
 }
 
 /**
@@ -37,7 +39,7 @@ interface CourtFiveProps {
  * (`placeInCircle`, `arrangeBestFive`): before tip-off it applies at once, during play a reserve waits for a legal
  * stoppage and players on court swap circles at once.
  */
-export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benchId, apply, onInteractionStart, knowledgeForPlayer }: CourtFiveProps) {
+export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benchId, apply, onInteractionStart, knowledgeForPlayer, planning = false }: CourtFiveProps) {
   const [pick, setPick] = useState<CourtPick | null>(null)
   const [dragging, setDragging] = useState<CourtPick | null>(null)
   const [dropKey, setDropKey] = useState<string | null>(null)
@@ -164,6 +166,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
   const required = match.requiredSubstitutions.find(request => request.side === side)
   const help = complete ? 'Match finished · substitutions closed.'
     : required ? `Replacement needed: tap a reserve, then the circle of ${name(required.playerId)} (${required.reason === 'injured' ? 'injured' : 'fouled out'}).`
+    : planning ? 'Your five for the next game. Drag a player onto a circle, or tap a player and then a circle.'
     : pregame ? 'Drag a player onto a circle, or tap a player and then a circle. Changes before tip-off apply at once.'
       : 'Drag or tap a reserve onto a circle: he comes on at the next legal stoppage. Players on court swap circles at once.'
 

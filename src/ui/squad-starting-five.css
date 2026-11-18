@@ -1,0 +1,5 @@
+.squad-starting-five{margin-bottom:14px}
+.squad-starting-five .section-heading{flex-wrap:wrap;gap:4px 12px}
+.squad-starting-five-next{font-size:12px;color:var(--muted)}
+.squad-starting-five-locked{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.squad-starting-five-locked p{margin:0;font-size:13px;color:var(--muted)}

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../src/data/fictional-teams';
 import type { MatchState } from '../src/domain/types';
-import { createFixtureMatch, createMatch, placeInCircle, setAutoSubstitutions, setInjuryMode, simulateToEnd } from '../src/engine/match';
+import { createFixtureMatch, createMatch, placeInCircle, setAutoSubstitutions, setInjuryMode, simulateToEnd, stepMatch } from '../src/engine/match';
+import { createSeason } from '../src/world/season';
+import { SquadStartingFive } from '../src/ui/SquadStartingFive';
 import { courtCircles } from '../src/engine/positions';
 import { MatchLineup } from '../src/ui/MatchLineup';
 import { outOfPositionWarning, resolveCourtPick, type CourtPick } from '../src/ui/court-five-moves';
@@ -85,5 +87,22 @@ describe('the court picture upside down (owner request, 18 November 2026)', () =
     expect(Math.max(top.SF!, top.SG!)).toBeLessThan(top.PG!);
     // The basket is drawn near the top: the court lines are turned upside down.
     expect(html).toContain('transform="matrix(1 0 0 -1 0 150)"');
+  });
+
+  it('is on the Squad page for the next game, and points to the Match center while a game is in play', () => {
+    const season = createSeason({ seed: 77, managedClubId: 'rhine-falcons', injuryMode: 'off' });
+    const squad = (state: typeof season) => renderToStaticMarkup(<SquadStartingFive season={state} busy={false} onUpdate={noop} onOpenMatch={noop} />);
+    const html = squad(season);
+    expect(html).toContain('>Starting five</h2>');
+    expect(html).toContain('Next game: ');
+    expect(html).toContain('Your five for the next game.');
+    expect(html.match(/data-court-circle="/g)).toHaveLength(5);
+    expect(html).toContain('data-best-five');
+    expect(html).toMatch(/data-court-reserve="/);
+    const playing = squad({ ...season, activeMatch: stepMatch(season.activeMatch!) });
+    expect(playing).not.toContain('data-court-circle');
+    expect(playing).toContain('A game is in play. Change your five in the Match center.');
+    expect(playing).toContain('Open Match center');
+    expect(squad({ ...season, status: 'complete' })).toBe('');
   });
 });

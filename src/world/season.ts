@@ -30,13 +30,14 @@ import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, Seaso
 import { nextEuropeanPlaces, openingEurope } from './european-places';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import { archiveFinancialHistory } from './finance-archives';
-import type { InjuryMode, MatchState, Side, Team } from '../domain/types';
+import type { InjuryMode, MatchState, Position, Side, Team } from '../domain/types';
 import type { ManagerProfile } from '../domain/manager';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-league';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import type { CareerWorld } from '../domain/world';
 import { fullWorldClubs, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
-import { createFixtureMatch, preTipoffLineup, simulateToEnd } from '../engine/match';
+import { createFixtureMatch, isPlayerEligible, preTipoffLineup, simulateToEnd } from '../engine/match';
+import { isCourtPosition } from '../engine/positions';
 import { clubRecoveryPercent, injuriesFromMatch, injuryRiskMap, isRecovering, withMedicalRecurrence } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
@@ -354,6 +355,50 @@ export function setMatchdaySelection(state: SeasonState, playerIds: readonly str
   // The circles chosen on the court picture stay with their players (format 74).
   const next = { ...state, plans: { ...state.plans, [club.id]: withPlanCircles({ ...plan, tactics: { ...edited.tactics[side] }, autoSubstitutions: edited.autoSubstitutions[side], lineup, matchday: ids }, edited.slots?.[side]) } };
   return { ...next, activeMatch: prepareMatch(next, getActiveFixture(next)) };
+}
+
+/**
+ * Why the manager cannot plan the starting five for the next game now (Squad page, owner request 18 November 2026), or
+ * null: planning works while the season is active and no match is in play or waiting for Continue.
+ */
+export function startingFivePlanBlock(state: SeasonState): string | null {
+  if (state.status !== 'active') return 'The season is over. Plan your five when the next season starts.';
+  if (isUnemployed(state) || !state.clubs.some(club => club.id === state.managedClubId)) return 'You have no club to plan for.';
+  const match = state.activeMatch;
+  if (match && (match.status !== 'ready' || match.stepCount !== 0)) return match.status === 'finished' ? 'This game is over. Press Continue to plan the next game.' : 'A game is in play. Change your five in the Match center.';
+  return null;
+}
+
+/**
+ * The match the planned five is shown and edited on: today's prepared match before tip-off, otherwise the next game as
+ * the club's plan would prepare it (never saved, played or shown as a current match).
+ */
+export function startingFivePlanMatch(state: SeasonState): MatchState {
+  const block = startingFivePlanBlock(state);
+  if (block) throw new Error(block);
+  return state.activeMatch ?? careerPresentationMatch(state);
+}
+
+/**
+ * The court picture on the Squad page: the five who start the next game and the circles they play (format 74 plan
+ * slots). Before tip-off the prepared match is prepared again from the plan, keeping its tactics, as a matchday
+ * selection does; between games the plan is changed and the next game starts from it. The same guards as the match's:
+ * five different available players from the matchday squad, one different court position each.
+ */
+export function setPlannedFive(state: SeasonState, lineup: readonly string[], slots: Readonly<Record<string, Position>>): SeasonState {
+  const block = startingFivePlanBlock(state);
+  if (block) throw new Error(block);
+  const club = state.clubs.find(club => club.id === state.managedClubId)!;
+  if (!Array.isArray(lineup) || lineup.length !== 5 || new Set(lineup).size !== 5 || lineup.some(id => !club.players.some(player => player.id === id))) throw new Error('Choose five different players from your squad.');
+  const circles = Object.entries(slots ?? {});
+  if (circles.some(([id, position]) => !lineup.includes(id) || !isCourtPosition(position)) || new Set(circles.map(([, position]) => position)).size !== circles.length) throw new Error('Give each starter a different position.');
+  const active = state.activeMatch, side = active ? managedSide(state) : null, plan = state.plans[club.id]!;
+  const kept = active && side ? { tactics: { ...active.tactics[side] }, autoSubstitutions: active.autoSubstitutions[side] } : {};
+  const next: SeasonState = { ...state, plans: { ...state.plans, [club.id]: withPlanCircles({ ...plan, ...kept, lineup: [...lineup] }, Object.fromEntries(circles)) } };
+  const prepared = active ? prepareMatch(next, getActiveFixture(next)) : careerPresentationMatch(next);
+  const preparedSide: Side = prepared.home.id === club.id ? 'home' : 'away', five = prepared.lineups[preparedSide];
+  if (five.length !== 5 || lineup.some(id => !five.includes(id) || !isPlayerEligible(prepared, id))) throw new Error('Choose five available players from the matchday squad.');
+  return active ? { ...next, activeMatch: prepared } : next;
 }
 
 /** Optional career systems, named. Omitted systems keep the positional defaults (training, coaching, finance and payroll on). */

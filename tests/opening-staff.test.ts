@@ -1,3 +1,4 @@
+import { staffLimit } from '../src/world/wage-pool';
 import { describe, expect, it } from 'vitest';
 import type { CareerWorld } from '../src/domain/world';
 import type { SeasonState } from '../src/domain/season';
@@ -45,7 +46,7 @@ describe('opening staff for every club (format 74, coaching-2)', () => {
   it('staffs every club in every role at ratings fitting its level and within its staff budget', () => {
     for (const world of [undefined, moneyWorld()]) {
       const state = createSeason({ seed: 5, ...(world ? { world, managedClubId: world.clubs[3]!.id } : {}), injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
-      expect(state.coaching.model).toBe('coaching-2');
+      expect(state.coaching.model).toBe('coaching-3'); // format 75: club-level staff with the wage pool
       expectFullyStaffed(state);
       // One person per role at the opening (training coaches and scouts can add more later).
       for (const club of state.clubs) for (const role of STAFF_ROLES) expect(roleStaff(state, role, club.id)).toHaveLength(1);
@@ -120,9 +121,10 @@ describe('opening staff for every club (format 74, coaching-2)', () => {
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       state = rolloverSeason(state);
       expect(state.seasonNumber).toBe(2);
-      expect(state.coaching.model).toBe('coaching-2');
+      expect(state.coaching.model).toBe('coaching-3'); // format 75: club-level staff with the wage pool
       for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) for (const role of STAFF_ROLES) expect(roleStaff(state, role, club.id).length, `${club.id} ${role}`).toBeGreaterThanOrEqual(1);
-      for (const club of state.clubs) expect(staffCommitted(state, club.id), club.id).toBeLessThanOrEqual(staffAllocation(state, club.id));
+      // Format 75: staff fees may also use unused player salary budget (one wage pool).
+      for (const club of state.clubs) expect(staffCommitted(state, club.id), club.id).toBeLessThanOrEqual(staffLimit(state, club.id));
       expect(roundTrip(state)).toEqual(state);
     } finally { requireWorldContexts(false); }
   }, 600_000);

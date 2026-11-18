@@ -1,4 +1,5 @@
 import { financeLedgerCount } from './finance-ledger';
+import { payStaffCompensation } from './staff-contracts';
 import { withCalculationCache } from './pure-cache';
 import type { SeasonYouth, YouthCoachContract } from '../domain/youth';
 import type { SeasonState } from '../domain/season';
@@ -34,7 +35,7 @@ function managedContract(state: SeasonState, contractId: string): YouthCoachCont
 }
 export function releaseYouthCoach(state: SeasonState, contractId: string): SeasonState {
   const contract = managedContract(state, contractId);
-  return { ...state, youth: { ...state.youth, contracts: state.youth.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } };
+  return payStaffCompensation({ ...state, youth: { ...state.youth, contracts: state.youth.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } }, 'youth', contractId);
 }
 export function setYouthCoachRenewal(state: SeasonState, contractId: string, renew: boolean): SeasonState {
   if (typeof renew !== 'boolean') throw new Error('Choose whether the youth-coach contract should renew.');

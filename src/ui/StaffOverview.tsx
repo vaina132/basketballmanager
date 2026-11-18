@@ -5,6 +5,7 @@ import { remainingStaffBudget } from '../world/staff-policy'
 import { StaffStars } from './StaffRating'
 import { Icon, type IconName } from './Icon'
 import { formatEuros } from './money-format'
+import { contractUntil, usesStaffContracts } from '../world/staff-contracts'
 
 const ROLE_ICONS: Readonly<Record<StaffRole, IconName>> = { coaches: 'training', scouts: 'search', fitness: 'shield', physio: 'medical', assistant: 'court', youth: 'people' }
 
@@ -32,7 +33,7 @@ export function StaffOverview({ season, busy = false, onReplace, onHire, onSack 
       return members.map(member => <li className="staff-overview-row" key={member.contractId} data-staff-role={role} data-staff-contract={member.contractId}>
         <span className="staff-overview-role"><Icon name={ROLE_ICONS[role]} size={15} />{STAFF_ROLE_LABELS[role]}</span>
         <span className="staff-overview-name"><strong>{member.name}</strong><StaffStars rating={member.rating} /></span>
-        <span className="staff-overview-fee">{formatEuros(member.fee)} <small>/ season</small></span>
+        <span className="staff-overview-fee">{formatEuros(member.fee)} <small>a season</small>{usesStaffContracts(season) && <small className="staff-contract-end" data-contract-until={contractUntil(season, member.personId, season.managedClubId)}> · until season {contractUntil(season, member.personId, season.managedClubId)}</small>}</span>
         <span className="staff-overview-actions">
           <button className="button small" onClick={() => onReplace(role, member.contractId)} disabled={busy || !open} aria-label={`Replace ${member.name}`} data-replace-staff={member.contractId}>Replace</button>
           {onSack && <button className="text-button" onClick={() => setSacking(member.contractId)} disabled={busy || !open} aria-label={`Sack ${member.name}`} data-sack-staff={member.contractId}>Sack</button>}

@@ -14,6 +14,7 @@ import { releaseYouthCoach, replaceYouthCoach } from './youth';
 import { staffFee } from './economy';
 import { remainingStaffBudget } from './staff-policy';
 import { STAFF_ROLES, usesClubLevelStaff, type StaffRole } from './staff-levels';
+import { compensationTerms, contractCompensation, usesStaffContracts } from './staff-contracts';
 
 export { STAFF_ROLES, type StaffRole } from './staff-levels';
 
@@ -79,12 +80,18 @@ export function quoteStaffReplacement(state: SeasonState, role: StaffRole, contr
 const roleName = (role: StaffRole) => STAFF_ROLE_LABELS[role].toLowerCase();
 
 /** The warning shown before a hire replaces someone (owner request, 16 November 2026). */
-export function replacementWarning(outgoing: Pick<StaffMemberSummary, 'name' | 'role'>): string {
+export function replacementWarning(outgoing: Pick<StaffMemberSummary, 'name' | 'role'> & Partial<Pick<StaffMemberSummary, 'contractId'>>, state?: SeasonState): string {
+  // Format 76: the person leaving is paid compensation.
+  const compensation = state && usesStaffContracts(state) && outgoing.contractId ? contractCompensation(state, outgoing.role, outgoing.contractId) : undefined;
+  if (compensation) return `This replaces ${outgoing.name} as ${roleName(outgoing.role)}. ${compensationTerms(outgoing.name, compensation)} It is paid at once from Spending left.`;
   return `This replaces ${outgoing.name} as ${roleName(outgoing.role)}. ${outgoing.name} leaves the club; their fee is not refunded.`;
 }
 
 /** What sacking costs, in plain words, under the career's fee rules. `money` formats euro cents. */
-export function sackingTerms(state: Pick<SeasonState, 'coaching'>, person: Pick<StaffMemberSummary, 'name' | 'fee'>, money: (cents: number) => string): string {
+export function sackingTerms(state: SeasonState, person: Pick<StaffMemberSummary, 'name' | 'fee'> & Partial<Pick<StaffMemberSummary, 'role' | 'contractId'>>, money: (cents: number) => string): string {
+  // Format 76: staff are on contracts, so sacking costs compensation (the exact amount, paid from Spending left).
+  const compensation = usesStaffContracts(state) && person.role && person.contractId ? contractCompensation(state, person.role, person.contractId) : undefined;
+  if (compensation) return `${person.name} leaves the club today. ${compensationTerms(person.name, compensation)} It is paid at once from Spending left.`;
   return usesClubLevelStaff(state)
     ? `${person.name} leaves the club today. Their ${money(person.fee)} season fee was paid when they were hired and is not refunded. Sacking costs nothing more, and the fee no longer counts against this season's staff budget.`
     : `${person.name} leaves the club today. Their ${money(person.fee)} season fee was paid when they were hired, is not refunded and still counts against this season's staff budget.`;
@@ -92,7 +99,7 @@ export function sackingTerms(state: Pick<SeasonState, 'coaching'>, person: Pick<
 
 /** The notice after a sacking or a replacement, in the career's fee rules. */
 export function staffChangeNotice(state: Pick<SeasonState, 'coaching'>, role: StaffRole, outgoing: string, incoming?: string): string {
-  const kept = usesClubLevelStaff(state) ? 'Their paid fee is not refunded.' : 'Their paid fee is not refunded and stays in this season\'s staff budget.';
+  const kept = usesStaffContracts(state) ? 'Their compensation has been paid.' : usesClubLevelStaff(state) ? 'Their paid fee is not refunded.' : 'Their paid fee is not refunded and stays in this season\'s staff budget.';
   return incoming ? `${incoming} replaces ${outgoing} as ${roleName(role)}. ${kept}` : `${outgoing} has left the club. ${kept}`;
 }
 

@@ -5,7 +5,7 @@ import type { Physio } from '../domain/physio';
 import type { Scout } from '../domain/scouts';
 import type { YouthCoach } from '../domain/youth';
 import { DEVELOPMENT_ASSISTANTS } from './development-assistants';
-import { DEVELOPMENT_COACHES } from './development-coaches';
+import { DEVELOPMENT_COACHES, ELITE_COACH_TERMS } from './development-coaches';
 import { DEVELOPMENT_FITNESS_COACHES } from './development-fitness';
 import { DEVELOPMENT_PHYSIOS } from './development-physios';
 import { DEVELOPMENT_SCOUTS } from './development-scouts';
@@ -93,12 +93,35 @@ function directory<T extends { id: string; name: string }>(authored: readonly T[
   return all;
 }
 
-export const COACH_DIRECTORY: readonly Coach[] = directory(DEVELOPMENT_COACHES);
+const COACH_STAFF: readonly Coach[] = directory(DEVELOPMENT_COACHES);
 export const SCOUT_DIRECTORY: readonly Scout[] = directory(DEVELOPMENT_SCOUTS);
 export const FITNESS_DIRECTORY: readonly FitnessCoach[] = directory(DEVELOPMENT_FITNESS_COACHES);
 export const PHYSIO_DIRECTORY: readonly Physio[] = directory(DEVELOPMENT_PHYSIOS);
 export const ASSISTANT_DIRECTORY: readonly AssistantCoach[] = directory(DEVELOPMENT_ASSISTANTS, REAL_ASSISTANTS);
 export const YOUTH_COACH_DIRECTORY: readonly YouthCoach[] = directory(DEVELOPMENT_YOUTH_COACHES);
+
+/**
+ * Top candidates a club-level market adds (owner play-test feedback, 18 November 2026): one set of the elite terms for
+ * every `ELITE_CLUBS` clubs, plus one. Their names are drawn after every other directory, so no earlier name moves.
+ */
+const ELITE_CLUBS = 24;
+const ELITES = new Map<readonly unknown[], readonly unknown[]>();
+function eliteCoaches(): readonly Coach[] {
+  const total = ELITE_COACH_TERMS.length * (1 + Math.floor(DIRECTORY_CLUBS / ELITE_CLUBS));
+  return Object.freeze(Array.from({ length: total }, (_, index) => {
+    const id = `coach-elite-${String(index + 1).padStart(2, '0')}`, country = NAME_COUNTRIES[nameHash(id) % NAME_COUNTRIES.length]!;
+    nationalities.set(id, country);
+    return Object.freeze({ ...ELITE_COACH_TERMS[index % ELITE_COACH_TERMS.length]!, id, name: nextName(country) });
+  }));
+}
+function withElite<T>(staff: readonly T[], elite: readonly T[]): readonly T[] {
+  const all = Object.freeze([...staff, ...elite]);
+  POOLS.set(all, POOLS.get(staff)!);
+  BASES.set(all, BASES.get(staff)!);
+  ELITES.set(all, elite);
+  return all;
+}
+export const COACH_DIRECTORY: readonly Coach[] = withElite(COACH_STAFF, eliteCoaches());
 
 const AUTHORED = new Map<readonly unknown[], number>([
   [COACH_DIRECTORY, DEVELOPMENT_COACHES.length], [SCOUT_DIRECTORY, DEVELOPMENT_SCOUTS.length], [FITNESS_DIRECTORY, DEVELOPMENT_FITNESS_COACHES.length],
@@ -115,9 +138,12 @@ export function realAssistantOf(clubId: string): AssistantCoach | undefined { re
  * the market adds each country's local pool, sized to that country's clubs, and the real assistant coaches of the
  * clubs listed.
  */
-export interface StaffMarketScope { clubs: readonly { id: string }[]; countries?: readonly (string | null)[] }
+export interface StaffMarketScope { clubs: readonly { id: string }[]; countries?: readonly (string | null)[]; elite?: boolean }
 
-/** The candidates a league's clubs can meet: as many per club as the built-in league offers its six clubs. */
+/**
+ * The candidates a league's clubs can meet: as many per club as the built-in league offers its six clubs. With `elite`
+ * (club-level staff), a directory with top candidates adds one set of them per 24 clubs, plus one.
+ */
 export function staffMarket<T>(directory: readonly T[], world: StaffMarketScope): readonly T[] {
   const authored = AUTHORED.get(directory);
   if (authored === undefined) throw new Error('Choose a staff directory.');
@@ -125,8 +151,11 @@ export function staffMarket<T>(directory: readonly T[], world: StaffMarketScope)
   const size = Math.min(base.length, Math.max(authored, Math.ceil(authored * world.clubs.length / BUILT_IN_CLUBS)));
   let markets = MARKETS.get(directory);
   if (!markets) { markets = new Map(); MARKETS.set(directory, markets); }
-  let market = markets.get(size);
-  if (!market) { market = Object.freeze(base.slice(0, size)); markets.set(size, market); }
+  const elite = world.elite ? ELITES.get(directory) ?? [] : [];
+  const eliteCount = Math.min(elite.length, elite.length && ELITE_COACH_TERMS.length * (1 + Math.floor(world.clubs.length / ELITE_CLUBS)));
+  const key = size * 1_000 + eliteCount;
+  let market = markets.get(key);
+  if (!market) { market = Object.freeze([...base.slice(0, size), ...elite.slice(0, eliteCount)]); markets.set(key, market); }
   if (!world.countries) return market as readonly T[];
   let byScope = SCOPED.get(directory);
   if (!byScope) { byScope = new WeakMap(); SCOPED.set(directory, byScope); }

@@ -34,7 +34,7 @@ export const STAFF_LEVEL_RULES = Object.freeze({
 
 /** Format 74: the career staffs every club to its level and sacked fees stop counting against the staff budget. */
 export function usesClubLevelStaff(state: { coaching?: Pick<SeasonCoaching, 'model'> }): boolean {
-  return state.coaching?.model === 'coaching-2' || state.coaching?.model === 'coaching-3';
+  return state.coaching?.model === 'coaching-2' || state.coaching?.model === 'coaching-3' || state.coaching?.model === 'coaching-4';
 }
 
 /**
@@ -43,19 +43,27 @@ export function usesClubLevelStaff(state: { coaching?: Pick<SeasonCoaching, 'mod
  */
 export function staffMarketWorld(context: WorldContext & { clubs?: readonly Team[]; coaching?: Pick<SeasonCoaching, 'model'> }): StaffMarketScope {
   const clubs = context.clubs ?? worldOf(context).clubs, world = context.world;
-  // Owner feedback (18 November 2026): club-level staff in a world whose countries are known also meet local pools.
-  if (!world || !usesClubLevelStaff(context)) return { clubs };
+  if (!usesClubLevelStaff(context)) return { clubs };
+  // Owner feedback (18 November 2026): club-level markets always offer a few top candidates (`elite`), and in a world
+  // whose countries are known also local pools.
+  if (!world) return eliteScope(clubs);
   let byWorld = marketScopes.get(clubs);
   if (!byWorld) { byWorld = new Map(); marketScopes.set(clubs, byWorld); }
   let scope = byWorld.get(world.id);
   if (!scope) {
     const countries = clubs.map(club => clubCountry(world, club.id));
-    scope = countries.some(country => country !== null) ? { clubs, countries } : { clubs };
+    scope = countries.some(country => country !== null) ? { clubs, countries, elite: true } : eliteScope(clubs);
     byWorld.set(world.id, scope);
   }
   return scope;
 }
 const marketScopes = new WeakMap<readonly { id: string }[], Map<string, StaffMarketScope>>();
+const eliteScopes = new WeakMap<readonly { id: string }[], StaffMarketScope>();
+function eliteScope(clubs: readonly { id: string }[]): StaffMarketScope {
+  let scope = eliteScopes.get(clubs);
+  if (!scope) { scope = { clubs, elite: true }; eliteScopes.set(clubs, scope); }
+  return scope;
+}
 
 /** Owner feedback (18 November 2026): most staff come from the club's country, a minority from abroad. */
 export const STAFF_NATIONALITY_RULES = Object.freeze({ localShare: 0.75 });
@@ -168,7 +176,9 @@ export function planComputerStaffRenewals(state: SeasonState, previous: SeasonCo
     if (!renewing(contract)) return contract;
     const first = !kept.has(contract.clubId);
     kept.add(contract.clubId);
-    return first && fits(contract.clubId, 'coaches', staffMember(COACH_DIRECTORY, contract.coachId)?.fee) ? contract : { ...contract, renew: false };
+    // Format 76: an extra training coach still under contract stays while he fits (letting him go costs compensation).
+    const contracted = (previous.terms?.[contract.coachId]?.clubId === contract.clubId && previous.terms[contract.coachId]!.untilSeason >= state.seasonNumber);
+    return (first || contracted) && fits(contract.clubId, 'coaches', staffMember(COACH_DIRECTORY, contract.coachId)?.fee) ? contract : { ...contract, renew: false };
   }) };
   const plan = <C extends RenewableContract>(contracts: C[], role: StaffRole, fee: (contract: C) => number | undefined): C[] => contracts.map(contract => contract.seasonNumber === year && renewing(contract) && !fits(contract.clubId, role, fee(contract)) ? { ...contract, renew: false } : contract);
   return { coaching, state: { ...state,

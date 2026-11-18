@@ -1,4 +1,5 @@
 import { financeLedgerCount } from './finance-ledger';
+import { payStaffCompensation } from './staff-contracts';
 import { withCalculationCache } from './pure-cache';
 import type { FitnessContract, SeasonFitness } from '../domain/fitness';
 import type { SeasonState } from '../domain/season';
@@ -39,7 +40,7 @@ function managedContract(state: SeasonState, contractId: string): FitnessContrac
 
 export function releaseFitnessCoach(state: SeasonState, contractId: string): SeasonState {
   const contract = managedContract(state, contractId);
-  return { ...state, fitness: { ...state.fitness, contracts: state.fitness.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } };
+  return payStaffCompensation({ ...state, fitness: { ...state.fitness, contracts: state.fitness.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } }, 'fitness', contractId);
 }
 
 export function setFitnessRenewal(state: SeasonState, contractId: string, renew: boolean): SeasonState {

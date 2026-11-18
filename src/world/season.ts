@@ -41,6 +41,7 @@ import { isCourtPosition } from '../engine/positions';
 import { clubRecoveryPercent, injuriesFromMatch, injuryRiskMap, isRecovering, withMedicalRecurrence } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
+import { keepContractedStaff, payComputerStaffCompensation, processStaffWagesRound, settleStaffTerms, withComputerStaffTerms, withOpeningStaffTerms } from './staff-contracts';
 import { planComputerStaffRenewals } from './staff-levels';
 import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
@@ -434,6 +435,12 @@ export interface SeasonSystems {
    * only; applies only with opening staff for every club.
    */
   wagePool?: boolean;
+  /**
+   * Format 76 (owner decision, 18 November 2026): staff work like players' contracts: 1-3 seasons, an annual salary paid
+   * weekly from Wages left (no up-front fee) and compensation when sacked (`coaching-4`, `src/world/staff-contracts.ts`).
+   * New careers only; requires the wage pool.
+   */
+  staffContracts?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -446,7 +453,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -467,17 +474,21 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.simpleFacilities !== undefined && typeof options.simpleFacilities !== 'boolean') throw new Error('Choose a valid facilities setting.');
   if (options.simpleFacilities && !options.facilities) throw new Error('Six-level facilities and the bank loan require club facilities.');
   if (options.wagePool !== undefined && typeof options.wagePool !== 'boolean') throw new Error('Choose a valid wage budget setting.');
+  if (options.staffContracts !== undefined && typeof options.staffContracts !== 'boolean') throw new Error('Choose a valid staff contract setting.');
+  const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
-  const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false, options.simpleFacilities ?? false, options.staffing ?? false);
+  const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false, options.simpleFacilities ?? false, options.staffing ?? false, staffContracts);
   const pressed = options.media ? enableMedia(created) : created;
   // Format 70: the board's president personalities and objectives apply from the opening; the opening match is unchanged.
   const boarded = options.presidents ? enablePresidentBoard(pressed) : pressed;
   // Format 75: player wages and staff fees share one pool from the opening; the opening staff and squads are unchanged.
+  // Format 76: staff contracts (`coaching-4`, set before the opening staff are paid) with each person's contract length.
+  if (staffContracts) return withOpeningStaffTerms(boarded);
   return options.wagePool && options.staffing ? { ...boarded, coaching: { ...boarded.coaching, model: 'coaching-3' } } : boarded;
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.
-function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD, namingRightsEnabled = false, simpleFacilities = false, staffingEnabled = false): SeasonState {
+function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD, namingRightsEnabled = false, simpleFacilities = false, staffingEnabled = false, staffContractsEnabled = false): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   validateWorld(world);
   managedClubId ??= fullWorldClubs(world)[0]!.id;
@@ -519,7 +530,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const fixtures = scheduledFixtures({ clubs, fixtures: [], world, divisions, seed, ...(europe ? { europe } : {}) }, 1);
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId));
   const preparation = {
-    ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled, staffingEnabled ? { world, seed } : undefined),
+    ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled, staffingEnabled ? { world, seed, ...(staffContractsEnabled ? { model: 'coaching-4' as const } : {}) } : undefined),
     plans: Object.fromEntries(clubs.map(club => [club.id, { ...defaultPlan(club, club.id !== managedClubId), ...(usesFullClubRoster({ world }) ? { matchday: null } : {}) }])),
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
@@ -805,6 +816,8 @@ function commitMatchday(state: SeasonState): { next: SeasonState; weekDone: bool
   }
   next = processYouthRound(next);
   next = processFinanceRound(next);
+  // Format 76: the week's staff salaries, before the player wages (the transfer payment run follows the wages).
+  next = processStaffWagesRound(next);
   next = processPayrollRound(next);
   next = processTransferPayments(next);
   next = processScoutingRound(next);
@@ -820,7 +833,7 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState, coachCh
   next = recruitAiPhysios(next);
   next = recruitAiAssistants(next);
   next = recruitAiYouthCoaches(next);
-  next = recruitAiCoaches(next);
+  next = withComputerStaffTerms(recruitAiCoaches(next));
   next.round += 1;
   next.date = dateForRound(next.round, next.seasonNumber);
   next = processFacilityProjects(next);
@@ -1031,19 +1044,21 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = resolveInSeasonRecruitment(next);
   next = processTransferPayments(next);
   // Format 74: computer clubs first decide which staff to keep at the new season's money level.
-  const renewals = planComputerStaffRenewals(next, state.coaching);
-  next = renewSeasonCoaching(renewals.state, renewals.coaching);
+  // Format 76: staff still under contract stay; computer clubs pay compensation to anyone they let go before the end.
+  const contracted = keepContractedStaff(next, state.coaching);
+  const renewals = planComputerStaffRenewals(contracted.state, contracted.coaching);
+  next = renewSeasonCoaching(payComputerStaffCompensation(renewals.state, renewals.coaching), renewals.coaching);
   next = renewSeasonScouts(next);
   next = renewSeasonFitness(next);
   next = renewSeasonPhysio(next);
   next = renewSeasonAssistant(next);
-  next = renewSeasonYouth(next);
+  next = settleStaffTerms(renewSeasonYouth(next), state.coaching);
   next = recruitAiScouts(next);
   next = recruitAiFitnessCoaches(next);
   next = recruitAiPhysios(next);
   next = recruitAiAssistants(next);
   next = recruitAiYouthCoaches(next);
-  next = recruitAiCoaches(next);
+  next = withComputerStaffTerms(recruitAiCoaches(next));
   next = preparePayrollRound(next);
   next = processTransferPayments(next);
   next = prepareScoutingAssignments(refreshSquadKnowledge(next));

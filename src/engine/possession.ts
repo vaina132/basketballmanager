@@ -1,5 +1,5 @@
 import type { CourtPoint, CourtPosition, MatchState, Player, Position, PossessionPlay, Side } from '../domain/types';
-import { EXTRA_MATCH, extraAttribute } from '../world/extra-attributes';
+import { EXTRA_MATCH } from '../world/extra-attributes';
 import { HOME_COURT_MAKE_BONUS, SCORE_EFFECT, SHOT_MAKING } from './calibration';
 import { matchPlayer } from './positions';
 
@@ -121,8 +121,8 @@ export function moveForAction(state: MatchState, play: PossessionPlay, action: '
 
 /** Mental: in the last minutes of a close fourth quarter or overtime, composed shooters make a little more and nervous ones a little less. */
 export function clutchAdjustment(state: Pick<MatchState, 'period' | 'clockSeconds' | 'score'>, shooter: Player): number {
-  if (state.period < 4 || state.clockSeconds > EXTRA_MATCH.clutchSeconds || Math.abs(state.score.home - state.score.away) > EXTRA_MATCH.clutchMargin) return 0;
-  return (extraAttribute(shooter, 'mental') - EXTRA_MATCH.centre) * EXTRA_MATCH.clutch;
+  if (shooter.attributes.mental === undefined || state.period < 4 || state.clockSeconds > EXTRA_MATCH.clutchSeconds || Math.abs(state.score.home - state.score.away) > EXTRA_MATCH.clutchMargin) return 0;
+  return (shooter.attributes.mental - EXTRA_MATCH.centre) * EXTRA_MATCH.clutch;
 }
 
 export function shotContext(state: MatchState, play: PossessionPlay): { defenderId: string; distanceM: number; separationM: number; contest: 'open' | 'pressured' | 'contested'; value: 2 | 3; makeChance: number } {

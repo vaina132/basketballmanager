@@ -7,7 +7,7 @@ import { actionScene, freeThrowPosition, passScene, reboundScene, setupScene, sh
 import { basketPoint, clutchAdjustment, courtDistance, createPossessionPlay, matchedDefender, moveForAction, positionOf, possessionFormation, primaryHandler, shotContext } from './possession';
 import { ACTION_SECONDS, BLOCKS, DEFENDER_ROLES, DEFENSIVE_FOULS, LATE_GAME, REBOUNDS, ROTATION, SHOOTING_FOULS, SHOT_MAKING, SHOT_SELECTION, TEAM_REBOUND_OFFENSIVE_SHARE, TEAM_REBOUND_SHARE, TURNOVERS } from './calibration';
 import { overallRating } from '../world/overall-rating';
-import { EXTRA_MATCH, extraAttribute } from '../world/extra-attributes';
+import { EXTRA_MATCH } from '../world/extra-attributes';
 import { asPlayedIn, courtCircles, COURT_POSITIONS, isCourtPosition } from './positions';
 export const MAX_MATCH_PERIODS = 24;
 const MAX_SIMULATION_STEPS = 20_000;
@@ -510,7 +510,8 @@ function installControl(state: MatchState, side: Side, handlerId: string, positi
 function possessionTurnover(state: MatchState, play: PossessionPlay, shotClock = false, action?: 'advance' | 'pass' | 'drive' | 'shot'): void {
   const offense = play.offense, defense = other(offense), handler = player(state, offense, play.handlerId), defender = matchedDefender(state, play);
   // On passes and drives a good stealer turns more of the defense's forced turnovers into steals.
-  const stealShare = action === 'pass' || action === 'drive' ? clamp(TURNOVERS.stealShare + (extraAttribute(defender, 'stealing') - EXTRA_MATCH.centre) * EXTRA_MATCH.stealShare, .3, .85) : TURNOVERS.stealShare;
+  const stealing = defender.attributes.stealing;
+  const stealShare = stealing !== undefined && (action === 'pass' || action === 'drive') ? clamp(TURNOVERS.stealShare + (stealing - EXTRA_MATCH.centre) * EXTRA_MATCH.stealShare, .3, .85) : TURNOVERS.stealShare;
   const stolen = !shotClock && draw(state) < stealShare;
   state.stats[handler.id]!.turnovers += 1;
   if (stolen) state.stats[defender.id]!.steals += 1;
@@ -547,11 +548,12 @@ function resolvePossessionShot(state: MatchState, play: PossessionPlay, rushed: 
   const fouled = draw(state) < clamp(SHOOTING_FOULS.base + state.tactics[defense].pressure * SHOOTING_FOULS.pressure + (three ? 0 : SHOOTING_FOULS.twoPoint) - Math.max(0, context.separationM - 1.5) * SHOOTING_FOULS.separation, SHOOTING_FOULS.min, SHOOTING_FOULS.max);
   // Inside, help defenders (mostly bigs) foul and block as well as the shooter's own defender; threes stay with him.
   const defenders = activePlayers(state, defense), helper = (weights: Readonly<Record<Player['position'], number>>, matched: number, careful: boolean) => three ? defender : choose(state, defenders, p => weights[p.position] * (p.id === defender.id ? matched : 1) * (careful ? foulCaution(state, p) : 1));
-  const blockerWeight = (p: Player) => Math.max(.2, 1 + (extraAttribute(p, 'blocking') - EXTRA_MATCH.centre) * EXTRA_MATCH.blockerChoice);
+  // Players without the five further abilities (older careers, exhibition teams) block as before.
+  const blockerWeight = (p: Player) => p.attributes.blocking === undefined ? 1 : Math.max(.2, 1 + (p.attributes.blocking - EXTRA_MATCH.centre) * EXTRA_MATCH.blockerChoice);
   const fouler = fouled ? helper(DEFENDER_ROLES.foul, DEFENDER_ROLES.matchedFoul, true) : defender, blocker = fouled ? defender : three ? defender : choose(state, defenders, p => DEFENDER_ROLES.block[p.position] * (p.id === defender.id ? DEFENDER_ROLES.matchedBlock : 1) * blockerWeight(p));
   // Blocking adds to two-point shots, fully near the rim and half further out; threes keep the defense-only chance.
-  const blocking = three ? 0 : (extraAttribute(blocker, 'blocking') - EXTRA_MATCH.centre) * EXTRA_MATCH.block * (context.distanceM <= EXTRA_MATCH.rimDistance ? 1 : .5);
-  const blockChance = clamp(BLOCKS.base + blocker.attributes.defense * BLOCKS.defense + blocking + Math.max(0, blocker.heightCm - shooter.heightCm) * BLOCKS.height - Math.max(0, context.separationM - .75) * BLOCKS.separation, BLOCKS.min, BLOCKS.max) * (three ? BLOCKS.threeFactor : 1);
+  const blocking = three || blocker.attributes.blocking === undefined ? 0 : (blocker.attributes.blocking - EXTRA_MATCH.centre) * EXTRA_MATCH.block * (context.distanceM <= EXTRA_MATCH.rimDistance ? 1 : .5);
+  const blockChance = clamp(BLOCKS.base + blocker.attributes.defense * (blocker.attributes.blocking === undefined ? BLOCKS.defenseWithoutBlocking : BLOCKS.defense) + blocking + Math.max(0, blocker.heightCm - shooter.heightCm) * BLOCKS.height - Math.max(0, context.separationM - .75) * BLOCKS.separation, BLOCKS.min, BLOCKS.max) * (three ? BLOCKS.threeFactor : 1);
   const blocked = !fouled && draw(state) < blockChance;
   const made = !blocked && draw(state) < context.makeChance * (fouled ? SHOT_MAKING.andOne : 1) - (rushed ? SHOT_MAKING.rushed : 0);
   const origin = positionOf(play, shooter.id), hoop = basketPoint(state, offense);
@@ -597,7 +599,8 @@ function resolvePossessionAction(state: MatchState): void {
     const passShare = clamp(SHOT_SELECTION.passBase - (play.actions - 1) * SHOT_SELECTION.passDecay + tactics.outsideShare * SHOT_SELECTION.passOutside, .15, .9);
     // Intelligence: a smart handler takes open looks a little more often and contested ones a little less.
     const separation = courtDistance(positionOf(play, handler.id), positionOf(play, defender.id)), look = separation > 1.75 ? 1 : separation <= .85 ? -1 : 0;
-    const chosen = distance < 4.5 ? shootChance : clamp(shootChance * (1 + look * (extraAttribute(handler, 'intelligence') - EXTRA_MATCH.centre) * EXTRA_MATCH.selection), SHOT_SELECTION.base * .8, SHOT_SELECTION.max);
+    const intelligence = handler.attributes.intelligence;
+    const chosen = distance < 4.5 || intelligence === undefined ? shootChance : clamp(shootChance * (1 + look * (intelligence - EXTRA_MATCH.centre) * EXTRA_MATCH.selection), SHOT_SELECTION.base * .8, SHOT_SELECTION.max);
     action = roll < chosen ? 'shot' : roll < chosen + (1 - chosen) * passShare ? 'pass' : 'drive';
   }
   // Include organizing, reading the defense and executing each action. Tempo
@@ -622,8 +625,9 @@ function resolvePossessionAction(state: MatchState): void {
     // Every action can end in a turnover or a whistle (the advance: backcourt pressure); the rates are calibrated.
     const fatigue = (100 - state.stats[handler.id]!.condition) / 100;
     // On passes and drives the defender's Stealing takes part of his defense's share; the handler's Intelligence lowers turnovers.
-    const defending = action === 'pass' || action === 'drive' ? defender.attributes.defense * (1 - EXTRA_MATCH.stealSkill) + extraAttribute(defender, 'stealing') * EXTRA_MATCH.stealSkill : defender.attributes.defense;
-    const decisions = (extraAttribute(handler, 'intelligence') - EXTRA_MATCH.turnoverCentre) * EXTRA_MATCH.turnover;
+    const stealing = defender.attributes.stealing, intelligence = handler.attributes.intelligence;
+    const defending = stealing !== undefined && (action === 'pass' || action === 'drive') ? defender.attributes.defense * (1 - EXTRA_MATCH.stealSkill) + stealing * EXTRA_MATCH.stealSkill : defender.attributes.defense;
+    const decisions = intelligence === undefined ? 0 : (intelligence - EXTRA_MATCH.turnoverCentre) * EXTRA_MATCH.turnover;
     const turnoverChance = clamp(TURNOVERS[action] + pressure * TURNOVERS.pressure + (defending - handler.attributes.passing) * TURNOVERS.skillGap - decisions + fatigue * TURNOVERS.fatigue + moraleTurnoverAdjustment(state, handler.id), .006, TURNOVERS.max);
     const offensiveFoul = action === 'advance' ? 0 : TURNOVERS.offensiveFoul, heldBall = action === 'advance' ? 0 : .004;
     const foulChance = stopClock ? 1 : DEFENSIVE_FOULS[action] + pressure * DEFENSIVE_FOULS.pressure;

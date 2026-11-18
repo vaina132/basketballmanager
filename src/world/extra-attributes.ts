@@ -6,8 +6,9 @@
  * rest and kept internal, owner decision): Blocking from height, position, rebounding and defence; Stealing from
  * position, defence and passing; Intelligence from passing, the overall rating and experience (age and minutes);
  * Mental from age, minutes and free throws; Discipline from age and a stable per-player value. Generated players and
- * academy prospects use the same rules with their own age. Records without stored values (exhibition teams, careers
- * started before the five existed) get the same estimate with an assumed age of 26 and average minutes.
+ * academy prospects use the same rules with their own age. Records without them (exhibition teams, the fictional
+ * development world, careers started before the five existed) keep playing, training and showing as before: every
+ * effect applies only to a player who stores the five.
  */
 import type { ExtraAttributes, Player, PlayerAttributes, Position } from '../domain/types';
 import { overallRating } from './overall-rating';
@@ -69,23 +70,6 @@ export function withExtraAttributes(input: ExtraAttributeInput): PlayerAttribute
 
 export const hasExtraAttributes = (attributes: PlayerAttributes): attributes is PlayerAttributes & ExtraAttributes => EXTRA_ATTRIBUTES.every(key => typeof attributes[key] === 'number');
 
-const estimates = new WeakMap<PlayerAttributes, ExtraAttributes>();
-/**
- * The five abilities as play uses them: the stored values, or for records without them the estimate from the
- * player's own details (cached per immutable attribute record). Played out of position, a player keeps his own.
- */
-export function extraAttributes(player: Pick<Player, 'id' | 'position' | 'heightCm' | 'attributes'>): ExtraAttributes {
-  const attributes = player.attributes;
-  if (hasExtraAttributes(attributes)) return attributes;
-  let known = estimates.get(attributes);
-  if (!known) { known = deriveExtraAttributes(player); estimates.set(attributes, known); }
-  return known;
-}
-
-export function extraAttribute(player: Pick<Player, 'id' | 'position' | 'heightCm' | 'attributes'>, key: ExtraAttribute): number {
-  return player.attributes[key] ?? extraAttributes(player)[key];
-}
-
 /** Only the five stored abilities of a record, for carrying them through skill projections (training, ageing). */
 export function storedExtras(attributes: PlayerAttributes): Partial<ExtraAttributes> {
   return hasExtraAttributes(attributes) ? { blocking: attributes.blocking, stealing: attributes.stealing, intelligence: attributes.intelligence, mental: attributes.mental, discipline: attributes.discipline } : {};
@@ -102,7 +86,7 @@ export const EXTRA_AGING: Readonly<Record<ExtraAttribute, { growUntilAge: number
 
 /** Match-engine weights for the five (src/engine). */
 export const EXTRA_MATCH = {
-  /** League-average ability the effects are centred on, so league totals stay calibrated. */
+  /** League-average ability the effects are centred on, so league totals stay calibrated (measured on squads like the real data's regulars). */
   centre: 12,
   /** Block chance per Blocking point above the centre near the rim (within rimDistance metres); other twos get half. */
   block: .0035, rimDistance: 3,

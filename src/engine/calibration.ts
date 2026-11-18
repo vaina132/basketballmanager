@@ -71,9 +71,10 @@ export const DEFENDER_ROLES = {
 
 /**
  * Blocked shots: two-point chance from defense, height and closeness; threes are blocked far less often. Blocking
- * (src/world/extra-attributes.ts, EXTRA_MATCH) adds to two-point chances, so defense weighs less than before (.0038).
+ * (src/world/extra-attributes.ts, EXTRA_MATCH) adds to two-point chances, so defense weighs less for a blocker who has it;
+ * players without the five further abilities (older careers, exhibition teams) keep the earlier weight.
  */
-export const BLOCKS = { base: .028, defense: .003, height: .002, separation: .025, min: .005, max: .16, threeFactor: .2 } as const;
+export const BLOCKS = { base: .028, defense: .003, defenseWithoutBlocking: .0038, height: .002, separation: .025, min: .005, max: .16, threeFactor: .2 } as const;
 
 /**
  * Last possession of a close fourth quarter or overtime (the game clock at most shotClockGrace beyond the shot clock):

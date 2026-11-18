@@ -5,7 +5,6 @@
  * manager never arranged. Pure and deterministic: no random draws, so arranging circles never changes the match's
  * random sequence.
  */
-import { extraAttributes } from '../world/extra-attributes';
 import type { MatchState, Player, PlayerAttributes, SkillAttributes, Position, Side } from '../domain/types';
 
 /** The court picture's circles, in the order they are listed. */
@@ -44,8 +43,7 @@ export function asPlayedIn(player: Player, position: Position): Player {
   if (player.position === position) return player;
   let byPosition = played.get(player);
   if (!byPosition) played.set(player, byPosition = {});
-  // The five further abilities do not depend on the circle: he keeps his own (stored or estimated from his listed position).
-  return byPosition[position] ??= { ...player, position, attributes: { ...playedAttributes(player.attributes, player.position, position), ...extraAttributes(player) } };
+  return byPosition[position] ??= { ...player, position, attributes: playedAttributes(player.attributes, player.position, position) };
 }
 
 /** A roster player as the simulation sees him now: in the circle the manager chose while he is on court, otherwise as listed. */

@@ -17,8 +17,8 @@ export interface SkillAttributes {
 /**
  * Five further abilities (owner decision, 18 November 2026), 1-20 like the skills: Blocking, Stealing, Intelligence
  * (decisions, fewer turnovers), Mental (close games, late in the game) and Discipline (faster training progress).
- * New careers store them on every player; records without them (exhibition teams, older careers) use the values
- * `extraAttributes` in `src/world/extra-attributes.ts` estimates from the player's other details.
+ * New careers store them on every player (`src/world/extra-attributes.ts`); records without them (exhibition teams,
+ * the fictional development world, older careers) play, train and show as before.
  */
 export interface ExtraAttributes {
   readonly blocking: number;

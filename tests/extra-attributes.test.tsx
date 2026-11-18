@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Player, PlayerAttributes, Position, Team } from '../src/domain/types';
 import { createFixtureMatch, simulateToEnd } from '../src/engine/match';
-import { deriveExtraAttributes, EXTRA_ATTRIBUTES, extraAttributes, hasExtraAttributes } from '../src/world/extra-attributes';
+import { deriveExtraAttributes, EXTRA_ATTRIBUTES, hasExtraAttributes, withExtraAttributes } from '../src/world/extra-attributes';
 import { worldFromPack } from '../src/world/real-world';
 import { createSeason, dateForRound, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
@@ -44,9 +44,8 @@ describe('five further abilities: derivation', () => {
     expect(small.stealing).toBeGreaterThan(big.stealing);
     // Experience: the same player older and with more minutes reads the game better.
     expect(deriveExtraAttributes({ ...guard, age: 30, minutes: 2400 }).intelligence).toBeGreaterThan(small.intelligence);
-    // Records without stored values get the same estimate as play uses.
     const player = { id: 'x', position: 'SF' as const, heightCm: 200, attributes: skills(11) };
-    expect(extraAttributes(player)).toEqual(deriveExtraAttributes(player));
+    expect(withExtraAttributes(player)).toEqual({ ...skills(11), ...deriveExtraAttributes(player) });
   });
 
   it('stores all five on every player of a new real-club world and keeps them through a strict save', () => {
@@ -84,7 +83,7 @@ describe('five further abilities: match engine and training', () => {
     expect(disciplinedPractice(100, 20)).toBe(120);
     expect(disciplinedPractice(100, 10)).toBe(100);
     expect(disciplinedPractice(100, 1)).toBe(82);
-    const withDiscipline = (value: number) => DEVELOPMENT_CLUBS.map(club => ({ ...club, players: club.players.map(player => ({ ...player, attributes: { ...player.attributes, ...extraAttributes(player), discipline: value } })) }));
+    const withDiscipline = (value: number) => DEVELOPMENT_CLUBS.map(club => ({ ...club, players: club.players.map(player => ({ ...player, attributes: { ...withExtraAttributes(player), discipline: value } })) }));
     const week = (clubs: Team[]) => {
       const training = createTraining(clubs);
       for (const plan of Object.values(training.plans)) Object.assign(plan, { delegated: false, intensity: 'heavy', focus: 'passing' });

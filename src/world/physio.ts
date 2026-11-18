@@ -8,7 +8,7 @@ import { seasonRounds } from './career-world';
 import type { Physio } from '../domain/physio';
 import { physioRating } from './physio-policy';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
-import { clubsByStaffLevel, fittingStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
+import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
 import { remainingStaffBudget } from './staff-policy';
 import { staffFee } from './economy';
 
@@ -55,7 +55,7 @@ export function recruitAiPhysios(state: SeasonState, includeManaged = false): Se
 let range: readonly [number, number] | undefined;
 /** Format 74: the physio fitting a club's staff level and its share of the staff budget (`src/world/staff-levels.ts`). */
 function fittingPhysio(state: SeasonState, clubId: string): Physio | undefined {
-  const choice = withCalculationCache(() => fittingStaffChoice(availablePhysios(state), {
+  const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'physio', availablePhysios(state), {
     rating: physioRating, fee: member => staffFee(state, clubId, member.fee), target: staffTargetRating(state, clubId, 'physio', range ??= ratingRange(DEVELOPMENT_PHYSIOS, physioRating)), cap: staffShareCap(state, clubId, 'physio'), budget: remainingStaffBudget(state, clubId),
   }));
   return choice && quotePhysioHire(state, choice.id, clubId).canHire ? choice : undefined;

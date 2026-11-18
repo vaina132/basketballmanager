@@ -8,7 +8,7 @@ import { seasonRounds } from './career-world';
 import type { YouthCoach } from '../domain/youth';
 import { youthCoachRating } from './youth-policy';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
-import { clubsByStaffLevel, fittingStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
+import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
 import { remainingStaffBudget } from './staff-policy';
 import { staffFee } from './economy';
 
@@ -55,7 +55,7 @@ export function recruitAiYouthCoaches(state: SeasonState, includeManaged = false
 let range: readonly [number, number] | undefined;
 /** Format 74: the youth coach fitting a club's staff level and its share of the staff budget (`src/world/staff-levels.ts`). */
 function fittingYouthCoach(state: SeasonState, clubId: string): YouthCoach | undefined {
-  const choice = withCalculationCache(() => fittingStaffChoice(availableYouthCoaches(state), {
+  const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'youth', availableYouthCoaches(state), {
     rating: youthCoachRating, fee: member => staffFee(state, clubId, member.fee), target: staffTargetRating(state, clubId, 'youth', range ??= ratingRange(DEVELOPMENT_YOUTH_COACHES, youthCoachRating)), cap: staffShareCap(state, clubId, 'youth'), budget: remainingStaffBudget(state, clubId),
   }));
   return choice && quoteYouthCoachHire(state, choice.id, clubId).canHire ? choice : undefined;

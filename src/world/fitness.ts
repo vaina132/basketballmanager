@@ -8,7 +8,7 @@ import { seasonRounds } from './career-world';
 import type { FitnessCoach } from '../domain/fitness';
 import { fitnessRating } from './fitness-policy';
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
-import { clubsByStaffLevel, fittingStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
+import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
 import { remainingStaffBudget } from './staff-policy';
 import { staffFee } from './economy';
 
@@ -64,7 +64,7 @@ export function recruitAiFitnessCoaches(state: SeasonState, includeManaged = fal
 let range: readonly [number, number] | undefined;
 /** Format 74: the fitness coach fitting a club's staff level and its share of the staff budget (`src/world/staff-levels.ts`). */
 function fittingFitnessCoach(state: SeasonState, clubId: string): FitnessCoach | undefined {
-  const choice = withCalculationCache(() => fittingStaffChoice(availableFitnessCoaches(state), {
+  const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'fitness', availableFitnessCoaches(state), {
     rating: fitnessRating, fee: member => staffFee(state, clubId, member.fee), target: staffTargetRating(state, clubId, 'fitness', range ??= ratingRange(DEVELOPMENT_FITNESS_COACHES, fitnessRating)), cap: staffShareCap(state, clubId, 'fitness'), budget: remainingStaffBudget(state, clubId),
   }));
   return choice && quoteFitnessHire(state, choice.id, clubId).canHire ? choice : undefined;

@@ -106,6 +106,25 @@ export function lastCommittedWeek(state: { round: number; fixtures: readonly { r
   return completed;
 }
 
+const weekStartViews = new WeakMap<object, object>();
+/**
+ * Player relationships and press questions decide at week boundaries (owner report, 18 November 2026: the day-by-day
+ * Continue stops between a week's game days). During an active week, the games of the week already played count from
+ * the week's end: this view hides their results and injuries, as the strict save check rebuilds each player decision
+ * at its week's start. Outside a partly played week it is the state itself.
+ */
+export function weekStartView<T extends { status?: string; round?: number; fixtures: readonly { id: string; round: number; result: unknown }[]; injuries?: readonly { fixtureId: string }[] }>(state: T): T {
+  const round = state.round;
+  if (state.status !== 'active' || round === undefined || !state.fixtures.some(fixture => fixture.round >= round && fixture.result)) return state;
+  let view = weekStartViews.get(state) as T | undefined;
+  if (!view) {
+    const open = new Set(state.fixtures.filter(fixture => fixture.round >= round && fixture.result).map(fixture => fixture.id));
+    view = { ...state, fixtures: state.fixtures.map(fixture => open.has(fixture.id) ? { ...fixture, result: null } : fixture), ...(state.injuries ? { injuries: state.injuries.filter(injury => !open.has(injury.fixtureId)) } : {}) };
+    weekStartViews.set(state, view);
+  }
+  return view;
+}
+
 /** Only careers outside the built-in league store their world. */
 export function storedWorld(world: CareerWorld): { world?: CareerWorld } {
   return world.id === DEVELOPMENT_WORLD.id ? {} : { world };

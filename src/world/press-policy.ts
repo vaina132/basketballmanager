@@ -5,7 +5,7 @@ import { isRichPressEvent, mediaMoraleFactor, PRESS_STYLE_TEXT, PRESS_TOPIC_TITL
 import { getRichPressQuestion, PRESS_TOPIC_QUOTES } from './press-topics';
 import { rosterForRound } from './rosters';
 import { fixturePlayerEvidence } from './senior-history';
-import { roundOrdinal, seasonRounds } from './career-world';
+import { roundOrdinal, seasonRounds, weekStartView } from './career-world';
 import type { WorldContext } from '../domain/world';
 
 /** A press question follows three consecutive wins or defeats; answers change morale a little and fade. */
@@ -83,6 +83,10 @@ const compareText = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
  * matchday completes a run of exactly three wins or defeats, and stays open until the next result or season.
  */
 export function getPressQuestion(state: Pick<SeasonState, 'relationships' | 'fixtures' | 'rosters' | 'clubs' | 'managedClubId' | 'seasonNumber'> & Partial<SeasonState> & WorldContext): PressQuestion | null {
+  // Asked from completed weeks only: a partly played week counts from its end (`weekStartView`).
+  return pressQuestionAt(weekStartView(state));
+}
+function pressQuestionAt(state: Pick<SeasonState, 'relationships' | 'fixtures' | 'rosters' | 'clubs' | 'managedClubId' | 'seasonNumber'> & Partial<SeasonState> & WorldContext): PressQuestion | null {
   // Format 67: careers with media choose richer topics from what happened.
   if (state.media) return getRichPressQuestion(state as SeasonState);
   const enabled = state.relationships.enabledSince;

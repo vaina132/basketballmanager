@@ -51,6 +51,8 @@ This file holds only the current state, the next steps and the rules that must n
 
 ## Rules and conventions that must not be broken
 
+**Talking to the owner (owner, 18 November 2026):** super simple language. Short sentences. Few words. No technical terms. Short lists.
+
 **Development mode until release (owner, 15 November 2026: build features first, test later; the owner chose all three speed-ups: pause old-save support, lighter save checks, parallel agents)**
 - No fixture capture, continuation tests, migration tests or corruption-rejection tests for new work. When the save shape changes, bump `SEASON_SCHEMA_VERSION` and add a version guard; older saves may be refused with a clear "start a new career" message instead of being migrated.
 - If a change makes an old-save continuation test fail, delete that test and list it under "Before release" below. Existing fixtures stay in the repository for that later work.

@@ -1,6 +1,13 @@
 import { Icon, type IconName } from './Icon'
 
 export type Page = 'home' | 'inbox' | 'squad' | 'match' | 'season' | 'training' | 'staff' | 'club' | 'board' | 'transfers' | 'scouting' | 'medical' | 'academy' | 'calendar' | 'europe'
+/**
+ * Owner feedback (18 November 2026): the budget bar shows only where money is decided: the desk, Transfers,
+ * Squad > Contracts, Staff and Club (facilities and the bank).
+ */
+export function showsBudgetBar(page: Page, squadView?: string): boolean {
+  return page === 'home' || page === 'transfers' || page === 'staff' || page === 'club' || page === 'squad' && squadView === 'contracts'
+}
 export interface NavItem { id: Page; label: string; icon: IconName }
 
 export const PAGE_NAMES: Record<Page, string> = { home: "Manager's desk", inbox: 'Inbox', squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', academy: 'Youth academy', medical: 'Medical & rehabilitation', staff: 'Club staff', club: 'Club', board: 'Board', transfers: 'Transfers', scouting: 'Scouting & shortlist', calendar: 'Season calendar', europe: 'European competitions' }

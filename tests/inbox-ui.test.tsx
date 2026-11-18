@@ -5,7 +5,7 @@ import { getPressQuestion } from '../src/world/press-policy';
 import { answerPress } from '../src/world/relationships';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { getInboxItems } from '../src/ui/inbox-items';
-import { InboxWorkspace, pressEffectText } from '../src/ui/InboxWorkspace';
+import { inboxList, InboxWorkspace, pressEffectText } from '../src/ui/InboxWorkspace';
 import { advanceMatchday } from './helpers/board-funding';
 
 const noop = () => {};
@@ -52,5 +52,19 @@ describe('inbox', () => {
     expect(html).not.toContain('id="press-conference"');
     expect(getInboxItems(answered).find(item => item.category === 'press')).toMatchObject({ title: 'Press conference answered', needsAction: false, detail: 'Back the squad: “This group has my full support.”' });
     expect(pressEffectText('leaders')).toBe('Regulars +3, rest of the squad −1 morale');
+  });
+});
+
+describe('one inbox list (owner feedback, 18 November 2026)', () => {
+  it('shows every message newest first, with All and Unread filters and no category tabs', () => {
+    const html = render(open);
+    expect(html).toMatch(/aria-pressed="true"[^>]*>All</);
+    expect(html).toContain('>Unread');
+    for (const tab of ['Needs action', '>Press<', '>Board<', '>Players<', '>Club<']) expect(html).not.toContain(tab);
+    const items = getInboxItems(open), list = inboxList(items, 'all', new Set());
+    expect(list).toHaveLength(items.length);
+    for (let index = 1; index < list.length; index += 1) expect(list[index - 1]!.date >= list[index]!.date).toBe(true);
+    const read = new Set([list[0]!.id]);
+    expect(inboxList(items, 'unread', read).map(item => item.id)).toEqual(list.slice(1).map(item => item.id));
   });
 });

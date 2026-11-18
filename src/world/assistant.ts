@@ -1,4 +1,5 @@
 import { financeLedgerCount } from './finance-ledger';
+import { payStaffCompensation } from './staff-contracts';
 import type { AssistantContract, SeasonAssistant } from '../domain/assistant';
 import type { SeasonState } from '../domain/season';
 import { recordAssistantFee } from './finance';
@@ -39,7 +40,7 @@ function managedContract(state: SeasonState, contractId: string): AssistantContr
 }
 export function releaseAssistant(state: SeasonState, contractId: string): SeasonState {
   const contract = managedContract(state, contractId);
-  return { ...state, assistant: { ...state.assistant, contracts: state.assistant.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } };
+  return payStaffCompensation({ ...state, assistant: { ...state.assistant, contracts: state.assistant.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } }, 'assistant', contractId);
 }
 export function setAssistantRenewal(state: SeasonState, contractId: string, renew: boolean): SeasonState {
   if (typeof renew !== 'boolean') throw new Error('Choose whether the assistant-coach contract should renew.');

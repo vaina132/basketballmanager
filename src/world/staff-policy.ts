@@ -15,6 +15,7 @@ import type { WorldContext } from '../domain/world';
 import { staffFee } from './economy';
 import { usesClubLevelStaff } from './staff-levels';
 import { formatEuros } from '../ui/money-format';
+import { usesStaffContracts } from './staff-contracts';
 
 export { STAFF_BUDGET } from './staff-constants';
 export { staffAllocation } from './board-consequences';
@@ -45,7 +46,7 @@ export function staffCommitted(state: Pick<SeasonState, 'coaching' | 'seasonNumb
  */
 export function staffMoneyReason(state: Pick<SeasonState, 'coaching'>, person: string, fee: number, remainingAllocation: number, remainingBudget: number): string | null {
   if (fee > remainingAllocation) return usesClubLevelStaff(state) ? `Not enough Wages left: this ${person} costs ${formatEuros(fee)} a season, you have ${formatEuros(remainingAllocation)} left.` : 'This appointment exceeds the shared staff budget. Released staff fees remain committed for this season.';
-  if (fee > remainingBudget) return `Not enough Spending left: the ${formatEuros(fee)} season fee is paid when hired, you have ${formatEuros(remainingBudget)} to spend.`;
+  if (fee > remainingBudget && !usesStaffContracts(state)) return `Not enough Spending left: the ${formatEuros(fee)} season fee is paid when hired, you have ${formatEuros(remainingBudget)} to spend.`;
   return null;
 }
 
@@ -54,5 +55,6 @@ export function remainingStaffBudget(state: SeasonState, clubId = state.managedC
   const allocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   if (!state.finance.enabledSince) return allocation;
   if (getFinanceBalance(state.finance, clubId).unpaid || getTransferPaymentSummary(state, clubId).overdue) return 0;
-  return Math.min(allocation, getSpendableCash(state, clubId));
+  // Format 76: staff are paid a weekly salary from Wages left, so Spending left is not needed to hire.
+  return usesStaffContracts(state) ? allocation : Math.min(allocation, getSpendableCash(state, clubId));
 }

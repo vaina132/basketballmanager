@@ -34,7 +34,7 @@ export const STAFF_LEVEL_RULES = Object.freeze({
 
 /** Format 74: the career staffs every club to its level and sacked fees stop counting against the staff budget. */
 export function usesClubLevelStaff(state: { coaching?: Pick<SeasonCoaching, 'model'> }): boolean {
-  return state.coaching?.model === 'coaching-2' || state.coaching?.model === 'coaching-3';
+  return state.coaching?.model === 'coaching-2' || state.coaching?.model === 'coaching-3' || state.coaching?.model === 'coaching-4';
 }
 
 /**
@@ -176,7 +176,9 @@ export function planComputerStaffRenewals(state: SeasonState, previous: SeasonCo
     if (!renewing(contract)) return contract;
     const first = !kept.has(contract.clubId);
     kept.add(contract.clubId);
-    return first && fits(contract.clubId, 'coaches', staffMember(COACH_DIRECTORY, contract.coachId)?.fee) ? contract : { ...contract, renew: false };
+    // Format 76: an extra training coach still under contract stays while he fits (letting him go costs compensation).
+    const contracted = (previous.terms?.[contract.coachId]?.clubId === contract.clubId && previous.terms[contract.coachId]!.untilSeason >= state.seasonNumber);
+    return (first || contracted) && fits(contract.clubId, 'coaches', staffMember(COACH_DIRECTORY, contract.coachId)?.fee) ? contract : { ...contract, renew: false };
   }) };
   const plan = <C extends RenewableContract>(contracts: C[], role: StaffRole, fee: (contract: C) => number | undefined): C[] => contracts.map(contract => contract.seasonNumber === year && renewing(contract) && !fits(contract.clubId, role, fee(contract)) ? { ...contract, renew: false } : contract);
   return { coaching, state: { ...state,

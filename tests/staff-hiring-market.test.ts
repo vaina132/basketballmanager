@@ -41,7 +41,7 @@ const play = (state: SeasonState) => advanceSeason(state.activeMatch ? { ...stat
 describe('coach hiring in club-level careers (no fixed catalog cap)', () => {
   it('hires a coach whose catalog fee breaks the old fixed cap when Wages left and Spending left allow it', () => {
     let state = career('richest');
-    expect(state.coaching.model).toBe('coaching-3');
+    expect(state.coaching.model).toBe('coaching-4');
     const clubId = state.managedClubId;
     const remaining = () => staffLimit(state, clubId) - staffCommitted(state, clubId);
     // The most expensive affordable coach whose catalog fee, with the coaches employed now, is above the old cap.

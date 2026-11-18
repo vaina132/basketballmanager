@@ -1,4 +1,5 @@
 import { financeLedgerCount } from './finance-ledger';
+import { payStaffCompensation } from './staff-contracts';
 import { withCalculationCache } from './pure-cache';
 import type { ScoutContract, SeasonScouts } from '../domain/scouts';
 import type { SeasonState } from '../domain/season';
@@ -44,10 +45,10 @@ function managedContract(state: SeasonState, contractId: string): ScoutContract 
 
 export function releaseScout(state: SeasonState, contractId: string): SeasonState {
   const contract = managedContract(state, contractId), club = state.scouting.clubs[state.managedClubId]!;
-  return { ...state,
+  return payStaffCompensation({ ...state,
     scouts: { ...state.scouts, contracts: state.scouts.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) },
     scouting: { ...state.scouting, clubs: { ...state.scouting.clubs, [state.managedClubId]: { ...club, assignments: club.assignments.filter(assignment => assignment.observer?.contractId !== contract.id) } } },
-  };
+  }, 'scouts', contractId);
 }
 
 /** One step: the scout leaves (the paid fee is not refunded) and the new scout is hired. */

@@ -1,4 +1,5 @@
 import { financeLedgerCount } from './finance-ledger';
+import { payStaffCompensation } from './staff-contracts';
 import { withCalculationCache } from './pure-cache';
 import type { PhysioContract, SeasonPhysio } from '../domain/physio';
 import type { SeasonState } from '../domain/season';
@@ -34,7 +35,7 @@ function managedContract(state: SeasonState, contractId: string): PhysioContract
 }
 export function releasePhysio(state: SeasonState, contractId: string): SeasonState {
   const contract = managedContract(state, contractId);
-  return { ...state, physio: { ...state.physio, contracts: state.physio.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } };
+  return payStaffCompensation({ ...state, physio: { ...state.physio, contracts: state.physio.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) } }, 'physio', contractId);
 }
 export function setPhysioRenewal(state: SeasonState, contractId: string, renew: boolean): SeasonState {
   if (typeof renew !== 'boolean') throw new Error('Choose whether the physio contract should renew.');

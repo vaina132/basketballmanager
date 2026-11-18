@@ -1,6 +1,7 @@
 import type { FinanceEntry } from '../domain/finance';
 import type { PlayerWageAgreement } from '../domain/payroll';
 import type { SeasonState } from '../domain/season';
+import { staffWageReserve } from './staff-contracts';
 import type { WorldContext } from '../domain/world';
 import { seasonRounds } from './career-world';
 import { getReservedTransferFees } from './market-policy';
@@ -94,7 +95,8 @@ export function getPayrollReserve(state: Pick<SeasonState, 'payroll' | 'finance'
  */
 export function getSpendablePosition(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'market' | 'employment' | 'recruitment' | 'round' | 'facilities'>> & WorldContext, clubId: string, excludeOfferId?: string, excludeTransferId?: string, excludeInSeasonOfferId?: string): number {
   const net = ledgerClubNet(state.finance, clubId);
-  return net - getPayrollReserve(state, clubId) - getReservedTransferFees(state, clubId, excludeOfferId) - getTransferObligationReserve(state, clubId, excludeTransferId) - getReservedInSeasonWages(state, clubId, excludeInSeasonOfferId) - getReservedInSeasonFees(state, clubId, excludeInSeasonOfferId) - debtReserve(state, clubId);
+  // Format 76: the staff salaries still to pay this season are held back like player wages.
+  return net - getPayrollReserve(state, clubId) - staffWageReserve(state as Parameters<typeof staffWageReserve>[0], clubId) - getReservedTransferFees(state, clubId, excludeOfferId) - getTransferObligationReserve(state, clubId, excludeTransferId) - getReservedInSeasonWages(state, clubId, excludeInSeasonOfferId) - getReservedInSeasonFees(state, clubId, excludeInSeasonOfferId) - debtReserve(state, clubId);
 }
 
 /** Reconciled net wealth yields cash when positive and unpaid obligations when negative. */

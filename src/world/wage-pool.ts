@@ -19,7 +19,7 @@ import { staffCommitted } from './staff-policy';
  *   these rules.
  */
 export function usesWagePool(state: { coaching?: { model: string } }): boolean {
-  return state.coaching?.model === 'coaching-3';
+  return state.coaching?.model === 'coaching-3' || state.coaching?.model === 'coaching-4';
 }
 
 type StaffState = Pick<SeasonState, 'coaching' | 'seasonNumber'> & Partial<Pick<SeasonState, 'scouts' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'board'>> & WorldContext;

@@ -10,6 +10,7 @@ import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { staffCommitted, staffMoneyReason } from './staff-policy';
 import { formatEuros } from '../ui/money-format';
+import { payStaffCompensation, usesStaffContracts } from './staff-contracts';
 import { STAFF_BUDGET } from './staff-constants';
 import { staffAllocation } from './board-consequences';
 import { MAX_SEASON_ROUNDS, seasonRounds } from './career-world';
@@ -70,9 +71,9 @@ function hireForClub(coaching: SeasonCoaching, clubs: readonly Team[], clubId: s
  * Opening coaches. Format 74 (`levels`, model 'coaching-2'): each club's coach fits its staff level and its share of the
  * staff budget, the richest club choosing first (`src/world/staff-levels.ts`); earlier careers take the directory in order.
  */
-export function createCoaching(clubs: readonly Team[], seasonNumber = 1, round = 1, enabled = true, levels?: WorldContext & { seed: number }): SeasonCoaching {
+export function createCoaching(clubs: readonly Team[], seasonNumber = 1, round = 1, enabled = true, levels?: WorldContext & { seed: number; model?: 'coaching-4' }): SeasonCoaching {
   validateBoundary(seasonNumber, round);
-  let coaching: SeasonCoaching = { model: levels ? 'coaching-2' : 'coaching-1', enabledSince: enabled ? { seasonNumber, round } : null, contracts: [] };
+  let coaching: SeasonCoaching = { model: levels ? levels.model ?? 'coaching-2' : 'coaching-1', enabledSince: enabled ? { seasonNumber, round } : null, contracts: [] };
   if (!enabled) return coaching;
   if (!levels) {
     for (const [index, club] of clubs.entries()) coaching = hireForClub(coaching, clubs, club.id, seasonNumber, round, COACH_DIRECTORY[index]!.id, 'balanced');
@@ -107,7 +108,7 @@ function canPayCoach(state: SeasonState, clubId: string, coach: Coach): boolean 
   if (staffCommitted(state, clubId) + fee > staffLimit(state, clubId)) return false;
   if (!state.finance.enabledSince) return true;
   const balance = getFinanceBalance(state.finance, clubId);
-  return balance.unpaid === 0 && getTransferPaymentSummary(state, clubId).overdue === 0 && getSpendableCash(state, clubId) >= fee;
+  return balance.unpaid === 0 && getTransferPaymentSummary(state, clubId).overdue === 0 && (usesStaffContracts(state) || getSpendableCash(state, clubId) >= fee);
 }
 
 /** Contracts and their cash payment are one immutable operation for every club. */
@@ -160,7 +161,7 @@ function updateContract(state: SeasonState, contract: CoachingContract): SeasonS
 }
 
 export function releaseCoach(state: SeasonState, contractId: string): SeasonState {
-  return updateContract(state, { ...managedContract(state, contractId), releasedRound: state.round });
+  return payStaffCompensation(updateContract(state, { ...managedContract(state, contractId), releasedRound: state.round }), 'coaches', contractId);
 }
 /** One step: the coach leaves (the paid fee is not refunded) and the new coach takes the same training assignment. */
 export function replaceCoach(state: SeasonState, contractId: string, coachId: string): SeasonState {
@@ -229,7 +230,7 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
 /** Format 74: the coach a club without one appoints, fitting its staff level and its share of the staff budget. */
 function appointFittingCoach(state: SeasonState, clubId: string): SeasonState {
   const remaining = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
-  const budget = !state.finance.enabledSince ? remaining : getFinanceBalance(state.finance, clubId).unpaid || getTransferPaymentSummary(state, clubId).overdue ? 0 : Math.min(remaining, getSpendableCash(state, clubId));
+  const budget = !state.finance.enabledSince ? remaining : getFinanceBalance(state.finance, clubId).unpaid || getTransferPaymentSummary(state, clubId).overdue ? 0 : usesStaffContracts(state) ? remaining : Math.min(remaining, getSpendableCash(state, clubId));
   const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'coaches', availableCoaches(state.coaching, state), {
     rating: coachRating, fee: coach => staffFee(state, clubId, coach.fee), target: staffTargetRating(state, clubId, 'coaches', coachRatingRange()), cap: staffShareCap(state, clubId, 'coaches'), budget,
   }));

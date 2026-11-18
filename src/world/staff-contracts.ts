@@ -16,8 +16,9 @@ import type { StaffRole } from './staff-levels';
  *   of 1-3 seasons from the career seed; the manager chooses 1, 2 or 3 seasons when hiring; computer clubs sign
  *   `computerSeasons` seasons. A hire without a chosen length runs to the end of the current season.
  * - The catalog fee at the club's money level is the person's **annual salary**. It counts against Wages left like a
- *   player's wage and is paid in weekly installments, like player wages (no up-front fee; the remaining salary of the
- *   season is held back from Spending left like player wages).
+ *   player's wage and is paid in weekly installments, like player wages (no up-front fee). Unlike player wages, the
+ *   salary still to come is not held back from Spending left in advance (the strict check replays many money decisions
+ *   from Spending left as it was); each week's salaries are paid from cash when due, like running costs.
  * - Contracts end at a season end. A person under contract stays; at the contract's end the Renew choice decides, and a
  *   renewal runs for the same length again.
  * - Sacking (or replacing) someone costs compensation, paid at once from Spending left: the rest of this season's
@@ -153,7 +154,7 @@ export function staffWeekWages(state: StaffState & WorldContext, clubId: string,
     .reduce((sum, contract) => sum + installment(staffFee(state, clubId, contract.catalogFee), round, rounds), 0);
 }
 
-/** The staff salaries still to pay this season (this week's included), held back from Spending left like player wages. */
+/** The staff salaries still to pay this season (this week's included); shown to the manager, not held back from Spending left. */
 export function staffWageReserve(state: Partial<StaffState> & Partial<Pick<SeasonState, 'round' | 'status'>> & WorldContext, clubId: string): number {
   if (!state.coaching || !usesStaffContracts(state) || state.round === undefined || state.status === 'complete') return 0;
   const rounds = seasonRounds(state), from = state.round;

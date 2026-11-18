@@ -6,7 +6,9 @@ import { facilityTypes, FACILITY_RULES_2, getFacilityCondition, hasFacilityCondi
 import { FACILITY_LABELS } from './FacilitiesPanel'
 import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
 import { rivalryNote } from './rivalry-text'
-import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/board-consequences'
+import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets, verdictSalaryPercent } from '../world/board-consequences'
+import { clubSalaryBudget } from '../world/club-roster-policy'
+import { usesWagePool } from '../world/wage-pool'
 import { getClubNamingRights, getClubSponsorship } from '../world/commercial'
 import { PRESIDENT_RULES } from '../world/presidents'
 import { requestText } from './PresidentBoard'
@@ -108,9 +110,11 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     const verdict = season.board.consequencesSince && season.seasonNumber < MAX_SEASON_NUMBER ? seasonVerdict(season.board, season.managedClubId, season.seasonNumber, seasonRounds(season)) : null
     if (verdict) {
       const budgets = verdictBudgets(season, season.managedClubId, verdict.verdict, season.seasonNumber + 1)
-      notices.push({ key: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `Final confidence ${verdict.confidence}/100. ${seasonLabel(season.seasonNumber + 1)}: ${money(budgets.staff)} staff budget and ${money(budgets.capital)} owner capital for facility upgrades.`, urgent: verdict.verdict === 'concerned' || verdict.verdict === 'pressure', action: 'Review board', open: onOpenBoard })
-    } else if (board.latest) notices.push({ key: 'board', title: `Board review · ${board.confidenceLabel}`, detail: `${medicalDate(board.latest.date)}: confidence ${board.confidence}/100. ${board.latest.club.wins} ${board.latest.club.wins === 1 ? 'win' : 'wins'} in ${board.latest.club.played} counted games.${board.financeStatus === 'behind' ? ' Unpaid costs are above the agreed starting balance.' : ''}`, urgent: board.confidence < 40 || board.financeStatus === 'behind', action: 'Review board', open: onOpenBoard })
-    else if (board.objective && board.objective.games > 0) notices.push({ key: 'board', title: 'Board objectives set', detail: `Win ${board.objective.targetWins} of ${board.objective.games} counted games.${board.objective.startingUnpaid !== null ? ` Keep unpaid costs at or below ${money(board.objective.startingUnpaid)}.` : ''}`, action: 'View objectives', open: onOpenBoard })
+      // Two budgets (owner, 18 November 2026): careers with one wage pool hear about next season's Wages left.
+      const pool = usesWagePool(season) && season.employment.enabledSince ? budgets.staff + Math.round(clubSalaryBudget(season, season.managedClubId, season.seasonNumber + 1) * (100 + verdictSalaryPercent(worldOf(season), season.managedClubId, verdict.verdict)) / 100) : null
+      notices.push({ key: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `Final confidence ${verdict.confidence}/100. ${seasonLabel(season.seasonNumber + 1)}: ${pool !== null ? `${money(pool)} for player wages and staff fees.` : `${money(budgets.staff)} staff budget and ${money(budgets.capital)} owner capital for facility upgrades.`}`, urgent: verdict.verdict === 'concerned' || verdict.verdict === 'pressure', action: 'Review board', open: onOpenBoard })
+    } else if (board.latest) notices.push({ key: 'board', title: `Board review · ${board.confidenceLabel}`, detail: `${medicalDate(board.latest.date)}: confidence ${board.confidence}/100. ${board.latest.club.wins} ${board.latest.club.wins === 1 ? 'win' : 'wins'} in ${board.latest.club.played} counted games.${board.financeStatus === 'behind' ? usesWagePool(season) ? ' Spending left ran out and some bills are unpaid.' : ' Unpaid costs are above the agreed starting balance.' : ''}`, urgent: board.confidence < 40 || board.financeStatus === 'behind', action: 'Review board', open: onOpenBoard })
+    else if (board.objective && board.objective.games > 0) notices.push({ key: 'board', title: 'Board objectives set', detail: `Win ${board.objective.targetWins} of ${board.objective.games} league games.${board.objective.startingUnpaid !== null ? usesWagePool(season) ? ' Keep Spending left above zero so every bill is paid.' : ` Keep unpaid costs at or below ${money(board.objective.startingUnpaid)}.` : ''}`, action: 'View objectives', open: onOpenBoard })
     // Format 70: an open request from the president stays visible until it is met or its deadline passes.
     const request = (season.board.requests ?? []).find(item => item.outcome === 'open' && item.clubId === season.managedClubId)
     if (request) notices.push({ key: 'president-request', title: "President's request", detail: `${requestText(season, request)} by the review after matchday ${request.deadlineRound}. Met: +${PRESIDENT_RULES.requests.met} confidence; ignored: ${PRESIDENT_RULES.requests.ignored}.`, urgent: true, action: 'Review board', open: onOpenBoard })

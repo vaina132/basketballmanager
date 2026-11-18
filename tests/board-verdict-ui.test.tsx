@@ -35,8 +35,21 @@ describe('board page: season verdict and budgets', () => {
     expect(html).toContain('If the season ended today · 2027/28');
     expect(html).toContain('Steady · confidence 50');
     expect(html).toContain('data-board-next-staff="15000000"');
-    expect(html).toContain('The verdict is given by the final review after the last matchday.');
-    expect(html).toContain('Season verdicts: when switched on');
+    // New careers have one wage pool (format 75): the verdict sets next season's Wages left for players and staff.
+    expect(html).toContain('Season verdict &amp; Wages left');
+    expect(html).toContain('The final review after the last matchday gives the verdict.');
+    expect(html).toContain('It sets next season&#x27;s Wages left for players and staff.');
+    expect(html).not.toContain('owner capital');
+  });
+
+  // Owner report (18 November 2026): "Keep unpaid costs under control" made no sense once wages are paid automatically.
+  it('words the money objective of a new career as Spending left and unpaid bills', () => {
+    const html = board(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', ...NEW_CAREER_SYSTEMS }));
+    expect(html).toContain('Keep Spending left above zero');
+    expect(html).toContain('Wages and costs are paid automatically.');
+    expect(html).toMatch(/Win \d+ of \d+ league games/);
+    expect(html).not.toContain('Keep unpaid costs under control');
+    expect(html).not.toContain('staff budget');
   });
 
   it('shows the final verdict and the budgets it sets for next season', () => {

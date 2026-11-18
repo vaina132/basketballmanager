@@ -2,7 +2,7 @@ import { financeLedgerCount } from './finance-ledger';
 import type { PlayerKnowledge, ScoutingAssignmentQuote, ScoutingRanges, ScoutingReview } from '../domain/scouting';
 import type { SeasonState } from '../domain/season';
 import type { ExtraAttributes, PlayerAttributes } from '../domain/types';
-import { EXTRA_ATTRIBUTES, extraAttributes, hasExtraAttributes } from './extra-attributes';
+import { EXTRA_ATTRIBUTES, hasExtraAttributes } from './extra-attributes';
 import { applyAgingAttributes, isPlayerRetired } from './lifecycle-policy';
 import { getCareerPlayer, getCareerPlayers, type CareerPlayerContext } from './player-catalog';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
@@ -52,12 +52,13 @@ export function scoutingActualAttributes(state: Pick<SeasonState, 'training'> & 
 }
 
 /**
- * The five further abilities as they stand on a date: stored ones with their ageing, or the estimate for records
- * without them. Kept out of recorded observations (they hold the seven skills); reports add them at the observation date.
+ * The five further abilities as they stand on a date, for players who store them (careers started with them; none for
+ * older careers, whose knowledge keeps the seven skills). Kept out of recorded observations (they hold the seven
+ * skills); reports add them at the observation date.
  */
-export function scoutingExtraAttributes(state: CareerPlayerContext, playerId: string, onDate = state.date): ExtraAttributes {
+export function scoutingExtraAttributes(state: CareerPlayerContext, playerId: string, onDate = state.date): Partial<ExtraAttributes> {
   const player = getCareerPlayer(state, playerId);
-  if (!hasExtraAttributes(player.attributes)) return extraAttributes(player);
+  if (!hasExtraAttributes(player.attributes)) return {};
   const aged = onDate ? applyAgingAttributes(state, playerId, player.attributes, onDate) : player.attributes;
   return Object.fromEntries(EXTRA_ATTRIBUTES.map(key => [key, aged[key] ?? player.attributes[key]])) as unknown as ExtraAttributes;
 }
@@ -157,7 +158,7 @@ export function getMatchPlayerKnowledge(state: SeasonState, playerId: string): P
   const knowledge = getPlayerKnowledge(state, playerId);
   if (knowledge.kind !== 'own') return knowledge;
   const player = [...(state.activeMatch?.home.players ?? []), ...(state.activeMatch?.away.players ?? [])].find(candidate => candidate.id === playerId);
-  return player ? { ...knowledge, attributes: { ...player.attributes, ...extraAttributes(player) } } : knowledge;
+  return player ? { ...knowledge, attributes: player.attributes } : knowledge;
 }
 
 export function quoteScoutingAssignment(state: SeasonState, playerId: string, clubId = state.managedClubId, scoutContractId?: string | null): ScoutingAssignmentQuote {

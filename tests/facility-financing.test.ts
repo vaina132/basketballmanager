@@ -332,7 +332,7 @@ describe('automatic borrowing', () => {
 describe('arena work started at a season end', () => {
   it('leaves the gates of the final week\'s later playoff games as they were played', { timeout: 300_000 }, () => {
     // Two divisions with playoffs: the final week's later games fall after its Saturday, which stays the calendar date
-    // until the first offseason day, so arena work started then is dated before games already played. Seed 2: Adriatic
+    // until the first offseason day, so arena work started then is dated before games already played. Seed 1: Adriatic
     // Comets host one of those games.
     const base = testWorld(12), managed = 'w0-adriatic-comets';
     const playerContracts = Object.fromEntries(base.clubs.flatMap(item => item.players.map((player, index) => [player.id, 1 + (index % 3)])));
@@ -340,7 +340,7 @@ describe('arena work started at a season end', () => {
       { id: 'first', name: 'First division', country: 'Testland', tier: 1, clubIds: base.clubs.slice(0, 6).map(item => item.id), postseason: 'test-tier1-1' },
       { id: 'second', name: 'Second division', country: 'Testland', tier: 2, clubIds: base.clubs.slice(6).map(item => item.id), postseason: 'test-tier2-2' },
     ] };
-    let state = setEmploymentDelegation(createSeason({ seed: 2, world, managedClubId: managed, ...NEW_CAREER_SYSTEMS, simpleFacilities: false }), true);
+    let state = setEmploymentDelegation(createSeason({ seed: 1, world, managedClubId: managed, ...NEW_CAREER_SYSTEMS, simpleFacilities: false }), true);
     while (state.status === 'active') state = advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
     const fixture = state.fixtures.find(item => item.result && item.date > state.date && item.homeClubId === managed)!;
     expect(fixture).toBeDefined();

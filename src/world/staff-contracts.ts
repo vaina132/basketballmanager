@@ -155,27 +155,32 @@ export function staffWeekWages(state: StaffState & WorldContext, clubId: string,
     .reduce((sum, contract) => sum + installment(staffFee(state, clubId, contract.catalogFee), round, rounds), 0);
 }
 
-/** The ledger kind of each role's appointment entry (`<kind>-<contract id>`, amount 0 in format 76). */
-const APPOINTMENT_KIND = Object.freeze({ coaches: 'coaching', scouts: 'scouting', fitness: 'fitness', physio: 'physio', assistant: 'assistant', youth: 'youth' } as const satisfies Record<StaffRole, string>);
+/** Each appointment entry kind's role and the catalog its person comes from. */
+const APPOINTMENTS: Readonly<Record<string, { role: StaffRole; directory: readonly { id: string; fee: number }[] }>> = Object.freeze({
+  coaching: { role: 'coaches', directory: COACH_DIRECTORY }, scouting: { role: 'scouts', directory: SCOUT_DIRECTORY }, fitness: { role: 'fitness', directory: FITNESS_DIRECTORY },
+  physio: { role: 'physio', directory: PHYSIO_DIRECTORY }, assistant: { role: 'assistant', directory: ASSISTANT_DIRECTORY }, youth: { role: 'youth', directory: YOUTH_COACH_DIRECTORY },
+});
 
 /**
  * The staff salaries still to pay this season, held back from Spending left like player wages (owner, 18 November
- * 2026; `coaching-4` only). Read from the ledger, so a strict check that cuts the ledger at a past decision gets the
- * reserve the game used then: a contract counts once its appointment is booked; the weeks counted are those after the
- * last week whose staff salaries were paid (an appointment made after a week's payment starts with the next week);
- * a release counts once its compensation is booked or its week's salaries were paid.
+ * 2026; `coaching-4` only, the same rule for every club). Read from the ledger alone, so a strict check that cuts the
+ * ledger at a past decision gets the reserve the game used then, even in an earlier season whose staff contracts are
+ * no longer kept: every appointment booked this season (its entry names the person and its week, the contract's first
+ * week) counts its salary installments from the week after the last week whose staff salaries were paid (so a computer
+ * club's appointment made after a week's payments starts with the next week, as it is paid) to the season's end, or to
+ * the week before an early release once its compensation is booked (a release booked with no compensation leaves no
+ * salary to pay).
  */
-export function staffWageReserve(state: Partial<StaffState> & Pick<SeasonState, 'seasonNumber'> & Partial<Pick<SeasonState, 'finance'>> & WorldContext, clubId: string): number {
+export function staffWageReserve(state: Partial<Pick<SeasonState, 'coaching' | 'finance'>> & Pick<SeasonState, 'seasonNumber'> & WorldContext, clubId: string): number {
   if (!state.coaching || !usesStaffContracts(state) || !state.finance?.enabledSince) return 0;
-  const rounds = seasonRounds(state), evidence = staffLedgerEvidence(state.finance), paidThrough = evidence.paidThrough(state.seasonNumber);
+  const rounds = seasonRounds(state), evidence = staffLedgerEvidence(state.finance), year = state.seasonNumber, paidThrough = evidence.paidThrough(year);
   if (paidThrough >= rounds) return 0;
   let reserve = 0;
-  for (const contract of seasonStaffContracts(state as StaffState)) {
-    if (contract.clubId !== clubId) continue;
-    const kind = APPOINTMENT_KIND[contract.role];
-    if (!evidence.has(clubId, kind, `${kind}-${contract.contractId}`)) continue;
-    const released = contract.releasedRound !== null && (contract.releasedRound <= paidThrough || evidence.has(clubId, STAFF_COMPENSATION_KIND, staffCompensationSourceId(contract.role, contract.contractId)));
-    reserve += installmentsBetween(staffFee(state, clubId, contract.catalogFee), Math.max(paidThrough + 1, contract.startedRound), released ? contract.releasedRound! - 1 : rounds, rounds);
+  for (const appointment of evidence.appointments(year, clubId)) {
+    const source = APPOINTMENTS[appointment.kind], catalogFee = source ? staffMember(source.directory, appointment.personId)?.fee : undefined;
+    if (!source || catalogFee === undefined) continue;
+    const released = evidence.releasedRound(year, clubId, staffCompensationSourceId(source.role, appointment.contractId));
+    reserve += installmentsBetween(staffFee(state, clubId, catalogFee), Math.max(paidThrough + 1, appointment.round), released === undefined ? rounds : released - 1, rounds);
   }
   return reserve;
 }

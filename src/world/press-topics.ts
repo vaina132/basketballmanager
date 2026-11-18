@@ -1,7 +1,7 @@
 import type { PressStyle } from '../domain/media';
 import type { PressQuestion, PressTopic } from '../domain/relationships';
 import type { SeasonFixture, SeasonState } from '../domain/season';
-import { lastCommittedWeek, roundOrdinal, seasonRounds, worldOf } from './career-world';
+import { lastCommittedWeek, roundOrdinal, seasonRounds, weekStartView, worldOf } from './career-world';
 import { seasonLeagues } from './divisions';
 import { MEDIA_RULES, mediaReputation } from './media';
 import { POSTSEASON_FORMATS } from './postseason';
@@ -59,7 +59,7 @@ interface PressDraft { clubId: string; last: SeasonFixture; playerIds: string[];
 
 /** The topics that apply after the managed club's latest completed week, before the seeded draw (for checks and tests). */
 export function pressTopicCandidates(state: RichContext): readonly PressCandidate[] {
-  return pressDraft(state)?.candidates ?? [];
+  return pressDraft(weekStartView(state))?.candidates ?? [];
 }
 
 /**
@@ -67,7 +67,9 @@ export function pressTopicCandidates(state: RichContext): readonly PressCandidat
  * from what happened by a seeded weighted draw. It reads only results, registrations, contracts, injuries and board
  * reviews already recorded at that week, so it stays the same until the next result or season.
  */
-export function getRichPressQuestion(state: RichContext): PressQuestion | null {
+export function getRichPressQuestion(current: RichContext): PressQuestion | null {
+  // Asked from completed weeks only: a partly played week counts from its end (`weekStartView`).
+  const state = weekStartView(current);
   const draft = pressDraft(state);
   if (!draft?.candidates.length) return null;
   const { clubId, last, playerIds, coreIds, candidates } = draft, season = state.seasonNumber, rules = MEDIA_RULES.press;

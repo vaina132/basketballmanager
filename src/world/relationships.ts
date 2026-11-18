@@ -9,7 +9,7 @@ import { withoutEarlierMorale } from './sealed-history';
 import { getPlayerRetirement } from './lifecycle-policy';
 import { getPressQuestion, pressAnswerLabel, pressEventFields, pressEventMatches, pressImpact, pressMoraleValue } from './press-policy';
 import { governingDerby, RIVALRY_MORALE_WEIGHT } from './rivalries';
-import { ordinalRound, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
+import { ordinalRound, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek, weekStartView } from './career-world';
 import { overallRating } from './overall-rating';
 import { scoutingActualAttributes } from './scouting-policy';
 import { contractForSeason, effectiveContractsForRound, effectiveContractsForSeason } from './employment-policy';
@@ -62,7 +62,8 @@ const sequenceOf = (id: string) => Number(id.slice(id.lastIndexOf('-') + 1));
 /** Disabled relationships are always the original empty journal; the model is chosen when they are enabled. */
 export function createRelationships(): SeasonRelationships { return { model: 'relationships-1', enabledSince: null, events: [] }; }
 export function relationshipEventAnchor(state: SeasonState): RelationshipAnchor {
-  const completed = lastCommittedWeek(state);
+  // A partly played week counts from its start (`weekStartView`): every decision of a week shares its boundary.
+  const completed = lastCommittedWeek(weekStartView(state));
   return { seasonNumber: state.seasonNumber, round: state.round, date: state.date, completedRounds: ordinal(state.seasonNumber, completed, seasonRounds(state)), contractCount: state.employment.contracts.length, rosterCount: state.rosters.length };
 }
 /** New careers pass `relationships-3` (squad roles everywhere); enabling squad dynamics in an older career keeps the original rules. */
@@ -93,7 +94,9 @@ function historicalPlayer(state: SeasonState, clubId: string, playerId: string):
  * import, edited fixture, club move or rivalry change must be read afresh. Keep each season's existing roster
  * ordering and rosterForRound lookup rather than assuming journals are already sorted or validated.
  */
-function clubHistory(state: SeasonState, clubId: string) {
+function clubHistory(current: SeasonState, clubId: string) {
+  // The week's games already played count from the week's end (`weekStartView`).
+  const state = weekStartView(current);
   const records = seasons(state), rounds = seasonRounds(state);
   const personal = new Map<string, PlayerEvent[]>(), contracts = new Map<string, ContractEvent[]>(), roleRequests = new Map<string, RoleRequestEvent[]>();
   for (const event of state.relationships.events) if (playerEvent(event) && event.clubId === clubId) {

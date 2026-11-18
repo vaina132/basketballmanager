@@ -36,6 +36,6 @@ export function quotePhysioHire(state: SeasonState, physioId: string, clubId = s
   else if (!availablePhysios(state).some(available => available.id === physioId)) reason = 'This physio already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a physio.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a physio.';
-  else reason = staffMoneyReason(state, 'physio', staffFee(state, clubId, physio.fee), remainingAllocation, remainingBudget);
+  else reason = staffMoneyReason(state, 'physio', staffFee(state, clubId, physio.fee), remainingAllocation, remainingBudget, clubId);
   return { physioId, clubId, fee: staffFee(state, clubId, physio?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

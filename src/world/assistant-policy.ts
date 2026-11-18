@@ -38,6 +38,6 @@ export function quoteAssistantHire(state: SeasonState, assistantId: string, club
   else if (!availableAssistants(state).some(available => available.id === assistantId)) reason = 'This assistant coach already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring an assistant coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring an assistant coach.';
-  else reason = staffMoneyReason(state, 'assistant coach', staffFee(state, clubId, coach.fee), remainingAllocation, remainingBudget);
+  else reason = staffMoneyReason(state, 'assistant coach', staffFee(state, clubId, coach.fee), remainingAllocation, remainingBudget, clubId);
   return { assistantId, clubId, fee: staffFee(state, clubId, coach?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

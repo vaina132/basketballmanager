@@ -26,7 +26,7 @@ import './staff-workspace.css'
 import { formatEuros } from './money-format'
 import { staffFee } from '../world/economy'
 import { StaffOverview } from './StaffOverview'
-import { replacementTarget, revealCandidates, ShowCandidatesButton, StaffReplacementOffer, type StaffCandidateControls } from './StaffReplacement'
+import { replacementTarget, revealCandidates, ShowCandidatesButton, SpendingAfterHire, StaffReplacementOffer, type StaffCandidateControls } from './StaffReplacement'
 import { sackingTerms, STAFF_ROLE_LABELS, roleStaff, type StaffRole } from '../world/staff-roster'
 import { usesClubLevelStaff } from '../world/staff-levels'
 import { usesStaffContracts } from '../world/staff-contracts'
@@ -205,7 +205,7 @@ function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRe
       {showCandidates && <>{selected && <section ref={candidateRegion} id="coach-candidate-detail" className="staff-candidate-detail panel" tabIndex={-1} aria-labelledby="coach-candidate-title" data-selected-coach={selected.id} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && !busy) { event.preventDefault(); event.stopPropagation(); closeCandidate() } }}>
         <header className="staff-heading"><div><h2 id="coach-candidate-title">Recruit {selected.name}</h2><span>Training coach</span></div><button className="text-button" aria-label="Close coach details" onClick={closeCandidate} disabled={busy}><Icon name="close" size={14} />Close</button></header>
         <div className="staff-candidate-body"><div className="staff-candidate-profile"><div className="staff-profile-portrait"><CoachPortrait coach={selected} color={club.color} size={104} /><StaffStars rating={coachRating(selected)} /></div><CoachSkills coach={selected} /></div><div className="staff-hire-controls">
-          <div className="staff-offer-fee"><span>Season fee</span><strong>{money(feeOf(selected.fee))}</strong></div><div className="staff-after-hire"><span>{staffBudget >= feeOf(selected.fee) ? 'Wages left after hire' : 'Wages left shortfall'}</span><strong>{money(Math.abs(staffBudget - feeOf(selected.fee)))}</strong></div>
+          <div className="staff-offer-fee"><span>Season fee</span><strong>{money(feeOf(selected.fee))}</strong></div><div className="staff-after-hire"><span>{staffBudget >= feeOf(selected.fee) ? 'Wages left after hire' : 'Wages left shortfall'}</span><strong>{money(Math.abs(staffBudget - feeOf(selected.fee)))}</strong></div>{!replacement && <SpendingAfterHire season={season} fee={feeOf(selected.fee)} />}
           {!replacement && <><label htmlFor="coach-hire-focus">Initial assignment</label><select id="coach-hire-focus" value={hireFocus} onChange={event => setHireFocus(event.target.value as TrainingFocus)} disabled={busy}><FocusOptions /></select></>}
           <span className="staff-renewal-note"><Icon name="check" size={14} />Renewal selected for next season</span>
           {replacement ? <StaffReplacementOffer key={selected.id} season={season} role="coaches" personId={selected.id} personName={selected.name} fee={feeOf(selected.fee)} target={replacement} busy={busy} onReplaceStaff={onReplaceStaff} /> : <>{hiringReason(selected) && <p id="coach-hire-reason" className="staff-hire-reason">{hiringReason(selected)}</p>}

@@ -35,6 +35,6 @@ export function quoteScoutHire(state: SeasonState, scoutId: string, clubId = sta
   else if (!availableScouts(state).some(available => available.id === scoutId)) reason = 'This scout already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a scout.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a scout.';
-  else reason = staffMoneyReason(state, 'scout', staffFee(state, clubId, scout.fee), remainingAllocation, remainingBudget);
+  else reason = staffMoneyReason(state, 'scout', staffFee(state, clubId, scout.fee), remainingAllocation, remainingBudget, clubId);
   return { scoutId, clubId, fee: staffFee(state, clubId, scout?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

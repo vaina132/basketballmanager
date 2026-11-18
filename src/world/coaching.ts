@@ -8,7 +8,7 @@ import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { getFinanceBalance, recordCoachFee } from './finance';
 import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
-import { staffCommitted, staffMoneyReason } from './staff-policy';
+import { keepingHeldStaff, staffCommitted, staffHireSpending, staffMoneyReason, staffSpendingReason, staffSpendingSalaryCap } from './staff-policy';
 import { formatEuros } from '../ui/money-format';
 import { payStaffCompensation, usesStaffContracts } from './staff-contracts';
 import { STAFF_BUDGET } from './staff-constants';
@@ -108,7 +108,8 @@ function canPayCoach(state: SeasonState, clubId: string, coach: Coach): boolean 
   if (staffCommitted(state, clubId) + fee > staffLimit(state, clubId)) return false;
   if (!state.finance.enabledSince) return true;
   const balance = getFinanceBalance(state.finance, clubId);
-  return balance.unpaid === 0 && getTransferPaymentSummary(state, clubId).overdue === 0 && (usesStaffContracts(state) || getSpendableCash(state, clubId) >= fee);
+  // Format 76: Spending left must carry the salary still to pay this season (the shared hire check).
+  return balance.unpaid === 0 && getTransferPaymentSummary(state, clubId).overdue === 0 && (usesStaffContracts(state) ? staffSpendingReason(state, clubId, staffHireSpending(state, clubId, fee)) === null : getSpendableCash(state, clubId) >= fee);
 }
 
 /** Contracts and their cash payment are one immutable operation for every club. */
@@ -141,7 +142,7 @@ export function coachHireReason(state: SeasonState, coachId: string, clubId = st
     if (overdue) return `${formatEuros(overdue)} of transfer payments is overdue. Settle it before hiring a coach.`;
   }
   const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
-  return staffMoneyReason(state, 'coach', fee, remainingAllocation, state.finance.enabledSince ? Math.min(remainingAllocation, getSpendableCash(state, clubId)) : remainingAllocation);
+  return staffMoneyReason(state, 'coach', fee, remainingAllocation, state.finance.enabledSince ? Math.min(remainingAllocation, getSpendableCash(state, clubId)) : remainingAllocation, clubId);
 }
 
 export function hireCoach(state: SeasonState, coachId: string, focus: TrainingFocus = 'balanced'): SeasonState {
@@ -230,7 +231,7 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
 /** Format 74: the coach a club without one appoints, fitting its staff level and its share of the staff budget. */
 function appointFittingCoach(state: SeasonState, clubId: string): SeasonState {
   const remaining = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
-  const budget = !state.finance.enabledSince ? remaining : getFinanceBalance(state.finance, clubId).unpaid || getTransferPaymentSummary(state, clubId).overdue ? 0 : usesStaffContracts(state) ? remaining : Math.min(remaining, getSpendableCash(state, clubId));
+  const budget = !state.finance.enabledSince ? remaining : getFinanceBalance(state.finance, clubId).unpaid || getTransferPaymentSummary(state, clubId).overdue ? 0 : usesStaffContracts(state) ? Math.min(remaining, staffSpendingSalaryCap(state, clubId)) : Math.min(remaining, getSpendableCash(state, clubId));
   const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'coaches', availableCoaches(state.coaching, state), {
     rating: coachRating, fee: coach => staffFee(state, clubId, coach.fee), target: staffTargetRating(state, clubId, 'coaches', coachRatingRange()), cap: staffShareCap(state, clubId, 'coaches'), budget,
   }));
@@ -239,6 +240,10 @@ function appointFittingCoach(state: SeasonState, clubId: string): SeasonState {
 
 /** Funding arrives first; unaffordable renewals lapse without borrowing or disturbing other clubs. */
 export function renewSeasonCoaching(state: SeasonState, previous: SeasonCoaching): SeasonState {
+  // Renewals keep staff the club holds, so Spending left does not decide them (format 76; new hires need it).
+  return keepingHeldStaff(() => renewCoaches(state, previous));
+}
+function renewCoaches(state: SeasonState, previous: SeasonCoaching): SeasonState {
   if (state.status !== 'active' || state.round !== 1) throw new Error('Renew staff on the new season opening day.');
   let next: SeasonState = { ...state, coaching: { ...previous, contracts: [] } };
   if (!previous.enabledSince) return next;

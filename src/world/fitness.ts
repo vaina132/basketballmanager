@@ -10,7 +10,7 @@ import type { FitnessCoach } from '../domain/fitness';
 import { fitnessRating } from './fitness-policy';
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
-import { remainingStaffBudget } from './staff-policy';
+import { keepingHeldStaff, staffHireBudget } from './staff-policy';
 import { staffFee } from './economy';
 
 export function createFitness(): SeasonFitness { return { model: 'fitness-1', enabledSince: null, contracts: [] }; }
@@ -20,7 +20,8 @@ export function enableFitness(state: SeasonState, opening = false): SeasonState 
   if (state.fitness.enabledSince) return state;
   if (!state.finance.enabledSince || !state.training.enabledSince) throw new Error('Enable club finances and training before recruiting fitness coaches.');
   if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Enable fitness coaches when weekly training is available, before the final matchday.');
-  return recruitAiFitnessCoaches({ ...state, fitness: { ...state.fitness, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening);
+  // The career's opening staff are held, not hired: Spending left does not decide them (format 76).
+  return keepingHeldStaff(() => recruitAiFitnessCoaches({ ...state, fitness: { ...state.fitness, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
 }
 
 function hireForClub(state: SeasonState, coachId: string, clubId: string): SeasonState {
@@ -66,7 +67,7 @@ let range: readonly [number, number] | undefined;
 /** Format 74: the fitness coach fitting a club's staff level and its share of the staff budget (`src/world/staff-levels.ts`). */
 function fittingFitnessCoach(state: SeasonState, clubId: string): FitnessCoach | undefined {
   const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'fitness', availableFitnessCoaches(state), {
-    rating: fitnessRating, fee: member => staffFee(state, clubId, member.fee), target: staffTargetRating(state, clubId, 'fitness', range ??= ratingRange(DEVELOPMENT_FITNESS_COACHES, fitnessRating)), cap: staffShareCap(state, clubId, 'fitness'), budget: remainingStaffBudget(state, clubId),
+    rating: fitnessRating, fee: member => staffFee(state, clubId, member.fee), target: staffTargetRating(state, clubId, 'fitness', range ??= ratingRange(DEVELOPMENT_FITNESS_COACHES, fitnessRating)), cap: staffShareCap(state, clubId, 'fitness'), budget: staffHireBudget(state, clubId),
   }));
   return choice && quoteFitnessHire(state, choice.id, clubId).canHire ? choice : undefined;
 }
@@ -77,7 +78,9 @@ export function replaceFitnessCoach(state: SeasonState, contractId: string, coac
 }
 
 /** Current-year staff spending is fresh; historical fees and reports remain intact. */
-export function renewSeasonFitness(state: SeasonState): SeasonState {
+/** Renewals keep staff the club holds, so Spending left does not decide them (format 76; new hires need it). */
+export function renewSeasonFitness(state: SeasonState): SeasonState { return keepingHeldStaff(() => renewFitness(state)); }
+function renewFitness(state: SeasonState): SeasonState {
   if (state.status !== 'active' || state.round !== 1) throw new Error('Renew fitness coaches on the new season opening day.');
   if (!state.fitness.enabledSince) return state;
   let next = state;

@@ -185,6 +185,28 @@ export function staffWageReserve(state: Partial<Pick<SeasonState, 'coaching' | '
   return reserve;
 }
 
+/**
+ * What a hire made now adds to this season's staff salary reserve (owner, 18 November 2026): the new person's salary
+ * for the weeks still to pay this season, counted as `staffWageReserve` counts the appointment once it is booked (from
+ * the week after the last paid week, or this week). Nothing in older careers, without club finances or once the season
+ * is complete (the offseason holds back no salaries of the next season).
+ */
+export function staffHireReserve(state: Pick<SeasonState, 'coaching' | 'finance' | 'seasonNumber' | 'round' | 'status'> & WorldContext, salary: number): number {
+  if (!usesStaffContracts(state) || !state.finance.enabledSince || state.status === 'complete') return 0;
+  const rounds = seasonRounds(state), paidThrough = staffLedgerEvidence(state.finance).paidThrough(state.seasonNumber);
+  return installmentsBetween(salary, Math.max(paidThrough + 1, state.round), rounds, rounds);
+}
+
+/** What releasing one of the season's contracts now frees from the reserve: its salary still held for later weeks. */
+export function releasedStaffReserve(state: SeasonState, role: StaffRole, contractId: string): number {
+  if (!usesStaffContracts(state) || !state.finance.enabledSince || state.status === 'complete') return 0;
+  const contract = seasonStaffContracts(state).find(item => item.role === role && item.contractId === contractId && item.releasedRound === null);
+  if (!contract) return 0;
+  const rounds = seasonRounds(state), evidence = staffLedgerEvidence(state.finance), paidThrough = evidence.paidThrough(state.seasonNumber);
+  const appointment = evidence.appointments(state.seasonNumber, contract.clubId).find(item => APPOINTMENTS[item.kind]?.role === role && item.contractId === contractId);
+  return appointment ? installmentsBetween(staffFee(state, contract.clubId, contract.catalogFee), Math.max(paidThrough + 1, appointment.round, state.round), rounds, rounds) : 0;
+}
+
 /** The kinds of staff money entries format 76 books. */
 export const STAFF_WAGES_KIND = 'staff-wages';
 export const STAFF_COMPENSATION_KIND = 'staff-compensation';

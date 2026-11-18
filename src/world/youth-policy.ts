@@ -36,7 +36,7 @@ export function quoteYouthCoachHire(state: SeasonState, coachId: string, clubId 
   else if (!availableYouthCoaches(state).some(coach => coach.id === coachId)) reason = 'This youth coach already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a youth coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a youth coach.';
-  else reason = staffMoneyReason(state, 'youth coach', staffFee(state, clubId, coach.fee), remainingAllocation, remainingBudget);
+  else reason = staffMoneyReason(state, 'youth coach', staffFee(state, clubId, coach.fee), remainingAllocation, remainingBudget, clubId);
   return { coachId, clubId, fee: staffFee(state, clubId, coach?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }
 export function youthCoachAssignments(youth: SeasonYouth, clubs: readonly Pick<Team, 'id'>[], seasonNumber: number, afterRound: number): AcademyWeek['coaches'] {

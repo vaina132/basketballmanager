@@ -12,9 +12,9 @@ import { releaseAssistant, replaceAssistant } from './assistant';
 import { getClubYouthCoach, youthCoachRating } from './youth-policy';
 import { releaseYouthCoach, replaceYouthCoach } from './youth';
 import { staffFee } from './economy';
-import { remainingStaffBudget } from './staff-policy';
+import { remainingStaffBudget, staffHireSpending, staffSpendingReason, type StaffSpendingCheck } from './staff-policy';
 import { STAFF_ROLES, usesClubLevelStaff, type StaffRole } from './staff-levels';
-import { compensationTerms, contractCompensation, usesStaffContracts } from './staff-contracts';
+import { compensationTerms, contractCompensation, releasedStaffReserve, usesStaffContracts } from './staff-contracts';
 
 export { STAFF_ROLES, type StaffRole } from './staff-levels';
 
@@ -61,6 +61,9 @@ export function releaseStaff(state: SeasonState, role: StaffRole, contractId: st
 
 /** One step: the current person leaves (fee not refunded) and the new person is hired on the role's usual terms. */
 export function replaceStaff(state: SeasonState, role: StaffRole, contractId: string, personId: string): SeasonState {
+  // Format 76: Spending left must carry the whole change at once (the release and the hire then pass their own checks).
+  const reason = staffSpendingReason(state, state.managedClubId, staffReplacementSpending(state, role, contractId, personId));
+  if (reason) throw new Error(reason);
   switch (role) {
     case 'coaches': return replaceCoach(state, contractId, personId);
     case 'scouts': return replaceScout(state, contractId, personId);
@@ -69,6 +72,21 @@ export function replaceStaff(state: SeasonState, role: StaffRole, contractId: st
     case 'assistant': return replaceAssistant(state, contractId, personId);
     case 'youth': return replaceYouthCoach(state, contractId, personId);
   }
+}
+
+const FEES: Readonly<Record<StaffRole, readonly { id: string; fee: number }[]>> = { coaches: COACH_DIRECTORY, scouts: SCOUT_DIRECTORY, fitness: FITNESS_DIRECTORY, physio: PHYSIO_DIRECTORY, assistant: ASSISTANT_DIRECTORY, youth: YOUTH_COACH_DIRECTORY };
+/**
+ * Format 76: what a replacement needs from Spending left, counted once for the whole change: the compensation for the
+ * person leaving, minus his salary it frees from this season's reserve, plus the new person's salary for the rest of
+ * the season. Null when no check applies.
+ */
+export function staffReplacementSpending(state: SeasonState, role: StaffRole, contractId: string, personId: string): StaffSpendingCheck | null {
+  const person = staffMember(FEES[role], personId), clubId = state.managedClubId;
+  const hire = person ? staffHireSpending(state, clubId, staffFee(state, clubId, person.fee)) : null;
+  if (!hire) return null;
+  const compensation = contractCompensation(state, role, contractId)?.amount ?? 0;
+  const needed = compensation - releasedStaffReserve(state, role, contractId) + hire.needed;
+  return { needed, available: hire.available, after: hire.available - needed };
 }
 
 /** Whether a replacement can be accepted now, and why not: the same guards as sacking and then hiring. */

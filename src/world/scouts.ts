@@ -12,7 +12,7 @@ import { SCOUT_DIRECTORY } from '../data/staff-directory';
 import type { Scout } from '../domain/scouts';
 import { scoutRating } from './scout-policy';
 import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
-import { remainingStaffBudget } from './staff-policy';
+import { keepingHeldStaff, staffHireBudget } from './staff-policy';
 import { staffFee } from './economy';
 
 export function createScouts(): SeasonScouts { return { model: 'scouts-1', enabledSince: null, contracts: [] }; }
@@ -23,7 +23,8 @@ export function enableScouts(state: SeasonState, opening = false): SeasonState {
   if (!state.finance.enabledSince || !state.scouting.enabledSince) throw new Error('Enable club finances and scouting before recruiting scouts.');
   if (state.status !== 'active') throw new Error('Start the next season before enabling scout recruitment.');
   const next = { ...state, scouts: { ...state.scouts, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } };
-  return prepareScoutingAssignments(recruitAiScouts(next, opening));
+  // The career's opening staff are held, not hired: Spending left does not decide them (format 76).
+  return keepingHeldStaff(() => prepareScoutingAssignments(recruitAiScouts(next, opening)), opening);
 }
 
 function hireForClub(state: SeasonState, scoutId: string, clubId: string): SeasonState {
@@ -79,13 +80,15 @@ let range: readonly [number, number] | undefined;
 /** Format 74: the scout fitting a club's staff level and its share of the staff budget (`src/world/staff-levels.ts`). */
 function fittingScout(state: SeasonState, clubId: string): Scout | undefined {
   const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'scouts', availableScouts(state), {
-    rating: scoutRating, fee: scout => staffFee(state, clubId, scout.fee), target: staffTargetRating(state, clubId, 'scouts', range ??= ratingRange(DEVELOPMENT_SCOUTS, scoutRating)), cap: staffShareCap(state, clubId, 'scouts'), budget: remainingStaffBudget(state, clubId),
+    rating: scoutRating, fee: scout => staffFee(state, clubId, scout.fee), target: staffTargetRating(state, clubId, 'scouts', range ??= ratingRange(DEVELOPMENT_SCOUTS, scoutRating)), cap: staffShareCap(state, clubId, 'scouts'), budget: staffHireBudget(state, clubId),
   }));
   return choice && quoteScoutHire(state, choice.id, clubId).canHire ? choice : undefined;
 }
 
 /** Existing coaches renew first; remaining shared funds decide each scout renewal. */
-export function renewSeasonScouts(state: SeasonState): SeasonState {
+/** Renewals keep staff the club holds, so Spending left does not decide them (format 76; new hires need it). */
+export function renewSeasonScouts(state: SeasonState): SeasonState { return keepingHeldStaff(() => renewScouts(state)); }
+function renewScouts(state: SeasonState): SeasonState {
   if (state.status !== 'active' || state.round !== 1) throw new Error('Renew scouts on the new season opening day.');
   if (!state.scouts.enabledSince) return state;
   let next = state;

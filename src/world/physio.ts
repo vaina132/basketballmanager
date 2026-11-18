@@ -10,7 +10,7 @@ import type { Physio } from '../domain/physio';
 import { physioRating } from './physio-policy';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
-import { remainingStaffBudget } from './staff-policy';
+import { keepingHeldStaff, staffHireBudget } from './staff-policy';
 import { staffFee } from './economy';
 
 export function createPhysio(): SeasonPhysio { return { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }; }
@@ -19,7 +19,8 @@ export function enablePhysio(state: SeasonState, opening = false): SeasonState {
   if (state.physio.enabledSince) return state;
   if (!state.finance.enabledSince) throw new Error('Enable club finances before recruiting physios.');
   if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Enable physios while weekly reviews are available, before the final matchday.');
-  return recruitAiPhysios({ ...state, physio: { ...state.physio, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening);
+  // The career's opening staff are held, not hired: Spending left does not decide them (format 76).
+  return keepingHeldStaff(() => recruitAiPhysios({ ...state, physio: { ...state.physio, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
 }
 function hireForClub(state: SeasonState, physioId: string, clubId: string): SeasonState {
   const quote = quotePhysioHire(state, physioId, clubId);
@@ -57,7 +58,7 @@ let range: readonly [number, number] | undefined;
 /** Format 74: the physio fitting a club's staff level and its share of the staff budget (`src/world/staff-levels.ts`). */
 function fittingPhysio(state: SeasonState, clubId: string): Physio | undefined {
   const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'physio', availablePhysios(state), {
-    rating: physioRating, fee: member => staffFee(state, clubId, member.fee), target: staffTargetRating(state, clubId, 'physio', range ??= ratingRange(DEVELOPMENT_PHYSIOS, physioRating)), cap: staffShareCap(state, clubId, 'physio'), budget: remainingStaffBudget(state, clubId),
+    rating: physioRating, fee: member => staffFee(state, clubId, member.fee), target: staffTargetRating(state, clubId, 'physio', range ??= ratingRange(DEVELOPMENT_PHYSIOS, physioRating)), cap: staffShareCap(state, clubId, 'physio'), budget: staffHireBudget(state, clubId),
   }));
   return choice && quotePhysioHire(state, choice.id, clubId).canHire ? choice : undefined;
 }
@@ -67,7 +68,9 @@ export function replacePhysio(state: SeasonState, contractId: string, physioId: 
   return hirePhysio(releasePhysio(state, contractId), physioId);
 }
 
-export function renewSeasonPhysio(state: SeasonState): SeasonState {
+/** Renewals keep staff the club holds, so Spending left does not decide them (format 76; new hires need it). */
+export function renewSeasonPhysio(state: SeasonState): SeasonState { return keepingHeldStaff(() => renewPhysio(state)); }
+function renewPhysio(state: SeasonState): SeasonState {
   if (state.status !== 'active' || state.round !== 1) throw new Error('Renew physios on the new season opening day.');
   if (!state.physio.enabledSince) return state;
   let next = state;

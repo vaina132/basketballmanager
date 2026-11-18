@@ -9,7 +9,7 @@ import type { AssistantCoach } from '../domain/assistant';
 import { assistantRating } from './assistant-policy';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
-import { remainingStaffBudget } from './staff-policy';
+import { keepingHeldStaff, staffHireBudget } from './staff-policy';
 import { staffFee } from './economy';
 import { withCalculationCache } from './pure-cache';
 
@@ -20,7 +20,8 @@ export function enableAssistant(state: SeasonState, opening = false): SeasonStat
   if (state.assistant.enabledSince) return state;
   if (!state.finance.enabledSince) throw new Error('Enable club finances before recruiting assistant coaches.');
   if (state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch?.status === 'finished') throw new Error('Enable assistant coaches before the final match finishes, or when the next season starts.');
-  return recruitAiAssistants({ ...state, assistant: { ...state.assistant, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening);
+  // The career's opening staff are held, not hired: Spending left does not decide them (format 76).
+  return keepingHeldStaff(() => recruitAiAssistants({ ...state, assistant: { ...state.assistant, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
 }
 
 function hireForClub(state: SeasonState, assistantId: string, clubId: string): SeasonState {
@@ -70,7 +71,7 @@ let range: readonly [number, number] | undefined;
 /** Format 74: the assistant coach fitting a club's staff level and its share of the staff budget (`src/world/staff-levels.ts`). */
 function fittingAssistantCoach(state: SeasonState, clubId: string): AssistantCoach | undefined {
   const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'assistant', availableAssistants(state), {
-    rating: assistantRating, fee: member => staffFee(state, clubId, member.fee), target: staffTargetRating(state, clubId, 'assistant', range ??= ratingRange(DEVELOPMENT_ASSISTANTS, assistantRating)), cap: staffShareCap(state, clubId, 'assistant'), budget: remainingStaffBudget(state, clubId),
+    rating: assistantRating, fee: member => staffFee(state, clubId, member.fee), target: staffTargetRating(state, clubId, 'assistant', range ??= ratingRange(DEVELOPMENT_ASSISTANTS, assistantRating)), cap: staffShareCap(state, clubId, 'assistant'), budget: staffHireBudget(state, clubId),
   }));
   return choice && quoteAssistantHire(state, choice.id, clubId).canHire ? choice : undefined;
 }
@@ -81,7 +82,9 @@ export function replaceAssistant(state: SeasonState, contractId: string, assista
 }
 
 /** Existing-role renewals precede assistants; unavailable funds cause an honest lapse. */
-export function renewSeasonAssistant(state: SeasonState): SeasonState {
+/** Renewals keep staff the club holds, so Spending left does not decide them (format 76; new hires need it). */
+export function renewSeasonAssistant(state: SeasonState): SeasonState { return keepingHeldStaff(() => renewAssistant(state)); }
+function renewAssistant(state: SeasonState): SeasonState {
   if (state.status !== 'active' || state.round !== 1) throw new Error('Renew assistant coaches on the new season opening day.');
   if (!state.assistant.enabledSince) return state;
   let next = state;

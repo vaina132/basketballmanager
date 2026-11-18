@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { SeasonState } from '../domain/season'
-import { quoteStaffReplacement, replacementWarning, roleStaff, STAFF_ROLE_LABELS, type StaffMemberSummary, type StaffRole } from '../world/staff-roster'
+import { quoteStaffReplacement, replacementWarning, roleStaff, STAFF_ROLE_LABELS, staffReplacementSpending, type StaffMemberSummary, type StaffRole } from '../world/staff-roster'
+import { staffHireSpending, type StaffSpendingCheck } from '../world/staff-policy'
 import { Icon } from './Icon'
 import { usesStaffContracts } from '../world/staff-contracts'
 import { formatEuros } from './money-format'
@@ -39,6 +40,15 @@ export function replacementTarget(season: SeasonState, role: StaffRole, position
   return { outgoing, contractId: [...outgoing].sort((left, right) => left.rating - right.rating || left.fee - right.fee)[0]!.contractId }
 }
 
+/** Format 76: Spending left after a hire (or a replacement), from the same check the hire uses. */
+function SpendingAfter({ check, label }: { check: StaffSpendingCheck | null; label: string }) {
+  if (!check) return null
+  return <div className="staff-after-hire"><span>{check.after >= 0 ? `Spending left after ${label}` : 'Spending left shortfall'}</span><strong data-spending-after={check.after}>{formatEuros(Math.abs(check.after))}</strong></div>
+}
+export function SpendingAfterHire({ season, fee }: { season: SeasonState; fee: number }) {
+  return <SpendingAfter check={staffHireSpending(season, season.managedClubId, fee)} label="hire" />
+}
+
 /** Hiring for a filled role: a clear warning naming who leaves, accepted in one step. */
 export function StaffReplacementOffer({ season, role, personId, personName, fee, target, busy = false, onReplaceStaff }: {
   season: SeasonState; role: StaffRole; personId: string; personName: string; fee: number
@@ -53,6 +63,7 @@ export function StaffReplacementOffer({ season, role, personId, personName, fee,
     <p className="staff-replacement-warning" id={`replacement-warning-${role}`}><Icon name="swap" size={15} /><span>{replacementWarning(outgoing, season)}</span></p>
     <p className="staff-replacement-fee">{personName} becomes your {STAFF_ROLE_LABELS[role].toLowerCase()}; {usesStaffContracts(season) ? <>{formatEuros(fee)} a season, paid weekly from Wages left.</> : <>the {formatEuros(fee)} season fee is paid now.</>}</p>
     {quote.remainingAfter !== null && <div className="staff-after-replacement"><span>Wages left after the change</span><strong data-replacement-budget-after={quote.remainingAfter}>{formatEuros(quote.remainingAfter)}</strong></div>}
+    <SpendingAfter check={staffReplacementSpending(season, role, outgoing.contractId, personId)} label="the change" />
     {quote.reason && <p className="staff-hire-reason" id={`replacement-reason-${role}`}>{quote.reason}</p>}
     <button className="button primary" data-accept-replacement={role} onClick={() => onReplaceStaff?.(role, outgoing.contractId, personId)} disabled={busy || !quote.canReplace || !onReplaceStaff} aria-describedby={`replacement-warning-${role}${quote.reason ? ` replacement-reason-${role}` : ''}`}><Icon name="swap" size={16} />Accept replacement</button>
   </div>

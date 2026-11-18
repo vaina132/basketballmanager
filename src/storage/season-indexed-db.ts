@@ -1,4 +1,4 @@
-import { decodeSeasonJournal, MAX_SEASON_CHECKPOINTS, prepareSeasonCheckpoint } from './season-journal';
+import { decodeSeasonJournal, MAX_STORED_CHECKPOINTS, prepareSeasonCheckpoint } from './season-journal';
 import type { CheckpointReason, SeasonCheckpoint, SeasonJournal } from './season-journal';
 
 export { MAX_SEASON_CHECKPOINTS, SeasonSaveConflictError } from './season-journal';
@@ -47,8 +47,8 @@ function readJournalSnapshot(transaction: IDBTransaction, accept: (journal: Seas
   const seasons = transaction.objectStore(STORE_NAME), checkpoints = transaction.objectStore(CHECKPOINT_STORE_NAME);
   const currentRequest = seasons.get(SAVE_KEY), revisionRequest = seasons.get(REVISION_KEY);
   // One extra row detects corruption without materializing an unbounded store.
-  const rowsRequest = checkpoints.getAll(undefined, MAX_SEASON_CHECKPOINTS + 1);
-  const keysRequest = checkpoints.getAllKeys(undefined, MAX_SEASON_CHECKPOINTS + 1);
+  const rowsRequest = checkpoints.getAll(undefined, MAX_STORED_CHECKPOINTS + 1);
+  const keysRequest = checkpoints.getAllKeys(undefined, MAX_STORED_CHECKPOINTS + 1);
   let pending = 4;
   const ready = () => {
     if (--pending !== 0) return;

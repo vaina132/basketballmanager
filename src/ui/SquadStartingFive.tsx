@@ -11,7 +11,7 @@ import './squad-starting-five.css'
 interface SquadStartingFiveProps {
   season: SeasonState
   busy: boolean
-  /** Runs a career change (the page's normal update with a checkpoint). */
+  /** Runs a career change (the page's normal update; saving is manual). */
   onUpdate: (action: (state: SeasonState) => SeasonState) => void
   onOpenMatch: () => void
 }

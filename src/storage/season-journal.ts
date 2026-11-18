@@ -1,7 +1,10 @@
 import { SEAL_PATTERN } from './save-seal';
 import { MAX_SEASON_SAVE_BYTES } from './season-limits';
 
-export const MAX_SEASON_CHECKPOINTS = 5;
+/** Saves kept per career (owner, 18 November 2026: manual saves on a small storage; the latest three). */
+export const MAX_SEASON_CHECKPOINTS = 3;
+/** Journals written before 18 November 2026 kept five; they load, and their next save prunes them to three. */
+export const MAX_STORED_CHECKPOINTS = 5;
 export const MAX_CHECKPOINT_BYTES = MAX_SEASON_SAVE_BYTES;
 export const MAX_SEASON_REVISION = Number.MAX_SAFE_INTEGER;
 
@@ -68,7 +71,7 @@ function decodeCheckpoint(value: unknown): SeasonCheckpoint {
 
 /** Validate bookkeeping only; game payloads are independently validated by the save service. */
 export function decodeSeasonJournal(current: unknown, storedRevision: unknown, rows: readonly unknown[]): SeasonJournal {
-  if (rows.length > MAX_SEASON_CHECKPOINTS) metadataError('too many checkpoints are stored');
+  if (rows.length > MAX_STORED_CHECKPOINTS) metadataError('too many checkpoints are stored');
   const revision = storedRevision === undefined && rows.length === 0 ? 0 : storedRevision;
   if (!validRevision(revision)) metadataError('the current revision is invalid');
   const checkpoints = rows.map(decodeCheckpoint).sort((left, right) => right.revision - left.revision);

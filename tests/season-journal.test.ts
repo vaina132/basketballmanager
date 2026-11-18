@@ -119,16 +119,25 @@ describe('career checkpoint compare-and-swap planning', () => {
     expect(original.revision).toBe(0);
   });
 
-  it('keeps exactly the latest five revisions and prunes legacy only when it leaves that window', () => {
+  it('keeps exactly the latest three revisions and prunes legacy only when it leaves that window', () => {
     let journal = decodeSeasonJournal('legacy', 0, []);
     for (let revision = 1; revision <= 8; revision += 1) {
       journal = save(journal);
       expect(journal.checkpoints).toHaveLength(Math.min(MAX_SEASON_CHECKPOINTS, revision + 1));
       expect(journal.checkpoints[0]!.revision).toBe(revision);
-      expect(journal.checkpoints.at(-1)!.revision).toBe(Math.max(0, revision - 4));
+      expect(journal.checkpoints.at(-1)!.revision).toBe(Math.max(0, revision - 2));
       expect(decodeSeasonJournal(journal.current, journal.revision, journal.checkpoints)).toEqual(journal);
     }
-    expect(journal.checkpoints.map(checkpoint => checkpoint.revision)).toEqual([8, 7, 6, 5, 4]);
+    expect(journal.checkpoints.map(checkpoint => checkpoint.revision)).toEqual([8, 7, 6]);
+  });
+
+  // Manual saves on a small storage (owner, 18 November 2026): journals written with five saves still load; their next
+  // save keeps the latest three.
+  it('loads a journal of five older saves and prunes it to three on the next save', () => {
+    const rows = [5, 4, 3, 2, 1].map(revision => row(revision));
+    const journal = decodeSeasonJournal('season-5', 5, rows);
+    expect(journal.checkpoints.map(checkpoint => checkpoint.revision)).toEqual([5, 4, 3, 2, 1]);
+    expect(save(journal).checkpoints.map(checkpoint => checkpoint.revision)).toEqual([6, 5, 4]);
   });
 
   it('starts a new database at revision one and never creates a fake legacy checkpoint', () => {

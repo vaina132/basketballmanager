@@ -58,13 +58,13 @@ const facilityCost = (context: WorldContext, clubId: string, type: FacilityType,
 const facilityUpkeep = (context: WorldContext, clubId: string, type: FacilityType, level: number): number => scaledMoney(context, clubId, UPKEEP[type][level - 1]!, 100);
 export const FACILITY_CONSTRUCTION_CAPACITY_PERCENT = 90;
 /** The only upgrade blocker that board capital can resolve. */
-export const FACILITY_FUNDS_REASON = 'The upgrade exceeds the remaining budget after salary and transfer commitments.';
+export const FACILITY_FUNDS_REASON = 'The upgrade exceeds your Spending left after salary and transfer commitments.';
 /** `facilities-3`: a project the Remaining budget cannot pay for; the bank can lend the difference. */
-export const FACILITY_BANK_REASON = 'Not enough Remaining budget. A bank loan on this page can add the difference.';
+export const FACILITY_BANK_REASON = 'Not enough Spending left. A bank loan on this page can add the difference.';
 /** Format 71: a leased level is upgraded further only once its lease is paid off or ended. */
 export const FACILITY_LEASED_REASON = 'This facility is leased. Upgrade it once the lease is paid off or ended.';
 /** The only repair blocker that board capital can resolve (`facilities-2`). */
-export const FACILITY_REPAIR_FUNDS_REASON = 'The repair exceeds the remaining budget after salary and transfer commitments.';
+export const FACILITY_REPAIR_FUNDS_REASON = 'The repair exceeds your Spending left after salary and transfer commitments.';
 
 /**
  * Rules of the `facilities-2` model (format 65, new careers; owner-approved saved idea, 15 November 2026). They are

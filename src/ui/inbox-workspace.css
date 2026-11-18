@@ -23,6 +23,9 @@
 .inbox-filters button{font:inherit;font-size:13px;min-height:32px;padding:4px 12px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;cursor:pointer}
 .inbox-filters button.selected{border-color:var(--accent);color:var(--accent)}
 .inbox-filters button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.inbox-filters .inbox-mark-read{margin-left:auto;border-radius:6px}
+.inbox-unread .inbox-text strong{font-weight:700}
+.inbox-unread-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:8px;vertical-align:middle}
 .inbox-list{list-style:none;margin:0;padding:0}
 .inbox-list li{display:grid;grid-template-columns:28px minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--border)}
 .inbox-list li:first-child{border-top:0}

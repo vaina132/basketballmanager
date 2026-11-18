@@ -51,7 +51,7 @@ export function StaffReplacementOffer({ season, role, personId, personName, fee,
     {target.outgoing.length > 1 && <label className="staff-replacement-choice">Replace<select value={outgoing.contractId} onChange={event => setContractId(event.target.value)} disabled={busy}>{target.outgoing.map(member => <option key={member.contractId} value={member.contractId}>{member.name}</option>)}</select></label>}
     <p className="staff-replacement-warning" id={`replacement-warning-${role}`}><Icon name="swap" size={15} /><span>{replacementWarning(outgoing)}</span></p>
     <p className="staff-replacement-fee">{personName} becomes your {STAFF_ROLE_LABELS[role].toLowerCase()}; the {formatEuros(fee)} season fee is paid now.</p>
-    {quote.remainingAfter !== null && <div className="staff-after-replacement"><span>Remaining staff budget after the change</span><strong data-replacement-budget-after={quote.remainingAfter}>{formatEuros(quote.remainingAfter)}</strong></div>}
+    {quote.remainingAfter !== null && <div className="staff-after-replacement"><span>Wages left after the change</span><strong data-replacement-budget-after={quote.remainingAfter}>{formatEuros(quote.remainingAfter)}</strong></div>}
     {quote.reason && <p className="staff-hire-reason" id={`replacement-reason-${role}`}>{quote.reason}</p>}
     <button className="button primary" data-accept-replacement={role} onClick={() => onReplaceStaff?.(role, outgoing.contractId, personId)} disabled={busy || !quote.canReplace || !onReplaceStaff} aria-describedby={`replacement-warning-${role}${quote.reason ? ` replacement-reason-${role}` : ''}`}><Icon name="swap" size={16} />Accept replacement</button>
   </div>

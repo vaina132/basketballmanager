@@ -1,3 +1,4 @@
+import { staffLimit } from './wage-pool';
 import type { FitnessCoach, FitnessContract, FitnessEffects, FitnessHireQuote, FitnessWeekAssignment, SeasonFitness } from '../domain/fitness';
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
@@ -34,7 +35,7 @@ export function getClubFitnessEffects(state: Pick<SeasonState, 'fitness' | 'trai
 
 export function quoteFitnessHire(state: SeasonState, coachId: string, clubId = state.managedClubId): FitnessHireQuote {
   const coach = staffMember(FITNESS_DIRECTORY, coachId);
-  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
+  const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.fitness.enabledSince) reason = 'Enable fitness coach recruitment before hiring.';
@@ -46,7 +47,7 @@ export function quoteFitnessHire(state: SeasonState, coachId: string, clubId = s
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a fitness coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a fitness coach.';
   else if (staffFee(state, clubId, coach.fee) > remainingAllocation) reason = staffAllocationShortfall(state);
-  else if (staffFee(state, clubId, coach.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
+  else if (staffFee(state, clubId, coach.fee) > remainingBudget) reason = 'Not enough Spending left in the club budget after protected wages and transfer commitments.';
   return { coachId, clubId, fee: staffFee(state, clubId, coach?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }
 

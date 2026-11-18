@@ -61,7 +61,7 @@ export function transferOfferReason(state: SeasonState, playerId: string, fee: n
   }
   if (getFinanceBalance(state.finance, buyerId).unpaid > 0) return 'Settle unpaid club costs before offering a transfer fee.';
   if (getTransferPaymentSummary(state, buyerId).overdue > 0) return 'Settle overdue transfer payments before offering another transfer fee.';
-  if (getSpendableCash(state, buyerId, own?.id) < fee) return 'The transfer fee exceeds the remaining budget after other commitments.';
+  if (getSpendableCash(state, buyerId, own?.id) < fee) return 'The transfer fee exceeds your Spending left after other commitments.';
   return null;
 }
 
@@ -96,7 +96,7 @@ export function sellerReplacementReason(state: SeasonState, offer: Pick<MarketOf
     const live = getLiveMarketOffers(state).filter(item => item.clubId === transfer.sellerClubId && item.seasonNumber + 1 <= year && item.seasonNumber + item.seasons >= year);
     const shortfalls = live.reduce((sum, item) => sum + Math.max(0, summary.reserveWage - item.seasonWage), 0);
     const minimum = Math.max(0, MIN_ROSTER_SIZE - remainingSize - summary.reservedRosterSize) * summary.reserveWage + shortfalls;
-    if (remainingWages + summary.reservedWages + minimum > summary.budget) return 'The selling club needs salary budget to replace its departing players.';
+    if (remainingWages + summary.reservedWages + minimum > summary.budget) return 'The selling club needs wages budget to replace its departing players.';
     if (year === state.seasonNumber + 1 && remainingSize < MIN_ROSTER_SIZE) {
       const playerReplyOn = transfer.clubStatus === 'accepted' ? offer.responseOn : addMarketDays(state.date, 1);
       if (playerReplyOn >= window.closesOn) return 'The selling club needs a day to sign a replacement before recruitment closes.';

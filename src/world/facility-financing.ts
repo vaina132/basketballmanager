@@ -64,7 +64,7 @@ export function quoteFacilityLoan(state: SeasonState, type: FacilityType, clubId
   else if (base.reason && base.reason !== fundsReason) reason = base.reason;
   else if (maxPrincipal < minimumPrincipal) reason = 'The club has reached its borrowing limit.';
   else if (!validAmount) reason = 'Choose a whole-euro loan amount within the project cost and the borrowing limit.';
-  else if (available < cost - amount + dueThisSeason) reason = 'Remaining budget must pay the rest of the cost now and cover this season\'s repayments.';
+  else if (available < cost - amount + dueThisSeason) reason = 'Spending left must pay the rest of the cost now and cover this season\'s repayments.';
   return { clubId, facilityType: type, project, cost, available, principal: amount, maxPrincipal, minimumPrincipal, downPayment: Math.max(0, cost - amount), rateBasisPoints, seasons, payments: terms.payments, payment: terms.payment, total: terms.total, interest: Math.max(0, terms.total - amount), schedule, dueThisSeason, limit, existingDebt, debtAfter: existingDebt + Math.max(0, amount), canBorrow: reason === null, reason };
 }
 
@@ -160,7 +160,7 @@ export function quoteFacilityLease(state: SeasonState, type: FacilityType, clubI
   else if (!validTerm) reason = 'Choose a lease term of 2 to 5 seasons.';
   else if (upgrade.reason && upgrade.reason !== FACILITY_FUNDS_REASON) reason = upgrade.reason;
   else if (existingDebt + terms.total > limit) reason = 'The lease would take the club beyond its borrowing limit.';
-  else if (available < dueThisSeason) reason = 'Remaining budget must cover this season\'s lease payments.';
+  else if (available < dueThisSeason) reason = 'Spending left must cover this season\'s lease payments.';
   return { clubId, facilityType: type, fromLevel: upgrade.fromLevel, toLevel: upgrade.toLevel, price, seasons, payments: validTerm ? terms.payments : 0, payment: validTerm ? terms.payment : 0, total: validTerm ? terms.total : 0, premium: validTerm ? terms.total - price : 0, schedule, dueThisSeason, available, limit, existingDebt, debtAfter: existingDebt + (validTerm ? terms.total : 0), canLease: reason === null, reason };
 }
 
@@ -195,7 +195,7 @@ export function quoteDebtSettlement(state: SeasonState, debtId: string): DebtSet
   else if (!loan && (!project || project.completedOn === null)) reason = 'The leased level is still being installed.';
   else if (!loan && active?.type === debt.facilityType) reason = 'Finish or cancel the current project on this facility first.';
   else if (getFinanceBalance(state.finance, debt.clubId).unpaid > 0) reason = 'Settle unpaid club costs first.';
-  else if (available < amount) reason = loan ? 'Remaining budget does not cover the early repayment.' : 'Remaining budget does not cover the penalty for ending the lease.';
+  else if (available < amount) reason = loan ? 'Spending left does not cover the early repayment.' : 'Spending left does not cover the penalty for ending the lease.';
   return { debt, position, outstanding: position.outstanding, charge, amount, available, canSettle: reason === null, reason };
 }
 

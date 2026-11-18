@@ -1,13 +1,14 @@
 import type { SeasonState } from '../domain/season'
-import { staffAllocation as staffAllocationFor, staffCommitmentsByRole, remainingStaffBudget } from '../world/staff-policy'
+import { staffAllocation as staffAllocationFor, remainingStaffBudget } from '../world/staff-policy'
 import { BOARD_VERDICT_EFFECTS, governingVerdict, salaryBudgetBasis, type SalaryBudgetBasis } from '../world/board-consequences'
-import { getClubContractSummary } from '../world/employment-policy'
 import { getFinanceBalance } from '../world/finance'
-import { getInSeasonBudget, getReservedInSeasonFees, getReservedInSeasonWages } from '../world/recruitment-policy'
+import { getInSeasonBudget, getReservedInSeasonFees } from '../world/recruitment-policy'
 import { getReservedTransferFees } from '../world/market-policy'
 import { getTransferPaymentSummary } from '../world/transfer-payments'
 import { getPayrollReserve, getSpendableCash } from '../world/payroll'
-import { MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
+import { getClubContractSummary } from '../world/employment-policy'
+import { usesWagePool, wagesLeft } from '../world/wage-pool'
+import { seasonLabel } from '../world/season'
 import { Icon } from './Icon'
 import './club-budget-bar.css'
 import { formatEuros } from './money-format'
@@ -28,47 +29,58 @@ function salaryBasisText(basis: SalaryBudgetBasis): string | null {
   return basis.verdict ? `${BOARD_VERDICT_EFFECTS[basis.verdict.verdict].label} verdict, ${seasonLabel(basis.verdict.seasonNumber)}: ${signedPercent(basis.percent)} on ${money(basis.standard)}` : `Standard budget: no verdict for this club`
 }
 
-/** One consistent view of the existing cash and annual allowances; never adds unlike budgets. */
-export function ClubBudgetBar({ season, disabled, onOpenClub, onOpenStaff, onOpenTransfers }: ClubBudgetBarProps) {
+/** Short plain explanations on hover (owner feedback, 18 November 2026: simpler and more playable). */
+export const BUDGET_HELP = Object.freeze({
+  wages: 'Money left for wages: player wages and staff fees share it. Signing or renewing a player and hiring staff use it.',
+  spending: 'Money left to spend: transfer fees, facilities and arena seats. Wages still to pay are already set aside. A bank loan adds to it.',
+})
+
+/**
+ * Owner feedback (18 November 2026): two budgets. **Wages left** is one pool for player wages and staff fees (this
+ * season while it is played, the coming season in the offseason); **Spending left** is the club's spendable money for
+ * transfer fees, facilities and the arena. Careers before the wage pool (format 74 and earlier) show the same two
+ * figures, and their details say that wages and staff keep separate limits there.
+ */
+export function ClubBudgetBar({ season, disabled, onOpenClub, onOpenStaff }: ClubBudgetBarProps) {
   const clubId = season.managedClubId
   const finance = season.finance.enabledSince !== null
-  const staffing = season.coaching.enabledSince !== null || season.scouts.enabledSince !== null || season.fitness.enabledSince !== null || season.physio.enabledSince !== null || season.assistant.enabledSince !== null || season.youth.enabledSince !== null
-  const employment = season.employment.enabledSince !== null && season.seasonNumber < MAX_SEASON_NUMBER
+  const pooled = usesWagePool(season)
   const balance = getFinanceBalance(season.finance, clubId)
   const reserve = getPayrollReserve(season, clubId)
   const cash = getSpendableCash(season, clubId)
-  const recruitmentFees = getReservedInSeasonFees(season, clubId)
-  const recruitmentReserve = getReservedInSeasonWages(season, clubId)
-  const currentPlayers = getInSeasonBudget(season, clubId)
-  const transferReserve = getReservedTransferFees(season, clubId)
+  const pendingFees = getReservedInSeasonFees(season, clubId) + getReservedTransferFees(season, clubId)
   const transferPayments = getTransferPaymentSummary(season, clubId)
-  const commitments = staffCommitmentsByRole(season, clubId)
-  const committed = commitments.total
-  const coachFees = commitments.coaches
-  const scoutFees = commitments.scouts
-  const fitnessFees = commitments.fitness
-  const physioFees = commitments.physio
-  const assistantFees = commitments.assistant
-  const youthFees = commitments.youth
-  const totalStaffBudget = staffAllocationFor(season, clubId)
+  const wages = wagesLeft(season, clubId)
+  const totalStaffBudget = staffAllocationFor(season, clubId, wages.seasonNumber)
   const staffVerdict = governingVerdict(season, clubId, season.seasonNumber)
-  const staffAllocation = Math.max(0, totalStaffBudget - committed)
-  const staff = remainingStaffBudget(season, clubId)
-  const players = getClubContractSummary(season, clubId)
-  const nextSalaryBasis = salaryBasisText(salaryBudgetBasis(season, clubId, season.seasonNumber + 1))
-  const currentSalaryBasis = salaryBasisText(salaryBudgetBasis(season, clubId, season.seasonNumber))
+  const salaryBasis = salaryBasisText(salaryBudgetBasis(season, clubId, wages.seasonNumber))
+  const current = wages.seasonNumber === season.seasonNumber
+  const salaryRoom = season.employment.enabledSince ? current ? getInSeasonBudget(season, clubId).remainingBudget : getClubContractSummary(season, clubId, wages.seasonNumber).remainingBudget : 0
+  const period = current ? 'this season' : `next season (${seasonLabel(wages.seasonNumber)})`
   return <section className="club-budget-bar" aria-label="Club budgets">
     <div className="club-budget-values">
-      <button className="club-budget-value" onClick={onOpenClub} disabled={disabled} title="Money available after setting aside remaining player salaries, pending recruitment salaries, pending transfer offers and agreed unpaid transfer fees"><Icon name="wallet" size={20} /><span><small>Remaining budget</small><strong data-budget-cash={finance ? cash : undefined}>{finance ? money(cash) : 'Finances off'}</strong></span>{finance && (balance.unpaid > 0 || transferPayments.overdue > 0) && <span className="budget-alert">{transferPayments.overdue ? 'Overdue transfer' : 'Unpaid costs'}</span>}</button>
-      <button className="club-budget-value" onClick={onOpenStaff} disabled={disabled} title="Money available to hire staff this season, within the staff limit and remaining club budget"><Icon name="staff" size={20} /><span><small>Remaining staff budget</small><strong data-budget-staff={staffing ? staff : undefined}>{staffing ? money(staff) : 'Staff off'}</strong></span></button>
-      <button className="club-budget-value" onClick={onOpenTransfers} disabled={disabled} title={`Salary budget remaining for next season, after signed contracts and pending offers. Keep enough to complete the squad.${nextSalaryBasis ? ` The board's season verdict sets next season's salary budget (${nextSalaryBasis.charAt(0).toLowerCase()}${nextSalaryBasis.slice(1)}).` : ''}`}><Icon name="people" size={20} /><span><small>Player salary budget</small><strong data-budget-players={employment ? players.remainingBudget : undefined}>{employment ? <>{money(players.remainingBudget)}<em> / year</em></> : season.employment.enabledSince ? 'Calendar limit' : 'Contracts off'}</strong></span></button>
+      <button className="club-budget-value" onClick={onOpenStaff} disabled={disabled} title={`${BUDGET_HELP.wages} For ${period}.`}><Icon name="people" size={20} /><span><small>Wages left</small><strong data-budget-wages={wages.amount}>{money(wages.amount)}</strong></span></button>
+      <button className="club-budget-value" onClick={onOpenClub} disabled={disabled} title={BUDGET_HELP.spending}><Icon name="wallet" size={20} /><span><small>Spending left</small><strong data-budget-cash={finance ? cash : undefined}>{finance ? money(cash) : 'Finances off'}</strong></span>{finance && (balance.unpaid > 0 || transferPayments.overdue > 0) && <span className="budget-alert">{transferPayments.overdue ? 'Overdue transfer' : 'Unpaid costs'}</span>}</button>
     </div>
     <details className="club-budget-details" id="club-budget-details"><summary><Icon name="wallet" size={14} />Budget details</summary><div className="club-budget-breakdown">
-      <div><h3><Icon name="wallet" size={16} />Club budget</h3>{finance ? <dl><div><dt>Bank balance</dt><dd>{money(balance.cash)}</dd></div><div><dt>Reserved for player salaries</dt><dd>{money(reserve)}</dd></div>{recruitmentReserve > 0 && <div><dt>Pending recruitment salaries</dt><dd data-budget-in-season-reserve={recruitmentReserve}>{money(recruitmentReserve)}</dd></div>}{recruitmentFees > 0 && <div><dt>Pending midseason transfer fees</dt><dd data-budget-in-season-fees={recruitmentFees}>{money(recruitmentFees)}</dd></div>}{transferReserve > 0 && <div><dt>Pending transfer offers</dt><dd data-budget-transfer-fees={transferReserve}>{money(transferReserve)}</dd></div>}{transferPayments.outgoingRemaining > 0 && <div><dt>Agreed fees remaining</dt><dd data-budget-transfer-outstanding={transferPayments.outgoingRemaining}>{money(transferPayments.outgoingRemaining)}</dd></div>}{transferPayments.overdue > 0 && <div><dt>Overdue fees (included above)</dt><dd data-budget-transfer-overdue={transferPayments.overdue}>{money(transferPayments.overdue)}</dd></div>}<div><dt>Unpaid costs</dt><dd>{money(balance.unpaid)}</dd></div><div><dt>Remaining budget</dt><dd>{money(cash)}</dd></div></dl> : <p>Enable finances in Club to track the budget.</p>}</div>
-      <div><h3><Icon name="staff" size={16} />Staff budget · {seasonLabel(season.seasonNumber)}</h3>{staffing ? <dl><div><dt>Total staff budget</dt><dd data-budget-staff-total={totalStaffBudget}>{money(totalStaffBudget)}</dd></div>{staffVerdict && <div><dt>Set by the board</dt><dd>{BOARD_VERDICT_EFFECTS[staffVerdict.verdict].label} verdict, {seasonLabel(staffVerdict.seasonNumber)}</dd></div>}<div><dt>Training coach fees</dt><dd>{money(coachFees)}</dd></div>{scoutFees > 0 && <div><dt>Scout fees</dt><dd data-budget-scout-fees={scoutFees}>{money(scoutFees)}</dd></div>}{fitnessFees > 0 && <div><dt>Fitness coach fees</dt><dd data-budget-fitness-fees={fitnessFees}>{money(fitnessFees)}</dd></div>}{physioFees > 0 && <div><dt>Physio fees</dt><dd data-budget-physio-fees={physioFees}>{money(physioFees)}</dd></div>}{assistantFees > 0 && <div><dt>Assistant coach fees</dt><dd data-budget-assistant-fees={assistantFees}>{money(assistantFees)}</dd></div>}{youthFees > 0 && <div><dt>Youth coach fees</dt><dd data-budget-youth-fees={youthFees}>{money(youthFees)}</dd></div>}<div><dt>Staff fees committed</dt><dd>{money(committed)}</dd></div><div><dt>Staff allocation remaining</dt><dd>{money(staffAllocation)}</dd></div><div><dt>Remaining staff budget</dt><dd>{money(staff)}</dd></div></dl> : <p>Enable staff recruitment in Staff.</p>}</div>
-      <div><h3><Icon name="people" size={16} />Player salaries · {employment ? seasonLabel(season.seasonNumber + 1) : 'Next season'}</h3>{employment ? <dl><div><dt>Total salary budget / year</dt><dd>{money(players.budget)}</dd></div>{nextSalaryBasis && <div><dt>Set by the board</dt><dd data-budget-salary-basis="next">{nextSalaryBasis}</dd></div>}<div><dt>Signed salaries / year</dt><dd>{money(players.seasonWages)}</dd></div>{players.reservedRosterSize > 0 && <><div><dt>Pending offers / year</dt><dd data-budget-offers={players.reservedWages}>{money(players.reservedWages)}</dd></div><div><dt>Squad places held</dt><dd>{players.reservedRosterSize}</dd></div></>}<div><dt>Salary budget remaining</dt><dd>{money(players.remainingBudget)}</dd></div><div><dt>Reserved to complete the squad</dt><dd>{money(players.minimumReserve)}</dd></div><div><dt>Available after squad reserve</dt><dd>{money(players.spendableBudget)}</dd></div></dl> : <p>{season.employment.enabledSince ? 'The supported calendar has ended.' : 'Enable player contracts in Transfers to plan salaries.'}</p>}</div>
-      {season.recruitment.enabledSince && <div className="club-budget-current-salaries"><h3><Icon name="people" size={16} />Player salaries &middot; {seasonLabel(season.seasonNumber)} (current season)</h3><dl><div><dt>Total salary budget / year</dt><dd>{money(currentPlayers.budget)}</dd></div>{currentSalaryBasis && <div><dt>Set by the board</dt><dd data-budget-salary-basis="current">{currentSalaryBasis}</dd></div>}<div><dt>Signed salaries / year</dt><dd>{money(currentPlayers.seasonWages)}</dd></div><div><dt>Pending offers / year</dt><dd>{money(currentPlayers.reservedWages)}</dd></div><div><dt>Salary budget remaining / year</dt><dd data-budget-current-players={currentPlayers.remainingBudget}>{money(currentPlayers.remainingBudget)}</dd></div></dl></div>}
-      <p>Training coaches, scouts, fitness coaches, physios, assistant coaches and youth coaches share this season’s club budget and staff limit. The player salary budget covers next season’s contracts. Signed salaries and pending offers are already deducted. Current-season offers reserve remaining salary costs and any full transfer fee from Remaining budget. The full unpaid transfer fee stays reserved, including future payments. Sale income is available only when received. Overdue transfer payments block staff hiring, paid transfers and contract buyouts.</p>
+      <div><h3><Icon name="people" size={16} />Wages left · {seasonLabel(wages.seasonNumber)}</h3><dl>
+        <div><dt>Budget for players</dt><dd>{money(wages.pool - totalStaffBudget)}</dd></div>
+        {salaryBasis && <div><dt>Set by the board</dt><dd data-budget-salary-basis={current ? 'current' : 'next'}>{salaryBasis}</dd></div>}
+        <div><dt>Budget for staff</dt><dd data-budget-staff-total={totalStaffBudget}>{money(totalStaffBudget)}</dd></div>
+        {staffVerdict && <div><dt>Staff budget set by the board</dt><dd>{BOARD_VERDICT_EFFECTS[staffVerdict.verdict].label} verdict, {seasonLabel(staffVerdict.seasonNumber)}</dd></div>}
+        <div><dt>Player wages and offers</dt><dd data-budget-player-wages={wages.players}>−{money(wages.players)}</dd></div>
+        <div><dt>Staff fees</dt><dd data-budget-staff-fees={wages.staff}>−{money(wages.staff)}</dd></div>
+        <div><dt>Wages left</dt><dd>{money(wages.amount)}</dd></div>
+      </dl>{!pooled && <p data-budget-split="true">This career started before the two budgets: players can use {money(salaryRoom)} of it and staff {money(remainingStaffBudget(season, clubId))}.</p>}</div>
+      <div><h3><Icon name="wallet" size={16} />Spending left</h3>{finance ? <dl>
+        <div><dt>Money in the bank</dt><dd>{money(balance.cash)}</dd></div>
+        <div><dt>Wages still to pay</dt><dd>−{money(reserve)}</dd></div>
+        {pendingFees > 0 && <div><dt>Transfer offers waiting</dt><dd data-budget-transfer-fees={pendingFees}>−{money(pendingFees)}</dd></div>}
+        {transferPayments.outgoingRemaining > 0 && <div><dt>Transfer fees still to pay</dt><dd data-budget-transfer-outstanding={transferPayments.outgoingRemaining}>−{money(transferPayments.outgoingRemaining)}</dd></div>}
+        {balance.unpaid > 0 && <div><dt>Unpaid costs</dt><dd>{money(balance.unpaid)}</dd></div>}
+        <div><dt>Spending left</dt><dd>{money(cash)}</dd></div>
+      </dl> : <p>Club finances are off in this career.</p>}</div>
+      <p>Wages left: player wages and staff fees share one budget. Staff fees are paid when you hire, so a hire also needs Spending left. Spending left pays transfer fees, facilities and arena seats; money from a sale counts when it arrives.</p>
     </div></details>
   </section>
 }

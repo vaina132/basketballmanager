@@ -112,7 +112,7 @@ export function applyFacilityEvent(state: SeasonState, event: FacilityEvent): Se
     return { ...state, facilities: { ...state.facilities, events, delegated: { ...state.facilities.delegated, [event.clubId]: event.delegated } } };
   }
   if (event.type === 'funding') {
-    if (usesSixLevels(state.facilities)) throw new Error('Facility projects are paid from Remaining budget; a bank loan can add to it.');
+    if (usesSixLevels(state.facilities)) throw new Error('Facility projects are paid from Spending left; a bank loan can add to it.');
     if (Object.hasOwn(event, 'project') && (event.project !== 'repair' || !usesFacilityRepairs(state.facilities))) throw new Error('Board capital funds an upgrade, or a repair in the current facilities model.');
     const quote = quoteBoardFunding(state, event.facilityType, event.clubId, event.mode, event.project ?? 'upgrade');
     if (!quote.eligible) throw new Error(quote.reason!);

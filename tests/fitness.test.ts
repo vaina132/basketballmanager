@@ -85,7 +85,7 @@ describe('fitness appointments and shared staff spending', () => {
 
   it('guards protected cash, arrears, occupied staff and the final round while renewal remains editable', () => {
     const poor = freeze(expense(initial, getSpendableCash(initial, club) - 1_000_000));
-    expect(quoteFitnessHire(poor, 'fitness-06').reason).toMatch(/remaining budget/i);
+    expect(quoteFitnessHire(poor, 'fitness-06').reason).toMatch(/Spending left/i);
     expect(() => hireFitnessCoach(poor, 'fitness-06')).toThrow(/budget/i);
     const debt = freeze(expense(initial, getFinanceBalance(initial.finance, club).cash + 1));
     expect(quoteFitnessHire(debt, 'fitness-06').reason).toMatch(/unpaid/i);

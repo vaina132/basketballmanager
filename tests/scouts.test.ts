@@ -93,7 +93,7 @@ describe('recruitable scouts and shared staff allocation', () => {
 
   it('applies cash, protected commitments and unpaid-cost guards without mutation', () => {
     const poor = freeze(expense(initial, getSpendableCash(initial, clubId) - 1_000_000));
-    expect(quoteScoutHire(poor, 'scout-06').reason).toMatch(/protected|remaining budget/i);
+    expect(quoteScoutHire(poor, 'scout-06').reason).toMatch(/protected|Spending left/i);
     expect(remainingStaffBudget(poor)).toBe(1_000_000);
     expect(() => hireScout(poor, 'scout-06')).toThrow(/budget/i);
     const overdue = freeze(expense(initial, getFinanceBalance(initial.finance, clubId).cash + 100));

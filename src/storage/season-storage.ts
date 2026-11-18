@@ -1,5 +1,7 @@
 import { clubRosterLimit, clubSalaryBudget, clubSalaryCeiling, usesFullClubRoster } from '../world/club-roster-policy';
-import { seasonSalaryCeiling } from '../world/board-consequences';
+import { seasonSalaryCeiling, staffAllocationCeiling } from '../world/board-consequences';
+import { usesWagePool } from '../world/wage-pool';
+import { usesClubLevelStaff } from '../world/staff-levels';
 import { selectedTeam } from '../world/matchday-selection';
 import { createBoard } from '../world/board';
 import type { SeasonBoard } from '../domain/board';
@@ -127,7 +129,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -473,9 +475,11 @@ function completedDevelopmentWeeks(anchor: { seasonNumber: number; round: number
 function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: number, round: number, rounds: number, version: number): SeasonCoaching {
   const fields = record(value, 'coaching', ['model', 'enabledSince', 'contracts']);
   // Format 74 ('coaching-2'): every club starts staffed and a sacked coach's fee stops counting against the limits.
-  if (fields.model !== 'coaching-1' && fields.model !== 'coaching-2') fail('coaching.model', 'is unsupported');
-  const levelled = fields.model === 'coaching-2';
+  // Format 75 ('coaching-3'): 'coaching-2' with one wage pool for player wages and staff fees.
+  if (fields.model !== 'coaching-1' && fields.model !== 'coaching-2' && fields.model !== 'coaching-3') fail('coaching.model', 'is unsupported');
+  const levelled = fields.model === 'coaching-2' || fields.model === 'coaching-3';
   if (levelled && version < 74) fail('coaching.model', 'requires format 74 or later');
+  if (fields.model === 'coaching-3' && version < 75) fail('coaching.model', 'requires format 75 or later');
   let earliestRound = 1;
   if (fields.enabledSince !== null) {
     const anchor = record(fields.enabledSince, 'coaching.enabledSince', ['seasonNumber', 'round']);
@@ -590,7 +594,7 @@ function validateScouts(value: unknown, state: SeasonState, coaching: SeasonCoac
     if (active.some(contract => contract.scoutId === scout.id)) fail(path, 'cannot appoint a scout already employed at this ledger boundary');
     if (active.filter(contract => contract.clubId === entry.clubId).length >= MAX_SCOUTS) fail(path, 'exceeds the three-scout staff limit at this appointment');
     // Format 74 ('coaching-2'): the employed staff's fees are checked in ledger order with the finances instead.
-    if (year === state.seasonNumber && coaching.model !== 'coaching-2') {
+    if (year === state.seasonNumber && !usesClubLevelStaff({ coaching })) {
       const total = fees.get(entry.clubId)! + staffFee(state, entry.clubId, scout.fee);
       if (total > staffBudgetFor(state.board, entry.clubId, year, state)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       fees.set(entry.clubId, total);
@@ -647,7 +651,7 @@ function validateFitness(value: unknown, state: SeasonState, coaching: SeasonCoa
     if (active.some(contract => contract.coachId === coach.id)) fail(path, 'cannot appoint a fitness coach already employed at this ledger boundary');
     if (active.filter(contract => contract.clubId === entry.clubId).length >= 1) fail(path, 'exceeds the one-fitness-coach staff limit at this appointment');
     // Format 74 ('coaching-2'): the employed staff's fees are checked in ledger order with the finances instead.
-    if (year === state.seasonNumber && coaching.model !== 'coaching-2') {
+    if (year === state.seasonNumber && !usesClubLevelStaff({ coaching })) {
       const total = fees.get(entry.clubId)! + staffFee(state, entry.clubId, coach.fee);
       if (total > staffBudgetFor(state.board, entry.clubId, year, state)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       fees.set(entry.clubId, total);
@@ -704,7 +708,7 @@ function validatePhysio(value: unknown, state: SeasonState, coaching: SeasonCoac
     if (active.some(contract => contract.physioId === coach.id)) fail(path, 'cannot appoint a physiotherapist already employed at this ledger boundary');
     if (active.filter(contract => contract.clubId === entry.clubId).length >= 1) fail(path, 'exceeds the one-physio staff limit at this appointment');
     // Format 74 ('coaching-2'): the employed staff's fees are checked in ledger order with the finances instead.
-    if (year === state.seasonNumber && coaching.model !== 'coaching-2') {
+    if (year === state.seasonNumber && !usesClubLevelStaff({ coaching })) {
       const total = fees.get(entry.clubId)! + staffFee(state, entry.clubId, coach.fee);
       if (total > staffBudgetFor(state.board, entry.clubId, year, state)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       fees.set(entry.clubId, total);
@@ -764,7 +768,7 @@ function validateAssistant(value: unknown, state: SeasonState, coaching: SeasonC
     if (active.some(contract => contract.assistantId === coach.id)) fail(path, 'cannot appoint an assistant coach already employed at this ledger boundary');
     if (active.filter(contract => contract.clubId === entry.clubId).length >= 1) fail(path, 'exceeds the one-assistant staff limit at this appointment');
     // Format 74 ('coaching-2'): the employed staff's fees are checked in ledger order with the finances instead.
-    if (year === state.seasonNumber && coaching.model !== 'coaching-2') {
+    if (year === state.seasonNumber && !usesClubLevelStaff({ coaching })) {
       const total = fees.get(entry.clubId)! + staffFee(state, entry.clubId, coach.fee);
       if (total > staffBudgetFor(state.board, entry.clubId, year, state)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       fees.set(entry.clubId, total);
@@ -822,7 +826,7 @@ function validateYouth(value: unknown, state: SeasonState, coaching: SeasonCoach
     if (active.some(contract => contract.coachId === coach.id)) fail(path, 'cannot appoint an youth coach already employed at this ledger boundary');
     if (active.filter(contract => contract.clubId === entry.clubId).length >= 1) fail(path, 'exceeds the one-youth staff limit at this appointment');
     // Format 74 ('coaching-2'): the employed staff's fees are checked in ledger order with the finances instead.
-    if (year === state.seasonNumber && coaching.model !== 'coaching-2') {
+    if (year === state.seasonNumber && !usesClubLevelStaff({ coaching })) {
       const total = fees.get(entry.clubId)! + staffFee(state, entry.clubId, coach.fee);
       if (total > staffBudgetFor(state.board, entry.clubId, year, state)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       fees.set(entry.clubId, total);
@@ -1543,7 +1547,9 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
   }
 }
 
-function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 30, context: CareerPlayerContext & Partial<Pick<SeasonState, 'seed' | 'career' | 'board' | 'relationships'>> = {}): SeasonEmployment {
+function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 30, context: CareerPlayerContext & Partial<Pick<SeasonState, 'seed' | 'career' | 'board' | 'relationships'>> & { wagePool?: boolean } = {}): SeasonEmployment {
+  // Format 75 ('coaching-3'): player wages may also use the unused staff budget; a basic bound (development mode).
+  const pooledStaffRoom = (clubId: string, year: number): number => context.wagePool ? staffAllocationCeiling(context, clubId, year) : 0;
   const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market', ...(version >= 15 ? ['transfers'] : []), ...(version >= 17 ? ['buyouts'] : []), ...(version >= 55 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'departures') ? ['departures'] : [])]);
   const rawTransfers = version >= 15 ? fields.transfers : [];
   if (!Array.isArray(rawTransfers) || rawTransfers.length > 20_000) fail('employment.transfers', 'must retain at most 20000 completed transfers');
@@ -1745,7 +1751,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
       const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
       // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow.
-      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)) + pooledStaffRoom(entry.clubId as string, year)) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
   }
   const employment = normalized;
@@ -1756,7 +1762,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     const ceiling = clubSalaryCeiling(context, clubId, year);
     for (let at = 1; at <= (year === seasonNumber ? round : seasonRounds(context)); at += 1) {
       const registrations = effectiveContractsForRound(employment, year, at).filter(contract => contract.clubId === clubId);
-      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > Math.max(ceiling, seasonSalaryCeiling(context, clubId, year))) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
+      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > Math.max(ceiling, seasonSalaryCeiling(context, clubId, year)) + pooledStaffRoom(clubId, year)) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
     }
   }
   // Clubs leaving the full world sit out the window; joining clubs' squads sign at the rollover (step 3.4d-2).
@@ -2490,7 +2496,9 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   // Format 74 ('coaching-2'): a sacked person's fee stops counting against the staff budget from the release. Roles that
   // keep a release boundary leave the totals at it; this season's coaches leave from their release round; coaches of
   // completed seasons keep no release record, so their fees are checked one by one (a basic check, development mode).
-  const levelledStaff = coaching.model === 'coaching-2';
+  const levelledStaff = usesClubLevelStaff({ coaching });
+  // Format 75 ('coaching-3'): staff fees may also use unused player salary budget; a basic bound (development mode).
+  const pooledSalaryRoom = (clubId: string, year: number): number => usesWagePool({ coaching }) ? seasonSalaryCeiling({ ...(worldContext as WorldContext), ...(board !== null && typeof board === 'object' ? { board: board as SeasonBoard } : {}) }, clubId, year) : 0;
   const staffReleases = levelledStaff ? ([
     ...scouts.contracts.map(contract => [contract, staffMember(SCOUT_DIRECTORY, contract.scoutId)?.fee] as const),
     ...fitness.contracts.map(contract => [contract, staffMember(FITNESS_DIRECTORY, contract.coachId)?.fee] as const),
@@ -2661,7 +2669,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const contract = fitnessContracts.get(details.contractId as string), expected = required.get(key);
       if (!contract || !expected || expected.kind !== 'fitness' || contract.hiredLedgerIndex !== index || contract.coachId !== details.coachId || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must record exactly the hired fitness coach fee at its original ledger boundary');
       const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
@@ -2675,7 +2683,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const contract = physioContracts.get(details.contractId as string), expected = required.get(key);
       if (!contract || !expected || expected.kind !== 'physio' || contract.hiredLedgerIndex !== index || contract.physioId !== details.physioId || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must record exactly the hired physiotherapist fee at its original ledger boundary');
       const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
@@ -2689,7 +2697,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const contract = assistantContracts.get(details.contractId as string), expected = required.get(key);
       if (!contract || !expected || expected.kind !== 'assistant' || contract.hiredLedgerIndex !== index || contract.assistantId !== details.assistantId || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must record exactly the hired assistant coach fee at its original ledger boundary');
       const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
@@ -2703,7 +2711,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const contract = youthContracts.get(details.contractId as string), expected = required.get(key);
       if (!contract || !expected || expected.kind !== 'youth' || contract.hiredLedgerIndex !== index || contract.coachId !== details.coachId || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must record exactly the hired youth coach fee at its original ledger boundary');
       const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
@@ -2717,7 +2725,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const contract = scoutContracts.get(details.contractId as string), expected = required.get(key);
       if (!contract || !expected || expected.kind !== 'scouting' || contract.hiredLedgerIndex !== index || contract.scoutId !== details.scoutId || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must record exactly the hired scout fee at its original ledger boundary');
       const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
@@ -2742,7 +2750,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       }
       // Historical contracts are not archived. Their catalog fees and annual limits remain verifiable.
       const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       if (levelledStaff && year === seasonNumber) coachEntries.set(details.contractId as string, index);
       if (!levelledStaff || year === seasonNumber) feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
@@ -3079,7 +3087,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version >= 37) validateCareer(state.career, state as unknown as SeasonState, version);
   if (Object.hasOwn(state, 'background')) validateBackground(state.background, { ...(state as unknown as SeasonState), divisions: seasonDivisions }, version);
   // Format 70: board-2 season verdicts change player salary budgets, so the salary checks read the board.
-  const employmentContext = { ...careerContext, ...((board as SeasonBoard | undefined)?.model === 'board-2' ? { board } : {}), ...(contractRolesApply({ relationships }) ? { relationships } : {}) };
+  const employmentContext = { ...careerContext, ...((board as SeasonBoard | undefined)?.model === 'board-2' ? { board } : {}), ...(contractRolesApply({ relationships }) ? { relationships } : {}), ...(version >= 75 && usesWagePool({ coaching: state.coaching as { model: string } | undefined }) ? { wagePool: true } : {}) };
   const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId, marketEnabled, version, employmentContext) : undefined;
   if (!sameData(state.clubs, clubsForEmploymentYear(employment, seasonNumber, round, careerContext))) fail('clubs', 'must match the versioned player catalog and effective employment registrations');
   if (version >= 55 && Object.hasOwn(state, 'background')) validateBackgroundHistory(state as unknown as SeasonState, employment, careerContext);

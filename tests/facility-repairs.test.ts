@@ -200,7 +200,7 @@ describe('facilities-2 automation and board capital', () => {
     const repair = quoteFacilityRepair(later, 'arena', generous);
     expect(repair.canStart).toBe(true);
     const poor = spend(later, generous, getSpendableCash(later, generous) - Math.floor(repair.cost / 2));
-    expect(quoteFacilityRepair(poor, 'arena', generous).reason).toMatch(/exceeds the remaining budget/);
+    expect(quoteFacilityRepair(poor, 'arena', generous).reason).toMatch(/exceeds your Spending left/);
     const quote = quoteBoardFunding(poor, 'arena', generous, 'manager', 'repair');
     expect(quote).toMatchObject({ project: 'repair', eligible: true, approved: true, cost: repair.cost });
     const funded = requestBoardFunding(poor, 'arena', 'repair');

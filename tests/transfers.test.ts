@@ -65,7 +65,7 @@ describe('club transfer ownership, fee accounting and protected budgets', () => 
     const state = paid(ready, target, getSeasonWage(target), 1, MAX_TRANSFER_FEE);
     const snapshot = structuredClone(state);
     expect(quoteTransferOffer(state, other, getSeasonWage(other), 1, MAX_TRANSFER_FEE)).toMatchObject({ canOffer: false });
-    expect(() => paid(state, other, getSeasonWage(other), 1, MAX_TRANSFER_FEE)).toThrow(/remaining budget|commitments/i);
+    expect(() => paid(state, other, getSeasonWage(other), 1, MAX_TRANSFER_FEE)).toThrow(/Spending left|commitments/i);
     expect(state).toEqual(snapshot);
     expect(getReservedTransferFees(state, buyer)).toBe(MAX_TRANSFER_FEE);
     expect(state.finance).toBe(ready.finance);

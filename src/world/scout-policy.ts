@@ -1,3 +1,4 @@
+import { staffLimit } from './wage-pool';
 import type { Scout, ScoutContract, ScoutHireQuote } from '../domain/scouts';
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
@@ -23,7 +24,7 @@ export function availableScouts(state: Pick<SeasonState, 'scouts' | 'seasonNumbe
 }
 export function quoteScoutHire(state: SeasonState, scoutId: string, clubId = state.managedClubId): ScoutHireQuote {
   const scout = staffMember(SCOUT_DIRECTORY, scoutId);
-  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
+  const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.scouts.enabledSince) reason = 'Enable scout recruitment before hiring a scout.';
@@ -35,6 +36,6 @@ export function quoteScoutHire(state: SeasonState, scoutId: string, clubId = sta
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a scout.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a scout.';
   else if (staffFee(state, clubId, scout.fee) > remainingAllocation) reason = staffAllocationShortfall(state);
-  else if (staffFee(state, clubId, scout.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
+  else if (staffFee(state, clubId, scout.fee) > remainingBudget) reason = 'Not enough Spending left in the club budget after protected wages and transfer commitments.';
   return { scoutId, clubId, fee: staffFee(state, clubId, scout?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

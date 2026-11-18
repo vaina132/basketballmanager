@@ -1,3 +1,4 @@
+import { staffLimit } from './wage-pool';
 import type { AssistantCoach, AssistantContract, AssistantHireQuote } from '../domain/assistant';
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
@@ -26,7 +27,7 @@ export function availableAssistants(state: Pick<SeasonState, 'assistant' | 'seas
 }
 export function quoteAssistantHire(state: SeasonState, assistantId: string, clubId = state.managedClubId): AssistantHireQuote {
   const coach = staffMember(ASSISTANT_DIRECTORY, assistantId);
-  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId));
+  const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.assistant.enabledSince) reason = 'Enable assistant-coach recruitment before hiring.';
@@ -38,6 +39,6 @@ export function quoteAssistantHire(state: SeasonState, assistantId: string, club
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring an assistant coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring an assistant coach.';
   else if (staffFee(state, clubId, coach.fee) > remainingAllocation) reason = staffAllocationShortfall(state);
-  else if (staffFee(state, clubId, coach.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
+  else if (staffFee(state, clubId, coach.fee) > remainingBudget) reason = 'Not enough Spending left in the club budget after protected wages and transfer commitments.';
   return { assistantId, clubId, fee: staffFee(state, clubId, coach?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }

@@ -383,6 +383,12 @@ export interface SeasonSystems {
    * upkeep plans, repairs, leases or board capital for projects. New careers only; requires club facilities.
    */
   simpleFacilities?: boolean;
+  /**
+   * Format 75 (owner feedback, 18 November 2026): two budgets. Player wages and staff fees share one pool, Wages left
+   * (`coaching-3`, `src/world/wage-pool.ts`); transfer fees, facilities and the arena use Spending left. New careers
+   * only; applies only with opening staff for every club.
+   */
+  wagePool?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -395,7 +401,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -415,11 +421,14 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.staffing && (options.coaching === false || !finance)) throw new Error('Opening staff for every club require coaching and club finances.');
   if (options.simpleFacilities !== undefined && typeof options.simpleFacilities !== 'boolean') throw new Error('Choose a valid facilities setting.');
   if (options.simpleFacilities && !options.facilities) throw new Error('Six-level facilities and the bank loan require club facilities.');
+  if (options.wagePool !== undefined && typeof options.wagePool !== 'boolean') throw new Error('Choose a valid wage budget setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
   const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false, options.simpleFacilities ?? false, options.staffing ?? false);
   const pressed = options.media ? enableMedia(created) : created;
   // Format 70: the board's president personalities and objectives apply from the opening; the opening match is unchanged.
-  return options.presidents ? enablePresidentBoard(pressed) : pressed;
+  const boarded = options.presidents ? enablePresidentBoard(pressed) : pressed;
+  // Format 75: player wages and staff fees share one pool from the opening; the opening staff and squads are unchanged.
+  return options.wagePool && options.staffing ? { ...boarded, coaching: { ...boarded.coaching, model: 'coaching-3' } } : boarded;
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.

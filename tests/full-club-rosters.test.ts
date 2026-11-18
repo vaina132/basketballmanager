@@ -4,6 +4,7 @@ import { createSeason, advanceSeason, rolloverSeason, NEW_CAREER_SYSTEMS, manage
 import { simulateToEnd, setAutoSubstitutions, stepMatch } from '../src/engine/match';
 import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { clubSalaryBudget } from '../src/world/club-roster-policy';
+import { staffRoomForWages } from '../src/world/wage-pool';
 import { getClubContractSummary } from '../src/world/employment-policy';
 import { setEmploymentDelegation } from '../src/world/employment';
 import { getFixtureTeams } from '../src/world/rosters';
@@ -33,7 +34,8 @@ describe('full club rosters and separate matchday selection', () => {
     expect(Object.keys(state.training.points)).toHaveLength(65);
     for (const club of state.clubs) {
       expect(getClubContractSummary(state, club.id, 1).seasonWages).toBe(club.players.length * 1_200_000);
-      expect(getClubContractSummary(state, club.id, 1).budget).toBe(clubSalaryBudget(state, club.id));
+      // Format 75: the wage pool adds the staff budget the club's staff leave unused.
+      expect(getClubContractSummary(state, club.id, 1).budget).toBe(clubSalaryBudget(state, club.id) + staffRoomForWages(state, club.id, 1));
     }
     expect(state.activeMatch![managedSide(state)].players).toHaveLength(12);
     expect(parseSeason(serializeSeasonCompact(state))).toEqual(state);

@@ -1,3 +1,4 @@
+import { staffLimit } from './wage-pool';
 import type { YouthCoach, YouthCoachContract, YouthCoachHireQuote, SeasonYouth } from '../domain/youth';
 import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
@@ -25,7 +26,7 @@ export function availableYouthCoaches(state: Pick<SeasonState, 'youth' | 'season
 }
 export function quoteYouthCoachHire(state: SeasonState, coachId: string, clubId = state.managedClubId): YouthCoachHireQuote {
   const coach = staffMember(YOUTH_COACH_DIRECTORY, coachId);
-  const remainingAllocation = Math.max(0, staffAllocation(state, clubId) - staffCommitted(state, clubId)), remainingBudget = remainingStaffBudget(state, clubId);
+  const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId)), remainingBudget = remainingStaffBudget(state, clubId);
   let reason: string | null = null;
   if (!state.youth.enabledSince) reason = 'Enable youth-coach recruitment before hiring.';
   else if (!state.academy.enabledSince || !state.finance.enabledSince) reason = 'Youth coaches require an academy and club finances.';
@@ -36,7 +37,7 @@ export function quoteYouthCoachHire(state: SeasonState, coachId: string, clubId 
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a youth coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a youth coach.';
   else if (staffFee(state, clubId, coach.fee) > remainingAllocation) reason = staffAllocationShortfall(state);
-  else if (staffFee(state, clubId, coach.fee) > remainingBudget) reason = 'Not enough remaining budget after protected wages and transfer commitments.';
+  else if (staffFee(state, clubId, coach.fee) > remainingBudget) reason = 'Not enough Spending left in the club budget after protected wages and transfer commitments.';
   return { coachId, clubId, fee: staffFee(state, clubId, coach?.fee ?? 0), remainingAllocation, remainingBudget, canHire: reason === null, reason };
 }
 export function youthCoachAssignments(youth: SeasonYouth, clubs: readonly Pick<Team, 'id'>[], seasonNumber: number, afterRound: number): AcademyWeek['coaches'] {

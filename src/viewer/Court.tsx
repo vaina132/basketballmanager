@@ -13,13 +13,30 @@ const LIFT = 12
 export interface ScoreBugTeam { name: string; color: string; score: number; fouls: number; timeouts: number }
 export interface ScoreBug { home: ScoreBugTeam; away: ScoreBugTeam; period: string; clock: string }
 
+export interface Jersey { fill: string; text: string; trim: string }
+function rgb(color: string): [number, number, number] | null {
+  const hex = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim())?.[1]
+  if (!hex) return null
+  const full = hex.length === 3 ? [...hex].map(c => c + c).join('') : hex
+  return [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16)) as [number, number, number]
+}
+/** Teams in similar colours (or without verified colours) stay apart: the away side then wears light jerseys with its colour as trim. */
+export function jerseys(home: string, away: string): Record<Side, Jersey> {
+  const a = rgb(home), b = rgb(away)
+  const close = !a || !b || Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 110
+  return {
+    home: { fill: home, text: '#fff', trim: '#fff' },
+    away: close ? { fill: '#eef0ea', text: '#1c2521', trim: away } : { fill: away, text: '#fff', trim: '#fff' },
+  }
+}
+
 const HANDS: Record<Pose, [number, number, number, number]> = {
   stand: [-11, -13, 11, -13], run: [-11, -14, 11, -14], dribble: [-10, -15, 12, -9], shoot: [-3, -46, 3, -48],
   block: [-8, -49, 8, -49], reach: [-6, -48, 9, -45], 'box-out': [-16, -15, 16, -15], screen: [-3, -20, 3, -21],
   defend: [-16, -21, 16, -21], catch: [-6, -23, 6, -23],
 }
 
-function CourtPlayer({ player, color, x, y, pose, lift, stride, active, label }: { player: Player; color: string; x: number; y: number; pose: Pose; lift: number; stride: number; active: boolean; label: boolean }) {
+function CourtPlayer({ player, jersey, x, y, pose, lift, stride, active }: { player: Player; jersey: Jersey; x: number; y: number; pose: Pose; lift: number; stride: number; active: boolean }) {
   const p = project(x, y)
   const heightScale = Math.max(.9, Math.min(1.1, player.heightCm / 200))
   const wide = pose === 'defend' || pose === 'box-out' || pose === 'screen' ? 8 : 5
@@ -33,12 +50,11 @@ function CourtPlayer({ player, color, x, y, pose, lift, stride, active, label }:
     <g transform={`translate(0 ${(-lift * LIFT * 1.6).toFixed(1)}) scale(1 ${heightScale})`}>
       <path d={`M-4-9 ${-wide + stride * 4} ${air ? -3 : 0}M4-9 ${wide - stride * 4} ${air ? -3 : 0}`} stroke="#24302b" strokeWidth="4" strokeLinecap="round" />
       <path d={`M-8-25 ${lx - swing} ${ly}M8-25 ${rx + swing} ${ry}`} stroke={player.skinTone} strokeWidth="4" strokeLinecap="round" fill="none" />
-      <path d="M-7-28h14l2 18H-9Z" fill={color} stroke="#fff" strokeOpacity=".4" strokeWidth=".8" />
+      <path d="M-7-28h14l2 18H-9Z" fill={jersey.fill} stroke={jersey.trim} strokeOpacity={jersey.trim === '#fff' ? .4 : 1} strokeWidth={jersey.trim === '#fff' ? .8 : 1.6} />
       <circle cx="0" cy="-35" r="6.5" fill={player.skinTone} />
       <path d="M-6-37q0-9 12 0v-2q-6-8-12 0Z" fill={player.hairColor} />
-      <text x="0" y="-16" textAnchor="middle" fontSize="8" fontWeight="800" fill="#fff">{player.number}</text>
+      <text x="0" y="-16" textAnchor="middle" fontSize="8" fontWeight="800" fill={jersey.text}>{player.number}</text>
     </g>
-    {label && <text x="0" y="21" textAnchor="middle" fill="#f2efe4" stroke="#1c2521" strokeWidth="3" paintOrder="stroke" fontSize="12" fontWeight="600">{player.name.split(' ').at(-1)}</text>}
   </g>
 }
 
@@ -68,8 +84,11 @@ const CourtFloor = memo(function CourtFloor() {
   </>
 })
 
-function Hoops({ swish }: { swish: number | null }) {
-  return <>{[.043, .957].map(x => {
+const HOOP_X = [.043, .957]
+const hoopDepth = (x: number) => project(x, .5).y
+/** One basket; drawn in depth order with the players so nobody in front of it disappears behind the post. */
+function Hoop({ x, swish }: { x: number; swish: number | null }) {
+  return <>{[x].map(x => {
     const p = project(x, .5), rim = x < .5 ? 7 : -7
     const flash = swish !== null && Math.abs((swish < .5 ? .043 : .957) - x) < .01
     return <g key={x} transform={`translate(${p.x} ${p.y})`}>
@@ -83,9 +102,9 @@ function Hoops({ swish }: { swish: number | null }) {
 
 const MARK_COLORS: Record<Frame['marks'][number]['kind'], string> = { score: '#f2b84b', miss: '#c9ccc4', block: '#ff7a6b', steal: '#6fc3ff', screen: '#e6dcc3', turnover: '#ff9d6b' }
 
-function ScoreBugView({ bug }: { bug: ScoreBug }) {
+function ScoreBugView({ bug, kits }: { bug: ScoreBug; kits: Record<Side, Jersey> }) {
   const row = (team: ScoreBugTeam, side: Side) => <div className="bug-row" data-side={side}>
-    <i style={{ background: team.color }} aria-hidden="true" /><b>{team.name}</b><span className="bug-score">{team.score}</span>
+    <i style={{ background: kits[side].fill, boxShadow: `inset 0 0 0 1px ${kits[side].trim}` }} aria-hidden="true" /><b>{team.name}</b><span className="bug-score">{team.score}</span>
     <span className="bug-meta" title={`${team.fouls} team fouls this quarter, ${team.timeouts} timeouts left`}>F{team.fouls}{team.fouls >= 5 ? '+' : ''} · TO{team.timeouts}</span>
   </div>
   return <div className="score-bug" aria-label={`${bug.home.name} ${bug.home.score}, ${bug.away.name} ${bug.away.score}, ${bug.period} ${bug.clock}`}>
@@ -118,9 +137,19 @@ export function Court({ match, event, progress = 1, clock, reducedMotion = false
   const animation = useMemo(() => current?.scene ? buildAnimation(current, roster) : null, [current, roster])
   const frame = animation ? frameAt(animation, shownProgress, reducedMotion) : legacyFrame(match)
   const players = useMemo(() => new Map((['home', 'away'] as Side[]).flatMap(side => match[side].players.map(player => [player.id, player] as const))), [match.home.players, match.away.players]) // eslint-disable-line react-hooks/exhaustive-deps
-  const roles = new Set(animation?.actors.map(actor => actor.playerId))
+  const kits = useMemo(() => jerseys(match.home.color, match.away.color), [match.home.color, match.away.color])
+  // Names for the players the play is about (not the contesting defender), kept from overlapping one another.
+  const roles = new Set(animation?.actors.filter(actor => actor.role !== 'contest').map(actor => actor.playerId))
   const ordered = frame.players.filter(pose => players.has(pose.playerId)).sort((a, b) => project(a.x, a.y).y - project(b.x, b.y).y)
   const ball = frame.ball
+  const labels: { id: string; name: string; x: number; y: number }[] = []
+  for (const pose of ordered) {
+    if (!roles.has(pose.playerId) && pose.playerId !== ball.holderId) continue
+    const p = project(pose.x, pose.y), name = players.get(pose.playerId)!.name.split(' ').at(-1)!
+    let y = p.y + 21
+    while (labels.some(other => Math.abs(other.y - y) < 13 && Math.abs(other.x - p.x) < (other.name.length + name.length) * 3.6)) y += 13
+    labels.push({ id: pose.playerId, name, x: p.x, y })
+  }
   const ground = project(ball.x, ball.y)
   const holderPose = ball.holderId ? frame.players.find(item => item.playerId === ball.holderId) : undefined
   // A dribbled ball drops beside the right hand; at hand height it sits in front of the body.
@@ -136,16 +165,17 @@ export function Court({ match, event, progress = 1, clock, reducedMotion = false
   const swish = frame.marks.find(mark => mark.kind === 'score')?.x ?? null
   const description = current?.text ?? 'Both teams are ready for the opening possession.'
   return <div className="court-presentation" data-scene-kind={current?.scene?.kind ?? 'legacy'} data-play={animation?.kind ?? 'legacy'} data-event-id={current?.id ?? 0} data-progress={shownProgress.toFixed(3)}>
-    {bug && <ScoreBugView bug={bug} />}
+    {bug && <ScoreBugView bug={bug} kits={kits} />}
     <svg viewBox="18 20 820 365" className="court-svg" role="img" aria-label={`Diagonal basketball court. ${description}`}>
       <CourtFloor />
-      {arcPath && <path d={arcPath} fill="none" stroke={flight!.kind === 'shot' ? '#f2b878' : '#e8e2cf'} strokeWidth="1.5" strokeDasharray="4 6" opacity=".45" />}
-      {ordered.map(pose => {
-        const player = players.get(pose.playerId)!
-        return <CourtPlayer key={pose.playerId} player={player} color={match[pose.side].color} x={pose.x} y={pose.y} pose={pose.pose} lift={pose.lift} stride={pose.stride}
-          active={pose.playerId === ball.holderId} label={roles.has(pose.playerId) || pose.playerId === ball.holderId} />
+      {arcPath && <path d={arcPath} fill="none" stroke={flight!.kind === 'shot' ? '#b5541f' : '#4f5d55'} strokeWidth="1.8" strokeDasharray="4 5" opacity=".7" />}
+      {[...ordered.map(pose => ({ depth: project(pose.x, pose.y).y, pose })), ...HOOP_X.map(x => ({ depth: hoopDepth(x) + .5, hoop: x }))].sort((a, b) => a.depth - b.depth).map(item => {
+        if ('hoop' in item) return <Hoop key={`hoop-${item.hoop}`} x={item.hoop!} swish={swish} />
+        const pose = item.pose!, player = players.get(pose.playerId)!
+        return <CourtPlayer key={pose.playerId} player={player} jersey={kits[pose.side]} x={pose.x} y={pose.y} pose={pose.pose} lift={pose.lift} stride={pose.stride}
+          active={pose.playerId === ball.holderId} />
       })}
-      <Hoops swish={swish} />
+      {labels.map(item => <text key={item.id} className="court-name" x={item.x.toFixed(1)} y={item.y.toFixed(1)} textAnchor="middle" fill="#f2efe4" stroke="#1c2521" strokeWidth="3" paintOrder="stroke" fontSize="12" fontWeight="600">{item.name}</text>)}
       <ellipse cx={ground.x + dribbleOffset} cy={ground.y + 2} rx={Math.max(2, 6 - ball.height * .6)} ry="2" fill="#17201d" opacity=".2" />
       <g className="court-ball" transform={`translate(${(ground.x + dribbleOffset).toFixed(1)} ${(ground.y - ball.height * LIFT - ballLift).toFixed(1)})`}><circle r="5" fill="#eea361" stroke="#433225" strokeWidth="1" /><path d="M-5 0h10M0-5v10" stroke="#60422b" strokeWidth=".7" /></g>
       {frame.marks.map(mark => {

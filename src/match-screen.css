@@ -127,10 +127,12 @@
 .match-screen .court-caption.play-line p { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
 .court-mark { pointer-events: none; }
 @media (max-width: 650px) {
-  .score-bug { top: 4px; left: 4px; min-width: 0; font-size: 10px; }
-  .score-bug .bug-row { gap: 4px; padding: 1px 5px 1px 4px; }
-  .score-bug .bug-score { min-width: 20px; font-size: 12px; }
-  .score-bug .bug-meta { min-width: 0; font-size: 9px; }
-  .score-bug .bug-clock { font-size: 10px; padding: 1px 5px; }
+  /* On a phone the bug sits in one row above the court, so it never covers a basket. */
+  .score-bug { position: static; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; min-width: 0; margin: 6px 8px 0; padding: 3px 0; font-size: 11px; }
+  .score-bug .bug-row { grid-template-columns: 4px minmax(0, 1fr) auto; gap: 5px; padding: 0 6px; }
+  .score-bug .bug-row[data-side="away"] { order: 2; }
+  .score-bug .bug-clock { order: 1; flex-direction: column; align-items: center; gap: 0; margin: 0; padding: 0 8px; border-top: 0; border-inline: 1px solid var(--border); font-size: 10px; line-height: 1.25; }
+  .score-bug .bug-score { min-width: 20px; font-size: 14px; }
+  .score-bug .bug-meta { grid-column: 2 / 4; min-width: 0; margin-top: -2px; text-align: left; font-size: 9px; }
   .match-screen .court-caption.play-line p { font-size: 12px; }
 }

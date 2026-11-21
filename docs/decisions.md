@@ -501,6 +501,10 @@ Landed 17 November 2026 (reversible defaults):
 - **People:** one person per job; staff names about 75% from the club's country, generated presidents about 90%; real presidents and first assistant coaches from Wikipedia where listed (`src/data/real-club-people.ts`).
 - **Five attributes** (names chosen by the owner): Blocking, Stealing, Intelligence, Mental, Discipline; 1-20, estimated for real players; engine effects centred on 12 (blocks near the rim, steals on passes and drives, fewer turnovers, late close-game shooting, +2% training per Discipline point above 10). Calibration stays in range (points 85.9, turnovers 13.5, steals 6.9, blocks 2.7).
 
+## Keep positions from league sites with strict terms (owner decision, 21 November 2026)
+
+"Yes of course." Positions taken from ACB, FEB, BBL and BCL sites stay in the game (plain facts, each with its source link) while the game is free and in testing; ask a lawyer or the leagues before selling.
+
 ## Staff under contract stay at a new season (owner decision, 18 November 2026)
 
 Staff hires need Spending left to cover the rest of the season's salary (replacements count compensation once). Staff already under contract simply stay at a new season, like players' contracts, even if that takes Spending left below zero; the club fixes it with a bank loan or sales ("A").

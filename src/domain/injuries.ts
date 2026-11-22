@@ -52,6 +52,30 @@ export const MATCH_INJURY_TYPES: readonly InjuryType[] = [
   { kind: 'illness', label: 'Illness', phrase: 'an illness', share: 11, minDays: 1, medianDays: 2, maxDays: 7, lowerLimb: false, recurrence: null },
 ];
 
+/**
+ * Injury durations `injuries-2` (owner feedback, 22 November 2026; new careers). The game simulates only match
+ * injuries, and a player who leaves a game hurt has more than a training knock: the minimum, median and maximum days
+ * are lifted so that over a season about four in ten injuries miss under a week, four in ten one to three weeks, and
+ * each club has one or two absences of a month or more (fractures, meniscus and Achilles problems, bad sprains and
+ * strains, and the rare season-ending ACL or Achilles rupture). Shares (how often each kind happens) are unchanged.
+ * Careers created before keep the research table above.
+ */
+export type InjuryModel = 'injuries-2';
+export const INJURY_MODEL_2: InjuryModel = 'injuries-2';
+export const INJURY_DURATIONS_2: Readonly<Record<MatchInjuryKind, readonly [min: number, median: number, max: number]>> = {
+  'ankle-sprain': [2, 9, 63], 'knee-minor': [2, 8, 42], meniscus: [28, 56, 150], acl: [240, 330, 400], hamstring: [5, 16, 63], calf: [5, 16, 63],
+  thigh: [2, 6, 28], groin: [3, 12, 49], back: [2, 7, 56], foot: [3, 12, 84], tendinopathy: [5, 16, 63], 'achilles-rupture': [270, 330, 400],
+  arm: [2, 9, 63], hand: [2, 7, 42], fracture: [28, 56, 120], concussion: [5, 10, 35], head: [1, 3, 10], illness: [1, 3, 10],
+};
+const TYPES_BY_KIND = new Map<MatchInjuryKind, InjuryType>(MATCH_INJURY_TYPES.map(type => [type.kind, type]));
+
+/** The recovery range for a kind under a career's injury model (absent: the research table). */
+export function injuryDurationRange(kind: MatchInjuryKind, model?: InjuryModel): { minDays: number; medianDays: number; maxDays: number } {
+  if (model === INJURY_MODEL_2) { const [minDays, medianDays, maxDays] = INJURY_DURATIONS_2[kind]; return { minDays, medianDays, maxDays }; }
+  const type = TYPES_BY_KIND.get(kind)!;
+  return { minDays: type.minDays, medianDays: type.medianDays, maxDays: type.maxDays };
+}
+
 export const MATCH_INJURY_KINDS: readonly MatchInjuryKind[] = MATCH_INJURY_TYPES.map(type => type.kind);
 export const LEGACY_INJURY_KINDS: readonly LegacyInjuryKind[] = ['ankle', 'muscle'];
 export const INJURY_KINDS: readonly InjuryKind[] = [...LEGACY_INJURY_KINDS, ...MATCH_INJURY_KINDS];

@@ -327,7 +327,9 @@ export function validateBoard(state: SeasonState, version: number): void {
       try { review = validationReplayCache.calculate('board-review', { state: { ...context, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}) }, mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
       // Format 73: only the latest review keeps each club's list of counted games (a full earlier review stays valid; the
       // rest of the review is compared exactly in any format).
-      if (Object.values(reviewRaw.clubs as Record<string, object>).every(club => !Object.hasOwn(club, 'fixtureIds'))) review = withoutCountedGames([review])[0]!;
+      // Since format 73 the latest review always keeps them, as the game writes it.
+      const latest = version >= SEALED_HISTORY_FORMAT && reviewIndex === source.reviews.length - 1;
+      if (!latest && Object.values(reviewRaw.clubs as Record<string, object>).every(club => !Object.hasOwn(club, 'fixtureIds'))) review = withoutCountedGames([review])[0]!;
       if (!equal(reviewRaw, review)) fail(reviewPath, 'must exactly reproduce results, inherited costs, injury context and bounded confidence');
       board = { ...board, reviews: [...board.reviews, review] }; reviewIndex += 1;
       if (requests) asked = replayRequests(state, asked, requests, context, round, expected);

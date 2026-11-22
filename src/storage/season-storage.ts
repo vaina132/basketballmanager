@@ -41,7 +41,7 @@ import type { SeasonScouts, ScoutContract } from '../domain/scouts';
 import type { SeasonFitness, FitnessContract } from '../domain/fitness';
 import type { SeasonPhysio, PhysioContract } from '../domain/physio';
 import type { SeasonAssistant, AssistantContract } from '../domain/assistant';
-import type { SeasonAcademy } from '../domain/academy';
+import type { AcademyWeek, AcademyWeekFullPlayer, SeasonAcademy } from '../domain/academy';
 import type { SeasonLifecycle } from '../domain/lifecycle';
 import type { SeasonYouth, YouthCoachContract } from '../domain/youth';
 import type { SeasonYouthCompetition, YouthFixture, YouthFixtureFull } from '../domain/youth-competition';
@@ -86,7 +86,8 @@ import { validationReplayCache } from './replay-cache';
 import { knownTrees, prefixPlan, recall, remember, SCOUTING_REVIEWS, trustedCutKey, trustedPrefixMismatch, withPrefixCheck, type CheckRecord } from './trusted-prefix';
 import { canSummarizeAcademyReport, createAcademyHistoryContext, isAcademyOutcome, summarizeAcademyHistory, summarizeAcademyPlayer } from '../world/academy-history';
 import { createYouth } from '../world/youth';
-import { createYouthCompetition, enableYouthCompetition, prepareYouthSeason, prepareYouthFixture, settleYouthFixture, getYouthPlayerStatus, youthCompetitionAtBoundary, youthInjuryHistory, YOUTH_RECURRENCE_MODEL } from '../world/youth-competition';
+import { buildYouthClubTeam, createYouthCompetition, enableYouthCompetition, prepareYouthSeason, prepareYouthFixture, settleYouthFixture, getYouthPlayerStatus, youthCompetitionAtBoundary, youthInjuryHistory, youthSeasonFixtures, youthShortageResult, YOUTH_DEFAULT_REASON, YOUTH_RECURRENCE_MODEL } from '../world/youth-competition';
+import { youthCoachAssignments } from '../world/youth-policy';
 import { canSummarizeYouthFixture, createYouthHistoryContext, isYouthOutcome, summarizeYouthFixture, summarizeYouthHistory, type YouthHistoryContext } from '../world/youth-history';
 import { createLifecycle, enableLifecycle, lifecycleAtBoundary, prepareLifecycleSeason } from '../world/lifecycle';
 import { getPlayerAging, type LifecycleContext } from '../world/lifecycle-policy';
@@ -123,7 +124,7 @@ import { archiveFinancialHistory, MAX_FINANCE_LOGICAL_ENTRIES, MAX_FINANCE_SEGME
 import { expandFinanceForValidation } from './finance-archive-validation';
 import { fixturePlayerEvidence, summarizeSeniorHistory } from '../world/senior-history';
 import { validateArchivedAppearances, validateSealedSeniorSummary, validateSeniorSummary } from './senior-history-validation';
-import { isSealedSeniorResult, sealCompletedHistory, SEALED_HISTORY_FORMAT, seniorSealedThrough } from '../world/sealed-history';
+import { isSealedSeniorResult, isSealedYouthFixture, sealCompletedHistory, SEALED_HISTORY_FORMAT, seniorSealedThrough } from '../world/sealed-history';
 import { abilityShapeProblem } from '../world/extra-attributes';
 import { ACADEMY_GRADUATION_AGE, academyPointCap, developAcademyPlayer, emptyAcademyPoints } from '../world/academy-policy';
 import { playerAgeOnDate } from '../data/development-player-profiles';
@@ -1055,29 +1056,171 @@ function activateYouthReplay(replay: SeasonState, original: SeasonState): Season
   return enabled;
 }
 
-/** Format 73: the weeks of sealed seasons keep their identities, dates and some prospects' reports (shape only). */
+/**
+ * Format 73: the weeks of sealed seasons keep their identities and dates, each prospect's last report of a season in the
+ * week it was made (the season's final week, or the week before his graduation) and only the final week's staff, as
+ * appointed. A kept full report is rebuilt from its prior points, instruction, staff, facilities and the diagnoses that
+ * set its availability, so its gains and prior points are exact (other clubs' youth conditions come from player lines
+ * that sealing deletes, so theirs are kept as recorded). Other clubs' instructions are the automatic focus, and a
+ * prospect's kept points never fall from one kept report to the next (they chain exactly across adjacent weeks).
+ */
 function validateSealedAcademyWeeks(state: SeasonState, anchor: NonNullable<SeasonAcademy['enabledSince']>, through: number): number {
   const rounds = seasonRounds(state), prospects = new Map(state.academy.prospects.map(prospect => [prospect.player.id, prospect]));
+  const graduation = new Map(state.academy.graduates.map(graduate => [graduate.prospectId, graduate.availableSince]));
+  const previous = new Map<string, { index: number; points: TrainingPoints }>();
   let index = 0;
   for (let year = anchor.seasonNumber; year <= through; year += 1) {
-    for (let afterRound = year === anchor.seasonNumber ? anchor.round : 1; afterRound < rounds; afterRound += 1) {
+    const firstRound = year === anchor.seasonNumber ? anchor.round : 1, clubs = fullWorldClubsIn(state, year), clubIds = new Set(clubs.map(club => club.id));
+    const conditionsClub = state.career?.moves.some(move => move.seasonNumber === year && move.phase === 'season') ? null : managedClubFor(state, year, false);
+    // Each prospect's last week of the season: the final week, or the week before his graduation; none outside the full world.
+    const lastWeek = new Map<string, number>();
+    for (const prospect of state.academy.prospects) {
+      if (!clubIds.has(prospect.clubId) || prospect.intakeSeason > year) continue;
+      const graduated = graduation.get(prospect.player.id);
+      const last = !graduated || graduated.seasonNumber > year ? rounds - 1 : graduated.seasonNumber < year ? 0 : graduated.round - 1;
+      if (last >= Math.max(firstRound, prospect.intakeSeason === year ? prospect.intakeRound : 1)) lastWeek.set(prospect.player.id, last);
+    }
+    for (let afterRound = firstRound; afterRound < rounds; afterRound += 1) {
       const path = `academy.weeks[${index}]`, week = state.academy.weeks[index];
       if (!week) fail(path, 'must retain every completed academy interval');
       if (week.id !== `academy-week-${index + 1}` || week.seasonNumber !== year || week.afterRound !== afterRound || week.fromDate !== dateForRound(afterRound, year) || week.toDate !== dateForRound(afterRound + 1, year)) fail(path, 'must retain its chronological development interval');
       if (week.coaches === null || typeof week.coaches !== 'object' || Array.isArray(week.coaches)) fail(`${path}.coaches`, 'must be an object');
       for (const [clubId, coach] of Object.entries(week.coaches)) if (coach !== null) record(coach, `${path}.coaches.${clubId}`, ['contractId', 'coachId', 'bonusPercent']);
+      if (!sameData(week.coaches, afterRound === rounds - 1 ? youthCoachAssignments(state.youth, clubs, year, afterRound) : {})) fail(`${path}.coaches`, 'must keep only the season\'s final week staff, as appointed');
+      if (week.players === null || typeof week.players !== 'object' || Array.isArray(week.players)) fail(`${path}.players`, 'must be an object');
+      if (!sameIds(Object.keys(week.players), [...lastWeek].filter(([, last]) => last === afterRound).map(([id]) => id))) fail(`${path}.players`, 'must keep each prospect\'s last report of the season in the week it was made');
+      const managed = managedClubAtRound(state, year, afterRound), full: string[] = [];
       for (const [id, player] of Object.entries(week.players)) {
         const prospect = prospects.get(id), location = `${path}.players.${id}`;
         if (!prospect || prospect.clubId !== player.clubId || roundKey(prospect.intakeSeason, prospect.intakeRound) > roundKey(year, afterRound)) fail(location, 'must report a prospect of this academy club');
-        const entry = record(player, location, isAcademyOutcome(player) ? ['detail', 'clubId', 'focus', 'pointsAfter'] : Object.keys(player).filter(key => ['clubId', 'focus', 'pointsBefore', 'gains', 'coachingGains', 'pointsAfter', 'availability', 'facility'].includes(key)));
-        if (!TRAINING_FOCUSES.includes(entry.focus as TrainingPlan['focus'])) fail(`${location}.focus`, 'must retain a supported instruction');
+        const outcome = isAcademyOutcome(player);
+        const entry = record(player, location, outcome ? ['detail', 'clubId', 'focus', 'pointsAfter'] : Object.keys(player).filter(key => ['clubId', 'focus', 'pointsBefore', 'gains', 'coachingGains', 'pointsAfter', 'availability', 'facility'].includes(key)));
+        if (!TRAINING_FOCUSES.includes(entry.focus as TrainingPlan['focus']) || prospect.clubId !== managed && entry.focus !== 'balanced') fail(`${location}.focus`, 'must retain a supported instruction for this club');
         const points = record(entry.pointsAfter, `${location}.pointsAfter`, TRAINING_ATTRIBUTES);
         for (const key of TRAINING_ATTRIBUTES) number(points[key], `${location}.pointsAfter.${key}`, 0, academyPointCap(prospect.player.attributes[key]));
+        const earlier = previous.get(id), from = outcome ? undefined : (player as AcademyWeekFullPlayer).pointsBefore as Partial<TrainingPoints> | undefined;
+        if (earlier && (from && earlier.index === index - 1 ? !sameData(from, earlier.points) : TRAINING_ATTRIBUTES.some(key => (from ?? player.pointsAfter)[key]! < earlier.points[key]))) fail(location, 'must continue the prospect\'s development from his previous kept report');
+        previous.set(id, { index, points: player.pointsAfter });
+        if (!outcome) full.push(id);
+      }
+      if (full.length) {
+        let built: AcademyWeek;
+        try {
+          built = buildAcademyWeek({
+            rounds, ...(state.world ? { world: state.world } : {}), facilities: state.facilities, youth: state.youth, youthCompetition: youthCompetitionAtBoundary(state.youthCompetition, year, afterRound, true),
+            clubs: clubs.map(({ id }) => ({ id })), seasonNumber: year, afterRound, fromDate: week.fromDate, toDate: week.toDate, weekNumber: index + 1,
+            academy: { prospects: full.map(id => prospects.get(id)!), graduates: [], points: Object.fromEntries(full.map(id => [id, (week.players[id] as AcademyWeekFullPlayer).pointsBefore])), focus: Object.fromEntries(full.map(id => [id, week.players[id]!.focus])) },
+          });
+        } catch (error) { fail(path, `cannot rebuild its kept reports: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
+        for (const id of full) {
+          const stored = week.players[id] as AcademyWeekFullPlayer, location = `${path}.players.${id}`;
+          let expected = built.players[id] as AcademyWeekFullPlayer;
+          if (expected.availability && stored.clubId !== conditionsClub) {
+            const kept = record(stored.availability, `${location}.availability`, ['availableDays', 'conditionBefore', 'conditionAfter']);
+            const conditionBefore = number(kept.conditionBefore, `${location}.availability.conditionBefore`, 35, 100, false), conditionAfter = number(kept.conditionAfter, `${location}.availability.conditionAfter`, 35, 100, false);
+            expected = { ...expected, availability: { ...expected.availability, conditionBefore, conditionAfter } };
+          }
+          if (!sameData(expected, stored)) fail(location, 'must keep the exact development of its kept report from its prior points, instruction, staff and availability');
+        }
       }
       index += 1;
     }
   }
   return index;
+}
+
+/**
+ * Format 73: youth seasons of completed seasons, checked without the detail sealing deletes. Games follow the season's
+ * schedule; other clubs' games are sealed and the managed club's stay complete. Every result follows the shortage rule
+ * from the squads' membership and earlier diagnoses, its kind, reason, winner and official score agree, and each
+ * diagnosis is the deterministic one for its player, game and kind. The managed club's games also keep the exact squads
+ * (attributes within the development the sealed academy weeks bound), box scores, and starting conditions of its own
+ * players. Other clubs' exact scores, a removed diagnosis, and opponents' starting conditions are not verifiable here:
+ * the games are not simulated again and their squads' points and player lines are gone.
+ */
+function validateSealedYouthSeasons(state: SeasonState, through: number): void {
+  const competition = state.youthCompetition;
+  if (!competition.enabledSince || competition.enabledSince.seasonNumber > through) return;
+  // Each prospect's kept points by season (the last report of that season), bounding his development during it.
+  const kept = new Map<string, Map<number, TrainingPoints>>();
+  for (const week of state.academy.weeks) {
+    if (week.seasonNumber > through) break;
+    for (const [id, player] of Object.entries(week.players)) { const seasons = kept.get(id) ?? new Map<number, TrainingPoints>(); seasons.set(week.seasonNumber, player.pointsAfter); kept.set(id, seasons); }
+  }
+  const pointsWithin = (id: string, year: number): { low: TrainingPoints; high: TrainingPoints } => {
+    let low = emptyAcademyPoints();
+    for (const [season, points] of kept.get(id) ?? []) if (season < year) low = points;
+    return { low, high: kept.get(id)?.get(year) ?? low };
+  };
+  const prospects = new Map(state.academy.prospects.map(prospect => [prospect.player.id, prospect]));
+  for (const [seasonIndex, season] of competition.seasons.entries()) {
+    const year = season.seasonNumber;
+    if (year > through) continue;
+    const seasonPath = `youthCompetition.seasons[${seasonIndex}]`, clubs = fullWorldClubsIn(state, year);
+    const context: SeasonState = { ...state, clubs: clubs as Team[], divisions: divisionsInSeason(state, year), seasonNumber: year, round: season.fromRound, date: dateForRound(season.fromRound, year) };
+    const schedule = youthSeasonFixtures(context, season.fromRound);
+    if (season.fixtures.length !== schedule.length) fail(`${seasonPath}.fixtures`, 'must retain every scheduled game exactly once');
+    const managed = managedClubFor(state, year, false), moved = state.career?.moves.some(move => move.seasonNumber === year && move.phase === 'season') ?? false;
+    for (const [index, fixture] of season.fixtures.entries()) {
+      const path = `${seasonPath}.fixtures[${index}]`, planned = schedule[index]!;
+      if (fixture.id !== planned.id || fixture.seasonNumber !== year || fixture.round !== planned.round || fixture.date !== planned.date || fixture.homeClubId !== planned.homeClubId || fixture.awayClubId !== planned.awayClubId) fail(path, 'must keep the identity, date and venue of its scheduled game');
+      const result = fixture.result;
+      if (!result) fail(`${path}.result`, 'must retain the completed result');
+      const own = fixture.homeClubId === managed || fixture.awayClubId === managed;
+      if (own ? Object.hasOwn(fixture, 'detail') : !isSealedYouthFixture(fixture)) fail(path, own ? 'must keep the managed club\'s game complete' : 'must be sealed as another club\'s game of a completed season');
+      const at: SeasonState = { ...context, round: fixture.round, date: fixture.date };
+      const teams = { home: buildYouthClubTeam(at, fixture.homeClubId), away: buildYouthClubTeam(at, fixture.awayClubId) };
+      const statuses = new Map([...teams.home.players, ...teams.away.players].map(player => [player.id, getYouthPlayerStatus(state, player.id, fixture.date, fixture.id)]));
+      const unavailable = Object.fromEntries([...statuses.values()].filter(status => status.injury).map(status => [status.playerId, status.injury!.kind]));
+      const short = (side: Side) => teams[side].players.filter(player => !Object.hasOwn(unavailable, player.id)).length < 5;
+      if (own) {
+        const full = fixture as YouthFixtureFull;
+        // The squads' identities and order are exact; each attribute lies within the development the kept reports bound.
+        for (const side of SIDES) {
+          const frozen = full[side], location = `${path}.${side}`;
+          if (frozen === null || typeof frozen !== 'object' || !Array.isArray(frozen.players)) fail(location, 'must retain the squad frozen at settlement');
+          const guessed: Record<string, TrainingPoints> = {};
+          for (const player of frozen.players) {
+            const prospect = player && typeof player === 'object' ? prospects.get(player.id) : undefined;
+            if (!prospect || player.attributes === null || typeof player.attributes !== 'object') continue;
+            const points = Object.fromEntries(TRAINING_ATTRIBUTES.map(key => [key, (player.attributes[key] - prospect.player.attributes[key]) * 100])) as TrainingPoints, { low, high } = pointsWithin(player.id, year);
+            if (TRAINING_ATTRIBUTES.some(key => !(points[key] >= Math.floor(low[key] / 100) * 100 && points[key] <= Math.floor(high[key] / 100) * 100))) fail(`${location}.players`, 'must keep each prospect\'s development of that matchday');
+            guessed[player.id] = points;
+          }
+          let expected: Team;
+          try { expected = buildYouthClubTeam({ ...at, academy: { ...state.academy, points: { ...state.academy.points, ...guessed } } }, side === 'home' ? fixture.homeClubId : fixture.awayClubId); }
+          catch { fail(`${location}.players`, 'must keep each prospect\'s development of that matchday'); }
+          if (!sameData(expected, frozen)) fail(location, 'must keep the exact academy squad of that matchday');
+        }
+        const conditions = record(full.startingConditions, `${path}.startingConditions`, [...statuses.keys()]);
+        for (const [id, status] of statuses) {
+          number(conditions[id], `${path}.startingConditions.${id}`, 35, 100, false);
+          if (!moved && prospects.get(id)!.clubId === managed && conditions[id] !== status.condition) fail(`${path}.startingConditions.${id}`, 'must keep the player\'s condition before the game');
+        }
+      }
+      if (short('home') || short('away')) {
+        if (!sameData(result, youthShortageResult(teams.home, teams.away, short('home'), short('away')))) fail(`${path}.result`, 'must retain the canonical unplayed forfeit or no-contest');
+        continue;
+      }
+      if (result.played !== true || !['played', 'default'].includes(result.kind)) fail(`${path}.result`, 'must retain an actual played result for two eligible starting teams');
+      if (result.reason !== (result.kind === 'default' ? YOUTH_DEFAULT_REASON : null)) fail(`${path}.result.reason`, 'must describe only the supported match outcome');
+      if (!Array.isArray(result.injuries) || result.injuries.length > statuses.size) fail(`${path}.result.injuries`, 'must retain bounded new diagnoses');
+      const injuries: Record<string, SeasonInjury['kind']> = {};
+      for (const [injuryIndex, value] of result.injuries.entries()) {
+        const injuryPath = `${path}.result.injuries[${injuryIndex}]`, injury = record(value, injuryPath, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);
+        const club = (['home', 'away'] as const).map(side => teams[side]).find(team => team.players.some(player => player.id === injury.playerId));
+        if (!club || !isInjuryKind(injury.kind) || Object.hasOwn(injuries, injury.playerId as string) || Object.hasOwn(unavailable, injury.playerId as string) || state.injuryMode === 'off') fail(injuryPath, 'must identify one new supported diagnosis for an available participant');
+        if (!sameData(injury, createSeasonInjury(state.seed, fixture, club.id, injury.playerId as string, injury.kind as SeasonInjury['kind'], youthInjuryHistory(competition, [injury.playerId as string], fixture.date)))) fail(injuryPath, 'must preserve the original deterministic diagnosis and return date');
+        injuries[injury.playerId as string] = injury.kind as SeasonInjury['kind'];
+      }
+      const summary = { score: result.score, officialScore: result.officialScore, winnerClubId: result.winnerClubId, kind: result.kind === 'played' ? 'normal' : 'default', periods: result.periods };
+      if (!own) { validateResultSummary(summary, `${path}.result`, teams.home, teams.away); continue; }
+      const full = fixture as YouthFixtureFull;
+      validateResult({ ...summary, stats: result.stats, injuries: { ...unavailable, ...injuries } }, `${path}.result`, full.home!, full.away!, false);
+      for (const id of Object.keys(unavailable)) requireNoPlay(result.stats[id]!, `${path}.result.stats.${id}`);
+      for (const id of Object.keys(injuries)) if (result.stats[id]!.secondsPlayed === 0) fail(`${path}.result.injuries`, 'requires actual exposure before a new diagnosis');
+    }
+  }
 }
 
 /** The academy and youth records at the end of the latest sealed season, from which the current season replays. */
@@ -1103,6 +1246,8 @@ function sealedAcademyReplay(replay: SeasonState, state: SeasonState, through: n
   const graduated = new Set(graduates.map(graduate => graduate.prospectId)), latest = new Map<string, TrainingPoints>();
   const weeks = academy.weeks.slice(0, weekCount);
   for (const week of weeks) for (const [id, player] of Object.entries(week.players)) latest.set(id, player.pointsAfter);
+  // A graduate leaves with the points of his last kept report (or none before any development).
+  for (const [index, graduate] of graduates.entries()) if (!sameData(graduate.sourcePoints, latest.get(graduate.prospectId) ?? emptyAcademyPoints())) fail(`academy.graduates[${index}].sourcePoints`, 'must equal the points of the prospect\'s last kept report');
   const points = Object.fromEntries(prospects.map(prospect => {
     const id = prospect.player.id;
     return [id, { ...(graduated.has(id) ? academy.points[id]! : latest.get(id) ?? emptyAcademyPoints()) }];
@@ -1154,13 +1299,17 @@ function validateAcademyHistory(state: SeasonState, version: SeasonFormatVersion
     conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => originalIds.has(id))),
     training: { ...state.training, points: Object.fromEntries(Object.entries(state.training.points).filter(([id]) => originalIds.has(id))) },
   };
-  // Format 73: completed seasons are sealed. Their weeks and youth results are checked by shape, and the current
-  // season replays from each prospect's accumulated points at the previous season's end.
+  // Format 73: completed seasons are sealed. Their weeks and youth games are checked without the deleted detail
+  // (`validateSealedAcademyWeeks`, `validateSealedYouthSeasons`), and the current season replays from each prospect's
+  // accumulated points at the previous season's end.
   const sealedThrough = version >= SEALED_HISTORY_FORMAT && state.seasonNumber > anchor.seasonNumber ? state.seasonNumber - 1 : 0;
   let weekIndex = resume ? resume.weekIndex : 0;
+  // A resumed replay holds the sealed weeks and youth seasons the trusted check accepted; the final comparisons below
+  // require them unchanged, so their checks are not repeated.
   if (resume) { /* Resumed below at the trusted week. */ }
   else if (sealedThrough) {
     weekIndex = validateSealedAcademyWeeks(state, anchor, sealedThrough);
+    validateSealedYouthSeasons(state, sealedThrough);
     replay = sealedAcademyReplay(replay, state, sealedThrough, weekIndex);
   } else {
     try { replay = enableAcademy(replay); }

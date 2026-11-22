@@ -15,8 +15,8 @@ const noop = () => {};
 const leagueProps = { onOpenMatch: noop, onNewCareer: noop, onLoad: noop };
 
 /**
- * Competitions' tabs (owner, 22 November 2026, evening): International lists only the European competitions the
- * manager's club plays; European Leagues lists every other domestic league (played, or with a simulated table) as
+ * Competitions' tabs (owner, 22 November 2026, evening): International opens on the European competitions the
+ * manager's club plays, the others behind smaller buttons; European Leagues lists every other domestic league (played, or with a simulated table) as
  * buttons by country instead of the old drop-down; League is the manager's own league only.
  */
 describe('Competitions > International, European Leagues and League, and the season calendar', () => {
@@ -29,29 +29,44 @@ describe('Competitions > International, European Leagues and League, and the sea
     quiet = createSeason({ seed: 12, world, managedClubId: world.clubs[5].id, ...NEW_CAREER_SYSTEMS });
   }, 300_000);
 
-  it('International shows only the club\'s European competition: its table, games and results', () => {
+  it('International opens on the club\'s own competition, with the others behind smaller buttons', () => {
     expect(clubEuropeanCompetitions(state, state.managedClubId)).toEqual(['euroleague']);
     const markup = renderToStaticMarkup(createElement(InternationalWorkspace, { season: state }));
     expect(markup).toContain('data-competitions-view="international"');
-    expect(markup).toContain('Test euroleague');
+    expect(markup).toMatch(/role="group" aria-label="Your European competitions"><button type="button" data-competition-option="euroleague" aria-pressed="true"/);
     expect(markup).toContain('Regular-season table');
     expect(markup).toContain('Your club');
+    expect(markup).toContain('Your club only');
     expect(markup).toContain('Games &amp; results');
     expect(markup).toMatch(/\d+–\d+/);
-    // Not the competitions the club does not play, and no hidden drop-down of competitions or leagues.
-    expect(markup).not.toContain('Test eurocup');
+    // The competitions the club does not play are a click away, not open; domestic leagues and drop-downs are not here.
+    expect(markup).toContain('id="competition-others-label">Other European competitions<');
+    expect(markup).toMatch(/data-other-competition="eurocup" aria-pressed="false"/);
+    expect(markup).not.toContain('data-other-competition="euroleague"');
+    expect(markup).not.toContain('Group D');
     expect(markup).not.toContain('Otherland League');
     expect(markup).not.toContain('id="europe-competition"');
-    // A competition id the club does not play falls back to its own competition.
-    expect(renderToStaticMarkup(createElement(InternationalWorkspace, { season: state, competitionId: 'eurocup' }))).not.toContain('Group D');
+    // Choosing another competition (as the buttons do) shows it in full, without the own-club filter.
+    const cup = renderToStaticMarkup(createElement(InternationalWorkspace, { season: state, competitionId: 'eurocup' }));
+    expect(cup).toMatch(/data-other-competition="eurocup" aria-pressed="true"/);
+    expect(cup).toMatch(/data-competition-option="euroleague" aria-pressed="false"/);
+    expect(cup).toContain('Group A');
+    expect(cup).toContain('Group D');
+    expect(cup).not.toContain('Your club only');
   });
 
-  it('International says so when the club plays no European competition', () => {
+  it('International gives a club without European games the note and the competitions to look at', () => {
     expect(clubEuropeanCompetitions(quiet, quiet.managedClubId)).toEqual([]);
     const markup = renderToStaticMarkup(createElement(InternationalWorkspace, { season: quiet }));
     expect(markup).toContain('Your club plays no European competition this season.');
-    expect(markup).not.toContain('Test euroleague');
+    expect(markup).toMatch(/data-other-competition="euroleague" aria-pressed="false"/);
+    expect(markup).toMatch(/data-other-competition="eurocup" aria-pressed="false"/);
+    expect(markup).not.toContain('data-competition-option=');
     expect(markup).not.toContain('Games &amp; results');
+    const chosen = renderToStaticMarkup(createElement(InternationalWorkspace, { season: quiet, competitionId: 'euroleague' }));
+    expect(chosen).toContain('Your club plays no European competition this season.');
+    expect(chosen).toContain('Regular-season table');
+    expect(chosen).toContain('Games &amp; results');
   });
 
   it('European Leagues lists every other league as buttons by country, own country first, and opens on a top division', () => {

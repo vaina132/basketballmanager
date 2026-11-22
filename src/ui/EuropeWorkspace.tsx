@@ -49,8 +49,9 @@ function SeasonPicker({ id, season, value, onChange }: { id: string; season: Sea
 
 /**
  * Competitions > International (owner, 22 November 2026, evening; step 3.5g before): the European competitions the
- * manager's club plays in the season shown, with their tables or groups, knockout rounds, games and results. A manager
- * without a club sees every competition. Everything shown comes from the career's games and records.
+ * manager's club plays in the season shown, with their tables or groups, knockout rounds, games and results; the other
+ * European competitions stay a click away in a smaller set of buttons (a EuroCup club can still follow the EuroLeague).
+ * A manager without a club sees every competition. Everything shown comes from the career's games and records.
  */
 export function InternationalWorkspace({ season, competitionId, onCompetitionChange }: { season: SeasonState; competitionId?: string | null; onCompetitionChange?: (id: string) => void }) {
   const world = worldOf(season)
@@ -63,8 +64,11 @@ export function InternationalWorkspace({ season, competitionId, onCompetitionCha
   const managedId = managedClubFor(season, selectedSeason, false)
   const own = useMemo(() => new Set(clubEuropeanCompetitions(season, managedId, selectedSeason)), [season, managedId, selectedSeason])
   const shown = managedId ? competitions.filter(item => own.has(item.competition.id) || fixtures.some(fixture => fixture.competition === item.competition.id && (fixture.homeClubId === managedId || fixture.awayClubId === managedId))) : competitions
+  // The competitions the club does not play, behind smaller buttons; never opened by default.
+  const others = managedId ? competitions.filter(item => !shown.includes(item)) : []
   const [chosen, setChosen] = useState<string | null>(competitionId ?? null)
-  const entry = shown.find(item => item.competition.id === chosen) ?? shown[0]
+  const entry = competitions.find(item => item.competition.id === chosen) ?? shown[0]
+  const ownEntry = !!entry && shown.includes(entry)
   const [ownOnly, setOwnOnly] = useState(false)
   const club = (id: string) => season.clubs.find(team => team.id === id) ?? world.clubs.find(team => team.id === id)!
   const choose = (id: string) => { setChosen(id); onCompetitionChange?.(id) }
@@ -80,11 +84,12 @@ export function InternationalWorkspace({ season, competitionId, onCompetitionCha
   return <div className="season-workspace europe-workspace" data-competitions-view="international">
     <section className="season-matchday panel" aria-label="European competition">
       <div className="season-matchday-identity">
-        {shown.length > 1 ? <div className="segmented competition-choice" role="group" aria-label="European competition">{shown.map(item => <button key={item.competition.id} type="button" data-competition-option={item.competition.id} aria-pressed={entry?.competition.id === item.competition.id} className={entry?.competition.id === item.competition.id ? 'selected' : ''} onClick={() => choose(item.competition.id)}><InlineLogo kind="competition" id={item.competition.id} name={item.competition.name} size={18} decorative />{item.competition.name}</button>)}</div>
-          : entry ? <h2 className="season-club-name season-league-name"><InlineLogo kind="competition" id={entry.competition.id} name={entry.competition.name} size={26} decorative /><span>{entry.competition.name}</span></h2> : null}
+        {shown.length > 1 || shown.length === 1 && others.length > 0 ? <div className="segmented competition-choice" role="group" aria-label={managedId ? 'Your European competitions' : 'European competition'}>{shown.map(item => <button key={item.competition.id} type="button" data-competition-option={item.competition.id} aria-pressed={entry?.competition.id === item.competition.id} className={entry?.competition.id === item.competition.id ? 'selected' : ''} onClick={() => choose(item.competition.id)}><InlineLogo kind="competition" id={item.competition.id} name={item.competition.name} size={18} decorative />{item.competition.name}</button>)}</div>
+          : entry && !others.length ? <h2 className="season-club-name season-league-name"><InlineLogo kind="competition" id={entry.competition.id} name={entry.competition.name} size={26} decorative /><span>{entry.competition.name}</span></h2> : null}
+        {others.length > 0 && <div className="competition-others" role="group" aria-labelledby="competition-others-label"><span id="competition-others-label">Other European competitions</span><div>{others.map(item => <button key={item.competition.id} type="button" data-other-competition={item.competition.id} aria-pressed={entry?.competition.id === item.competition.id} className={entry?.competition.id === item.competition.id ? 'selected' : ''} onClick={() => choose(item.competition.id)}><InlineLogo kind="competition" id={item.competition.id} name={item.competition.name} size={14} decorative />{item.competition.name}</button>)}</div></div>}
         <SeasonPicker id="europe-season" season={season} value={selectedSeason} onChange={value => { setSelectedSeason(value); setChosen(null) }} />
       </div>
-      <div className="season-matchday-action"><p data-international-status>{entry ? champion ? <><strong>{champion.name}</strong> win the {entry.competition.name}.</> : `${entry.format.label}: ${entry.table.length || europeanEntrants(entry.competition, europe).length} clubs.` : !competitions.length ? 'No European competition is played in this career.' : current ? 'Your club plays no European competition this season.' : `Your club played no European competition in ${seasonLabel(selectedSeason)}.`}</p></div>
+      <div className="season-matchday-action"><p data-international-status>{managedId && !shown.length && competitions.length > 0 && <>{current ? 'Your club plays no European competition this season.' : `Your club played no European competition in ${seasonLabel(selectedSeason)}.`}{entry && ' '}</>}{entry ? champion ? <><strong>{champion.name}</strong> win the {entry.competition.name}.</> : `${entry.format.label}: ${entry.table.length || europeanEntrants(entry.competition, europe).length} clubs.` : !competitions.length ? 'No European competition is played in this career.' : null}</p></div>
     </section>
 
     {entry && <>
@@ -106,7 +111,7 @@ export function InternationalWorkspace({ season, competitionId, onCompetitionCha
             <td>{series.bestOf === 1 ? 'Single game' : `Best of ${series.bestOf}`}{series.neutral ? ' · one venue' : ''}</td></tr>)}</tbody></table></div>
       </section>}
       <section className="season-fixtures panel" aria-labelledby="europe-fixtures-title">
-        <header className="season-panel-heading season-fixtures-heading"><h2 id="europe-fixtures-title">Games &amp; results</h2>{managedId && <label className="season-own-filter"><input type="checkbox" checked={ownOnly} onChange={event => setOwnOnly(event.target.checked)} /> Your club only</label>}</header>
+        <header className="season-panel-heading season-fixtures-heading"><h2 id="europe-fixtures-title">Games &amp; results</h2>{managedId && ownEntry && <label className="season-own-filter"><input type="checkbox" checked={ownOnly} onChange={event => setOwnOnly(event.target.checked)} /> Your club only</label>}</header>
         <div className="season-table-scroll"><table className="season-fixtures-table"><thead><tr><th scope="col">Date</th><th scope="col">Home</th><th scope="col">Score</th><th scope="col">Away</th><th scope="col">Stage</th></tr></thead>
           <tbody>{games.map(fixture => <tr key={fixture.id} className={fixture.homeClubId === managedId || fixture.awayClubId === managedId ? 'season-managed-row' : ''}>
             <td><time dateTime={fixture.date}>{formatDate(fixture.date)}</time></td><td><ClubName club={club(fixture.homeClubId)} /></td>

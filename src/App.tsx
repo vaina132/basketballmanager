@@ -246,9 +246,14 @@ export default function App() {
   // Owner decisions (22 November 2026): Calendar and Europe are tabs of Competitions, Academy of Training, Board of Club;
   // that evening Europe became International (the club's European competitions) and European Leagues (the other leagues).
   const [competitionsView, setCompetitionsView] = useState<CompetitionsView>('league')
-  // The competition and league last chosen on those tabs, kept while the manager looks at other pages.
-  const [internationalCompetition, setInternationalCompetition] = useState<string | null>(null)
-  const [europeanLeague, setEuropeanLeague] = useState<string | null>(null)
+  // The competition and league last chosen on those tabs, kept while the manager looks at other pages; a new career or
+  // a new club starts afresh (International then opens on the club's own competition, or on none).
+  const [competitionChoices, setCompetitionChoices] = useState<{ career: string; international: string | null; league: string | null }>({ career: '', international: null, league: null })
+  const careerKey = season ? `${season.seed}:${season.managedClubId}` : ''
+  const choices = competitionChoices.career === careerKey ? competitionChoices : { career: careerKey, international: null, league: null }
+  const internationalCompetition = choices.international, europeanLeague = choices.league
+  const setInternationalCompetition = (id: string) => setCompetitionChoices({ ...choices, international: id })
+  const setEuropeanLeague = (id: string) => setCompetitionChoices({ ...choices, league: id })
   const [trainingView, setTrainingView] = useState<TrainingView>('plan')
   const [clubView, setClubView] = useState<ClubView>('club')
   const [performancePlayer, setPerformancePlayer] = useState<string | null>(null)

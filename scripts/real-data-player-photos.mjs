@@ -10,7 +10,8 @@
 // 3. Takes the item's image (P18) and keeps it only under a free licence that allows reuse (CC0, public
 //    domain, CC BY, CC BY-SA; never NC/ND or non-free) with a named author where attribution is required.
 // 4. With --download: crops each photo to its top centre square, 128x128 WebP in public/photos/players/,
-//    and writes src/data/player-photos.ts and real-data/player-photo-matches.json.
+//    and writes src/data/player-photos.ts and real-data/player-photo-matches.json. Players of the previous map who
+//    are no longer in the pack keep their photo (careers on an older pack still have them).
 //
 // Every response is cached in --cache, so a rerun works offline (--offline) and never repeats a request.
 // Requests are spaced at least 1.1 s apart with a descriptive User-Agent, as Wikimedia asks.
@@ -231,6 +232,24 @@ if (download) {
     photos[item.player.id] = { player: item.player.name, author: item.author, licence: item.licence, licenceUrl: item.url, commonsFile: item.info.title.replace(/^File:/, '') }
     if (index % 100 === 0) console.log(`  photos: ${index + 1} of ${accepted.length}`)
   }
+  // Players who left the pack (a later world dropped them) keep the photo they had: careers started on an older pack
+  // still have them (added 22 November 2026, world-10). Their rows come from the current map and matches file.
+  const packIds = new Set(pack.players.map(player => player.id)), keptRows = []
+  const mapPath = join(root, 'src/data/player-photos.ts'), matchesPath = join(root, 'real-data/player-photo-matches.json')
+  if (existsSync(mapPath)) {
+    const source = readFileSync(mapPath, 'utf8')
+    const oldLicences = JSON.parse(/const LICENCES[^=]*= (\[.*\])\n/.exec(source)?.[1] ?? '[]')
+    const oldMatches = existsSync(matchesPath) ? JSON.parse(readFileSync(matchesPath, 'utf8')).players : []
+    for (const [, id, row] of source.matchAll(/^ {2}("player-[^"]+"): (\[.*\]),$/gm)) {
+      const playerId = JSON.parse(id), [player, author, licence, commonsFile] = JSON.parse(row)
+      if (packIds.has(playerId) || Object.hasOwn(photos, playerId) || !existsSync(join(outDir, `${playerId}.webp`))) continue
+      photos[playerId] = { player, author, licence: oldLicences[licence][0], licenceUrl: oldLicences[licence][1], commonsFile }
+      const match = oldMatches.find(item => item.playerId === playerId)
+      if (match) keptRows.push({ playerId, name: match.name, wikidata: match.wikidata, evidence: match.evidence, file: match.commonsFile })
+    }
+    if (keptRows.length) console.log(`Kept ${keptRows.length} photos of players no longer in this pack.`)
+  }
+  rows.push(...keptRows)
   // Photos of players no longer matched are removed so the folder and the map agree.
   for (const file of readdirSync(outDir)) if (file.endsWith('.webp') && !Object.hasOwn(photos, file.replace(/\.webp$/, ''))) rmSync(join(outDir, file))
   // Compact form (the map ships in the game bundle): licences listed once, file and page URL derived.

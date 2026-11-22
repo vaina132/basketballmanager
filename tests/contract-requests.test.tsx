@@ -114,8 +114,10 @@ describe('players asking about new contracts', () => {
     const items = getInboxItems(middle).filter(item => open.some(request => request.id === item.id));
     expect(items).toHaveLength(2);
     expect(items.every(item => item.needsAction && item.title.endsWith('asks about a new contract'))).toBe(true);
-    const html = renderToStaticMarkup(<InboxWorkspace season={middle} onAnswerPress={() => {}} onOpen={() => {}} onContractReply={() => {}} />);
-    expect(html.match(/data-contract-reply="/g)).toHaveLength(6);
+    const html = renderToStaticMarkup(<InboxWorkspace season={middle} onAnswerPress={() => {}} onOpen={() => {}} onContractReply={() => {}} initialSelectedId={open[0]!.id} />);
+    // Owner feedback (22 November 2026): the open message's card shows on the right; each request is one message in the list.
+    expect(html.match(/data-contract-reply="/g)).toHaveLength(3);
+    for (const request of open) expect(html).toContain(`data-inbox-item="${request.id}"`);
     expect(getPlayerRelationship(middle, open[0]!.playerId).contractRequest).toMatchObject({ id: open[0]!.id, status: 'open' });
   });
 

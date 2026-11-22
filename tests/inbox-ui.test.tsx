@@ -5,7 +5,7 @@ import { getPressQuestion } from '../src/world/press-policy';
 import { answerPress } from '../src/world/relationships';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { getInboxItems } from '../src/ui/inbox-items';
-import { inboxList, InboxWorkspace, pressEffectText } from '../src/ui/InboxWorkspace';
+import { inboxList, inboxView, InboxWorkspace, pressEffectText, withRead } from '../src/ui/InboxWorkspace';
 import { advanceMatchday } from './helpers/board-funding';
 
 const noop = () => {};
@@ -66,5 +66,34 @@ describe('one inbox list (owner feedback, 18 November 2026)', () => {
     for (let index = 1; index < list.length; index += 1) expect(list[index - 1]!.date >= list[index]!.date).toBe(true);
     const read = new Set([list[0]!.id]);
     expect(inboxList(items, 'unread', read).map(item => item.id)).toEqual(list.slice(1).map(item => item.id));
+  });
+});
+
+describe('two-pane inbox (owner feedback, 22 November 2026)', () => {
+  it('shows the chosen message in full on the right, with its actions', () => {
+    const items = getInboxItems(open), board = items.find(item => item.title.startsWith('Board review'))!;
+    const html = renderToStaticMarkup(<InboxWorkspace season={open} onAnswerPress={noop} onOpen={noop} initialSelectedId={board.id} />);
+    const reader = html.slice(html.indexOf('id="inbox-reader"'));
+    expect(reader).toContain(`data-inbox-selected="${board.id}"`);
+    expect(reader).toContain(`<h3>${board.title}</h3>`);
+    expect(reader).toContain(board.detail.slice(0, 40));
+    expect(reader).toContain('Open board');
+    expect(reader).toContain('Back to messages');
+    // The list holds titles and dates only; the full text is in the reader.
+    expect(html.slice(0, html.indexOf('id="inbox-reader"'))).not.toContain(board.detail.slice(0, 40));
+    // Without a choice, a waiting press conference opens first.
+    expect(render(open).slice(render(open).indexOf('id="inbox-reader"'))).toContain('id="press-conference"');
+  });
+
+  it('marks the chosen message read and keeps it open in the Unread view', () => {
+    const items = getInboxItems(open), chosen = inboxList(items, 'all', new Set())[2]!;
+    const read = withRead(new Set(), [chosen.id]);
+    expect(read.has(chosen.id)).toBe(true);
+    const view = inboxView(items, 'unread', read, chosen.id);
+    expect(view.selected?.id).toBe(chosen.id);
+    expect(view.shown.some(item => item.id === chosen.id)).toBe(true);
+    // Once another message is chosen, the read one leaves the Unread view.
+    const other = view.shown.find(item => item.id !== chosen.id)!;
+    expect(inboxView(items, 'unread', withRead(read, [other.id]), other.id).shown.some(item => item.id === chosen.id)).toBe(false);
   });
 });

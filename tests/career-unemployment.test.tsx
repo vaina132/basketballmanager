@@ -68,7 +68,7 @@ describe('declining every offer', () => {
     expect(outlook).toMatchObject({ timing: 'mid-season', dismissed: true, unemployment: true, clubId: DISMISSAL_CLUB, offers: [], vacancies: [] });
     const dialog = renderToStaticMarkup(<SeasonEndChoice season={beforeDismissal} outlook={outlook} onChoose={noop} onClose={noop} />);
     expect(dialog).toMatch(/id="season-end-unemployed"[^>]*>Continue without a club/);
-    expect(dialog).toContain('No club that is replacing its coach wants you');
+    expect(dialog).toContain('No club that is replacing its head coach wants you');
     expect(dialog).toContain('data-unemployment-note');
     expect(dialog).not.toContain('id="season-end-stay"');
     // Without offers, no decision also leaves the manager without a club.
@@ -92,7 +92,7 @@ describe('declining every offer', () => {
     expect(html).toContain('data-unemployed-desk');
     expect(html).toContain(`Dismissed (matchday ${DISMISSAL_WEEK + 1}) · no new club`);
     expect(html).toContain('data-career-period="unemployed"');
-    expect(html).toContain('No club is looking for a coach right now.');
+    expect(html).toContain('No club is looking for a head coach right now.');
     // The one Continue on the top bar plays the week (owner request, 16 November 2026).
     expect(html).toMatch(/data-unemployed-next="true">Continue plays (every club&#x27;s games this week|the final week and finishes the season)\./);
     expect(getInboxItems(unemployed).find(item => item.id === 'career-move-2')).toMatchObject({ title: 'Dismissed by Danube Lynx · without a club', target: 'jobs' });

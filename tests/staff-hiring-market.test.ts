@@ -68,17 +68,17 @@ describe('coach hiring in club-level careers (no fixed catalog cap)', () => {
     const remaining = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
     const tooDear = availableCoaches(state.coaching, state).find(coach => staffFee(state, clubId, coach.fee) > remaining);
     expect(tooDear, 'a coach above the poorest club\'s Wages left').toBeDefined();
-    expect(coachHireReason(state, tooDear!.id)).toMatch(/^Not enough Wages left: this coach costs €[\d.,]+M? a season, you have €[\d.,]+M? left\.$/);
+    expect(coachHireReason(state, tooDear!.id)).toMatch(/^Not enough Wages left: this training coach costs €[\d.,]+M? a season, you have €[\d.,]+M? left\.$/);
     expect(() => hireCoach(state, tooDear!.id)).toThrow(/^Not enough Wages left/);
     // Spending left: the fee is paid in full when hired.
     expect(staffMoneyReason(state, 'physio', 5_000_000, 10_000_000, 2_000_000)).toBe('Not enough Spending left: the €50,000 season fee is paid when hired, you have €20,000 to spend.');
     expect(staffMoneyReason(state, 'physio', 5_000_000, 10_000_000, 6_000_000)).toBeNull();
     // A coach already working for a club, and full coaching places.
     const employed = getClubCoaching(state.coaching, state.clubs.find(club => club.id !== clubId)!.id)[0]!;
-    expect(coachHireReason(state, employed.coachId)).toBe('This coach is not available: he already works for a club.');
+    expect(coachHireReason(state, employed.coachId)).toBe('This training coach is not available: he already works for a club.');
     const cheap = () => availableCoaches(state.coaching, state).filter(coach => coachHireReason(state, coach.id) === null).sort((left, right) => left.fee - right.fee)[0];
     while (getClubCoaching(state.coaching, clubId).length < 3 && cheap()) state = hireCoach(state, cheap()!.id);
-    if (getClubCoaching(state.coaching, clubId).length === 3) expect(coachHireReason(state, availableCoaches(state.coaching, state)[0]!.id)).toBe('All three coaching places are filled. Release a coach first.');
+    if (getClubCoaching(state.coaching, clubId).length === 3) expect(coachHireReason(state, availableCoaches(state.coaching, state)[0]!.id)).toBe('All three training coach places are filled. Release a training coach first.');
   }, 300_000);
 });
 

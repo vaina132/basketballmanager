@@ -211,7 +211,7 @@ function unemployedInboxItems(season: SeasonState): InboxItem[] {
   const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? id
   const items = [...careerMoveItems(season), ...nationalInboxItems(season)], market = jobMarket(season)
   for (const vacancy of market?.vacancies ?? []) {
-    const opened = vacancy.opened === 'season' ? `${name(vacancy.clubId)}'s board replaced its coach after matchday ${vacancy.round}; an interim coach has the team.` : `${name(vacancy.clubId)}'s season ended Under pressure, so its board is replacing its coach.`
+    const opened = vacancy.opened === 'season' ? `${name(vacancy.clubId)}'s board replaced its head coach after matchday ${vacancy.round}; an interim head coach has the team.` : `${name(vacancy.clubId)}'s season ended Under pressure, so its board is replacing its head coach.`
     const until = vacancy.openUntil ? `The job stays open until ${medicalDate(vacancy.openUntil)}.` : 'The job stays open through this offseason.'
     const wanted = vacancy.offered ? `It looks for a reputation of ${vacancy.requirement} and offers you the job (yours: ${market!.reputation.value}).` : `It looks for a reputation of ${vacancy.requirement}; yours is ${market!.reputation.value}, so it is not considering you.`
     items.push({ id: `job-${vacancy.seasonNumber}-${vacancy.round}-${vacancy.clubId}`, date: vacancy.opened === 'season' ? dateForWeek(season, vacancy.seasonNumber, vacancy.round) : season.date, category: 'board', title: vacancy.offered ? `Job offer · ${name(vacancy.clubId)}` : `Job open · ${name(vacancy.clubId)}`, detail: `${opened} ${wanted} ${until}`, needsAction: vacancy.offered, target: 'jobs' })

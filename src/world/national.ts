@@ -121,7 +121,7 @@ export function createNational(seed: number, date: string): SeasonNational {
 /** The coach of a national team now. */
 export function nationalCoach(national: Pick<SeasonNational, 'coaches'>, teamId: string): NationalCoach {
   const coach = national.coaches.find(item => item.teamId === teamId);
-  if (!coach) throw new Error('This national team has no coach.');
+  if (!coach) throw new Error('This national team has no head coach.');
   return coach;
 }
 
@@ -624,7 +624,7 @@ export function commitNationalMatch(state: SeasonState): SeasonState {
 export function acceptNationalOffer(state: SeasonState, offerId: string): SeasonState {
   const national = state.national, offer = national?.offers.find(item => item.id === offerId);
   if (!national || !offer || offer.status !== 'open' || offer.expiresOn < state.date) throw new Error('This national job offer is no longer open.');
-  if (national.job) throw new Error('You already coach a national team.');
+  if (national.job) throw new Error('You are already head coach of a national team.');
   if (national.activeMatch) throw new Error('Finish the national game first.');
   const team = nationalTeam(national, offer.teamId), since = { seasonNumber: state.seasonNumber, date: state.date };
   return { ...state, national: {
@@ -646,7 +646,7 @@ export function declineNationalOffer(state: SeasonState, offerId: string): Seaso
 /** Leave the national job; the federation names a new coach. The club job is not affected. */
 export function resignNationalJob(state: SeasonState): SeasonState {
   const national = state.national, job = national?.job;
-  if (!national || !job) throw new Error('You do not coach a national team.');
+  if (!national || !job) throw new Error('You are not head coach of a national team.');
   if (national.activeMatch) throw new Error('Finish the national game first.');
   const replaced = replacementCoach(state, national, job.teamId, state.seasonNumber, state.date);
   return { ...state, national: { ...payNationalSalary(national, state.date), job: null, coaches: national.coaches.map(coach => coach.teamId === job.teamId ? replaced.coach : coach), coachCount: replaced.coachCount, events: [...national.events, { id: `national-event-resigned-s${state.seasonNumber}-${state.date}`, teamId: job.teamId, date: state.date, kind: 'resigned' as const }] } };
@@ -655,7 +655,7 @@ export function resignNationalJob(state: SeasonState): SeasonState {
 /** The manager's own picks for his national team (up to twelve players of its country); the rest is picked automatically. */
 export function setNationalSelection(state: SeasonState, playerIds: readonly string[]): SeasonState {
   const national = state.national, job = national?.job;
-  if (!national || !job) throw new Error('You do not coach a national team.');
+  if (!national || !job) throw new Error('You are not head coach of a national team.');
   if (national.activeMatch) throw new Error('Finish the national game first.');
   const country = nationalTeam(national, job.teamId).country;
   if (playerIds.length > NATIONAL_RULES.squadSize || new Set(playerIds).size !== playerIds.length || playerIds.some(id => typeof id !== 'string' || playerNationalCountry(state, id) !== country)) throw new Error(`Pick up to ${NATIONAL_RULES.squadSize} players of ${country}.`);

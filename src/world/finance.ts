@@ -206,7 +206,7 @@ export function recordTransferPayment(state: SeasonState, transfer: EmploymentTr
 /** The coach's catalog fee at the club's money level (format 62), paid when hired (nothing up front with staff contracts). */
 function coachFee(context: WorldContext & Pick<SeasonState, 'coaching'>, contract: CoachingContract): number {
   const coach = staffMember(COACH_DIRECTORY, contract.coachId);
-  if (!coach) throw new Error('The coaching fee needs a coach from the development catalog.');
+  if (!coach) throw new Error('The training coach fee needs a training coach from the development catalog.');
   return upfrontStaffFee(context, contract.clubId, coach.fee);
 }
 
@@ -222,12 +222,12 @@ export function upfrontStaffFee(context: WorldContext & Pick<SeasonState, 'coach
 /** New contracts may use cash only; mandatory existing obligations are booked during activation. */
 export function recordCoachFee(state: SeasonState, contract: CoachingContract): SeasonState {
   if (!state.finance.enabledSince) return state;
-  if (contract.seasonNumber !== state.seasonNumber || !state.coaching.contracts.some(current => current.id === contract.id && current.clubId === contract.clubId && current.coachId === contract.coachId)) throw new Error('The coaching payment must belong to a current club contract.');
+  if (contract.seasonNumber !== state.seasonNumber || !state.coaching.contracts.some(current => current.id === contract.id && current.clubId === contract.clubId && current.coachId === contract.coachId)) throw new Error('The training coach payment must belong to a current club contract.');
   const fee = coachFee(state, contract), balance = getFinanceBalance(state.finance, contract.clubId);
   if (staffCommitted(state, contract.clubId) > staffLimit(state, contract.clubId)) throw new Error('This appointment exceeds the shared staff budget.');
-  if (getTransferPaymentSummary(state, contract.clubId).overdue > 0) throw new Error('Settle overdue transfer payments before hiring a coach.');
-  if (balance.unpaid > 0 || balance.cash < fee) throw new Error('This club must settle unpaid costs and have enough cash before hiring a coach.');
-  if (getSpendableCash(state, contract.clubId) < fee) throw new Error('This club must protect remaining player wage commitments before hiring a coach.');
+  if (getTransferPaymentSummary(state, contract.clubId).overdue > 0) throw new Error('Settle overdue transfer payments before hiring a training coach.');
+  if (balance.unpaid > 0 || balance.cash < fee) throw new Error('This club must settle unpaid costs and have enough cash before hiring a training coach.');
+  if (getSpendableCash(state, contract.clubId) < fee) throw new Error('This club must protect remaining player wage commitments before hiring a training coach.');
   return book(state, contract.clubId, 'coaching', 0 - fee, `coaching-${contract.id}`, null, { contractId: contract.id, coachId: contract.coachId });
 }
 

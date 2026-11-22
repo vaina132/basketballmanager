@@ -38,7 +38,7 @@ describe('national team screens (format 80)', () => {
     expect((html.match(/data-national-player=/g) ?? []).length).toBe(12);
     expect(html).toContain('Resign');
     expect(html).toContain('Career earnings');
-    expect(renderToStaticMarkup(<NationalJobCard season={hired} onOpen={noop} />)).toContain('You still coach');
+    expect(renderToStaticMarkup(<NationalJobCard season={hired} onOpen={noop} />)).toContain('Still head coach of');
   });
 
   it('gives a manager without a club the Match center while his national game is open', () => {

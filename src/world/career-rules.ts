@@ -132,15 +132,15 @@ export function resignationsCounting(career: Pick<SeasonCareer, 'moves'> | undef
 /** Plain-English summary of the rules, shared by the Board page and the desk. */
 export const CAREER_RULES_TEXT = {
   protectedSeason: 'Your first season at a club is protected: the board will not dismiss you. If that season still ends Under pressure (below 30), you get a final warning instead, and the next season counts.',
-  freshStart: `A new coach starts with board confidence ${CAREER_RULES.freshConfidence}, whatever the previous coach left behind.`,
-  midSeason: `After a third of the regular season, a board whose confidence falls below ${CAREER_RULES.midSeasonDismissalBelow} at a review dismisses its coach at once (never in a protected first season). Rival clubs follow the same rule.`,
+  freshStart: `A new head coach starts with board confidence ${CAREER_RULES.freshConfidence}, whatever the previous head coach left behind.`,
+  midSeason: `After a third of the regular season, a board whose confidence falls below ${CAREER_RULES.midSeasonDismissalBelow} at a review dismisses its head coach at once (never in a protected first season). Rival clubs follow the same rule.`,
   seasonEnd: `A season that ends Under pressure (final confidence below ${CAREER_RULES.seasonDismissalBelow}) ends your job, unless it was your protected first season.`,
   resignation: `You can resign at any time between matches. It costs ${CAREER_RULES.resignationReputationCost} reputation points for three seasons, and you choose your next club from the jobs offered at once; there is always at least one.`,
   /** Career-3 careers (format 69). */
   resignation3: `You can resign at any time between matches. It costs ${CAREER_RULES.resignationReputationCost} reputation points for three seasons. Clubs whose board is Under pressure may offer you their job at once; you can also leave without a new job and wait for one.`,
-  unemployed: `Without a club, the career goes on: every club, including your last one, is run automatically and every competition keeps playing. Boards that change coach during a season keep the job open to you for ${CAREER_RULES.vacancyOpenWeeks} weeks, and jobs opened at a season end stay open through the offseason. A club offers you its job when your reputation reaches what it looks for.`,
+  unemployed: `Without a club, the career goes on: every club, including your last one, is run automatically and every competition keeps playing. Boards that change head coach during a season keep the job open to you for ${CAREER_RULES.vacancyOpenWeeks} weeks, and jobs opened at a season end stay open through the offseason. A club offers you its job when your reputation reaches what it looks for.`,
   fade: `While you are without a club, your reputation moves ${CAREER_RULES.unemployedFadePoints} point every ${CAREER_RULES.unemployedFadeDays / 7} weeks towards ${CAREER_RULES.unemployedReputationLevel}: a good name fades, a poor one is slowly forgotten.`,
   /** Who offers a job (browser play-through, 16 November 2026). */
   offers: `At most ${CAREER_RULES.maxJobOffers} clubs offer you their job at a time: those in the highest division first, then those looking for the strongest reputation. Reserve and B teams never offer it.`,
-  dismissal3: 'After a dismissal, only clubs that are replacing their own coach can offer you a job. You may take one or decline them all and wait without a club.',
+  dismissal3: 'After a dismissal, only clubs that are replacing their own head coach can offer you a job. You may take one or decline them all and wait without a club.',
 };

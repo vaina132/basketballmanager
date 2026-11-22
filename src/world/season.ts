@@ -543,7 +543,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.presidents !== undefined && typeof options.presidents !== 'boolean') throw new Error('Choose a valid president personalities setting.');
   if (options.presidents && !options.board) throw new Error('President personalities require board reviews.');
   if (options.staffing !== undefined && typeof options.staffing !== 'boolean') throw new Error('Choose a valid opening staff setting.');
-  if (options.staffing && (options.coaching === false || !finance)) throw new Error('Opening staff for every club require coaching and club finances.');
+  if (options.staffing && (options.coaching === false || !finance)) throw new Error('Opening staff for every club require training coaches and club finances.');
   if (options.simpleFacilities !== undefined && typeof options.simpleFacilities !== 'boolean') throw new Error('Choose a valid facilities setting.');
   if (options.simpleFacilities && !options.facilities) throw new Error('Six-level facilities and the bank loan require club facilities.');
   if (options.wagePool !== undefined && typeof options.wagePool !== 'boolean') throw new Error('Choose a valid wage budget setting.');

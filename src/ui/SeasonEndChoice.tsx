@@ -20,9 +20,9 @@ const ordinal = (position: number) => `${position}${position % 10 === 1 && posit
 
 export function offerReason(offer: ClubVacancy, reputation: number, timing?: SeasonEndOutlook['timing']): string {
   const why = offer.reason === 'change' ? 'Its board, the least confident in the league, is making a change.'
-    : timing === 'mid-season' ? 'Its board has just dismissed its coach.'
-      : timing === 'resignation' ? 'Its board is Under pressure and wants a new coach.'
-        : 'Its own season ended Under pressure, so it is replacing its coach.'
+    : timing === 'mid-season' ? 'Its board has just dismissed its head coach.'
+      : timing === 'resignation' ? 'Its board is Under pressure and wants a new head coach.'
+        : 'Its own season ended Under pressure, so it is replacing its head coach.'
   const anyway = timing === 'resignation' ? '; it offers you the job anyway' : '; it offers you the job anyway after your dismissal'
   return `${why} It looks for a reputation of ${offer.requirement}${offer.requirement > reputation ? anyway : ''}.`
 }
@@ -54,10 +54,10 @@ export function SeasonEndChoice({ season, outlook, busy = false, onChoose, onClo
   const offered = outlook.offers.length === 1 ? 'One club wants' : `${outlook.offers.length} clubs want`
   // Career-3 (format 69): offers are no longer guaranteed, and the manager may leave without a club.
   const unemployment = !!outlook.unemployment, none = !outlook.offers.length
-  const offerText = none ? 'No club that is replacing its coach wants you at the moment.' : `${offered} you.`
+  const offerText = none ? 'No club that is replacing its head coach wants you at the moment.' : `${offered} you.`
   const lead = unemployment
     ? timing === 'resignation'
-      ? `Resigning costs ${CAREER_RULES.resignationReputationCost} reputation points for three seasons, so clubs judge you at ${outlook.reputation.value}. ${none ? 'No board Under pressure wants you as its coach right now.' : `${offered} you at once.`} You can ${none ? '' : 'resign and take over there, '}resign without a new job and wait for one, or keep your job at ${current}.`
+      ? `Resigning costs ${CAREER_RULES.resignationReputationCost} reputation points for three seasons, so clubs judge you at ${outlook.reputation.value}. ${none ? 'No board Under pressure wants you as its head coach right now.' : `${offered} you at once.`} You can ${none ? '' : 'resign and take over there, '}resign without a new job and wait for one, or keep your job at ${current}.`
       : timing === 'mid-season'
         ? `The board's confidence is ${outlook.verdict.confidence}/100 after this review, below ${CAREER_RULES.midSeasonDismissalBelow}, and it has ended your job. ${offerText} ${none ? 'You continue without a club' : 'Take a job before the next games, or continue without a club'}; ${current} continues under an interim coach.`
         : `The board's season verdict is ${label} (confidence ${outlook.verdict.confidence}/100), and it has ended your job. ${offerText} ${none ? 'You continue without a club' : 'Take a job for this offseason, or continue without a club'}; ${current} continues under automatic control.`
@@ -67,7 +67,7 @@ export function SeasonEndChoice({ season, outlook, busy = false, onChoose, onClo
         ? `The board's confidence is ${outlook.verdict.confidence}/100 after this review, below ${CAREER_RULES.midSeasonDismissalBelow}, and it has ended your job. Choose your next club: you take over before the next games, and ${current} continues under an interim coach.`
         : outlook.dismissed
           ? `The board's season verdict is ${label} (confidence ${outlook.verdict.confidence}/100), and it has ended your job. Choose your next club; ${current} continues under automatic control.`
-          : `${current}'s board gives the verdict ${label} (confidence ${outlook.verdict.confidence}/100).${outlook.warning ? ' Your first season was protected, so this is a final warning instead of a dismissal: next season counts.' : ''} ${outlook.offers.length === 1 ? 'Another club wants' : `${outlook.offers.length} clubs want`} you as their next coach. Take a job, or stay at ${current}.`
+          : `${current}'s board gives the verdict ${label} (confidence ${outlook.verdict.confidence}/100).${outlook.warning ? ' Your first season was protected, so this is a final warning instead of a dismissal: next season counts.' : ''} ${outlook.offers.length === 1 ? 'Another club wants' : `${outlook.offers.length} clubs want`} you as their next head coach. Take a job, or stay at ${current}.`
   const note = timing === 'resignation'
     ? `${CAREER_RULES_TEXT.freshStart} Your first season there is protected. Contracts, staff and results stay where they are.`
     : timing === 'mid-season'

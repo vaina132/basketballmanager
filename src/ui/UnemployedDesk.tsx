@@ -86,13 +86,13 @@ export function UnemployedDesk({ season, busy, onAccept, onOpenCompetitions, onO
           const team = club(vacancy.clubId), refusal = jobRefusal(season, vacancy.clubId)
           return <li key={vacancy.clubId} data-job-club={vacancy.clubId} data-job-offered={vacancy.offered}>
             <div className="unemployed-job-club"><ClubBadge club={team} className="unemployed-club-code" fallback={team?.shortName ?? vacancy.clubId.slice(0, 3).toUpperCase()} /><div><strong>{name(vacancy.clubId)}</strong><span>{leagueOf(vacancy.clubId)} · {placeText(vacancy)} · board confidence {vacancy.confidence}</span></div></div>
-            <p>{vacancy.opened === 'season' ? 'The board replaced its coach; an interim coach has the team.' : 'Its season ended Under pressure, so the board is replacing its coach.'} It looks for a reputation of {vacancy.requirement}. {vacancy.openUntil ? <>Open until <time dateTime={vacancy.openUntil}>{medicalDate(vacancy.openUntil)}</time>.</> : 'Open through this offseason.'}</p>
+            <p>{vacancy.opened === 'season' ? 'The board replaced its head coach; an interim head coach has the team.' : 'Its season ended Under pressure, so the board is replacing its head coach.'} It looks for a reputation of {vacancy.requirement}. {vacancy.openUntil ? <>Open until <time dateTime={vacancy.openUntil}>{medicalDate(vacancy.openUntil)}</time>.</> : 'Open through this offseason.'}</p>
             <div className="unemployed-job-action"><span className="unemployed-job-status" data-state={vacancy.offered ? 'offered' : 'closed'}><Icon name={vacancy.offered ? 'check' : 'target'} size={14} />{status(vacancy)}</span>
               {vacancy.offered && <button className="button" data-accept-job={vacancy.clubId} onClick={() => onAccept(vacancy.clubId)} disabled={busy || !!refusal} aria-describedby={refusal ? `job-refusal-${vacancy.clubId}` : undefined}>Accept job</button>}
               {vacancy.offered && refusal && <small id={`job-refusal-${vacancy.clubId}`}>{refusal}</small>}
             </div>
           </li>
-        })}</ul> : <p className="unemployed-empty">No club is looking for a coach right now. Boards replace their coach after a review below {CAREER_RULES.midSeasonDismissalBelow} once a third of the season is played, and when a season ends Under pressure; those jobs appear here.</p>}
+        })}</ul> : <p className="unemployed-empty">No club is looking for a head coach right now. Boards replace their head coach after a review below {CAREER_RULES.midSeasonDismissalBelow} once a third of the season is played, and when a season ends Under pressure; those jobs appear here.</p>}
         <p className="unemployed-note">Clubs look for a reputation of {VACANCY_BASE_REQUIREMENT} for last place and {VACANCY_STEP} more for each place higher. {CAREER_RULES_TEXT.offers} {CAREER_RULES_TEXT.unemployed}</p>
       </section>
 

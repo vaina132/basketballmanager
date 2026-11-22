@@ -35,8 +35,8 @@ export function nationalInboxItems(season: SeasonState): InboxItem[] {
   }
   for (const event of national.events) {
     const text = event.kind === 'appointed' ? [`Head coach of ${name(event.teamId)}`, `You are the new head coach of ${name(event.teamId)}. Pick your squad on the National team page before each window; your club job continues as before.`]
-      : event.kind === 'resigned' ? [`You left ${name(event.teamId)}`, `You resigned as head coach of ${name(event.teamId)}. The federation has named a new coach.`]
-      : event.kind === 'dismissed' ? [`${name(event.teamId)} dismissed you`, `The ${name(event.teamId)} federation lost confidence after the results and named a new coach. Your club job is not affected.`]
+      : event.kind === 'resigned' ? [`You left ${name(event.teamId)}`, `You resigned as head coach of ${name(event.teamId)}. The federation has named a new head coach.`]
+      : event.kind === 'dismissed' ? [`${name(event.teamId)} dismissed you`, `The ${name(event.teamId)} federation lost confidence after the results and named a new head coach. Your club job is not affected.`]
       : [`${name(event.teamId)} contract ended`, `Your contract with ${name(event.teamId)} ended after the summer tournament and the federation did not renew it.`]
     items.push({ id: event.id, date: event.date, category: 'board', title: text[0]!, detail: text[1]!, needsAction: false, target: 'national' })
   }

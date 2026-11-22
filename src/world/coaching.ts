@@ -27,12 +27,12 @@ const FOCUSES: readonly TrainingFocus[] = ['balanced', ...ATTRIBUTES];
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
 const coachById = (id: string): Coach => {
   const coach = staffMember(COACH_DIRECTORY, id);
-  if (!coach) throw new Error('Choose a coach from the development staff pool.');
+  if (!coach) throw new Error('Choose a training coach from the development staff pool.');
   return coach;
 };
-function validateFocus(focus: TrainingFocus): void { if (!FOCUSES.includes(focus)) throw new Error('Choose a supported coaching assignment.'); }
+function validateFocus(focus: TrainingFocus): void { if (!FOCUSES.includes(focus)) throw new Error('Choose a supported training assignment.'); }
 function validateBoundary(seasonNumber: number, round: number): void {
-  if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || seasonNumber > 7974 || !Number.isInteger(round) || round < 1 || round > MAX_SEASON_ROUNDS) throw new Error('Choose a valid season and matchday for the coaching contract.');
+  if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || seasonNumber > 7974 || !Number.isInteger(round) || round < 1 || round > MAX_SEASON_ROUNDS) throw new Error('Choose a valid season and matchday for the training coach contract.');
 }
 
 export function coachRating(coach: Coach): number { return Math.round(ATTRIBUTES.reduce((sum, attribute) => sum + coach.skills[attribute], 0) / ATTRIBUTES.length); }
@@ -65,13 +65,13 @@ function coachAvailable(coaching: SeasonCoaching, world: Pick<CareerWorld, 'club
 
 /** The same commitment, vacancy and availability checks serve human and AI clubs. */
 function hireForClub(coaching: SeasonCoaching, clubs: readonly Team[], clubId: string, seasonNumber: number, round: number, coachId: string, focus: TrainingFocus, context: WorldContext = {}, kept = false): SeasonCoaching {
-  if (!coaching.enabledSince) throw new Error('Enable coaching staff before recruiting.');
+  if (!coaching.enabledSince) throw new Error('Enable training coaches before recruiting.');
   validateBoundary(seasonNumber, round); validateFocus(focus);
-  if (!clubs.some(club => club.id === clubId)) throw new Error('The coaching contract needs a club in this league.');
+  if (!clubs.some(club => club.id === clubId)) throw new Error('The training coach contract needs a club in this league.');
   const coach = coachById(coachId);
-  if (getClubCoaching(coaching, clubId).length >= MAX_COACHES) throw new Error('All three coaching positions are occupied.');
-  if (!coachAvailable(coaching, { ...context, clubs }, coachId, kept)) throw new Error('This coach is not available: he already works for a club.');
-  if (!usesClubLevelStaff({ coaching }) && coachingCommitted(coaching, clubId) + coach.fee > COACHING_BUDGET) throw new Error('This contract exceeds the remaining coaching budget. Released contracts remain committed for the season.');
+  if (getClubCoaching(coaching, clubId).length >= MAX_COACHES) throw new Error('All three training coach positions are occupied.');
+  if (!coachAvailable(coaching, { ...context, clubs }, coachId, kept)) throw new Error('This training coach is not available: he already works for a club.');
+  if (!usesClubLevelStaff({ coaching }) && coachingCommitted(coaching, clubId) + coach.fee > COACHING_BUDGET) throw new Error('This contract exceeds the remaining training coach budget. Released contracts remain committed for the season.');
   return { ...coaching, contracts: [...coaching.contracts, { id: `coach-s${seasonNumber}-c${coaching.contracts.length + 1}`, coachId, clubId, seasonNumber, startedRound: round, releasedRound: null, focus, renew: true }] };
 }
 
@@ -100,7 +100,7 @@ export function createCoaching(clubs: readonly Team[], seasonNumber = 1, round =
 
 export function enableCoaching(state: SeasonState): SeasonState {
   if (state.coaching.enabledSince) return state;
-  if (state.status === 'complete') throw new Error('Start the next season before enabling coaching staff.');
+  if (state.status === 'complete') throw new Error('Start the next season before enabling training coaches.');
   let next: SeasonState = { ...state, coaching: { model: 'coaching-1', enabledSince: { seasonNumber: state.seasonNumber, round: state.round }, contracts: [] } };
   for (const [index, club] of state.clubs.entries()) {
     const coach = COACH_DIRECTORY[index]!;
@@ -138,31 +138,31 @@ function hireContractForClub(state: SeasonState, clubId: string, coachId: string
 export function coachHireReason(state: SeasonState, coachId: string, clubId = state.managedClubId): string | null { return hireReason(state, coachId, clubId, false); }
 function hireReason(state: SeasonState, coachId: string, clubId: string, kept: boolean): string | null {
   const coach = staffMember(COACH_DIRECTORY, coachId);
-  if (state.status === 'complete') return 'Start the next season before recruiting a coach.';
-  if (!state.coaching.enabledSince) return 'Enable coaching staff before recruiting.';
-  if (!coach || !state.clubs.some(club => club.id === clubId)) return 'Choose a coach and club from this career.';
-  if (getClubCoaching(state.coaching, clubId).length >= MAX_COACHES) return 'All three coaching places are filled. Release a coach first.';
-  if (!coachAvailable(state.coaching, state, coachId, kept)) return 'This coach is not available: he already works for a club.';
-  if (!usesClubLevelStaff(state) && coachingCommitted(state.coaching, clubId) + coach.fee > COACHING_BUDGET) return 'This contract exceeds the remaining coaching budget. Released contracts remain committed for the season.';
+  if (state.status === 'complete') return 'Start the next season before recruiting a training coach.';
+  if (!state.coaching.enabledSince) return 'Enable training coaches before recruiting.';
+  if (!coach || !state.clubs.some(club => club.id === clubId)) return 'Choose a training coach and club from this career.';
+  if (getClubCoaching(state.coaching, clubId).length >= MAX_COACHES) return 'All three training coach places are filled. Release a training coach first.';
+  if (!coachAvailable(state.coaching, state, coachId, kept)) return 'This training coach is not available: he already works for a club.';
+  if (!usesClubLevelStaff(state) && coachingCommitted(state.coaching, clubId) + coach.fee > COACHING_BUDGET) return 'This contract exceeds the remaining training coach budget. Released contracts remain committed for the season.';
   const fee = staffFee(state, clubId, coach.fee);
   if (state.finance.enabledSince) {
     const unpaid = getFinanceBalance(state.finance, clubId).unpaid, overdue = getTransferPaymentSummary(state, clubId).overdue;
-    if (unpaid) return `Settle ${formatEuros(unpaid)} of unpaid club costs before hiring a coach.`;
-    if (overdue) return `${formatEuros(overdue)} of transfer payments is overdue. Settle it before hiring a coach.`;
+    if (unpaid) return `Settle ${formatEuros(unpaid)} of unpaid club costs before hiring a training coach.`;
+    if (overdue) return `${formatEuros(overdue)} of transfer payments is overdue. Settle it before hiring a training coach.`;
   }
   const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
-  return staffMoneyReason(state, 'coach', fee, remainingAllocation, state.finance.enabledSince ? Math.min(remainingAllocation, getSpendableCash(state, clubId)) : remainingAllocation, clubId);
+  return staffMoneyReason(state, 'training coach', fee, remainingAllocation, state.finance.enabledSince ? Math.min(remainingAllocation, getSpendableCash(state, clubId)) : remainingAllocation, clubId);
 }
 
 export function hireCoach(state: SeasonState, coachId: string, focus: TrainingFocus = 'balanced'): SeasonState {
-  if (state.status === 'complete') throw new Error('Start the next season before recruiting a coach.');
+  if (state.status === 'complete') throw new Error('Start the next season before recruiting a training coach.');
   return hireContractForClub(state, state.managedClubId, coachId, focus);
 }
 
 function managedContract(state: SeasonState, contractId: string): CoachingContract {
-  if (!state.coaching.enabledSince) throw new Error('Enable coaching staff before changing a contract.');
+  if (!state.coaching.enabledSince) throw new Error('Enable training coaches before changing a contract.');
   const contract = state.coaching.contracts.find(contract => contract.id === contractId && contract.clubId === state.managedClubId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null);
-  if (!contract) throw new Error('Choose an active coach at your club.');
+  if (!contract) throw new Error('Choose an active training coach at your club.');
   return contract;
 }
 
@@ -183,7 +183,7 @@ export function setCoachAssignment(state: SeasonState, contractId: string, focus
   return updateContract(state, { ...managedContract(state, contractId), focus });
 }
 export function setCoachRenewal(state: SeasonState, contractId: string, renew: boolean): SeasonState {
-  if (typeof renew !== 'boolean') throw new Error('Choose whether the coaching contract should renew.');
+  if (typeof renew !== 'boolean') throw new Error('Choose whether the training coach contract should renew.');
   return updateContract(state, { ...managedContract(state, contractId), renew });
 }
 

@@ -50,9 +50,9 @@ interface CareerSummary {
 function ManagerCoaching({ coaching }: { coaching: NonNullable<CareerSummary['coaching']> }) {
   const latest = coaching.seasons[0]
   return <section className="panel" aria-labelledby="manager-coaching-title" data-manager-coaching>
-    <header className="career-start-panel-heading"><h2 id="manager-coaching-title">Your coaching</h2><strong>Overall {coachOverall(coaching.attributes)}/20</strong></header>
+    <header className="career-start-panel-heading"><h2 id="manager-coaching-title">Your head coach profile</h2><strong>Overall {coachOverall(coaching.attributes)}/20</strong></header>
     <div className="manager-coaching-body"><CoachAttributeBars attributes={coaching.attributes} changes={latest?.changes} /></div>
-    <p className="career-start-subnote">Reputation {coaching.reputation}/100{coaching.bonus ? ` (coaching ${coaching.bonus > 0 ? '+' : '−'}${Math.abs(coaching.bonus)})` : ''}. Your attributes change a little each season: results against the board's hopes, trophies, young players' progress and dismissals. At most two points up and two down a season.</p>
+    <p className="career-start-subnote">Reputation {coaching.reputation}/100{coaching.bonus ? ` (head coach attributes ${coaching.bonus > 0 ? '+' : '−'}${Math.abs(coaching.bonus)})` : ''}. Your attributes change a little each season: results against the board's hopes, trophies, young players' progress and dismissals. At most two points up and two down a season.</p>
     {coaching.seasons.length ? <dl className="career-start-details">{coaching.seasons.slice(0, 5).map(season => <Fragment key={season.seasonNumber}><dt>Season {season.seasonNumber}</dt><dd>{season.reasons.length ? season.reasons.join(' ') : 'No change.'}</dd></Fragment>)}</dl> : <p className="career-start-empty">Your first change comes at the end of this season.</p>}
   </section>
 }

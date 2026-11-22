@@ -176,7 +176,7 @@ function pressDraft(state: RichContext): PressDraft | null {
     const rows = league || !world.domesticLeagues ? table() : [];
     const own = rows.find(item => item.clubId === clubId), theirs = rows.find(item => item.clubId === rival);
     const neighbours = !!own && !!theirs && own.played > 0 && Math.abs(own.position - theirs.position) === 1;
-    if (governingDerby(state.rivalries, next.homeClubId, next.awayClubId, season, next.round, world) || neighbours) candidates.push({ topic: 'rival-comments', weight: weight('rival-comments'), subjectIds: [], opponentId: rival, question: `${clubName(state, rival)}'s coach says they will beat you on ${gameDay(next.date)}. Your reply?` });
+    if (governingDerby(state.rivalries, next.homeClubId, next.awayClubId, season, next.round, world) || neighbours) candidates.push({ topic: 'rival-comments', weight: weight('rival-comments'), subjectIds: [], opponentId: rival, question: `${clubName(state, rival)}'s head coach says they will beat you on ${gameDay(next.date)}. Your reply?` });
   }
   // Topics answered recently (about the same player) wait; runs are asked at their own lengths.
   const recent = state.relationships.events.filter(event => event.type === 'press' && event.clubId === clubId && event.completedRounds < triggerAt && triggerAt - roundOrdinal(event.seasonNumber, event.triggerRound, rounds) <= rules.repeatWeeks);

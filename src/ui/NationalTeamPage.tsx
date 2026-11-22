@@ -63,7 +63,7 @@ export function NationalTeamPage({ season, busy, onSelect, onResign, onOpenCompe
         <div><span>Salary</span><strong>{formatEuros(job.salary)} a season · paid monthly</strong></div>
         <div><span>Career earnings</span><strong data-national-earnings={earnings?.total ?? 0}>{formatEuros(earnings?.total ?? 0)}</strong></div>
       </div>
-      {isUnemployed(season) && <p className="muted national-panel-body">Without a club, you still coach your national games: Continue stops for them and they open in the Match center.</p>}
+      {isUnemployed(season) && <p className="muted national-panel-body">Without a club, you are still head coach in your national games: Continue stops for them and they open in the Match center.</p>}
       <div className="national-actions"><button className="button small" onClick={() => { if (globalThis.confirm?.(`Resign as head coach of ${team.name}? Your club job is not affected.`) ?? true) onResign() }} disabled={busy}>Resign</button></div>
     </section>
 
@@ -98,7 +98,7 @@ export function NationalJobCard({ season, onOpen }: { season: SeasonState; onOpe
   const team = nationalTeam(national, job.teamId), coach = nationalCoach(national, job.teamId)
   const next = national.competitions.filter(item => item.seasonNumber === season.seasonNumber).flatMap(item => item.fixtures).filter(fixture => !fixture.result && (fixture.homeTeamId === team.id || fixture.awayTeamId === team.id)).sort((a, b) => a.date < b.date ? -1 : 1)[0]
   return <section className="panel national-job-card" aria-labelledby="national-job-card-title" data-national-job-card={team.id}>
-    <header className="season-panel-heading"><h2 id="national-job-card-title">You still coach <Nationality country={team.country} /></h2><button className="text-button" onClick={onOpen}>Open national team</button></header>
+    <header className="season-panel-heading"><h2 id="national-job-card-title">Still head coach of <Nationality country={team.country} /></h2><button className="text-button" onClick={onOpen}>Open national team</button></header>
     <div className="national-facts">
       <div><span>Federation</span><strong>{federationMood(coach.confidence)} · {coach.confidence}/100</strong></div>
       <div><span>Next game</span><strong>{next ? nationalDate(next.date) : 'None this season'}</strong></div>

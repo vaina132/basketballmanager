@@ -76,7 +76,7 @@ function OpponentCoach({ season, clubId }: { season?: SeasonState | null; clubId
   const coach = season?.coaches ? clubHeadCoach(season, clubId) : undefined
   if (!coach || coach === MANAGER_COACH) return null
   const words = styleWords(coach.style), pace = words.pace.split(',')[0]!.toLowerCase(), defence = coach.style.pressure >= 13 ? 'pressing defence' : coach.style.pressure <= 7 ? 'soft defence' : 'normal defence'
-  return <small className="desk-opponent-coach" data-opponent-coach={coach.id}>Coach {coach.name} · {pace} pace, {defence}</small>
+  return <small className="desk-opponent-coach" data-opponent-coach={coach.id}>Head coach {coach.name} · {pace} pace, {defence}</small>
 }
 
 export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenContracts, onOpenScouting, onOpenRelationships, onOpenBoard, onOpenInbox }: ManagerDeskProps) {

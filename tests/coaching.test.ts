@@ -59,7 +59,7 @@ describe('fictional coaches and contract decisions', () => {
     const full = hireCoach(hireCoach(original, 'coach-25'), 'coach-26');
     expect(getClubCoaching(full.coaching, clubId)).toHaveLength(3);
     expect(coachingCommitted(full.coaching, clubId)).toBe(11_000_000);
-    expect(() => hireCoach(full, 'coach-27')).toThrow(/three coaching positions/);
+    expect(() => hireCoach(full, 'coach-27')).toThrow(/three training coach positions/);
     expect(original).toEqual(before);
   });
 
@@ -74,7 +74,7 @@ describe('fictional coaches and contract decisions', () => {
     expect(getClubCoaching(rehired.coaching, clubId)[0]).toMatchObject({ id: 'coach-s1-c7', startedRound: 1, focus: 'passing', renew: true });
     expect(rehired.coaching.contracts[0]!.releasedRound).toBe(1);
     expect(coachingAssignments(rehired.coaching, rehired.clubs, 1, 1)![clubId]!.map(assignment => assignment.contractId)).toEqual(['coach-s1-c7']);
-    expect(() => releaseCoach(rehired, first.id)).toThrow(/active coach/);
+    expect(() => releaseCoach(rehired, first.id)).toThrow(/active training coach/);
   });
 
   it('enables and edits future staff without changing the current match, training report or sporting RNG', () => {

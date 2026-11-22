@@ -28,8 +28,10 @@ import { plain, templateParams } from './real-data-wikipedia-people.mjs';
  * Head coaches checked by hand against a current source (22 November 2026), for clubs the encyclopedias left without a
  * coach or with a stale one. `evidence` says what the source shows; `facts` replace what the coach's own pages give
  * (each stated by a named page, never guessed); `lookup: false` skips the coach-article and Wikidata searches for a name
- * too common to match safely. Still unknown on that day: MKE Ankaragücü (its coach left for Konya on 10 November 2026
- * and no successor was announced). Sites that ask AI agents not to read them were not used.
+ * too common to match safely. Still unknown on that day: MKE Ankaragücü (its coach left for Konya on 10 November 2026;
+ * searched again that evening in web search, the Turkish Wikipedia club article and the 2026-27 TBL article: no
+ * successor named; Eurobasket and Türkgün refused automated reading). Sites that ask AI agents not to read them were
+ * not used.
  */
 const CHECKED_ON = '2026-11-22';
 const CHECKED = [
@@ -38,6 +40,7 @@ const CHECKED = [
   { club: 'Juvecaserta', coach: 'Lino Lardo', source: 'https://www.legapallacanestro.com/squadra/wp/36002', evidence: 'LNP team page, staff 2026-27' },
   { club: 'Montecatini', coach: 'Marco Andreazza', source: 'https://www.legapallacanestro.com/serie-a2/la-t-tecnica-gema-montecatini?qt-squadra=5', evidence: 'LNP team staff 2026-27: coach' },
   { club: 'UEB Cividale', coach: 'Stefano Pillastrini', source: 'https://www.legapallacanestro.com/squadra/wp/1501072', evidence: 'LNP team page, staff 2026-27' },
+  { club: 'Victoria Libertas Pesaro', coach: 'Pete Strobl', source: 'https://www.victorialibertas.it/pete-strobl-e-il-nuovo-coach-della-cmt-orange-tools-pesaro/', evidence: 'club statement, 17 November 2026: "Pete Strobl è il nuovo Coach" (Giorgio Valli sacked on 15 November); LNP team page, staff 2026-27: "Allenatore Pete Strobl"', lookup: false, facts: { birthDate: '1977', nationality: 'USA', firstHeadCoachYear: 2019 } }, // the club statement: US-Austrian, born 1977, head coach at Braunschweig from 2019
   { club: 'Urania Milano', coach: 'Stefano Sacripanti', source: 'https://www.legapallacanestro.com/squadra/wp/32014', evidence: 'LNP team page, staff 2026-27 (his Wikipedia article still names Pesaro)' },
   { club: 'Vigevano', coach: 'Stefano Salieri', source: 'https://www.legapallacanestro.com/serie-a2/elachem-vigevano-1955?qt-squadra=5', evidence: 'LNP team staff 2026-27: capo allenatore' },
   { club: 'Batumi', coach: 'Anatoli Berishvili', source: 'https://basketball.eurobasket.com/team/Basketball-Club-Batumi/3543', evidence: 'Eurobasket team page: head coach 2021-27, 2026-27 staff (Flashscore agrees)' },

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArchivedFixture, SeasonFixture, SeasonState, Standing } from '../domain/season'
 import type { Team } from '../domain/types'
 import type { BackgroundLeague } from '../domain/world'
@@ -162,11 +162,19 @@ export function EuropeanLeaguesWorkspace({ season, leagueId, onLeagueChange, onO
   const all = groups.flatMap(group => group.leagues)
   const selected = all.find(league => league.id === chosen) ?? all.find(league => league.id === defaultOtherLeague(groups))
   const choose = (id: string) => { setChosen(id); onLeagueChange?.(id) }
+  // On a phone the buttons form one row that scrolls sideways: keep the chosen league in view without moving the page.
+  const row = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const container = row.current, button = container?.querySelector<HTMLElement>('.league-option.selected')
+    if (!container || !button || container.scrollWidth <= container.clientWidth) return
+    const left = button.getBoundingClientRect().left - container.getBoundingClientRect().left + container.scrollLeft, right = left + button.offsetWidth
+    if (left < container.scrollLeft || right > container.scrollLeft + container.clientWidth) container.scrollLeft = Math.max(0, left - 12)
+  }, [selected?.id])
   if (!selected) return <div className="season-workspace"><section className="panel season-intro"><p>No other league is in this career.</p></section></div>
   return <div className="season-workspace european-leagues" data-competitions-view="leagues">
     <section className="panel league-picker" aria-labelledby="league-picker-title">
       <header className="season-panel-heading"><h2 id="league-picker-title">Choose a league</h2><span>{all.length} {all.length === 1 ? 'league' : 'leagues'}</span></header>
-      <div className="league-picker-countries">{groups.map(group => {
+      <div ref={row} className="league-picker-countries">{groups.map(group => {
         const titleId = `league-country-${group.country.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
         return <div key={group.country} className="league-picker-country" role="group" aria-labelledby={titleId}>
           <h3 id={titleId}><CountryFlag country={group.country} decorative />{group.country}</h3>

@@ -59,3 +59,4 @@
 
 .payroll-salary-start{display:block;margin-top:4px;color:var(--muted);font-size:12px;line-height:1.5}
 .squad-wages{margin-top:12px;outline:none}
+.squad-wages .payroll-enabled>.payroll-overview{grid-column:1/-1}

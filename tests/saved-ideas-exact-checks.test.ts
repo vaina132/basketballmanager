@@ -5,7 +5,10 @@ import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { validateSeasonState } from '../src/storage/season-storage';
 import { sponsorClause } from '../src/world/commercial-policy';
 import { setEmploymentDelegation } from '../src/world/employment';
-import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
+import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, resignManager } from '../src/world/season';
+import { resignationOutlook } from '../src/world/career-policy';
+import { restartBoard, transferManager } from '../src/world/career';
+import { asCareer2 } from './helpers/career-rules';
 import { testWorld } from './world-fixtures';
 
 /**
@@ -80,5 +83,55 @@ describe('sponsors\' clause exits are decided again at each season end', () => {
     edited.commercial.agreements = edited.commercial.agreements.map(agreement => agreement.id === id ? { ...agreement, exit: { ...agreement.exit!, reason: 'decline' } } : agreement);
     edited.commercial.events = edited.commercial.events.map(event => event.type === 'exit' && event.agreementId === id ? { ...event, reason: 'decline' } : event);
     expect(check(edited)).toThrow(/sponsor exits the clauses decide/);
+  }, 300_000);
+});
+
+describe('a resignation takes a job offered at that point', () => {
+  it('accepts an offered job and refuses a club that made no offer', () => {
+    // Career-2 rules (format 63): a resigning manager always has an offer, at least from the least confident board.
+    let state = setEmploymentDelegation(asCareer2(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS })), true);
+    while (state.status === 'active') state = play(state);
+    const outlook = resignationOutlook(state)!;
+    expect(outlook.offers.length).toBeGreaterThan(0);
+    expect(check(resignManager(state, outlook.offers[0]!.clubId))).not.toThrow();
+    // The same move to a club that offered nothing, made with the game's own steps but without its offer check.
+    const other = state.clubs.find(club => club.id !== state.managedClubId && !outlook.offers.some(offer => offer.clubId === club.id))!;
+    const from = state.managedClubId;
+    const illegal = restartBoard(restartBoard(transferManager(state, other.id, 'resigned', 'offseason'), from, 'ai', 'offseason'), other.id, 'manager', 'offseason');
+    expect(check(illegal)).toThrow(/job offered to the resigning manager/);
+  }, 600_000);
+});
+
+describe('president requests are rebuilt from each review', () => {
+  // Adriatic Comets has the most interfering president: find a career whose first request reads the squad.
+  let asked: SeasonState | undefined, settled: SeasonState | undefined;
+  beforeAll(() => {
+    for (let seed = 1; seed <= 40 && !asked; seed += 1) {
+      let state = createSeason({ seed, managedClubId: 'adriatic-comets', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS });
+      while (state.status === 'active' && !(state.board.requests ?? []).length) state = play(state);
+      if (state.board.requests?.[0] && state.board.requests[0].kind !== 'raise-ticket-price') asked = state;
+    }
+    if (asked) { settled = asked; while (settled.status === 'active' && settled.board.requests![0]!.outcome === 'open') settled = play(settled); }
+  }, 600_000);
+
+  it('accepts the honest requests, open and settled', () => {
+    expect(asked).toBeDefined();
+    expect(check(asked!)).not.toThrow();
+    expect(check(settled!)).not.toThrow();
+  }, 300_000);
+
+  it('refuses a career that hides a request the seeded draw made', () => {
+    const edited = clone(asked!);
+    edited.board.requests = [];
+    expect(check(edited)).toThrow(/president's request at the review/);
+  }, 300_000);
+
+  it('refuses a request whose terms differ from the draw', () => {
+    const edited = clone(asked!), request = edited.board.requests![0]!;
+    if (request.kind === 'play-player') {
+      const other = edited.rosters.filter(roster => roster.clubId === request.clubId).at(-1)!.players.find(player => player.id !== request.playerId)!;
+      edited.board.requests![0] = { ...request, playerId: other.id };
+    } else edited.board.requests![0] = { ...request, position: request.position === 'C' ? 'PG' : 'C' };
+    expect(check(edited)).toThrow(/seeded draw picks/);
   }, 300_000);
 });

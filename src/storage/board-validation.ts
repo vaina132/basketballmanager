@@ -7,12 +7,12 @@ import { validationReplayCache } from './replay-cache';
 import { dateForRound } from '../world/season';
 import { openingSponsorshipClubs } from '../world/commercial-policy';
 import { fundingSourceId } from '../world/finance';
-import { fullWorldClubsIn, roundKey, roundOrdinal, seasonRounds } from '../world/career-world';
+import { fullWorldClubsIn, roundKey, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
 import { prefixPlan, recall, remember } from './trusted-prefix';
 import { financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
 import { boardDebtImpacts } from '../world/facility-debt';
-import { PRESIDENT_RULES, usesPresidentBoard } from '../world/presidents';
-import { REQUEST_KINDS } from '../world/board-requests';
+import { PRESIDENT_RULES, presidentTraits, usesPresidentBoard } from '../world/presidents';
+import { REQUEST_KINDS, requestDraw, requestStatus, type RequestState, type RequestTerms } from '../world/board-requests';
 import { managedClubAtRound } from '../world/career';
 import { maxTicketPriceFor, TICKET_PRICE_STEP } from '../world/finance';
 import { SEALED_HISTORY_FORMAT, withoutCountedGames } from '../world/sealed-history';
@@ -77,7 +77,7 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard, 
 const REQUEST_KEYS = ['id', 'clubId', 'kind', 'seasonNumber', 'round', 'date', 'deadlineRound', 'outcome', 'resolvedRound'] as const;
 const REQUEST_TERMS: Readonly<Record<BoardRequest['kind'], readonly string[]>> = { 'raise-ticket-price': ['ticketPrice'], 'sign-player': ['position'], 'play-player': ['playerId', 'minutes'] };
 
-/** Format 70 (board-2): basic checks of the president's requests; review replays then apply their recorded outcomes. */
+/** Format 70 (board-2): shape checks of the president's requests; the review replay then rebuilds them (`replayRequests`). */
 function validateBoardRequests(state: SeasonState, raw: unknown): BoardRequest[] {
   if (!Array.isArray(raw) || raw.length > PRESIDENT_RULES.requests.maxPerSeason * state.seasonNumber) fail('board.requests', 'must be a bounded list');
   const rules = PRESIDENT_RULES.requests, rounds = seasonRounds(state);
@@ -119,6 +119,47 @@ function validateBoardRequests(state: SeasonState, raw: unknown): BoardRequest[]
   }
   if (open > 1) fail('board.requests', 'can hold one open request at a time');
   return raw as BoardRequest[];
+}
+
+/**
+ * Format 70 (exact since 22 November 2026): the president's requests at one rebuilt review, as `processBoardRound` makes
+ * them. Open requests are settled first (met, withdrawn, or ignored at the deadline), then the seeded draw may ask the
+ * manager's club for something. Everything is rebuilt from registrations, results and injuries, except what reads the
+ * ticket plan of that moment, which the save does not journal: a ticket request's price and outcome stay as recorded
+ * (bounded by `validateBoardRequests`), and the kind draw may count a ticket request or not.
+ */
+function replayRequests(state: SeasonState, asked: BoardRequest[], recorded: readonly BoardRequest[], context: BoardCalculationContext, round: number, mandate: BoardMandate): BoardRequest[] {
+  const year = context.seasonNumber, since = state.recruitment?.enabledSince;
+  const recruitment = since && roundKey(since.seasonNumber, since.round) <= roundKey(year, round) ? state.recruitment : undefined;
+  const view = (list: BoardRequest[]): RequestState => ({ ...context, board: { ...context.board, requests: list }, seed: state.seed, ...(recruitment ? { recruitment } : {}) }) as unknown as RequestState;
+  const settled = asked.map((request): BoardRequest => {
+    if (request.outcome !== 'open' || request.seasonNumber !== year || round <= request.round) return request;
+    if (request.kind === 'raise-ticket-price') {
+      const stored = recorded.find(item => item.id === request.id);
+      if (stored?.outcome === 'withdrawn') fail(`board.requests[${recorded.indexOf(stored)}]`, 'cannot be withdrawn: only a request for minutes ends when its player leaves');
+      return stored && stored.outcome !== 'open' && stored.resolvedRound === round ? { ...request, outcome: stored.outcome, resolvedRound: round } : request;
+    }
+    const status = requestStatus(view(asked), request);
+    if (status) return { ...request, outcome: status, resolvedRound: round };
+    return round >= request.deadlineRound ? { ...request, outcome: 'ignored', resolvedRound: round } : request;
+  });
+  const clubId = managedClubAtRound(state, year, round);
+  if (!mandate.clubs[clubId]?.games) return settled;
+  const draw = requestDraw(view(settled), clubId, presidentTraits(worldOf(state), clubId).interference);
+  const stored = recorded.find(item => item.seasonNumber === year && item.round === round);
+  const path = stored ? `board.requests[${recorded.indexOf(stored)}]` : 'board.requests';
+  if (!draw) { if (stored) fail(path, 'must follow the president\'s seeded draw at its review'); return settled; }
+  const pick = (candidates: readonly RequestTerms[]) => candidates.length ? candidates[draw.kindHash % candidates.length]! : null;
+  // Without a ticket request (no ticket plan, or the price already at its maximum), or with one in first place.
+  const options = [pick(draw.squad), draw.ticketPlan ? pick([{ kind: 'raise-ticket-price' }, ...draw.squad]) : null];
+  if (!stored) {
+    if (draw.squad.length) fail(path, `must record the president's request at the review of week ${round} of season ${year}`);
+    return settled;
+  }
+  const same = (option: RequestTerms | null) => !!option && option.kind === stored.kind && (option.kind === 'raise-ticket-price' || (option.kind === 'sign-player' ? option.position === stored.position : option.playerId === stored.playerId && option.minutes === stored.minutes));
+  if (!options.some(same)) fail(path, 'must ask what the president\'s seeded draw picks at its review');
+  const terms: RequestTerms = stored.kind === 'raise-ticket-price' ? { kind: stored.kind, ticketPrice: stored.ticketPrice! } : stored.kind === 'sign-player' ? { kind: stored.kind, position: stored.position! } : { kind: stored.kind, playerId: stored.playerId!, minutes: stored.minutes! };
+  return [...settled, { id: `board-request-${settled.length + 1}`, clubId, ...terms, seasonNumber: year, round, date: context.date, deadlineRound: draw.deadlineRound, outcome: 'open', resolvedRound: null }];
 }
 
 /** The review follows mandatory costs and due fees, before later AI hires or offseason decisions. */
@@ -216,10 +257,12 @@ export function validateBoard(state: SeasonState, version: number): void {
   // are unchanged (the latest is still rewritten, format 73), so the current season's replay resumes where the trusted
   // check reached it, with its objective; later reviews are rebuilt from contexts of this state, as in a full check.
   const plan = version >= SEALED_HISTORY_FORMAT ? prefixPlan('board.reviews', source.reviews, review => roundKey(review.seasonNumber, review.round + 1)) : { skip: 0, record: -1 };
-  interface Resume { board: SeasonBoard; mandateIndex: number; reviewIndex: number; previous: BoardAnchor; expected: BoardMandate; round: number }
+  interface Resume { board: SeasonBoard; mandateIndex: number; reviewIndex: number; previous: BoardAnchor; expected: BoardMandate; round: number; asked: BoardRequest[] }
   const saved = plan.skip > 0 ? recall<Resume>('board.reviews', 'replay') : undefined;
   const resume = saved && saved.reviewIndex === plan.skip ? saved : undefined;
   if (resume) ({ board, mandateIndex, reviewIndex, previous } = resume);
+  // Format 70: the president's requests rebuilt so far (`replayRequests`); earlier seasons' as recorded.
+  let asked: BoardRequest[] = resume?.asked ?? [];
   for (let year = resume ? state.seasonNumber : enabled.seasonNumber; year <= state.seasonNumber; year += 1) {
     const first = year === enabled.seasonNumber;
     const startsRound = first ? enabled.round + Number(!activation.includeCurrentRound) : 1;
@@ -262,8 +305,9 @@ export function validateBoard(state: SeasonState, version: number): void {
     board = { ...board, mandates: [...board.mandates, expected] }; mandateIndex += 1;
     }
     const through = year === state.seasonNumber ? state.status === 'complete' ? seasonRounds(state) : state.round - 1 : seasonRounds(state);
+    if (requests && !resumed) asked = requests.filter(request => request.seasonNumber < year);
     for (let round = resumed ? resumed.round : startsRound; round <= through; round += 1) {
-      if (year === state.seasonNumber && reviewIndex === plan.record) remember('board.reviews', 'replay', { board, mandateIndex, reviewIndex, previous, expected, round } satisfies Resume);
+      if (year === state.seasonNumber && reviewIndex === plan.record) remember('board.reviews', 'replay', { board, mandateIndex, reviewIndex, previous, expected, round, asked } satisfies Resume);
       const reviewPath = `board.reviews[${reviewIndex}]`;
       const reviewRaw = record(source.reviews[reviewIndex], reviewPath, [...ANCHOR_KEYS, 'id', 'mandateId', 'clubs']);
       const reviewAnchor = checkAnchor(Object.fromEntries(ANCHOR_KEYS.map(key => [key, reviewRaw[key]])), reviewPath, 'review');
@@ -283,7 +327,9 @@ export function validateBoard(state: SeasonState, version: number): void {
       if (Object.values(reviewRaw.clubs as Record<string, object>).every(club => !Object.hasOwn(club, 'fixtureIds'))) review = withoutCountedGames([review])[0]!;
       if (!equal(reviewRaw, review)) fail(reviewPath, 'must exactly reproduce results, inherited costs, injury context and bounded confidence');
       board = { ...board, reviews: [...board.reviews, review] }; reviewIndex += 1;
+      if (requests) asked = replayRequests(state, asked, requests, context, round, expected);
     }
+    if (requests && !equal(asked.filter(request => request.seasonNumber === year), requests.filter(request => request.seasonNumber === year))) fail('board.requests', `must exactly match the requests rebuilt from the reviews of season ${year}`);
   }
   if (consequences && fields.consequencesSince !== null) {
     const since = checkAnchor(fields.consequencesSince, 'board.consequencesSince', 'activation');

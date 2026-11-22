@@ -3,7 +3,7 @@ import type { AssistantCoach, AssistantContract, AssistantHireQuote } from '../d
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { getFinanceBalance } from './finance';
-import { remainingStaffBudget, staffAllocation, staffCommitted, staffMoneyReason } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason } from './staff-policy';
 import { staffMarketWorld } from './staff-levels';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { seasonRounds, worldOf } from './career-world';
@@ -25,7 +25,8 @@ export function availableAssistants(state: Pick<SeasonState, 'assistant' | 'seas
   const employed = new Set(state.assistant.contracts.filter(contract => contract.seasonNumber === state.seasonNumber && contract.releasedRound === null).map(contract => contract.assistantId));
   return staffMarket(ASSISTANT_DIRECTORY, staffMarketWorld(state)).filter(coach => !employed.has(coach.id));
 }
-export function quoteAssistantHire(state: SeasonState, assistantId: string, clubId = state.managedClubId): AssistantHireQuote {
+/** `kept`: a season-opening renewal, which only needs the assistant free in careers with staff contracts (`staffCanJoin`). */
+export function quoteAssistantHire(state: SeasonState, assistantId: string, clubId = state.managedClubId, kept = false): AssistantHireQuote {
   const coach = staffMember(ASSISTANT_DIRECTORY, assistantId);
   const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
@@ -35,7 +36,7 @@ export function quoteAssistantHire(state: SeasonState, assistantId: string, club
   else if (state.status !== 'active' || state.round === seasonRounds(state) && state.activeMatch?.status === 'finished') reason = 'No match advice remains this season. Recruit an assistant when the next season starts.';
   else if (!state.clubs.some(club => club.id === clubId) || !coach) reason = 'Choose an assistant coach and club from this career.';
   else if (getClubAssistant(state, clubId)) reason = 'The assistant-coach position is already occupied.';
-  else if (!availableAssistants(state).some(available => available.id === assistantId)) reason = 'This assistant coach already has an active club contract.';
+  else if (!staffCanJoin(state, kept, state.assistant.contracts.some(contract => contract.assistantId === assistantId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null), () => availableAssistants(state).some(available => available.id === assistantId))) reason = 'This assistant coach already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring an assistant coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring an assistant coach.';
   else reason = staffMoneyReason(state, 'assistant coach', staffFee(state, clubId, coach.fee), remainingAllocation, remainingBudget, clubId);

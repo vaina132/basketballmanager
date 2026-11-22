@@ -22,8 +22,8 @@ export function enablePhysio(state: SeasonState, opening = false): SeasonState {
   // The career's opening staff are held, not hired: Spending left does not decide them (format 76).
   return keepingHeldStaff(() => recruitAiPhysios({ ...state, physio: { ...state.physio, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
 }
-function hireForClub(state: SeasonState, physioId: string, clubId: string): SeasonState {
-  const quote = quotePhysioHire(state, physioId, clubId);
+function hireForClub(state: SeasonState, physioId: string, clubId: string, kept = false): SeasonState {
+  const quote = quotePhysioHire(state, physioId, clubId, kept);
   if (!quote.canHire) throw new Error(quote.reason!);
   const contract: PhysioContract = { id: `physio-contract-${state.physio.contracts.length + 1}`, physioId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: financeLedgerCount(state.finance) };
   return recordPhysioFee({ ...state, physio: { ...state.physio, contracts: [...state.physio.contracts, contract] } }, contract);
@@ -75,7 +75,7 @@ function renewPhysio(state: SeasonState): SeasonState {
   if (!state.physio.enabledSince) return state;
   let next = state;
   for (const contract of state.physio.contracts.filter(contract => contract.seasonNumber === state.seasonNumber - 1 && contract.releasedRound === null && contract.renew)) {
-    if (quotePhysioHire(next, contract.physioId, contract.clubId).canHire) next = hireForClub(next, contract.physioId, contract.clubId);
+    if (quotePhysioHire(next, contract.physioId, contract.clubId, true).canHire) next = hireForClub(next, contract.physioId, contract.clubId, true);
   }
   return next;
 }

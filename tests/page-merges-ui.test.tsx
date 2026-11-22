@@ -98,7 +98,9 @@ describe('the merged pages keep their controls in their new tabs', () => {
   });
 
   it('Staff: one list; each current person has the contract end, Replace and Release, and vacancies lead to candidates', () => {
-    const html = renderToStaticMarkup(<StaffWorkspace season={opening} role="coaches" onRoleChange={noop} onEnable={noop} onHire={noop} onRelease={noop} onAssignment={noop} onRenewal={noop} onOpenTraining={noop} onHireScout={noop} onHireFitness={noop} onHirePhysio={noop} onHireAssistant={noop} onHireYouthCoach={noop} />);
+    // Only the training-coach role is shown; the other roles' handlers are not called while rendering.
+    const props = { season: opening, role: 'coaches', onRoleChange: noop, onEnable: noop, onHire: noop, onRelease: noop, onAssignment: noop, onRenewal: noop, onOpenTraining: noop, onHireScout: noop, onHireFitness: noop, onHirePhysio: noop, onHireAssistant: noop, onHireYouthCoach: noop } as unknown as Parameters<typeof StaffWorkspace>[0];
+    const html = renderToStaticMarkup(<StaffWorkspace {...props} />);
     expect(html).not.toContain('Current staff');
     expect(html).not.toContain('staff-overview');
     const cards = html.match(/data-release-coach="/g) ?? [];

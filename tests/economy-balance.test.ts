@@ -48,7 +48,7 @@ describe('the economy balance option (format 87)', () => {
     expect(() => createSeason({ seed: 3, world, economyBalance: 'yes' as unknown as boolean })).toThrow(/club money setting/);
     expect(usesEconomyBalance({ world: { ...DEVELOPMENT_WORLD, economyBalance: true } })).toBe(false);
     const envelope = JSON.parse(serializeSeason(state));
-    envelope.formatVersion = 85; envelope.state.schemaVersion = 85;
+    envelope.formatVersion = 86; envelope.state.schemaVersion = 86;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/economyBalance.*format 87/);
   });
 

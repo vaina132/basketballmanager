@@ -193,7 +193,9 @@ describe('a manager appointed by a club promoted from the next division', () => 
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      let state = setEmploymentDelegation(createSeason({ seed: 58, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+      // Stopgap (formats 86/87 merged): seed 58 was found with the economy balance but without steering head coaches;
+      // re-seed with both before release.
+      let state = setEmploymentDelegation(createSeason({ seed: 58, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, coachSteering: false }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       const priced = getPostseasons(state, 1)[0]!.outcome.relegated.map(entry => entry.clubId).find((id): id is string => id !== null)!;

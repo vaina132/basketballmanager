@@ -34,7 +34,7 @@ const SKIP_LEAGUE_LOGOS = new Set([102])
 const MANUAL = { 'LDLC ASVEL': 26, 'Champagne Basket': 12, 'Stade Rochelais': 2311, Juvecaserta: 704 }
 
 const STOP = new Set(['bc', 'bk', 'kk', 'sk', 'ks', 'cb', 'cd', 'ab', 'as', 'asd', 'ssd', 'sad', 'sa', 'fc', 'gs', 'bsk', 'jsk', 'basket', 'basketball', 'basketbol', 'baloncesto', 'pallacanestro', 'club', 'de', 'del', 'la', 'el', 'the', 'and', 'b', 'c', 'spor', 'kulubu', 'kulübü'])
-const plain = text => text.toLowerCase().replace(/ı/g, 'i').replace(/ß/g, 'ss').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+const plain = text => text.toLowerCase().replace(/ı/g, 'i').replace(/ß/g, 'ss').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
 const tokens = text => plain(text).split(' ').filter(token => token && !STOP.has(token))
 const bigrams = text => { const s = tokens(text).join(''), out = new Map(); for (let i = 0; i < s.length - 1; i += 1) { const g = s.slice(i, i + 2); out.set(g, (out.get(g) ?? 0) + 1) } return out }
 function dice(a, b) {
@@ -105,8 +105,8 @@ if (download) {
     writeFileSync(file, Buffer.from(await response.arrayBuffer()))
     return true
   }
-  // 96x96, transparent padding, small WebP.
-  const toWebp = (source, target) => execFileSync('convert', [source, '-background', 'none', '-resize', '96x96', '-gravity', 'center', '-extent', '96x96', '-strip', '-quality', '82', '-define', 'webp:alpha-quality=90', target])
+  // Trimmed of empty margins, fitted into 96x96 with transparent padding, small WebP.
+  const toWebp = (source, target) => execFileSync('convert', [source, '-trim', '+repage', '-background', 'none', '-resize', '96x96', '-gravity', 'center', '-extent', '96x96', '-strip', '-quality', '82', '-define', 'webp:alpha-quality=90', target])
   const clubLogos = {}, competitionLogos = {}, missing = []
   const ordered = [...rows].sort((a, b) => a.club.localeCompare(b.club)), sources = new Map(), digests = new Map()
   for (const row of ordered) {

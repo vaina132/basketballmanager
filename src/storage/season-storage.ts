@@ -3669,10 +3669,13 @@ export function serializeSeason(state: SeasonState): string {
  * Format 40's compact layout (`compact-json.ts`): repeated field names and long identifiers are stored once, which
  * makes a real 18-club season about 30% of the plain size. Local saves, checkpoints and exported files use it.
  */
-export function serializeSeasonCompact(state: SeasonState, options: { check?: boolean } = {}): string {
-  // Development mode (owner, 15 November 2026): the game's own checkpoints skip the full career check (`check: false`);
-  // imported files still get it when they are read.
-  if (options.check !== false) validateSeasonState(state);
+export function serializeSeasonCompact(state: SeasonState): string {
+  validateSeasonState(state);
+  return encodeSeasonCompact(state);
+}
+
+/** The compact encoding alone, for a state the caller has just checked (`serializeCheckpoint`). */
+function encodeSeasonCompact(state: SeasonState): string {
   // Format 73: the finance ledger is packed losslessly (`save-packing.ts`) and written in the compact-3 layout.
   const { strings, shapes, nodes, value } = compactJson3(packSeasonForSave(state));
   const envelope = { format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', encoding: COMPACT_JSON_3_ENCODING, strings, shapes, nodes, state: value };
@@ -3729,7 +3732,7 @@ export function resetCheckpointTrust(): void { lastCheckpoint = null; }
 /** Check a checkpoint of the game's own state (incrementally when possible), then encode it like `serializeSeasonCompact`. */
 export function serializeCheckpoint(state: SeasonState): string {
   checkCheckpointState(state);
-  return serializeSeasonCompact(state, { check: false });
+  return encodeSeasonCompact(state);
 }
 
 /** Old schemas had immutable pack rosters; ownership is recoverable, discarded box scores are not. */

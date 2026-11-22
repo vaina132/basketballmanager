@@ -127,6 +127,45 @@ describe('sealed academy history (format 73)', () => {
     rejected(changed);
   });
 
+  // A kept full report is rebuilt from its prior points, instruction, staff and availability.
+  const earned = report => Object.keys(report.gains).find(key => report.gains[key] > 0 && report.pointsBefore[key] > 0);
+  it.each([
+    ['changed gains', report => { report.gains[earned(report)] += 1; }],
+    ['changed earlier points', report => { const key = earned(report); report.pointsBefore[key] -= 1; report.gains[key] += 1; }],
+    ['changed coaching gains', report => { report.coachingGains[earned(report)] += 1; }],
+    ['changed availability', report => { report.availability.availableDays -= 1; }],
+    ['removed gains', report => { delete report.gains; }],
+    ['another valid instruction', report => { report.focus = report.focus === 'passing' ? 'defense' : 'passing'; }],
+  ])('rejects a sealed full report with %s', (_label, damage) => {
+    for (const id of [rivalId, ownId]) {
+      const changed = structuredClone(opening), report = changed.academy.weeks[finalWeek].players[id];
+      expect(earned(report)).toBeDefined();
+      validateSeasonState(changed);
+      damage(report);
+      rejected(changed);
+    }
+  });
+
+  it('checks the managed club\'s youth conditions in a kept report; other clubs\' come from deleted player lines', () => {
+    const own = structuredClone(opening), ownReport = own.academy.weeks[finalWeek].players[ownId];
+    ownReport.availability.conditionAfter = ownReport.availability.conditionAfter === 100 ? 99 : 100;
+    rejected(own);
+    const rival = structuredClone(opening), rivalReport = rival.academy.weeks[finalWeek].players[rivalId];
+    rivalReport.availability.conditionAfter = rivalReport.availability.conditionAfter === 100 ? 99 : 100;
+    expect(parseSeason(currentSeasonFile(rival))).toEqual(rival);
+  });
+
+  it.each([
+    ['final week\'s staff removed', state => { state.academy.weeks[finalWeek].coaches = {}; }],
+    ['final week\'s staff copied into an earlier week', state => { state.academy.weeks[summarizedWeek].coaches = structuredClone(state.academy.weeks[finalWeek].coaches); }],
+    ['last report moved into an earlier week', state => { const weeks = state.academy.weeks; weeks[summarizedWeek].players[rivalId] = weeks[finalWeek].players[rivalId]; delete weeks[finalWeek].players[rivalId]; }],
+    ['last report copied into an earlier week', state => { const weeks = state.academy.weeks; weeks[summarizedWeek].players[rivalId] = structuredClone(weeks[finalWeek].players[rivalId]); }],
+  ])('rejects a sealed season with its %s', (_label, damage) => {
+    const changed = structuredClone(opening);
+    damage(changed);
+    rejected(changed);
+  });
+
   it('rebuilds the latest completed season\'s board history beside its sealed academy weeks', () => {
     const reviews = opening.board.reviews;
     expect(reviews.some(review => review.seasonNumber === 1)).toBe(true);

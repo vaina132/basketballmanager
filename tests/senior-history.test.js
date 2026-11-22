@@ -20,7 +20,9 @@ beforeAll(() => {
     const text = gunzipSync(bytes).toString('utf8'), original = JSON.parse(text);
     expect(original.formatVersion).toBe(44);
     const full = { ...original.state, schemaVersion: SEASON_SCHEMA_VERSION };
-    validateSeasonState(full);
+    // Since save checks version 6 a current-format save keeps its completed seasons' youth games and academy weeks
+    // sealed (format 73), as a rollover leaves them.
+    validateSeasonState(sealCompletedHistory(full));
     cases.push({ file: row.file, text, full, summarized: parseSeason(text) });
   }
 }, 120_000);
@@ -51,7 +53,8 @@ describe('completed senior season summaries', () => {
 
   it('shrinks the retained season while preserving the full source object', () => {
     const { full, summarized } = opening(), before = structuredClone(full);
-    expect(serializeSeasonCompact(summarized).length).toBeLessThan(serializeSeasonCompact(full).length);
+    // The unsealed source is no longer a valid current-format save (save checks version 6), so compare plain JSON.
+    expect(JSON.stringify(summarized).length).toBeLessThan(JSON.stringify(full).length);
     // Format 73: the upgraded career's completed youth and academy seasons are sealed as a rollover would do.
     expect(sealCompletedHistory(summarizeSeniorHistory(full))).toEqual(summarized);
     expect(full).toEqual(before);

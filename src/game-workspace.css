@@ -184,3 +184,5 @@
 .nationality-compact .nationality-emoji { font-size: 13px; }
 .transfers-player .nationality-compact { margin: 0 6px 0 0; }
 .profile-nationality { margin: 4px 0 0; font-size: 13px; color: var(--text); }
+/* Format 78: the scouting network note on Staff > Scouts. */
+.scout-network-note { display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 14px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border); }

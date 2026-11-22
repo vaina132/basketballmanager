@@ -28,6 +28,12 @@ import { ReleaseClauseValue, transferEntryQuote } from './ReleaseClause'
 import { PlayerRating } from './PlayerRating'
 import { GeneratedTag } from './GeneratedTag'
 import { ContractDelegation, ContractsEnablePanel } from './contract-panels'
+import type { ReactNode } from 'react'
+import { scoutingQuoter, scoutNetworkRange, usesScoutNetwork } from '../world/scouting-policy'
+import { getScoutingDiscovery } from '../world/scouting-discovery'
+import { getClubScouts } from '../world/scout-policy'
+import { getClubListings, usesPlayerListings } from '../world/listings'
+import type { ListingChoice } from './PlayerListingControl'
 import { DEFAULT_TRANSFER_FILTERS, filterTransferRows, getTransferSearch, sortTransferRows, type TransferRowKind, type TransferSearchFilters, type TransferSort } from './transfer-search'
 import './transfers-workspace.css'
 import { formatEuros } from './money-format'
@@ -56,9 +62,21 @@ interface TransfersWorkspaceProps {
   onShortlist: (playerId: string, shortlisted: boolean) => void
   /** Squad > Contracts: renewals, contract ends and requests of the own squad. */
   onOpenContracts: () => void
-  /** The Scouting page, where scouts widen the range this search covers. */
+  /** The Scouting tab, where reports, the shortlist and observations live. */
   onOpenScoutingPage: () => void
+  /** Owner feedback (22 November 2026): scouting lives inside Transfers as a tab. */
+  tab?: TransfersTab
+  onTabChange?: (tab: TransfersTab) => void
+  scouting?: ReactNode
+  /** One click: queue a scout report on a player. */
+  onScout?: (playerId: string) => void
+  /** Staff > Scouts, where scouts are hired. */
+  onOpenScouts?: () => void
+  /** Format 78: change a player's transfer or loan listing. */
+  onListing?: (playerId: string, choice: ListingChoice) => void
 }
+
+export type TransfersTab = 'search' | 'scouting'
 
 const money = (cents: number) => formatEuros(cents)
 const seasonLabel = (number: number) => number > MAX_SEASON_NUMBER ? 'Calendar limit' : supportedSeasonLabel(number)
@@ -76,7 +94,7 @@ interface RowAction { label: string; disabled: boolean; reason: string | null; o
  * Transfers (owner, 16 November 2026): a player search to bring players in, with the shortlist beside it. Offers for
  * your players, your open offers and sales stay below; the own squad's contracts are on Squad > Contracts.
  */
-export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotiations, onEnableInSeason, onEnableInSeasonTransfers, onInSeasonTransferOffer, onInSeasonClubDecision, onInSeasonOffer, onWithdrawInSeasonOffer, onOpenMatch, onOpenAcademy, onEnableMarket, onWithdrawOffer, onDelegation, onOffer, onClubDecision, focusedPlayerId, onClearFocusedPlayer, onOpenScouting, onShortlist, onOpenContracts, onOpenScoutingPage }: TransfersWorkspaceProps) {
+export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotiations, onEnableInSeason, onEnableInSeasonTransfers, onInSeasonTransferOffer, onInSeasonClubDecision, onInSeasonOffer, onWithdrawInSeasonOffer, onOpenMatch, onOpenAcademy, onEnableMarket, onWithdrawOffer, onDelegation, onOffer, onClubDecision, focusedPlayerId, onClearFocusedPlayer, onOpenScouting, onShortlist, onOpenContracts, onOpenScoutingPage, tab = 'search', onTabChange, scouting, onScout, onOpenScouts, onListing }: TransfersWorkspaceProps) {
   const [filters, setFilters] = useState<TransferSearchFilters>(DEFAULT_TRANSFER_FILTERS)
   const [shown, setShown] = useState(PAGE_SIZE)
   const [offerId, setOfferId] = useState<string | null>(null)
@@ -118,6 +136,19 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
   const focusedResponse = focused ? getLatestNegotiation(season, focused.id) : null
   const focusedOffer = focused ? (focusedInSeason ? inSeasonOffers : openOffers).find(offer => offer.playerId === focused.id) : null
   const shortlist = season.scouting.clubs[club.id]!.shortlist
+  // Owner feedback (22 November 2026): one click queues a scout report; it arrives after the next matchday.
+  const network = usesScoutNetwork(season) && season.scouting.enabledSince !== null
+  const scoutCount = season.scouts.enabledSince ? getClubScouts(season, club.id).length : 0
+  const quoter = useMemo(() => scoutingQuoter(season), [season])
+  const queued = new Set(season.scouting.clubs[club.id]!.assignments.map(assignment => assignment.playerId))
+  const listings = getClubListings(season)
+  function scoutButton(playerId: string) {
+    if (!onScout || season.scouting.enabledSince === null) return null
+    const name = getCareerPlayer(season, playerId).name
+    if (queued.has(playerId)) return <span className="transfer-scout-queued" data-transfer-scouting={playerId}><Icon name="clock" size={13} />Report after next match</span>
+    const quote = quoter(playerId)
+    return <button className="text-button transfer-scout" data-transfer-scout={playerId} aria-label={`Scout ${name}`} title={quote.reason ?? 'A scout watches his next match; the report sharpens his ratings.'} onClick={() => onScout(playerId)} disabled={disabled || !quote.canAssign}><Icon name="search" size={13} />Scout</button>
+  }
   const scoutingEnabled = season.scouting.enabledSince !== null
   // Decisions that must not be missed below the search: offers for your players and counteroffers to your offers.
   const incoming = season.status === 'active' ? getInSeasonOffers(season).filter(offer => offer.status === 'club-review' && offer.transfer?.sellerClubId === club.id).length : marketOpen ? getLiveMarketOffers(season).filter(offer => offer.status === 'club-review' && offer.transfer?.sellerClubId === club.id).length : 0
@@ -206,7 +237,8 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
     {focused && focusedQuote && <section ref={focusedReport} id="transfer-player-review" className="transfer-player-review panel" tabIndex={-1} aria-labelledby="transfer-player-review-title" data-transfer-focus={focused.id} onKeyDown={event => { if (event.key === 'Escape' && !disabled) { event.preventDefault(); event.stopPropagation(); closeFocusedReview() } }}><header className="transfers-heading"><div><h2 id="transfer-player-review-title">{focused.name}</h2><span>{getPlayerRetirement(season, focused.id).status === 'retired' ? 'Retired player' : season.clubs.find(team => team.players.some(player => player.id === focused.id))?.name ?? 'Free agent'} · {focused.position} · {focused.heightCm} cm</span></div><button className="text-button" aria-label="Close player contract review" onClick={closeFocusedReview} disabled={disabled}><Icon name="close" size={14} />Close</button></header><div className="transfer-player-review-body"><PlayerCareerStatus season={season} playerId={focused.id} /><ScoutingKnowledge knowledge={getPlayerKnowledge(season, focused.id)} position={focused.position} /><div className="transfer-player-review-actions">{getPlayerRetirement(season, focused.id).status !== 'retired' && <p>{negotiations ? 'Opening demand · one season' : 'Requested annual wage'} <strong>{money(contractAskingWage(season, season.managedClubId, focused.id))}</strong></p>}{focusedResponse && (!datedMarket || season.status !== 'complete' || focusedOffer?.status === 'countered') && <p className="transfer-latest-response">Latest reply: <strong>{negotiationOutcome(focusedResponse)}</strong></p>}<button id="transfer-focused-offer" className="button primary" onClick={() => focusedInSeason ? setInSeasonPlayerId(focused.id) : openOffer(focused.id)} disabled={disabled || !focusedQuote.canOffer && !focusedOffer} aria-describedby={focusedQuote.reason ? 'transfer-focused-reason' : undefined}>{getPlayerRetirement(season, focused.id).status === 'retired' ? 'Retired' : focusedOffer ? 'Review offer' : focusedInSeasonPaid ? 'Offer transfer' : focusedInSeason ? 'Sign for this season' : focusedTransfer ? 'Offer transfer' : 'Offer contract'}</button>{focusedQuote.reason && <p id="transfer-focused-reason">{focusedQuote.reason}</p>}<button className="button" aria-pressed={shortlist.includes(focused.id)} onClick={() => onShortlist(focused.id, !shortlist.includes(focused.id))} disabled={disabled || !scoutingEnabled || getPlayerRetirement(season, focused.id).status === 'retired' && !shortlist.includes(focused.id)}>{shortlist.includes(focused.id) ? 'Remove from shortlist' : 'Add to shortlist'}</button><button className="text-button" onClick={() => onOpenScouting(focused.id)} disabled={disabled}>Open scouting report<Icon name="chevron" size={14} /></button></div></div></section>}
 
     {!enabled ? <ContractsEnablePanel season={season} disabled={disabled} onEnable={onEnable} /> : <>
-      <div className="transfer-search-layout">
+      {scouting && onTabChange && <div className="segmented transfers-tabs" role="group" aria-label="Transfers view"><button id="transfers-tab-search" aria-pressed={tab === 'search'} className={tab === 'search' ? 'selected' : ''} onClick={() => onTabChange('search')} disabled={disabled}><Icon name="search" size={14} />Find players</button><button id="transfers-tab-scouting" aria-pressed={tab === 'scouting'} className={tab === 'scouting' ? 'selected' : ''} onClick={() => onTabChange('scouting')} disabled={disabled}><Icon name="star" size={14} />Scouting &amp; shortlist</button></div>}
+      {scouting && tab === 'scouting' ? scouting : <div className="transfer-search-layout">
         <section className="transfer-search panel" aria-labelledby="transfer-search-title" data-transfer-phase={search.phase}>
           <header className="transfers-heading"><div><h2 id="transfer-search-title"><Icon name="search" size={16} />Find players</h2><span>{phaseLabel}</span></div><span data-transfer-results={rows.length}>{rows.length} {rows.length === 1 ? 'player' : 'players'}</span></header>
           <div className="transfer-search-filters" role="search" aria-label="Player search filters">
@@ -222,7 +254,7 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
             <label htmlFor="transfer-search-sort">Sort<select id="transfer-search-sort" value={filters.sort} onChange={event => updateFilters({ sort: event.target.value as TransferSort })} disabled={disabled}>{SORTS.map(sort => <option key={sort.id} value={sort.id}>{sort.label}</option>)}</select></label>
             {filtered && <button className="text-button transfer-filter-clear" onClick={() => updateFilters({ ...DEFAULT_TRANSFER_FILTERS, sort: filters.sort })} disabled={disabled}><Icon name="close" size={13} />Clear filters</button>}
           </div>
-          {search.scouted && search.phase !== 'closed' && <p className="transfer-search-range" data-transfer-known={search.knownCount} data-transfer-market={search.marketCount}><Icon name="search" size={14} /><span>Your scouts know <strong>{search.knownCount}</strong> of the {search.marketCount} players you could sign or approach now. The others are listed without a rating until they are scouted.</span><button className="text-button" onClick={onOpenScoutingPage} disabled={disabled}>Scouting<Icon name="chevron" size={13} /></button></p>}
+          {search.scouted && search.phase !== 'closed' && <p className="transfer-search-range" data-transfer-known={search.knownCount} data-transfer-market={search.marketCount} data-scout-network-range={network ? scoutNetworkRange(season) : undefined}><Icon name="search" size={14} /><span>{network ? <>Your {scoutCount} {scoutCount === 1 ? 'scout knows' : 'scouts know'} <strong>{search.knownCount}</strong> of {search.marketCount} players; their ratings are estimates within ±{scoutNetworkRange(season)}. Better scouts know more players and estimate closer. Press Scout for a sharper report.</> : <>Your scouts know <strong>{search.knownCount}</strong> of the {search.marketCount} players you could sign or approach now. The others are listed without a rating until they are scouted.</>}</span><button className="text-button" onClick={onOpenScouts ?? onOpenScoutingPage} disabled={disabled}>{onOpenScouts ? 'Hire scouts' : 'Scouting'}<Icon name="chevron" size={13} /></button></p>}
           <div className="transfers-table-scroll transfer-search-scroll" tabIndex={0} role="region" aria-label="Player search results"><table className="transfers-table transfer-search-table"><thead><tr><th scope="col">Player</th><th scope="col">Rating</th><th scope="col">Asking wage</th><th scope="col">Fee</th><th scope="col">Contract</th><th scope="col">Action</th></tr></thead><tbody>{rows.slice(0, shown).map(row => {
             const { player } = row
             const owner = ownerOf(player.id)
@@ -233,7 +265,7 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
               <td data-label="Asking wage">{money(row.wage)}<small>per year</small></td>
               <td data-label="Fee">{row.fee === null ? <span className="transfers-secured">Free</span> : money(row.fee)}{row.releaseFee !== null && <ReleaseClauseValue fee={row.releaseFee} />}</td>
               <td data-label="Contract">{row.contractEnds === null ? 'None' : `Until ${seasonLabel(row.contractEnds)}`}{search.phase === 'offseason' && <RivalOfferBadge season={season} playerId={player.id} onReview={() => openOffer(player.id)} disabled={disabled} />}</td>
-              <td className="transfers-action">{actionButton(player.id, row.kind)}<button className="text-button transfer-shortlist-toggle" data-transfer-shortlist={player.id} aria-pressed={listed} aria-label={`${listed ? 'Remove' : 'Add'} ${player.name} ${listed ? 'from' : 'to'} shortlist`} onClick={() => onShortlist(player.id, !listed)} disabled={disabled || !scoutingEnabled}><Icon name="star" size={13} />{listed ? 'Shortlisted' : 'Shortlist'}</button></td>
+              <td className="transfers-action">{actionButton(player.id, row.kind)}<button className="text-button transfer-shortlist-toggle" data-transfer-shortlist={player.id} aria-pressed={listed} aria-label={`${listed ? 'Remove' : 'Add'} ${player.name} ${listed ? 'from' : 'to'} shortlist`} onClick={() => onShortlist(player.id, !listed)} disabled={disabled || !scoutingEnabled}><Icon name="star" size={13} />{listed ? 'Shortlisted' : 'Shortlist'}</button>{scoutButton(player.id)}</td>
             </tr>
           })}{!rows.length && <tr><td colSpan={6} className="transfers-empty">{search.phase === 'closed' ? !hasNextYear ? 'The calendar has reached its final supported season; no further contracts can be signed.' : 'No signings are possible right now. Recruitment for next season opens with the offseason.' : filtered ? filters.minStars > 0 && rows.length === 0 && search.rows.some(row => row.rating.max === null) ? 'No rated player matches these filters. Only players your scouts have observed have a rating; assign observations in Scouting.' : 'No players match these filters.' : search.scouted ? 'No player your scouts know can be signed or approached now. Widen the range in Scouting.' : 'No players can be signed or approached now.'}</td></tr>}</tbody></table></div>
           {rows.length > shown && <div className="transfer-search-more"><button className="button small" onClick={() => setShown(value => value + PAGE_SIZE)} disabled={disabled}>Show {Math.min(PAGE_SIZE, rows.length - shown)} more<Icon name="chevron" size={13} /></button><span>{shown} of {rows.length} shown</span></div>}
@@ -254,12 +286,16 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
               <div className="transfer-shortlist-actions">{action ? actionButton(playerId, row?.kind ?? null, true) : <small>{own ? 'In your squad' : retired ? 'Retired' : 'Not available now'}</small>}<button className="icon-button" aria-label={`Remove ${player.name} from shortlist`} title="Remove from shortlist" onClick={() => onShortlist(playerId, false)} disabled={disabled}><Icon name="close" size={13} /></button></div>
             </li>
           })}</ul> : <p className="transfers-empty">No players saved yet. Use Shortlist in the search to follow a player.</p>}
-          <button className="text-button transfer-shortlist-scouting" onClick={onOpenScoutingPage} disabled={disabled}>Observe players in Scouting<Icon name="chevron" size={13} /></button>
+          <button className="text-button transfer-shortlist-scouting" onClick={onOpenScoutingPage} disabled={disabled}>Reports and observations<Icon name="chevron" size={13} /></button>
         </aside>
-      </div>
+      </div>}
 
       <section id="transfer-business" className="transfer-business" aria-labelledby="transfer-business-title">
         <h2 id="transfer-business-title" className="transfer-business-title"><Icon name="swap" size={16} />Offers and sales</h2>
+        {usesPlayerListings(season) && <section className="transfer-listings panel" aria-labelledby="transfer-listings-title" data-transfer-listings={listings.length}><header className="transfers-heading"><h2 id="transfer-listings-title"><Icon name="swap" size={15} />Your transfer and loan list</h2><span>{listings.length}</span></header>
+          {listings.length ? <ul className="transfer-listing-list">{listings.map(listing => { const player = getCareerPlayer(season, listing.playerId); return <li key={listing.playerId} data-listed-player={listing.playerId}><strong>{player.name}</strong><span>{[listing.transfer ? `Transfer · asking ${money(listing.askingFee)}` : '', listing.loan ? 'Loan' : ''].filter(Boolean).join(' · ')}</span>{onListing && <button className="text-button" onClick={() => onListing(listing.playerId, { transfer: false, loan: false })} disabled={disabled}><Icon name="close" size={13} />Remove</button>}</li> })}</ul>
+            : <p className="transfers-empty">No players listed. Open a player on Squad and choose Transfer list or Loan list. Offers for your players arrive in the Inbox.</p>}
+        </section>}
         <InSeasonRecruitmentPanel onOpenAcademy={onOpenAcademy} season={season} disabled={disabled} onEnable={onEnableInSeason} onEnableTransfers={onEnableInSeasonTransfers} onClubDecision={onInSeasonClubDecision} onReview={setInSeasonPlayerId} onWithdraw={onWithdrawInSeasonOffer} onOpenMatch={onOpenMatch} onBrowse={() => showSearch({ freeOnly: true })} />
         {datedMarket && <OffseasonMarketPanel season={season} disabled={disabled} onWithdraw={onWithdrawOffer} onReview={playerId => openOffer(playerId)} onClubDecision={onClubDecision} />}
         {!negotiations && hasNextYear && <section className="transfers-negotiations-enable panel" aria-labelledby="negotiations-enable-title"><div><h2 id="negotiations-enable-title">Player responses</h2><p>Enable counteroffers, rejections and a saved conversation history for future offers. Longer contracts can carry higher wage demands. Existing signed terms remain binding.</p></div><button id="enable-negotiations" className="button" onClick={onEnableNegotiations} disabled={disabled}>Enable contract negotiations</button></section>}

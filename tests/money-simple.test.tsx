@@ -88,7 +88,7 @@ describe('two budgets (owner feedback, 18 November 2026)', () => {
   });
 
   it('shows the budget bar only where money is decided', () => {
-    const pages = ['home', 'inbox', 'squad', 'match', 'season', 'training', 'staff', 'club', 'board', 'transfers', 'scouting', 'medical', 'academy', 'calendar', 'europe'] as const;
+    const pages = ['home', 'inbox', 'squad', 'match', 'season', 'training', 'staff', 'club', 'board', 'transfers', 'medical', 'academy', 'calendar', 'europe'] as const;
     expect(pages.filter(page => showsBudgetBar(page, 'selection'))).toEqual(['home', 'staff', 'club', 'transfers']);
     expect(showsBudgetBar('squad', 'contracts')).toBe(true);
     expect(showsBudgetBar('squad', 'payroll')).toBe(false);

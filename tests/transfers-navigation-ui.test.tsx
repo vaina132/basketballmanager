@@ -42,7 +42,7 @@ describe('the left menu', () => {
   it('is ordered by use in small groups, with Board as its own item and every page reachable', () => {
     const groups = mainNavigation({ career: true, europe: true });
     expect(groups.map(group => group.map(item => item.id))).toEqual([
-      ['home', 'inbox'], ['squad', 'match', 'transfers', 'scouting', 'training', 'staff'], ['club', 'board'], ['season', 'calendar', 'europe'], ['academy', 'medical'],
+      ['home', 'inbox'], ['squad', 'match', 'transfers', 'training', 'staff'], ['club', 'board'], ['season', 'calendar', 'europe'], ['academy', 'medical'],
     ]);
     expect(groups.flat().find(item => item.id === 'board')).toMatchObject({ label: 'Board', icon: 'shield' });
     // Nothing that exists is hidden: every page has its menu item.

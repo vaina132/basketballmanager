@@ -751,7 +751,9 @@ export function rolloverNational(state: SeasonState, nextSeasonDate?: string): S
   let next: SeasonState = playSummerTournament(state);
   next = { ...next, national: expireOffers(next.national!, addCalendarDays(state.date, 1)) };
   if (qualifiers) {
+    // The salary up to the tournament's end comes before the federation's verdict on it.
     const tournament = findCompetition(next.national!, `nt-s${seasonNumber}`), last = nationalTournamentDays(seasonNumber).at(-1)!;
+    next = { ...next, national: payNationalSalary(next.national!, last) };
     next = { ...next, national: reviewNational(next, next.national!, tournament.fixtures, `s${seasonNumber}-w3`, last, 3) };
   }
   // The salary up to the tournament's end, when a contract can end; a kept job is paid on to the new season's first day.

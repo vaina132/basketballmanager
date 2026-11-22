@@ -22,10 +22,11 @@ import { asCareer1 } from './helpers/career-rules';
 
 const FROM = 'rhine-falcons';
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
-// Seed 8 (2 before the manager's planned starting five of 16 November 2026, 8 before the relationships-2 rules of
-// format 66, 6 before the match calibration of sprint 4): Rhine Falcons keep their job and Aegean Waves' season ends
+// Seed 19 (8 before the new-career rules of formats 74-80, 2 before the manager's planned starting five of 16 November
+// 2026, 8 before the relationships-2 rules of format 66, 6 before the match calibration of sprint 4): Rhine Falcons
+// keep their job and Aegean Waves' season ends
 // Under pressure, so Aegean Waves offer their job.
-const OFFER_SEED = 8;
+const OFFER_SEED = 19;
 // The Level 7 move rules that careers created before format 63 keep (`career-1`, and the board before format 70's
 // presidents); tests/career-board-rules.test.ts covers new careers.
 const career = (careerMoves = true, seed = OFFER_SEED) => asCareer1(createSeason({ seed, managedClubId: FROM, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves, presidents: false }));
@@ -142,12 +143,12 @@ describe('club changes after manual decisions at both clubs', () => {
   let secondMove: SeasonState, thirdSeason: SeasonState;
 
   beforeAll(() => {
-    // With these decisions, seed 1 (4 before step 3.7's sponsor-exit check fix; 14 before the planned starting five of
-    // 16 November 2026, 20 with format 66 alone, 8 before it) brings a job offer at both season ends. Season one ends
-    // with no sponsorship event and season two has none until a sponsor leaves at its end, the case that check fix covers.
-    // Since the planned starters start every game, no player had a playing-time concern to talk about in the seeds tried
-    // (1-40), so a talk is credited only when one happens.
-    let state = setTicketPlan(career(true, 1), { delegated: false, price: 2200 });
+    // With these decisions, seed 17 (1 before the new-career rules of formats 74-80; 4 before step 3.7's sponsor-exit
+    // check fix; 14 before the planned starting five of 16 November 2026, 20 with format 66 alone, 8 before it) brings a
+    // job offer at both season ends. Season one ends with no sponsor exit and season two has none until a sponsor leaves
+    // at its end, the case that check fix covers. Since the planned starters start every game, no player had a
+    // playing-time concern to talk about in the seeds tried (1-40), so a talk is credited only when one happens.
+    let state = setTicketPlan(career(true, 17), { delegated: false, price: 2200 });
     while (state.round < 10) state = advanceMatchday(manage(state, FROM, log));
     state = takeBestOffer(finish(manage(state, FROM, log)));
     const firstClub = state.managedClubId;

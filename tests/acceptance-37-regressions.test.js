@@ -42,7 +42,7 @@ describe('step 3.7 acceptance careers in the strict save check', () => {
     // Seed 5 (11 before the planned starting five of 16 November 2026): the final ends in a sweep, so the season's last
     // week has no game; sponsors leave at the season end.
     // Seed-found scenario from before every club started with staff (format 74): it keeps the earlier staffing.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 5, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS, staffing: false }), true);
+    let state = setEmploymentDelegation(createSeason({ world, seed: 5, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS, injuryLengths: false, staffing: false }), true);
     while (state.status === 'active') state = play(state);
     const rounds = seasonRounds(state);
     expect(state.fixtures.some(fixture => fixture.round === rounds)).toBe(false);
@@ -61,7 +61,7 @@ describe('step 3.7 acceptance careers in the strict save check', () => {
     // with 3 and 7 players over their new allocation, and the season-four offseason never closed). In this world clubs
     // start season two's offseason short of eight players and over their fallen allocation.
     const world = moneyWorld();
-    let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS, injuryLengths: false }), true);
     while (state.status === 'active') state = play(state);
     for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
     state = rolloverSeason(state);

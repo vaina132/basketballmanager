@@ -28,7 +28,7 @@ const noop = () => {};
 const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 // The format-63 rules (`career-2`, careers created before format 69): a dismissed or resigning manager always receives an
 // offer. New careers (`career-3`, unemployed seasons) are covered by tests/career-unemployment.test.tsx.
-const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(asCareer2(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, presidents: false })), true), true);
+const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(asCareer2(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, injuryLengths: false, presidents: false })), true), true);
 const throughOffseason = (state: SeasonState) => {
   let next = setEmploymentDelegation(state, true);
   for (let step = 0; step < 80 && getMarketStartReason(next); step += 1) next = advanceMarket(next);

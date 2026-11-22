@@ -24,7 +24,7 @@ const finish = (state: SeasonState) => ({ ...state, activeMatch: simulateToEnd(s
 // and the board from before format 70 (president patience would move the Under pressure line).
 // `legacy`: converted before the assistant's first signings, which would otherwise carry squad roles (relationships-3),
 // and without the opening staff of format 74 (`coaching-2`).
-const start = (seed: number, careerMoves = true, media = true, legacy = false) => { const created = createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, staffing: !legacy, careerMoves, media, namingRights: false, presidents: false, simpleFacilities: media }); return asCareer1(setEmploymentDelegation(setFacilityDelegation(legacy ? withLegacyRelationships(withLegacyFacilities(created)) : created, true), true)); };
+const start = (seed: number, careerMoves = true, media = true, legacy = false) => { const created = createSeason({ seed, managedClubId: CLUB, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, injuryLengths: false, staffing: !legacy, careerMoves, media, namingRights: false, presidents: false, simpleFacilities: media }); return asCareer1(setEmploymentDelegation(setFacilityDelegation(legacy ? withLegacyRelationships(withLegacyFacilities(created)) : created, true), true)); };
 /** An all-automatic Rhine Falcons season, played to the finished final match. */
 function finalMatchday(seed: number, careerMoves = true, enableAtRound?: number, legacy = false): SeasonState {
   // `legacy`: a career as saved before formats 65-71: no media record, `facilities-1` paid upfront and `relationships-1`.

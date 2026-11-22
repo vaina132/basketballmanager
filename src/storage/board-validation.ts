@@ -44,7 +44,11 @@ function seasonRecords(state: SeasonState, year: number) {
 }
 
 /** Board assessments see only registrations, cash and results that existed at their recorded boundary. */
-function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard): BoardCalculationContext {
+/**
+ * `opening`: a mandate frozen at a season opening or at activation. It comes before every move of its own week, so the
+ * club managed then is the one before them (a resignation on the first day kept the opening's objectives).
+ */
+function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard, opening = false): BoardCalculationContext {
   const source = seasonRecords(state, anchor.seasonNumber), rosters = source.rosters.slice(0, anchor.rosterCount);
   const completed = anchor.completedRounds - ordinal(anchor.seasonNumber, 0, seasonRounds(state));
   const fixtures = source.fixtures.map(fixture => ({ ...fixture, result: fixture.round <= completed ? fixture.result : null })) as SeasonFixture[];
@@ -65,7 +69,7 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard):
     finance: { ...finance, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
     // Format 70 (board-2): the academy, the previous season's squads, the managed club and the president's requests.
     // Step 3.7: the club managed at the anchor's own week (a season opening before a mid-season dismissal kept the club).
-    ...(usesPresidentBoard(board) ? { academy: state.academy, history: history.filter(archive => archive.seasonNumber === anchor.seasonNumber - 1), managedClubId: managedClubAtRound(state, anchor.seasonNumber, anchor.round), boardRequests: (state.board.requests ?? []) as BoardRequest[] } : {}),
+    ...(usesPresidentBoard(board) ? { academy: state.academy, history: history.filter(archive => archive.seasonNumber === anchor.seasonNumber - 1), managedClubId: managedClubAtRound(state, anchor.seasonNumber, opening ? anchor.round - 1 : anchor.round), boardRequests: (state.board.requests ?? []) as BoardRequest[] } : {}),
   };
 }
 
@@ -241,7 +245,7 @@ export function validateBoard(state: SeasonState, version: number): void {
     }
     chronological(anchor, path);
     let expected: BoardMandate;
-    try { expected = validationReplayCache.calculate('board-mandate', { state: contextAt(state, anchor, board), startsRound }, input => buildBoardMandate(input.state, input.startsRound)); } catch (error) { fail(path, `cannot rebuild objectives: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
+    try { expected = validationReplayCache.calculate('board-mandate', { state: contextAt(state, anchor, board, true), startsRound }, input => buildBoardMandate(input.state, input.startsRound)); } catch (error) { fail(path, `cannot rebuild objectives: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
     if (!equal(raw, expected)) fail(path, 'must retain the exact objective and resources frozen from its original registrations and payment prefix');
     board = { ...board, mandates: [...board.mandates, expected] }; mandateIndex += 1;
     const through = year === state.seasonNumber ? state.status === 'complete' ? seasonRounds(state) : state.round - 1 : seasonRounds(state);

@@ -42,13 +42,16 @@ export function describePlayTestSave(version, commit, title) {
     return text;
   };
   const roundTrip = state => parseSeason(serializeSeasonCompact(state));
+  /** National teams (format 80) exactly when the captured career had them. */
+  const expectNational = state => expect(Object.hasOwn(state, 'national')).toBe(manifest.career.nationalPlayed !== undefined);
 
   describe(`format-${version} play-test career (${title})`, () => {
     it(`was captured from the unchanged format-${version} runtime`, () => {
       expect(manifest.schema).toBe(version);
       expect(manifest.source).toBe(`commit ${commit} (src unchanged)`);
       expect(manifest.moduleCount).toBeGreaterThan(100);
-      expect(SEASON_SCHEMA_VERSION).toBeGreaterThan(version);
+      // The current format's own fixture (80 while it is the latest) is the one capture without a later runtime.
+      expect(SEASON_SCHEMA_VERSION).toBeGreaterThanOrEqual(version);
       file('career'); file('career-next');
     });
 
@@ -59,8 +62,9 @@ export function describePlayTestSave(version, commit, title) {
       expect([state.seasonNumber, state.round, state.date, state.status]).toEqual([recorded.seasonNumber, recorded.round, recorded.date, recorded.status]);
       // The rules the career was created with: no newer system model, play model or injury model is switched on.
       expect(systemModels(state)).toEqual(manifest.career.models);
-      // Features of later formats stay off (format 80's national teams).
-      expect(state).not.toHaveProperty('national');
+      // Features of later formats stay off (format 80's national teams); a format-80 career keeps its national record.
+      expectNational(state);
+      if (manifest.career.nationalPlayed !== undefined) expect(state.national.competitions.flatMap(competition => competition.fixtures).filter(fixture => fixture.result)).toHaveLength(manifest.career.nationalPlayed);
       expect(state.managedClubId).toBe(manifest.career.managedClubId);
       expect(state.employment.transfers).toHaveLength(manifest.career.transfers);
       expect(state.employment.transfers.some(transfer => transfer.playerId === manifest.career.signing)).toBe(true);
@@ -77,7 +81,7 @@ export function describePlayTestSave(version, commit, title) {
       const next = playWeek(state);
       expectValidOldSaveWeek(state, next, parseSeason(file('career-next')));
       expect(systemModels(next)).toEqual(manifest.career.models);
-      expect(next).not.toHaveProperty('national');
+      expectNational(next);
       expect(roundTrip(next)).toEqual(next);
     }, 600_000);
 
@@ -95,7 +99,7 @@ export function describePlayTestSave(version, commit, title) {
       for (let week = 0; week < 2; week += 1) opening = playWeek(opening);
       expect(roundTrip(opening)).toEqual(opening);
       expect(systemModels(opening)).toEqual(manifest.career.models);
-      expect(opening).not.toHaveProperty('national');
+      expectNational(opening);
     }, 1_200_000);
   });
 }

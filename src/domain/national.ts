@@ -85,7 +85,7 @@ export interface NationalJob {
   since: { seasonNumber: number; date: string };
   /** The contract runs until this season's summer tournament has been played (at the next rollover). */
   untilSeason: number;
-  /** Euro cents a season; shown only (the game has no personal money). */
+  /** Euro cents a season, paid monthly into the manager's career earnings (never into club money). */
   salary: number;
   selection: string[];
 }
@@ -103,6 +103,20 @@ export interface NationalVerdict {
 /** A change in the manager's national career: appointed, resigned, dismissed or contract ended. */
 export interface NationalJobEvent { id: string; teamId: string; date: string; kind: 'appointed' | 'resigned' | 'dismissed' | 'ended' }
 
+/** One monthly salary payment from a federation to the manager (euro cents). */
+export interface NationalPayment { date: string; teamId: string; amount: number }
+
+/**
+ * The manager's career earnings (owner, 22 November 2026: "salary that matters"). The game has no personal money and the
+ * club job carries no personal salary, so the record holds the national salary: a twelfth of the season's salary on the
+ * first day of each month while he holds the job. It never enters club money.
+ */
+export interface ManagerEarnings {
+  /** The salary is paid up to this day (null before any national job). */
+  paidThrough: string | null;
+  payments: NationalPayment[];
+}
+
 export interface SeasonNational {
   model: NationalModel;
   teams: NationalTeamInfo[];
@@ -114,6 +128,7 @@ export interface SeasonNational {
   offers: NationalOffer[];
   verdicts: NationalVerdict[];
   events: NationalJobEvent[];
+  earnings: ManagerEarnings;
   /** The manager's national game being played in the Match center. */
   activeFixtureId: string | null;
   activeMatch: MatchState | null;

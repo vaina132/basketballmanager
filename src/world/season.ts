@@ -1141,7 +1141,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = processContractRequests(automateRelationships(prepareRelationshipsRound(next)));
   next = prepareBoardSeason(next);
   // Format 80: the summer tournament, the federations' judgement and next season's qualifiers.
-  if (state.national) next = { ...next, national: rolloverNational(state) };
+  if (state.national) next = { ...next, national: rolloverNational(state, next.date) };
   next.activeMatch = first ? prepareMatch(next, first) : null;
   return next;
 }

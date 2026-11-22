@@ -1,4 +1,4 @@
-import type { NationalCoach, NationalCompetition, NationalFixture, NationalGroup, NationalOffer, NationalResult, NationalTeamInfo, NationalVerdict, SeasonNational } from '../domain/national';
+import type { ManagerEarnings, NationalPayment, NationalCoach, NationalCompetition, NationalFixture, NationalGroup, NationalOffer, NationalResult, NationalTeamInfo, NationalVerdict, SeasonNational } from '../domain/national';
 import type { SeasonInjury, SeasonState } from '../domain/season';
 import type { MatchState, Player, Position, Side, Team } from '../domain/types';
 import type { CareerWorld } from '../domain/world';
@@ -75,7 +75,7 @@ export function qualifierCompetition(seasonNumber: number, groups: NationalGroup
 /** The national teams, coaches and season one's qualifiers of a new career. */
 export function createNational(seed: number, date: string): SeasonNational {
   const teams = NATIONAL_TEAMS.map(team => ({ ...team }));
-  let national: SeasonNational = { model: NATIONAL_MODEL, teams, coaches: [], coachCount: 0, competitions: [], job: null, offers: [], verdicts: [], events: [], activeFixtureId: null, activeMatch: null };
+  let national: SeasonNational = { model: NATIONAL_MODEL, teams, coaches: [], coachCount: 0, competitions: [], job: null, offers: [], verdicts: [], events: [], earnings: { paidThrough: null, payments: [] }, activeFixtureId: null, activeMatch: null };
   for (const team of teams) {
     const { coach, coachCount } = generatedCoach(national, team.id, 1, date);
     national = { ...national, coaches: [...national.coaches, coach], coachCount };
@@ -446,6 +446,38 @@ function expireOffers(national: SeasonNational, date: string): SeasonNational {
   return national.offers.some(offer => offer.status === 'open' && offer.expiresOn < date) ? { ...national, offers: national.offers.map(offer => offer.status === 'open' && offer.expiresOn < date ? { ...offer, status: 'expired' as const } : offer) } : national;
 }
 
+/** A month's salary payment: a twelfth of the season's salary. */
+export const monthlyNationalSalary = (salary: number) => Math.round(salary / 12);
+
+/** The first days of months after `from` up to and including `through`. */
+function monthStarts(from: string, through: string): string[] {
+  const days: string[] = [];
+  let year = Number(from.slice(0, 4)), month = Number(from.slice(5, 7));
+  for (;;) {
+    month += 1; if (month > 12) { month = 1; year += 1; }
+    const day = `${year}-${String(month).padStart(2, '0')}-01`;
+    if (day > through) return days;
+    days.push(day);
+  }
+}
+
+/**
+ * The national salary paid up to `through`: each first day of a month since the last payment, while the manager holds
+ * the job (owner, 22 November 2026). Without a job the record waits unchanged.
+ */
+export function payNationalSalary(national: SeasonNational, through: string): SeasonNational {
+  const job = national.job, paid = national.earnings.paidThrough;
+  if (!job || !paid || through <= paid) return national;
+  const payments: NationalPayment[] = monthStarts(paid, through).map(date => ({ date, teamId: job.teamId, amount: monthlyNationalSalary(job.salary) }));
+  return { ...national, earnings: { paidThrough: through, payments: [...national.earnings.payments, ...payments] } };
+}
+
+/** The manager's career earnings: the total and the payments, newest last (null in careers without national teams). */
+export function careerEarnings(state: Pick<SeasonState, 'national'>): (ManagerEarnings & { total: number }) | null {
+  const earnings = state.national?.earnings;
+  return earnings ? { ...earnings, total: earnings.payments.reduce((sum, payment) => sum + payment.amount, 0) } : null;
+}
+
 /**
  * The week's national business, run before the week's training (`toDate` is the next Saturday): offers expire, every
  * national game up to that Saturday is played (a manager without a club has his games simulated), and each window
@@ -453,7 +485,8 @@ function expireOffers(national: SeasonNational, date: string): SeasonNational {
  */
 export function advanceNationalWeek(state: SeasonState, fromDate: string, toDate: string): SeasonState {
   if (!state.national) return state;
-  let next: SeasonState = { ...state, national: expireOffers(state.national, toDate) };
+  // The month's salary first: a dismissal after the window comes after the payments due by then.
+  let next: SeasonState = { ...state, national: payNationalSalary(expireOffers(state.national, toDate), toDate) };
   next = playNationalGames(next, toDate);
   for (const competition of next.national!.competitions) {
     if (competition.kind !== 'qualifiers') continue;
@@ -565,6 +598,7 @@ export function acceptNationalOffer(state: SeasonState, offerId: string): Season
   return { ...state, national: {
     ...national,
     job: { teamId: team.id, since, untilSeason: state.seasonNumber + NATIONAL_RULES.contractSeasons - 1, salary: NATIONAL_RULES.salary[team.level], selection: [] },
+    earnings: { ...national.earnings, paidThrough: state.date },
     coaches: national.coaches.map(coach => coach.teamId === team.id ? { teamId: team.id, name: state.manager?.name ?? 'You', manager: true as const, since, confidence: NATIONAL_RULES.startingConfidence } : coach),
     offers: national.offers.map(item => item.id === offerId ? { ...item, status: 'accepted' as const } : item.status === 'open' ? { ...item, status: 'declined' as const } : item),
     events: [...national.events, { id: `national-event-${offerId}`, teamId: team.id, date: state.date, kind: 'appointed' as const }],
@@ -583,7 +617,7 @@ export function resignNationalJob(state: SeasonState): SeasonState {
   if (!national || !job) throw new Error('You do not coach a national team.');
   if (national.activeMatch) throw new Error('Finish the national game first.');
   const replaced = generatedCoach(national, job.teamId, state.seasonNumber, state.date);
-  return { ...state, national: { ...national, job: null, coaches: national.coaches.map(coach => coach.teamId === job.teamId ? replaced.coach : coach), coachCount: replaced.coachCount, events: [...national.events, { id: `national-event-resigned-s${state.seasonNumber}-${state.date}`, teamId: job.teamId, date: state.date, kind: 'resigned' as const }] } };
+  return { ...state, national: { ...payNationalSalary(national, state.date), job: null, coaches: national.coaches.map(coach => coach.teamId === job.teamId ? replaced.coach : coach), coachCount: replaced.coachCount, events: [...national.events, { id: `national-event-resigned-s${state.seasonNumber}-${state.date}`, teamId: job.teamId, date: state.date, kind: 'resigned' as const }] } };
 }
 
 /** The manager's own picks for his national team (up to twelve players of its country); the rest is picked automatically. */
@@ -711,7 +745,7 @@ function seededGroups(state: SeasonState): NationalGroup[] {
  * At the season's rollover (`state` is the completed season): the summer tournament is played, the federations judge
  * it, the manager's contract ends or is renewed, and next season's qualifiers are drawn. Older seasons are dropped.
  */
-export function rolloverNational(state: SeasonState): SeasonNational {
+export function rolloverNational(state: SeasonState, nextSeasonDate?: string): SeasonNational {
   if (!state.national) throw new Error('This career has no national teams.');
   const seasonNumber = state.seasonNumber, qualifiers = state.national.competitions.find(item => item.seasonNumber === seasonNumber && item.kind === 'qualifiers');
   let next: SeasonState = playSummerTournament(state);
@@ -720,7 +754,8 @@ export function rolloverNational(state: SeasonState): SeasonNational {
     const tournament = findCompetition(next.national!, `nt-s${seasonNumber}`), last = nationalTournamentDays(seasonNumber).at(-1)!;
     next = { ...next, national: reviewNational(next, next.national!, tournament.fixtures, `s${seasonNumber}-w3`, last, 3) };
   }
-  let national = next.national!;
+  // The salary up to the tournament's end, when a contract can end; a kept job is paid on to the new season's first day.
+  let national = payNationalSalary(next.national!, nationalTournamentDays(seasonNumber).at(-1)!);
   const job = national.job;
   if (job && job.untilSeason <= seasonNumber) {
     const coach = nationalCoach(national, job.teamId), date = nationalTournamentDays(seasonNumber).at(-1)!, renewed = coach.confidence >= NATIONAL_RULES.renewFrom;
@@ -731,6 +766,7 @@ export function rolloverNational(state: SeasonState): SeasonNational {
       national = { ...national, job: null, coaches: national.coaches.map(item => item.teamId === job.teamId ? replaced.coach : item), coachCount: replaced.coachCount, verdicts: [...national.verdicts, verdict], events: [...national.events, { id: `national-event-ended-s${seasonNumber}`, teamId: job.teamId, date, kind: 'ended' as const }] };
     }
   }
+  if (nextSeasonDate) national = payNationalSalary(national, nextSeasonDate);
   const groups = seededGroups({ ...next, national });
   return { ...national, competitions: [...national.competitions.filter(item => item.seasonNumber >= seasonNumber), qualifierCompetition(seasonNumber + 1, groups)] };
 }

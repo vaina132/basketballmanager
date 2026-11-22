@@ -4,7 +4,7 @@ import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { continueAction, runContinueStep } from '../src/world/continue-step';
 import { continueStop } from '../src/ui/continue-run';
-import { acceptNationalOffer, nationalManagedSide, nationalTournament, offerNationalJob, resignNationalJob } from '../src/world/national';
+import { acceptNationalOffer, careerEarnings, nationalManagedSide, nationalTournament, offerNationalJob, resignNationalJob } from '../src/world/national';
 import { nationalTournamentDays } from '../src/world/national-calendar';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { setEmploymentDelegation } from '../src/world/employment';
@@ -70,6 +70,9 @@ describe('the summer tournament in the offseason (format 80)', () => {
     expect(tournament.fixtures.every(fixture => fixture.result)).toBe(true);
     expect(tournament.fixtures.filter(fixture => fixture.homeTeamId === teamId || fixture.awayTeamId === teamId).length).toBeGreaterThanOrEqual(2);
     expect(state.national!.verdicts.some(verdict => verdict.id === 'national-verdict-s1-w3')).toBe(true);
+    // The salary was paid every month, through the offseason to the new season's first day.
+    expect(careerEarnings(state)!.payments.at(-1)!.date).toBe('2027-09-01');
+    expect(state.national!.earnings.paidThrough).toBe(state.date);
     expect(parseSeason(serializeSeason(state)).national).toEqual(state.national);
   }, 900_000);
 });

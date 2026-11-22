@@ -7,7 +7,7 @@ import { continueAction } from '../src/world/continue-step';
 import { runContinueStep } from '../src/world/continue-step';
 import { continueUntilStop } from '../src/ui/continue-run';
 import { getInboxItems } from '../src/ui/inbox-items';
-import { acceptNationalOffer, clubWindowCallUps, isNationalFixtureId, nationalManagedSide, offerNationalJob, resignNationalJob, setNationalSelection } from '../src/world/national';
+import { acceptNationalOffer, careerEarnings, clubWindowCallUps, isNationalFixtureId, monthlyNationalSalary, nationalManagedSide, offerNationalJob, resignNationalJob, setNationalSelection } from '../src/world/national';
 import { getPlayerHealth } from '../src/world/health';
 import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { nationalWorld } from './helpers/national-world';
@@ -89,6 +89,13 @@ describe('national windows in play (format 80)', () => {
     expect(own.some(fixture => [...fixture.result!.squads.home, ...fixture.result!.squads.away].includes(turk.id))).toBe(true);
     // The federation judged the window.
     expect(state.national!.verdicts.some(verdict => verdict.id === 'national-verdict-s1-w1')).toBe(true);
+    // The salary is paid monthly into the manager's career earnings (1 October and 1 November), never into club money.
+    const earned = careerEarnings(state)!;
+    expect(earned.payments.map(payment => payment.date)).toEqual(['2026-10-01', '2026-11-01']);
+    expect(earned.total).toBe(2 * monthlyNationalSalary(state.national!.job!.salary));
+    expect(state.finance.ledger.some(entry => JSON.stringify(entry).includes('national'))).toBe(false);
+    const forged = { ...state, national: { ...state.national!, earnings: { ...state.national!.earnings, payments: [...state.national!.earnings.payments, { date: '2026-11-15', teamId: 'nation-tur', amount: 1 }] } } };
+    expect(() => parseSeason(serializeSeason(forged))).toThrow(/earnings/);
     // Leaving the national job keeps the club.
     const resigned = resignNationalJob(state);
     expect(resigned.national!.job).toBeNull();

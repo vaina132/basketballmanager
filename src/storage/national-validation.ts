@@ -3,7 +3,7 @@ import type { SeasonState } from '../domain/season';
 import { NATIONAL_TEAMS } from '../data/national-teams';
 import { worldOf } from '../world/career-world';
 import { addCalendarDays } from '../world/competition-calendar';
-import { NATIONAL_MODEL, qualifierCompetition, usesNationalTeams } from '../world/national';
+import { monthlyNationalSalary, NATIONAL_MODEL, qualifierCompetition, usesNationalTeams } from '../world/national';
 import { NATIONAL_RULES, nationalTournamentDays } from '../world/national-calendar';
 import { validateMatchState } from './validate-match';
 import { isMatchInjuryKind } from '../domain/injuries';
@@ -82,7 +82,7 @@ function validateFixture(value: unknown, path: string, competition: Record<strin
 export function validateNationalShape(value: unknown, state: SeasonState, version: number): asserts value is SeasonNational {
   if (version < 80) fail('national', 'requires format 80 or later');
   if (!state.world || !usesNationalTeams(worldOf(state))) fail('national', 'requires a real-club world with a national team\'s country');
-  const national = record(value, 'national', ['model', 'teams', 'coaches', 'coachCount', 'competitions', 'job', 'offers', 'verdicts', 'events', 'activeFixtureId', 'activeMatch']);
+  const national = record(value, 'national', ['model', 'teams', 'coaches', 'coachCount', 'competitions', 'job', 'offers', 'verdicts', 'events', 'earnings', 'activeFixtureId', 'activeMatch']);
   if (national.model !== NATIONAL_MODEL) fail('national.model', 'is unsupported');
   if (!same(national.teams, NATIONAL_TEAMS)) fail('national.teams', 'must be the game\'s national teams');
   const teamIds = new Set(NATIONAL_TEAMS.map(team => team.id)), seasonNumber = state.seasonNumber;
@@ -143,6 +143,20 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
     if (!Object.values(NATIONAL_RULES.salary).includes(fields.salary as number)) fail('national.job.salary', 'must be a national salary');
     if (!Array.isArray(fields.selection) || fields.selection.length > NATIONAL_RULES.squadSize || fields.selection.some(id => typeof id !== 'string') || new Set(fields.selection).size !== fields.selection.length) fail('national.job.selection', `must list up to ${NATIONAL_RULES.squadSize} distinct players`);
   }
+  // The manager's career earnings: monthly national salary payments, in order, up to the day they are paid through.
+  const earnings = record(national.earnings, 'national.earnings', ['paidThrough', 'payments']);
+  const paidThrough = earnings.paidThrough === null ? null : date(earnings.paidThrough, 'national.earnings.paidThrough');
+  if (paidThrough !== null && paidThrough > latest || job !== null && (paidThrough === null || paidThrough < ((job as { since: { date: string } }).since.date))) fail('national.earnings.paidThrough', 'must follow the national job');
+  const monthly = new Set(Object.values(NATIONAL_RULES.salary).map(monthlyNationalSalary));
+  if (!Array.isArray(earnings.payments) || earnings.payments.length > 12 * (seasonNumber + 1)) fail('national.earnings.payments', 'must be a bounded list');
+  let previous = '';
+  earnings.payments.forEach((value, index) => {
+    const path = `national.earnings.payments.${index}`, payment = record(value, path, ['date', 'teamId', 'amount']);
+    const day = date(payment.date, `${path}.date`);
+    if (!day.endsWith('-01') || day <= previous || paidThrough === null || day > paidThrough) fail(`${path}.date`, 'must be the first day of a later month, already paid');
+    if (!teamIds.has(payment.teamId as string) || !monthly.has(payment.amount as number)) fail(path, 'must be a month of a national salary');
+    previous = day;
+  });
   for (const [key, keys] of [['offers', ['id', 'teamId', 'date', 'expiresOn', 'status']], ['verdicts', ['id', 'teamId', 'date', 'confidence', 'change', 'outcome']], ['events', ['id', 'teamId', 'date', 'kind']]] as const) {
     const list = national[key];
     if (!Array.isArray(list) || list.length > 400) fail(`national.${key}`, 'must be a bounded list');

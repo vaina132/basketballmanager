@@ -149,7 +149,7 @@ export function matchName(name, number, rows) {
  * the pack prefix. Returns { rows, report }.
  */
 /** Community sources (Wikipedia) are not official: their label is used only inside an official broad role. */
-export const COMMUNITY_SOURCES = new Set(['en.wikipedia.org']);
+export const COMMUNITY_SOURCES = new Set(['en.wikipedia.org', 'fr.wikipedia.org']);
 function communityParsed(row, parsed, group, report, player) {
   if (!COMMUNITY_SOURCES.has(row.sourceName) || !group) return parsed;
   const options = parsed.options.filter(position => GROUP_POSITIONS[group].includes(position));
@@ -173,7 +173,7 @@ export function profileOverrides({ pack, officialDocuments = [], clubLinks = [],
     if (!date(file.observedOn) || file.observedOn > observedOn) throw new Error('Roster evidence needs an observation date on or before the override date.');
     const sources = club.sources ?? [file.source];
     if (!sources.length || sources.some(url => !/^https:\/\//.test(url ?? ''))) throw new Error(`Roster evidence for ${club.clubId} needs https sources.`);
-    const rows = club.players.map(player => ({ ...player, sources, observedOn: file.observedOn, sourceName: file.sourceName ?? null }));
+    const rows = club.players.map(player => ({ ...player, sources, observedOn: file.observedOn, sourceName: club.sourceName ?? file.sourceName ?? null }));
     rosterOf.set(club.clubId, [...(rosterOf.get(club.clubId) ?? []), rows]);
   }
   // Players the pack keeps at a club whose current roster no longer lists them: the same full name, found once in all

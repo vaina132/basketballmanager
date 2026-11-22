@@ -17,7 +17,10 @@
  * player `position` for moved players, and club `added_players`.
  *
  *   node scripts/real-data-current-squads.mjs --pack PACK.json --rosters A.json,B.json --official E.json,U.json \
- *     --club-map MAP.json --out SQUADS.json [--observed-on YYYY-MM-DD]
+ *     --club-map MAP.json --out SQUADS.json [--observed-on YYYY-MM-DD] [--batch NAME] [--keep-confirmed]
+ *
+ * --keep-confirmed is for a run over a few clubs' rosters only (the second divisions, 22 November 2026): players
+ * confirmed at a club outside the run by an earlier current roster are never moved or added a second time.
  */
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -39,12 +42,12 @@ const titled = name => name === name.toUpperCase() ? name.toLowerCase().replace(
 /** Display order: "Surname Given" rosters (Serie A2) become "Given Surname". */
 const display = row => { const name = titled(row.name.replace(/\s+/g, ' ').trim()); if (!row.surnameFirst) return name; const words = name.split(' '); return [words.at(-1), ...words.slice(0, -1)].join(' '); };
 
-export function currentSquads({ pack, rosters, officialRows = [], codeToClub = new Map(), observedOn, batch }) {
+export function currentSquads({ pack, rosters, officialRows = [], codeToClub = new Map(), observedOn, batch, keepConfirmed = false }) {
   // One defining roster per club, the best-ranked with enough players.
   const candidates = new Map();
   // Rows repeated on a page count once; pages with more than 24 players mix teams (a women's or youth roster too).
   const offer = (clubId, sourceName, sources, listed) => { const seen = new Set(), players = listed.filter(row => { const key = fold(row.name).replace(/\s+/g, ' '); return !seen.has(key) && seen.add(key); }); if (players.length < MINIMUM_ROSTER || players.length > 24) return; const list = candidates.get(clubId) ?? []; list.push({ sourceName, sources, players, rank: rank(sourceName) }); candidates.set(clubId, list); };
-  for (const file of rosters) for (const club of file.clubs ?? []) offer(club.clubId, file.sourceName, club.sources ?? [file.source], club.players);
+  for (const file of rosters) for (const club of file.clubs ?? []) offer(club.clubId, club.sourceName ?? file.sourceName, club.sources ?? [file.source], club.players);
   const registrations = new Map();
   for (const row of officialRows) { const clubId = codeToClub.get(row.club.code); if (!clubId) continue; const [surname, given] = row.person.name.split(','); registrations.set(clubId, [...(registrations.get(clubId) ?? []), { name: `${(given ?? '').trim()} ${surname.trim()}`, number: /^\d{1,2}$/.test(row.dorsal ?? '') ? Number(row.dorsal) : null, position: row.positionName, birthDate: row.person.birthDate?.slice(0, 10), heightCm: row.person.height >= 150 && row.person.height <= 240 ? row.person.height : undefined, sourceUrl: row.sourceUrl }]); }
   for (const [clubId, players] of registrations) offer(clubId, 'euroleague-eurocup', [players[0].sourceUrl], players);
@@ -77,6 +80,9 @@ export function currentSquads({ pack, rosters, officialRows = [], codeToClub = n
   const rowKeys = new Map();
   for (const [, squad] of ordered) for (const row of squad.players) { const key = fullKey(display(row)); if (key) rowKeys.set(key, (rowKeys.get(key) ?? 0) + 1); }
   const moves = [], blocked = [], doubles = [];
+  // With keepConfirmed (a run over a few clubs only), a player whose own club is not in this run but whose membership
+  // there was confirmed by an earlier current roster stays there: the other roster's row is reported, never added.
+  const confirmed = player => keepConfirmed && !squads.has(player.clubId) && player.profileEvidence?.membership === 'official-registration-observed';
   for (const [clubId, squad] of ordered) for (const row of squad.players) {
     if (row.taken) continue;
     const key = fullKey(display(row));
@@ -87,6 +93,7 @@ export function currentSquads({ pack, rosters, officialRows = [], codeToClub = n
       if (options.length === 1) mover = options[0];
     }
     if (!mover || assigned.has(mover.id) || mover.clubId === clubId) continue;
+    if (confirmed(mover)) { row.taken = true; doubles.push({ player: mover.name, listedBy: clubs.get(clubId)?.name, keptAt: clubs.get(mover.clubId)?.name, reason: 'confirmed at his club by an earlier current roster' }); continue; }
     // A club without a current roster keeps at least the minimum squad: the player stays there instead (and is not
     // added again at the other club).
     if (!squads.has(mover.clubId)) {
@@ -106,7 +113,7 @@ export function currentSquads({ pack, rosters, officialRows = [], codeToClub = n
     if (same.length !== 1) continue;
     const player = same[0];
     row.taken = true;
-    if (assigned.has(player.id) || player.clubId === clubId) { doubles.push({ player: player.name, listedBy: clubs.get(clubId)?.name, keptAt: clubs.get(assigned.get(player.id)?.clubId ?? player.clubId)?.name }); continue; }
+    if (assigned.has(player.id) || player.clubId === clubId || confirmed(player)) { doubles.push({ player: player.name, listedBy: clubs.get(clubId)?.name, keptAt: clubs.get(assigned.get(player.id)?.clubId ?? player.clubId)?.name }); continue; }
     if (!squads.has(player.clubId) && pack.players.filter(item => item.clubId === player.clubId).length - moves.filter(move => move.from === player.clubId).length - 1 < MINIMUM_SQUAD) { blocked.push({ player, from: player.clubId, to: clubId, squad }); continue; }
     assigned.set(player.id, { clubId, row, squad, method: 'found-on-another-club-roster', own: false });
     moves.push({ player, from: player.clubId, to: clubId, row, squad });
@@ -126,7 +133,7 @@ export function currentSquads({ pack, rosters, officialRows = [], codeToClub = n
     const base = { sources: move.squad.sources, observedOn, method: 'found-on-another-club-roster', from: move.from.replace(/^club-/, '') };
     rows.push({ entity_type: 'player', entity_id: move.player.id.replace(/^player-/, ''), field: 'club_id', value: { value: move.to.replace(/^club-/, ''), ...base, batch }, reason: reason(move.squad, `Moved: listed in ${clubs.get(move.to).name}'s current roster, not in ${clubs.get(move.from)?.name ?? 'his club'}'s`) });
     const parsed = rosterPosition(move.row.position), exact = parsed.options.length === 1 ? parsed.options[0] : null;
-    if (exact || parsed.group) rows.push({ entity_type: 'player', entity_id: move.player.id.replace(/^player-/, ''), field: 'position', value: { value: exact, group: parsed.group ?? (exact ? Object.keys(GROUP_POSITIONS).find(group => GROUP_POSITIONS[group].includes(exact)) : null), method: exact ? 'official-roster-exact' : 'official-group-statistics', sources: move.squad.sources, rosterLabel: String(move.row.position), rosterMatch: 'found-on-another-club-roster', ...(exact && COMMUNITY_SOURCES.has(move.squad.sourceName) ? { community: true } : {}), observedOn, batch }, reason: reason(move.squad, 'Position from the new club\'s roster') });
+    if (exact || parsed.group) rows.push({ entity_type: 'player', entity_id: move.player.id.replace(/^player-/, ''), field: 'position', value: { value: exact, group: parsed.group ?? (exact ? Object.keys(GROUP_POSITIONS).find(group => GROUP_POSITIONS[group].includes(exact)) : null), method: exact ? 'official-roster-exact' : 'official-group-statistics', sources: move.squad.sources, rosterLabel: String(move.row.label ?? move.row.position), rosterMatch: 'found-on-another-club-roster', ...(exact && COMMUNITY_SOURCES.has(move.squad.sourceName) ? { community: true } : {}), observedOn, batch }, reason: reason(move.squad, 'Position from the new club\'s roster') });
   }
   // Players left out of a known current squad leave the pack, unless the club would fall below the minimum.
   for (const [clubId, squad] of squads) {
@@ -149,7 +156,7 @@ export function currentSquads({ pack, rosters, officialRows = [], codeToClub = n
       const age = born ? Number(opening.slice(0, 4)) - Number(born.slice(0, 4)) - Number(opening.slice(5) < born.slice(5)) : null;
       const [height, weight] = BUILD[position];
       report.added += 1; tally(clubId, 'added');
-      return { id, name, number: row.number ?? null, position, positionSource: exact ? (COMMUNITY_SOURCES.has(squad.sourceName) ? 'provider' : 'official') : 'estimated', nationality: null,
+      return { id, name, number: row.number ?? null, position, positionSource: exact ? (COMMUNITY_SOURCES.has(squad.sourceName) ? 'provider' : 'official') : 'estimated', nationality: row.nationality ?? null,
         age: age !== null && age >= 14 && age <= 60 ? age : null, ...(age !== null && age >= 14 && age <= 60 ? { birthDate: born } : {}),
         heightCm: row.heightCm ?? height, weightKg: weight, attributes: profile[position],
         estimated: ['all-abilities', ...(row.heightCm ? [] : ['height_cm']), 'weight_kg', ...(age !== null && age >= 14 && age <= 60 ? [] : ['age-unverified']), ...(exact ? [] : ['game_position'])] };
@@ -178,7 +185,7 @@ async function main() {
   const links = (await read(path.join(root, 'real-data', 'official-club-links.json'))).clubs, map = argument('--club-map') ? await read(argument('--club-map')) : {};
   const codeToClub = new Map(links.filter(link => map[link.apiSportsId]).map(link => [link.officialCode, `club-${map[link.apiSportsId]}`]));
   const official = list('--official').length ? officialPeople(await Promise.all(list('--official').map(read)), observedOn, pack.season.slice(0, 4)) : [];
-  const result = currentSquads({ pack, rosters, officialRows: official, codeToClub, observedOn, batch: argument('--batch') ?? `current-squads-${observedOn}` });
+  const result = currentSquads({ pack, rosters, officialRows: official, codeToClub, observedOn, batch: argument('--batch') ?? `current-squads-${observedOn}`, keepConfirmed: process.argv.includes('--keep-confirmed') });
   await writeFile(out, JSON.stringify(result, null, 1));
   const { report } = result;
   console.log(`Current squads from ${report.clubsWithRoster} club rosters: ${report.kept} kept, ${report.moved} moved, ${report.left} leave, ${report.added} added; ${report.rows} rows.`);

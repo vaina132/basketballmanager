@@ -7,6 +7,7 @@ import { continueAction, runContinueStep } from '../world/continue-step'
 import { getClubContractSummary, MIN_ROSTER_SIZE } from '../world/employment-policy'
 import { getMarketWindow, isLiveMarketOffer, isMarketActive } from '../world/market-policy'
 import { currentGameDay, seasonLabel } from '../world/season'
+import { dueManagerNationalGame, nationalStepDay } from '../world/national'
 import { careerDay, careerToday, gameDate, gamesText, nextGameText, seasonChangeText } from './career-text'
 import { getInboxItems } from './inbox-items'
 
@@ -78,7 +79,7 @@ export function continueStop(before: SeasonState, after: SeasonState): ContinueS
   }
   // Format 80: the manager's national game is ready in the Match center.
   const nationalMatch = after.national?.activeMatch
-  if (after.status === 'active' && nationalMatch && nationalMatch.status !== 'finished' && !before.national?.activeMatch) {
+  if (nationalMatch && nationalMatch.status !== 'finished' && !before.national?.activeMatch) {
     return { kind: 'match', message: `Your national team plays: ${nationalMatch.home.name} vs ${nationalMatch.away.name}.`, page: 'match' }
   }
   if (after.status === 'active' && after.activeMatch && (after.activeMatch.status !== 'finished' || after.activeMatch.result?.kind === 'default')) {
@@ -103,6 +104,8 @@ export function continueStop(before: SeasonState, after: SeasonState): ContinueS
     const short = !unemployed && before.status === 'complete' && isMarketActive(after) && !after.employment.delegated
       ? MIN_ROSTER_SIZE - getClubContractSummary(after, after.managedClubId).rosterSize : 0
     if (short > 0) return { kind: 'decision', message: `Your squad needs ${plural(short, 'more signed player', 'more signed players')} for next season. Make offers in Transfers; each Continue moves one recruitment day while the squad is short.`, page: 'transfers' }
+    // Format 80: the summer tournament the manager's national team played ends the offseason.
+    if (ready && continueAction(before).kind === 'national') return { kind: 'start-ready', message: `The ${after.national?.competitions.find(item => item.seasonNumber === after.seasonNumber && item.kind === 'tournament')?.name ?? 'summer tournament'} is over. ${seasonLabel(after.seasonNumber + 1)} can start. Continue starts it.`, page: 'home' }
     if (ready) return { kind: 'start-ready', message: `Recruitment is complete: ${seasonLabel(after.seasonNumber + 1)} can start. Continue starts it.`, page: to('transfers') }
     const next = continueAction(after)
     if (next.kind === 'blocked') return { kind: 'blocked', message: next.reason, page: to('transfers') }
@@ -116,7 +119,10 @@ export function continueStepView(state: SeasonState): ContinueStepView {
   const action = continueAction(state)
   if (action.kind === 'market') return { day: action.date, label: 'Recruitment day: player replies and signings' }
   if (action.kind === 'rollover') return { day: state.date, label: `Preparing the ${seasonLabel(state.seasonNumber + 1)} season` }
-  if (action.kind === 'national') return { day: careerToday(state), label: state.national?.activeMatch ? 'National games of the day' : 'Your national team\'s next game' }
+  if (action.kind === 'national') {
+    const day = nationalStepDay(state) ?? careerToday(state)
+    return { day, label: state.national?.activeMatch ? 'National games of the day' : dueManagerNationalGame(state) ? 'Your national team\'s next game' : `${state.national?.competitions.find(item => item.seasonNumber === state.seasonNumber && item.kind === 'tournament')?.name ?? 'Summer tournament'}: games of the day` }
+  }
   if (action.kind !== 'round') return { day: careerToday(state), label: '' }
   // Without a club, a step plays the whole week (no managed match to stop for).
   if (isUnemployed(state)) {
@@ -140,6 +146,7 @@ export function continueStepView(state: SeasonState): ContinueStepView {
 export function remainingSteps(state: SeasonState): number {
   const action = continueAction(state)
   if (action.kind === 'rollover') return 1
+  if (action.kind === 'national') return 2
   if (action.kind === 'market') {
     const window = getMarketWindow(state)!, dates = new Set<string>([window.closesOn])
     for (let day = new Date(`${window.date}T00:00:00Z`); ; ) { day.setUTCDate(day.getUTCDate() + 7); const iso = day.toISOString().slice(0, 10); if (iso >= window.closesOn) break; dates.add(iso) }

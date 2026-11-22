@@ -13,7 +13,7 @@ import { appointFromUnemployment, appointManager, createCareer, enableCareerMove
 import { jobOfferRefusal, jobRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, unemployedSeasonEndVacancies, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
 import { allowsUnemployment, CAREER_RULES, coachProtected, isUnemployed, NO_CLUB, startingConfidence, usesCareerRules } from './career-rules';
 import { nationalPausedWeeks } from './national-calendar';
-import { advanceNationalWeek, createNational, nationalDutyDays, rolloverNational, usesNationalTeams } from './national';
+import { advanceNationalWeek, createNational, nationalDutyDays, playSummerTournament, rolloverNational, usesNationalTeams } from './national';
 import { addCalendarDays, domesticRoundDates, roundRobinGames, roundRobinRoundCount, calendarDaysBetween } from './competition-calendar';
 import { derivePostseason, POSTSEASON_FORMATS, POSTSEASON_SLOT_OFFSETS, postseasonOutcome } from './postseason';
 import { divisionChanges, openingDivisions, seasonLeagues } from './divisions';
@@ -1023,6 +1023,8 @@ export function rolloverSeason(state: SeasonState): SeasonState {
     const result = current.result!;
     if (result.winnerClubId !== state.activeMatch[state.activeMatch.result!.winner].id || result.kind !== state.activeMatch.result!.kind || result.periods !== state.activeMatch.period || SIDES.some(side => result.score[side] !== state.activeMatch!.score[side] || result.officialScore[side] !== state.activeMatch!.result!.officialScore[side])) throw new Error('The final score must match its committed fixture result.');
   }
+  // Format 80: the summer tournament's remaining games are played first; their injuries carry into the new season.
+  if (state.national) state = playSummerTournament(state);
   const seasonNumber = state.seasonNumber + 1;
   const divisions = nextSeasonDivisions(state);
   const europe = state.europe ? europeanPlacesAfter(state) : undefined;

@@ -116,7 +116,7 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
       if (!Array.isArray(fields.teamIds) || fields.teamIds.some(id => !teamIds.has(id as string) || members.has(id as string))) fail(`${path}.groups.${groupIndex}.teamIds`, 'must list distinct national teams');
       for (const id of fields.teamIds as string[]) members.add(id);
     }
-    // A summer tournament is played at the rollover, so its last games can come after the new season's first day.
+    // A summer tournament's games are later than the offseason's recruitment days.
     const fixtures = competition.fixtures.map((fixture, fixtureIndex) => validateFixture(fixture, `${path}.fixtures.${fixtureIndex}`, competition, teamIds, competition.kind === 'tournament' ? '9999-12-31' : latest));
     for (const fixture of fixtures) { if (fixtureIds.has(fixture.id)) fail(`${path}.fixtures`, 'must have distinct ids'); fixtureIds.add(fixture.id); }
     if (competition.kind === 'qualifiers') {
@@ -125,7 +125,11 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
       if (competition.id !== expected.id || competition.name !== expected.name || competition.groups.length !== 4 || members.size !== NATIONAL_TEAMS.length || !same(fixtures.map(fixture => ({ ...fixture, result: null })), expected.fixtures)) fail(path, 'must follow the qualifier schedule of its groups');
     } else {
       const days = nationalTournamentDays(year);
-      if (competition.id !== `nt-s${year}` || members.size !== 12 || fixtures.length > 16 || fixtures.some(fixture => fixture.window !== 3 || !days.includes(fixture.date) || !fixture.result)) fail(path, 'must be a played summer tournament of twelve teams');
+      // Drawn when the qualifiers end; played day by day in the offseason (the manager's team) or at the season change.
+      const groupGames = fixtures.filter(fixture => fixture.stage === 'group'), knockouts = fixtures.filter(fixture => fixture.stage !== 'group');
+      if (competition.id !== `nt-s${year}` || competition.groups.length !== 4 || members.size !== 12 || groupGames.length !== 12 || knockouts.length > 4 || fixtures.some(fixture => fixture.window !== 3 || !days.includes(fixture.date))) fail(path, 'must be a summer tournament of twelve teams');
+      if (knockouts.length && groupGames.some(fixture => !fixture.result) || knockouts.some(fixture => fixture.stage !== 'semi') && knockouts.some(fixture => fixture.stage === 'semi' && !fixture.result)) fail(path, 'must play each round before the next');
+      if (year < seasonNumber && fixtures.some(fixture => !fixture.result)) fail(path, 'must be played by the season change');
     }
   }
   const job = national.job;

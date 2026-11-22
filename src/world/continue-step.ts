@@ -8,7 +8,7 @@ import { clubRosterLimit } from './club-roster-policy';
 import { getClubContractSummary, MIN_ROSTER_SIZE } from './employment-policy';
 import { advanceMarket } from './market';
 import { getMarketStartReason, getNextMarketDate } from './market-policy';
-import { commitNationalMatch, dueManagerNationalGame, startNationalMatch } from './national';
+import { commitNationalMatch, dueManagerNationalGame, offseasonNationalDay, startNationalMatch } from './national';
 import { advanceSeason, currentGameDay, MAX_SEASON_NUMBER, midSeasonDismissalPossible, previewSeasonEnd, rolloverSeason } from './season';
 
 /**
@@ -36,9 +36,18 @@ export function continueAction(state: SeasonState): ContinueAction {
     // Format 80: the manager's national game (FIBA window) is played before the week closes: open it, then record it.
     const national = state.national?.activeMatch;
     if (national) return national.status !== 'finished' || national.requiredSubstitutions.length ? { kind: 'match' } : { kind: 'national' };
-    if (closesWeek(state) && dueManagerNationalGame(state)) return { kind: 'national' };
+    if (closesWeek(state) && !isUnemployed(state) && dueManagerNationalGame(state)) return { kind: 'national' };
     return { kind: 'round' };
   }
+  // Format 80: the manager's summer tournament game, once opened in the offseason, is finished and recorded first.
+  const national = state.national?.activeMatch;
+  if (national) return national.status !== 'finished' || national.requiredSubstitutions.length ? { kind: 'match' } : { kind: 'national' };
+  const next = offseasonAction(state);
+  // With a team in the summer tournament, its game days follow recruitment and come before the season change.
+  return next.kind === 'rollover' && offseasonNationalDay(state) ? { kind: 'national' } : next;
+}
+
+function offseasonAction(state: SeasonState): ContinueAction {
   if (state.seasonNumber >= MAX_SEASON_NUMBER) return { kind: 'blocked', reason: 'The calendar has reached its final supported season.' };
   if (state.market?.enabledSince) {
     const reason = getMarketStartReason(state), date = getNextMarketDate(state);

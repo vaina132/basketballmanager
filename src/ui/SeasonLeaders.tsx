@@ -5,7 +5,7 @@ import { seasonLabel } from '../world/season'
 import type { PerformanceMode } from '../world/performance'
 import { PerformanceLegend, PerformanceModeControl, PerformanceTable } from './PerformanceTable'
 import { PlayerPerformanceReport } from './PlayerPerformanceReport'
-import { canSplitPhases, hasPhaseGames, phaseRows, STAT_PHASES, type StatPhase } from './season-stat-phases'
+import { canSplitPhases, hasEuropeanGames, hasPhaseGames, phaseRows, STAT_PHASES, type StatPhase } from './season-stat-phases'
 import './season-leaders.css'
 
 interface SeasonLeadersProps {
@@ -39,13 +39,16 @@ export function SeasonLeaders({ season, seasonNumber, clubIds, busy = false, onR
   // Per-game records allow the split; a season kept partly as season totals stays combined (and has no European table).
   const splittable = useMemo(() => coverage === 'complete' && canSplitPhases(season, seasonNumber, clubIds), [coverage, season, seasonNumber, clubIds])
   const showPhases = splittable && (phases || !!competitionId && hasPhaseGames(season, seasonNumber, scope, 'playoffs', clubIds))
-  // Without the toggle a European table covers all of the competition's games.
+  // Without the toggle a European table covers all of the competition's games, and League all of the league's games.
   const shownPhase: StatPhase | null = showPhases ? phase : null
+  // League statistics count league games only; European games belong to International's statistics (owner, 22 November
+  // 2026). Only a season kept partly as season totals cannot leave them out.
   const rows = useMemo(() => {
     const all = getSeasonPerformance(season, seasonNumber).filter(row => !clubIds || clubIds.includes(row.club.id))
-    if (!splittable || !showPhases && !competitionId) return all
+    if (!splittable) return all
     return phaseRows(season, seasonNumber, all, scope, shownPhase)
-  }, [season, seasonNumber, clubIds, splittable, showPhases, competitionId, scope, shownPhase])
+  }, [season, seasonNumber, clubIds, splittable, scope, shownPhase])
+  const combinedEurope = !competitionId && !splittable && coverage === 'complete' && hasEuropeanGames(season, seasonNumber, clubIds)
   const search = query.trim().toLowerCase()
   const selectedClub = clubFilter === 'managed' ? season.managedClubId : clubFilter
   const matchingRows = rows.filter(row =>
@@ -105,11 +108,11 @@ export function SeasonLeaders({ season, seasonNumber, clubIds, busy = false, onR
       </div>
       <p id="league-qualification-rule" className="season-leader-rule">Qualified: played in half the club's games and 5 minutes a club game.</p>
       {scopeNote && <p className="season-leader-rule" data-stats-scope-note>{scopeNote}</p>}
-      {phases && coverage === 'complete' && !splittable && <p className="season-leader-rule" data-phases-combined>Regular season and playoffs are shown together: this season's records are kept as season totals.</p>}
+      {(phases || combinedEurope) && coverage === 'complete' && !splittable && <p className="season-leader-rule" data-phases-combined>{phases ? 'Regular season and playoffs are shown' : 'League and European games are shown'} together{phases && combinedEurope ? ', with European games' : ''}: this season's records are kept as season totals.</p>}
       <div className="season-leader-result-count" role="status">{hasResults ? `${visibleRows.length} ${visibleRows.length === 1 ? 'player' : 'players'} shown` : shownPhase === 'playoffs' ? 'No playoff games recorded yet' : 'No recorded matchdays yet'}</div>
       {!hasResults ? <p className="season-leaders-empty">{shownPhase === 'playoffs' ? 'Playoff statistics appear once the first playoff game is played and recorded.' : 'Player statistics appear after you finish a match and Continue to record the matchday.'}</p> : visibleRows.length ? <>
         <PerformanceTable rows={visibleRows} mode={mode} onSelectPlayer={selectPlayer} selectedPlayerId={selected?.key} showClub managedClubId={season.managedClubId} busy={busy} label={shownPhase ? `${title}, ${shownPhase === 'playoffs' ? 'playoffs' : 'regular season'}` : title} />
-        <PerformanceLegend mode={mode} note={`Records keep the club each player played for. Only recorded matchdays of the chosen season count.${shownPhase === 'regular' ? competitionId ? ' Regular season: the regular-season games of this competition.' : ' Regular season: league games before the playoffs; European games are not included.' : shownPhase === 'playoffs' ? ' Playoffs: every postseason game (play-in, playoffs, play-outs and final stages); a club\'s games for qualification are its playoff games.' : competitionId ? ' Only games of this competition count.' : ''}`} />
+        <PerformanceLegend mode={mode} note={`Records keep the club each player played for. Only recorded matchdays of the chosen season count.${shownPhase === 'regular' ? competitionId ? ' Regular season: the regular-season games of this competition.' : ' Regular season: league games before the playoffs; European games are not included.' : shownPhase === 'playoffs' ? ' Playoffs: every postseason game (play-in, playoffs, play-outs and final stages); a club\'s games for qualification are its playoff games.' : competitionId ? ' Only games of this competition count.' : splittable ? ' Only league games count; European games are in International.' : ''}`} />
       </> : <div className="season-leaders-empty">
         <p>{matchingRows.length && qualifiedOnly ? 'No players meet the qualification threshold with these filters.' : 'No players match these filters.'}</p>
         {matchingRows.length > 0 && qualifiedOnly && <button className="text-button" onClick={() => setQualifiedOnly(false)} disabled={busy}>Include unqualified players</button>}

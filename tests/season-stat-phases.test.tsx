@@ -97,6 +97,20 @@ describe('regular season and playoff statistics', () => {
     expect(seasonWorkspace).toContain('phases={!!league?.postseason}');
   });
 
+  it('keeps European games out of League statistics, with or without playoffs', () => {
+    // Owner, 22 November 2026: a league without playoffs counted its clubs' European games too.
+    const league = points(phaseRows(season, season.seasonNumber, all, {}, null));
+    expect(league).toMatchObject({ games: 2, clubGames: 2, totals: expect.objectContaining({ points: 2 * (1 + 3) }) });
+    expect(league.log.map(game => game.round).sort()).toEqual([1, 2]);
+    const plain = renderToStaticMarkup(<SeasonLeaders season={season} seasonNumber={season.seasonNumber} />);
+    expect(plain).toContain('Only league games count; European games are in International.');
+    // Per game: 8 points in 2 league games (4.0), not 54 in 5 games with the European ones (10.8).
+    const name = season.clubs[0]!.players[0]!.name;
+    const row = new RegExp(`${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?</tr>`).exec(plain)?.[0] ?? '';
+    expect(row).toContain('>4.0<');
+    expect(row).not.toContain('>10.8<');
+  });
+
   it('gives International a statistics table of the competition shown, split where it has knockout games', () => {
     const html = renderToStaticMarkup(<SeasonLeaders season={season} seasonNumber={season.seasonNumber} competitionId="euroleague" title="EuroLeague player statistics" scopeNote="Only clubs from the countries in your career keep player statistics." />);
     expect(html).toContain('>EuroLeague player statistics</h2>');

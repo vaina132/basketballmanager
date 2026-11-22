@@ -244,9 +244,11 @@ export function validateBoard(state: SeasonState, version: number): void {
     if (anchor.date < previous.date || anchor.completedRounds < previous.completedRounds || anchor.ledgerCount < previous.ledgerCount || ordinal(anchor.seasonNumber, anchor.round, seasonRounds(state)) < ordinal(previous.seasonNumber, previous.round, seasonRounds(state))) fail(path, 'must preserve chronological results and cash evidence');
     previous = anchor;
   };
-  // Format 73: games of sealed seasons keep no per-player minutes, which objectives assess. Objectives and reviews
-  // of earlier seasons are kept as recorded (shape and order checked); the current season's are rebuilt.
-  const replayFrom = version >= SEALED_HISTORY_FORMAT && state.seasonNumber >= 3 ? state.seasonNumber : 0;
+  // Format 73: games of sealed seasons keep no per-player minutes, which objectives assess. Objectives, reviews and
+  // requests of those seasons are kept as recorded (shape and order checked). The latest completed season keeps every
+  // game's minutes (`seniorSealedThrough`), so since 22 November 2026 it is rebuilt with the current season; the
+  // incremental checkpoint check resumes in the current season and skips both.
+  const replayFrom = version >= SEALED_HISTORY_FORMAT && state.seasonNumber >= 3 ? state.seasonNumber - 1 : 0;
   const recordedAnchor = (raw: Record<string, unknown>, path: string): BoardAnchor => {
     integer(raw.seasonNumber, `${path}.seasonNumber`, 1, state.seasonNumber); integer(raw.round, `${path}.round`, 1, seasonRounds(state));
     integer(raw.completedRounds, `${path}.completedRounds`, 0, completedNow); integer(raw.ledgerCount, `${path}.ledgerCount`, 0, financeLedgerCount(state.finance)); integer(raw.rosterCount, `${path}.rosterCount`, 0, 100_000);

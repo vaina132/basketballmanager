@@ -5,7 +5,9 @@ import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { validateSeasonState } from '../src/storage/season-storage';
 import { sponsorClause } from '../src/world/commercial-policy';
 import { setEmploymentDelegation } from '../src/world/employment';
-import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, resignManager } from '../src/world/season';
+import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, resignManager, rolloverSeason } from '../src/world/season';
+import { advanceMarket } from '../src/world/market';
+import { getMarketStartReason } from '../src/world/market-policy';
 import { resignationOutlook } from '../src/world/career-policy';
 import { restartBoard, transferManager } from '../src/world/career';
 import { asCareer2 } from './helpers/career-rules';
@@ -134,4 +136,21 @@ describe('president requests are rebuilt from each review', () => {
     } else edited.board.requests![0] = { ...request, position: request.position === 'C' ? 'PG' : 'C' };
     expect(check(edited)).toThrow(/seeded draw picks/);
   }, 300_000);
+});
+
+describe('the latest completed season\'s board history is rebuilt after sealing (format 73)', () => {
+  it('refuses a changed review of the previous season in season three', () => {
+    const finish = (from: SeasonState) => { let state = from; while (state.status === 'active') state = play(state); for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state); return state; };
+    let state = setEmploymentDelegation(createSeason({ seed: 31, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true);
+    state = rolloverSeason(finish(rolloverSeason(finish(state))));
+    state = play(state);
+    expect(state.seasonNumber).toBe(3);
+    expect(check(state)).not.toThrow();
+    // A mid-season review of season two: its senior games still keep each player's minutes, so it is rebuilt.
+    const edited = clone(state), index = edited.board.reviews.findIndex(review => review.seasonNumber === 2 && review.round === 10);
+    const club = Object.keys(edited.board.reviews[index]!.clubs).find(id => id !== edited.managedClubId)!;
+    const review = edited.board.reviews[index]!.clubs[club]!;
+    edited.board.reviews[index]!.clubs[club] = { ...review, wins: review.wins + 1 };
+    expect(check(edited)).toThrow(/board\.reviews/);
+  }, 900_000);
 });

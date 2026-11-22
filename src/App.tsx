@@ -92,6 +92,7 @@ const RealClubFriendly = lazy(() => import('./ui/RealClubFriendly').then(module 
 import { fetchBuiltInPack } from './world/built-in-pack'
 import { SeasonCalendar } from './ui/SeasonCalendar'
 import { EuropeWorkspace } from './ui/EuropeWorkspace'
+import { answerEuropeanOffer } from './world/european-entry-day'
 import { playsEurope } from './world/europe'
 import { SeasonWorkspace } from './ui/SeasonWorkspace'
 import { TrainingWorkspace } from './ui/TrainingWorkspace'
@@ -430,6 +431,12 @@ export default function App() {
   }
   function answerNationalOffer(offerId: string, accept: boolean) {
     updateCareer(state => accept ? acceptNationalOffer(state, offerId) : declineNationalOffer(state, offerId), next => accept && next.national?.job ? `You are the head coach of ${nationalTeam(next.national, next.national.job.teamId).name}. Your club job continues. Pick your squad on the National team page.` : 'Offer declined.', true)
+  }
+  /** Format 83: answer an offered European place for next season (no answer means accept). */
+  function answerEuropeanPlace(competitionId: string, accept: boolean) {
+    const current = sessionRef.current
+    const name = (current.kind === 'season' ? worldOf(current.season).europeanCompetitions?.find(item => item.id === competitionId)?.name : undefined) ?? 'European'
+    updateCareer(state => answerEuropeanOffer(state, competitionId, accept), accept ? `${name} place accepted.` : `${name} place declined. The next club takes it; check the Inbox for any other offer.`, true)
   }
   function updateShortlist(playerId: string, shortlisted: boolean) {
     updateCareer(state => setShortlisted(state, playerId, shortlisted), shortlisted ? 'Player added to your shortlist.' : 'Player removed from your shortlist.', true)
@@ -984,8 +991,9 @@ export default function App() {
           else if (target === 'dynamics') { setRelationshipPlayer(playerId ?? null); setSquadView('relationships'); navigate('squad') }
           else if (target === 'contract' && playerId) openTransfers(playerId)
           else if (target === 'bid') { setTransfersTab('search'); navigate('transfers', '#transfer-business') }
+          else if (target === 'europe') navigate('europe', '[data-european-places]')
           else { if (playerId) setSelectedPlayer(playerId); setRosterFilter('all'); setRosterQuery(''); navigate('squad', playerId ? '.player-profile' : '#main') }
-        }} onContractReply={replyToContract} onNationalOffer={answerNationalOffer} onBidDecision={(offerId, market, response) => updateCareer(state => market === 'season' ? decideInSeasonTransfer(state, offerId, response) : decideClubTransfer(state, offerId, response), response === 'accept' ? 'Offer accepted. The player decides by the next matchday; the fee arrives when he signs.' : response === 'counter' ? 'Counteroffer sent: the club may come back at your asking fee.' : 'Offer declined.', true)} />}
+        }} onContractReply={replyToContract} onNationalOffer={answerNationalOffer} onEuropeanOffer={answerEuropeanPlace} onBidDecision={(offerId, market, response) => updateCareer(state => market === 'season' ? decideInSeasonTransfer(state, offerId, response) : decideClubTransfer(state, offerId, response), response === 'accept' ? 'Offer accepted. The player decides by the next matchday; the fee arrives when he signs.' : response === 'counter' ? 'Counteroffer sent: the club may come back at your asking fee.' : 'Offer declined.', true)} />}
 
         {restWeek && season && (page === 'home' || page === 'match') && <RestWeek season={season} busy={advancing || saving} onTraining={() => navigate('training')} />}
         {page === 'home' && !restWeek && <ManagerDesk onOpenInbox={() => navigate('inbox', '#press-conference')} onOpenBoard={() => navigate('board')} onOpenRelationships={id => { setRelationshipPlayer(id ?? null); setSquadView('relationships'); navigate('squad') }} assistant={assistantCoach} onOpenAssistantAdvice={() => navigate('match', '#assistant-advice-toggle')} onOpenMedical={() => navigate('medical')} season={season} match={match} managedSide={managedSide} apply={apply} fixtureLabel={season ? `${season.world?.domesticLeagues?.find(league => league.clubIds.includes(season.managedClubId))?.name ?? worldOf(season).name} / Week ${season.round}${matchVenue ? ` / ${matchVenue}` : ''}` : undefined} onOpenMatch={() => navigate('match')} onOpenSquad={() => navigate('squad')} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} onOpenCoaching={() => navigate('match', needsReplacement ? '#match-rotation' : complete ? '.coaching-workbench' : '#tempo')} onOpenClub={() => navigate('club')} onOpenPayroll={openPayroll} onOpenTransfers={() => navigate('transfers')} onOpenContracts={() => openContracts()} onOpenScouting={() => openScouting()} />}

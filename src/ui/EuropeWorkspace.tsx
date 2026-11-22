@@ -9,6 +9,7 @@ import { seasonLabel } from '../world/season'
 import { NOT_PLAYED_LEAGUE } from './career-text'
 import './season-workspace.css'
 import { ClubBadge, InlineLogo } from './ClubLogo'
+import { EuropeanPlacesPanel } from './EuropeanPlacesPanel'
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
@@ -48,6 +49,8 @@ export function EuropeWorkspace({ season, initialCompetition }: { season: Season
   const champion = entry?.outcome.champion ? club(entry.outcome.champion) : null
 
   return <div className="season-workspace europe-workspace">
+    {/* Format 83: how places work, your club's status and next season's places (careers with European entry rules). */}
+    <EuropeanPlacesPanel season={season} />
     <section className="season-matchday panel" aria-label="European competition">
       <div className="season-matchday-identity">
         <div className="season-year-filter"><label htmlFor="europe-competition">Competition</label><select id="europe-competition" aria-label="European competition" value={selected} onChange={event => setSelected(event.target.value)}>

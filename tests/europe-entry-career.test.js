@@ -9,6 +9,10 @@ import { answerEuropeanOffer } from '../src/world/european-entry-day';
 import { clubPlace, openingEuropeTwo } from '../src/world/european-entry';
 import { placesWorld } from './helpers/europe-worlds';
 import { currentSeasonFile } from './helpers/season-format';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { europeanInboxItems, yourClubCard } from '../src/ui/european-places';
+import { EuropeanPlacesPanel } from '../src/ui/EuropeanPlacesPanel';
 
 const play = state => advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
 const roundTrip = state => parseSeason(serializeSeasonCompact(state));
@@ -76,6 +80,28 @@ describe('European entry in a career (format 83)', () => {
     changed(complete, copy => { copy.europe.entrants[0].places[0] = { type: 'wild-card', until: 1, reason: 'opening' }; }, /europe/);
     expect(() => answerEuropeanOffer({ ...answered, status: 'active' }, 'euroleague', true)).toThrow(/end of the season/);
   }, 300_000);
+
+  it('shows the places day in the Inbox and on the European places panel', () => {
+    const clubId = world.clubs[0].id;
+    const offered = europeanInboxItems(complete);
+    const invitation = offered.find(item => item.id === 'europe-offer-s2-euroleague');
+    expect(invitation).toMatchObject({ needsAction: true, target: 'europe', offerId: 'euroleague' });
+    expect(offered.find(item => item.id === 'europe-places-s2').detail).toContain('Test euroleague');
+    const after = europeanInboxItems(answered);
+    expect(after.find(item => item.id === 'europe-offer-s2-euroleague')).toMatchObject({ needsAction: false, title: expect.stringContaining('declined') });
+    expect(after.some(item => item.id === 'europe-offer-s2-eurocup' && item.needsAction)).toBe(true);
+    const card = yourClubCard(answered);
+    expect(card).toMatchObject({ clubId, decided: true });
+    expect(card.checks).toHaveLength(3);
+    expect(card.next?.competitionId).not.toBe('euroleague');
+    const html = renderToStaticMarkup(createElement(EuropeanPlacesPanel, { season: answered }));
+    expect(html).toContain('How European places work');
+    expect(html).toContain('data-european-your-club');
+    expect(html).toContain('Wild-card checklist');
+    // A club outside Europe sees the card too, with its checklist and score.
+    const outside = { ...answered, managedClubId: world.clubs[4].id };
+    expect(renderToStaticMarkup(createElement(EuropeanPlacesPanel, { season: outside }))).toContain('No European place');
+  }, 120_000);
 
   it('plays season two with the decided places, keeps the answer in the archive and rebuilds the places day in saves', () => {
     expect(next.europe).toEqual(europeanPlacesAfter(answered));

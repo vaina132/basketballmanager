@@ -1,4 +1,5 @@
 import { nationalInboxItems } from './national-inbox'
+import { europeanInboxItems } from './european-places'
 import type { SeasonState } from '../domain/season'
 import { getDevelopmentSponsor } from '../data/development-sponsors'
 import { getBoardSummary } from '../world/board'
@@ -28,7 +29,8 @@ export type InboxCategory = 'press' | 'board' | 'club' | 'players'
 /** `jobs` (format 69): the job market on the unemployed desk. */
 /** `bid` (format 78): a club's offer for one of your players, answered in the reading pane. */
 /** `national` (format 80): the national team page (or Competitions > National teams without a national job). */
-export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract' | 'jobs' | 'bid' | 'national'
+/** `europe` (format 83): European places, answered in the reading pane (`offerId` is the competition's id). */
+export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract' | 'jobs' | 'bid' | 'national' | 'europe'
 export interface InboxItem {
   id: string
   date: string
@@ -161,6 +163,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })
 
   items.push(...nationalInboxItems(season))
+  items.push(...europeanInboxItems(season))
   return items.sort((a, b) => Number(b.needsAction) - Number(a.needsAction) || compare(b.date, a.date) || compare(a.id, b.id))
 }
 

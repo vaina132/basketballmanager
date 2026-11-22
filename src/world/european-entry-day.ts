@@ -6,7 +6,7 @@ import { seasonLeagues } from './divisions';
 import { clubEconomy, moneyAt } from './economy';
 import { backgroundSide, getEuropeanCompetitions } from './europe';
 import { playedEuropeanCompetitions } from './european-formats';
-import { decidePlaces, openingEuropeTwo, type ClubFacts, type EuropeanStage } from './european-entry';
+import { decidePlaces, openingEuropeTwo, type ClubFacts, type EuropeanStage, type PlacesDayInput } from './european-entry';
 import { estimatedTable, strengthOf } from './european-places';
 import { getArenaFullCapacity } from './facilities-policy';
 import { dateForRound, foreseeEconomy, getPostseasons, getStandings, MAX_SEASON_NUMBER, nextSeasonDivisions } from './season';
@@ -21,6 +21,11 @@ export interface PlacesDayOptions {
   unpaidOf?: (clubId: string) => number | null;
   /** Ignore the manager's answers (the places as offered). */
   withoutAnswers?: boolean;
+  /**
+   * A season still being played (the "Your club" card's score so far): the table so far stands in for the final
+   * ranking, next season's divisions are taken as this season's and unpaid costs are the latest review's.
+   */
+  provisional?: boolean;
 }
 
 const DEPTH: Readonly<Record<string, number>> = { 'play-in': 1, 'quarter-final': 2, 'semi-final': 3, 'third-place': 3, final: 4 };
@@ -57,10 +62,15 @@ function stageOf(kind: 'euroleague' | 'eurocup' | 'bcl', clubId: string, series:
 
 /** Format 83: next season's places from a completed season (the places day). */
 export function europeanEntryAfter(state: PlacesDayState, options: PlacesDayOptions = {}): SeasonEurope {
+  return decidePlaces(placesDayInput(state, options));
+}
+
+/** Everything the places day reads from a career, as facts. */
+export function placesDayInput(state: PlacesDayState, options: PlacesDayOptions = {}): PlacesDayInput {
   const world = worldOf(state), N = state.seasonNumber, europe = state.europe!, rounds = seasonRounds(state);
   const competitions = playedEuropeanCompetitions(world);
   const outcomes = getEuropeanCompetitions({ ...state, europe }, N);
-  const leaguesNow = seasonLeagues(world, state.divisions), leaguesNext = seasonLeagues(world, nextSeasonDivisions(state as Parameters<typeof nextSeasonDivisions>[0]));
+  const leaguesNow = seasonLeagues(world, state.divisions), leaguesNext = options.provisional ? leaguesNow : seasonLeagues(world, nextSeasonDivisions(state as Parameters<typeof nextSeasonDivisions>[0]));
   const background = world.backgroundLeagues ?? [];
   const leagueClubs = new Set([...(world.domesticLeagues ?? []).flatMap(league => league.clubIds), ...(world.lowerDivisions ?? []).flatMap(list => 'clubIds' in list ? list.clubIds : []), ...leaguesNow.flatMap(league => league.clubIds), ...background.flatMap(league => league.clubIds)]);
   const europeanOnly = world.clubs.map(club => club.id).filter(clubId => !leagueClubs.has(clubId));
@@ -97,7 +107,7 @@ export function europeanEntryAfter(state: PlacesDayState, options: PlacesDayOpti
   };
   const euroleagueSeasons = seasonsIn('euroleague'), eurocupSeasons = seasonsIn('eurocup');
   const endDate = dateForRound(rounds, N);
-  const review = state.board?.reviews.filter(item => item.seasonNumber === N && item.round === rounds).at(-1);
+  const review = state.board?.reviews.filter(item => item.seasonNumber === N && (options.provisional || item.round === rounds)).at(-1);
   const unpaidOf = options.unpaidOf ?? ((clubId: string) => review?.clubs[clubId]?.unpaid ?? null);
   const money = moneyAt(state, N);
   const seatsOf = (clubId: string) => {
@@ -122,12 +132,12 @@ export function europeanEntryAfter(state: PlacesDayState, options: PlacesDayOpti
   // The manager answering: the club managed when the next season starts (the current club for the season being played).
   const current = state.managedClubId !== undefined && !state.history.some(archive => archive.seasonNumber === N);
   const managedClubId = current ? state.managedClubId ?? '' : managedClubAtRound(state as Parameters<typeof managedClubAtRound>[0], N + 1, 0);
-  return decidePlaces({
+  return {
     seasonNumber: N, date: endDate, competitions, europe, opening: openingEuropeTwo(world), facts, rankings, euroleaguePlayoffs: playoffs,
     eurocupFinal: { winner: final?.winner ?? null, loser: final?.loser ?? null }, bclChampion: outcomeOf('bcl')?.outcome.champion ?? null,
     europeanOnly, managedClubId, answers: options.withoutAnswers ? [] : europe.answers ?? [],
     strength: clubId => strengthOf(backgroundSide(state, clubId, N).players),
-  });
+  };
 }
 
 /**

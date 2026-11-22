@@ -142,7 +142,7 @@ describe('real head coaches (format 82)', () => {
     expect(() => parseSeason(JSON.stringify(forged))).toThrow(/coaches/);
     const older = JSON.parse(serializeSeason(played));
     // A format-80 file has none of the format-85 world rules either.
-    older.formatVersion = 80; older.state.schemaVersion = 80; delete older.state.world.neutralVenues;
+    older.formatVersion = 80; older.state.schemaVersion = 80; delete older.state.world.neutralVenues; delete older.state.world.nextDivisionCountries;
     expect(() => parseSeason(JSON.stringify(older))).toThrow(/format 82/);
   }, 600_000);
 

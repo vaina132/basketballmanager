@@ -61,7 +61,8 @@ const ROLES: Role[] = [
 describe('non-coach staff renewals when promoted clubs join', () => {
   it('keeps the manager\'s scout, fitness coach, physio, assistant and youth coach from the end of the local pools, passing the strict check', () => {
     expect(lowerDivisionClubIds(world).size).toBeGreaterThan(0);
-    let state = setEmploymentDelegation(createSeason({ seed: 7, world, managedClubId: 'gbl-1', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true);
+    // Careers before format 85 (no `clubCountries`) give promoted clubs no country, so their local pools shrink.
+    let state = setEmploymentDelegation(createSeason({ seed: 7, world, managedClubId: 'gbl-1', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, clubCountries: false }), true);
     expect(state.coaching.model).toBe('coaching-4');
     const scope = staffMarketWorld(state);
     // The manager replaces each opening staff member with someone the market will lose, on a two-season contract.

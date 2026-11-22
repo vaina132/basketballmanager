@@ -6,16 +6,22 @@ import { createFixtureMatch, setAutoSubstitutions, simulateToEnd } from '../src/
 import { shotContext } from '../src/engine/possession';
 import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { validateMatchState } from '../src/storage/validate-match';
-import { playsAtNeutralVenue, worldOf } from '../src/world/career-world';
+import { clubCountry, lowerDivisionClubIds, playsAtNeutralVenue, worldOf } from '../src/world/career-world';
+import { getClubCoaching } from '../src/world/coaching';
 import { setEmploymentDelegation } from '../src/world/employment';
 import { financeLedgerEntries, financeLedgerTicket } from '../src/world/finance-ledger';
+import { advanceMarket } from '../src/world/market';
+import { getMarketStartReason } from '../src/world/market-policy';
 import { worldFromPack } from '../src/world/real-world';
-import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
+import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
+import { staffMarketWorld } from '../src/world/staff-levels';
 import { economyPack } from './helpers/economy-pack';
 
 /**
  * Format 85 (new careers): Primera FEB's final stage is played at one venue, so its games have no home-court advantage
- * and earn neither club a gate (`neutralVenues`). One Primera FEB season (18 clubs, its real format) covers it.
+ * and earn neither club a gate (`neutralVenues`); clubs promoted from a next division keep their country
+ * (`clubCountries`). One Primera FEB season (18 clubs, its real format) and the rollover that brings three Segunda FEB
+ * clubs up cover both.
  */
 const levels = [16, 16, 15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8];
 const pack = economyPack([{ id: 'feb', name: 'Primera FEB', country: 'Spain', tier: 2, levels }], null, 12);
@@ -44,8 +50,9 @@ describe('format 85: no home advantage at one venue', () => {
     const fixture = { neutral: true };
     const opening = createSeason({ seed: 3, world: packWorld, managedClubId: 'feb-3', ...NEW_CAREER_SYSTEMS });
     expect(worldOf(opening).neutralVenues).toBe(true);
+    expect(worldOf(opening).nextDivisionCountries).toBe(true);
     expect(playsAtNeutralVenue(opening, fixture)).toBe(true);
-    const older = createSeason({ seed: 3, world: packWorld, managedClubId: 'feb-3', ...NEW_CAREER_SYSTEMS, neutralVenues: false });
+    const older = createSeason({ seed: 3, world: packWorld, managedClubId: 'feb-3', ...NEW_CAREER_SYSTEMS, neutralVenues: false, clubCountries: false });
     expect(worldOf(older)).toBe(packWorld);
     expect(playsAtNeutralVenue(older, fixture)).toBe(false);
     const envelope = JSON.parse(serializeSeason(opening));
@@ -54,8 +61,8 @@ describe('format 85: no home advantage at one venue', () => {
   });
 });
 
-describe('format 85: a Primera FEB season', () => {
-  let finalStage: SeasonState | undefined, complete: SeasonState;
+describe('format 85: a Primera FEB season and the promoted clubs that follow', () => {
+  let finalStage: SeasonState | undefined, complete: SeasonState, next: SeasonState;
   beforeAll(() => {
     let state = setEmploymentDelegation(createSeason({ seed: 3, world: packWorld, managedClubId: 'feb-3', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true);
     while (state.status === 'active') {
@@ -63,6 +70,8 @@ describe('format 85: a Primera FEB season', () => {
       state = play(state);
     }
     complete = state;
+    for (let steps = 0; steps < 200 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
+    next = rolloverSeason(state);
   }, 900_000);
 
   it('plays the final stage at one venue: no home advantage, no gate, strict saves', () => {
@@ -81,5 +90,20 @@ describe('format 85: a Primera FEB season', () => {
     for (const fixture of quarterFinals) expect(financeLedgerTicket(complete.finance, fixture.id)).not.toBeNull();
     expect([...financeLedgerEntries(complete.finance)].filter(entry => entry.kind === 'tickets').every(entry => !neutral.some(fixture => fixture.id === entry.ticket!.fixtureId))).toBe(true);
     expect(roundTrip(complete)).toEqual(complete);
+  }, 600_000);
+
+  it('gives the promoted next-division clubs their country, and the staff systems use it', () => {
+    const world = worldOf(next), joined = next.clubs.filter(club => !complete.clubs.some(old => old.id === club.id)).map(club => club.id);
+    expect(joined).toHaveLength(3);
+    expect(joined.every(id => lowerDivisionClubIds(world).has(id))).toBe(true);
+    expect(joined.map(id => clubCountry(world, id))).toEqual(['Spain', 'Spain', 'Spain']);
+    // Older careers keep no country for them.
+    expect(joined.map(id => clubCountry(packWorld, id))).toEqual([null, null, null]);
+    // Every club of the season counts in the local staff pools, and the joining clubs are staffed.
+    expect(staffMarketWorld(next).countries!.every(country => country === 'Spain')).toBe(true);
+    for (const id of joined) expect(getClubCoaching(next.coaching, id).length).toBeGreaterThan(0);
+    expect(roundTrip(next)).toEqual(next);
+    const week = play(next);
+    expect(roundTrip(week)).toEqual(week);
   }, 600_000);
 });

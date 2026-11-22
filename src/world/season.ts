@@ -41,7 +41,7 @@ import type { ManagerProfile } from '../domain/manager';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-league';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import type { CareerWorld } from '../domain/world';
-import { fullWorldClubs, playsAtNeutralVenue, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
+import { fullWorldClubs, isMemberList, playsAtNeutralVenue, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
 import { createFixtureMatch, isPlayerEligible, preTipoffLineup, simulateToEnd } from '../engine/match';
 import { isCourtPosition } from '../engine/positions';
 import { INJURY_MODEL_2 } from '../domain/injuries';
@@ -523,6 +523,12 @@ export interface SeasonSystems {
    * listed home club's advantage and gate.
    */
   neutralVenues?: boolean;
+  /**
+   * Format 85 (live bug, 22 November 2026): clubs of a next division have their country, so a promoted club keeps it for
+   * staff pools, European places and draws, and same-country European rivalries (`world.nextDivisionCountries`). New
+   * real-club careers with a next division; older careers keep no country for those clubs.
+   */
+  clubCountries?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -536,7 +542,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true,
-  neutralVenues: true,
+  neutralVenues: true, clubCountries: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -567,6 +573,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.realCoaches !== undefined && typeof options.realCoaches !== 'boolean') throw new Error('Choose a valid head coaches setting.');
   if (options.europeanEntry !== undefined && typeof options.europeanEntry !== 'boolean') throw new Error('Choose a valid European entry setting.');
   if (options.neutralVenues !== undefined && typeof options.neutralVenues !== 'boolean') throw new Error('Choose a valid neutral venue setting.');
+  if (options.clubCountries !== undefined && typeof options.clubCountries !== 'boolean') throw new Error('Choose a valid club country setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -603,15 +610,15 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
 
 /**
  * Format 85: the career's world with the rule markers of its options: neutral venues in a world with games at one venue
- * (a domestic final stage or a European Final Four or qualification). The built-in league and worlds without such games
- * stay as given.
+ * (a domestic final stage or a European Final Four or qualification), and the next-division countries in one with a next
+ * division. The built-in league and worlds without such games or divisions stay as given.
  */
 function ruledWorld(options: SeasonOptions): CareerWorld {
   const world = options.world ?? DEVELOPMENT_WORLD;
   if (world.id === DEVELOPMENT_WORLD.id) return world;
   const oneVenue = !!world.domesticLeagues?.some(league => league.postseason && POSTSEASON_FORMATS[league.postseason].series.some(spec => spec.neutral)) || !!world.europeanCompetitions?.some(competition => competition.format && competition.kind !== 'eurocup');
-  const neutral = !!options.neutralVenues && !world.neutralVenues && oneVenue;
-  return neutral ? { ...world, neutralVenues: true as const } : world;
+  const neutral = !!options.neutralVenues && !world.neutralVenues && oneVenue, countries = !!options.clubCountries && !world.nextDivisionCountries && !!world.lowerDivisions?.some(isMemberList);
+  return neutral || countries ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}) } : world;
 }
 
 /** Format 82: the career's coaches (the manager's starting attributes) and the national teams' real coaches. */

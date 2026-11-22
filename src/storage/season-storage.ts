@@ -3515,8 +3515,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 60 && (Object.hasOwn(world, 'europeanPlaces') || Object.hasOwn(world, 'backgroundLeagues') || world.europeanCompetitions?.some(competition => Object.hasOwn(competition, 'oneYear')))) fail('world.europeanPlaces', 'requires format 60 or later');
   // Format 62 (sprint 4): researched club money; older careers keep the development economy's constants.
   if (version < 62 && Object.hasOwn(world, 'economy')) fail('world.economy', 'requires format 62 or later');
-  // Format 85: neutral venues are a rule of new careers only.
-  for (const key of ['neutralVenues'] as const) if (version < 85 && Object.hasOwn(world, key)) fail(`world.${key}`, 'requires format 85 or later');
+  // Format 85: neutral venues and next-division countries are rules of new careers only.
+  for (const key of ['neutralVenues', 'nextDivisionCountries'] as const) if (version < 85 && Object.hasOwn(world, key)) fail(`world.${key}`, 'requires format 85 or later');
   // Format 63: the career-2 rules (protected first season, fresh confidence, mid-season moves, resignations) need it.
   const careerModel = state.career !== null && typeof state.career === 'object' ? (state.career as { model?: unknown }).model : undefined;
   if (version < 63 && (careerModel === 'career-2' || state.board !== null && typeof state.board === 'object' && Object.hasOwn(state.board, 'restarts'))) fail('career.model', 'requires format 63 or later');

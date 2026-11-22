@@ -133,6 +133,8 @@ export interface CareerWorld {
    * the Final Fours, the BCL qualification) are played without home-court advantage and earn neither club a gate.
    */
   neutralVenues?: true;
+  /** Format 85 (new careers, option `clubCountries`): clubs of a next division have their country (`clubCountry`). */
+  nextDivisionCountries?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

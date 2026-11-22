@@ -6,6 +6,7 @@ import { reservedEuropeanDays } from '../world/europe'
 import { dateForRound, postseasonSlotDay } from '../world/season'
 import { POSTSEASON_SLOT_OFFSETS } from '../world/postseason'
 import './season-workspace.css'
+import { InlineLogo } from './ClubLogo'
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
@@ -18,6 +19,7 @@ export function SeasonCalendar({ season }: { season: SeasonState }) {
   const world = worldOf(season)
   const [ownOnly, setOwnOnly] = useState(false)
   const leagues = seasonLeagues(world, season.divisions)
+  const competitionIds = new Map<string, string>([...leagues.map(league => [league.name, league.id] as [string, string]), ...(world.europeanCompetitions ?? []).map(item => [item.name, item.id] as [string, string])])
   const competitionName = (fixture: SeasonState['fixtures'][number]) => fixture.competition ? world.europeanCompetitions?.find(item => item.id === fixture.competition)?.name ?? fixture.competition : leagues.find(league => league.clubIds.includes(fixture.homeClubId))?.name ?? 'League'
   const club = (id: string) => season.clubs.find(team => team.id === id) ?? world.clubs.find(team => team.id === id)
   const managedId = season.managedClubId
@@ -51,7 +53,7 @@ export function SeasonCalendar({ season }: { season: SeasonState }) {
           return <tr key={`${week.round}:${day.date}`} className={week.round === season.round && season.status === 'active' ? 'season-managed-row' : ''} aria-current={week.round === season.round && season.status === 'active' && index === 0 ? 'date' : undefined}>
             <td>{index === 0 ? week.round > regular ? `Playoffs ${week.round - regular}` : `Week ${week.round}` : ''}</td>
             <td><time dateTime={day.date}>{formatDate(day.date)}</time></td>
-            <td>{day.competitions.length ? day.competitions.map(([name, count]) => `${name} (${count})`).join(' · ') : day.reserved.length ? '' : 'No games'}{day.reserved.length > 0 && <small>{day.competitions.length ? ' · ' : ''}Reserved: {day.reserved.join(', ')}</small>}</td>
+            <td>{day.competitions.length ? day.competitions.map(([name, count], index) => <span key={name}>{index ? ' · ' : ''}<InlineLogo kind="competition" id={competitionIds.get(name)} name={name} size={14} />{name} ({count})</span>) : day.reserved.length ? '' : 'No games'}{day.reserved.length > 0 && <small>{day.competitions.length ? ' · ' : ''}Reserved: {day.reserved.join(', ')}</small>}</td>
             <td>{own && opponent ? <>{own.homeClubId === managedId ? 'vs' : 'at'} <strong>{opponent.name}</strong> · {competitionName(own)}{own.result ? ` · ${own.result.officialScore[own.homeClubId === managedId ? 'home' : 'away']}–${own.result.officialScore[own.homeClubId === managedId ? 'away' : 'home']} ${own.result.winnerClubId === managedId ? 'W' : 'L'}` : ''}</> : ''}</td>
           </tr>
         }))}</tbody></table></div>

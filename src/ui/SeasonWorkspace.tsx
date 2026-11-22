@@ -16,6 +16,7 @@ import { PIR_HELP } from './MatchBoxScore'
 import './season-workspace.css'
 import { regularWorldRounds, seasonRounds, worldOf } from '../world/career-world'
 import { seasonLeagues } from '../world/divisions'
+import { ClubBadge, InlineLogo } from './ClubLogo'
 
 interface SeasonWorkspaceProps {
   season: SeasonState | null
@@ -32,7 +33,7 @@ const difference = (value: number) => value > 0 ? `+${value}` : String(value)
 const minutes = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 
 function ClubName({ club, yours = false }: { club: Team; yours?: boolean }) {
-  return <span className="season-club-name"><span className="season-club-code" style={{ color: club.color }}>{club.shortName}</span><span>{club.name}{yours && <small>Your club</small>}</span></span>
+  return <span className="season-club-name"><ClubBadge club={club} className="season-club-code" /><span>{club.name}{yours && <small>Your club</small>}</span></span>
 }
 
 export function SeasonWorkspace(props: SeasonWorkspaceProps) {
@@ -170,7 +171,7 @@ function ActiveSeason({ season, onOpenMatch, onNewGame, busy = false }: SeasonWo
     </section>
 
     <section className="season-standings panel" aria-labelledby="season-table-title">
-      <header className="season-panel-heading"><div><h2 id="season-table-title">{leagues ? 'Regular-season table' : 'League table'}</h2>{leagues && <label>Competition <select aria-label="Competition" value={leagueId} onChange={event => { setLeagueId(event.target.value); setRound(null); setReviewId(null) }} disabled={busy}>{leagues.map(item => <option key={item.id} value={item.id}>{item.country} · {item.name}</option>)}</select></label>}<p>{leagueName} · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
+      <header className="season-panel-heading"><div><h2 id="season-table-title">{leagues ? 'Regular-season table' : 'League table'}</h2>{leagues && <label>Competition <select aria-label="Competition" value={leagueId} onChange={event => { setLeagueId(event.target.value); setRound(null); setReviewId(null) }} disabled={busy}>{leagues.map(item => <option key={item.id} value={item.id}>{item.country} · {item.name}</option>)}</select></label>}<p><InlineLogo kind="competition" id={league?.id} name={leagueName} />{leagueName} · {seasonLabel(selectedNumber)}{archived ? ' · Final standings' : ''}</p></div><span>{selectedFixtures.filter(fixture => fixture.result).length} / {selectedFixtures.length} fixtures complete</span></header>
       <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th>{lnbRanking && <th scope="col" title="Wins divided by games played">Win %</th>}{fibaRanking && <th scope="col" title="Classification points: 2 for a win, 1 for a loss">Pts</th>}{leagueRule?.points && <th scope="col" title={leagueRule.pointsTitle}>Pts</th>}<th scope="col" title="Points for">PF</th><th scope="col" title="Points against">PA</th><th scope="col" title="Point difference">Diff</th></tr></thead><tbody>{standings.map(row => <tr key={row.clubId} data-club-id={row.clubId} className={row.clubId === season.managedClubId ? 'season-managed-row' : ''}>
         <td>{row.position}{row.rankingTie === 'unresolved' && <span className="season-tie-mark" title="Still tied on sporting criteria; display order only" aria-label="Still tied">=</span>}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} />{row.rankingTie === 'draw' && <span className="season-draw-label" title="Equal after all sporting tie-breaks; position decided by a reproducible draw">Draw</span>}</th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td>{lnbRanking && <td>{row.played ? `${(row.wins / row.played * 100).toFixed(1)}%` : '—'}</td>}{fibaRanking && <td className="season-wins">{classificationPoints(row)}</td>}{leagueRule?.points && <td className="season-wins">{leagueRule.points(row)}</td>}<td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
       </tr>)}</tbody></table></div>

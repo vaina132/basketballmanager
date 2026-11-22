@@ -38,6 +38,7 @@ import type { ListingChoice } from './PlayerListingControl'
 import { DEFAULT_TRANSFER_FILTERS, filterTransferRows, getTransferSearch, sortTransferRows, type TransferRowKind, type TransferSearchFilters, type TransferSort } from './transfer-search'
 import './transfers-workspace.css'
 import { formatEuros } from './money-format'
+import { InlineLogo } from './ClubLogo'
 
 interface TransfersWorkspaceProps {
   season: SeasonState
@@ -261,7 +262,7 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
             const owner = ownerOf(player.id)
             const listed = shortlist.includes(player.id)
             return <tr key={player.id} data-search-player={player.id} data-search-kind={row.kind}>
-              <th scope="row"><button className="transfers-player transfers-player-report" aria-label={`Scouting report for ${player.name}`} onClick={() => onOpenScouting(player.id)} disabled={disabled}><span aria-hidden="true"><Avatar player={owner?.players.find(member => member.id === player.id) ?? player} color={owner?.color ?? '#687385'} size={30} /></span><span><strong>{player.name}</strong><GeneratedTag season={season} playerId={player.id} /><small><Nationality country={playerNationality(season, player.id)} compact />{player.position} · {row.age === null ? 'Age unknown' : `${row.age} yrs`} · {clubName(row.clubId) ?? (row.currentClubId ? `${clubName(row.currentClubId)} · contract ending` : 'Free agent')}</small></span></button></th>
+              <th scope="row"><button className="transfers-player transfers-player-report" aria-label={`Scouting report for ${player.name}`} onClick={() => onOpenScouting(player.id)} disabled={disabled}><span aria-hidden="true"><Avatar player={owner?.players.find(member => member.id === player.id) ?? player} color={owner?.color ?? '#687385'} size={30} /></span><span><strong>{player.name}</strong><GeneratedTag season={season} playerId={player.id} /><small><Nationality country={playerNationality(season, player.id)} compact />{player.position} · {row.age === null ? 'Age unknown' : `${row.age} yrs`} · <InlineLogo kind="club" id={row.clubId ?? row.currentClubId} name={clubName(row.clubId ?? row.currentClubId) ?? ''} size={14} />{clubName(row.clubId) ?? (row.currentClubId ? `${clubName(row.currentClubId)} · contract ending` : 'Free agent')}</small></span></button></th>
               <td className="transfer-search-rating" data-label="Rating"><PlayerRating knowledge={getPlayerKnowledge(season, player.id)} position={player.position} compact /><small>{knowledgeLabel(getPlayerKnowledge(season, player.id))}</small></td>
               <td data-label="Asking wage">{money(row.wage)}<small>per year</small></td>
               <td data-label="Fee">{row.fee === null ? <span className="transfers-secured">Free</span> : money(row.fee)}{row.releaseFee !== null && <ReleaseClauseValue fee={row.releaseFee} />}</td>

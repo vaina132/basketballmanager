@@ -8,6 +8,7 @@ import { estimatedTable } from '../world/european-places'
 import { seasonLabel } from '../world/season'
 import { NOT_PLAYED_LEAGUE } from './career-text'
 import './season-workspace.css'
+import { ClubBadge, InlineLogo } from './ClubLogo'
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
@@ -15,7 +16,7 @@ const STAGES: Record<string, string> = { qualifying: 'Qualification', 'play-in':
 const signed = (value: number) => value > 0 ? `+${value}` : String(value)
 
 function ClubName({ club, yours = false }: { club: Team; yours?: boolean }) {
-  return <span className="season-club-name"><span className="season-club-code" style={{ color: club.color }}>{club.shortName}</span><span>{club.name}{yours && <small>Your club</small>}</span></span>
+  return <span className="season-club-name"><ClubBadge club={club} className="season-club-code" /><span>{club.name}{yours && <small>Your club</small>}</span></span>
 }
 
 /**
@@ -58,7 +59,7 @@ export function EuropeWorkspace({ season, initialCompetition }: { season: Season
           {[...season.history].reverse().map(item => <option key={item.seasonNumber} value={item.seasonNumber}>{seasonLabel(item.seasonNumber)} · Archived</option>)}
         </select></div>
       </div>
-      <div className="season-matchday-action"><p>{entry ? champion ? <><strong>{champion.name}</strong> win the {entry.competition.name}.</> : `${entry.format.label}: ${entry.table.length || entry.competition.clubIds.length} clubs.` : league ? `${league.name} is not played game by game in this career: ${NOT_PLAYED_LEAGUE.table}` : 'No European competition is played in this career.'}</p></div>
+      <div className="season-matchday-action"><p>{entry && <InlineLogo kind="competition" id={entry.competition.id} name={entry.competition.name} size={20} />}{entry ? champion ? <><strong>{champion.name}</strong> win the {entry.competition.name}.</> : `${entry.format.label}: ${entry.table.length || entry.competition.clubIds.length} clubs.` : league ? `${league.name} is not played game by game in this career: ${NOT_PLAYED_LEAGUE.table}` : 'No European competition is played in this career.'}</p></div>
     </section>
 
     {entry && <>

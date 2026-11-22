@@ -12,6 +12,7 @@ import { careerMoveOutcome } from './career-text'
 import { Icon } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
 import './unemployed-desk.css'
+import { ClubBadge } from './ClubLogo'
 
 interface UnemployedDeskProps {
   season: SeasonState
@@ -84,7 +85,7 @@ export function UnemployedDesk({ season, busy, onAccept, onOpenCompetitions, onO
         {market?.vacancies.length ? <ul className="unemployed-jobs" aria-label="Open jobs">{market.vacancies.map(vacancy => {
           const team = club(vacancy.clubId), refusal = jobRefusal(season, vacancy.clubId)
           return <li key={vacancy.clubId} data-job-club={vacancy.clubId} data-job-offered={vacancy.offered}>
-            <div className="unemployed-job-club"><span className="unemployed-club-code" style={{ color: team?.color }}>{team?.shortName ?? vacancy.clubId.slice(0, 3).toUpperCase()}</span><div><strong>{name(vacancy.clubId)}</strong><span>{leagueOf(vacancy.clubId)} · {placeText(vacancy)} · board confidence {vacancy.confidence}</span></div></div>
+            <div className="unemployed-job-club"><ClubBadge club={team} className="unemployed-club-code" fallback={team?.shortName ?? vacancy.clubId.slice(0, 3).toUpperCase()} /><div><strong>{name(vacancy.clubId)}</strong><span>{leagueOf(vacancy.clubId)} · {placeText(vacancy)} · board confidence {vacancy.confidence}</span></div></div>
             <p>{vacancy.opened === 'season' ? 'The board replaced its coach; an interim coach has the team.' : 'Its season ended Under pressure, so the board is replacing its coach.'} It looks for a reputation of {vacancy.requirement}. {vacancy.openUntil ? <>Open until <time dateTime={vacancy.openUntil}>{medicalDate(vacancy.openUntil)}</time>.</> : 'Open through this offseason.'}</p>
             <div className="unemployed-job-action"><span className="unemployed-job-status" data-state={vacancy.offered ? 'offered' : 'closed'}><Icon name={vacancy.offered ? 'check' : 'target'} size={14} />{status(vacancy)}</span>
               {vacancy.offered && <button className="button" data-accept-job={vacancy.clubId} onClick={() => onAccept(vacancy.clubId)} disabled={busy || !!refusal} aria-describedby={refusal ? `job-refusal-${vacancy.clubId}` : undefined}>Accept job</button>}

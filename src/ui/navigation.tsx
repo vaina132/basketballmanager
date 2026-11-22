@@ -1,6 +1,6 @@
 import { Icon, type IconName } from './Icon'
 
-export type Page = 'home' | 'inbox' | 'squad' | 'match' | 'season' | 'training' | 'staff' | 'club' | 'board' | 'transfers' | 'scouting' | 'medical' | 'academy' | 'calendar' | 'europe'
+export type Page = 'home' | 'inbox' | 'squad' | 'match' | 'season' | 'training' | 'staff' | 'club' | 'board' | 'transfers' | 'medical' | 'academy' | 'calendar' | 'europe'
 /**
  * Owner feedback (18 November 2026): the budget bar shows only where money is decided: the desk, Transfers,
  * Squad > Contracts, Staff and Club (facilities and the bank).
@@ -10,7 +10,7 @@ export function showsBudgetBar(page: Page, squadView?: string): boolean {
 }
 export interface NavItem { id: Page; label: string; icon: IconName }
 
-export const PAGE_NAMES: Record<Page, string> = { home: "Manager's desk", inbox: 'Inbox', squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', academy: 'Youth academy', medical: 'Medical & rehabilitation', staff: 'Club staff', club: 'Club', board: 'Board', transfers: 'Transfers', scouting: 'Scouting & shortlist', calendar: 'Season calendar', europe: 'European competitions' }
+export const PAGE_NAMES: Record<Page, string> = { home: "Manager's desk", inbox: 'Inbox', squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', academy: 'Youth academy', medical: 'Medical & rehabilitation', staff: 'Club staff', club: 'Club', board: 'Board', transfers: 'Transfers', calendar: 'Season calendar', europe: 'European competitions' }
 
 const ITEMS: Record<Page, NavItem> = {
   home: { id: 'home', label: 'Desk', icon: 'home' },
@@ -18,7 +18,6 @@ const ITEMS: Record<Page, NavItem> = {
   squad: { id: 'squad', label: 'Squad', icon: 'people' },
   match: { id: 'match', label: 'Match center', icon: 'court' },
   transfers: { id: 'transfers', label: 'Transfers', icon: 'swap' },
-  scouting: { id: 'scouting', label: 'Scouting', icon: 'search' },
   training: { id: 'training', label: 'Training', icon: 'training' },
   staff: { id: 'staff', label: 'Staff', icon: 'staff' },
   club: { id: 'club', label: 'Club', icon: 'building' },
@@ -39,7 +38,8 @@ export function mainNavigation({ career, europe }: { career: boolean; europe: bo
   if (!career) return [[ITEMS.home], [ITEMS.squad, ITEMS.match], [ITEMS.season]]
   return [
     [ITEMS.home, ITEMS.inbox],
-    [ITEMS.squad, ITEMS.match, ITEMS.transfers, ITEMS.scouting, ITEMS.training, ITEMS.staff],
+    // Owner feedback (22 November 2026): scouting lives inside Transfers; scouts are hired on Staff.
+    [ITEMS.squad, ITEMS.match, ITEMS.transfers, ITEMS.training, ITEMS.staff],
     [ITEMS.club, ITEMS.board],
     [ITEMS.season, ITEMS.calendar, ...(europe ? [ITEMS.europe] : [])],
     [ITEMS.academy, ITEMS.medical],

@@ -22,7 +22,7 @@ import { currentSeasonFile } from './helpers/season-format';
 const clubId = 'rhine-falcons';
 // Press and media (format 67) need squad relationships, so a career without them also has no media record.
 // The relationships-3 rules (careers of formats 74-76); contract requests are unchanged by the calmer format-77 rules.
-const career = (relationships = true) => createSeason({ seed: 11, managedClubId: clubId, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, relationships, media: relationships, calmPlayingTime: false });
+const career = (relationships = true) => createSeason({ seed: 11, managedClubId: clubId, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, relationships, media: relationships, calmPlayingTime: false, transferLists: false });
 const rankOf = (state: SeasonState, club: string, playerId: string) => state.relationships.squadRanks![rosterForRound(state.rosters, club, state.round).id]!.indexOf(playerId) + 1;
 const trustOf = (state: SeasonState, playerId: string) => getPlayerRelationship(state, playerId).trust;
 const reason = (state: SeasonState, playerId: string) => getPlayerRelationship(state, playerId).reasons.find(item => item.label === 'Contract talks')?.impact;

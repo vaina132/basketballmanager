@@ -72,7 +72,8 @@ function contractsAt(employment: SeasonEmployment, seasonNumber: number, round: 
   if (!byWeek) { byWeek = new Map(); contractsAtCache.set(employment, byWeek); }
   const key = `${seasonNumber}:${round}`, known = byWeek.get(key);
   if (known) return known;
-  const released = new Set([...(employment.transfers ?? []).filter(release => release.startsSeason < seasonNumber || release.startsSeason === seasonNumber && (release.startsRound ?? 1) <= round), ...(employment.buyouts ?? []).filter(release => release.startsSeason <= seasonNumber), ...(employment.departures ?? []).filter(release => release.startsSeason <= seasonNumber)].flatMap(release => release.releasedContractIds));
+  // Format 78: a loan releases the lending club's terms for its own season only; they apply again from the next one.
+  const released = new Set([...(employment.transfers ?? []).filter(release => (release.mode !== 'loan' || release.startsSeason === seasonNumber) && (release.startsSeason < seasonNumber || release.startsSeason === seasonNumber && (release.startsRound ?? 1) <= round)), ...(employment.buyouts ?? []).filter(release => release.startsSeason <= seasonNumber), ...(employment.departures ?? []).filter(release => release.startsSeason <= seasonNumber)].flatMap(release => release.releasedContractIds));
   const contracts = employment.contracts.filter(contract => contract.startsSeason <= seasonNumber && contract.endsSeason >= seasonNumber && (contract.startsSeason < seasonNumber || (contract.startsRound ?? 1) <= round) && !released.has(contract.id));
   byWeek.set(key, contracts);
   return contracts;

@@ -132,7 +132,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -282,8 +282,10 @@ function roleKeys(value: unknown, context: { relationships?: SeasonRelationships
 function validateOptionalRole(fields: Record<string, unknown>, path: string): void {
   if (Object.hasOwn(fields, 'role') && !isSquadRole(fields.role)) fail(`${path}.role`, 'must identify a Star, Starter, Rotation, Reserve or Prospect role');
 }
-function validateTransferMode(fields: Record<string, unknown>, path: string): void {
+function validateTransferMode(fields: Record<string, unknown>, path: string, loans = false): void {
   if (!Object.hasOwn(fields, 'transferMode')) return;
+  // Format 78 (`recruitment-2`): a loan offer for the rest of the season, with its fee paid at once.
+  if (loans && fields.transferMode === 'loan' && Object.hasOwn(fields, 'transferFee') && fields.transferPaymentPlan === 'upfront' && fields.seasons === 1 && !Object.hasOwn(fields, 'releaseFee')) return;
   if (fields.transferMode !== 'release-clause' || !Object.hasOwn(fields, 'transferFee') || fields.transferPaymentPlan !== 'upfront') fail(`${path}.transferMode`, 'requires an explicit release-clause trigger and full upfront transfer fee');
 }
 function array(value: unknown, path: string, length: number): unknown[] {
@@ -1623,7 +1625,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     if (typeof transfer.offerId !== 'string' || typeof transfer.contractId !== 'string' || !Array.isArray(transfer.releasedContractIds) || !transfer.releasedContractIds.length || transfer.releasedContractIds.some(id => typeof id !== 'string') || new Set(transfer.releasedContractIds).size !== transfer.releasedContractIds.length) fail(path, 'must identify its offer, new contract and distinct released terms');
     const fee = number(transfer.fee, `${path}.fee`, 100_000, maxTransferFee(context));
     if (fee % 100_000 !== 0) fail(`${path}.fee`, 'must use whole thousand-euro steps');
-    if (Object.hasOwn(transfer, 'mode') && transfer.mode !== 'release-clause') fail(`${path}.mode`, 'must identify an explicit release-clause transfer');
+    if (Object.hasOwn(transfer, 'mode') && transfer.mode !== 'release-clause' && !(transfer.mode === 'loan' && version >= 78 && midseason && transfer.paymentPlan === 'upfront')) fail(`${path}.mode`, 'must identify an explicit release-clause transfer');
     if (transfer.mode === 'release-clause' && transfer.paymentPlan !== 'upfront') fail(`${path}.paymentPlan`, 'must settle an activated release clause fully upfront');
     if (version >= 16) {
       if (!['upfront', 'two-payments', 'three-payments'].includes(transfer.paymentPlan as string)) fail(`${path}.paymentPlan`, 'must identify a supported payment schedule');
@@ -1953,13 +1955,32 @@ function migrateRecruitmentTransfers(recruitment: SeasonRecruitment): SeasonRecr
   return { ...recruitment, transfersEnabledSince: null, offers: recruitment.offers.map(offer => ({ ...offer, seasons: 1, transfer: null })) };
 }
 
+/** Format 78: the manager's transfer and loan list (basic shape check; listings change no agreement). */
+function validateListings(value: unknown, state: SeasonState): void {
+  if (!Array.isArray(value) || value.length > 500) fail('recruitment.listings', 'must hold a bounded list');
+  const clubIds = new Set(state.clubs.map(club => club.id)), seen = new Set<string>();
+  for (const [index, raw] of value.entries()) {
+    const path = `recruitment.listings[${index}]`, listing = record(raw, path, ['clubId', 'playerId', 'transfer', 'loan', 'askingFee', 'listedOn']);
+    if (typeof listing.clubId !== 'string' || !clubIds.has(listing.clubId) || typeof listing.playerId !== 'string' || seen.has(`${listing.clubId}:${listing.playerId}`)) fail(path, 'must identify one player of a club once');
+    seen.add(`${listing.clubId}:${listing.playerId}`);
+    if (typeof listing.transfer !== 'boolean' || typeof listing.loan !== 'boolean' || !listing.transfer && !listing.loan) fail(path, 'must list the player for a transfer, a loan or both');
+    const fee = number(listing.askingFee, `${path}.askingFee`, 100_000, maxTransferFee(state));
+    if (fee % 100_000) fail(`${path}.askingFee`, 'must use whole thousand-euro steps');
+    if (typeof listing.listedOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(listing.listedOn) || listing.listedOn > state.date || !Number.isFinite(Date.parse(`${listing.listedOn}T00:00:00Z`))) fail(`${path}.listedOn`, 'must be a real date up to today');
+  }
+}
+
 /** Commands are replayed against the exact cash and ownership prefix available when issued. */
 function validateRecruitment(value: unknown, state: SeasonState, version: number): RecruitmentHolds[] {
-  const original = record(value, 'recruitment', ['model', 'enabledSince', 'events', 'offers', ...(version >= 19 ? ['transfersEnabledSince'] : [])]);
+  // Format 78 (`recruitment-2`): the transfer and loan list, bids for the manager's players and loans.
+  const listed = value !== null && typeof value === 'object' && (value as Record<string, unknown>).model === 'recruitment-2';
+  if (listed && version < 78) fail('recruitment.model', 'requires format 78 or later');
+  const original = record(value, 'recruitment', ['model', 'enabledSince', 'events', 'offers', ...(version >= 19 ? ['transfersEnabledSince'] : []), ...(listed ? ['listings'] : [])]);
   const fields = version >= 19 ? original : { ...original, transfersEnabledSince: null, offers: Array.isArray(original.offers) ? original.offers.map(offer => ({ ...offer, seasons: 1, transfer: null })) : original.offers };
-  if (fields.model !== 'recruitment-1' || !Array.isArray(fields.events) || fields.events.length > 20_000 || !Array.isArray(fields.offers) || fields.offers.length > fields.events.length) fail('recruitment', 'must retain a supported bounded command journal');
+  if (listed) validateListings(original.listings, state);
+  if (fields.model !== 'recruitment-1' && !listed || !Array.isArray(fields.events) || fields.events.length > 20_000 || !Array.isArray(fields.offers) || fields.offers.length > fields.events.length) fail('recruitment', 'must retain a supported bounded command journal');
   if (fields.enabledSince === null) {
-    if (!sameData(fields, createRecruitment()) || state.employment.contracts.some(contract => contract.kind === 'midseason' || contract.kind === 'midseason-transfer')) fail('recruitment', 'must retain no in-season commands or agreements while disabled');
+    if (!sameData(listed ? { ...fields, model: 'recruitment-1', listings: undefined } : fields, { ...createRecruitment(), ...(listed ? { listings: undefined } : {}) }) || state.employment.contracts.some(contract => contract.kind === 'midseason' || contract.kind === 'midseason-transfer')) fail('recruitment', 'must retain no in-season commands or agreements while disabled');
     return [];
   }
   const anchor = record(fields.enabledSince, 'recruitment.enabledSince', ['seasonNumber', 'round', 'ledgerIndex', 'contractCount', 'negotiationCount']);
@@ -1991,7 +2012,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     if (version >= 19 && offer.transfer !== null) record(offer.transfer, `recruitment.offers[${index}].transfer`, ['sellerClubId', 'contractId', 'fee', 'paymentPlan', 'requiredFee', 'clubStatus', 'clubResponseOn', 'clubRespondedOn', 'clubReason', 'counterFee', ...optionalClauseKeys(offer.transfer, version, ['mode'])]);
   }
   if (fields.transfersEnabledSince !== null) record(fields.transfersEnabledSince, 'recruitment.transfersEnabledSince', ['seasonNumber', 'round', 'ledgerIndex', 'contractCount', 'negotiationCount']);
-  let recruitment: SeasonRecruitment = { model: 'recruitment-1', enabledSince: { seasonNumber: firstYear, round: firstRound, ledgerIndex: anchorLedger, contractCount: anchorContracts, negotiationCount: anchorNegotiations }, transfersEnabledSince: null, events: [], offers: [] };
+  let recruitment: SeasonRecruitment = { model: listed ? 'recruitment-2' : 'recruitment-1', ...(listed ? { listings: original.listings as SeasonRecruitment['listings'] } : {}), enabledSince: { seasonNumber: firstYear, round: firstRound, ledgerIndex: anchorLedger, contractCount: anchorContracts, negotiationCount: anchorNegotiations }, transfersEnabledSince: null, events: [], offers: [] };
   let boundary = firstBoundary, previousLedger = anchorLedger, previousContracts = anchorContracts, previousNegotiations = anchorNegotiations;
   const holds: RecruitmentHolds[] = [];
   const generatedContracts = new Set<string>(), generatedResponses = new Set<string>(), generatedTransfers = new Set<string>();
@@ -2000,7 +2021,7 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     const type = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).type : undefined;
     const event = record(raw, path, ['type', 'seasonNumber', 'round', 'date', 'ledgerIndexBefore', 'contractCountBefore', 'negotiationCountBefore', ...(type === 'offer' ? ['id', 'clubId', 'playerId', 'seasonWage', ...(version >= 19 ? ['seasons', 'transferFee', 'transferPaymentPlan'].filter(key => Object.hasOwn(raw as object, key)) : []), ...optionalClauseKeys(raw, version, ['releaseFee', 'transferMode']), ...roleKeys(raw, state), ...(version >= 25 && Object.hasOwn(raw as object, 'academyProspectId') ? ['academyProspectId'] : [])] : type === 'withdraw' ? ['offerId'] : version >= 19 && type === 'club-decision' ? ['offerId', 'response'] : [])]);
     if (!['offer', 'withdraw', 'resolve', ...(version >= 19 ? ['enable-transfers', 'club-decision'] : [])].includes(type as string)) fail(`${path}.type`, 'must identify a supported in-season command');
-    if (type === 'offer') { validateOptionalReleaseFee(event, path, state); validateOptionalRole(event, path); validateTransferMode(event, path); }
+    if (type === 'offer') { validateOptionalReleaseFee(event, path, state); validateOptionalRole(event, path); validateTransferMode(event, path, listed); }
     const year = number(event.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber), round = number(event.round, `${path}.round`, 1, year === state.seasonNumber ? state.round : seasonRounds(state));
     const eventBoundary = roundOrdinal(year, round, seasonRounds(state));
     if (eventBoundary !== boundary + (type === 'resolve' ? 1 : 0) || event.date !== dateForRound(round, year)) fail(path, 'must process each successive matchday before new commands at that boundary');
@@ -2136,9 +2157,11 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
 /** Reports preserve what was observed at a committed fixture, never current hidden ratings. */
 function validateScouting(value: unknown, state: SeasonState, version: number): SeasonScouting {
   const fields = record(value, 'scouting', ['model', 'enabledSince', 'clubs']);
-  if (fields.model !== 'scouting-1') fail('scouting.model', 'is unsupported');
+  // Format 78: the scouting network (`scouting-2`) keeps the scouting-1 records; only the manager's estimates differ.
+  if (fields.model === 'scouting-2' && version < 78) fail('scouting.model', 'requires format 78 or later');
+  if (fields.model !== 'scouting-1' && fields.model !== 'scouting-2') fail('scouting.model', 'is unsupported');
   if (fields.enabledSince === null) {
-    if (!sameData(fields, createScouting(state.clubs, state.managedClubId))) fail('scouting', 'must retain empty default scouting offices while disabled');
+    if (fields.model !== 'scouting-1' || !sameData(fields, createScouting(state.clubs, state.managedClubId))) fail('scouting', 'must retain empty default scouting offices while disabled');
     return fields as unknown as SeasonScouting;
   }
   const anchor = record(fields.enabledSince, 'scouting.enabledSince', ['seasonNumber', 'round']);

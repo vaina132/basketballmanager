@@ -51,7 +51,7 @@ beforeAll(() => {
 describe('calmer playing time for new careers', () => {
   it('starts new careers on the relationships-4 rules in format 77', () => {
     expect(start.relationships.model).toBe('relationships-4');
-    expect(JSON.parse(serializeSeason(start)).formatVersion).toBe(77);
+    expect(JSON.parse(serializeSeason(start)).formatVersion).toBeGreaterThanOrEqual(77);
     expect(createSeason({ seed: 3, world, managedClubId: clubId, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, calmPlayingTime: false }).relationships.model).toBe('relationships-3');
   });
 

@@ -64,3 +64,10 @@
   .inbox-reader{padding:12px}
   .inbox-press{padding:12px}
 }
+/* Format 78: a club's offer for one of your players, answered in the reading pane. */
+.inbox-bid{display:grid;gap:10px;margin:4px 0 12px;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2,rgba(255,255,255,.03))}
+.inbox-bid dl{display:flex;flex-wrap:wrap;gap:8px 22px;margin:0}
+.inbox-bid dt{font-size:12px;color:var(--muted)}
+.inbox-bid dd{margin:2px 0 0;font-weight:700}
+.inbox-bid-note{margin:0;font-size:13px;color:var(--muted);line-height:1.45}
+.inbox-bid-actions{display:flex;flex-wrap:wrap;gap:8px}

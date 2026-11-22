@@ -148,7 +148,8 @@ export interface DomesticDivisions {
 /** Format 74: six-level facilities with the bank loan (also accepted at format 73), opening staff for every club (`coaching-2`), squad roles (`relationships-3`) and court-picture slots. */
 /** Format 76: staff contracts of 1-3 seasons with weekly salaries and sacking compensation (`coaching-4`, `src/world/staff-contracts.ts`). */
 /** Format 77: calmer playing time for new careers (`relationships-4`, `PLAYING_TIME_RULES` in `src/world/relationship-rules.ts`): quiet role adjustments (`role-adjust` events) and one calm concern (`role-request` stage 'concern'). */
-export const SEASON_SCHEMA_VERSION = 77;
+/** Format 78: the transfer and loan list with bids for the manager's players and loans (`recruitment-2`), and the scouting network (`scouting-2`). */
+export const SEASON_SCHEMA_VERSION = 78;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

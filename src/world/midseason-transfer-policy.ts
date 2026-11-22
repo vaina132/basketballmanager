@@ -7,7 +7,7 @@ import { financeLedgerEntries } from './finance-ledger';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import type { Player } from '../domain/types';
 import { getActiveCareerPlayers } from './player-catalog';
-import { contractForRound, effectiveContractsForRound, getClubContractSummary, MAX_CONTRACT_SEASONS, maxContractWage, MIN_CONTRACT_WAGE, MIN_ROSTER_SIZE, outgoingReplacementReserve, WAGE_STEP } from './employment-policy';
+import { contractForRound, contractForSeason, effectiveContractsForRound, getClubContractSummary, MAX_CONTRACT_SEASONS, maxContractWage, MIN_CONTRACT_WAGE, MIN_ROSTER_SIZE, outgoingReplacementReserve, WAGE_STEP } from './employment-policy';
 import { getFinanceBalance } from './finance';
 import { getPlayerPayroll } from './payroll';
 import { getInSeasonBudget, getInSeasonOffers, remainingSeasonWages } from './recruitment-policy';
@@ -32,6 +32,15 @@ export function getInSeasonReleasedContractIds(state: SeasonState, playerId: str
 function futureRightsReason(state: SeasonState, playerId: string, sellerClubId: string): string | null {
   const through = Math.max(state.seasonNumber, ...state.employment.contracts.filter(contract => contract.playerId === playerId).map(contract => contract.endsSeason));
   for (let year = state.seasonNumber + 1; year <= through; year += 1) if (effectiveContractsForRound(state.employment, year, 1).some(contract => contract.playerId === playerId && contract.clubId !== sellerClubId)) return 'This player has a future agreement with another club. That agreement cannot be sold by the current employer.';
+  return null;
+}
+
+/** Format 78 (`recruitment-2`): a loan covers the rest of this season, and the player returns to terms with his club. */
+export function loanReason(state: SeasonState, playerId: string, seasons: number, paymentPlan: TransferPaymentPlan, sellerClubId: string): string | null {
+  if (state.recruitment.model !== 'recruitment-2') return 'Loans are not part of this career.';
+  if (seasons !== 1) return 'A loan covers the rest of this season only.';
+  if (paymentPlan !== 'upfront') return 'A loan fee is paid at once.';
+  if (contractForSeason(state.employment, playerId, state.seasonNumber + 1)?.clubId !== sellerClubId) return 'Only a player under contract with his club after this season can go on loan.';
   return null;
 }
 
@@ -101,6 +110,7 @@ export function quoteInSeasonTransferOffer(state: SeasonState, playerId: string,
   else if (!feeValid) reason = transferFeeRuleText(state, 'EUR ');
   else if (!planValid || paymentPlan !== 'upfront' && state.seasonNumber >= 7974) reason = 'Choose a payment plan within the supported career calendar.';
   else if (options.transferMode === 'release-clause' && releaseClauseTriggerReason(state, playerId, fee, paymentPlan)) reason = releaseClauseTriggerReason(state, playerId, fee, paymentPlan);
+  else if (options.transferMode === 'loan' && loanReason(state, playerId, seasons, paymentPlan, current.clubId)) reason = loanReason(state, playerId, seasons, paymentPlan, current.clubId);
   // relationships-3: a player refuses a role below his standing at the buying club.
   else if (contractRoleReason(state, clubId, playerId, options.role)) reason = contractRoleReason(state, clubId, playerId, options.role);
   else if (resolving && (!own?.transfer || own.transfer.clubStatus !== 'accepted' || own.transfer.contractId !== current.id || own.transfer.sellerClubId !== current.clubId || own.seasonWage !== seasonWage || own.seasons !== seasons || own.releaseFee !== options.releaseFee || own.transfer.fee !== fee || own.transfer.paymentPlan !== paymentPlan || (own.transfer.mode ?? 'negotiated') !== (options.transferMode ?? 'negotiated'))) reason = 'The selling club must approve these transfer terms before the player can join.';
@@ -135,7 +145,7 @@ export function quoteInSeasonSale(state: SeasonState, offerId: string): InSeason
   const sellerPayroll = payroll?.agreement.clubId === transfer.sellerClubId ? payroll : null;
   let acceptReason = !state.recruitment.transfersEnabledSince || state.status !== 'active' || offer.seasonNumber !== state.seasonNumber || offer.offeredRound !== state.round || offer.status !== 'club-review' || transfer.clubStatus !== 'review' ? 'Choose a transfer offer awaiting this matchday\'s club decision.' : current?.id !== transfer.contractId ? 'The selling agreement has changed.' : inSeasonSellerReason(state, offer.playerId, transfer.sellerClubId, offer.id);
   if (!acceptReason && offer.responseRound <= state.round) acceptReason = 'This transfer review has expired.';
-  const counterReason = acceptReason ?? (transfer.fee >= transfer.requiredFee ? 'This offer already meets the asking fee. Accept or reject it.' : null);
+  const counterReason = acceptReason ?? (transfer.mode === 'loan' ? 'A loan offer cannot be countered. Accept or decline it.' : transfer.fee >= transfer.requiredFee ? 'This offer already meets the asking fee. Accept or reject it.' : null);
   const released = getInSeasonReleasedContractIds(state, offer.playerId, transfer.sellerClubId);
   let nonRefundablePrepayment = 0;
   if (sellerPayroll?.prepaid) for (const entry of financeLedgerEntries(state.finance)) {

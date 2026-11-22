@@ -42,7 +42,7 @@ describe('the left menu', () => {
   it('is ordered by use in small groups, with Board as its own item and every page reachable', () => {
     const groups = mainNavigation({ career: true, europe: true });
     expect(groups.map(group => group.map(item => item.id))).toEqual([
-      ['home', 'inbox'], ['squad', 'match', 'transfers', 'scouting', 'training', 'staff'], ['club', 'board'], ['season', 'calendar', 'europe'], ['academy', 'medical'],
+      ['home', 'inbox'], ['squad', 'match', 'transfers', 'training', 'staff'], ['club', 'board'], ['season', 'calendar', 'europe'], ['academy', 'medical'],
     ]);
     expect(groups.flat().find(item => item.id === 'board')).toMatchObject({ label: 'Board', icon: 'shield' });
     // Nothing that exists is hidden: every page has its menu item.
@@ -105,9 +105,11 @@ describe('Transfers', () => {
     const cheapest = Math.min(...rows.map(row => row.wage));
     expect(filterTransferRows(rows, filtersOf({ maxWage: cheapest })).every(row => row.wage === cheapest)).toBe(true);
     expect(filterTransferRows(rows, filtersOf({ query: rows[0]!.player.name.slice(0, 5).toUpperCase() })).some(row => row.player.id === rows[0]!.player.id)).toBe(true);
-    // In-season, every known player is under contract elsewhere: free agents only leaves none; unscouted ratings stay unknown.
+    // In-season, every known player is under contract elsewhere: free agents only leaves none. Format 78: players in
+    // the scouting network show an estimate; a rating filter keeps only players with one.
     expect(filterTransferRows(rows, filtersOf({ freeOnly: true }))).toEqual([]);
-    expect(filterTransferRows(rows, filtersOf({ minStars: 3 }))).toEqual([]);
+    expect(filterTransferRows(rows, filtersOf({ minStars: 3 })).every(row => row.rating.kind !== 'unknown')).toBe(true);
+    expect(filterTransferRows(rows, filtersOf({ minStars: 3 })).length).toBeLessThanOrEqual(search.knownCount);
     const byAge = sortTransferRows(rows, 'age').map(row => row.age!);
     expect(byAge).toEqual([...byAge].sort((left, right) => left - right));
     const byFee = sortTransferRows(rows, 'fee').map(row => row.fee!);

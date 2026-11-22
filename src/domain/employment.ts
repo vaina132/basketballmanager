@@ -4,7 +4,8 @@ import type { SquadRole } from './relationships';
 
 export interface ContractOfferOptions {
   releaseFee?: number;
-  transferMode?: 'negotiated' | 'release-clause';
+  /** `loan` (format 78, `recruitment-2`): the buyer takes the player for the rest of this season only. */
+  transferMode?: 'negotiated' | 'release-clause' | 'loan';
   /** `relationships-3`: the squad role offered; omitted, the player's natural role at the offering club. */
   role?: SquadRole;
 }
@@ -42,7 +43,8 @@ export interface EmploymentTransfer {
   startsSeason: number;
   startsRound: number;
   fee: number;
-  mode?: 'release-clause';
+  /** `loan` (format 78): the released terms come back to the lending club from the next season. */
+  mode?: 'release-clause' | 'loan';
   releasedContractIds: string[];
   contractId: string;
   paymentPlan: TransferPaymentPlan;

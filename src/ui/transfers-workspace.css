@@ -220,3 +220,13 @@
 .transfer-search-table .transfers-action,.squad-contracts-table .transfers-action{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;min-width:0}
 .transfer-search-table .transfer-shortlist-toggle{margin-top:0}
 }
+/* Owner feedback (22 November 2026): scouting inside Transfers, one-click Scout and the transfer and loan list. */
+.transfers-tabs{display:flex;gap:0;margin:0 0 10px}
+.transfers-tabs button{display:inline-flex;align-items:center;gap:6px}
+.transfer-scout,.transfer-scout-queued{display:inline-flex;align-items:center;gap:4px;font-size:12px;margin-left:12px}
+.transfer-scout-queued{color:var(--muted)}
+.transfer-listings{margin-bottom:12px}
+.transfer-listing-list{list-style:none;margin:0;padding:0 14px 10px;display:grid;gap:6px}
+.transfer-listing-list li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:6px 0;border-bottom:1px solid var(--border)}
+.transfer-listing-list li span{color:var(--muted);font-size:13px}
+.transfer-listing-list li button{margin-left:auto}

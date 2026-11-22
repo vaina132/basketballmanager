@@ -5,7 +5,8 @@ import { acceptNationalOffer, offerNationalJob } from '../src/world/national';
 import { NationalTeamPage, NationalJobCard } from '../src/ui/NationalTeamPage';
 import { NationalWorkspace } from '../src/ui/NationalWorkspace';
 import { InboxWorkspace } from '../src/ui/InboxWorkspace';
-import { unemployedNavigation } from '../src/ui/navigation';
+import { competitionsViews, NATIONAL_TEAMS_LINK, resolveNavigation, shownCompetitionsView, unemployedNavigation } from '../src/ui/navigation';
+import app from '../src/App.tsx?raw';
 import { CareerStart } from '../src/ui/CareerStart';
 import { nationalWorld } from './helpers/national-world';
 
@@ -51,5 +52,21 @@ describe('national team screens (format 80)', () => {
     expect(html).toContain('Career earnings');
     expect(html).toContain('data-career-earnings="6666666"');
     expect(html).toContain('Turkey');
+  });
+
+  it('opens Competitions > National Teams from every national-team link (navigating used to reset the tab to League)', () => {
+    // The link names the tab, and navigating sets it after the page's first tab, so it is not reset.
+    expect(resolveNavigation(NATIONAL_TEAMS_LINK)).toEqual({ page: 'season', view: { page: 'season', view: 'national' } });
+    expect(app).toContain("const { page: nextPage, view } = resolveNavigation(target)");
+    expect(app).toContain("else if (view?.page === 'season') setCompetitionsView(view.view)");
+    // A career with national teams has the tab, so it is the one shown (employed or not).
+    expect(start.national).toBeDefined();
+    for (const league of [true, false]) expect(shownCompetitionsView(resolveNavigation(NATIONAL_TEAMS_LINK).view!.view as 'national', competitionsViews({ league, international: true, leagues: true, national: !!start.national }))).toBe('national');
+    // The three links: "National team" (Inbox, menu) without a national job, and the national team page's link in the
+    // unemployed and employed layouts. None sets the tab before navigating any more.
+    expect(app).toContain("if (current.kind === 'season' && current.season.national?.job) navigate('national')\n    else navigate(NATIONAL_TEAMS_LINK)");
+    expect(app.match(/onOpenCompetitions=\{\(\) => navigate\(NATIONAL_TEAMS_LINK\)\}/g)).toHaveLength(2);
+    expect(app.match(/navigate\(NATIONAL_TEAMS_LINK\)/g)).toHaveLength(3);
+    expect(app).not.toContain("setCompetitionsView('national')");
   });
 });

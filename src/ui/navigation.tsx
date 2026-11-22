@@ -92,8 +92,15 @@ export const MERGED_PAGES: Partial<Record<Page, PageView>> = {
 /** The tab a page opens on from its menu item or a plain link (Squad keeps the view it was left on). */
 const FIRST_VIEWS: Partial<Record<Page, PageView>> = { season: { page: 'season', view: 'league' }, training: { page: 'training', view: 'plan' }, club: { page: 'club', view: 'club' } }
 
-/** Where a link to a page lands: a merged page opens its tab on the page that holds it. */
-export function resolveNavigation(target: Page): { page: Page; view: PageView | null } {
+/**
+ * Competitions > National Teams: the national-team links (Inbox, the national team page's "Competitions" link, and
+ * "National team" while the manager has no national job). A link to a tab names it, so navigating cannot reset it.
+ */
+export const NATIONAL_TEAMS_LINK: PageView = Object.freeze({ page: 'season', view: 'national' })
+
+/** Where a link to a page lands: a merged page opens its tab on the page that holds it; a link to a tab opens that tab. */
+export function resolveNavigation(target: Page | PageView): { page: Page; view: PageView | null } {
+  if (typeof target !== 'string') return { page: target.page, view: target }
   const view = MERGED_PAGES[target] ?? FIRST_VIEWS[target] ?? null
   return { page: view?.page ?? target, view }
 }

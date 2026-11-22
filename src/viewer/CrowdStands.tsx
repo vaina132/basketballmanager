@@ -31,8 +31,8 @@ const Stands = memo(function Stands({ crowd }: { crowd: Crowd }) {
   </svg>
 })
 
-function CheerLayer({ fans, delay, strength }: { fans: readonly Fan[]; delay: number; strength: Cheer['strength'] }) {
-  return <svg viewBox={COURT_VIEW_BOX} className="crowd-layer crowd-cheer" data-strength={strength} style={{ animationDelay: `${delay}s` }} aria-hidden="true" focusable="false">
+function CheerLayer({ fans, delay, strength, onEnd }: { fans: readonly Fan[]; delay: number; strength: Cheer['strength']; onEnd?: () => void }) {
+  return <svg viewBox={COURT_VIEW_BOX} className="crowd-layer crowd-cheer" data-strength={strength} style={{ animationDelay: `${delay}s` }} onAnimationEnd={onEnd} aria-hidden="true" focusable="false">
     <FanShapes fans={fans} standing />
   </svg>
 }
@@ -43,18 +43,22 @@ function CheerLayer({ fans, delay, strength }: { fans: readonly Fan[]; delay: nu
  * motion shows the seated crowd only.
  */
 export const CrowdLayers = memo(function CrowdLayers({ crowd, cheer, reducedMotion }: { crowd: Crowd; cheer: Cheer | null; reducedMotion: boolean }) {
-  // The last cheer stays shown (its layers simply finish their animation) until the next one starts.
+  // A cheer plays once: its layers stay until their animation ends (even after the play moves on), then go away.
   const [shown, setShown] = useState(cheer)
+  const [ended, setEnded] = useState<string | null>(null)
   if (cheer && cheer.key !== shown?.key) setShown(cheer)
   const groups = useMemo(() => {
     const cheering = crowd.fans.filter(fan => fan.cheers)
     const home = [0, 1, 2].map(wave => cheering.filter(fan => fan.side === 'home' && fan.wave === wave))
     return { home, away: cheering.filter(fan => fan.side === 'away') }
   }, [crowd])
-  const active = !reducedMotion && shown ? shown : null
-  const layers = (side: Side, cheerKey: string, strength: Cheer['strength']) => side === 'away'
-    ? [<CheerLayer key={`${cheerKey}-away`} fans={groups.away} delay={0} strength={strength} />]
-    : (strength === 'small' ? [1] : [0, 1, 2]).map((wave, index) => <CheerLayer key={`${cheerKey}-${wave}`} fans={groups.home[wave]!} delay={index * .14} strength={strength} />)
+  const active = !reducedMotion && shown && shown.key !== ended ? shown : null
+  const layers = (side: Side, cheerKey: string, strength: Cheer['strength']) => {
+    const finish = () => setEnded(cheerKey)
+    if (side === 'away') return [<CheerLayer key={`${cheerKey}-away`} fans={groups.away} delay={0} strength={strength} onEnd={finish} />]
+    const waves = strength === 'small' ? [1] : [0, 1, 2]
+    return waves.map((wave, index) => <CheerLayer key={`${cheerKey}-${wave}`} fans={groups.home[wave]!} delay={index * .14} strength={strength} onEnd={index === waves.length - 1 ? finish : undefined} />)
+  }
   return <div className="crowd" data-crowd-motion={reducedMotion ? 'off' : 'on'} data-crowd-density={crowd.density.toFixed(2)} data-cheer={active ? `${active.side}-${active.strength}` : 'none'}>
     <Stands crowd={crowd} />
     {active?.flash && <svg key={`${active.key}-flash`} viewBox={COURT_VIEW_BOX} className="crowd-layer crowd-flash" aria-hidden="true" focusable="false">{crowd.stands.map(d => <path key={d} d={d} fill="#fff6dc" />)}</svg>}

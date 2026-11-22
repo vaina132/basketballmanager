@@ -34,6 +34,14 @@
 .court-five-warning{color:var(--accent)}
 .court-five-unavailable{color:#e69588}
 .court-five-queued-label{color:var(--accent)}
+/* A queued change (owner feedback, 22 November 2026): the label under the circle is a button that withdraws it. */
+.court-five-undo{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:2px 8px;border:1px solid var(--accent);border-radius:2px;background:#e5aa551f;font-weight:600;touch-action:manipulation;cursor:pointer}
+.court-five-undo:hover{background:#e5aa5538}
+.court-five-undo:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.court-five-reserve-queued{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.court-five-reserve-queued .lineup-cancel-sub{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:4px 12px;font-size:12px}
+.court-five-bench.is-drop ul{box-shadow:inset 0 0 0 2px var(--accent)}
+@media(pointer:coarse){.court-five-undo{min-height:40px;padding:4px 10px}.court-five-reserve-queued .lineup-cancel-sub{min-height:44px;min-width:88px;justify-content:center}}
 .court-five-fouls,.court-five-listed{color:var(--muted)}
 .court-five-fouls.is-trouble{color:var(--accent)}
 .court-five-spot.is-out-of-position .court-five-ring{border-color:var(--accent);border-style:dashed}

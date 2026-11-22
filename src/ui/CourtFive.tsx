@@ -123,12 +123,36 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
     announce(result.state === before ? 'Your five is already the best five.' : pregame ? 'Best five set: your best healthy players, each in his circle.' : queued ? `Best five: ${queued} ${queued === 1 ? 'change waits' : 'changes wait'} for the next legal stoppage; players on court moved circles at once.` : 'Best five set: players on court moved circles.')
   }
 
+  /** Withdraws a change still waiting for a stoppage (owner feedback, 22 November 2026): one tap, a key or a drag back to the bench. */
   function cancel(outId: string) {
     if (disabled || complete) return
     onInteractionStart()
+    const request = match.pendingSubstitutions[side].find(item => item.outId === outId)
     let applied = false
     apply(current => { const next = cancelSubstitution(current, side, outId); applied = true; return next })
-    if (applied) announce(`Substitution for ${name(outId)} cancelled.`)
+    setPick(null); setDragging(null); setDropKey(null)
+    if (applied) announce(`Change cancelled: ${name(outId)} stays on${request ? `, ${name(request.inId)} stays on the bench` : ''}.`)
+  }
+  const cancelLabel = (request: { outId: string; inId: string }) => `Cancel substitution: ${name(request.outId)} stays on, ${name(request.inId)} stays on the bench`
+  /** A queued reserve dragged back onto the bench withdraws his change. */
+  const queuedDrag = dragging?.kind === 'bench' ? pending.find(request => request.inId === dragging.playerId) : undefined
+  const benchDropHandlers = {
+    onDragOver: (event: DragEvent<HTMLElement>) => {
+      if (!editable || !queuedDrag) return
+      event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropKey('bench')
+    },
+    onDragLeave: (event: DragEvent<HTMLElement>) => { if (dropKey === 'bench' && (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget))) setDropKey(null) },
+    onDrop: (event: DragEvent<HTMLElement>) => {
+      if (!editable) return
+      try {
+        const data: unknown = JSON.parse(event.dataTransfer.getData(DRAG_TYPE))
+        if (!data || typeof data !== 'object' || !('identity' in data) || !('source' in data) || data.identity !== identity) return
+        const source = data.source as CourtPick
+        const request = source && typeof source === 'object' && source.kind === 'bench' ? pending.find(item => item.inId === source.playerId) : undefined
+        if (request) { event.preventDefault(); cancel(request.outId) }
+      } catch { /* not a drag from this court picture */ }
+      finally { setDragging(null); setDropKey(null) }
+    },
   }
 
   function clearSelection() {
@@ -172,6 +196,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
     : required ? `Replacement needed: tap a reserve, then the circle of ${name(required.playerId)} (${required.reason === 'injured' ? 'injured' : 'fouled out'}).`
     : planning ? 'Your five for the next game. Drag a player onto a circle, or tap a player and then a circle.'
     : pregame ? 'Drag a player onto a circle, or tap a player and then a circle. Changes before tip-off apply at once.'
+      : pending.length ? 'A change waits for the next stoppage. Tap Cancel, or drag the reserve back to the bench, to withdraw it.'
       : 'Drag or tap a reserve onto a circle: he comes on at the next legal stoppage. Players on court swap circles at once.'
 
   return <div className="court-five" onKeyDown={event => { if (event.key === 'Escape' && pick) { event.preventDefault(); clearSelection() } }}>
@@ -183,7 +208,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
       </div>
     </div>
     <p ref={status} className="court-five-status" tabIndex={-1} role="status" aria-live="polite">{announcement}</p>
-    {pending.length > 0 && <ul className="lineup-queued-changes court-five-queued" aria-label="Pending substitutions">{pending.map(request => <li key={request.outId}><span><strong>Queued</strong> {name(request.inId)} for {name(request.outId)}{circles[request.outId] ? ` at ${circles[request.outId]}` : ''}</span><button type="button" className="text-button" data-cancel-lineup-sub={request.outId} aria-label={`Cancel substitution of ${name(request.inId)} for ${name(request.outId)}`} onClick={() => cancel(request.outId)} disabled={disabled || complete}>Cancel</button></li>)}</ul>}
+    {pending.length > 0 && <ul className="lineup-queued-changes court-five-queued" aria-label="Pending substitutions">{pending.map(request => <li key={request.outId}><span><strong>Waiting for a stoppage</strong> {name(request.inId)} on for {name(request.outId)}{circles[request.outId] ? ` at ${circles[request.outId]}` : ''}</span><button type="button" className="button small lineup-cancel-sub" data-cancel-lineup-sub={request.outId} aria-label={cancelLabel(request)} onClick={() => cancel(request.outId)} disabled={disabled || complete}><Icon name="close" size={13} />Cancel</button></li>)}</ul>}
     <div className="court-five-layout" onPointerDownCapture={editable ? onInteractionStart : undefined}>
       <div ref={court} className="court-five-court" role="group" aria-label={`${team.name} ${pregame ? 'starting five' : 'on court'}: five positions`}>
         <svg className="court-five-lines" viewBox="0 0 150 150" aria-hidden="true" focusable="false" preserveAspectRatio="none">
@@ -227,12 +252,12 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
             {warning && <span className="court-five-warning" data-out-of-position={position}>{warning}</span>}
             {listedNote && <span className="court-five-listed" title="The automatic choice: he plays his listed position without a penalty. Put him in a circle yourself to change the position he plays.">{listedNote}</span>}
             {unavailable && <span className="court-five-unavailable">{unavailable}</span>}
-            {queued && <span className="court-five-queued-label">Sub queued: {shortName(name(queued.inId))}</span>}
+            {queued && (editable ? <button type="button" className="court-five-queued-label court-five-undo" data-cancel-court-sub={queued.outId} aria-label={cancelLabel(queued)} title="Cancel this change" onClick={() => cancel(queued.outId)}><Icon name="close" size={12} />Sub: {shortName(name(queued.inId))}</button> : <span className="court-five-queued-label">Sub queued: {shortName(name(queued.inId))}</span>)}
           </div>
         })}
       </div>
-      <div id={benchId} className="court-five-bench" hidden={!benchOpen}>
-        <div className="court-five-bench-heading"><h4>Bench</h4><span>{bench.length} {bench.length === 1 ? 'player' : 'players'} · stamina recovers while resting</span></div>
+      <div id={benchId} className={`court-five-bench${dropKey === 'bench' ? ' is-drop' : ''}`} hidden={!benchOpen} {...(editable ? benchDropHandlers : {})}>
+        <div className="court-five-bench-heading"><h4>Bench</h4><span>{queuedDrag ? 'Drop here to cancel his change' : `${bench.length} ${bench.length === 1 ? 'player' : 'players'} · stamina recovers while resting`}</span></div>
         {showRatings && bench.length > 1 && <div className="court-five-sort" role="group" aria-label="Sort the bench"><span aria-hidden="true">Sort:</span>{([['position', 'Position'], ['rating', 'Match rating']] as const).map(([value, text]) => <button key={value} type="button" className={benchSort === value ? 'selected' : ''} aria-pressed={benchSort === value} data-bench-sort={value} onClick={() => setBenchSort(value)}>{text}</button>)}</div>}
         {bench.length ? <ul aria-label={`${team.name} bench`}>{bench.map(player => {
           const target: CourtPick = { kind: 'bench', playerId: player.id }, key = pickKey(target), stats = shown.stats[player.id]
@@ -248,7 +273,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
             {live ? <button type="button" className="court-five-reserve-pick" data-court-reserve={player.id} aria-pressed={move ? undefined : isSelected} aria-label={action!} draggable onClick={event => choose(target, event.detail === 0)} onDragStart={event => beginDrag(event, target)} onDragEnd={dragEnd}>{identityMarkup}</button> : <div className="court-five-reserve-pick">{identityMarkup}</div>}
             <span className="court-five-reserve-ratings"><PlayerRating attributes={player.attributes} position={player.position} knowledge={knowledgeForPlayer?.(player.id)} compact label={`${player.name} ability`} />{showRatings && stats && <MatchRating stats={stats} live compact label={player.name} />}</span>
             {stats && <StaminaMeter value={stats.condition} label={`${player.name} stamina`} compact />}
-            {(unavailable || queued) && <span className={unavailable ? 'court-five-unavailable' : 'court-five-queued-label'}>{unavailable ?? `Queued on for ${shortName(name(queued!.outId))}`}</span>}
+            {unavailable ? <span className="court-five-unavailable">{unavailable}</span> : queued && <span className="court-five-queued-label court-five-reserve-queued">Queued on for {shortName(name(queued.outId))}{editable && <button type="button" className="button small lineup-cancel-sub" data-cancel-bench-sub={queued.outId} aria-label={cancelLabel(queued)} onClick={() => cancel(queued.outId)}><Icon name="close" size={12} />Cancel</button>}</span>}
           </li>
         })}</ul> : <p className="lineup-empty">No reserves in the matchday squad.</p>}
       </div>

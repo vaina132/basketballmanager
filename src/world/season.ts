@@ -38,6 +38,7 @@ import type { CareerWorld } from '../domain/world';
 import { fullWorldClubs, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
 import { createFixtureMatch, isPlayerEligible, preTipoffLineup, simulateToEnd } from '../engine/match';
 import { isCourtPosition } from '../engine/positions';
+import { INJURY_MODEL_2 } from '../domain/injuries';
 import { clubRecoveryPercent, injuriesFromMatch, injuryRiskMap, isRecovering, withMedicalRecurrence } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
@@ -446,6 +447,11 @@ export interface SeasonSystems {
    * judged over a longer stretch, quiet role adjustments and one calm concern. New careers only; requires squad relationships.
    */
   calmPlayingTime?: boolean;
+  /**
+   * Owner feedback (22 November 2026): longer recoveries for players hurt in a match (`injuries-2`,
+   * `INJURY_DURATIONS_2` in `src/domain/injuries.ts`), so long injuries happen over a season. New careers only.
+   */
+  injuryLengths?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -458,7 +464,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -480,6 +486,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.simpleFacilities && !options.facilities) throw new Error('Six-level facilities and the bank loan require club facilities.');
   if (options.wagePool !== undefined && typeof options.wagePool !== 'boolean') throw new Error('Choose a valid wage budget setting.');
   if (options.staffContracts !== undefined && typeof options.staffContracts !== 'boolean') throw new Error('Choose a valid staff contract setting.');
+  if (options.injuryLengths !== undefined && typeof options.injuryLengths !== 'boolean') throw new Error('Choose a valid injury setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -491,8 +498,9 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   const boarded = options.calmPlayingTime && options.relationships ? { ...presided, relationships: { ...presided.relationships, model: 'relationships-4' as const } } : presided;
   // Format 75: player wages and staff fees share one pool from the opening; the opening staff and squads are unchanged.
   // Format 76: staff contracts (`coaching-4`, set before the opening staff are paid) with each person's contract length.
-  if (staffContracts) return withOpeningStaffTerms(boarded);
-  return options.wagePool && options.staffing ? { ...boarded, coaching: { ...boarded.coaching, model: 'coaching-3' } } : boarded;
+  const staffed = staffContracts ? withOpeningStaffTerms(boarded) : options.wagePool && options.staffing ? { ...boarded, coaching: { ...boarded.coaching, model: 'coaching-3' as const } } : boarded;
+  // Owner feedback (22 November 2026): longer recoveries for match injuries in new careers.
+  return options.injuryLengths ? { ...staffed, injuryModel: INJURY_MODEL_2 } : staffed;
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.
@@ -623,7 +631,7 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
   }
   fixture.result = compactResult(match, rosterIds);
   if (usesFullClubRoster(season)) fixture.result.selection = captureMatchdaySelection(season.clubs, match.home, match.away, season.conditions);
-  for (const injury of injuriesFromMatch(season.seed, fixture, match, season.injuries, clubRecoveryPercent(season, fixture.date))) {
+  for (const injury of injuriesFromMatch(season.seed, fixture, match, season.injuries, clubRecoveryPercent(season, fixture.date), season.injuryModel)) {
     if (season.injuries.some(existing => existing.id === injury.id || existing.playerId === injury.playerId && isRecovering(existing, fixture.date, season.physio))) throw new Error('An unavailable player cannot receive a duplicate injury episode.');
     season.injuries.push(injury);
   }

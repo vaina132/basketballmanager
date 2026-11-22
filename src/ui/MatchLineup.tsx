@@ -206,7 +206,7 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
       return next
     })
     if (!applied) return
-    setAnnouncement(`Substitution for ${playerName(outId)} cancelled.`)
+    setAnnouncement(`Change cancelled: ${playerName(outId)} stays on.`)
     requestAnimationFrame(() => status.current?.focus({ preventScroll: true }))
   }
 
@@ -261,6 +261,6 @@ function MatchRotationControls({ match, side, selected, selectedActive, helpId, 
   return <div className="lineup-rotation-controls">
     <div className="lineup-rotation-help"><p id={helpId}>{finished ? 'Match finished · substitutions closed.' : selected ? `${selected.name} selected. Choose an on-court player to replace.` : selectedActive ? `${selectedActive.name} selected. Choose another on-court player to swap places, or a reserve to bring on.` : 'Drag a reserve onto an on-court player, or select both: substitutions wait for a legal stoppage. Drag or select two on-court players to swap their places at once.'}</p>{(selected || selectedActive) && <button type="button" className="text-button" onClick={onClear} disabled={disabled}><Icon name="close" size={13} />Clear selection</button>}</div>
     <p ref={statusRef} className={`lineup-rotation-status${announcement ? '' : ' visually-hidden'}`} tabIndex={-1} role="status" aria-live="polite">{announcement}</p>
-    {match.pendingSubstitutions[side].length > 0 && <ul className="lineup-queued-changes" aria-label="Pending substitutions">{match.pendingSubstitutions[side].map(request => <li key={request.outId}><span><strong>Queued</strong> {playerName(request.inId)} for {playerName(request.outId)}</span><button type="button" className="text-button" data-cancel-lineup-sub={request.outId} aria-label={`Cancel substitution of ${playerName(request.inId)} for ${playerName(request.outId)}`} onClick={() => onCancel(request.outId)} disabled={disabled || finished}>Cancel</button></li>)}</ul>}
+    {match.pendingSubstitutions[side].length > 0 && <ul className="lineup-queued-changes" aria-label="Pending substitutions">{match.pendingSubstitutions[side].map(request => <li key={request.outId}><span><strong>Waiting for a stoppage</strong> {playerName(request.inId)} on for {playerName(request.outId)}</span><button type="button" className="button small lineup-cancel-sub" data-cancel-lineup-sub={request.outId} aria-label={`Cancel substitution: ${playerName(request.outId)} stays on, ${playerName(request.inId)} stays on the bench`} onClick={() => onCancel(request.outId)} disabled={disabled || finished}><Icon name="close" size={13} />Cancel</button></li>)}</ul>}
   </div>
 }

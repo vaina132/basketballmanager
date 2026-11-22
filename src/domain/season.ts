@@ -6,7 +6,7 @@ import type { SeasonCommercial } from './commercial';
 import type { SeasonRivalries } from './rivalries';
 import type { SeasonCareer } from './career';
 import type { SeasonRelationships } from './relationships';
-import type { InjuryKind } from './injuries';
+import type { InjuryKind, InjuryModel } from './injuries';
 import type { InjuryMode, MatchResult, MatchState, PlayerStats, Position, Side, Tactics, Team } from './types';
 import type { SeasonTraining } from './training';
 import type { SeasonCoaching } from './coaching';
@@ -175,6 +175,8 @@ export interface SeasonState {
   conditions: Record<string, number>;
   injuryMode: InjuryMode;
   injuries: SeasonInjury[];
+  /** Owner feedback (22 November 2026): new careers diagnose match injuries with the longer `injuries-2` durations. */
+  injuryModel?: InjuryModel;
   training: SeasonTraining;
   coaching: SeasonCoaching;
   finance: SeasonFinance;

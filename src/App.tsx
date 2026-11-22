@@ -52,7 +52,7 @@ import { enableAssistant, hireAssistant, releaseAssistant, setAssistantRenewal }
 import { AssistantAdvice } from './ui/AssistantAdvice'
 import { automaticChoiceLabels } from './ui/automatic-choice'
 import { ClubBudgetBar } from './ui/ClubBudgetBar'
-import { getPlayerHealth } from './world/health'
+import { getPlayerHealth, getPlayerMedicalSummary } from './world/health'
 import { EXTRA_ATTRIBUTE_LABELS, EXTRA_ATTRIBUTES } from './world/extra-attributes'
 import { getMatchPlayerKnowledge, getPlayerKnowledge, getPotentialKnowledge } from './world/scouting-policy'
 import { POTENTIAL_RATING_DESCRIPTION } from './world/potential'
@@ -110,7 +110,7 @@ import { enablePhysio, hirePhysio, releasePhysio, setPhysioRenewal } from './wor
 import { enableCoaching, hireCoach, releaseCoach, setCoachAssignment, setCoachRenewal } from './world/coaching'
 import { enableTraining, setTrainingPlan } from './world/training'
 import type { TrainingPlan } from './domain/training'
-import { PlayerHealthSummary, SeasonMedicalReport } from './ui/SeasonMedicalReport'
+import { medicalDate, PlayerHealthSummary, SeasonMedicalReport } from './ui/SeasonMedicalReport'
 import type { SeasonReply } from './world/season.worker'
 import { SeasonProgress, seasonFacts, showsSeasonStrip } from './ui/SeasonProgress'
 import { Nationality, playerNationality } from './ui/Nationality'
@@ -320,6 +320,8 @@ export default function App() {
   const chosenPlayer = selectedSquadPlayer && season ? { ...selectedSquadPlayer, attributes: getPlayerKnowledge(season, selectedSquadPlayer.id).attributes ?? selectedSquadPlayer.attributes } : selectedSquadPlayer
 
   const offseason = season?.status === 'complete'
+  // Owner feedback (22 November 2026): the squad list shows when an injured player is expected back.
+  const injuredUntil = (id: string, label: string) => { const summary = season ? getPlayerMedicalSummary(season, id) : null; return summary && summary.daysRemaining > 0 ? `${label} · back ${medicalDate(summary.effectiveReturnOn)}` : label }
   const squadEligible = (id: string) => offseason || !match.stats[id] ? !!season && !getPlayerHealth(season, id) : isPlayerEligible(match, id)
   const squadCondition = (id: string) => offseason ? season!.conditions[id]! : match.stats[id]?.condition ?? season?.conditions[id] ?? 100
   const eligiblePlayers = squadTeam.players.filter(player => squadEligible(player.id))
@@ -919,7 +921,7 @@ export default function App() {
               {fullRoster && season && <td><label className="matchday-check"><input type="checkbox" aria-label={`Select ${player.name} for matchday`} checked={matchdayIds.includes(player.id)} disabled={saving || advancing || !canSelectMatchday(season) || (matchdayIds.includes(player.id) ? matchdayIds.length <= 5 : matchdayIds.length >= 12)} onChange={event => { const ids = event.target.checked ? [...matchdayIds, player.id] : matchdayIds.filter(id => id !== player.id); updateCareer(state => setMatchdaySelection(state, ids), 'Matchday squad updated.', true) }} /></label></td>}
               <td><button className="roster-player" onClick={() => setSelectedPlayer(player.id)} aria-pressed={chosenPlayer.id === player.id}><Avatar player={player} color={managedTeam.color} size={34} /><span><strong>{player.name}</strong><GeneratedTag season={season} playerId={player.id} /><small>#{player.number} / <PositionLabel position={player.position} profile={season ? worldOf(season).playerProfiles[player.id] : undefined} /><Nationality country={playerNationality(season, player.id)} compact /></small></span></button></td>
               <td className="squad-role-cell">{season ? <SquadRoleCell season={season} playerId={player.id} busy={advancing || saving} onRole={(playerId, role) => updateCareer(state => agreeSquadRole(state, playerId, role), roleChangeMessage(season, playerId, role), true)} /> : '—'}</td>
-              <td><span className={`roster-role ${match.lineups[managedSide].includes(player.id) ? 'on-court' : ''}`}>{offseason ? squadEligible(player.id) ? 'Available' : 'Recovering' : !match.stats[player.id] ? squadEligible(player.id) ? 'Not selected' : 'Injured' : !isPlayerEligible(match, player.id) ? match.injuries[player.id] ? 'Injured' : 'Fouled out' : match.lineups[managedSide].includes(player.id) ? 'On court' : 'Bench'}</span></td><td>{season ? getCareerPlayerAge(season, player.id, season.date) ?? '—' : '—'}</td><td>{player.heightCm} <span className="muted">cm</span></td><td><StaminaMeter value={squadCondition(player.id)} label={`${player.name} stamina`} compact /></td><td>{match.stats[player.id]?.points ?? '—'}</td><td>{match.stats[player.id]?.fouls ?? '—'}</td>
+              <td><span className={`roster-role ${match.lineups[managedSide].includes(player.id) ? 'on-court' : ''}`}>{offseason ? squadEligible(player.id) ? 'Available' : injuredUntil(player.id, 'Recovering') : !match.stats[player.id] ? squadEligible(player.id) ? 'Not selected' : injuredUntil(player.id, 'Injured') : !isPlayerEligible(match, player.id) ? match.injuries[player.id] ? injuredUntil(player.id, 'Injured') : 'Fouled out' : match.lineups[managedSide].includes(player.id) ? 'On court' : 'Bench'}</span></td><td>{season ? getCareerPlayerAge(season, player.id, season.date) ?? '—' : '—'}</td><td>{player.heightCm} <span className="muted">cm</span></td><td><StaminaMeter value={squadCondition(player.id)} label={`${player.name} stamina`} compact /></td><td>{match.stats[player.id]?.points ?? '—'}</td><td>{match.stats[player.id]?.fouls ?? '—'}</td>
             </tr>)}</tbody></table>{rosterPlayers.length === 0 && <p className="roster-empty">No players match this filter.</p>}</div>
           </section><PlayerProfile onOpenMedical={() => navigate('medical')} player={chosenPlayer} match={match} managedSide={managedSide} season={season} onPerformance={() => { setPerformancePlayer(chosenPlayer.id); setSquadView('performance'); navigate('squad', '#player-performance-report') }} onContractReply={replyToContract} busy={advancing || saving} /></div>
           {season && <SeasonMedicalReport onOpenMedical={() => navigate('medical')} season={season} onSelectPlayer={id => { setSelectedPlayer(id); document.querySelector<HTMLElement>('.player-profile')?.focus() }} />}

@@ -14,8 +14,9 @@ const changed = (state: SeasonState, mutate: (copy: SeasonState) => void) => { c
 let generous: { state: SeasonState; quote: BoardFundingQuote }, cautious: { state: SeasonState; quote: BoardFundingQuote };
 
 beforeAll(() => {
-  // Seed 4 (227 before the relationships-2 rules of format 66): Aegean Waves' board approves in season 1, after an automatic request.
-  generous = driveToFundingRequest('aegean-waves', 4);
+  // Seed 2 (4 before the match flow, real coaches and European entry of formats 81-83, 227 before the relationships-2
+  // rules of format 66): Aegean Waves' board approves at the start of season 2, after automatic requests.
+  generous = driveToFundingRequest('aegean-waves', 2);
   cautious = driveToFundingRequest('alpine-stags', 227);
 }, 240_000);
 
@@ -30,9 +31,9 @@ describe('board funding rules', () => {
     const { state, quote } = generous;
     expect(quote.amount).toBe(quote.cost - quote.available);
     expect(quote.amount).toBeGreaterThan(0);
-    const legacy = createSeason({ seed: 3, managedClubId: 'adriatic-comets', ...NEW_CAREER_SYSTEMS, matchFlow: false, simpleFacilities: false, boardFunding: false });
+    const legacy = createSeason({ seed: 3, managedClubId: 'adriatic-comets', ...NEW_CAREER_SYSTEMS, simpleFacilities: false, boardFunding: false });
     expect(quoteBoardFunding(legacy, 'arena').reason).toBe('Enable board funding requests first.');
-    expect(quoteBoardFunding(createSeason({ seed: 3, managedClubId: 'adriatic-comets', ...NEW_CAREER_SYSTEMS, matchFlow: false, simpleFacilities: false }), 'youth').reason).toBe('The club can fund this upgrade without board capital.');
+    expect(quoteBoardFunding(createSeason({ seed: 3, managedClubId: 'adriatic-comets', ...NEW_CAREER_SYSTEMS, simpleFacilities: false }), 'youth').reason).toBe('The club can fund this upgrade without board capital.');
     expect(() => enableBoardFunding(createSeason({ seed: 3, finance: true, facilities: true }))).toThrow(/board reviews/);
     expect(quote.capitalRemaining).toBe(DEVELOPMENT_PRESIDENTS.find(item => item.clubId === 'aegean-waves')!.seasonCapital - boardCapitalGranted(state.facilities, 'aegean-waves', state.seasonNumber));
   });
@@ -45,7 +46,7 @@ describe('board funding rules', () => {
   });
 
   it('lets older careers opt in during a season or after its final matchday, and the save still validates', () => {
-    let legacy = createSeason({ seed: 3, managedClubId: 'adriatic-comets', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, matchFlow: false, simpleFacilities: false, boardFunding: false });
+    let legacy = createSeason({ seed: 3, managedClubId: 'adriatic-comets', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, simpleFacilities: false, boardFunding: false });
     legacy = advanceMatchday(advanceMatchday(legacy));
     const midSeason = enableBoardFunding(legacy);
     expect(midSeason.facilities.fundingSince).toEqual(facilityEventAnchor(legacy));

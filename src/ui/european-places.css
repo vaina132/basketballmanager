@@ -1,0 +1,27 @@
+.european-places{display:flex;flex-direction:column;gap:4px}
+.european-your-club{margin:4px 14px 10px;padding:10px 12px;border:1px solid var(--border);border-radius:4px}
+.european-your-club h3,.european-wildcards h3{margin:0 0 8px;font-size:14px}
+.european-your-club h4{margin:10px 0 4px;font-size:13px;color:var(--muted);font-weight:600}
+.european-status{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 16px;margin:0}
+.european-status dt{font-size:12px;color:var(--muted)}
+.european-status dd{margin:0;font-size:14px}
+.european-status small{color:var(--muted)}
+.european-checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-size:13px}
+.european-checks li{display:grid;grid-template-columns:18px 1fr auto;gap:6px;align-items:baseline}
+.european-checks li[data-check-ok='true'] .european-check-mark{color:#4ade80}
+.european-checks li[data-check-ok='false'] .european-check-mark{color:#f87171}
+.european-score{margin:8px 0 0;font-size:13px}
+.european-fixes{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
+.european-places-controls{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:0 14px 8px}
+.european-places-toggle{display:flex;gap:4px}
+.european-places-toggle button{background:none;border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:4px;cursor:pointer;font:inherit;font-size:13px}
+.european-places-toggle button.selected{border-color:var(--accent);color:var(--accent)}
+.european-places-toggle button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.european-held{padding:0 14px;font-size:13px}
+.european-wildcards{padding:8px 14px 0}
+.european-table{width:100%;border-collapse:collapse;font-size:13px}
+.european-table th,.european-table td{text-align:left;padding:7px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+.european-table thead th{color:var(--muted);font-weight:600;font-size:12px}
+.european-table tbody th{font-weight:600}
+.european-checks{max-width:560px}
+.european-places-list .european-places-controls{padding-top:4px}

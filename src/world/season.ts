@@ -1,8 +1,9 @@
 import { requireCalendarWeek } from './calendar-boundary';
 import { competitionTable } from './competition-table';
-import { BOARD_REVIEW_STEP, createBoard, enableBoard, enableBoardConsequences, enablePresidentBoard, prepareBoardSeason, processBoardRound } from './board';
+import { BOARD_REVIEW_STEP, buildBoardMandate, createBoard, enableBoard, enableBoardConsequences, enablePresidentBoard, prepareBoardSeason, processBoardRound } from './board';
 import { isYouthPlayer, objectiveStartingFive } from './presidents';
 import { clubHeadCoach, computerCoachTactics, createCoaches, headCoachWorld, MANAGER_COACH, recordManagerSeason, youthTrustFive } from './head-coaches';
+import { financeAtLedgerBoundary } from './finance-ledger';
 import { summarizeAcademyHistory } from './academy-history';
 import { summarizeYouthHistory } from './youth-history';
 import { sealCompletedHistory } from './sealed-history';
@@ -31,6 +32,8 @@ import { createFacilities, enableBoardFunding, enableFacilities, enableFacilityM
 import { medicalRecurrencePercent } from './facilities-policy';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonEurope, SeasonFixture, SeasonState, Standing } from '../domain/season';
 import { nextEuropeanPlaces, openingEurope } from './european-places';
+import { openingEuropeTwo } from './european-entry';
+import { europeanEntryAfter, type PlacesDayOptions, type PlacesDayState } from './european-entry-day';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import { archiveFinancialHistory } from './finance-archives';
 import type { InjuryMode, MatchState, Position, Side, Team } from '../domain/types';
@@ -505,6 +508,12 @@ export interface SeasonSystems {
    * with his career (`src/world/head-coaches.ts`). New real-club careers with job changes; others are unchanged.
    */
   realCoaches?: boolean;
+  /**
+   * Format 83 (owner's item C, 22 November 2026): European entry rules (`places-2`, `src/world/european-entry.ts`):
+   * place types with end seasons, the places day with the licence check and wild cards, the manager's answers and the
+   * board's European aim. New careers of worlds with European places; older careers keep `places-1`.
+   */
+  europeanEntry?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -517,7 +526,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -546,6 +555,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.matchFlow !== undefined && typeof options.matchFlow !== 'boolean') throw new Error('Choose a valid match flow setting.');
   if (options.nationalTeams !== undefined && typeof options.nationalTeams !== 'boolean') throw new Error('Choose a valid national teams setting.');
   if (options.realCoaches !== undefined && typeof options.realCoaches !== 'boolean') throw new Error('Choose a valid head coaches setting.');
+  if (options.europeanEntry !== undefined && typeof options.europeanEntry !== 'boolean') throw new Error('Choose a valid European entry setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -554,7 +564,10 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   let created: SeasonState;
   try { created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false, options.simpleFacilities ?? false, options.staffing ?? false, staffContracts); }
   finally { openingNational = false; }
-  const pressed = options.media ? enableMedia(created) : created;
+  // Format 83: European entry rules; the opening places name the same clubs, so nothing scheduled changes. The boards'
+  // opening objectives are set again with them (the European aim), as they stood when they were set.
+  const entered = options.europeanEntry && created.europe && created.world ? withOpeningObjectives({ ...created, europe: openingEuropeTwo(created.world) }) : created;
+  const pressed = options.media ? enableMedia(entered) : entered;
   // Format 70: the board's president personalities and objectives apply from the opening; the opening match is unchanged.
   const presided = options.presidents ? enablePresidentBoard(pressed) : pressed;
   // Format 77: the calmer playing-time rules; nothing has been judged at the opening, so its frozen morale is unchanged.
@@ -581,6 +594,13 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
 function withRealCoaches(state: SeasonState): SeasonState {
   const coaches = createCoaches(state.manager, state.seed, worldOf(state).startDate);
   return { ...state, coaches, ...(state.national ? { national: withRealNationalCoaches(state.national, worldOf(state)) } : {}) };
+}
+
+/** The opening objectives built again from the career's opening state, each at its own ledger point (format 83). */
+function withOpeningObjectives(state: SeasonState): SeasonState {
+  if (!state.board.enabledSince || !state.board.mandates.length) return state;
+  const opened = { ...state, board: { ...state.board, mandates: [] } };
+  return { ...state, board: { ...state.board, mandates: state.board.mandates.map(mandate => buildBoardMandate({ ...opened, finance: financeAtLedgerBoundary(opened.finance, mandate.ledgerCount) }, mandate.startsRound)) } };
 }
 
 /** Format 80: set by `createSeason` while the opening of a career with national teams is built. */
@@ -1008,7 +1028,9 @@ export function oneYearSeasons(state: Pick<SeasonState, 'seasonNumber' | 'histor
 }
 
 /** Next season's European places from a completed season (step 3.5f): its top divisions' final orders and its European results. */
-export function europeanPlacesAfter(state: Pick<SeasonState, 'seed' | 'seasonNumber' | 'history' | 'fixtures' | 'clubs' | 'europe'> & Partial<Pick<SeasonState, 'divisions' | 'background' | 'lifecycle' | 'academy'>> & WorldContext): SeasonEurope {
+export function europeanPlacesAfter(state: PlacesDayState, options?: PlacesDayOptions): SeasonEurope {
+  // Format 83: new careers' places day (`places-2`).
+  if (state.europe?.model === 'places-2') return europeanEntryAfter(state, options);
   const world = worldOf(state), standings = getStandings(state);
   const topDivisions = seasonLeagues(world, state.divisions).filter(league => league.tier === 1);
   const domesticOrders = new Map(topDivisions.map(league => [league.id, standings.filter(row => league.clubIds.includes(row.clubId)).sort((a, b) => a.position - b.position).map(row => row.clubId)]));

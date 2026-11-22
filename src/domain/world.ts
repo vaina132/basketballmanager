@@ -128,6 +128,11 @@ export interface CareerWorld {
    * `economy` figures. Absent: the development economy's constants (every older or test world).
    */
   economy?: WorldEconomyId;
+  /**
+   * Format 85 (new careers, option `neutralVenues`): games marked at one venue (`neutral`: Primera FEB's final stage,
+   * the Final Fours, the BCL qualification) are played without home-court advantage and earn neither club a gate.
+   */
+  neutralVenues?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

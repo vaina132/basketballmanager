@@ -164,6 +164,10 @@ export function clubCountry(world: CareerWorld, clubId: string): string | null {
   for (const competition of world.europeanCompetitions ?? []) if (competition.countries && Object.hasOwn(competition.countries, clubId)) return competition.countries[clubId]!;
   return null;
 }
+/** Format 85 (`neutralVenues`, new careers): a game marked at one venue is played without home advantage or gate. */
+export function playsAtNeutralVenue(context: WorldContext, fixture: { neutral?: boolean }): boolean {
+  return !!fixture.neutral && !!worldOf(context).neutralVenues;
+}
 const fullClubLists = new WeakMap<CareerWorld, readonly Team[]>();
 /** The clubs a career starts with: every club of the world except next-division and European-only clubs (the same array when there are none). */
 export function fullWorldClubs(world: CareerWorld): readonly Team[] {
@@ -426,8 +430,10 @@ function checkLowerDivisions(world: CareerWorld, clubIds: ReadonlySet<string>): 
 export function validateWorld(value: unknown): asserts value is CareerWorld {
   if (isObject(value) && !Object.hasOwn(value, 'domesticLeagues') && validated.has(value)) return;
   const fail = (path: string, reason: string): never => { throw new Error(`Invalid career world: ${path} ${reason}.`); };
-  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : []), ...(isObject(value) && Object.hasOwn(value, 'europeanCompetitions') ? ['europeanCompetitions'] : []), ...(['europeanPlaces', 'backgroundLeagues', 'economy'] as const).filter(key => isObject(value) && Object.hasOwn(value, key))])) fail('world', 'must contain exactly the world fields');
+  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : []), ...(isObject(value) && Object.hasOwn(value, 'europeanCompetitions') ? ['europeanCompetitions'] : []), ...(['europeanPlaces', 'backgroundLeagues', 'economy', 'neutralVenues'] as const).filter(key => isObject(value) && Object.hasOwn(value, key))])) fail('world', 'must contain exactly the world fields');
   const world = value as unknown as CareerWorld;
+  // Format 85: rule markers of new careers, true when recorded.
+  for (const key of ['neutralVenues'] as const) if (Object.hasOwn(world, key) && world[key] !== true) fail(`world.${key}`, 'must be true when recorded');
   if (Object.hasOwn(world, 'rosterModel') && world.rosterModel !== FULL_ROSTER_MODEL) fail('world.rosterModel', 'has an unsupported value');
   if (!isText(world.id, 80) || !ID.test(world.id)) fail('world.id', 'must be a supported identifier');
   if (!isText(world.name)) fail('world.name', 'must be a nonempty, bounded text value');

@@ -8,7 +8,7 @@ import { getReservedTransferFees } from './market-policy';
 import { agreementThroughRound, getSpendableCash, payrollInstallment } from './payroll-policy';
 import { getReservedInSeasonFees, getReservedInSeasonWages } from './recruitment-policy';
 import { getTransferInstallmentRemaining, getTransferInstallments } from './transfer-payments';
-import { seasonRounds } from './career-world';
+import { playsAtNeutralVenue, seasonRounds } from './career-world';
 
 export const CASH_OUTLOOK_ADVERSE_GATE_PERCENT = 75;
 
@@ -81,7 +81,8 @@ export function getClubCashOutlook(state: SeasonState, clubId = state.managedClu
     const upkeep = getFacilityUpkeep(state, clubId, fixture.date);
     const upkeepPosted = upkeep === 0 || ledger.some(entry => entry.kind === 'facility-upkeep' && entry.round === fixture.round && entry.seasonNumber === state.seasonNumber);
     const gatePosted = ledger.some(entry => entry.kind === 'tickets' && (entry.ticket?.fixtureId === fixture.id || entry.sourceId === `tickets-${fixture.id}`));
-    const gatePending = fixture.homeClubId === clubId && !gatePosted;
+    // Format 85: a game at one venue earns the listed home club no gate.
+    const gatePending = fixture.homeClubId === clubId && !gatePosted && !playsAtNeutralVenue(state, fixture);
     if (operationPosted && upkeepPosted && !gatePending) continue;
     const row = rowOn(fixture.date);
     row.round = fixture.round;

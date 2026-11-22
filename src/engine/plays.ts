@@ -222,7 +222,8 @@ function makeChance(ctx: Ctx, shooter: Player, defender: Player, kind: ShotKind,
   const height = value === 2 ? clamp((defender.heightCm - shooter.heightCm) / 1000, -.025, .025) : 0;
   const range = value === 3 ? Math.max(0, distance - 7.4) * .025 : 0;
   const fatigue = (100 - state.stats[shooter.id]!.condition) / 100 * .07;
-  const home = ctx.offense === 'home' ? HOME_COURT_MAKE_BONUS : -HOME_COURT_MAKE_BONUS;
+  // Format 85: no home-court advantage at one venue.
+  const home = state.neutralVenue ? 0 : ctx.offense === 'home' ? HOME_COURT_MAKE_BONUS : -HOME_COURT_MAKE_BONUS;
   const lead = clamp(state.score[ctx.offense] - state.score[ctx.defense], -SCORE_EFFECT.cap, SCORE_EFFECT.cap);
   const scoreEffect = lead * SCORE_EFFECT.perPoint * (state.period >= 4 ? SCORE_EFFECT.fourthQuarter : 1);
   return clamp(base - defense + room - height - range - fatigue + home - scoreEffect + clutchAdjustment(state, shooter), .05, value === 3 ? .65 : .93);

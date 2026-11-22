@@ -135,6 +135,12 @@ export interface CareerWorld {
   neutralVenues?: true;
   /** Format 85 (new careers, option `clubCountries`): clubs of a next division have their country (`clubCountry`). */
   nextDivisionCountries?: true;
+  /**
+   * Format 87 (new careers with researched money, option `economyBalance`): weak clubs stay sustainable over long
+   * careers (`src/world/economy-balance.ts`): league solidarity money for smaller clubs, automatic facility spending that
+   * counts only the home games still to come, and automatic wage targets that follow the club's money when cash is low.
+   */
+  economyBalance?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

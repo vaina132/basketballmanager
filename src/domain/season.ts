@@ -227,7 +227,8 @@ export interface DomesticDivisions {
 /** Format 84: computer clubs always fill their six staff roles, the training (head) coach first, down to the cheapest candidate when they can afford no one (`coaching.fullStaff`, new careers with the wage pool). */
 /** Format 85: new real-club careers play games at one venue without home advantage or gate (`world.neutralVenues`) and give next-division clubs their country (`world.nextDivisionCountries`). */
 /** Format 86: computer clubs' head coaches steer their training, automatic rotation and transfer targets, and every head coach's Development and Motivation (the manager's too) help his club a little (`coaches.model` 'coaches-2', option `coachSteering`, `src/world/coach-steering.ts`). */
-export const SEASON_SCHEMA_VERSION = 86;
+/** Format 87: weak clubs stay sustainable in new real-money careers (`world.economyBalance`, `src/world/economy-balance.ts`): league solidarity money, automatic facility spending by home games left, and automatic wage targets that follow the club's money when cash is low. */
+export const SEASON_SCHEMA_VERSION = 87;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

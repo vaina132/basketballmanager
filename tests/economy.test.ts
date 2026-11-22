@@ -22,6 +22,7 @@ import { MAX_TRANSFER_FEE, maxTransferFee } from '../src/world/transfers-policy'
 import { sponsorshipReferenceFee, SPONSORSHIP_REFERENCE_FEE } from '../src/world/commercial-policy';
 import { parseSeason, serializeSeason } from '../src/storage/season-storage';
 import { DEVELOPMENT_WORLD } from '../src/data/development-world';
+import { solidarityPayment } from '../src/world/economy-balance';
 
 const play = (state: SeasonState) => advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
 const EURO = 100;
@@ -170,7 +171,8 @@ describe('realistic money for real-club worlds (format 62)', () => {
     for (const id of ai) {
       expect(first.find(entry => entry.clubId === id && entry.kind === 'opening')!.amount).toBe(economyOf(german, id).openingCash);
       expect(first.find(entry => entry.clubId === id && entry.sourceId === 'sponsor-s1')!.amount).toBe(economyOf(german, id).sponsorship);
-      expect(first.find(entry => entry.clubId === id && entry.sourceId === fundingSourceId(1))!.amount).toBe(economyOf(german, id).funding);
+      // Format 87: smaller clubs' league solidarity comes with the season funding.
+      expect(first.find(entry => entry.clubId === id && entry.sourceId === fundingSourceId(1))!.amount).toBe(economyOf(german, id).funding + solidarityPayment({ world: state.world! }, id));
     }
     while (state.status === 'active') { state = play(state); check(); }
     for (const id of ai) expect(getFinanceBalance(state.finance, id).cash).toBeLessThan(opening.get(id)!);
@@ -179,7 +181,7 @@ describe('realistic money for real-club worlds (format 62)', () => {
     for (let week = 0; week < 3; week += 1) { state = play(state); check(); }
     // Season two: negotiated sponsors pay their installments and every club receives its season funding again.
     const ledger = [...financeLedgerEntries(state.finance)];
-    expect(ai.every(id => ledger.some(entry => entry.clubId === id && entry.sourceId === fundingSourceId(2) && entry.amount === economyOf(german, id).funding))).toBe(true);
+    expect(ai.every(id => ledger.some(entry => entry.clubId === id && entry.sourceId === fundingSourceId(2) && entry.amount === economyOf(german, id).funding + solidarityPayment({ world: state.world! }, id)))).toBe(true);
     expect(parseSeason(serializeSeason(state))).toEqual(state);
     const envelope = JSON.parse(serializeSeason(state));
     envelope.formatVersion = 61; envelope.state.schemaVersion = 61;
@@ -251,12 +253,19 @@ describe('money gaps: staff pay, scaled amounts and automatic upgrades (16 Novem
   it('keeps the rest of the season\'s running costs before an automatic upgrade, and a tenth of the budget at its end', () => {
     requireWorldContexts(true);
     const german = worldFromPack(economyPack([{ id: 'bbl', name: 'easyCredit BBL', country: 'Germany', tier: 1, levels: [16, 14, 13, 12, 11, 10, 9, 8] }]), 'bbl');
-    const state = createSeason({ seed: 5, world: german, managedClubId: 'bbl-5', ...NEW_CAREER_SYSTEMS });
+    // Careers before format 87 count the expected gate evenly over the weeks left.
+    const state = createSeason({ seed: 5, world: german, managedClubId: 'bbl-5', ...NEW_CAREER_SYSTEMS, economyBalance: false });
     const economy = economyOf(german, 'bbl-1'), rules = REAL_ECONOMY_RULES.automaticSpending;
     const opening = upgradeAutomationCushion(state, 'bbl-1'), late = upgradeAutomationCushion({ ...state, round: seasonRounds(state) }, 'bbl-1');
     expect(opening).toBeGreaterThan(economy.operatingCost / 2);
     expect(opening).toBeGreaterThan(late);
     expect(late).toBeGreaterThan(economy.budget * rules.seasonEndCashShare);
+    // Format 87: only the home games still to play bring gate, so the final week with every home game played keeps its
+    // whole running cost, more than the even spread did; with every home game still to play the opening is unchanged.
+    const balanced = createSeason({ seed: 5, world: german, managedClubId: 'bbl-5', ...NEW_CAREER_SYSTEMS });
+    const played = { ...balanced, round: seasonRounds(balanced), fixtures: balanced.fixtures.map(fixture => ({ ...fixture, result: fixture.result ?? ({} as NonNullable<typeof fixture.result>) })) };
+    expect(upgradeAutomationCushion(balanced, 'bbl-1')).toBe(opening);
+    expect(upgradeAutomationCushion(played, 'bbl-1')).toBeGreaterThan(late);
     expect(upgradeAutomationCushion({ ...state, status: 'complete' }, 'bbl-1')).toBe(Math.round(economy.budget * rules.seasonEndCashShare / 10_000) * 10_000);
     // Upgraded facilities' upkeep, paid every season from the budget's reserve, stays within its share of the budget.
     const limit = Math.floor(economy.budget * rules.upkeepShare / seasonRounds(state));

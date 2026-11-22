@@ -32,6 +32,7 @@ import { agreementFor, commercialGovernsSeason, openingSponsorshipClubs, sponsor
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
 import { appendFinanceLedgerEntry, financeLedgerCount, financeLedgerEntries, financeLedgerTicket } from './finance-ledger';
 import { clubEconomy, REAL_ECONOMY_RULES, staffFee } from './economy';
+import { solidarityPayment } from './economy-balance';
 import { ledgerClubBalance } from './finance-ledger-index';
 import type { SeasonMedia } from '../domain/media';
 import type { SeasonRelationships } from '../domain/relationships';
@@ -55,7 +56,7 @@ export const openingCashFor = (context: WorldContext, clubId: string): number =>
 /** The fixed annual sponsorship (format 62: the club's main sponsorship). */
 export const annualSponsorshipFor = (context: WorldContext, clubId: string): number => clubEconomy(context, clubId)?.sponsorship ?? ANNUAL_SPONSORSHIP;
 /** Format 62: the club's season funding (league, European and public money and the owner's contribution); none in the development economy. */
-export const annualFundingFor = (context: WorldContext, clubId: string): number => clubEconomy(context, clubId)?.funding ?? 0;
+export const annualFundingFor = (context: WorldContext, clubId: string): number => { const economy = clubEconomy(context, clubId); return economy ? economy.funding + solidarityPayment(context, clubId) : 0; };
 /** The season-funding receipt's source (booked as sponsorship-kind income at the season opening, after the sponsors). */
 export const fundingSourceId = (seasonNumber: number): string => `funding-s${seasonNumber}`;
 /** A week's operating cost: the club's annual figure in equal weekly parts (format 62), otherwise the development constant. */

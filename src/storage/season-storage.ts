@@ -16,6 +16,7 @@ import type { SeasonMedia } from '../domain/media';
 import { validateRelationships } from './relationships-validation';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonArchive, SeasonEurope, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
+import { usesEconomyBalance } from '../world/economy-balance';
 import { isInjuryKind, isMatchInjuryKind, type InjuryModel } from '../domain/injuries';
 import type { SeasonNational } from '../domain/national';
 import { STANDINGS_RULE_FORMAT } from '../domain/competition';
@@ -141,7 +142,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -1830,7 +1831,8 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
     const payroll = payrollVisible ? { ...state.payroll, agreements: state.payroll.agreements.filter(agreement => agreement.seasonNumber < year || agreement.seasonNumber === year && agreement.startsRound <= round && (!employment.enabledSince || contractForRound(employment, agreement.playerId, year, agreement.startsRound)?.clubId === agreement.clubId)) } : createPayroll(clubs, state.managedClubId);
     const trainingAnchor = state.training.enabledSince;
     const training = trainingAnchor && roundKey(trainingAnchor.seasonNumber, trainingAnchor.round) <= roundKey(year, round) ? state.training : { ...state.training, enabledSince: null };
-    let replay: SeasonState = { ...state, managedClubId: managedClubAtLedger(state, event.ledgerIndex), training, seasonNumber: year, round, date: event.date, status: round === seasonRounds(state) && ledger.some(entry => entry.seasonNumber === year && entry.round === seasonRounds(state) && entry.kind === 'operations') ? 'complete' : 'active', clubs, academy, lifecycle, employment, facilities, finance, payroll, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, event.negotiationCount) }, recruitment: { ...state.recruitment, events: state.recruitment.events.slice(0, event.recruitmentEventCount), offers: live }, market };
+    // Format 87: automatic spending reads that season's own schedule (`remainingHomeShare`).
+    let replay: SeasonState = { ...state, managedClubId: managedClubAtLedger(state, event.ledgerIndex), training, seasonNumber: year, round, date: event.date, status: round === seasonRounds(state) && ledger.some(entry => entry.seasonNumber === year && entry.round === seasonRounds(state) && entry.kind === 'operations') ? 'complete' : 'active', clubs, academy, lifecycle, employment, facilities, finance, payroll, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, event.negotiationCount) }, recruitment: { ...state.recruitment, events: state.recruitment.events.slice(0, event.recruitmentEventCount), offers: live }, market , ...(usesEconomyBalance(state) && year !== state.seasonNumber ? { fixtures: (state.history.find(archive => archive.seasonNumber === year)?.fixtures ?? []) as unknown as SeasonState['fixtures'] } : {}) };
     if (event.ledgerIndex < previousLedger) fail(path, 'cannot rewind cash after a funded approval');
     for (const [i, command] of state.recruitment.events.entries()) {
       const nextLedger = event.ledgerIndex + Number(['start', 'repair', 'loan', 'lease', 'repay', 'end-lease', 'borrow'].includes(event.type));
@@ -3529,6 +3531,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   for (const key of ['neutralVenues', 'nextDivisionCountries'] as const) if (version < 85 && Object.hasOwn(world, key)) fail(`world.${key}`, 'requires format 85 or later');
   // Format 86: head coaches who steer their clubs (`coaches-2`) are a rule of new careers only; checked before anything they change.
   if (version < 86 && state.coaches !== null && typeof state.coaches === 'object' && (state.coaches as { model?: unknown }).model === COACH_STEERING_MODEL) fail('coaches.model', 'needs format 86 or later to steer clubs');
+  // Format 87: the economy balance is a rule of new careers only.
+  if (version < 87 && Object.hasOwn(world, 'economyBalance')) fail('world.economyBalance', 'requires format 87 or later');
   // Format 63: the career-2 rules (protected first season, fresh confidence, mid-season moves, resignations) need it.
   const careerModel = state.career !== null && typeof state.career === 'object' ? (state.career as { model?: unknown }).model : undefined;
   if (version < 63 && (careerModel === 'career-2' || state.board !== null && typeof state.board === 'object' && Object.hasOwn(state.board, 'restarts'))) fail('career.model', 'requires format 63 or later');

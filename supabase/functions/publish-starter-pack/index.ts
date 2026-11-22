@@ -11,7 +11,11 @@
 // small forward and a good centre reach similar overall ratings, while each skill keeps its position's real profile for
 // the match engine) and blended with the average player of the same position and league when they rest on fewer than
 // 900 minutes. It applies to every pack this function builds from now on; `source.ratingBalance` records it.
-// scripts/real-data-rating-balance.mjs applies the same calculation offline to a published pack for a preview.
+// position-balance-2 (owner approved, 22 November 2026) also lowers a bench role: minutes per game well below the
+// club's five most-used players, compared within the position. Each player's games behind the ratings (the rating
+// row's `method.weightedGames`, recency-weighted like the minutes) go into the pack as `ratingGames` next to
+// `ratingMinutes`; the game ignores the field. scripts/real-data-rating-balance.mjs applies the same calculation
+// offline to a pack built without the balance, for a preview.
 //
 // It acts only on an authorised request: a pending, unexpired `publish-pack` row in `data_change_requests` (written
 // only by the service role or the owner's dashboard), which names the new version. `preview` returns the built pack
@@ -141,6 +145,8 @@ Deno.serve(async request => {
         nationality: fix?.nationality?.value ?? player.nationality ?? null, age, heightCm: height, weightKg: weight, attributes,
         // Sprint 4 rating fairness: the minutes behind the ratings.
         ...(rating && Number.isFinite(rating.method?.weightedMinutes) ? { ratingMinutes: Math.round(rating.method.weightedMinutes) } : {}),
+        // Rating balance position-balance-2: the games behind the ratings, for minutes per game (one decimal).
+        ...(useOverrides && rating && Number.isFinite(rating.method?.weightedMinutes) && Number.isFinite(rating.method?.weightedGames) ? { ratingGames: Math.round(rating.method.weightedGames * 10) / 10 } : {}),
         estimated,
         ...(born ? { birthDate: born } : {}),
         ...(fix ? { profileEvidence: { observedAt, positionSource: resolution.estimated ? 'estimated' : official?.value && !official.community ? 'official' : 'provider', membership: registered ? 'official-registration-observed' : 'provider-observed', sources } } : {}),
@@ -171,7 +177,7 @@ Deno.serve(async request => {
     const profileCorrections = { model: 'profile-overrides-1', players: corrected.length, currentSquads: { moved: overrideRows.filter(row => row.field === 'club_id').length, left: overrideRows.filter(row => row.field === 'squad_status').length, added: clubRows.reduce((sum, row) => sum + row.value.value.length, 0) }, exactPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'official').length, reportedPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'provider').length, estimatedPositions: packPlayers.filter(player => player.estimated.includes('game_position')).length, note: 'Official EuroLeague/EuroCup registrations and official league and club roster pages; Wikipedia rosters and player articles (CC BY-SA 4.0) where no official page gives an exact position, shown as reported; a broad role (Guard, Forward) keeps the exact position an estimate.' };
     const pack = { format: 'basketball-manager-data-pack', formatVersion: 1, version: ask.version, season: SEASON, source: { ...source, profileCorrections, ratingBalance }, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026). Player positions, heights, birth dates and names corrected from official competition and club sources where available (16 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
     const checksum = await sha256(JSON.stringify(pack));
-    const summary = { version: pack.version, checksum, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, profileCorrections, ratingBalance: { model: ratingBalance.model, changedPlayers: ratingBalance.changedPlayers }, cut, matchesRecordedChecksum: recorded === versionRow.checksum, replaces: existingVersion };
+    const summary = { version: pack.version, checksum, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, profileCorrections, ratingBalance: { model: ratingBalance.model, changedPlayers: ratingBalance.changedPlayers, playersWithGames: ratingBalance.role.playersWithGames, clubsWithStarters: ratingBalance.role.clubsWithStarters }, cut, matchesRecordedChecksum: recorded === versionRow.checksum, replaces: existingVersion };
     const text = JSON.stringify({ checksum, writtenAt: new Date().toISOString(), pack });
     if (mode === 'preview') return new Response(JSON.stringify({ status: 'preview', ...summary, envelope: JSON.parse(text) }), { headers: { 'Content-Type': 'application/json' } });
     if (checksum !== ask.expected_sha256) return json({ status: 'refused', error: 'The built pack does not match the requested checksum; preview and check it again.', ...summary }, 409);

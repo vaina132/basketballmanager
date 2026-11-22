@@ -1,7 +1,8 @@
 /**
- * Rating balance (owner decision, 22 November 2026): the pack's abilities are lined up by position and pulled
- * towards the average when they rest on few minutes. Pure and dependency-free, so the publishing function (Deno),
- * the offline preview script (Node) and the tests all run exactly the same calculation on the same pack contents.
+ * Rating balance (owner decisions, 22 November 2026): the pack's abilities are lined up by position, lowered for a
+ * bench role (few minutes per game) and pulled towards the average when they rest on few minutes. Pure and
+ * dependency-free, so the publishing function (Deno), the offline preview script (Node) and the tests all run exactly
+ * the same calculation on the same pack contents.
  *
  * Why: every ability (1-20) is scored against all players on one shared scale, so centres own the top of two-point
  * shooting and rebounding and point guards the top of passing. The overall rating weighs exactly those skills most
@@ -12,14 +13,27 @@
  * 1. Position balance: a player's standing is measured against players of his own position. In the reference pool
  *    (rated players with `poolMinutes` or more at clubs in a top division or a European competition), each player's
  *    position-weighted skill level (the level behind the overall rating) gets its percentile within his position,
- *    and that percentile is read off one common ladder shared by all positions. So the best tenth of centres and the
- *    best tenth of small forwards reach the same overall ratings, and each position keeps the pool's average and
- *    spread. Players outside the pool's range continue the line at the position's slope. The player's whole skill
- *    profile moves by the same amount, so every individual skill keeps the shared scale's real differences between
- *    positions that the match engine relies on: a centre still rebounds and finishes inside far more than a guard, a
- *    point guard still passes most. A separate position scale for each skill was rejected: it would give an average
- *    guard the rebounding of an average centre, and an average centre the passing of an average point guard.
- * 2. Few minutes: the balanced profile is blended with the average player of his position in his league (the
+ *    and that percentile is read off one common ladder shared by all positions. So the best tenth of centres and the best tenth of small forwards reach the same
+ *    overall ratings, and each position keeps the pool's average and spread. Players outside the pool's range
+ *    continue the line at the position's slope. The player's whole skill profile moves by the same amount, so every
+ *    individual skill keeps the shared scale's real differences between positions that the match engine relies on: a
+ *    centre still rebounds and finishes inside far more than a guard, a point guard still passes most. A separate
+ *    position scale for each skill was rejected: it would give an average guard the rebounding of an average centre,
+ *    and an average centre the passing of an average point guard.
+ * 2. Role (position-balance-2, owner approved 22 November 2026): the ratings come from production per 40 minutes, so
+ *    an efficient bench player matched a starter with the same production. A player's role is his minutes per game
+ *    (`ratingMinutes` / `ratingGames`, pulled towards his position's average over the first `rolePriorGames` games)
+ *    minus the average of his club's `roleStarters` most-used rated players: about 0 for a starter, well below 0 for
+ *    a bench player. Roles are compared within a position (centres play fewer minutes than guards everywhere): in
+ *    deviations from the position's average role in the reference pool. A role below that average costs
+ *    `roleWeight` x the common spread per deviation (at most `roleLimit` deviations), after the ladder. Roles above
+ *    the average change nothing, so starters keep their position-balance-1 rating and a starter on a weak team gains
+ *    nothing for his long minutes; the ladder and its scale are unchanged, so league and club differences stay as
+ *    they were. Each position's pool average drops by its average cost (`roleCost`, about the same for every
+ *    position), so the positions stay level with one another. Players without games, and clubs with fewer than
+ *    `roleStarters` players with games, have no role cost. With `roleWeight` 0, or without games, the calculation
+ *    is exactly position-balance-1 (world-11 and world-12).
+ * 3. Few minutes: the balanced profile is blended with the average player of his position in his league (the
  *    position's average profile, moved to the league's level) with a Bayesian weight m / (m + priorMinutes),
  *    rescaled so that `fullMinutes` or more keep the player's own ratings in full.
  *
@@ -35,6 +49,8 @@ export type BalanceAttributes = Record<BalanceSkill, number>;
 
 export interface BalancePlayer {
   id: string; clubId: string; position: BalancePosition; attributes: BalanceAttributes; estimated: string[]; ratingMinutes?: number;
+  /** Games behind the ratings (the rating row's recency-weighted games, weighted like `ratingMinutes`); packs from world-13 on. */
+  ratingGames?: number;
 }
 export interface BalanceCompetition { id: string; name: string; kind: string; tier: number; clubIds: string[] }
 
@@ -42,7 +58,7 @@ export const BALANCE_SKILLS: readonly BalanceSkill[] = ['twoPoint', 'threePoint'
 export const BALANCE_POSITIONS: readonly BalancePosition[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 
 export const RATING_BALANCE_RULES = Object.freeze({
-  id: 'position-balance-1',
+  id: 'position-balance-2',
   /** The overall rating's position weights (src/world/overall-rating.ts, OVR_POSITION_WEIGHTS; a test keeps them equal). */
   weights: Object.freeze({
     PG: Object.freeze({ twoPoint: 0.15, threePoint: 0.20, freeThrow: 0.08, passing: 0.27, defense: 0.15, rebounding: 0.05, stamina: 0.10 }),
@@ -61,7 +77,21 @@ export const RATING_BALANCE_RULES = Object.freeze({
   levelMinutes: 300,
   /** A league with fewer measured players uses the pool's average level. */
   minimumLeaguePlayers: 8,
+  /** Role: the cost of a bench role, in common spreads (about 13 overall points) per deviation below the position's average role. */
+  roleWeight: 0.3,
+  /** Role: minutes per game are pulled towards the position's average with this many games (the ratings' own priorGames). */
+  rolePriorGames: 10,
+  /** Role: a bench role costs at most this many deviations. */
+  roleLimit: 2,
+  /** Role: a club's starters are its this many most-used rated players (clubs with fewer players with games give a neutral role). */
+  roleStarters: 5,
 });
+
+/**
+ * Options for checks and the offline preview: another role weight (0 gives position-balance-1), games read another
+ * way than `ratingGames`, and a label for where the games came from (recorded in the summary).
+ */
+export interface BalanceOptions<T extends BalancePlayer = BalancePlayer> { roleWeight?: number; gamesOf?: (player: T) => number | undefined; gamesSource?: string }
 
 const round = (value: number, digits = 2) => Math.round(value * 10 ** digits) / 10 ** digits;
 const clampSkill = (value: number) => Math.max(1, Math.min(20, value));
@@ -105,6 +135,12 @@ export function statisticsWeight(minutes: number): number {
   return Math.min(1, (minutes / (minutes + priorMinutes)) / (fullMinutes / (fullMinutes + priorMinutes)));
 }
 
+/** Minutes per game pulled towards `average` over the first rolePriorGames games: (m + prior x average) / (g + prior). */
+export function shrunkMinutesPerGame(minutes: number, games: number, average: number): number {
+  const prior = RATING_BALANCE_RULES.rolePriorGames;
+  return (minutes + prior * average) / (games + prior);
+}
+
 const isRated = (player: BalancePlayer) => typeof player.ratingMinutes === 'number' && Number.isFinite(player.ratingMinutes) && !player.estimated.includes('all-abilities');
 
 /**
@@ -139,22 +175,29 @@ function interpolate(from: readonly number[], to: readonly number[], x: number):
   while (high - low > 1) { const middle = (low + high) >> 1; if (from[middle]! <= x) low = middle; else high = middle; }
   return to[low]! + (to[high]! - to[low]!) * (x - from[low]!) / (from[high]! - from[low]!);
 }
+const meanOf = (values: readonly number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+const spreadOfValues = (values: readonly number[]) => { const average = meanOf(values); return Math.sqrt(values.reduce((sum, value) => sum + (value - average) ** 2, 0) / values.length); };
 
-export interface PositionBalance { players: number; level: number; spread: number; slope: number; profile: BalanceAttributes }
+export interface PositionBalance { players: number; level: number; spread: number; slope: number; profile: BalanceAttributes; minutesPerGame: number; roleAverage: number; roleSpread: number; roleCost: number }
 export interface RatingBalanceSummary {
   model: string; poolPlayers: number; commonLevel: number; commonSpread: number;
   positions: Record<BalancePosition, PositionBalance>; leagues: Record<string, { players: number; level: number }>;
-  changedPlayers: number; rules: { poolMinutes: number; fullMinutes: number; priorMinutes: number; levelMinutes: number };
+  changedPlayers: number; rules: { poolMinutes: number; fullMinutes: number; priorMinutes: number; levelMinutes: number; roleWeight: number; rolePriorGames: number; roleLimit: number; roleStarters: number };
+  role: { gamesSource: string; playersWithGames: number; clubsWithStarters: number; poolPlayersWithGames: number };
   note: string;
 }
 
 /** The balanced pack players (same order; players without statistics unchanged) and a summary for the pack's source. */
-export function balanceRatings<T extends BalancePlayer>(players: readonly T[], competitions: readonly BalanceCompetition[]): { players: T[]; summary: RatingBalanceSummary } {
+export function balanceRatings<T extends BalancePlayer>(players: readonly T[], competitions: readonly BalanceCompetition[], options: BalanceOptions<T> = {}): { players: T[]; summary: RatingBalanceSummary } {
   const rules = RATING_BALANCE_RULES;
+  const roleWeight = options.roleWeight ?? rules.roleWeight;
+  const gamesOf = options.gamesOf ?? ((player: T) => player.ratingGames);
   const league = leagueOfClubs(competitions);
   const topClubs = new Set(competitions.filter(competition => competition.kind === 'european' || competition.tier === 1).flatMap(competition => competition.clubIds));
   const rated = players.filter(isRated);
   const pool = rated.filter(player => player.ratingMinutes! >= rules.poolMinutes && topClubs.has(player.clubId));
+  const gamesById = new Map<string, number>();
+  for (const player of rated) { const games = gamesOf(player); if (typeof games === 'number' && Number.isFinite(games) && games > 0 && player.ratingMinutes! > 0) gamesById.set(player.id, games); }
 
   // Each position's average profile, level and spread in the pool, and the common level and spread over all of them.
   const positions = {} as Record<BalancePosition, PositionBalance>;
@@ -166,14 +209,37 @@ export function balanceRatings<T extends BalancePlayer>(players: readonly T[], c
     const profile = {} as BalanceAttributes;
     for (const key of BALANCE_SKILLS) profile[key] = members.reduce((sum, player) => sum + player.attributes[key], 0) / members.length;
     const levels = members.map(player => weightedLevel(player.attributes, position));
-    const level = levels.reduce((sum, value) => sum + value, 0) / levels.length;
-    const spread = Math.sqrt(levels.reduce((sum, value) => sum + (value - level) ** 2, 0) / levels.length);
-    positions[position] = { players: members.length, level, spread, slope: 1, profile };
+    const level = meanOf(levels), spread = spreadOfValues(levels);
+    // Role: the position's average minutes per game in the pool (players with games), the target of the pull for few games.
+    const timed = members.filter(player => gamesById.has(player.id));
+    const minutesPerGame = timed.length ? meanOf(timed.map(player => player.ratingMinutes! / gamesById.get(player.id)!)) : 0;
+    positions[position] = { players: members.length, level, spread, slope: 1, profile, minutesPerGame, roleAverage: 0, roleSpread: 0, roleCost: 0 };
     levelsOf[position] = levels;
     poolLevel += members.length * level; poolVariance += members.length * spread ** 2;
   }
   const commonLevel = poolLevel / pool.length, commonSpread = Math.sqrt(poolVariance / pool.length);
   for (const position of BALANCE_POSITIONS) positions[position].slope = commonSpread / positions[position].spread;
+
+  // Role: minutes per game (pulled for few games) against the club's starters, the average of its `roleStarters` most-used players.
+  const minutesPerGameOf = new Map<string, number>(), clubMinutes = new Map<string, number[]>();
+  for (const player of rated) {
+    const games = gamesById.get(player.id);
+    if (games === undefined) continue;
+    const value = shrunkMinutesPerGame(player.ratingMinutes!, games, positions[player.position].minutesPerGame);
+    minutesPerGameOf.set(player.id, value); clubMinutes.set(player.clubId, [...(clubMinutes.get(player.clubId) ?? []), value]);
+  }
+  const starters = new Map([...clubMinutes].filter(([, values]) => values.length >= rules.roleStarters).map(([clubId, values]) => [clubId, meanOf([...values].sort((a, b) => b - a).slice(0, rules.roleStarters))]));
+  const gapOf = (player: BalancePlayer) => { const value = minutesPerGameOf.get(player.id), reference = starters.get(player.clubId); return value === undefined || reference === undefined ? undefined : value - reference; };
+  for (const position of BALANCE_POSITIONS) {
+    const gaps = pool.filter(player => player.position === position).map(gapOf).filter((gap): gap is number => gap !== undefined);
+    if (gaps.length >= 5) { positions[position].roleAverage = meanOf(gaps); positions[position].roleSpread = spreadOfValues(gaps); }
+  }
+  /** The role within the position: the gap to the club's starters in deviations of the position's gaps in the pool (capped); 0 without games. */
+  const roleOf = (player: BalancePlayer) => {
+    const entry = positions[player.position], gap = gapOf(player);
+    if (gap === undefined || !(entry.roleSpread > 0)) return 0;
+    return Math.max(-rules.roleLimit, Math.min(rules.roleLimit, (gap - entry.roleAverage) / entry.roleSpread));
+  };
 
   // The common ladder: every pool player's level, each position moved to the common average and spread.
   const common = ladder(BALANCE_POSITIONS.flatMap(position => levelsOf[position].map(level => exact(commonLevel + positions[position].slope * (level - positions[position].level)))));
@@ -182,14 +248,19 @@ export function balanceRatings<T extends BalancePlayer>(players: readonly T[], c
     return [position, { ...own, targets: own.percentiles.map(percentile => interpolate(common.percentiles, common.values, percentile)) }];
   })) as Record<BalancePosition, Ladder & { targets: number[] }>;
   /** The balanced level: the player's percentile within his position read off the common ladder; outside the pool's range, the position's slope. */
-  const balancedLevel = (level: number, position: BalancePosition) => {
+  const ladderLevel = (level: number, position: BalancePosition) => {
     const own = ladders[position], last = own.values.length - 1, slope = positions[position].slope;
     if (level < own.values[0]!) return own.targets[0]! + slope * (level - own.values[0]!);
     if (level > own.values[last]!) return own.targets[last]! + slope * (level - own.values[last]!);
     return interpolate(own.values, own.targets, level);
   };
+  // Role: a bench role costs roleWeight x the common spread per deviation below the position's average role.
+  const benchOf = (player: BalancePlayer) => Math.max(0, -roleOf(player));
+  for (const position of BALANCE_POSITIONS) positions[position].roleCost = roleWeight * commonSpread * meanOf(pool.filter(player => player.position === position).map(benchOf));
+  const roleShiftOf = (player: BalancePlayer) => roleWeight === 0 ? 0 : -roleWeight * commonSpread * benchOf(player);
+  const balancedLevel = (player: BalancePlayer) => ladderLevel(weightedLevel(player.attributes, player.position), player.position) + roleShiftOf(player);
   // The whole profile moves by the same amount (the position weights sum to 1).
-  const moveOf = (player: BalancePlayer) => { const level = weightedLevel(player.attributes, player.position); return balancedLevel(level, player.position) - level; };
+  const moveOf = (player: BalancePlayer) => balancedLevel(player) - weightedLevel(player.attributes, player.position);
 
   // Each league's level on the balanced scale, from its measured players weighted by their minutes.
   const sums = new Map<string, { weight: number; total: number; players: number }>();
@@ -197,7 +268,7 @@ export function balanceRatings<T extends BalancePlayer>(players: readonly T[], c
     const name = league.get(player.clubId);
     if (!name || player.ratingMinutes! < rules.levelMinutes) continue;
     const weight = Math.min(player.ratingMinutes!, rules.fullMinutes), entry = sums.get(name) ?? { weight: 0, total: 0, players: 0 };
-    entry.weight += weight; entry.total += weight * balancedLevel(weightedLevel(player.attributes, player.position), player.position); entry.players += 1;
+    entry.weight += weight; entry.total += weight * balancedLevel(player); entry.players += 1;
     sums.set(name, entry);
   }
   const leagues: Record<string, { players: number; level: number }> = {};
@@ -220,11 +291,12 @@ export function balanceRatings<T extends BalancePlayer>(players: readonly T[], c
   });
 
   const summary: RatingBalanceSummary = {
-    model: rules.id, poolPlayers: pool.length, commonLevel: round(commonLevel, 3), commonSpread: round(commonSpread, 3),
-    positions: Object.fromEntries(BALANCE_POSITIONS.map(position => { const entry = positions[position]; return [position, { players: entry.players, level: round(entry.level, 3), spread: round(entry.spread, 3), slope: round(entry.slope, 3), profile: Object.fromEntries(BALANCE_SKILLS.map(key => [key, round(entry.profile[key])])) as BalanceAttributes }]; })) as Record<BalancePosition, PositionBalance>,
+    model: roleWeight === rules.roleWeight ? rules.id : `${rules.id} (role weight ${roleWeight})`, poolPlayers: pool.length, commonLevel: round(commonLevel, 3), commonSpread: round(commonSpread, 3),
+    positions: Object.fromEntries(BALANCE_POSITIONS.map(position => { const entry = positions[position]; return [position, { players: entry.players, level: round(entry.level, 3), spread: round(entry.spread, 3), slope: round(entry.slope, 3), profile: Object.fromEntries(BALANCE_SKILLS.map(key => [key, round(entry.profile[key])])) as BalanceAttributes, minutesPerGame: round(entry.minutesPerGame), roleAverage: round(entry.roleAverage), roleSpread: round(entry.roleSpread), roleCost: round(entry.roleCost, 3) }]; })) as Record<BalancePosition, PositionBalance>,
     leagues: Object.fromEntries(Object.entries(leagues).map(([name, entry]) => [name, { players: entry.players, level: round(entry.level, 3) }])),
-    changedPlayers, rules: { poolMinutes: rules.poolMinutes, fullMinutes: rules.fullMinutes, priorMinutes: rules.priorMinutes, levelMinutes: rules.levelMinutes },
-    note: 'Abilities lined up by position (a player\'s percentile within his position sets his overall level on one ladder shared by all positions; his whole skill profile moves with it, so each skill keeps its position\'s real profile) and blended with the average player of the same position in the same league when they rest on fewer than 900 minutes (owner decision, 22 November 2026).',
+    changedPlayers, rules: { poolMinutes: rules.poolMinutes, fullMinutes: rules.fullMinutes, priorMinutes: rules.priorMinutes, levelMinutes: rules.levelMinutes, roleWeight, rolePriorGames: rules.rolePriorGames, roleLimit: rules.roleLimit, roleStarters: rules.roleStarters },
+    role: { gamesSource: options.gamesSource ?? 'ratingGames (rating rows, recency-weighted games)', playersWithGames: gamesById.size, clubsWithStarters: starters.size, poolPlayersWithGames: pool.filter(player => gamesById.has(player.id)).length },
+    note: 'Abilities lined up by position (a player\'s percentile within his position sets his overall level on one ladder shared by all positions; his whole skill profile moves with it, so each skill keeps its position\'s real profile), lowered for a bench role (minutes per game well below his club\'s five most-used players, compared within his position), so of two equally efficient players the one with starter minutes rates higher, and blended with the average player of the same position in the same league when they rest on fewer than 900 minutes (owner decisions, 22 November 2026).',
   };
   return { players: out, summary };
 }

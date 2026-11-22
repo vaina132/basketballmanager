@@ -4,6 +4,7 @@ import { getFinanceBalance } from '../world/finance'
 import { getClubPayrollSummary, getPlayerPayroll } from '../world/payroll'
 import { seasonLabel } from '../world/season'
 import { Avatar } from './Avatar'
+import { MoreInfo } from './MoreInfo'
 import { Icon } from './Icon'
 import './payroll-workspace.css'
 import { formatEuros } from './money-format'
@@ -56,9 +57,9 @@ export function PayrollWorkspace({ season, busy = false, onEnable, onOpenClub, o
         })}{!players.length && <tr><td colSpan={4} className="payroll-empty">No players match this search.</td></tr>}</tbody></table></div>
         <div className="payroll-totals"><span>Annual salaries <strong>{money(summary.seasonWages)}</strong></span><span>Paid so far <strong data-payroll-charged={summary.charged}>{money(summary.charged)}</strong></span></div>
         {startedThisSeason !== null && startedThisSeason > 1 && <p className="payroll-note">Wages started on Matchday {startedThisSeason}; nothing was charged for earlier weeks.</p>}
-        <p className="payroll-note" data-payroll-automatic="true">Wages are paid automatically every week. New players are paid from the week they join. Injuries do not change wages.</p>
+        <p className="payroll-note" data-payroll-automatic="true">Wages are paid automatically every week, from the week a player joins.</p>
       </section>
-      <p className="payroll-model-note">{season.employment.enabledSince ? 'Player wages follow signed employment contracts. Renewals are on Squad > Contracts and recruitment in Transfers.' : (season.world?.economy ? 'Wages estimated from published 2025-27 salary reports; fixed squad terms continue annually.' : 'Fictional wage estimates; fixed squad terms continue annually.')}</p>
+      <MoreInfo label="About wages"><p className="payroll-model-note">{season.employment.enabledSince ? 'Player wages follow signed employment contracts. Renewals are on Squad > Contracts and recruitment in Transfers.' : (season.world?.economy ? 'Wages estimated from published 2025-27 salary reports; fixed squad terms continue annually.' : 'Fictional wage estimates; fixed squad terms continue annually.')}</p></MoreInfo>
     </>}
   </div>
 }

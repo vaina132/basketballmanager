@@ -4,3 +4,6 @@
 .player-listing-price{display:flex;align-items:center;gap:6px;font-size:13px}
 .player-listing-price input{width:120px}
 .player-listing small{color:var(--muted);font-size:12px;line-height:1.4}
+.player-listing-more{grid-column:1/-1;margin-top:10px;text-align:left}
+.player-listing-more>summary{padding:8px 0}
+.player-listing-more>.player-listing{margin-top:4px}

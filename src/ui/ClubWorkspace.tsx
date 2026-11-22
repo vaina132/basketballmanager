@@ -18,6 +18,7 @@ import { DebtsPanel } from './DebtsPanel'
 import { ratePercent } from './FacilityFinancing'
 import { debtSchedule, FACILITY_FINANCING_RULES } from '../world/facility-debt'
 import { seasonRounds } from '../world/career-world'
+import { MoreInfo } from './MoreInfo'
 import { Icon } from './Icon'
 import { FACILITY_LABELS, FacilitiesPanel, type FacilitiesActions } from './FacilitiesPanel'
 import { SimpleFacilitiesPanel } from './SimpleFacilitiesPanel'
@@ -161,7 +162,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
 
       <section className="club-venue panel" aria-labelledby="club-venue-title">
         <header className="club-heading"><h2 id="club-venue-title">Venue</h2></header>
-        <dl>{arenaName && arenaName !== definition.venue ? <><div><dt>Arena name</dt><dd data-arena-name={arenaName}>{arenaName}</dd></div><div><dt>Official venue</dt><dd>{definition.venue}</dd></div></> : <div><dt>Venue</dt><dd data-arena-name={definition.venue}>{definition.venue}</dd></div>}<div><dt>{facilities.arenaCapacity === facilities.arenaFullCapacity ? 'Capacity' : 'Capacity this matchday'}</dt><dd>{count(facilities.arenaCapacity)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{money(roundOperatingCostFor(season, club.id) + facilities.upkeepPerRound)}</dd></div></dl>
+        <dl>{arenaName && arenaName !== definition.venue ? <><div><dt>Arena name</dt><dd data-arena-name={arenaName}>{arenaName}</dd></div><div><dt>Official venue</dt><dd>{definition.venue}</dd></div></> : <div><dt>Venue</dt><dd data-arena-name={definition.venue}>{definition.venue}</dd></div>}<div><dt>{facilities.arenaCapacity === facilities.arenaFullCapacity ? 'Capacity' : 'Capacity this matchday'}</dt><dd>{count(facilities.arenaCapacity)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{formatEuros(roundOperatingCostFor(season, club.id) + facilities.upkeepPerRound)}</dd></div></dl>
       </section>
 
       <ClubMoneyPanel season={season} />
@@ -206,6 +207,6 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
         <p className="club-note">Income clears unpaid costs before adding to cash. Balances include all earlier activity, even when filtered. Staff commitments track season allocation separately from cash.</p>
       </details>
     </>}
-    <p className="club-model-note">{economy ? `Estimated from published 2025-27 club budgets, salary and attendance reports: about ${formatEuros(economy.budget)} a season (${BAND_LABELS[economy.band]}). ` : 'Fictional development finances. '}{payrollEnabled ? season.employment.enabledSince ? 'Player wages follow signed employment contracts.' : 'Player wages follow the fixed squad terms.' : 'Player payroll is not enabled.'}</p>
+    <MoreInfo label="About these figures"><p className="club-model-note">{economy ? `Estimated from published 2025-27 club budgets, salary and attendance reports: about ${formatEuros(economy.budget)} a season (${BAND_LABELS[economy.band]}). ` : 'Fictional development finances. '}{payrollEnabled ? season.employment.enabledSince ? 'Player wages follow signed employment contracts.' : 'Player wages follow the fixed squad terms.' : 'Player payroll is not enabled.'}</p></MoreInfo>
   </div>
 }

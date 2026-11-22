@@ -19,6 +19,7 @@ import { seasonLeagues } from '../world/divisions'
 import { worldOf } from '../world/career-world'
 import { InSeasonOfferDialog, InSeasonRecruitmentPanel } from './InSeasonRecruitment'
 import { Avatar } from './Avatar'
+import { MoreInfo } from './MoreInfo'
 import { Icon } from './Icon'
 import { Nationality, playerNationality } from './Nationality'
 import { knowledgeLabel, scoutingDate, ScoutingKnowledge } from './ScoutingKnowledge'
@@ -308,7 +309,7 @@ export function TransfersWorkspace({ season, disabled, onEnable, onEnableNegotia
           const destination = lastOffer?.status === 'lost' ? season.clubs.find(team => team.id === chosenMarketOffer(season, lastOffer)?.clubId) : null
           return <tr key={record.id} data-negotiation-player={record.playerId}><th scope="row">{player.name}</th><td>{money(record.offeredWage)} / season<small>{record.offeredSeasons} {record.offeredSeasons === 1 ? 'season' : 'seasons'} · from {seasonLabel(record.startsSeason)}</small></td><td><strong>{negotiationOutcome(record)}</strong><small>{destination ? `Talks closed · chose ${destination.name}` : record.counterOffer ? `${money(record.counterOffer.seasonWage)} · ${record.counterOffer.seasons} seasons` : record.outcome === 'accepted' ? buyout ? `Bought out ${scoutingDate(buyout.completedOn)}` : 'Contract signed' : 'Improve the offer'}</small></td><td><time dateTime={record.date}>{scoutingDate(record.date)}</time><small>{record.status === 'complete' ? 'Offseason' : `Matchday ${record.round}`}</small></td><td><button className="button small" data-review-negotiation={player.id} aria-label={`Review negotiations with ${player.name}`} onClick={() => openOffer(player.id, true)} disabled={disabled}>Review<Icon name="chevron" size={13} /></button></td></tr>
         })}</tbody></table></div> : <p className="transfers-empty">No replies recorded yet. Open a player’s contract to start talks.</p>}</details>}
-        <p className="transfers-model-note">{season.world?.economy ? 'Wages and fees estimated from published 2025-27 club budgets and salary reports.' : 'Fictional development wages.'} The board allocation limits annual promises; wages are paid through the season payroll. Press Save to keep your decisions. Export keeps a separate file backup.</p>
+        <MoreInfo label="About these figures"><p className="transfers-model-note">{season.world?.economy ? 'Wages and fees estimated from published 2025-27 club budgets and salary reports.' : 'Fictional development wages.'} The board allocation limits annual promises; wages are paid through the season payroll. Press Save to keep your decisions. Export keeps a separate file backup.</p></MoreInfo>
       </section>
     </>}
     {inSeasonPlayer && enabled && <InSeasonOfferDialog key={inSeasonPlayer.id} season={season} player={inSeasonPlayer} disabled={disabled} onClose={() => setInSeasonPlayerId(null)} onOffer={onInSeasonOffer} onTransferOffer={onInSeasonTransferOffer} onWithdraw={onWithdrawInSeasonOffer} onOpenScouting={onOpenScouting} onOpenMatch={onOpenMatch} />}

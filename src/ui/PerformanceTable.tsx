@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MoreInfo } from './MoreInfo'
 import type { PerformanceDirection, PerformanceMetric, PerformanceMode, SeasonPlayerPerformance } from '../world/performance'
 import { performanceValue, sortPerformance } from '../world/performance'
 import { Avatar } from './Avatar'
@@ -68,11 +69,12 @@ export function PerformanceModeControl({ mode, onChange, busy = false, idPrefix 
   </div>
 }
 
-export function PerformanceLegend({ mode }: { mode: PerformanceMode }) {
-  return <div className="performance-legend">
+export function PerformanceLegend({ mode, note }: { mode: PerformanceMode; note?: string }) {
+  return <MoreInfo label="How to read the table" className="performance-legend">
     <p>{mode === 'totals' ? 'Totals cover recorded appearances in the selected season. MIN is total court time.' : mode === 'per-game' ? 'Per-game figures use each player’s appearances. Unused players are excluded from the average; MPG is minutes per appearance.' : 'Per 40 scales counting statistics to 40 minutes played; it is not a prediction. GP remains appearances and MPG remains minutes per appearance.'}</p>
     <p>Shooting percentages use total makes divided by total attempts. — means no appearances, playing time or attempts for that statistic.</p>
-  </div>
+    {note && <p>{note}</p>}
+  </MoreInfo>
 }
 
 export function PerformanceTable({ rows, mode, onSelectPlayer, selectedPlayerId, showClub = false, managedClubId, busy = false, label = 'Player performance' }: PerformanceTableProps) {

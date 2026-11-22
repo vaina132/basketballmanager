@@ -1,4 +1,4 @@
-.in-season-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;padding:14px}
+.in-season-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:14px}
 .in-season-summary>div{display:flex;align-items:center;gap:10px;min-width:0}
 .in-season-summary svg{color:var(--accent);flex:none}
 .in-season-summary small,.in-season-player small,.in-season-reply small{display:block;color:var(--muted);font-size:12px;line-height:1.5}

@@ -141,6 +141,10 @@ export const REAL_CLUB_LOGOS: Readonly<Record<string, string>> = ${JSON.stringif
 export const REAL_COMPETITION_LOGOS: Readonly<Record<string, string>> = ${JSON.stringify(sorted(competitionLogos), null, 2)}
 `
   writeFileSync(join(root, 'src/data/real-logos.ts'), body)
+  // The reviewed matches, kept so later packs and the tests can check the map against them.
+  const reviewed = ordered.map(row => ({ clubId: row.clubId, club: row.club, apiSportsTeamId: row.teamId, apiSportsTeam: row.team, logo: Object.hasOwn(clubLogos, row.clubId) }))
+  const leagues = Object.entries(leagueLogos).map(([competitionId, item]) => ({ competitionId, competition: item.name, apiSportsLeagueId: item.leagueId, logo: Object.hasOwn(competitionLogos, competitionId) }))
+  writeFileSync(join(root, 'real-data/club-logo-matches.json'), `${JSON.stringify({ source: 'API-Sports team lists 2026-27, matched 22 November 2026', clubs: reviewed, competitions: leagues }, null, 1)}\n`)
   if (missing.length) console.log(`No image at API-Sports for: ${missing.join(', ')}`)
   console.log(`Wrote ${Object.keys(clubLogos).length} club and ${Object.keys(competitionLogos).length} competition logos.`)
 }

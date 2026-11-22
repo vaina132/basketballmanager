@@ -1,10 +1,10 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { seasonRounds } from '../src/world/career-world';
 import { SeasonProgress, seasonFacts, showsSeasonStrip } from '../src/ui/SeasonProgress';
 import { PAGE_NAMES, type Page } from '../src/ui/navigation';
+import app from '../src/App.tsx?raw';
 
 // Owner feedback (22 November 2026): the season strip only on the Desk, the key facts in the top bar, no Squad header strip.
 describe('season facts in the top bar', () => {
@@ -22,7 +22,6 @@ describe('season facts in the top bar', () => {
   });
 
   it('has no Squad header strip and renders the strip only through the Desk check', () => {
-    const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
     expect(app).not.toContain('squad-summary');
     expect(app).not.toContain('AVG. STAMINA');
     expect(app.match(/<SeasonProgress /g)).toHaveLength(1);

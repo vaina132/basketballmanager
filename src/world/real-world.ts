@@ -146,7 +146,8 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   const levelOf = (clubId: string): ContractLevel => euroleagueClubs.has(clubId) ? 'euroleague' : (tierOf.get(clubId) ?? 1) >= 2 ? 'second' : 'top';
   const playerContracts = Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, openingContractYears(ageOf(player.id), hash(player.id), levelOf(team.id), byId.get(player.id)?.nationality)])));
   const profileOf = (playerId: string): DevelopmentPlayerProfile => ({ dateOfBirth: byId.get(playerId)?.birthDate ?? `${2026 - (byId.get(playerId)?.age ?? REAL_WORLD_RULES.defaultAge)}-01-01`, source: byId.get(playerId)?.birthDate ? 'official-profile' as const : 'estimated-from-age' as const,
-    positionSource: byId.get(playerId)?.profileEvidence?.positionSource ?? (byId.get(playerId)?.estimated.includes('game_position') ? 'estimated' as const : 'unverified' as const) });
+    positionSource: byId.get(playerId)?.profileEvidence?.positionSource ?? (byId.get(playerId)?.estimated.includes('game_position') ? 'estimated' as const : 'unverified' as const),
+    ...(byId.get(playerId)?.nationality ? { nationality: byId.get(playerId)!.nationality! } : {}) });
   const domesticWorld: CareerWorld = {
     id: realWorldId(pack, competitions.length === 1 ? competition.id : `leagues-${hash(competitions.map(item => item.id).sort().join('|')).toString(16)}`), name: competitions.length === 1 ? `${competition.name} ${competition.season}` : `European domestic leagues ${competition.season}`, source: 'real-data-pack', rosterModel: FULL_ROSTER_MODEL, startDate: DEVELOPMENT_WORLD.startDate,
     domesticLeagues: competitions.map(item => ({ id: item.id, name: item.name, country: item.country ?? 'Other', tier: item.tier, clubIds: [...item.clubIds], standingsRule: standingsRuleFor(item.country ?? 'Other', item.tier), ...(postseasons ? { postseason: postseasons.get(item.id)! } : {}) })),

@@ -3,7 +3,7 @@
  * the 24 national teams, with the facts the game estimates their 1-20 attributes from (`src/world/coach-ratings.ts`).
  * Sources: English Wikipedia (CC BY-SA 4.0; for nine clubs the Italian, French, Turkish or Czech Wikipedia) and Wikidata
  * (CC0), facts only (who coaches which team, birth date, nationality, first season as a head coach, titles won as a
- * head coach), each with its page link; 24 club posts checked by hand against a current 2026-27 league, club or press page
+ * head coach), each with its page link; 25 club posts checked by hand against a current 2026-27 league, club or press page
  * (`CHECKED` in the fetch script, which also drops older claims on the same coach); fetched by `scripts/real-data-coaches.mjs` and
  * written by `scripts/real-data-coaches-emit.mjs` on 2026-11-22. Teams not listed have no head coach in a free
  * source and get a generated coach (marked). `level`: the job level the formula uses; `hints`: the game's own estimate
@@ -231,7 +231,7 @@ export const REAL_COACHES: readonly RealCoach[] = Object.freeze(([
   { id: "coach-jevgenijs-kosuskins", name: "Jevgēnijs Kosuškins", born: "1977-01-25", nationality: "Latvia", since: 2012, titles: {euroleague: 0,europe: 0,league: 0,cup: 0,national: 0,awards: 0}, level: 3, source: "https://en.wikipedia.org/wiki/Jevg%C4%93nijs_Kosu%C5%A1kins" },
   { id: "coach-benka-barloschky", name: "Benka Barloschky", born: null, nationality: null, since: null, titles: {euroleague: 0,europe: 0,league: 0,cup: 0,national: 0,awards: 0}, level: 2, source: "https://en.wikipedia.org/wiki/Hamburg_Towers" },
   { id: "coach-alessandro-ramagli", name: "Alessandro Ramagli", born: "1964-04-01", nationality: "Italy", since: 1996, titles: {euroleague: 0,europe: 0,league: 0,cup: 0,national: 0,awards: 0}, level: 2, source: "https://en.wikipedia.org/wiki/Alessandro_Ramagli" },
-  { id: "coach-giorgio-valli", name: "Giorgio Valli", born: "1962-03-10", nationality: "Italy", since: null, titles: {euroleague: 0,europe: 0,league: 0,cup: 0,national: 0,awards: 0}, level: 0.5, source: "https://www.wikidata.org/wiki/Q3765806" },
+  { id: "coach-pete-strobl", name: "Pete Strobl", born: "1977", nationality: "USA", since: 2019, titles: {euroleague: 0,europe: 0,league: 0,cup: 0,national: 0,awards: 0}, level: 0.5, source: "https://www.victorialibertas.it/pete-strobl-e-il-nuovo-coach-della-cmt-orange-tools-pesaro/" },
   { id: "coach-stefano-salieri", name: "Stefano Salieri", born: "1961-04-16", nationality: "Italy", since: null, titles: {euroleague: 0,europe: 0,league: 0,cup: 0,national: 0,awards: 0}, level: 0.5, source: "https://www.wikidata.org/wiki/Q3972704" },
   { id: "coach-thanasis-giaples", name: "Thanasis Giaples", born: null, nationality: null, since: null, titles: {euroleague: 0,europe: 0,league: 0,cup: 0,national: 0,awards: 0}, level: 2, source: "https://en.wikipedia.org/wiki/Vikos_Falcons_Ioannina_B.C." },
   { id: "coach-alex-mumbru", name: "Álex Mumbrú", born: "1979-06-12", nationality: "Spain", since: 2018, titles: {euroleague: 0,europe: 0,league: 0,cup: 0,national: 0,awards: 0}, level: 4, source: "https://en.wikipedia.org/wiki/%C3%81lex_Mumbr%C3%BA" },
@@ -467,7 +467,7 @@ export const REAL_COACH_POSTS: readonly RealCoachPost[] = Object.freeze([
   { teamId: "club-ba177d1c-20c0-4679-9661-9e583494304f", team: "VEF Riga", coachId: "coach-jevgenijs-kosuskins", source: "https://en.wikipedia.org/wiki/BK_VEF_R%C4%ABga" },
   { teamId: "club-3a326dca-2221-4fe7-b45d-1cd9e4f845a5", team: "Veolia Towers Hamburg", coachId: "coach-benka-barloschky", source: "https://en.wikipedia.org/wiki/Hamburg_Towers" },
   { teamId: "club-7d132e12-9e34-4882-8a85-8653a3b26f84", team: "Verona", coachId: "coach-alessandro-ramagli", source: "https://en.wikipedia.org/wiki/Scaligera_Basket_Verona" },
-  { teamId: "club-23606130-2e69-47c8-9909-33526c4e332f", team: "Victoria Libertas Pesaro", coachId: "coach-giorgio-valli", source: "https://en.wikipedia.org/wiki/Victoria_Libertas_Pallacanestro" },
+  { teamId: "club-23606130-2e69-47c8-9909-33526c4e332f", team: "Victoria Libertas Pesaro", coachId: "coach-pete-strobl", source: "https://www.victorialibertas.it/pete-strobl-e-il-nuovo-coach-della-cmt-orange-tools-pesaro/" },
   { teamId: "club-83116580-8967-435f-b7a4-ca3c0d3bc21b", team: "Vigevano", coachId: "coach-stefano-salieri", source: "https://www.legapallacanestro.com/serie-a2/elachem-vigevano-1955?qt-squadra=5" },
   { teamId: "club-2301f37d-86c6-4023-b2b4-d15a6ed3d92f", team: "Vikos", coachId: "coach-thanasis-giaples", source: "https://en.wikipedia.org/wiki/Vikos_Falcons_Ioannina_B.C." },
   { teamId: "club-0a749a8e-5fec-4963-a48e-8ecf505a995e", team: "Virtus Bologna", coachId: "coach-alex-mumbru", source: "https://en.wikipedia.org/wiki/Virtus_Bologna" },

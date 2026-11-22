@@ -4,7 +4,8 @@ import { getSeasonRosterData } from '../world/rosters'
 import type { SeasonPlayerPerformance } from '../world/performance'
 
 /**
- * Regular season and playoff player statistics shown apart on Competitions (owner suggestion, HANDOVER). Presentation
+ * Regular season and playoff player statistics shown apart on Competitions (owner suggestion, HANDOVER), and League
+ * statistics without European games (owner, 22 November 2026: those belong to International's statistics). Presentation
  * only: the rows are rebuilt from each player's retained per-game records (`SeasonPlayerPerformance.log`); nothing is
  * saved and no rule changes.
  */
@@ -51,6 +52,11 @@ export function canSplitPhases(season: SeasonState, seasonNumber: number, clubId
 /** Whether the season shown has any game of the phase in the scope, played or scheduled. */
 export function hasPhaseGames(season: SeasonState, seasonNumber: number, scope: StatScope, phase: StatPhase, clubIds?: readonly string[]): boolean {
   return getSeasonRosterData(season, seasonNumber).fixtures.some(fixture => inStatScope(fixture, scope) && inStatPhase(fixture, phase) && (!clubIds || clubIds.includes(fixture.homeClubId) || clubIds.includes(fixture.awayClubId)))
+}
+
+/** Whether the season shown has any European game of the clubs (played or scheduled). */
+export function hasEuropeanGames(season: SeasonState, seasonNumber: number, clubIds?: readonly string[]): boolean {
+  return getSeasonRosterData(season, seasonNumber).fixtures.some(fixture => !!fixture.competition && (!clubIds || clubIds.includes(fixture.homeClubId) || clubIds.includes(fixture.awayClubId)))
 }
 
 /**

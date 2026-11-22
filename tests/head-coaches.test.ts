@@ -46,9 +46,10 @@ describe('real head coaches (format 82)', () => {
     const ids = new Set(REAL_COACHES.map(coach => coach.id));
     expect(ids.size).toBe(REAL_COACHES.length);
     for (const post of REAL_COACH_POSTS) expect(ids.has(post.coachId)).toBe(true);
-    // 221 of 222 clubs (not MKE Ankaragücü) and all 24 national teams; a coach holds at most one club post, and a post
-    // checked against a current source wins over an older page (Rémy Valin left Fos for Nantes; Sacripanti coaches
-    // Urania, not Pesaro).
+    // 221 of 222 clubs (not MKE Ankaragücü, whose coach left on 10 November 2026; no successor found by 22 November)
+    // and all 24 national teams; a coach holds at most one club post, and a post checked against a current source wins
+    // over an older page (Rémy Valin left Fos for Nantes; Sacripanti coaches Urania; Pete Strobl replaced Giorgio Valli
+    // at Pesaro on 17 November 2026).
     expect(REAL_COACH_POSTS.filter(post => !post.teamId.startsWith('nation-'))).toHaveLength(221);
     expect(REAL_COACH_POSTS.filter(post => post.teamId.startsWith('nation-'))).toHaveLength(24);
     const clubPosts = REAL_COACH_POSTS.filter(post => !post.teamId.startsWith('nation-')).map(post => post.coachId);
@@ -58,6 +59,8 @@ describe('real head coaches (format 82)', () => {
     expect(coachOf('Fos Provence')).toBe('Abgué Barakaou');
     expect(coachOf('Urania Milano')).toBe('Stefano Sacripanti');
     expect(coachOf('Tizona Burgos')).toBe('Denis Pombar');
+    expect(coachOf('Victoria Libertas Pesaro')).toBe('Pete Strobl');
+    expect(REAL_COACHES.some(coach => coach.name === 'Giorgio Valli')).toBe(false);
     const jasikevicius = REAL_COACHES.find(coach => coach.name === 'Šarūnas Jasikevičius')!;
     const once = estimateCoach(jasikevicius.id, jasikevicius, jasikevicius.level, '2026-09-05'), again = estimateCoach(jasikevicius.id, jasikevicius, jasikevicius.level, '2026-09-05');
     expect(once).toEqual(again);

@@ -67,7 +67,7 @@ import { StaminaMeter } from './ui/StaminaMeter'
 import { ManagerDesk } from './ui/ManagerDesk'
 import type { SeasonState } from './domain/season'
 import { RestWeek } from './ui/RestWeek'
-import { acceptJob, careerPresentationMatch, createSeason, getStandings, managedSide as seasonManagedSide, NEW_CAREER_SYSTEMS, resignManager, seasonLabel } from './world/season'
+import { acceptJob, careerPresentationMatch, createSeason, managedSide as seasonManagedSide, NEW_CAREER_SYSTEMS, resignManager, seasonLabel } from './world/season'
 import { isUnemployed } from './world/career-rules'
 import { careerDay, careerPointLabel, careerToday, gameDate, worldSeasonName } from './ui/career-text'
 import { continueNotice, continueStatus, continueStepView, continueStop, remainingSteps, stoppedRun, type ContinueStop } from './ui/continue-run'
@@ -112,9 +112,8 @@ import { enableTraining, setTrainingPlan } from './world/training'
 import type { TrainingPlan } from './domain/training'
 import { PlayerHealthSummary, SeasonMedicalReport } from './ui/SeasonMedicalReport'
 import type { SeasonReply } from './world/season.worker'
-import './ui/season-progress.css'
-import { seasonRounds, worldOf } from './world/career-world'
-import { seasonLeagues } from './world/divisions'
+import { SeasonProgress, seasonFacts, showsSeasonStrip } from './ui/SeasonProgress'
+import { worldOf } from './world/career-world'
 import { ASSISTANT_DIRECTORY } from './data/staff-directory'
 
 const MedicalWorkspace = lazy(() => import('./ui/MedicalWorkspace').then(module => ({ default: module.MedicalWorkspace })))
@@ -142,9 +141,6 @@ function ClubMark({ name, color, large = false }: { name: string; color: string;
   return <div className={`club-mark ${large ? 'club-mark-large' : ''}`} style={{ color }} aria-hidden="true"><Icon name="ball" size={large ? 30 : 21} /><span>{name.slice(0, 3).toUpperCase()}</span></div>
 }
 
-function Stat({ label, value, detail }: { label: string; value: string | number; detail?: string }) {
-  return <div className="stat"><span className="eyebrow">{label}</span><strong>{value}</strong>{detail && <span className="muted">{detail}</span>}</div>
-}
 
 export default function App() {
   const [entryView, setEntryView] = useState<'menu' | 'new-career' | 'profile' | null>('menu')
@@ -326,7 +322,6 @@ export default function App() {
   const squadEligible = (id: string) => offseason || !match.stats[id] ? !!season && !getPlayerHealth(season, id) : isPlayerEligible(match, id)
   const squadCondition = (id: string) => offseason ? season!.conditions[id]! : match.stats[id]?.condition ?? season?.conditions[id] ?? 100
   const eligiblePlayers = squadTeam.players.filter(player => squadEligible(player.id))
-  const averageCondition = Math.round(squadTeam.players.reduce((sum, player) => sum + squadCondition(player.id), 0) / squadTeam.players.length)
   const rosterPlayers = squadTeam.players.filter(player => {
     const active = match.lineups[managedSide].includes(player.id)
     const included = rosterFilter === 'all' || rosterFilter === 'court' && active || rosterFilter === 'bench' && !active && !!match.stats[player.id] || rosterFilter === 'unavailable' && !squadEligible(player.id)
@@ -857,7 +852,7 @@ export default function App() {
     </aside>
 
     <div className="main-shell">
-      <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span></div><div className="topbar-actions">{!season && <span className="session-status"><span className="status-dot" />{complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span>}{season && <SaveStatus progress={saveProgress} />}<button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save' : 'Save match'}</button>{season && <ContinueControl day={careerToday(season)} status={continueStatus(season, complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused')} busy={saving} run={continueRun} onContinue={() => continueCareer()} onStop={stopContinue} />}</div></header>
+      <header className="topbar"><div className="game-context"><strong>{managedTeam.name}</strong><span>/</span><span>{pageNames[page]}</span>{season && <small className="topbar-season" data-topbar-season>{seasonFacts(season)}</small>}</div><div className="topbar-actions">{!season && <span className="session-status"><span className="status-dot" />{complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused'}</span>}{season && <SaveStatus progress={saveProgress} />}<button id="game-main-menu" className="button small" onClick={() => { void openEntry('menu') }} disabled={saving || advancing}><Icon name="home" size={16} />Main menu</button><button className="button small" onClick={save} disabled={saving || advancing}><Icon name="save" size={16} />{saving ? 'Saving...' : season ? 'Save' : 'Save match'}</button>{season && <ContinueControl day={careerToday(season)} status={continueStatus(season, complete ? 'Full time' : needsReplacement ? 'Decision required' : playing ? 'Match in progress' : match.status === 'ready' ? 'Pre-match' : 'Match paused')} busy={saving} run={continueRun} onContinue={() => continueCareer()} onStop={stopContinue} />}</div></header>
       {continueRun && <ContinueProgress run={continueRun} />}
       {checkpointIssue && <div className="career-save-issue" role="alert"><span>{checkpointIssue}</span><button className="text-button" onClick={openSaveHistory} disabled={saving || advancing}>Save history</button><button className="text-button" onClick={exportSave} disabled={saving || advancing}>Export current</button></div>}
       <main id="main" tabIndex={-1} inert={saving}>
@@ -865,7 +860,8 @@ export default function App() {
         <div className={page === 'match' ? 'sr-only' : 'page-heading'}><h1>{pageNames[page]}</h1><div className="heading-meta"><span className="pill">{season || page === 'season' ? (season ? worldSeasonName(season) : 'Development league').toUpperCase() : 'EXHIBITION'}</span><span className="muted">{page === 'season' ? season ? <time dateTime={careerToday(season)}>{gameDate(careerToday(season), true)}</time> : 'Club selection' : deskDay ? deskDay.label : `${match.home.shortName} vs ${match.away.shortName}`}</span></div></div>
         {workerFailure && <PageError title={workerFailure.title} error={workerFailure.error} step={{ failed: workerFailure.failed, part: 'the file that runs this step' }} savesFirst onReload={() => { void saveAndReload() }} />}
 
-        {season && page !== 'season' && page !== 'match' && <SeasonProgress season={season} onCompetition={() => navigate('season')} />}
+        {/* Owner feedback (22 November 2026): the season strip only on the Desk; the top bar carries the key facts elsewhere. */}
+        {season && showsSeasonStrip(page) && <SeasonProgress season={season} onCompetition={() => navigate('season')} />}
         <PageErrorBoundary key={page} title={pageNames[page]} savesFirst={!!season} onReload={() => { void saveAndReload() }}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
         {page === 'calendar' && season && <SeasonCalendar season={season} />}
         {page === 'europe' && season && <EuropeWorkspace season={season} />}
@@ -911,13 +907,12 @@ export default function App() {
         </>}
 
         {page === 'squad' && <>
-          <div className="squad-summary panel"><div><ClubMark name={managedTeam.shortName} color={managedTeam.color} /><h2>{managedTeam.name}</h2><span className="pill">FIRST TEAM</span></div><div><Stat label="AVAILABLE" value={`${eligiblePlayers.length}/${squadTeam.players.length}`} /><Stat label={offseason ? "LAST LINEUP" : "ON COURT"} value={match.lineups[managedSide].length} /><Stat label="AVG. STAMINA" value={`${averageCondition}%`} /></div></div>
           {season && <div className="squad-view-controls"><div className="segmented" role="group" aria-label="Squad view"><button aria-pressed={squadView === 'selection'} className={squadView === 'selection' ? 'selected' : ''} onClick={() => setSquadView('selection')}>Selection</button><button aria-pressed={squadView === 'performance'} className={squadView === 'performance' ? 'selected' : ''} onClick={() => { setSquadView('performance'); setPerformancePlayer(null) }}>Season statistics</button><button aria-pressed={squadView === 'relationships'} className={squadView === 'relationships' ? 'selected' : ''} onClick={() => setSquadView('relationships')}>Dynamics</button><button aria-pressed={squadView === 'payroll'} className={squadView === 'payroll' ? 'selected' : ''} onClick={() => setSquadView('payroll')}>Wages</button><button id="squad-view-contracts" aria-pressed={squadView === 'contracts'} className={squadView === 'contracts' ? 'selected' : ''} onClick={() => setSquadView('contracts')}>Contracts</button></div><span>{squadView === 'contracts' ? 'Renewals, contract ends and requests' : squadView === 'relationships' ? 'Roles, morale and promises' : squadView === 'selection' ? 'Current fixture and availability' : squadView === 'payroll' ? 'Player wage commitments' : 'Committed match results'}</span></div>}
           {season && squadView === 'contracts' ? <SquadContracts key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}`} season={season} disabled={advancing || saving} onEnable={enableContracts} onDelegation={delegateContracts} onOffer={offerContract} onWithdrawOffer={withdrawContractOffer} onBuyout={buyoutContract} onContractReply={replyToContract} onOpenScouting={openScouting} onShortlist={updateShortlist} onOpenTransfers={() => navigate('transfers')} focusedPlayerId={contractsPlayer} onClearFocusedPlayer={() => setContractsPlayer(null)} /> : season && squadView === 'relationships' ? <RelationshipsPanel key={`${season.seed}:${season.managedClubId}`} season={season} busy={advancing || saving} selectedPlayerId={relationshipPlayer} onSelectPlayer={setRelationshipPlayer} onEnable={() => updateCareer(enableRelationships, 'Squad dynamics enabled. Agreed roles and future match focus now have a recorded history.', true)} onRole={(playerId, role) => updateCareer(state => agreeSquadRole(state, playerId, role), 'Playing-time role agreed. Review the expectation in Dynamics.', true)} onTalk={(playerId, choice) => updateCareer(state => talkToPlayer(state, playerId, choice), 'Conversation recorded. Review the response and any commitment in Dynamics.', true)} onContractReply={replyToContract} /> : season && squadView === 'payroll' ? <PayrollWorkspace key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}`} season={season} busy={advancing || saving} onEnable={() => updateCareer(enablePayroll, 'Player payroll enabled. Wage schedules start from this matchday.')} onOpenClub={() => navigate('club')} onSelectPlayer={id => { setSelectedPlayer(id); setRosterFilter('all'); setRosterQuery(''); navigate('squad', '.player-profile') }} /> : season && squadView === 'performance' ? <SquadPerformance key={`${season.seed}:${season.managedClubId}:${season.seasonNumber}`} season={season} selectedPlayerId={performancePlayer} onSelectPlayer={setPerformancePlayer} busy={advancing || saving} /> : <>
           {fullRoster && season && !restWeek && <MatchdaySquad season={season} busy={advancing || saving} assistantName={assistantCoach?.name} onAutomatic={() => updateCareer(state => setMatchdaySelection(state, null), automaticChoiceLabels(assistantCoach?.name).selected, true)} />}
           {season && <SquadStartingFive season={season} busy={advancing || saving} onUpdate={action => updateCareer(action, undefined, true)} onOpenMatch={() => navigate('match', '#match-rotation')} />}
           <div className="squad-layout"><section className="panel roster-panel">
-            <div className="section-heading"><h2>Players</h2><button className="text-button" onClick={() => navigate('match', '#match-rotation')}>Manage rotation <Icon name="swap" size={15} /></button></div>
+            <div className="section-heading"><h2>Players <small className="roster-available" data-squad-available>{eligiblePlayers.length}/{squadTeam.players.length} available</small></h2><button className="text-button" onClick={() => navigate('match', '#match-rotation')}>Manage rotation <Icon name="swap" size={15} /></button></div>
             <div className="roster-toolbar"><div className="roster-filters" aria-label="Filter squad">{[{id:'all',label:'All'},{id:'court',label:offseason ? 'Last lineup' : 'On court'},{id:'bench',label:offseason ? 'Last bench' : 'Bench'},{id:'unavailable',label:'Unavailable'}].map(filter => <button key={filter.id} aria-pressed={rosterFilter === filter.id} onClick={() => setRosterFilter(filter.id)}>{filter.label}</button>)}</div><label className="roster-search"><Icon name="search" size={15}/><input type="search" placeholder="Find player" aria-label="Search squad" value={rosterQuery} onChange={event => setRosterQuery(event.target.value)}/></label></div>
             <div className="table-scroll"><table className="roster"><thead><tr>{fullRoster && <th scope="col">MATCHDAY</th>}<th>PLAYER</th><th className="squad-role-head">ROLE</th><th>STATUS</th><th>AGE</th><th>HEIGHT</th><th>STAMINA</th><th>{offseason ? 'LAST PTS' : 'PTS'}</th><th>{offseason ? 'LAST PF' : 'PF'}</th></tr></thead><tbody>{rosterPlayers.map(player => <tr key={player.id} data-player-id={player.id} className={chosenPlayer.id === player.id ? 'selected-row' : ''}>
               {fullRoster && season && <td><label className="matchday-check"><input type="checkbox" aria-label={`Select ${player.name} for matchday`} checked={matchdayIds.includes(player.id)} disabled={saving || advancing || !canSelectMatchday(season) || (matchdayIds.includes(player.id) ? matchdayIds.length <= 5 : matchdayIds.length >= 12)} onChange={event => { const ids = event.target.checked ? [...matchdayIds, player.id] : matchdayIds.filter(id => id !== player.id); updateCareer(state => setMatchdaySelection(state, ids), 'Matchday squad updated.', true) }} /></label></td>}
@@ -947,15 +942,3 @@ function PlayerProfile({ player, match, managedSide, season, onPerformance, onOp
 
 
 
-/** Where the season stands; the one Continue on the top bar moves it on (owner request, 16 November 2026). */
-function SeasonProgress({ season, onCompetition }: { season: SeasonState; onCompetition: () => void }) {
-  const fixture = season.fixtures.find(item => item.id === season.activeFixtureId)
-  const standing = getStandings(season).find(row => row.clubId === season.managedClubId)!
-  // The day the career stands on (a midweek game day included), in the same words as the desk panel and the notices.
-  const today = careerToday(season), date = gameDate(today, true)
-  return <section className="season-progress panel" aria-label="Season progress">
-    <div><time dateTime={today}>{date}</time><span>{season.status === 'complete' ? isMarketActive(season) ? 'Offseason recruitment' : `Season ${season.seasonNumber} complete` : `Season ${season.seasonNumber} / Matchday ${fixture?.round ?? season.round} / ${seasonRounds(season)}`}</span></div>
-    <div className="season-record"><strong>{standing.played ? `${standing.position} / ${(season.world ? seasonLeagues(season.world, season.divisions) : []).find(league => league.clubIds.includes(season.managedClubId))?.clubIds.length ?? season.clubs.length}` : 'Unplayed'}</strong><span>{standing.wins} W / {standing.losses} L</span></div>
-    <button className="text-button" onClick={onCompetition}>League table<Icon name="chevron" size={14} /></button>
-  </section>
-}

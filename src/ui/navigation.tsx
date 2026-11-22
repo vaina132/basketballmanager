@@ -10,13 +10,15 @@ export function showsBudgetBar(page: Page, squadView?: string): boolean {
 }
 export interface NavItem { id: Page; label: string; icon: IconName }
 
-export type SquadView = 'selection' | 'performance' | 'relationships' | 'payroll' | 'contracts' | 'medical'
-/** The Squad page's views, in order. Medical joined them in the simplify pass (owner, 22 November 2026). */
+export type SquadView = 'selection' | 'performance' | 'relationships' | 'contracts' | 'medical'
+/**
+ * The Squad page's views, in order. Medical joined them in the simplify pass; the wage list moved inside Contracts
+ * (owner decisions, 22 November 2026).
+ */
 export const SQUAD_VIEWS: readonly { id: SquadView; label: string }[] = [
   { id: 'selection', label: 'Selection' },
   { id: 'performance', label: 'Statistics' },
   { id: 'relationships', label: 'Dynamics' },
-  { id: 'payroll', label: 'Wages' },
   { id: 'contracts', label: 'Contracts' },
   { id: 'medical', label: 'Medical' },
 ]

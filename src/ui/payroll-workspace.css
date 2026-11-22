@@ -58,3 +58,4 @@
 @media(max-width:650px){.payroll-heading{flex-wrap:wrap;padding:10px;gap:8px}.payroll-summary{padding:12px 10px;gap:12px}.payroll-summary dd{font-size:14px}.payroll-policy-control{padding:12px 10px}.payroll-note,.payroll-totals,.payroll-model-note{padding-inline:10px}.payroll-search{width:100%;justify-content:space-between}.payroll-search input{width:65%}.payroll-settlement-body{padding:12px 10px}.payroll-settlement>footer{padding:10px}.payroll-settlement>footer .button{flex:1;font-size:12px;padding-inline:8px}}
 
 .payroll-salary-start{display:block;margin-top:4px;color:var(--muted);font-size:12px;line-height:1.5}
+.squad-wages{margin-top:12px;outline:none}

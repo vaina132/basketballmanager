@@ -40,44 +40,41 @@ beforeAll(() => {
 }, 120_000);
 
 describe('the left menu', () => {
-  it('is ordered by use in small groups, with Board as its own item and every page reachable', () => {
-    const groups = mainNavigation({ career: true, europe: true });
+  it('is ordered by use in small groups, with every page reachable as an item or a tab (owner, 22 November 2026)', () => {
+    const groups = mainNavigation({ career: true });
     expect(groups.map(group => group.map(item => item.id))).toEqual([
-      ['home', 'inbox'], ['squad', 'match', 'transfers', 'training', 'staff'], ['club', 'board'], ['season', 'calendar', 'europe'], ['academy'],
+      ['home', 'inbox'], ['squad', 'match', 'transfers', 'training', 'staff'], ['club', 'season'],
     ]);
-    expect(groups.flat().find(item => item.id === 'board')).toMatchObject({ label: 'Board', icon: 'shield' });
-    // Nothing that exists is hidden: every page has its menu item or is a view of a page that has one.
+    // Nothing that exists is hidden: every page has its menu item or is a tab of a page that has one.
     const merged = Object.keys(MERGED_PAGES) as Page[];
-    expect(merged).toEqual(['medical']);
+    expect(merged.sort()).toEqual(['academy', 'board', 'calendar', 'europe', 'medical']);
     expect(groups.flat().map(item => item.id).sort()).toEqual((Object.keys(PAGE_NAMES) as Page[]).filter(page => !merged.includes(page)).sort());
     for (const page of merged) expect(groups.flat().some(item => item.id === MERGED_PAGES[page]!.page)).toBe(true);
-    expect(mainNavigation({ career: true, europe: false }).flat().some(item => item.id === 'europe')).toBe(false);
-    expect(mainNavigation({ career: false, europe: false }).flat().map(item => item.id)).toEqual(['home', 'squad', 'match', 'season']);
-    expect(unemployedNavigation({ europe: false }).flat().map(item => item.id)).toEqual(['home', 'inbox', 'season', 'calendar']);
+    expect(mainNavigation({ career: false }).flat().map(item => item.id)).toEqual(['home', 'squad', 'match', 'season']);
+    expect(unemployedNavigation().flat().map(item => item.id)).toEqual(['home', 'inbox', 'season']);
   });
 
-  it('opens the Board page from its Board button', () => {
-    const groups = mainNavigation({ career: true, europe: false });
-    const html = renderToStaticMarkup(<MainNavigation groups={groups} current="board" disabled={false} onNavigate={noop} />);
-    expect(html).toMatch(/<button[^>]*data-nav="board"[^>]*aria-label="Board"[^>]*aria-current="page"/);
+  it('opens Club from its menu button', () => {
+    const groups = mainNavigation({ career: true });
+    const html = renderToStaticMarkup(<MainNavigation groups={groups} current="club" disabled={false} onNavigate={noop} />);
+    expect(html).toMatch(/<button[^>]*data-nav="club"[^>]*aria-label="Club"[^>]*aria-current="page"/);
     expect(html.match(/class="nav-divider"/g)).toHaveLength(groups.length - 1);
     const opened: Page[] = [];
-    const board = buttons(MainNavigation({ groups, current: 'home', disabled: false, onNavigate: page => opened.push(page) })).find(button => button.props['data-nav'] === 'board')!;
-    board.props.onClick();
-    expect(opened).toEqual(['board']);
-    expect(PAGE_NAMES.board).toBe('Board');
+    const club = buttons(MainNavigation({ groups, current: 'home', disabled: false, onNavigate: page => opened.push(page) })).find(button => button.props['data-nav'] === 'club')!;
+    club.props.onClick();
+    expect(opened).toEqual(['club']);
   });
 
   it('keeps every Medical control on Squad > Medical after the merge (simplify pass, 22 November 2026)', () => {
-    expect(MERGED_PAGES.medical).toEqual({ page: 'squad', squadView: 'medical' });
-    expect(SQUAD_VIEWS.map(view => view.id)).toEqual(['selection', 'performance', 'relationships', 'payroll', 'contracts', 'medical']);
+    expect(MERGED_PAGES.medical).toEqual({ page: 'squad', view: 'medical' });
+    expect(SQUAD_VIEWS.map(view => view.id)).toEqual(['selection', 'performance', 'relationships', 'contracts', 'medical']);
     // The Squad view renders the same Medical workspace, so its views, physio and training links and rules stay.
     const opened: string[] = [];
     const html = renderToStaticMarkup(<MedicalWorkspace season={opening} onSelectPlayer={id => opened.push(id)} onOpenPhysio={() => opened.push('physio')} onOpenTraining={() => opened.push('training')} />);
     for (const text of ['aria-label="Club medical status"', 'aria-label="Medical view"', '>Recovering', 'Recently cleared', 'History', 'id="medical-manage-physio"', '>Training<', 'Recovery information']) expect(html).toContain(text);
   });
 
-  it('shows the board, the president and the media standing on the Board page', () => {
+  it('shows the board, the president and the media standing on Club > Board', () => {
     const html = renderToStaticMarkup(<BoardWorkspace season={opening} onEnable={noop} onEnableFunding={noop} onEnableConsequences={noop} onEnableRivalries={noop} onEnableCareerMoves={noop} />);
     expect(html).toContain('aria-labelledby="board-title"');
     expect(html).toContain('id="media-standing-title"');

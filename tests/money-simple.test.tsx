@@ -92,6 +92,9 @@ describe('two budgets (owner feedback, 18 November 2026)', () => {
     expect(pages.filter(page => showsBudgetBar(page, 'selection'))).toEqual(['home', 'staff', 'club', 'transfers']);
     expect(showsBudgetBar('squad', 'contracts')).toBe(true);
     expect(showsBudgetBar('squad', 'payroll')).toBe(false);
+    // Board is a tab of Club (owner, 22 November 2026): the bar stays with facilities and the bank.
+    expect(showsBudgetBar('club', 'club')).toBe(true);
+    expect(showsBudgetBar('club', 'board')).toBe(false);
   });
 
   it('pays wages automatically every week and shows no settlement columns', () => {

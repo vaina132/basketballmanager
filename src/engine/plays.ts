@@ -429,7 +429,7 @@ function shoot(ctx: Ctx, plan: ShotPlan): void {
       : blocked ? `${nameOf(blocker)} blocks ${nameOf(shooter)}'s ${plan.alleyOop ? 'alley-oop' : words.noun}${horn}.`
       : `${nameOf(shooter)} ${what}${kind === 'heave' || kind === 'catchThree' || kind === 'pullThree' || kind === 'dunk' || plan.alleyOop ? '' : ` (${label})`}${fouled ? ' through the contact' : ''}${horn}.`;
     kit.emit(state, { type: 'shot', side: offense, playerId: shooter.id, ...(assist ? { assistPlayerId: assist.id } : {}), text,
-      shot: { x: origin.x, y: origin.y, made, value, defenderId: goaltending ? blocker.id : contest.id, contest: label, distanceM: Math.round(distance * 100) / 100 },
+      shot: { x: origin.x, y: origin.y, made, value, defenderId: contest.id, contest: label, distanceM: Math.round(distance * 100) / 100 },
       scene: actionScene('shot', offense, play.positions, play.positions, ballAt(origin, kind === 'dunk' || plan.alleyOop ? 2.9 : 2.1), ballAt(landing, made ? 3.05 : .45), made ? kind === 'dunk' || plan.alleyOop ? .3 : value === 3 || kind === 'heave' ? 3.1 : 2.4 : 2.8) });
   }
   if (fouled) {

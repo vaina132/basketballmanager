@@ -128,6 +128,21 @@ describe('the dead balls of a real game (format 81, plays-3)', () => {
     }
   }, 120_000);
 
+  it('passes the strict match check under coaches\' tactics, goaltending included (format 82 regression)', () => {
+    // Head coaches (format 82) set tempo, outside shots and pressure per game; every honest plays-3 match must validate.
+    let goaltending = 0
+    for (let seed = 0; seed < 160; seed += 1) {
+      const style = (k: number) => ((seed * 7 + k * 13) % 11) / 10
+      const end = simulateToEnd(createFixtureMatch(700 + seed, teams[seed % 12]!, teams[(seed * 5 + 3) % 12]!, {
+        autoSubstitutions: { home: true, away: true }, injuryMode: 'standard', ...FLOW,
+        tactics: { home: { tempo: style(1), outsideShare: style(2), pressure: style(3) }, away: { tempo: style(4), outsideShare: style(5), pressure: style(6) } },
+      }))
+      goaltending += end.events.filter(event => /goaltending/.test(event.text)).length
+      validateMatchState(end)
+    }
+    expect(goaltending).toBeGreaterThan(0)
+  }, 300_000)
+
   it('leaves plays-2 matches replaying exactly', () => {
     // Measured with the play model before format 81 (main d912cf7).
     const end = simulateToEnd(createFixtureMatch(4242, teams[4]!, teams[7]!, { autoSubstitutions: { home: true, away: true }, injuryMode: 'standard', playModel: 'plays-2', computerCoach: ['home', 'away'] }));

@@ -116,7 +116,7 @@ describe('opening staff for every club (format 74, coaching-2)', () => {
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      let state = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, staffContracts: false }), true);
+      let state = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, staffContracts: false, calmPlayingTime: false }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       state = rolloverSeason(state);

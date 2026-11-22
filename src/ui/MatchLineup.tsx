@@ -23,6 +23,8 @@ interface MatchLineupProps {
   knowledgeForPlayer?: (id: string) => PlayerKnowledge
   /** Career matches: the manager's side is shown on the court picture with PG, SG, SF, PF and C circles. */
   courtPicture?: boolean
+  /** A player's country for the small flag on the court picture's bench rows. */
+  nationalityOf?: (id: string) => string | null
 }
 
 interface LineupPlayerProps {
@@ -71,7 +73,7 @@ function LineupPlayer({ player, match, side, active, pickLabel, pressed, selecte
  * Pairs: a reserve and an on-court player make a substitution (it waits for a legal stoppage); two on-court players
  * swap places at once (owner feedback, 16 November 2026: nobody enters or leaves, so no stoppage is needed).
  */
-export function MatchLineup({ match, displayMatch = match, managedSide = 'home', disabled = false, apply, onInteractionStart, knowledgeForPlayer, courtPicture: useCourtPicture = false }: MatchLineupProps) {
+export function MatchLineup({ match, displayMatch = match, managedSide = 'home', disabled = false, apply, onInteractionStart, knowledgeForPlayer, courtPicture: useCourtPicture = false, nationalityOf }: MatchLineupProps) {
   const [showOpponent, setShowOpponent] = useState(false)
   const [benchOpen, setBenchOpen] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -230,7 +232,7 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
       <div className="lineup-team-switch" role="group" aria-label="Lineup team">{(['home', 'away'] as const).map(value => <button key={value} type="button" onClick={() => { setShowOpponent(value !== managedSide); setSelectedId(null); setDraggedId(null); setDropId(null) }} aria-pressed={side === value} className={side === value ? 'selected' : ''}><span style={{ backgroundColor: match[value].color }} />{match[value].shortName}<small>{value === managedSide ? 'Your team' : 'Opponent'}</small></button>)}</div>
       <button className="lineup-bench-toggle" type="button" aria-expanded={benchOpen} aria-controls={benchId} onClick={() => setBenchOpen(value => !value)}>{benchOpen ? 'Hide bench' : 'Show bench'} <span>{bench.length}</span><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
     </div>
-    {courtPicture ? <CourtFive match={match} displayMatch={displayMatch} side={managedSide} disabled={disabled} benchOpen={benchOpen} benchId={benchId} apply={apply} onInteractionStart={onInteractionStart} knowledgeForPlayer={knowledgeForPlayer} /> : <>
+    {courtPicture ? <CourtFive match={match} displayMatch={displayMatch} side={managedSide} disabled={disabled} benchOpen={benchOpen} benchId={benchId} apply={apply} onInteractionStart={onInteractionStart} knowledgeForPlayer={knowledgeForPlayer} nationalityOf={nationalityOf} /> : <>
     {own && <MatchRotationControls match={match} side={managedSide} selected={selected} selectedActive={selectedActive} helpId={helpId} statusRef={status} announcement={announcement} disabled={disabled} onClear={clearSelection} onCancel={cancelChange} />}
     <div className="lineup-grid" aria-label={`${team.name} on court`} aria-describedby={own ? helpId : undefined}>{active.map(player => {
       const pending = match.pendingSubstitutions[side].find(request => request.outId === player.id)

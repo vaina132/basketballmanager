@@ -10,6 +10,7 @@ import { Icon } from './Icon'
 import { MatchRating, PlayerRating } from './PlayerRating'
 import { playerMatchRating } from '../world/performance-rating'
 import { StaminaMeter } from './StaminaMeter'
+import { Nationality } from './Nationality'
 import type { SquadSpot } from '../world/squad-board'
 import './court-five.css'
 
@@ -40,6 +41,8 @@ interface CourtFiveProps {
   planning?: boolean
   /** Squad page bench and reserves (owner feedback, 22 November 2026): every move goes through `moveSquadPlayer`. */
   squad?: SquadControls
+  /** A player's country for the small flag on the bench and reserve rows (owner request, 22 November 2026); none hides it. */
+  nationalityOf?: (id: string) => string | null
 }
 
 export interface SquadControls {
@@ -63,7 +66,7 @@ export interface SquadControls {
  * (`placeInCircle`, `arrangeBestFive`): before tip-off it applies at once, during play a reserve waits for a legal
  * stoppage and players on court swap circles at once.
  */
-export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benchId, apply, onInteractionStart, knowledgeForPlayer, planning = false, squad }: CourtFiveProps) {
+export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benchId, apply, onInteractionStart, knowledgeForPlayer, planning = false, squad, nationalityOf }: CourtFiveProps) {
   const [pick, setPick] = useState<Pick | null>(null)
   const [dragging, setDragging] = useState<Pick | null>(null)
   const [dropKey, setDropKey] = useState<string | null>(null)
@@ -296,7 +299,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
     const action = resolved?.kind === 'squad' ? describeSquadMove(resolved.playerId, resolved.spot)
       : move ? `Bring on ${player.name} at ${move.position} for ${name(occupantOf(circles, move.position))}`
       : live ? `${isSelected ? 'Deselect' : 'Select'} ${player.name}, ${player.position}, ${Math.round(condition)}% stamina, then choose ${squad ? 'a place' : 'a circle'}` : null
-    const identityMarkup = <><span aria-hidden="true"><Avatar player={player} color={team.color} size={30} /></span><span className="court-five-reserve-identity"><strong>{player.name}</strong><span>#{player.number} · {player.position}{stats && stats.fouls > 0 ? <span className={stats.fouls >= 4 ? 'lineup-foul-trouble' : ''}> · {stats.fouls} {stats.fouls === 1 ? 'foul' : 'fouls'}</span> : null}</span></span></>
+    const identityMarkup = <><span aria-hidden="true"><Avatar player={player} color={team.color} size={30} /></span><span className="court-five-reserve-identity"><strong>{player.name}</strong><span>#{player.number} · {player.position}<Nationality country={nationalityOf?.(player.id) ?? null} compact />{stats && stats.fouls > 0 ? <span className={stats.fouls >= 4 ? 'lineup-foul-trouble' : ''}> · {stats.fouls} {stats.fouls === 1 ? 'foul' : 'fouls'}</span> : null}</span></span></>
     return <li key={player.id} className={`court-five-reserve${isSelected ? ' is-selected' : ''}${resolved ? ' is-target' : ''}${dropKey === key ? ' is-drop' : ''}${unavailable ? ' is-unavailable' : ''}`} data-player-id={player.id} {...(editable && (live || resolved) ? dropHandlers(target) : {})}>
       {live || resolved ? <button type="button" className="court-five-reserve-pick" {...(target.kind === 'bench' ? { 'data-court-reserve': player.id } : { 'data-squad-reserve': player.id })} aria-pressed={resolved ? undefined : isSelected} aria-label={action!} draggable={live} onClick={event => choose(target, event.detail === 0)} onDragStart={event => beginDrag(event, target)} onDragEnd={dragEnd}>{identityMarkup}</button> : <div className="court-five-reserve-pick">{identityMarkup}</div>}
       <span className="court-five-reserve-ratings"><PlayerRating attributes={player.attributes} position={player.position} knowledge={knowledgeForPlayer?.(player.id)} compact label={`${player.name} ability`} />{showRatings && stats && <MatchRating stats={stats} live compact label={player.name} />}</span>

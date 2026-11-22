@@ -7,6 +7,7 @@ import { isUnemployed } from '../world/career-rules'
 import { getMatchPlayerKnowledge } from '../world/scouting-policy'
 import { CourtFive, type SquadControls } from './CourtFive'
 import { Icon } from './Icon'
+import { playerNationality } from './Nationality'
 import './squad-starting-five.css'
 
 interface SquadStartingFiveProps {
@@ -61,7 +62,7 @@ export function SquadStartingFive({ season, busy, onUpdate, onOpenMatch }: Squad
       <h2 id={`${benchId}-title`}>Starting five, bench and reserves</h2>
       {opponent && side && <span className="squad-starting-five-next">Next game: {side === 'home' ? 'vs' : 'at'} {opponent.name}</span>}
     </div>
-    {match && side ? <CourtFive match={match} displayMatch={match} side={side} disabled={busy} benchOpen benchId={benchId} apply={apply} onInteractionStart={() => {}} knowledgeForPlayer={id => getMatchPlayerKnowledge(season, id)} planning squad={squad} />
+    {match && side ? <CourtFive match={match} displayMatch={match} side={side} disabled={busy} benchOpen benchId={benchId} apply={apply} onInteractionStart={() => {}} knowledgeForPlayer={id => getMatchPlayerKnowledge(season, id)} planning squad={squad} nationalityOf={id => playerNationality(season, id)} />
       : <div className="squad-starting-five-locked"><p>{block}</p>{season.activeMatch && season.activeMatch.status !== 'finished' && <button type="button" className="button small" onClick={onOpenMatch}><Icon name="court" size={15} />Open Match center</button>}</div>}
   </section>
 }

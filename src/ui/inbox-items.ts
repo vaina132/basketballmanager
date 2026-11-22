@@ -1,3 +1,4 @@
+import { nationalInboxItems } from './national-inbox'
 import type { SeasonState } from '../domain/season'
 import { getDevelopmentSponsor } from '../data/development-sponsors'
 import { getBoardSummary } from '../world/board'
@@ -26,7 +27,8 @@ import { formatEuros } from './money-format'
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
 /** `jobs` (format 69): the job market on the unemployed desk. */
 /** `bid` (format 78): a club's offer for one of your players, answered in the reading pane. */
-export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract' | 'jobs' | 'bid'
+/** `national` (format 80): the national team page (or Competitions > National teams without a national job). */
+export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract' | 'jobs' | 'bid' | 'national'
 export interface InboxItem {
   id: string
   date: string
@@ -40,6 +42,7 @@ export interface InboxItem {
   /** `bid` items: the offer and whether it belongs to the season's or the offseason's market. */
   offerId?: string
   market?: 'season' | 'offseason'
+  /** `national` job offers (format 80): the offer answered in the reading pane uses `offerId`. */
 }
 
 const money = (cents: number) => formatEuros(cents)
@@ -157,6 +160,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   items.push(...bidInboxItems(season))
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })
 
+  items.push(...nationalInboxItems(season))
   return items.sort((a, b) => Number(b.needsAction) - Number(a.needsAction) || compare(b.date, a.date) || compare(a.id, b.id))
 }
 
@@ -202,7 +206,7 @@ function careerMoveItems(season: SeasonState): InboxItem[] {
 /** Career-3 (format 69): the inbox of a manager without a club: the career's moves and every job open now. */
 function unemployedInboxItems(season: SeasonState): InboxItem[] {
   const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? id
-  const items = careerMoveItems(season), market = jobMarket(season)
+  const items = [...careerMoveItems(season), ...nationalInboxItems(season)], market = jobMarket(season)
   for (const vacancy of market?.vacancies ?? []) {
     const opened = vacancy.opened === 'season' ? `${name(vacancy.clubId)}'s board replaced its coach after matchday ${vacancy.round}; an interim coach has the team.` : `${name(vacancy.clubId)}'s season ended Under pressure, so its board is replacing its coach.`
     const until = vacancy.openUntil ? `The job stays open until ${medicalDate(vacancy.openUntil)}.` : 'The job stays open through this offseason.'

@@ -605,3 +605,51 @@ export function rolloverNational(state: SeasonState): SeasonNational {
   const groups = seededGroups({ ...next, national });
   return { ...national, competitions: [...national.competitions.filter(item => item.seasonNumber >= seasonNumber), qualifierCompetition(seasonNumber + 1, groups)] };
 }
+
+/** One of a club's players on national duty in a window: his team and, once played, his minutes over the window. */
+export interface ClubCallUp { playerId: string; teamId: string; minutes: number | null }
+export interface ClubCallUps { seasonNumber: number; window: 1 | 2; saturday: string; played: boolean; players: ClubCallUp[] }
+
+/** A club's players in a window's squads (`played`: from the games; otherwise as the coaches would pick them now). */
+export function clubWindowCallUps(state: SeasonState, clubId: string, seasonNumber: number, window: 1 | 2): ClubCallUps | null {
+  const national = state.national, club = state.clubs.find(item => item.id === clubId);
+  const competition = national?.competitions.find(item => item.seasonNumber === seasonNumber && item.kind === 'qualifiers');
+  if (!national || !club || !competition) return null;
+  const own = new Set(club.players.map(player => player.id)), fixtures = competition.fixtures.filter(fixture => fixture.window === window);
+  const played = fixtures.every(fixture => fixture.result), players = new Map<string, ClubCallUp>();
+  if (fixtures.some(fixture => fixture.result)) {
+    for (const fixture of fixtures) if (fixture.result) for (const side of SIDES) for (const id of fixture.result.squads[side]) {
+      if (!own.has(id)) continue;
+      const teamId = side === 'home' ? fixture.homeTeamId : fixture.awayTeamId, entry = players.get(id) ?? { playerId: id, teamId, minutes: 0 };
+      players.set(id, { ...entry, minutes: (entry.minutes ?? 0) + (fixture.result.minutes[id] ?? 0) });
+    }
+  } else for (const [teamId, squad] of projectedNationalSquads(state, seasonNumber, window)) for (const item of squad) if (own.has(item.player.id)) players.set(item.player.id, { playerId: item.player.id, teamId, minutes: null });
+  return { seasonNumber, window, saturday: nationalWindowSaturday(seasonNumber, window), played, players: [...players.values()] };
+}
+
+/** The window of this week or the next two (call-ups are shown at the club then), or null outside them. */
+export function upcomingNationalWindow(state: Pick<SeasonState, 'national' | 'seasonNumber' | 'date' | 'status'>): { seasonNumber: number; window: 1 | 2; saturday: string } | null {
+  if (!state.national || state.status !== 'active') return null;
+  for (const window of [1, 2] as const) {
+    const saturday = nationalWindowSaturday(state.seasonNumber, window);
+    if (saturday > state.date && saturday <= addCalendarDays(state.date, 14)) return { seasonNumber: state.seasonNumber, window, saturday };
+  }
+  return null;
+}
+
+/** The next unplayed window or tournament game day of the season, for the screens (null once the season's games are played). */
+export function nextNationalDate(state: Pick<SeasonState, 'national' | 'seasonNumber'>): string | null {
+  const dates = (state.national?.competitions ?? []).filter(item => item.seasonNumber === state.seasonNumber).flatMap(item => item.fixtures).filter(fixture => !fixture.result).map(fixture => fixture.date).sort();
+  return dates[0] ?? null;
+}
+
+/** A national squad player's name and club for the screens: club players by their club, generated players by their team. */
+export function nationalPlayerInfo(state: SeasonState, playerId: string): { name: string; clubId: string | null; generated: boolean } {
+  if (isGeneratedNationalPlayer(playerId)) {
+    const match = /^(nation-[a-z]+)-generated-(\d+)$/u.exec(playerId), team = match ? state.national?.teams.find(item => item.id === match[1]) : undefined;
+    return { name: team ? generatedNationalPlayer(team, Number(match![2]), state.seed).name : 'Generated player', clubId: null, generated: true };
+  }
+  for (const club of state.clubs) { const player = club.players.find(item => item.id === playerId); if (player) return { name: player.name, clubId: club.id, generated: false }; }
+  for (const club of worldOf(state).clubs) { const player = club.players.find(item => item.id === playerId); if (player) return { name: player.name, clubId: club.id, generated: false }; }
+  return { name: 'Unknown player', clubId: null, generated: false };
+}

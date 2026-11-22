@@ -9,7 +9,8 @@ import { getActiveCareerPlayers, getCareerPlayers } from './player-catalog';
 import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE, playerContractQuoter, quotePlayerContract } from './employment-policy';
 import { commitPlayerOffer } from './employment';
 import { commitContractBuyout } from './buyouts';
-import { scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
+import { coachRecruitmentRating, scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
+import { clubStyleFit } from './head-coaches';
 import { evaluateNegotiation } from './negotiations-policy';
 import { getApplicableReleaseClause, offerOptionsReason } from './release-clauses';
 import { processTransferPayments } from './transfer-payments';
@@ -240,10 +241,12 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
       // Step 3.7: each candidate's rating and the club's own players are worked out once, not in every comparison, and one
       // club quoter serves every candidate of this unchanged state (same values, same order, same first offerable player).
       const own = new Set(club.players.map(player => player.id)), ratings = new Map<string, number>();
+      // Format 86: a club whose head coach steers prefers players who fit his style (`clubStyleFit`).
+      const fit = clubStyleFit(next, club.id), fitted = fit ? coachRecruitmentRating(next, club.id, fit) : null;
       const rating = (id: string) => {
         const known = ratings.get(id);
         if (known !== undefined) return known;
-        const value: number = next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, id) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, id) : playerInList(getCareerPlayers(next), id)!.attributes).reduce((total, skill) => total + skill, 0);
+        const value: number = fitted ? fitted(id) : next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, id) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, id) : playerInList(getCareerPlayers(next), id)!.attributes).reduce((total, skill) => total + skill, 0);
         ratings.set(id, value);
         return value;
       };
@@ -260,7 +263,7 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
       const sold = next.employment.transfers.some(transfer => transfer.seasonNumber === next.seasonNumber && transfer.fromClubId === club.id);
       const triedPaidTarget = getMarketWindow(next)!.offers.some(offer => offer.clubId === club.id && offer.transfer);
       if (sold && !triedPaidTarget && !finalProposalDay) {
-        const assessed = (id: string) => next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, id) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, id) : playerInList(getCareerPlayers(next), id)!.attributes).reduce((sum, value) => sum + value, 0);
+        const assessed = (id: string) => fitted ? rating(id) : next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, id) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, id) : playerInList(getCareerPlayers(next), id)!.attributes).reduce((sum, value) => sum + value, 0);
         const approach = (id: string): { fee: number; options: ContractOfferOptions } => {
           const asking = requiredTransferFee(next, id), clause = getApplicableReleaseClause(next, id);
           return clause.canTrigger && clause.fee! <= asking && quoteTransferOffer(next, id, wage(id), 1, clause.fee!, club.id, 'upfront', { transferMode: 'release-clause' }).canOffer ? { fee: clause.fee!, options: { transferMode: 'release-clause' } } : { fee: asking, options: {} };

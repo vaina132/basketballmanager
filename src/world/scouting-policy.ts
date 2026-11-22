@@ -1,7 +1,7 @@
 import { financeLedgerCount } from './finance-ledger';
 import type { PlayerKnowledge, ScoutingAssignmentQuote, ScoutingRanges, ScoutingReview } from '../domain/scouting';
 import type { SeasonState } from '../domain/season';
-import type { ExtraAttributes, PlayerAttributes } from '../domain/types';
+import type { ExtraAttributes, PlayerAttributes, SkillAttributes } from '../domain/types';
 import { EXTRA_ATTRIBUTES, hasExtraAttributes } from './extra-attributes';
 import { applyAgingAttributes, isPlayerRetired } from './lifecycle-policy';
 import { getCareerPlayer, getCareerPlayers, type CareerPlayerContext } from './player-catalog';
@@ -245,4 +245,25 @@ export function scoutingRecruitmentRating(state: SeasonState, clubId: string, pl
   if (knowledge.attributes) return SCOUTING_ATTRIBUTES.reduce((sum, attribute) => sum + knowledge.attributes![attribute], 0);
   if (knowledge.ranges) return SCOUTING_ATTRIBUTES.reduce((sum, attribute) => sum + (knowledge.ranges![attribute].min + knowledge.ranges![attribute].max) / 2, 0);
   return 10.5 * SCOUTING_ATTRIBUTES.length;
+}
+
+/**
+ * Format 86: a computer club's rating of a player for a signing, with how well he fits its head coach's style
+ * (`clubStyleFit`): the usual rating (`scoutingRecruitmentRating`, or the summed skills without scouting) plus the fit,
+ * read from what the club knows of each skill. Without a steering coach it is the usual rating.
+ */
+export function coachRecruitmentRating(state: SeasonState, clubId: string, fit: ((playerId: string, skill: (key: keyof SkillAttributes) => number) => number) | null): (playerId: string) => number {
+  const known = new Map<string, number>();
+  return playerId => {
+    const cached = known.get(playerId);
+    if (cached !== undefined) return cached;
+    const usual = state.scouting.enabledSince ? scoutingRecruitmentRating(state, clubId, playerId) : Object.values(state.lifecycle?.enabledSince ? scoutingActualAttributes(state, playerId) : getCareerPlayer(state, playerId).attributes).reduce((sum, value) => sum + value, 0);
+    if (!fit) { known.set(playerId, usual); return usual; }
+    const knowledge = state.scouting.enabledSince ? getPlayerKnowledge(state, playerId, clubId) : null;
+    const actual = !state.scouting.enabledSince ? (state.lifecycle?.enabledSince ? scoutingActualAttributes(state, playerId) : getCareerPlayer(state, playerId).attributes) : null;
+    const skill = (key: keyof SkillAttributes) => actual ? actual[key] : knowledge!.attributes ? knowledge!.attributes[key] : knowledge!.ranges ? (knowledge!.ranges[key].min + knowledge!.ranges[key].max) / 2 : 10.5;
+    const rating = usual + fit(playerId, skill);
+    known.set(playerId, rating);
+    return rating;
+  };
 }

@@ -743,6 +743,8 @@ export interface FixtureMatchOptions {
   playModel?: PlayModel;
   /** With the play model: the sides run by a computer coach (timeouts in a bad run). */
   computerCoach?: readonly Side[];
+  /** Format 85 (new careers): a game at one venue, played without home-court advantage. Omit for a home game. */
+  neutralVenue?: true;
 }
 
 function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team, away: Team, options: FixtureMatchOptions = {}): MatchState {
@@ -773,6 +775,7 @@ function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team,
   const risks = Object.entries(options.injuryRisk ?? {}).filter(([, risk]) => Object.keys(risk).length);
   if (risks.length) state.injuryRisk = Object.fromEntries(risks.map(([id, risk]) => [id, { ...risk }]));
   if (options.playModel) { state.playModel = options.playModel; state.computerCoach = SIDES.filter(side => options.computerCoach?.includes(side)); }
+  if (options.neutralVenue) state.neutralVenue = true;
   state.possession = draw(state) < 0.5 ? 'home' : 'away'; state.possessionArrow = other(state.possession);
   // The development league retains the existing two-player default threshold.
   // No live action or fabricated court exposure precedes a pre-match default.
@@ -826,6 +829,7 @@ export function createFixtureMatch(seed: number, home: Team, away: Team, options
     }
   }
   if (options.injuryMode !== undefined && !['standard', 'reduced', 'off'].includes(options.injuryMode)) throw new Error('Choose a valid fixture injury setting.');
+  if (options.neutralVenue !== undefined && options.neutralVenue !== true) throw new Error('A neutral venue is marked true or omitted.');
   if (options.playModel !== undefined && options.playModel !== 'plays-2' && options.playModel !== 'plays-3') throw new Error('Choose a supported play model.');
   if (options.computerCoach !== undefined && (!options.playModel || !Array.isArray(options.computerCoach) || options.computerCoach.some(side => side !== 'home' && side !== 'away'))) throw new Error('Computer coaches need the play model and must name teams.');
   if (options.slots !== undefined) {

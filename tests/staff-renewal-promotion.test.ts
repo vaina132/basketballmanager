@@ -29,7 +29,8 @@ const play = (state: SeasonState) => advanceSeason(state.activeMatch && state.ac
 describe('staff renewals when promoted clubs join (live season-change crash)', () => {
   it('rolls a Greek real-club career over with the manager\'s coach from the end of the local pool, passing the strict check', () => {
     expect(lowerDivisionClubIds(world).size).toBeGreaterThan(0);
-    let state = setEmploymentDelegation(createSeason({ seed: 7, world, managedClubId: 'gbl-1', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true);
+    // Careers before format 85 (no `clubCountries`) give promoted clubs no country, so their local pools shrink.
+    let state = setEmploymentDelegation(createSeason({ seed: 7, world, managedClubId: 'gbl-1', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, clubCountries: false }), true);
     expect(state.coaching.model).toBe('coaching-4');
     // The coaches the market loses when one Greek club of the full world is counted without a country.
     const scope = staffMarketWorld(state);

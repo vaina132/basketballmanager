@@ -21,7 +21,7 @@ import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
 import type { WorldContext } from '../domain/world';
-import { clubFinanceDefinition, seasonRounds, worldOf } from './career-world';
+import { clubFinanceDefinition, playsAtNeutralVenue, seasonRounds, worldOf } from './career-world';
 import { getPayrollReserve, getSpendableCash } from './payroll-policy';
 import { getTransferInstallmentRemaining, getTransferPaymentSchedule, getTransferPaymentSummary, payTransferInstallment } from './transfer-payments';
 import { quoteContractBuyout } from './buyouts';
@@ -394,6 +394,8 @@ export function processFinanceRound(state: SeasonState): SeasonState {
   for (const fixture of fixtures) {
     // Step 3.5b: a background side's home European game earns the full world nothing.
     if (!Object.hasOwn(state.finance.roundPrices, fixture.homeClubId)) continue;
+    // Format 85: a game at one venue earns neither club a gate (the organiser keeps it).
+    if (playsAtNeutralVenue(state, fixture)) continue;
     const gate = forecastGate(state, fixture, state.finance.roundPrices[fixture.homeClubId]!);
     next = book(next, fixture.homeClubId, 'tickets', gate.revenue, `tickets-${fixture.id}`, { fixtureId: fixture.id, price: gate.price, attendance: gate.attendance, ...(state.facilities?.enabledSince ? { capacity: gate.capacity } : {}) });
   }

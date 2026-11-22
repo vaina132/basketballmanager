@@ -248,7 +248,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     'pendingSubstitutions', 'requiredSubstitutions', 'freeThrows', 'stoppage', 'substitutionLocks',
     'autoSubstitutions', 'injuryMode', 'injuries', 'courtSeconds', 'result',
     ...(modern ? ['possessionPlay'] : []),
-  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk', 'slots', 'startingSlots', 'playModel', 'computerCoach'] : []);
+  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk', 'slots', 'startingSlots', 'playModel', 'computerCoach', 'neutralVenue'] : []);
   if (state.schemaVersion !== 2 || !['rules-2', 'possession-3'].includes(state.engineVersion as string)) fail('state', 'uses an unsupported schema or engine version');
   // Format 79: the richer play model, with the sides a computer coach runs.
   // Format 81: the richer play model with the dead balls of a real game (`plays-3`).
@@ -257,6 +257,8 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     const coached = state.computerCoach;
     if (!Object.hasOwn(state, 'playModel') || !Array.isArray(coached) || coached.length > 2 || new Set(coached).size !== coached.length || coached.some(side => !SIDES.includes(side as Side))) fail('computerCoach', 'must name distinct teams of a match with the play model');
   } else if (Object.hasOwn(state, 'playModel')) fail('computerCoach', 'must be recorded with the play model');
+  // Format 85: a game at one venue has no home-court advantage.
+  if (Object.hasOwn(state, 'neutralVenue') && state.neutralVenue !== true) fail('neutralVenue', 'must be true when recorded');
   number(state.seed, 'seed', 0, 0xffff_ffff);
   number(state.rngState, 'rngState', 1, 0xffff_ffff);
   const period = number(state.period, 'period', 1, MAX_MATCH_PERIODS);

@@ -9,7 +9,7 @@ import { NATIONAL_TEAMS } from '../data/national-teams';
 import { countryName, nameCapacity, NAME_COUNTRIES } from '../data/people-names';
 import { COACH_LEVELS, coachAge, coachHash, coachOverall, estimateCoach, NO_TITLES } from './coach-ratings';
 import { careerPointKey } from './career-rules';
-import { seasonRounds, worldOf } from './career-world';
+import { clubCountry, seasonRounds, worldOf } from './career-world';
 import { overallRating } from './overall-rating';
 import { managedClubFor } from './career';
 import { seasonVerdict } from './board-consequences';
@@ -242,7 +242,8 @@ function hireFromMarket(world: CareerWorld, pool: CoachWorld, free: readonly str
   const id = `coach-hire-${restart.clubId}-s${restart.seasonNumber}-r${restart.round}-${restart.phase}`;
   if (!pool.coaches.has(id)) {
     const taken = new Set([...pool.coaches.values()].map(coach => coach.name)), key = `hire|${id}`;
-    const country = world.domesticLeagues?.find(league => league.clubIds.includes(restart.clubId))?.country ?? null;
+    // Format 85: a promoted next-division club has its country (`clubCountry`); older careers find only opening leagues.
+    const country = clubCountry(world, restart.clubId);
     const { name, nationality } = generatedName(country, key, taken);
     (pool.coaches as Map<string, HeadCoach>).set(id, estimateCoach(id, { name, born: generatedBorn(key, world.startDate), nationality, since: null, titles: NO_TITLES }, worldClubLevel(world, restart.clubId), world.startDate, true));
   }

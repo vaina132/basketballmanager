@@ -2,6 +2,7 @@ import type { SeasonState } from '../domain/season'
 import type { MatchEvent, Side } from '../domain/types'
 import { forecastGate } from '../world/finance'
 import { financeLedgerTicket } from '../world/finance-ledger'
+import { playsAtNeutralVenue } from '../world/career-world'
 import type { Animation } from './choreography'
 import { project, rgb } from './projection'
 
@@ -27,7 +28,8 @@ export function crowdDensity(gate: Gate | null | undefined): number | null {
 export function matchGate(season: SeasonState): Gate | null {
   if (!season.activeMatch || !season.finance?.enabledSince) return null
   const fixture = season.fixtures.find(item => item.id === season.activeFixtureId)
-  if (!fixture) return null
+  // Format 85: a game at one venue has no home gate to read; the stands show the usual fill.
+  if (!fixture || playsAtNeutralVenue(season, fixture)) return null
   try {
     const ticket = financeLedgerTicket(season.finance, fixture.id)
     if (ticket) return { attendance: ticket.attendance, capacity: ticket.capacity ?? forecastGate(season, fixture, ticket.price).capacity }

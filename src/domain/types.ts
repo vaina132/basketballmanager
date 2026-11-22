@@ -151,6 +151,8 @@ export interface MatchState {
   playModel?: PlayModel;
   /** Format 79, with the play model: the sides run by a computer coach, who call timeouts in a bad run. */
   computerCoach?: Side[];
+  /** Format 85: a game at one venue (Primera FEB's final stage, Final Fours, BCL qualification): no home-court advantage. */
+  neutralVenue?: true;
   /** Frozen when the career round is prepared; later conversations never rewrite a match. */
   morale?: { model: 'morale-1'; eventCount: number; values: Record<string, number> };
   seed: number;

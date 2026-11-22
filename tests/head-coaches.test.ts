@@ -154,7 +154,7 @@ describe('real head coaches (format 82)', () => {
     expect(() => parseSeason(JSON.stringify(forged))).toThrow(/coaches/);
     const older = JSON.parse(serializeSeason(played));
     older.formatVersion = 80; older.state.schemaVersion = 80;
-    delete older.state.coaching.fullStaff; // format 84's staffing rule, refused on its own in a format-80 save
+    delete older.state.coaching.fullStaff; // format 84's staffing rule, refused on its own in a format-80 save delete older.state.world.neutralVenues; delete older.state.world.nextDivisionCountries;
     expect(() => parseSeason(JSON.stringify(older))).toThrow(/format 82/);
   }, 600_000);
 

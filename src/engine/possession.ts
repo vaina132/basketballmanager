@@ -139,7 +139,7 @@ export function shotContext(state: MatchState, play: PossessionPlay): { defender
   const defense = (defender.attributes.defense - 10) * SHOT_MAKING.defense;
   const height = clamp((defender.heightCm - shooter.heightCm) / 1000, -.025, .025) * (value === 2 ? 1 : .5);
   const range = value === 3 ? Math.max(0, distance - 7.2) * .025 : Math.max(0, distance - 2) * .025;
-  const home = play.offense === 'home' ? HOME_COURT_MAKE_BONUS : -HOME_COURT_MAKE_BONUS;
+  const home = state.neutralVenue ? 0 : play.offense === 'home' ? HOME_COURT_MAKE_BONUS : -HOME_COURT_MAKE_BONUS;
   const lead = clamp(state.score[play.offense] - state.score[play.offense === 'home' ? 'away' : 'home'], -SCORE_EFFECT.cap, SCORE_EFFECT.cap);
   const base = value === 3 ? SHOT_MAKING.threeBase + skill * SHOT_MAKING.threeSkill : SHOT_MAKING.twoBase + skill * SHOT_MAKING.twoSkill;
   const scoreEffect = lead * SCORE_EFFECT.perPoint * (state.period >= 4 ? SCORE_EFFECT.fourthQuarter : 1);

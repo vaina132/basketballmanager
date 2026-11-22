@@ -43,8 +43,8 @@ export function SeasonCalendar({ season }: { season: SeasonState }) {
   const shown = ownOnly ? weeks.filter(week => week.days.some(day => day.own)) : weeks
   return <div className="season-workspace season-calendar">
     <section className="season-fixtures panel" aria-labelledby="calendar-title">
-      <header className="season-panel-heading season-fixtures-heading"><h2 id="calendar-title">Season calendar</h2><label className="season-own-filter"><input type="checkbox" checked={ownOnly} onChange={event => setOwnOnly(event.target.checked)} /> Weeks with your games only</label></header>
-      <p className="muted">Domestic games are on Saturdays; European games are midweek. Days still reserved for playoffs or knockout rounds are used only if those games are needed.</p>
+      <header className="season-panel-heading season-fixtures-heading"><h2 id="calendar-title">Weeks</h2><label className="season-own-filter"><input type="checkbox" checked={ownOnly} onChange={event => setOwnOnly(event.target.checked)} /> Weeks with your games only</label></header>
+      <p className="muted">League games on Saturdays, European games midweek. Playoff days are used only if needed.</p>
       <div className="season-table-scroll"><table className="season-fixtures-table calendar-table"><thead><tr><th scope="col">Week</th><th scope="col">Day</th><th scope="col">Competitions</th><th scope="col">Your game</th></tr></thead>
         <tbody>{shown.flatMap(week => (week.days.length ? week.days : [{ date: week.saturday, competitions: [], own: undefined, reserved: [] }]).map((day, index) => {
           const own = day.own, opponent = own ? club(own.homeClubId === managedId ? own.awayClubId : own.homeClubId) : undefined

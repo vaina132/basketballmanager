@@ -98,7 +98,7 @@ export function SquadContracts({ season, disabled, onEnable, onDelegation, onOff
 
   return <div className="transfers-workspace squad-contracts" id="squad-contracts">
     <section className="transfers-overview panel" aria-labelledby="squad-contracts-heading">
-      <header className="transfers-heading"><div><h2 id="squad-contracts-heading" tabIndex={-1}>{club.name} · Contracts</h2><span>{seasonLabel(season.seasonNumber)} · renewals, contract ends and requests</span></div><button className="button small" onClick={onOpenTransfers} disabled={disabled}>Find players<Icon name="search" size={14} /></button></header>
+      <header className="transfers-heading"><div><h2 id="squad-contracts-heading" tabIndex={-1}>Contracts</h2><span>{seasonLabel(season.seasonNumber)}</span></div><button className="button small" onClick={onOpenTransfers} disabled={disabled}>Find players<Icon name="search" size={14} /></button></header>
       {hasNextYear && <div className="transfers-squad-plan"><div className="transfers-squad-count"><Icon name="people" size={24} /><div><strong data-next-contract-roster={summary.rosterSize}>{summary.rosterSize}<small> / {MIN_ROSTER_SIZE}–{clubRosterLimit(season)}</small></strong><span>Next season's squad</span></div></div><div className="transfers-squad-slots" aria-hidden="true">{Array.from({ length: Math.max(MIN_ROSTER_SIZE, summary.rosterSize + summary.reservedRosterSize) }, (_, index) => {
         const contract = summary.contracts[index]
         const pending = nextSquadOffers[index - summary.contracts.length]

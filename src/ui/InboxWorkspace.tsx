@@ -160,7 +160,7 @@ export function InboxWorkspace({ season, busy = false, onAnswerPress, onOpen, on
   const player = selected?.playerId ? season.clubs.find(club => club.id === season.managedClubId)?.players.find(member => member.id === selected.playerId) : undefined
   return <div className="inbox-workspace" data-inbox-opened={opened ? 'true' : 'false'}>
     <section className="panel inbox-panel" aria-labelledby="inbox-title">
-      <header className="inbox-heading"><h2 id="inbox-title"><Icon name="mail" size={18} />Inbox</h2><span data-inbox-waiting={waiting}>{waiting ? `${waiting} ${waiting === 1 ? 'needs' : 'need'} action · ` : ''}{items.length} {items.length === 1 ? 'message' : 'messages'}{unread ? ` · ${unread} unread` : ''}</span></header>
+      <header className="inbox-heading"><h2 id="inbox-title"><Icon name="mail" size={18} />Messages</h2><span data-inbox-waiting={waiting}>{waiting ? `${waiting} ${waiting === 1 ? 'needs' : 'need'} action · ` : ''}{items.length} {items.length === 1 ? 'message' : 'messages'}{unread ? ` · ${unread} unread` : ''}</span></header>
       <div className="inbox-panes">
         <div className="inbox-list-pane">
           <div className="inbox-filters" role="group" aria-label="Filter messages">{FILTERS.map(option => <button key={option.id} className={filter === option.id ? 'selected' : ''} aria-pressed={filter === option.id} onClick={() => setFilter(option.id)}>{option.label}{option.id === 'unread' && unread ? ` (${unread})` : ''}</button>)}{unread > 0 && <button className="inbox-mark-read" onClick={() => markRead(items.map(item => item.id))} disabled={busy}>Mark all read</button>}</div>

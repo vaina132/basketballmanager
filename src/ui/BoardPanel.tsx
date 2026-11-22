@@ -256,7 +256,7 @@ export function BoardPanel({ season, busy = false, onEnable, onEnableFunding, on
   const sportingConcern = summary.sportingStatus === 'behind' || summary.sportingStatus === 'missed'
   const sportingGood = summary.sportingStatus === 'on-track' || summary.sportingStatus === 'met'
   return <section className="board-panel panel" aria-labelledby="board-title">
-    <header className="board-heading"><h2 id="board-title"><Icon name="shield" size={18} />Board</h2><span>{seasonLabel(season.seasonNumber)}</span></header>
+    <header className="board-heading"><h2 id="board-title"><Icon name="shield" size={18} />Confidence</h2><span>{seasonLabel(season.seasonNumber)}</span></header>
     {!summary.enabled ? <div className="board-enable"><Icon name="shield" size={28} /><div><strong>Set your board objectives</strong><p>Record a results target and financial expectations. {season.status === 'complete' || season.round === seasonRounds(season) ? 'Objectives start next season.' : 'Reviews begin after the current matchday.'}</p></div><button id="enable-board" className="button" onClick={onEnable} disabled={busy}>Enable board reviews</button></div> : <>
       <div className="board-summary">
         <div className="board-confidence" data-board-confidence={summary.confidence}><div><strong>{summary.confidenceLabel}</strong><span>{summary.confidence}<small> / 100</small></span></div><meter min={0} max={100} value={summary.confidence} aria-label={`Board confidence: ${summary.confidence} out of 100, ${summary.confidenceLabel}`} /><small>Board confidence</small></div>

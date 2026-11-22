@@ -10,7 +10,8 @@ export function showsBudgetBar(page: Page, squadView?: string): boolean {
 }
 export interface NavItem { id: Page; label: string; icon: IconName }
 
-export const PAGE_NAMES: Record<Page, string> = { home: "Manager's desk", inbox: 'Inbox', squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', academy: 'Youth academy', medical: 'Medical & rehabilitation', staff: 'Club staff', club: 'Club', board: 'Board', transfers: 'Transfers', calendar: 'Season calendar', europe: 'European competitions' }
+/** Page titles use the menu's own words (simplify pass, owner, 22 November 2026). */
+export const PAGE_NAMES: Record<Page, string> = { home: 'Desk', inbox: 'Inbox', squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', academy: 'Academy', medical: 'Medical', staff: 'Staff', club: 'Club', board: 'Board', transfers: 'Transfers', calendar: 'Calendar', europe: 'Europe' }
 
 const ITEMS: Record<Page, NavItem> = {
   home: { id: 'home', label: 'Desk', icon: 'home' },

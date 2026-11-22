@@ -37,7 +37,7 @@ export function PayrollWorkspace({ season, busy = false, onEnable, onOpenClub, o
 
   return <div className={`payroll-workspace${enabled ? ' payroll-enabled' : ''}`}>
     <section className="payroll-overview panel" aria-label="Wage commitments">
-      <header className="payroll-heading"><div><h2 id="payroll-heading" tabIndex={-1}>{club.name}</h2><span>{seasonLabel(season.seasonNumber)} · Player wages</span></div><button className="button small" onClick={onOpenClub} disabled={busy}>Open Club<Icon name="chevron" size={14} /></button></header>
+      <header className="payroll-heading"><div><h2 id="payroll-heading" tabIndex={-1}>Player wages</h2><span>{seasonLabel(season.seasonNumber)}</span></div><button className="button small" onClick={onOpenClub} disabled={busy}>Open Club<Icon name="chevron" size={14} /></button></header>
       {enabled && <dl className="payroll-summary"><div><dt>Cash</dt><dd data-payroll-cash={balance.cash}>{money(balance.cash)}</dd></div><div><dt>Wages still to pay</dt><dd data-payroll-reserve={summary.futureCommitted}>{money(summary.futureCommitted)}</dd></div><div><dt>Next weekly wages</dt><dd data-payroll-next={summary.nextInstallment}>{money(summary.nextInstallment)}</dd></div></dl>}
     </section>
 

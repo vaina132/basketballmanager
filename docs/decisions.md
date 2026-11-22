@@ -587,3 +587,7 @@ National teams, later on 22 November 2026: national games record injuries with t
 ## Sales model (owner decision, 22 November 2026)
 
 Free play for the first half of the first season, then a one-off payment to continue (price to be decided), sold through Gumroad. Not built yet; licensing of names, faces, photos and logos must be settled before any sale (HANDOVER, "Before release").
+
+## Rating balance (owner approved, 22 November 2026)
+
+`position-balance-1` in `supabase/functions/publish-starter-pack/rating-balance.ts`: the publishing function lines up abilities by position (a player's percentile within his position in the reference pool of 300+ minutes at top-division or European clubs sets his overall level on one ladder shared by all positions, and his whole skill profile moves with it, so each skill keeps its position's real profile for the match engine) and blends ratings resting on few minutes with the average player of the same position in the same league (weight m/(m+300), full from 900 minutes). The game's club-level fairness below 600 minutes still applies at career start. No game-side formula changed; old careers keep their world. Published as world-11.

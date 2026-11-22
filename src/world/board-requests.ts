@@ -21,8 +21,8 @@ function hash(seed: number, key: string): number {
   return value;
 }
 
-type RequestState = Pick<SeasonState, 'board' | 'seed' | 'seasonNumber' | 'round' | 'date' | 'rosters' | 'fixtures' | 'finance' | 'injuries'> & Partial<Pick<SeasonState, 'physio' | 'recruitment' | 'world' | 'dataPackId'>>;
-type RequestTerms = Omit<BoardRequest, 'id' | 'clubId' | 'seasonNumber' | 'round' | 'date' | 'deadlineRound' | 'outcome' | 'resolvedRound'>;
+export type RequestState = Pick<SeasonState, 'board' | 'seed' | 'seasonNumber' | 'round' | 'date' | 'rosters' | 'fixtures' | 'finance' | 'injuries'> & Partial<Pick<SeasonState, 'physio' | 'recruitment' | 'world' | 'dataPackId'>>;
+export type RequestTerms = Omit<BoardRequest, 'id' | 'clubId' | 'seasonNumber' | 'round' | 'date' | 'deadlineRound' | 'outcome' | 'resolvedRound'>;
 
 const clubGames = (state: Pick<SeasonState, 'fixtures'>, clubId: string, fromRound: number, toRound: number) => state.fixtures.filter(fixture => isRegularFixture(fixture) && fixture.result && fixture.round >= fromRound && fixture.round <= toRound && [fixture.homeClubId, fixture.awayClubId].includes(clubId));
 /** Seconds a player has played for the club in counted games between two weeks. */
@@ -31,7 +31,7 @@ export function requestSeconds(state: Pick<SeasonState, 'fixtures'>, clubId: str
 }
 
 /** Whether a request is met at the state's review, or withdrawn because its subject left the club. */
-function requestStatus(state: RequestState, request: BoardRequest): 'met' | 'withdrawn' | null {
+export function requestStatus(state: RequestState, request: BoardRequest): 'met' | 'withdrawn' | null {
   const roster = rosterForRound(state.rosters, request.clubId, state.round);
   if (request.kind === 'raise-ticket-price') {
     const plan = state.finance.plans[request.clubId];
@@ -57,16 +57,20 @@ export function resolveBoardRequests(state: RequestState): BoardRequest[] {
 
 const POSITIONS: readonly Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 
-/** The requests the president could make at this review, in a fixed order. */
-function requestCandidates(state: RequestState, clubId: string, deadlineRound: number): RequestTerms[] {
-  const rules = PRESIDENT_RULES.requests, candidates: RequestTerms[] = [];
+/** The ticket-price request the president could make at this review (it reads the club's ticket plan of the moment). */
+function ticketCandidate(state: RequestState, clubId: string): RequestTerms[] {
   const plan = state.finance.enabledSince ? state.finance.plans[clubId] : undefined;
-  if (plan) {
-    // Raise the home ticket price by a tenth (whole euros), within the club's maximum.
-    const maximum = maxTicketPriceFor(state, clubId), current = plan.price;
-    const target = Math.min(maximum, Math.ceil(current * (100 + rules.ticketRaisePercent) / 100 / TICKET_PRICE_STEP) * TICKET_PRICE_STEP);
-    if (target > current) candidates.push({ kind: 'raise-ticket-price', ticketPrice: target });
-  }
+  if (!plan) return [];
+  // Raise the home ticket price by a tenth (whole euros), within the club's maximum.
+  const maximum = maxTicketPriceFor(state, clubId), current = plan.price;
+  const target = Math.min(maximum, Math.ceil(current * (100 + PRESIDENT_RULES.requests.ticketRaisePercent) / 100 / TICKET_PRICE_STEP) * TICKET_PRICE_STEP);
+  return target > current ? [{ kind: 'raise-ticket-price', ticketPrice: target }] : [];
+}
+
+
+/** The requests that read only registrations, results and injuries, in a fixed order (after the ticket request). */
+function squadCandidates(state: RequestState, clubId: string, deadlineRound: number): RequestTerms[] {
+  const rules = PRESIDENT_RULES.requests, candidates: RequestTerms[] = [];
   const roster = rosterForRound(state.rosters, clubId, state.round);
   if (state.recruitment?.enabledSince && deadlineRound < seasonRounds(state) && roster.players.length < clubRosterLimit(state)) {
     // Sign a player for the thinnest position (fewest registered players; ties in court order).
@@ -86,17 +90,31 @@ function requestCandidates(state: RequestState, clubId: string, deadlineRound: n
  * decides; reading screens never draws.
  */
 export function issueBoardRequest(state: RequestState, clubId: string, interference: PresidentTraitLevel): BoardRequest[] {
+  const requests = state.board.requests ?? [], draw = requestDraw(state, clubId, interference);
+  if (!draw) return requests;
+  const candidates = [...ticketCandidate(state, clubId), ...draw.squad];
+  if (!candidates.length) return requests;
+  const pick = candidates[draw.kindHash % candidates.length]!;
+  return [...requests, { id: `board-request-${requests.length + 1}`, clubId, ...pick, seasonNumber: state.seasonNumber, round: state.round, date: state.date, deadlineRound: draw.deadlineRound, outcome: 'open', resolvedRound: null }];
+}
+
+/** A review's request draw: the seeded kind draw and the candidates that read only the squad, results and injuries. */
+export interface RequestDraw { deadlineRound: number; kindHash: number; squad: RequestTerms[] }
+
+/**
+ * Whether the president asks at this review (null when the rules or the seeded draw say no), with what the save check
+ * can rebuild (22 November 2026). The ticket request reads the club's ticket plan of that moment, which the save does
+ * not journal, so the caller decides whether a ticket request was possible.
+ */
+export function requestDraw(state: RequestState, clubId: string, interference: PresidentTraitLevel): RequestDraw | null {
   const rules = PRESIDENT_RULES.requests, requests = state.board.requests ?? [];
   const deadlineRound = state.round + rules.deadlineWeeks;
   const ownSeason = requests.filter(request => request.clubId === clubId && request.seasonNumber === state.seasonNumber);
-  if (state.round < rules.firstRound || deadlineRound > seasonRounds(state) || ownSeason.length >= rules.maxPerSeason || requests.some(request => request.outcome === 'open')) return requests;
+  if (state.round < rules.firstRound || deadlineRound > seasonRounds(state) || ownSeason.length >= rules.maxPerSeason || requests.some(request => request.outcome === 'open')) return null;
   const chance = rules.weeklyChance[level(interference)]!;
-  if (hash(state.seed, `president-request|${state.seasonNumber}|${state.round}|${clubId}`) % 10_000 >= Math.round(chance * 10_000)) return requests;
-  if (!state.fixtures.some(fixture => isRegularFixture(fixture) && !fixture.result && fixture.round > state.round && fixture.round <= deadlineRound && [fixture.homeClubId, fixture.awayClubId].includes(clubId))) return requests;
-  const candidates = requestCandidates(state, clubId, deadlineRound);
-  if (!candidates.length) return requests;
-  const pick = candidates[hash(state.seed, `president-request-kind|${state.seasonNumber}|${state.round}|${clubId}`) % candidates.length]!;
-  return [...requests, { id: `board-request-${requests.length + 1}`, clubId, ...pick, seasonNumber: state.seasonNumber, round: state.round, date: state.date, deadlineRound, outcome: 'open', resolvedRound: null }];
+  if (hash(state.seed, `president-request|${state.seasonNumber}|${state.round}|${clubId}`) % 10_000 >= Math.round(chance * 10_000)) return null;
+  if (!state.fixtures.some(fixture => isRegularFixture(fixture) && !fixture.result && fixture.round > state.round && fixture.round <= deadlineRound && [fixture.homeClubId, fixture.awayClubId].includes(clubId))) return null;
+  return { deadlineRound, kindHash: hash(state.seed, `president-request-kind|${state.seasonNumber}|${state.round}|${clubId}`), squad: squadCandidates(state, clubId, deadlineRound) };
 }
 
 export const REQUEST_KINDS: readonly BoardRequestKind[] = ['raise-ticket-price', 'sign-player', 'play-player'];

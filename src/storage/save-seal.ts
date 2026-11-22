@@ -13,7 +13,9 @@ import { SEASON_SCHEMA_VERSION } from '../domain/season';
 // Version 1 was produced by an unfinished path that skipped validation before writing. Always re-check those saves.
 // Version 3 also requires archived roster validation in every format from 9 onward, regardless of league length.
 // Version 4: development-mode checkpoints (15-16 November 2026) carried version-3 seals without the full check. Re-check them.
-export const SAVE_CHECKS_VERSION = 4;
+// Version 5 (22 November 2026): naming rights, sponsor exits, president requests, resignations and the latest completed
+// season's board history are rebuilt exactly, refusing tampered saves the earlier checks accepted.
+export const SAVE_CHECKS_VERSION = 5;
 const SEAL_PREFIX = `courtside-save-seal|format-${SEASON_SCHEMA_VERSION}|checks-${SAVE_CHECKS_VERSION}|`;
 export const SEAL_PATTERN = /^[0-9a-f]{64}$/;
 

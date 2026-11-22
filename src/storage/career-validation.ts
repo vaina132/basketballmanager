@@ -1,6 +1,6 @@
 import type { SeasonState } from '../domain/season';
 import { dateForRound } from '../world/season';
-import { jobMarketAt, midSeasonChanges, seasonEndOutlook, unemployedSeasonEndVacancies } from '../world/career-policy';
+import { jobMarketAt, jobOfferRefusal, midSeasonChanges, resignationOutlook, seasonEndOutlook, unemployedSeasonEndVacancies } from '../world/career-policy';
 import { managedClubFor } from '../world/career';
 import type { CareerMove, CareerMovePhase, SeasonCareer } from '../domain/career';
 import type { BoardRestart } from '../domain/board';
@@ -189,8 +189,11 @@ function validateCareer2Decisions(state: SeasonState): void {
       if (move) { used.add(move); restart(move.fromClubId, seasonNumber, rounds, 'end', date, 'ai'); if (move.toClubId !== NO_CLUB) restart(move.toClubId, seasonNumber, rounds, 'end', date, 'manager'); }
     } });
   }
-  for (const move of career.moves) if (move.reason === 'resigned') points.push({ key: careerPointKey(move.seasonNumber, move.round!, move.phase!), order: 1, date: move.date, run: () => {
+  // Since 22 November 2026 a resignation must take a job offered at that point (or, career-3, no job), rebuilt from the
+  // reviews, fresh starts, tables and moves before it (`resignationOutlook`).
+  for (const [index, move] of career.moves.entries()) if (move.reason === 'resigned') points.push({ key: careerPointKey(move.seasonNumber, move.round!, move.phase!), order: 1, date: move.date, run: () => {
     used.add(move);
+    if (jobOfferRefusal(resignationOutlook(resignationView(state, career.moves.slice(0, index), move, [...expected])), move.toClubId)) fail(`${pathOf(move)}.toClubId`, 'must take a job offered to the resigning manager at that point, or none where the career allows it');
     restart(move.fromClubId, move.seasonNumber, move.round!, move.phase!, move.date, 'ai');
     if (move.toClubId !== NO_CLUB) restart(move.toClubId, move.seasonNumber, move.round!, move.phase!, move.date, 'manager');
   } });
@@ -212,4 +215,22 @@ function validateCareer2Decisions(state: SeasonState): void {
     const actual = record(restarts[index], `board.restarts[${index}]`, ['clubId', 'seasonNumber', 'round', 'phase', 'date', 'reviewCount', 'confidence', 'coach']);
     if ((Object.keys(item) as (keyof BoardRestart)[]).some(key => actual[key] !== item[key])) fail(`board.restarts[${index}]`, 'must match the coach change at that point of the career');
   }
+}
+
+/**
+ * The career as it stood when the manager resigned: that season's games with only the results recorded before the move
+ * (all of them in the offseason), the board reviews and fresh starts made before it, the earlier moves, and the club the
+ * manager left. `resignationOutlook` reads it as it read the live state.
+ */
+function resignationView(state: SeasonState, prior: CareerMove[], move: CareerMove, restarts: BoardRestart[]): SeasonState {
+  const seasonNumber = move.seasonNumber, inSeason = move.phase === 'season', round = move.round!;
+  const archive = seasonNumber === state.seasonNumber ? undefined : state.history.find(item => item.seasonNumber === seasonNumber);
+  const games = (archive ? archive.fixtures : state.fixtures) as SeasonState['fixtures'];
+  const fixtures = games.map(fixture => inSeason && fixture.round >= round ? { ...fixture, result: null } : fixture);
+  const reviews = state.board.reviews.filter(review => review.seasonNumber < seasonNumber || review.seasonNumber === seasonNumber && (!inSeason || review.round < round));
+  return {
+    ...state, seasonNumber, round: inSeason ? round : seasonRounds(state), status: inSeason ? 'active' : 'complete', date: move.date, managedClubId: move.fromClubId, activeMatch: null, fixtures,
+    divisions: archive ? archive.divisions : state.divisions, history: state.history.filter(item => item.seasonNumber < seasonNumber),
+    board: { ...state.board, reviews, restarts }, career: { ...state.career, moves: prior },
+  } as SeasonState;
 }

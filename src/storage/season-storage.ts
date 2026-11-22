@@ -3803,7 +3803,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Format 82 guard: real head coaches (`coaches-1`) need format 82 or later and a real-club career with job changes.
   if (Object.hasOwn(state, 'coaches')) validateCoachesShape(state.coaches, state as unknown as SeasonState, version);
   // Format 79 guard: careers created with the richer play model (`plays-2`) need format 79 or later.
-  if (Object.hasOwn(state, 'matchModel') && (state.matchModel !== 'plays-2' || version < 79)) fail('matchModel', 'must be plays-2 and requires format 79 or later');
+  // Format 81 guard: careers created with the dead balls of a real game (`plays-3`) need format 81 or later.
+  if (Object.hasOwn(state, 'matchModel') && (state.matchModel === 'plays-3' ? version < 81 : state.matchModel !== 'plays-2' || version < 79)) fail('matchModel', 'must be plays-2 (format 79 or later) or plays-3 (format 81 or later)');
 }
 
 /** Validate every reference and committed round before replacing any live season. */

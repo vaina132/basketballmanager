@@ -158,7 +158,7 @@ describe('new careers play with the richer model (format 79)', () => {
   const world = worldFromPack(pack, 'bbl');
   let played: SeasonState;
   beforeAll(() => {
-    let state = createSeason({ seed: 21, world, managedClubId: 'bbl-1', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS });
+    let state = createSeason({ seed: 21, world, managedClubId: 'bbl-1', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchFlow: false });
     for (let day = 0; day < 3; day += 1) state = advanceMatchday(state);
     played = state;
   }, 300_000);

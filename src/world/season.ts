@@ -487,6 +487,13 @@ export interface SeasonSystems {
    */
   matchPlays?: boolean;
   /**
+   * Format 81 (owner feedback, 22 November 2026 evening: "a more realistic flow ... the ball going out, backcourt
+   * violations"): with `matchPlays`, matches use `plays-3`: the dead balls of a real game (balls knocked out of bounds,
+   * kicked balls, held balls, 8-second, 5-second and double-dribble violations, goaltending, unsportsmanlike fouls),
+   * realistic timeouts and holds for the last shot. New careers only; `plays-2` careers replay unchanged.
+   */
+  matchFlow?: boolean;
+  /**
    * Format 80 (owner feedback item 13, 22 November 2026): national teams, their qualifiers and summer tournaments, FIBA
    * windows in the calendar and national jobs (`src/world/national.ts`). New real-club careers whose leagues include a
    * national team's country; other worlds and older careers are unchanged.
@@ -510,7 +517,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, nationalTeams: true, realCoaches: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -536,6 +543,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.transferLists !== undefined && typeof options.transferLists !== 'boolean') throw new Error('Choose a valid transfer list setting.');
   if (options.scoutNetwork !== undefined && typeof options.scoutNetwork !== 'boolean') throw new Error('Choose a valid scouting network setting.');
   if (options.matchPlays !== undefined && typeof options.matchPlays !== 'boolean') throw new Error('Choose a valid match engine setting.');
+  if (options.matchFlow !== undefined && typeof options.matchFlow !== 'boolean') throw new Error('Choose a valid match flow setting.');
   if (options.nationalTeams !== undefined && typeof options.nationalTeams !== 'boolean') throw new Error('Choose a valid national teams setting.');
   if (options.realCoaches !== undefined && typeof options.realCoaches !== 'boolean') throw new Error('Choose a valid head coaches setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
@@ -560,7 +568,8 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   const listed = options.transferLists && healed.recruitment.enabledSince ? { ...healed, recruitment: { ...healed.recruitment, model: 'recruitment-2' as const, listings: [] } } : healed;
   const scouted = options.scoutNetwork && listed.scouting.enabledSince ? { ...listed, scouting: { ...listed.scouting, model: 'scouting-2' as const } } : listed;
   // Format 79: the richer play model; the opening match is prepared again with it.
-  const played: SeasonState = options.matchPlays ? { ...scouted, matchModel: 'plays-2' } : scouted;
+  // Format 81: with the match flow option, the play model with the dead balls of a real game.
+  const played: SeasonState = options.matchPlays ? { ...scouted, matchModel: options.matchFlow ? 'plays-3' : 'plays-2' } : scouted;
   // Format 82: real head coaches in real-club careers with job changes (every coach change is a board change); the
   // national teams start with their real coaches.
   const coached = options.realCoaches && options.world && headCoachWorld(options.world) && played.career.enabledSince ? withRealCoaches(played) : played;

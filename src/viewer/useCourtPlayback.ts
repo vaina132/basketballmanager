@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { MatchEvent, Side } from '../domain/types'
-import { advancePlayback, createPlayback, playbackProgress, playbackScore, settlePlayback } from './playback'
-import type { PlaybackCursor } from './playback'
+import { useCallback, useEffect, useState } from 'react'
+import type { Side } from '../domain/types'
+import { advanceBeatPlayback, beatProgress, beatScore, createBeatPlayback, settleBeatPlayback } from './playback'
+import type { BeatCursor } from './playback'
+import type { Beat } from './flow'
 
 /** Frame-by-frame playback position. Only the court subscribes to it, so the rest of the screen does not redraw each frame. */
 export interface PlaybackClock {
   subscribe(listener: () => void): () => void
-  getSnapshot(): PlaybackCursor | null
+  getSnapshot(): BeatCursor | null
 }
-function createClock(): PlaybackClock & { set(next: PlaybackCursor | null): void } {
-  let current: PlaybackCursor | null = null
+function createClock(): PlaybackClock & { set(next: BeatCursor | null): void } {
+  let current: BeatCursor | null = null
   const listeners = new Set<() => void>()
   return {
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
@@ -17,49 +18,48 @@ function createClock(): PlaybackClock & { set(next: PlaybackCursor | null): void
     set(next) { current = next; listeners.forEach(listener => listener()) },
   }
 }
-/** The screen outside the court changes only when the shown event changes or finishes. */
-const sameStep = (a: PlaybackCursor | null, b: PlaybackCursor | null) => a === b || !!a && !!b && a.events === b.events && a.index === b.index && a.done === b.done && (playbackProgress(a) >= 1) === (playbackProgress(b) >= 1)
+/** The screen outside the court changes only when the shown beat changes or finishes. */
+const sameStep = (a: BeatCursor | null, b: BeatCursor | null) => a === b || !!a && !!b && a.beats === b.beats && a.index === b.index && a.done === b.done && (beatProgress(a) >= 1) === (beatProgress(b) >= 1)
 
-export function useCourtPlayback(playing: boolean, speed: number, reducedMotion: boolean, duration?: (event: MatchEvent) => number) {
+/** Plays the continuous broadcast's beats (src/viewer/flow.ts) at the chosen speed. */
+export function useCourtPlayback(playing: boolean, speed: number, reducedMotion: boolean) {
   const [clock] = useState(createClock)
-  const [cursor, setCursor] = useState<PlaybackCursor | null>(null)
-  const durationRef = useRef(duration)
-  durationRef.current = duration
-  const events = cursor?.events
+  const [cursor, setCursor] = useState<BeatCursor | null>(null)
+  const beats = cursor?.beats
   const done = cursor?.done ?? true
 
-  const publish = useCallback((next: PlaybackCursor | null) => {
+  const publish = useCallback((next: BeatCursor | null) => {
     clock.set(next)
     setCursor(previous => sameStep(previous, next) ? previous : next)
   }, [clock])
 
   useEffect(() => {
-    if (!playing || done || !events) return
+    if (!playing || done || !beats) return
     let request = 0
     let previous = performance.now()
     const tick = (now: number) => {
       const elapsed = Math.min(100, Math.max(0, now - previous))
       previous = now
       const current = clock.getSnapshot()
-      if (!document.hidden && current) publish(advancePlayback(current, elapsed * speed))
+      if (!document.hidden && current) publish(advanceBeatPlayback(current, elapsed * speed))
       request = requestAnimationFrame(tick)
     }
     request = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(request)
-  }, [playing, speed, events, done, clock, publish])
+  }, [playing, speed, beats, done, clock, publish])
 
-  const present = useCallback((newEvents: readonly MatchEvent[], initialScore: Record<Side, number>, animate: boolean) => {
-    const next = createPlayback(newEvents, initialScore, animate, durationRef.current)
+  const present = useCallback((newBeats: readonly Beat[], initialScore: Record<Side, number>, animate: boolean) => {
+    const next = createBeatPlayback(newBeats, initialScore, animate)
     if (next) publish(next)
   }, [publish])
   const reset = useCallback(() => publish(null), [publish])
-  const settle = useCallback(() => publish(settlePlayback(clock.getSnapshot())), [clock, publish])
-  const event = cursor?.events[cursor.index]
-  const finished = cursor ? reducedMotion || playbackProgress(cursor) >= 1 : true
+  const settle = useCallback(() => publish(settleBeatPlayback(clock.getSnapshot())), [clock, publish])
+  const beat = cursor?.beats[cursor.index]
+  const finished = cursor ? reducedMotion || beatProgress(cursor) >= 1 : true
   return {
-    present, reset, settle, event, clock, finished,
+    present, reset, settle, beat, event: beat?.event, clock, finished,
     progress: finished ? 1 : 0,
-    visibleScore: cursor ? reducedMotion ? cursor.events[cursor.index].score : playbackScore(cursor) : null,
+    visibleScore: cursor ? reducedMotion ? cursor.beats[cursor.index]!.event.score : beatScore(cursor) : null,
     busy: !done,
   }
 }

@@ -39,7 +39,8 @@ import { Icon } from './ui/Icon'
 import { CLUB_VIEWS, competitionsViews, europeLinkView, MainNavigation, mainNavigation, PAGE_NAMES as pageNames, PageViewTabs, resolveNavigation, shownCompetitionsView, showsBudgetBar, SQUAD_VIEWS, TRAINING_VIEWS, unemployedNavigation, type ClubView, type CompetitionsView, type Page, type SquadView, type TrainingView } from './ui/navigation'
 import { Court } from './viewer/Court'
 import type { ScoreBug } from './viewer/Court'
-import { buildAnimation, presentationDuration, rosterOf } from './viewer/choreography'
+import { rosterOf } from './viewer/choreography'
+import { beatsFrom, broadcastOf } from './viewer/flow'
 import { describePlay } from './viewer/play-text'
 import { useCourtPlayback } from './viewer/useCourtPlayback'
 import { matchGate } from './viewer/crowd'
@@ -207,9 +208,9 @@ export default function App() {
   const [textOnly, setTextOnly] = useState(false)
   const [visible, setVisible] = useState(!document.hidden)
   const reducedMotion = motionOverride ?? systemReduced
-  // Each play is shown for its own animation length (presentation only; the match clock is unrelated).
-  const playDuration = useCallback((event: MatchEvent) => presentationDuration(event, rosterOf(matchRef.current)), [])
-  const playback = useCourtPlayback(playing, speed, reducedMotion || textOnly, playDuration)
+  // The continuous broadcast (src/viewer/flow.ts): each recorded event becomes beats shown for their own length
+  // (presentation only; the simulation never waits for them).
+  const playback = useCourtPlayback(playing, speed, reducedMotion || textOnly)
   const { present, reset: resetPlayback, settle: settlePlayback } = playback
   const [seedInput, setSeedInput] = useState('42')
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -287,13 +288,14 @@ export default function App() {
       if (sessionRef.current.kind === 'season' && !sessionRef.current.season.activeMatch && !sessionRef.current.season.national?.activeMatch) return
       const before = matchRef.current
       const next = action(before)
-      const newEvents = next.events.slice(before.events.length)
       const critical = next.requiredSubstitutions.length > 0
       if (progression && !animate || critical) settlePlayback()
-      if (newEvents.some(event => event.scene)) setPresentationBase(animate && !critical ? before : null)
-      present(newEvents, before.score, animate && !critical)
+      // Before the first live step the jump ball is shown too.
+      const beats = beatsFrom(broadcastOf(next.events, rosterOf(next)), before.stepCount === 0 ? 0 : before.events.length)
+      if (beats.length) setPresentationBase(animate && !critical ? before : null)
+      present(beats, before.score, animate && !critical)
       replaceMatch(next)
-      if (critical || next.status === 'finished' && (!animate || !newEvents.some(event => event.scene))) setPlaying(false)
+      if (critical || next.status === 'finished' && (!animate || !beats.length)) setPlaying(false)
     } catch (error) { setPlaying(false); setNotice({ message: messageOf(error), error: true }) }
   }, [replaceMatch, present, settlePlayback])
 
@@ -308,7 +310,8 @@ export default function App() {
 
   useEffect(() => {
     if (!playing || !visible || playback.busy || match.status === 'finished' || match.requiredSubstitutions.length) return
-    const timer = window.setTimeout(() => apply(stepMatch, true, true), 220 / speed)
+    // The next action follows at once: the broadcast joins one step's last beat to the next step's first.
+    const timer = window.setTimeout(() => apply(stepMatch, true, true), 30)
     return () => window.clearTimeout(timer)
   }, [playing, speed, visible, playback.busy, match.status, match.requiredSubstitutions.length, match.events.length, apply])
 
@@ -323,6 +326,8 @@ export default function App() {
   }, [notice])
 
   const latestEvent = match.events.at(-1)
+  const matchBroadcast = broadcastOf(match.events, rosterOf(match))
+  const shownBeat = playback.beat ?? matchBroadcast.beats.at(-1)
   const presentedEvent = playback.event ?? [...match.events].reverse().find(event => event.scene) ?? match.events.at(-1)
   const presentedProgress = playback.event ? playback.progress : 1
   const captionEvent = playback.busy ? presentedEvent : latestEvent ?? presentedEvent
@@ -344,9 +349,12 @@ export default function App() {
   const bugTeam = (side: Side) => ({ name: match[side].shortName, color: match[side].color, score: displayScore[side], fouls: resolvedStats.teamFouls?.[side] ?? 0, timeouts: resolvedStats.timeoutUsage ? remainingTimeouts(resolvedStats, side) : 0 })
   const scoreBug: ScoreBug = { home: bugTeam('home'), away: bugTeam('away'), period: periodLabel(bugEvent?.period ?? match.period), clock: clock(bugEvent?.clockSeconds ?? match.clockSeconds) }
   const captionIndex = captionEvent ? match.events.findIndex(event => event.id === captionEvent.id) : -1
-  const playLine = captionEvent ? describePlay(captionEvent, matchRoster, captionIndex > 0 ? match.events[captionIndex - 1] : undefined) : 'Ready for tipoff.'
-  const playKind = captionEvent?.scene ? buildAnimation(captionEvent, matchRoster)?.kind : undefined
-  const inFlight = playback.busy && presentedProgress < 1 && (presentedEvent?.shot || presentedEvent?.scene?.kind === 'free-throw')
+  // The line under the court follows the beat on screen (at rest: the last beat shown, not a later command).
+  const lineBeat = playback.busy ? playback.beat : shownBeat
+  const lineIndex = lineBeat ? match.events.findIndex(event => event.id === lineBeat.event.id) : captionIndex
+  const playLine = match.stepCount === 0 && !playback.busy ? 'Jump ball: both teams line up at the centre circle.' : lineBeat?.caption ?? (lineBeat ? describePlay(lineBeat.event, matchRoster, lineIndex > 0 ? match.events[lineIndex - 1] : undefined) : captionEvent ? describePlay(captionEvent, matchRoster, captionIndex > 0 ? match.events[captionIndex - 1] : undefined) : 'Ready for tipoff.')
+  const playKind = (playback.busy ? playback.beat?.chip ?? playback.beat?.animation.kind : shownBeat?.chip ?? shownBeat?.animation.kind) ?? undefined
+  const inFlight = playback.busy && presentedProgress < 1 && !!playback.beat && ['shot', 'dunk', 'block', 'free-throw'].includes(playback.beat.animation.kind)
   const shooterName = presentedEvent?.playerId ? matchRoster.get(presentedEvent.playerId)?.name.split(' ').at(-1) : undefined
 
   const assistantContract = season ? getClubAssistant(season) : null

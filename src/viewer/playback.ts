@@ -1,4 +1,5 @@
 import type { CourtPosition, CourtScene, MatchEvent, Side } from '../domain/types'
+import type { Beat } from './flow'
 
 export interface PlaybackCursor {
   events: MatchEvent[]
@@ -67,4 +68,41 @@ export function interpolateScene(scene: CourtScene, progress: number): { players
       height: from.height + (to.height - from.height) * t + 4 * arcHeight * t * (1 - t),
     },
   }
+}
+
+/**
+ * The continuous broadcast's playback (src/viewer/flow.ts): one beat after another, each for its own presentation
+ * length. Presentation time only; it never advances the sporting engine.
+ */
+export interface BeatCursor {
+  beats: Beat[]
+  index: number
+  elapsedMs: number
+  done: boolean
+  initialScore: Record<Side, number>
+}
+export function createBeatPlayback(beats: readonly Beat[], initialScore: Record<Side, number>, animate: boolean): BeatCursor | null {
+  if (!beats.length) return null
+  if (!animate) { const last = beats.at(-1)!; return { beats: [last], index: 0, elapsedMs: last.durationMs, done: true, initialScore: { ...initialScore } } }
+  return { beats: [...beats], index: 0, elapsedMs: 0, done: false, initialScore: { ...initialScore } }
+}
+export function beatProgress(cursor: BeatCursor): number {
+  return Math.min(1, cursor.elapsedMs / Math.max(1, cursor.beats[cursor.index]!.durationMs))
+}
+export function advanceBeatPlayback(cursor: BeatCursor, elapsedMs: number): BeatCursor {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) throw new Error('Presentation time must be finite and nonnegative.')
+  if (cursor.done || elapsedMs === 0) return cursor
+  let index = cursor.index, time = cursor.elapsedMs + elapsedMs
+  const length = (at: number) => Math.max(1, cursor.beats[at]!.durationMs)
+  while (index < cursor.beats.length - 1 && time >= length(index)) { time -= length(index); index += 1 }
+  return { ...cursor, index, elapsedMs: Math.min(time, length(index)), done: time >= length(index) && index === cursor.beats.length - 1 }
+}
+export function settleBeatPlayback(cursor: BeatCursor | null): BeatCursor | null {
+  if (!cursor || cursor.done) return cursor
+  const last = cursor.beats.length - 1
+  return { ...cursor, index: last, elapsedMs: Math.max(1, cursor.beats[last]!.durationMs), done: true }
+}
+/** The score shown: before the event of the beat on screen, the final one once the beats are done. */
+export function beatScore(cursor: BeatCursor): Record<Side, number> {
+  return cursor.done ? cursor.beats.at(-1)!.event.score : cursor.beats[cursor.index]!.scoreBefore
 }

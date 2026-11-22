@@ -152,7 +152,8 @@ export interface DomesticDivisions {
 /** Format 78: the transfer and loan list with bids for the manager's players and loans (`recruitment-2`), and the scouting network (`scouting-2`). */
 /** Format 79: the richer play model for new careers' matches (`matchModel` 'plays-2', `src/engine/plays.ts`); older careers replay with the earlier possession actions. */
 /** Format 80: national teams, their competitions, FIBA windows that pause the domestic leagues with room, and national jobs (`national`, `src/world/national.ts`). */
-export const SEASON_SCHEMA_VERSION = 80;
+/** Format 81: the play model with the dead balls of a real game for new careers' matches (`matchModel` 'plays-3', option `matchFlow`, `FLOW` in `src/engine/plays.ts`); 'plays-2' careers replay unchanged. */
+export const SEASON_SCHEMA_VERSION = 81;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

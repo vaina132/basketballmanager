@@ -101,6 +101,38 @@ export const PLAYS = {
   heaveSeconds: 3, rushSeconds: 7,
 } as const;
 
+/**
+ * Format 81 (`plays-3`, owner feedback 22 November 2026 evening: "the ball going out, backcourt violations ... hundreds
+ * of possibilities"): the dead balls of a real game, at the rates of European top-flight games (per game, both teams:
+ * about 15 balls knocked out of bounds by the defense, 1.5 kicked balls, 1.5 held balls, 0.1-0.3 each of 8-second,
+ * 5-second and double-dribble violations, 0.3 goaltending calls, 0.4 unsportsmanlike fouls, 5-7 timeouts). Reversible
+ * defaults, 22 November 2026; `plays-2` matches never read them.
+ */
+export const FLOW = {
+  /** The defense knocks the ball out of bounds and the attack keeps it (throw-in, shot clock running on), per risky action. */
+  outOfBounds: { advance: .012, pass: .05, drive: .056, post: .036, screen: .006, fastBreak: .035 } satisfies Record<RiskKind, number>,
+  /** Kicked ball by the defense (the attack keeps it; shot clock 24 in the backcourt, at least 14 in the frontcourt). */
+  kicked: { advance: .002, pass: .0065, drive: .0045, post: .002, screen: 0, fastBreak: .003 } satisfies Record<RiskKind, number>,
+  heldBall: .0055,
+  /** Share of blocked attempts near the rim called goaltending (the basket counts), and of missed tips and putbacks called basket interference. */
+  goaltending: .065, interference: .035,
+  /** Unsportsmanlike foul share of non-shooting fouls: on a fast break, and elsewhere. */
+  unsportsmanlike: { fastBreak: .14, other: .004 },
+  /** Game-clock seconds of a frontcourt throw-in (the clock starts when the ball is touched on court). */
+  inbound: 2.2,
+  /** Computer coaches: timeout after an unanswered run of this many points; late in the fourth when behind by up to `lateBehind`. */
+  timeoutRun: 6, lateSeconds: 120, lateBehind: 6,
+  /** End of a period with no more than a shot clock left: hold the ball for the last shot, attacking with `shootAt` seconds left. */
+  holdFrom: 24, shootAt: 6,
+  /** Late in the fourth with the lead, the attack runs the clock: extra seconds per half-court action. */
+  milk: { seconds: 120, extra: 3 },
+  shotClockViolation: .15,
+  /** Non-shooting fouls per risky action relative to `plays-2` (its quicker actions take more of them per game). */
+  foulScale: .88, turnoverScale: .95,
+  /** Game-clock seconds per action (quicker than `plays-2`: the throw-ins, holds and dead balls above take their own time). */
+  seconds: { advance: 6.6, pnr: 8.5, drive: 7.5, post: 9, motion: 8.5, early: 4.6 },
+} as const;
+
 const other = (side: Side): Side => side === 'home' ? 'away' : 'home';
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const round = (value: number) => Math.round(value * 100000) / 100000;
@@ -108,7 +140,7 @@ const isBig = (p: Player) => p.position === 'PF' || p.position === 'C';
 const ballAt = (point: CourtPoint, height = 1.25): CourtBallPoint => ({ x: point.x, y: point.y, height });
 const nameOf = (p: Player) => p.name;
 
-interface Ctx { state: MatchState; kit: PlayKit; play: PossessionPlay; offense: Side; defense: Side; hoop: CourtPoint; dir: 1 | -1 }
+interface Ctx { state: MatchState; kit: PlayKit; play: PossessionPlay; offense: Side; defense: Side; hoop: CourtPoint; dir: 1 | -1; flow: boolean; restarted: boolean }
 interface ShotPlan { shooter: Player; kind: ShotKind; value: 2 | 3; contest: Player; assist?: Player; rushed?: boolean; offDribble?: boolean; alleyOop?: boolean }
 interface Read { key: string; weight: number; value: number }
 
@@ -233,8 +265,11 @@ function risk(ctx: Ctx, actor: Player, kind: RiskKind, interceptor?: Player): bo
   const decisions = intelligence === undefined ? 0 : (intelligence - EXTRA_MATCH.turnoverCentre) * EXTRA_MATCH.turnover;
   const fatigue = (100 - state.stats[actor.id]!.condition) / 100;
   const T = PLAYS.turnovers;
-  const turnover = kind === 'screen' ? T.screen : clamp(T[kind] + pressure * T.pressure + (defending - actor.attributes.passing) * T.skillGap - decisions + fatigue * T.fatigue + kit.moraleTurnover(state, actor.id), .004, T.max);
-  const offensive = PLAYS.offensiveFouls[kind], foul = PLAYS.defensiveFouls[kind] + pressure * PLAYS.defensiveFouls.pressure, held = kind === 'advance' ? 0 : PLAYS.heldBall;
+  const turnover = (kind === 'screen' ? T.screen : clamp(T[kind] + pressure * T.pressure + (defending - actor.attributes.passing) * T.skillGap - decisions + fatigue * T.fatigue + kit.moraleTurnover(state, actor.id), .004, T.max)) * (ctx.flow ? FLOW.turnoverScale : 1);
+  const offensive = PLAYS.offensiveFouls[kind], foul = (PLAYS.defensiveFouls[kind] + pressure * PLAYS.defensiveFouls.pressure) * (ctx.flow ? FLOW.foulScale : 1), held = kind === 'advance' ? 0 : ctx.flow ? FLOW.heldBall : PLAYS.heldBall;
+  // Format 81: balls knocked out of bounds and kicked by the defense (the attack keeps the ball).
+  // A deflection out of bounds needs time to inbound and still play (the shot clock runs on): not in the last seconds.
+  const out = ctx.flow && state.shotClockSeconds >= 5 ? FLOW.outOfBounds[kind] : 0, kick = ctx.flow ? FLOW.kicked[kind] : 0;
   const roll = kit.draw(state);
   if (roll < turnover) { loseBall(ctx, actor, kind, defender); return true; }
   if (roll < turnover + offensive) { offensiveFoul(ctx, actor, kind, defender); return true; }
@@ -242,10 +277,30 @@ function risk(ctx: Ctx, actor: Player, kind: RiskKind, interceptor?: Player): bo
   if (roll < turnover + offensive + foul + held) {
     const receiving = state.possessionArrow; state.possessionArrow = other(receiving);
     if (receiving !== ctx.offense) kit.resetPossession(state, receiving);
-    kit.whistle(state); kit.emit(state, { type: 'held-ball', side: receiving, text: `Held ball. The possession arrow awards the throw-in to ${state[receiving].name}.` });
+    kit.whistle(state); kit.emit(state, { type: 'held-ball', side: receiving, text: ctx.flow ? `Held ball between ${nameOf(actor)} and ${nameOf(defender)}. The possession arrow awards the throw-in to ${state[receiving].name}.` : `Held ball. The possession arrow awards the throw-in to ${state[receiving].name}.` });
     return true;
   }
+  if (roll < turnover + offensive + foul + held + out) { knockedOut(ctx, actor, kind, defender); return true; }
+  if (roll < turnover + offensive + foul + held + out + kick) { kickedBall(ctx, actor, defender); return true; }
   return false;
+}
+/** Where a throw-in is taken: the baseline near the end line, otherwise the nearest sideline. */
+function throwInLine(point: CourtPoint): 'baseline' | 'sideline' {
+  return Math.min(point.x, 1 - point.x) * 28 < 1.6 && Math.abs(point.y - .5) * 15 < 6 ? 'baseline' : 'sideline';
+}
+/** Format 81: the defense knocks the ball out of bounds; the attack keeps it with the shot clock running on (FIBA 29.2.1). */
+function knockedOut(ctx: Ctx, actor: Player, kind: RiskKind, defender: Player): void {
+  const { state, kit } = ctx, line = throwInLine(pos(ctx, actor.id));
+  const how = kind === 'pass' ? `deflects ${nameOf(actor)}'s pass` : kind === 'drive' || kind === 'fastBreak' ? `pokes the ball away from ${nameOf(actor)}` : kind === 'post' ? `swipes at ${nameOf(actor)} in the post and knocks the ball` : kind === 'screen' ? `tips the ball away from ${nameOf(actor)}` : `gets a hand on ${nameOf(actor)}'s dribble and knocks the ball`;
+  kit.whistle(state);
+  kit.emit(state, { type: 'command', side: ctx.defense, playerId: defender.id, text: `${nameOf(defender)} ${how} out of bounds: ${state[ctx.offense].name} keep the ball, ${line} throw-in. Shot clock ${state.shotClockSeconds}.` });
+}
+/** Format 81: a kicked ball (defensive violation): the attack keeps it; shot clock 24 in the backcourt, at least 14 in the frontcourt. */
+function kickedBall(ctx: Ctx, actor: Player, defender: Player): void {
+  const { state, kit } = ctx;
+  state.shotClockSeconds = state.frontcourt ? Math.max(14, state.shotClockSeconds) : 24;
+  kit.whistle(state);
+  kit.emit(state, { type: 'command', side: ctx.defense, playerId: defender.id, text: `Kicked ball: ${nameOf(defender)} stops ${nameOf(actor)}'s pass with his foot. ${state[ctx.offense].name} keep the ball, shot clock ${state.shotClockSeconds}.` });
 }
 function loseBall(ctx: Ctx, actor: Player, kind: RiskKind | 'shot-clock', defender: Player): void {
   const { state, kit, play } = ctx;
@@ -256,6 +311,7 @@ function loseBall(ctx: Ctx, actor: Player, kind: RiskKind | 'shot-clock', defend
   if (stolen) state.stats[defender.id]!.steals += 1;
   const variant = stolen || kind === 'shot-clock' ? 0 : kit.draw(state);
   const text = kind === 'shot-clock' ? `${state[ctx.offense].name} fail to release a shot before the shot-clock signal. Turnover.`
+    : ctx.flow && !stolen ? deadBallText(ctx, actor, kind, variant)
     : stolen ? kind === 'pass' ? `${nameOf(defender)} steals ${nameOf(actor)}'s pass and the ball goes the other way.` : `${nameOf(defender)} steals the ball from ${nameOf(actor)}.`
       : kind === 'pass' ? `${nameOf(actor)}'s pass sails out of bounds. Turnover.`
         : kind === 'post' ? variant < .5 ? `${nameOf(actor)} travels in the post. Turnover.` : `${nameOf(actor)} is called for three seconds. Turnover.`
@@ -266,6 +322,26 @@ function loseBall(ctx: Ctx, actor: Player, kind: RiskKind | 'shot-clock', defend
   kit.installControl(state, ctx.defense, defender.id, positions, false);
   if (!stolen) kit.whistle(state);
   kit.emit(state, { type: kind === 'shot-clock' ? 'shot-clock' : 'turnover', side: ctx.offense, playerId: actor.id, text, scene: actionScene('turnover', ctx.offense, positions, positions, from, to, .1) });
+}
+/** The ball is put in play from the end line after the other team scored (a made basket or last free throw). */
+function afterScore(ctx: Ctx): boolean {
+  const event = ctx.state.events.at(-1);
+  return !!event && event.side === ctx.defense && (event.type === 'shot' && !!event.shot?.made || event.type === 'free-throw' && /\bmakes\b/.test(event.text));
+}
+/** Format 81: the dead-ball turnovers of a real game, by action (travels, out of bounds, violations). */
+function deadBallText(ctx: Ctx, actor: Player, kind: RiskKind, variant: number): string {
+  const who = nameOf(actor), team = ctx.state[ctx.offense].name;
+  if (kind === 'advance') {
+    if (variant < .46) return `${who} loses the ball out of bounds.`;
+    if (variant < .68) return `${who} is called for a backcourt violation. Turnover.`;
+    if (variant < .8) return `${team} cannot bring the ball over halfcourt in eight seconds: 8-second violation. Turnover.`;
+    if (variant < .9) return `${who} is called for a double dribble. Turnover.`;
+    return ctx.restarted || afterScore(ctx) ? `${team} cannot throw the ball in within five seconds: 5-second violation. Turnover.` : `${who} steps on the sideline. Turnover.`;
+  }
+  if (kind === 'pass') return variant < .86 ? `${who}'s pass sails out of bounds. Turnover.` : `${who}'s pass goes back over halfcourt: backcourt violation. Turnover.`;
+  if (kind === 'post') return variant < .45 ? `${who} travels in the post. Turnover.` : variant < .9 ? `${who} is called for three seconds. Turnover.` : `${who} loses the ball out of bounds in the post.`;
+  if (kind === 'fastBreak') return variant < .3 ? `${who} travels on the break. Turnover.` : variant < .8 ? `${who} loses the ball out of bounds on the break.` : variant < .9 ? `${who} is called for a double dribble. Turnover.` : `${who} steps out of bounds. Turnover.`;
+  return variant < .4 ? `${who} travels. Turnover.` : variant < .72 ? `${who} loses the ball out of bounds.` : variant < .9 ? `${who} steps out of bounds. Turnover.` : variant < .95 ? `${who} is called for a double dribble. Turnover.` : `${who} is called for carrying the ball. Turnover.`;
 }
 function offensiveFoul(ctx: Ctx, actor: Player, kind: RiskKind, defender: Player): void {
   const { state, kit } = ctx;
@@ -279,6 +355,12 @@ function defensiveFoul(ctx: Ctx, actor: Player, kind: RiskKind): void {
   const { state, kit } = ctx, matched = defenderOf(ctx, actor);
   const fouler = kit.choose(state, defenders(ctx), p => DEFENDER_ROLES.foul[p.position] * (p.id === matched.id ? DEFENDER_ROLES.matchedFoul : 1) * kit.foulCaution(state, p));
   const how = kind === 'screen' ? `fouls ${nameOf(actor)} fighting through the screen` : kind === 'post' ? `fouls ${nameOf(actor)} in the post` : kind === 'drive' || kind === 'fastBreak' ? `reaches in on ${nameOf(actor)}` : kind === 'advance' ? `fouls ${nameOf(actor)} in the backcourt` : `holds ${nameOf(actor)} off the ball`;
+  // Format 81: an unsportsmanlike foul (mostly stopping a fast break): two free throws and the ball (FIBA 37).
+  if (ctx.flow && kit.draw(state) < (kind === 'fastBreak' ? FLOW.unsportsmanlike.fastBreak : FLOW.unsportsmanlike.other)) {
+    kit.personalFoul(state, ctx.defense, fouler, `${nameOf(fouler)} ${kind === 'fastBreak' ? `pulls down ${nameOf(actor)} on the break` : `grabs ${nameOf(actor)} away from the ball`}: unsportsmanlike foul, two free throws and the ball.`);
+    kit.startFreeThrows(state, ctx.offense, actor, 2);
+    return;
+  }
   kit.personalFoul(state, ctx.defense, fouler, `${nameOf(fouler)} ${how}: a non-shooting foul.`);
   if (state.teamFouls[ctx.defense] >= 5) awardFreeThrows(ctx, actor, fouler, 2);
   else { state.shotClockSeconds = state.frontcourt ? Math.max(14, state.shotClockSeconds) : 24; kit.whistle(state); }
@@ -322,8 +404,18 @@ function shoot(ctx: Ctx, plan: ShotPlan): void {
   const blocker = !fouled && inside ? rimProtector(ctx, contest) : contest;
   const blocking = blocker.attributes.blocking === undefined ? 0 : (blocker.attributes.blocking - EXTRA_MATCH.centre) * PLAYS.blocking * (inside && distance <= EXTRA_MATCH.rimDistance ? 1 : .5);
   const blockChance = PLAYS.blocks[kind] === 0 ? 0 : clamp(PLAYS.blocks[kind] + blocking + Math.max(0, blocker.heightCm - shooter.heightCm) * .0015 + (blocker.attributes.defense - 12) * .002 - Math.max(0, separation - .9) * .02, .002, .2);
-  const blocked = !fouled && kit.draw(state) < blockChance;
-  const made = !blocked && kit.draw(state) < chance * (fouled ? PLAYS.andOne : 1);
+  let blocked = !fouled && kit.draw(state) < blockChance;
+  // Format 81: a block on the ball's way down near the rim is goaltending (the basket counts).
+  const goaltending = ctx.flow && blocked && inside && kind !== 'dunk' && kit.draw(state) < FLOW.goaltending;
+  if (goaltending) blocked = false;
+  const made = goaltending || !blocked && kit.draw(state) < chance * (fouled ? PLAYS.andOne : 1);
+  // Format 81: a missed tip or putback touched in the cylinder is basket interference: no attempt, the defense's ball.
+  if (ctx.flow && !made && !blocked && !fouled && (kind === 'tip' || kind === 'putback') && kit.draw(state) < FLOW.interference) {
+    stats.turnovers += 1;
+    kit.resetPossession(state, defense); kit.whistle(state);
+    kit.emit(state, { type: 'turnover', side: offense, playerId: shooter.id, text: `Basket interference on ${nameOf(shooter)}: he touches the ball in the cylinder. No basket, ${state[defense].name} ball.` });
+    return;
+  }
   const landing: CourtPoint = made ? hoop : blocked ? toward(origin, hoop, -1.5 - kit.draw(state) * 2) : { x: clamp(hoop.x - ctx.dir * (.5 + kit.draw(state) * (value === 3 ? 2.2 : 1.4)) / 28, .025, .975), y: clamp(.5 + (kit.draw(state) - .5) * .25, .08, .92) };
   const assist = made && plan.assist ? plan.assist : undefined;
   if (!fouled || made) {
@@ -333,10 +425,11 @@ function shoot(ctx: Ctx, plan: ShotPlan): void {
     if (assist) state.stats[assist.id]!.assists += 1;
     const words = SHOT_WORDS[kind], horn = state.clockSeconds === 0 ? ' at the horn' : '';
     const what = plan.alleyOop ? made ? 'finishes the alley-oop' : 'cannot finish the alley-oop' : made ? words.made : words.missed;
-    const text = blocked ? `${nameOf(blocker)} blocks ${nameOf(shooter)}'s ${plan.alleyOop ? 'alley-oop' : words.noun}${horn}.`
+    const text = goaltending ? `${nameOf(blocker)} is called for goaltending on ${nameOf(shooter)}'s ${plan.alleyOop ? 'alley-oop' : words.noun}: the basket counts${horn}.`
+      : blocked ? `${nameOf(blocker)} blocks ${nameOf(shooter)}'s ${plan.alleyOop ? 'alley-oop' : words.noun}${horn}.`
       : `${nameOf(shooter)} ${what}${kind === 'heave' || kind === 'catchThree' || kind === 'pullThree' || kind === 'dunk' || plan.alleyOop ? '' : ` (${label})`}${fouled ? ' through the contact' : ''}${horn}.`;
     kit.emit(state, { type: 'shot', side: offense, playerId: shooter.id, ...(assist ? { assistPlayerId: assist.id } : {}), text,
-      shot: { x: origin.x, y: origin.y, made, value, defenderId: contest.id, contest: label, distanceM: Math.round(distance * 100) / 100 },
+      shot: { x: origin.x, y: origin.y, made, value, defenderId: goaltending ? blocker.id : contest.id, contest: label, distanceM: Math.round(distance * 100) / 100 },
       scene: actionScene('shot', offense, play.positions, play.positions, ballAt(origin, kind === 'dunk' || plan.alleyOop ? 2.9 : 2.1), ballAt(landing, made ? 3.05 : .45), made ? kind === 'dunk' || plan.alleyOop ? .3 : value === 3 || kind === 'heave' ? 3.1 : 2.4 : 2.8) });
   }
   if (fouled) {
@@ -382,8 +475,9 @@ function coachTimeout(ctx: Ctx): void {
     low = Math.min(low, event.score[scoring]);
   }
   const run = state.score[scoring] - low, behind = state.score[scoring] - own;
-  const late = state.period >= 4 && state.clockSeconds <= 40 && behind >= 1 && behind <= 3;
-  if (remaining < (late ? 1 : keep) || !late && run < PLAYS.timeoutRun) return;
+  // Format 81: coaches stop shorter runs and draw up plays over the last two minutes (about three timeouts a team a game).
+  const late = ctx.flow ? state.period >= 4 && state.clockSeconds <= FLOW.lateSeconds && behind >= 1 && behind <= FLOW.lateBehind : state.period >= 4 && state.clockSeconds <= 40 && behind >= 1 && behind <= 3;
+  if (remaining < (late ? 1 : keep) || !late && run < (ctx.flow ? FLOW.timeoutRun : PLAYS.timeoutRun)) return;
   kit.emit(state, { type: 'command', side, text: late ? `${state[side].name} call time to set up the next play.` : `${state[side].name} call time to stop the ${run}-0 run.` });
   state.timeoutRequested[side] = true;
 }
@@ -418,15 +512,20 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   const restarted = !state.possessionPlay;
   const play = state.possessionPlay ?? createPossessionPlay(state); state.possessionPlay = play;
   const offense = play.offense, defense = other(offense);
-  const ctx: Ctx = { state, kit, play, offense, defense, hoop: basketPoint(state, offense), dir: offenseDirection(state, offense) };
+  const flow = state.playModel === 'plays-3';
+  const ctx: Ctx = { state, kit, play, offense, defense, hoop: basketPoint(state, offense), dir: offenseDirection(state, offense), flow, restarted };
   const handler = kit.player(state, offense, play.handlerId), tactics = state.tactics[offense];
   const lead = state.score[offense] - state.score[defense];
   const lastShot = state.period >= 4 && state.frontcourt && !restarted && state.clockSeconds <= state.shotClockSeconds + LATE_GAME.shotClockGrace && lead <= 0 && lead >= -LATE_GAME.maxDeficit;
   const threeNeeded = lastShot && lead === -3, holdFor = Math.min(state.clockSeconds, state.shotClockSeconds);
   const stopClock = state.period >= 4 && lead >= 1 && PLAYS.intentional.some(rule => lead <= rule.lead && state.clockSeconds <= rule.seconds);
   const control = restarted ? null : lastControl(ctx);
+  // Format 81: with a shot clock or less left in a period, the attack holds the ball for the last shot (in the fourth
+  // and overtime only with the lead; the existing late-game rules handle a tie or a deficit).
+  const endHold = flow && state.frontcourt && !restarted && !lastShot && !stopClock && state.clockSeconds <= Math.min(FLOW.holdFrom, state.shotClockSeconds + 1) && state.clockSeconds > FLOW.shootAt + 1 && (state.period < 4 || lead > 0) && control !== 'offensive';
   let action: Action;
   if (stopClock) action = 'foul';
+  else if (endHold) action = 'hold';
   else if (restarted || !state.frontcourt) {
     if (state.clockSeconds <= PLAYS.heaveSeconds && state.clockSeconds <= state.shotClockSeconds) action = 'heave';
     else if (state.clockSeconds <= PLAYS.rushSeconds && state.clockSeconds <= state.shotClockSeconds) action = 'rush';
@@ -436,11 +535,15 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   else if (lastShot) action = holdFor > LATE_GAME.shootAt ? 'hold' : 'late';
   else if (state.shotClockSeconds <= 5 || state.clockSeconds <= 5 && state.clockSeconds <= state.shotClockSeconds || play.actions >= 3) action = 'late';
   else action = choosePlay(ctx, handler);
-  const base = action === 'advance' && state.frontcourt ? PLAYS.seconds.inbound : action === 'heave' || action === 'rush' || action === 'hold' || action === 'foul' ? 0 : PLAYS.seconds[action];
+  const base = action === 'advance' && state.frontcourt ? flow ? FLOW.inbound : PLAYS.seconds.inbound : action === 'heave' || action === 'rush' || action === 'hold' || action === 'foul' ? 0 : flow && Object.hasOwn(FLOW.seconds, action) ? FLOW.seconds[action as keyof typeof FLOW.seconds] : PLAYS.seconds[action];
   let proposed = clamp(Math.round(base + (.5 - tactics.tempo) * PLAYS.seconds.tempo + (kit.draw(state) - .5) * 3), 1, 13);
+  // Format 81: a frontcourt throw-in with little left on the shot clock is a quick catch.
+  if (flow && action === 'advance' && state.frontcourt && state.shotClockSeconds <= 8) proposed = 1;
+  // Format 81: late in the fourth with the lead, the attack runs the clock.
+  if (flow && state.period >= 4 && state.clockSeconds <= FLOW.milk.seconds && lead > 0 && (action === 'pnr' || action === 'drive' || action === 'post' || action === 'motion')) proposed += FLOW.milk.extra;
   if (action === 'putback') proposed = Math.min(proposed, 2);
   if (action === 'heave' || action === 'rush') proposed = state.clockSeconds;
-  if (action === 'hold') proposed = clamp(holdFor - LATE_GAME.shootAt, 1, 7);
+  if (action === 'hold') proposed = endHold ? clamp(state.clockSeconds - FLOW.shootAt, 1, 18) : clamp(holdFor - LATE_GAME.shootAt, 1, 7);
   if (action === 'late' && lastShot) proposed = Math.max(1, holdFor - 1);
   if (action === 'foul') proposed = Math.min(proposed, LATE_GAME.foulDelay);
   const shooting = action !== 'advance' && action !== 'hold' && action !== 'foul';
@@ -449,7 +552,7 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   // Late in the shot clock the attack hurries; with four seconds or fewer it may fail to get a shot off.
   let violation = false;
   if (proposed >= state.shotClockSeconds && state.shotClockSeconds < state.clockSeconds) {
-    if (state.shotClockSeconds > 1 && !(shooting && state.shotClockSeconds <= 4 && kit.draw(state) < PLAYS.shotClockViolation)) proposed = state.shotClockSeconds - 1;
+    if (state.shotClockSeconds > 1 && !(shooting && state.shotClockSeconds <= 4 && kit.draw(state) < (flow ? FLOW.shotClockViolation : PLAYS.shotClockViolation))) proposed = state.shotClockSeconds - 1;
     else { proposed = state.shotClockSeconds; violation = true; }
   }
   const seconds = Math.min(state.clockSeconds, state.shotClockSeconds, proposed);
@@ -469,7 +572,7 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   else if (action === 'heave') heave(ctx, handler);
   else if (action === 'rush') rush(ctx, handler);
   else if (action === 'putback') putback(ctx, handler);
-  else if (action === 'hold') hold(ctx, handler);
+  else if (action === 'hold') { if (endHold) holdForLastShot(ctx, handler); else hold(ctx, handler); }
   else if (action === 'late') late(ctx, handler, threeNeeded, rushed);
   else if (action === 'pnr') pickAndRoll(ctx, handler);
   else if (action === 'drive') isolation(ctx, handler);
@@ -487,8 +590,10 @@ function advance(ctx: Ctx, restarted: boolean): void {
   const start = restarted ? kit.visualStart(state, play.positions) : play.positions;
   const positions = moveForAction(state, play, 'advance'), carrier = kit.player(state, offense, primaryHandler(state, offense));
   const from = kit.visualBallStart(state, start.find(point => point.playerId === handler.id)!), to = ballAt(positions.find(point => point.playerId === carrier.id)!);
+  // Format 81 names a throw-in taken in the frontcourt (after a foul, a ball knocked out or a kicked ball).
+  const text = ctx.flow && state.frontcourt ? `${nameOf(carrier)} takes the throw-in in the frontcourt. Shot clock ${state.shotClockSeconds}.` : `${nameOf(carrier)} brings ${state[offense].name} into their half-court offense.`;
   play.positions = positions; play.handlerId = carrier.id; play.passerId = null; state.frontcourt = true;
-  kit.emit(state, { type: 'command', side: offense, playerId: carrier.id, text: `${nameOf(carrier)} brings ${state[offense].name} into their half-court offense.`, scene: actionScene('setup', offense, start, positions, from, to) });
+  kit.emit(state, { type: 'command', side: offense, playerId: carrier.id, text, scene: actionScene('setup', offense, start, positions, from, to) });
 }
 
 /** Fast break after a steal or a defensive rebound: the leader finishes, hits a runner or a trailer, or the defense recovers. */
@@ -562,6 +667,16 @@ function hold(ctx: Ctx, handler: Player): void {
   if (!receiver) return;
   if (risk(ctx, handler, 'pass', defenderOf(ctx, receiver))) return;
   pass(ctx, handler, receiver, threeSpot(ctx, receiver), `${nameOf(handler)} swings it to ${nameOf(receiver)}, running down the clock.`);
+}
+/** Format 81: end of a period: the handler dribbles out the clock at the top, the others spread the floor. */
+function holdForLastShot(ctx: Ctx, handler: Player): void {
+  if (ctx.state.period < 4 && risk(ctx, handler, 'advance')) return;
+  const next = copyPositions(ctx);
+  setAt(next, handler.id, spot(ctx, 8.6, clamp(angleOf(ctx, pos(ctx, handler.id)) * .3, -.35, .35)));
+  follow(ctx, next, new Set());
+  setAt(next, defenderOf(ctx, handler).id, toward(next.find(item => item.playerId === handler.id)!, ctx.hoop, 1.4));
+  move(ctx, 'command', handler, next, ctx.state.period < 4 ? `${nameOf(handler)} holds the ball for the last shot of the quarter.` : `${nameOf(handler)} runs down the clock with the lead.`, { from: handler.id, to: handler.id });
+  ctx.play.passerId = null;
 }
 /** Shot clock or game clock running out: the best creator isolates. */
 function late(ctx: Ctx, handler: Player, threeNeeded: boolean, rushed: boolean): void {

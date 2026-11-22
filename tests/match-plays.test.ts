@@ -100,7 +100,7 @@ describe('richer play model (format 79)', () => {
       let state: MatchState = createFixtureMatch(seed, teams[3]!, teams[8]!, { autoSubstitutions: { home: true, away: true }, injuryMode: 'standard', ...PLAYS });
       for (let step = 0; state.status !== 'finished' && step < 5000; step += 1) {
         state = stepMatch(state);
-        if (step % 25 === 0) validateMatchState(state);
+        if (seed === 11 || step % 25 === 0) validateMatchState(state);
       }
       expect(state.status).toBe('finished');
       validateMatchState(state);

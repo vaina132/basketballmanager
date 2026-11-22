@@ -76,8 +76,8 @@ export const PLAYS = {
   blockOut: .3, blockOffense: .05,
   /** Block chance per Blocking point above 12 near the rim (half further out and on jump shots). */
   blocking: .006,
-  /** Steal share of a pass or drive turnover per Stealing point above 12. */
-  stealing: .02,
+  /** Steal share of a pass or drive turnover per Stealing point above 12, and Stealing's share of the defender's skill there. */
+  stealing: .03, stealSkill: .5,
   /** Turnover chance per risky action, plus the defense's pressure, the defender's skill over the actor's passing and fatigue. */
   turnovers: { advance: .018, pass: .08, drive: .112, post: .095, screen: .002, fastBreak: .1, pressure: .02, skillGap: .003, fatigue: .014, max: .14 } satisfies Record<RiskKind | 'pressure' | 'skillGap' | 'fatigue' | 'max', number>,
   /** Share of those turnovers that are steals (Stealing adjusts it on passes and drives). */
@@ -165,7 +165,7 @@ function pass(ctx: Ctx, passer: Player, receiver: Player, to: CourtPoint, text: 
   setAt(next, receiver.id, to);
   if (contest) settle(ctx, next, receiver, contest.defender, contest.separation); else follow(ctx, next, new Set());
   move(ctx, 'pass', passer, next, text, { from: passer.id, to: receiver.id, arc }, receiver);
-  ctx.play.handlerId = receiver.id; ctx.play.passerId = passer.id; ctx.play.actions += 1;
+  ctx.play.handlerId = receiver.id; ctx.play.passerId = passer.id;
 }
 function drive(ctx: Ctx, driver: Player, to: CourtPoint, text: string, contest?: { defender: Player; separation: number }, screener?: Player): void {
   const next = copyPositions(ctx);
@@ -173,7 +173,7 @@ function drive(ctx: Ctx, driver: Player, to: CourtPoint, text: string, contest?:
   if (screener) setAt(next, screener.id, toward(to, ctx.hoop, -1));
   if (contest) settle(ctx, next, driver, contest.defender, contest.separation); else follow(ctx, next, new Set());
   move(ctx, 'drive', driver, next, text, { from: driver.id, to: driver.id });
-  ctx.play.handlerId = driver.id; ctx.play.actions += 1;
+  ctx.play.handlerId = driver.id;
 }
 
 /** Space a shooter gets: base plus the creator's skill over the defender's defense, with a random spread (metres). */
@@ -229,7 +229,7 @@ const threeSpot = (ctx: Ctx, p: Player) => spot(ctx, 7.05, clamp(angleOf(ctx, po
 function risk(ctx: Ctx, actor: Player, kind: RiskKind, interceptor?: Player): boolean {
   const { state, kit } = ctx, defender = interceptor ?? defenderOf(ctx, actor), pressure = state.tactics[ctx.defense].pressure;
   const stealing = defender.attributes.stealing, intelligence = actor.attributes.intelligence;
-  const defending = stealing !== undefined && (kind === 'pass' || kind === 'drive') ? defender.attributes.defense * (1 - EXTRA_MATCH.stealSkill) + stealing * EXTRA_MATCH.stealSkill : defender.attributes.defense;
+  const defending = stealing !== undefined && (kind === 'pass' || kind === 'drive') ? defender.attributes.defense * (1 - PLAYS.stealSkill) + stealing * PLAYS.stealSkill : defender.attributes.defense;
   const decisions = intelligence === undefined ? 0 : (intelligence - EXTRA_MATCH.turnoverCentre) * EXTRA_MATCH.turnover;
   const fatigue = (100 - state.stats[actor.id]!.condition) / 100;
   const T = PLAYS.turnovers;
@@ -434,7 +434,7 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
     else action = 'advance';
   } else if (control === 'offensive' && distanceToRim(ctx, pos(ctx, handler.id)) <= PLAYS.putback.range && kit.draw(state) < PLAYS.putback.chance) action = 'putback';
   else if (lastShot) action = holdFor > LATE_GAME.shootAt ? 'hold' : 'late';
-  else if (state.shotClockSeconds <= 5 || state.clockSeconds <= 5 && state.clockSeconds <= state.shotClockSeconds || play.actions >= 4) action = 'late';
+  else if (state.shotClockSeconds <= 5 || state.clockSeconds <= 5 && state.clockSeconds <= state.shotClockSeconds || play.actions >= 3) action = 'late';
   else action = choosePlay(ctx, handler);
   const base = action === 'advance' && state.frontcourt ? PLAYS.seconds.inbound : action === 'heave' || action === 'rush' || action === 'hold' || action === 'foul' ? 0 : PLAYS.seconds[action];
   let proposed = clamp(Math.round(base + (.5 - tactics.tempo) * PLAYS.seconds.tempo + (kit.draw(state) - .5) * 3), 1, 13);
@@ -476,6 +476,8 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   else if (action === 'post') postUp(ctx, handler);
   else if (action === 'early') early(ctx, handler);
   else motion(ctx, handler);
+  // One action per live step, however many events it recorded (the saved count never exceeds the steps played).
+  if (state.possessionPlay === play) play.actions += 1;
   kit.sampleInjuries(state, seconds); kit.finishPeriod(state); kit.resolveEligibility(state);
 }
 
@@ -485,7 +487,7 @@ function advance(ctx: Ctx, restarted: boolean): void {
   const start = restarted ? kit.visualStart(state, play.positions) : play.positions;
   const positions = moveForAction(state, play, 'advance'), carrier = kit.player(state, offense, primaryHandler(state, offense));
   const from = kit.visualBallStart(state, start.find(point => point.playerId === handler.id)!), to = ballAt(positions.find(point => point.playerId === carrier.id)!);
-  play.positions = positions; play.handlerId = carrier.id; play.actions += 1; play.passerId = null; state.frontcourt = true;
+  play.positions = positions; play.handlerId = carrier.id; play.passerId = null; state.frontcourt = true;
   kit.emit(state, { type: 'command', side: offense, playerId: carrier.id, text: `${nameOf(carrier)} brings ${state[offense].name} into their half-court offense.`, scene: actionScene('setup', offense, start, positions, from, to) });
 }
 
@@ -519,7 +521,7 @@ function fastBreak(ctx: Ctx, handler: Player): void {
   if (choice === 'settle') {
     const next = copyPositions(ctx); setAt(next, leader.id, toward(lane, { x: .5, y: .5 }, 6)); follow(ctx, next, new Set());
     move(ctx, 'drive', leader, next, `${nameOf(leader)} pushes on the fast break, but the defense gets back.`, { from: leader.id, to: leader.id });
-    ctx.play.handlerId = leader.id; ctx.play.actions += 1; ctx.play.passerId = null;
+    ctx.play.handlerId = leader.id; ctx.play.passerId = null;
     return;
   }
   if (choice === 'finish') {
@@ -580,7 +582,7 @@ function pickAndRoll(ctx: Ctx, handler: Player): void {
   const handlerAt = pos(ctx, handler.id), screenAt = toward(pos(ctx, man.id), { x: handlerAt.x, y: handlerAt.y < .5 ? handlerAt.y + .08 : handlerAt.y - .08 }, .7);
   const next = copyPositions(ctx); setAt(next, screener.id, screenAt); follow(ctx, next, new Set([man.id]));
   move(ctx, 'command', handler, next, `${nameOf(screener)} sets a ball screen for ${nameOf(handler)}.`, { from: handler.id, to: handler.id });
-  ctx.play.passerId = null; ctx.play.actions += 1;
+  ctx.play.passerId = null;
   const shooter = shooterFrom(ctx, others(ctx, handler, screener));
   const pullThree = handler.attributes.threePoint >= 12;
   const lob = screener.heightCm >= 203 && handler.attributes.passing >= 13;

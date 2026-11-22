@@ -200,7 +200,6 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   if (!complete && match.pendingSubstitutions[managedSide].length) notices.push({ key: 'queued', title: 'Substitutions queued', detail: match.pendingSubstitutions[managedSide].map(change => `${playerName(change.outId)} → ${playerName(change.inId)}`).join('; '), action: 'Review changes', open: onOpenCoaching })
   if (!complete && match.timeoutRequested[managedSide]) notices.push({ key: 'timeout', title: 'Timeout requested', detail: 'Waiting for the next permitted stoppage.', action: 'Review request', open: onOpenCoaching })
 
-  const activity = match.events.filter(event => event.type !== 'tipoff' && !(event.type === 'command' && event.scene?.kind === 'setup')).slice(-5).reverse()
   const displayName = complete ? 'Final lineup' : ready ? 'Starting five' : 'On the floor'
 
   return <div className="manager-desk">
@@ -223,6 +222,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
       <div><dt>Substitutions</dt><dd className="desk-policy-value">{match.autoSubstitutions[managedSide] ? automaticChoiceLabels(assistant?.name).policy : 'Manual'}</dd></div>
     </dl>
 
+    {/* Owner decision (22 November 2026): no "Recent activity" play-by-play on the Desk; the match screen has it. */}
     <div className="desk-columns">
       <div className="desk-main-column">
         <section className="desk-lineup panel" aria-labelledby="desk-lineup-heading">
@@ -235,10 +235,6 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
           <div className="desk-reserves"><span>Available bench</span><div>{availableBench.map(player => <button key={player.id} onClick={() => onSelectPlayer(player.id)} title={`${player.name} · ${player.position} · ${Math.round(match.stats[player.id].condition)}% stamina`}>{player.name.split(' ').at(-1)}<small>{Math.round(match.stats[player.id].condition)}%</small></button>)}{!availableBench.length && <span>No eligible reserves</span>}</div></div>
         </section>
 
-        <section className="desk-activity panel" aria-labelledby="desk-activity-heading">
-          <div className="desk-panel-heading"><h2 id="desk-activity-heading"><Icon name="clock" size={16} />Recent activity</h2><span className="desk-section-note">Current match</span></div>
-          {activity.length ? <ol>{activity.map(event => <li key={event.id}><time>{period(event.period)}<span>{clock(event.clockSeconds)}</span></time><p>{event.text}</p><span className="desk-activity-score">{event.score.home}–{event.score.away}</span></li>)}</ol> : <p className="desk-empty">No match actions yet. Review your lineup and instructions before tipoff.</p>}
-        </section>
       </div>
 
       <div className="desk-side-column">

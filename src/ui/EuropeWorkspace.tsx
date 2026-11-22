@@ -92,6 +92,8 @@ export function InternationalWorkspace({ season, competitionId, onCompetitionCha
       </div>
       <div className="season-matchday-action"><p data-international-status>{managedId && !shown.length && competitions.length > 0 && <>{current ? 'Your club plays no European competition this season.' : `Your club played no European competition in ${seasonLabel(selectedSeason)}.`}{entry && ' '}</>}{entry ? champion ? <><strong>{champion.name}</strong> win the {entry.competition.name}.</> : `${entry.format.label}: ${entry.table.length || europeanEntrants(entry.competition, europe).length} clubs.` : !competitions.length ? 'No European competition is played in this career.' : null}</p></div>
     </section>
+    {/* Format 83: how European places work, your club's status and next season's places (careers with European entry rules), after the club's competitions. */}
+    <EuropeanPlacesPanel season={season} />
 
     {entry && <>
       {entry.tables.filter(group => group.rows.length).length > 0 && <section className="season-standings panel" aria-labelledby="europe-tables-title">
@@ -120,8 +122,6 @@ export function InternationalWorkspace({ season, competitionId, onCompetitionCha
         {!games.length && <p className="muted">No games yet.</p>}
       </section>
     </>}
-    {/* Format 83: how European places work, your club's status and next season's places (careers with European entry rules). */}
-    <EuropeanPlacesPanel season={season} />
   </div>
 }
 

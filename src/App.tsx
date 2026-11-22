@@ -1019,7 +1019,7 @@ export default function App() {
           else if (target === 'dynamics') { setRelationshipPlayer(playerId ?? null); setSquadView('relationships'); navigate('squad') }
           else if (target === 'contract' && playerId) openTransfers(playerId)
           else if (target === 'bid') { setTransfersTab('search'); navigate('transfers', '#transfer-business') }
-          else if (target === 'europe') { setCompetitionsView('international'); navigate('season', '[data-european-places]') }
+          else if (target === 'europe') { navigate('season', '[data-european-places]'); setCompetitionsView('international') }
           else { if (playerId) setSelectedPlayer(playerId); setRosterFilter('all'); setRosterQuery(''); navigate('squad', playerId ? '.player-profile' : '#main') }
         }} onContractReply={replyToContract} onNationalOffer={answerNationalOffer} onEuropeanOffer={answerEuropeanPlace} onBidDecision={(offerId, market, response) => updateCareer(state => market === 'season' ? decideInSeasonTransfer(state, offerId, response) : decideClubTransfer(state, offerId, response), response === 'accept' ? 'Offer accepted. The player decides by the next matchday; the fee arrives when he signs.' : response === 'counter' ? 'Counteroffer sent: the club may come back at your asking fee.' : 'Offer declined.', true)} />}
 

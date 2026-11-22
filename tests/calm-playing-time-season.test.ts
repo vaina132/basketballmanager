@@ -26,7 +26,7 @@ const signing = 'bbl-14-p6';
 let end: SeasonState;
 const messages = new Set<string>();
 beforeAll(() => {
-  const start = createSeason({ seed: 5, world, managedClubId: clubId, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchFlow: false });
+  const start = createSeason({ seed: 5, world, managedClubId: clubId, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS });
   const offered = submitInSeasonTransferOffer(start, signing, requiredNegotiationWage(signing, 2, undefined, start, 'rotation'), 2, requiredInSeasonTransferFee(start, signing), clubId, 'upfront', { role: 'rotation' });
   let state = setEmploymentDelegation(offered, true);
   while (state.status === 'active') {

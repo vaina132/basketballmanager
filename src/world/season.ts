@@ -1,7 +1,8 @@
 import { requireCalendarWeek } from './calendar-boundary';
 import { competitionTable } from './competition-table';
 import { BOARD_REVIEW_STEP, createBoard, enableBoard, enableBoardConsequences, enablePresidentBoard, prepareBoardSeason, processBoardRound } from './board';
-import { objectiveStartingFive } from './presidents';
+import { isYouthPlayer, objectiveStartingFive } from './presidents';
+import { clubHeadCoach, computerCoachTactics, createCoaches, headCoachWorld, MANAGER_COACH, recordManagerSeason, youthTrustFive } from './head-coaches';
 import { summarizeAcademyHistory } from './academy-history';
 import { summarizeYouthHistory } from './youth-history';
 import { sealCompletedHistory } from './sealed-history';
@@ -13,7 +14,7 @@ import { appointFromUnemployment, appointManager, createCareer, enableCareerMove
 import { jobOfferRefusal, jobRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, unemployedSeasonEndVacancies, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
 import { allowsUnemployment, CAREER_RULES, coachProtected, isUnemployed, NO_CLUB, startingConfidence, usesCareerRules } from './career-rules';
 import { nationalPausedWeeks } from './national-calendar';
-import { advanceNationalWeek, createNational, nationalDutyDays, playSummerTournament, rolloverNational, usesNationalTeams } from './national';
+import { advanceNationalWeek, createNational, nationalDutyDays, playSummerTournament, rolloverNational, usesNationalTeams, withRealNationalCoaches } from './national';
 import { addCalendarDays, domesticRoundDates, roundRobinGames, roundRobinRoundCount, calendarDaysBetween } from './competition-calendar';
 import { derivePostseason, POSTSEASON_FORMATS, POSTSEASON_SLOT_OFFSETS, postseasonOutcome } from './postseason';
 import { divisionChanges, openingDivisions, seasonLeagues } from './divisions';
@@ -295,7 +296,7 @@ export function managedSide(season: SeasonState): Side {
   throw new Error('The active fixture must include the managed club.');
 }
 
-function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background' | 'facilities' | 'board' | 'matchModel'>> & WorldContext, fixture: SeasonFixture): MatchState {
+function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background' | 'facilities' | 'board' | 'matchModel' | 'coaches'>> & WorldContext, fixture: SeasonFixture): MatchState {
   const homeClub = season.clubs.find(club => club.id === fixture.homeClubId);
   const awayClub = season.clubs.find(club => club.id === fixture.awayClubId);
   // Step 3.5b: a European game's club outside the full world plays as a background side.
@@ -321,18 +322,23 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   const unavailable = new Set(Object.keys(preExistingInjuries));
   const startingFive = (club: Team, developed: Team, plan: ClubPlan, full: boolean) => {
     const planned = lineup(club, plan);
-    return full && club.id !== season.managedClubId && isRegularFixture(fixture) ? objectiveStartingFive(season, { clubId: club.id, seasonNumber: season.seasonNumber ?? 1, players: developed.players, planned, unavailable }) : planned;
+    const objective = full && club.id !== season.managedClubId && isRegularFixture(fixture) ? objectiveStartingFive(season, { clubId: club.id, seasonNumber: season.seasonNumber ?? 1, players: developed.players, planned, unavailable }) : planned;
+    // Format 82: a computer club's coach who trusts youth starts a young player in league games.
+    const coach = full && club.id !== season.managedClubId && isRegularFixture(fixture) ? clubHeadCoach(season, club.id) : undefined;
+    return coach && coach !== MANAGER_COACH ? youthTrustFive(coach, developed.players, objective, unavailable, id => isYouthPlayer(season, club.id, id, fixture.date, 22)) : objective;
   };
   const homeFive = startingFive(home, developedHome, homePlan, !!homeClub), awayFive = startingFive(away, developedAway, awayPlan, !!awayClub);
   // Format 74: the manager's starters play the circles he chose on the court picture; everyone else, and computer
   // clubs, play their listed positions.
   const circles = (club: Team, plan: ClubPlan, five: readonly string[]) => { const chosen = club.id === season.managedClubId ? Object.fromEntries(five.flatMap(id => plan.slots?.[id] ? [[id, plan.slots[id]!]] : [])) : {}; return Object.keys(chosen).length ? chosen : undefined; };
   const homeCircles = circles(home, homePlan, homeFive), awayCircles = circles(away, awayPlan, awayFive);
+  // Format 82: computer clubs play their head coach's style, fitted to the five by his Tactics attribute.
+  const homeTactics = computerCoachTactics(season, developedHome, homeFive) ?? homePlan.tactics, awayTactics = computerCoachTactics(season, developedAway, awayFive) ?? awayPlan.tactics;
   let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), developedHome, developedAway, {
     ...(morale ? { morale } : {}),
     lineups: { home: homeFive, away: awayFive },
     ...(homeCircles || awayCircles ? { slots: { ...(homeCircles ? { home: homeCircles } : {}), ...(awayCircles ? { away: awayCircles } : {}) } } : {}),
-    tactics: { home: homePlan.tactics, away: awayPlan.tactics },
+    tactics: { home: homeTactics, away: awayTactics },
     autoSubstitutions: { home: home.id === season.managedClubId ? homePlan.autoSubstitutions : true, away: away.id === season.managedClubId ? awayPlan.autoSubstitutions : true },
     conditions,
     injuryMode: season.injuryMode,
@@ -343,6 +349,8 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   });
   if (season.assistant?.enabledSince) for (const side of SIDES) {
     if (match[side].id === season.managedClubId) continue;
+    // Format 82: the head coach decides a computer club's instructions, not the assistant.
+    if (season.coaches && clubHeadCoach(season, match[side].id)) continue;
     const contract = season.assistant.contracts.find(contract => contract.clubId === match[side].id && contract.seasonNumber === season.seasonNumber && contract.startedRound <= fixture.round && contract.releasedRound === null);
     const coach = contract && staffMember(ASSISTANT_DIRECTORY, contract.assistantId);
     if (coach && match.status !== 'finished') match = applyAssistantTactics(match, side, coach);
@@ -484,6 +492,12 @@ export interface SeasonSystems {
    * national team's country; other worlds and older careers are unchanged.
    */
   nationalTeams?: boolean;
+  /**
+   * Format 82 (owner, 22 November 2026, item E): real head coaches with 1-20 attributes and playing styles for every
+   * club and national team; computer clubs play their coach's style; the manager's own coaching attributes change
+   * with his career (`src/world/head-coaches.ts`). New real-club careers with job changes; others are unchanged.
+   */
+  realCoaches?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -496,7 +510,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, nationalTeams: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, nationalTeams: true, realCoaches: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -523,6 +537,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.scoutNetwork !== undefined && typeof options.scoutNetwork !== 'boolean') throw new Error('Choose a valid scouting network setting.');
   if (options.matchPlays !== undefined && typeof options.matchPlays !== 'boolean') throw new Error('Choose a valid match engine setting.');
   if (options.nationalTeams !== undefined && typeof options.nationalTeams !== 'boolean') throw new Error('Choose a valid national teams setting.');
+  if (options.realCoaches !== undefined && typeof options.realCoaches !== 'boolean') throw new Error('Choose a valid head coaches setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -545,9 +560,18 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   const listed = options.transferLists && healed.recruitment.enabledSince ? { ...healed, recruitment: { ...healed.recruitment, model: 'recruitment-2' as const, listings: [] } } : healed;
   const scouted = options.scoutNetwork && listed.scouting.enabledSince ? { ...listed, scouting: { ...listed.scouting, model: 'scouting-2' as const } } : listed;
   // Format 79: the richer play model; the opening match is prepared again with it.
-  if (!options.matchPlays) return scouted;
-  const played: SeasonState = { ...scouted, matchModel: 'plays-2' };
-  return played.activeMatch && played.activeFixtureId ? { ...played, activeMatch: prepareMatch(played, getActiveFixture(played)) } : played;
+  const played: SeasonState = options.matchPlays ? { ...scouted, matchModel: 'plays-2' } : scouted;
+  // Format 82: real head coaches in real-club careers with job changes (every coach change is a board change); the
+  // national teams start with their real coaches.
+  const coached = options.realCoaches && options.world && headCoachWorld(options.world) && played.career.enabledSince ? withRealCoaches(played) : played;
+  if (!options.matchPlays && coached === played) return played;
+  return coached.activeMatch && coached.activeFixtureId ? { ...coached, activeMatch: prepareMatch(coached, getActiveFixture(coached)) } : coached;
+}
+
+/** Format 82: the career's coaches (the manager's starting attributes) and the national teams' real coaches. */
+function withRealCoaches(state: SeasonState): SeasonState {
+  const coaches = createCoaches(state.manager, state.seed, worldOf(state).startDate);
+  return { ...state, coaches, ...(state.national ? { national: withRealNationalCoaches(state.national, worldOf(state)) } : {}) };
 }
 
 /** Format 80: set by `createSeason` while the opening of a career with national teams is built. */
@@ -1142,6 +1166,8 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = prepareBoardSeason(next);
   // Format 80: the summer tournament, the federations' judgement and next season's qualifiers.
   if (state.national) next = { ...next, national: rolloverNational(state, next.date) };
+  // Format 82: the manager's coaching attributes change with the completed season.
+  if (state.coaches) next = { ...next, coaches: recordManagerSeason(state)! };
   next.activeMatch = first ? prepareMatch(next, first) : null;
   return next;
 }

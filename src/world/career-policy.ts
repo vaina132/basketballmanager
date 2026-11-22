@@ -10,6 +10,9 @@ import type { WorldContext } from '../domain/world';
 import { allowsUnemployment, CAREER_RULES, careerPointKey, coachProtected, fadedReputation, isUnemployed, midSeasonMinimumGames, NO_CLUB, resignationsCounting, restartsBefore, startingConfidence, usesCareerRules } from './career-rules';
 import { calendarDaysBetween } from './competition-calendar';
 import { dateForRound } from './season';
+import { managerCoachingReputation } from './head-coaches';
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 /** A season verdict of Under pressure ends the manager's job when dismissal and job changes are on. */
 export const DISMISSAL_VERDICT = 'pressure' as const;
@@ -21,7 +24,7 @@ export const STARTING_REPUTATION = 45;
 export const VACANCY_BASE_REQUIREMENT = 25;
 export const VACANCY_STEP = 6;
 
-type CareerContext = Pick<SeasonState, 'managedClubId' | 'board' | 'clubs' | 'fixtures' | 'history' | 'seasonNumber'> & { career?: SeasonCareer; divisions?: SeasonState['divisions']; background?: SeasonState['background'] } & WorldContext;
+type CareerContext = Pick<SeasonState, 'managedClubId' | 'board' | 'clubs' | 'fixtures' | 'history' | 'seasonNumber'> & { career?: SeasonCareer; divisions?: SeasonState['divisions']; background?: SeasonState['background']; coaches?: SeasonState['coaches'] } & WorldContext;
 
 export interface ReputationSeason { seasonNumber: number; clubId: string; confidence: number; weight: number }
 /** `resignations` (career-2 careers, only when there are any): resignations still costing reputation. */
@@ -33,7 +36,9 @@ export interface ManagerReputation { value: number; seasons: ReputationSeason[];
  * `throughSeason`) made before the career point `penalty.before`.
  */
 export function managerReputation(state: CareerContext, throughSeason = state.seasonNumber, penalty?: { seasonNumber: number; before: number }): ManagerReputation {
-  const { value, seasons } = reputationSeasons(state, throughSeason);
+  const board = reputationSeasons(state, throughSeason), seasons = board.seasons;
+  // Format 82: the manager's coaching attributes add to (or take from) his reputation, as they stood during that season.
+  const value = clamp(board.value + managerCoachingReputation(state.coaches, throughSeason), 0, 100);
   if (!usesCareerRules(state.career)) return { value, seasons };
   const resignations = resignationsCounting(state.career, penalty?.seasonNumber ?? throughSeason, penalty?.before).length;
   return resignations ? { value: Math.max(0, value - resignations * CAREER_RULES.resignationReputationCost), seasons, resignations } : { value, seasons };

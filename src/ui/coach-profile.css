@@ -1,0 +1,38 @@
+.coach-profile { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: 16px; border: 1px solid var(--border, #3a4150); background: var(--surface, #191e25); color: inherit; border-radius: 6px; }
+.coach-profile::backdrop { background: rgb(0 0 0 / 55%); }
+.coach-profile header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.coach-profile h2 { margin: 0; font-size: 1.2rem; }
+.coach-profile h3 { margin: 14px 0 6px; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #a3abb8); }
+.coach-profile header p { margin: 2px 0 0; color: var(--muted, #a3abb8); }
+.coach-profile-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 10px 0 0; }
+.coach-attributes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; margin: 0; }
+.coach-attribute { display: grid; grid-template-columns: 7.5rem 1fr; align-items: center; gap: 8px; }
+.coach-attribute dt { font-size: .9rem; }
+.coach-attribute dd { margin: 0; display: flex; align-items: center; gap: 6px; }
+.coach-attribute-bar { flex: 1; height: 8px; background: var(--surface-2, #202630); border-radius: 4px; overflow: hidden; min-width: 40px; }
+.coach-attribute-bar span { display: block; height: 100%; background: var(--accent, #e3a33b); }
+.coach-attribute strong { width: 1.6rem; text-align: right; font-variant-numeric: tabular-nums; }
+.coach-change-up { color: #6fcf8a; }
+.coach-change-down { color: #f08a7a; }
+.coach-style { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; margin: 0; }
+.coach-style div { display: flex; justify-content: space-between; gap: 8px; }
+.coach-style dt { color: var(--muted, #a3abb8); }
+.coach-style dd { margin: 0; text-align: right; }
+.coach-titles, .coach-spells { margin: 0; padding-left: 18px; }
+.coach-empty, .coach-source { color: var(--muted, #a3abb8); margin: 4px 0 0; font-size: .9rem; }
+.coach-source { margin-top: 14px; }
+.coach-list { width: 100%; border-collapse: collapse; }
+.coach-list th, .coach-list td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--border, #3a4150); }
+.coach-list td.number, .coach-list th.number { text-align: right; font-variant-numeric: tabular-nums; }
+.coach-list button.link { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; text-align: left; }
+.coach-list-free { margin-top: 12px; }
+@media (max-width: 600px) {
+  .coach-attributes, .coach-style { grid-template-columns: 1fr; }
+  .coach-list .hide-narrow { display: none; }
+}
+.head-coaches { padding: 12px 14px; overflow-x: auto; }
+.head-coaches .panel-heading h2 { margin: 0 0 8px; font-size: 14px; }
+.head-coaches h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #a3abb8); margin: 16px 0 6px; }
+.head-coaches .generated-tag { margin-left: 6px; }
+.manager-coaching-body { padding: 4px 16px 4px; }
+.desk-fixture-team > div > .desk-opponent-coach { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }

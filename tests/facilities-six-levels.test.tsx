@@ -24,8 +24,7 @@ import { economyPack } from './helpers/economy-pack';
 /** Owner request (16 November 2026): six levels, the arena as seats, a simple bank loan and no confusing controls. */
 const club = 'rhine-falcons';
 const manager = { name: 'Six Level Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-// Its cash and calendar scenarios were set before every club started with staff (format 74): it keeps the earlier staffing.
-const career = () => createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS, matchPlays: false, staffing: false });
+const career = () => createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS });
 /** Rule fixtures only: an artificial cost or sold-out gate, without claiming to be a valid career export. */
 function entry(state: SeasonState, fields: Partial<FinanceEntry>): SeasonState {
   const item: FinanceEntry = { id: `finance-${state.finance.ledger.length + 1}`, clubId: club, seasonNumber: state.seasonNumber, round: state.round, kind: 'operations', amount: 0, sourceId: `test-${state.finance.ledger.length}`, ticket: null, coach: null, payroll: null, ...fields };
@@ -95,7 +94,7 @@ describe('a six-level upgrade, an arena expansion and a bank loan', () => {
     built = until(upgraded, state => getFacilityLevel(state, 'training', club) === 4);
     borrowed = takeBankLoan(built, 10_000_000, 2);
     expanding = startArenaExpansion(borrowed, 500);
-    expanded = until(expanding, state => state.facilities.projects.at(-1)!.completedOn !== null || state.status !== 'active');
+    expanded = until(expanding, state => state.facilities.projects.filter(project => project.clubId === club).at(-1)!.completedOn !== null || state.status !== 'active');
   }, 600_000);
 
   it('raises one level at a time, paid in full from Remaining budget, with its effect and upkeep from completion', () => {
@@ -239,8 +238,10 @@ describe('paying for projects and the board\'s prudent loans', () => {
 
   it('takes the loan and starts the expansion during the calendar, and the strict save check rebuilds both', () => {
     // Cancelled projects are not refunded, so the board is left short of the expansion plus its cushion; free tickets sell out.
+    // Three cancelled upgrades (four before the full new-career rules of 22 November 2026, whose staff fees use up cash
+    // faster): the shortfall when the arena sells out stays within the automatic loan's half of the limit.
     let state = setTicketPlan(career(), { delegated: false, price: 0 });
-    for (const type of ['training', 'youth', 'medical', 'scouting'] as const) state = cancelFacilityUpgrade(startFacilityUpgrade(state, type), `facility-project-${state.facilities.projects.length + 1}`);
+    for (const type of ['training', 'youth', 'medical'] as const) state = cancelFacilityUpgrade(startFacilityUpgrade(state, type), `facility-project-${state.facilities.projects.length + 1}`);
     expect(getSpendableCash(state, club)).toBeLessThan(quoteArenaExpansion(state, 500).cost + upgradeAutomationCushion(state, club));
     state = setFacilityDelegation(state, true);
     state = until(state, next => next.facilities.debts!.some(debt => debt.clubId === club), 10);

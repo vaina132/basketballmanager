@@ -16,6 +16,8 @@
 /* Menu groups (owner, 16 November 2026: a short menu ordered by use). The sidebar scrolls on short screens. */
 .game-shell .sidebar { overflow-y: auto; scrollbar-width: none; }
 .nav-divider { display: block; flex: none; height: 1px; margin: 4px 8px; background: var(--border); }
+/* Tab icons sit a little apart from their labels (22 November 2026, evening). */
+.page-view-controls .segmented > button { display: inline-flex; align-items: center; gap: 6px; }
 /* Squad has five views since Contracts moved there (16 November 2026); on phones they wrap instead of widening the page. */
 @media (max-width: 600px) { .squad-view-controls .segmented { flex-wrap: wrap; min-width: 0; max-width: 100%; } }
 .game-shell .nav-item { font-size: 12px; min-height: 38px; padding: 8px; border-radius: 1px; }

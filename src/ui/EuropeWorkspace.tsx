@@ -163,7 +163,7 @@ export function EuropeanLeaguesWorkspace({ season, leagueId, onLeagueChange, onO
         return <div key={group.country} className="league-picker-country" role="group" aria-labelledby={titleId}>
           <h3 id={titleId}><CountryFlag country={group.country} decorative />{group.country}</h3>
           <div className="league-picker-options">{group.leagues.map(league => <button key={league.id} type="button" className={`league-option${league.id === selected.id ? ' selected' : ''}`} aria-pressed={league.id === selected.id} data-league-option={league.id} onClick={() => choose(league.id)}>
-            <InlineLogo kind="competition" id={league.id} name={league.name} size={22} decorative />
+            <span className="league-option-logo"><InlineLogo kind="competition" id={league.id} name={league.name} size={22} decorative /></span>
             <span><strong>{league.name}</strong><small>{league.played ? TIERS[league.tier] ?? `Division ${league.tier}` : NOT_PLAYED_LEAGUE.tag}</small></span>
           </button>)}</div>
         </div>
@@ -190,7 +190,7 @@ function SimulatedLeague({ season, league }: { season: SeasonState; league: Back
     </section>
     <section className="season-standings panel" aria-labelledby="europe-estimated-title">
       <header className="season-panel-heading"><h2 id="europe-estimated-title">{league.name} · Simulated final table</h2></header>
-      <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Strength of the best eight players plus the season's random element">Strength</th></tr></thead>
+      <div className="season-table-scroll"><table className="season-standings-table simulated-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Strength of the best eight players plus the season's random element">Strength</th></tr></thead>
         <tbody>{estimatedTable(season, league, selectedSeason).map((row, index) => <tr key={row.clubId}><td>{index + 1}</td><th scope="row"><ClubName club={club(row.clubId)} /></th><td>{row.estimate.toFixed(1)}</td></tr>)}</tbody></table></div>
       <p className="muted">Not played game by game: clubs are ranked by the strength of their best eight players plus a random element. The order only decides who plays in Europe next season.</p>
     </section>

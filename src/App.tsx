@@ -118,7 +118,7 @@ import type { TrainingPlan } from './domain/training'
 import { medicalDate, PlayerHealthSummary } from './ui/SeasonMedicalReport'
 import type { SeasonReply } from './world/season.worker'
 import { SeasonProgress, seasonFacts, showsSeasonStrip } from './ui/SeasonProgress'
-import { Nationality, playerNationality } from './ui/Nationality'
+import { ManagerFlags, Nationality, playerNationality } from './ui/Nationality'
 import { worldOf } from './world/career-world'
 import { ASSISTANT_DIRECTORY } from './data/staff-directory'
 
@@ -949,7 +949,7 @@ export default function App() {
       <div className="brand"><div className="brand-symbol"><Icon name="ball" size={29} /></div><div>COURTSIDE<small>BASKETBALL MANAGER</small></div></div>
       <div className="club-context"><ClubMark id={managedTeam.id} name={managedTeam.shortName} fullName={managedTeam.name} color={managedTeam.color} /><div><strong>{managedTeam.name}</strong><span>First team</span></div></div>
       <MainNavigation groups={mainNavigation({ career: !!season, national: !!season?.national?.job })} current={page} disabled={saving} onNavigate={navigate} />
-      <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />{season ? 'Season' : 'Exhibition'}</div><p>{season ? worldOf(season).source === 'real-data-pack' ? 'Real clubs' : 'Fictional squads' : match.home.id.startsWith('club-') ? 'Real clubs · private pack' : 'Fictional squads'}</p>{season ? <button id="manager-profile" className="manager manager-profile-button" onClick={openManagerProfile} disabled={saving || advancing} aria-label={season.manager ? 'Edit manager profile' : 'Set manager profile'}><span className="manager-avatar">{season.manager ? season.manager.name.split(/\s+/u).map(part => Array.from(part)[0]).slice(0, 2).join('').toUpperCase() : 'YOU'}</span><span className="manager-identity"><strong data-manager-name>{season.manager?.name ?? 'Set manager profile'}</strong><small>Head coach</small>{season.manager && <small data-manager-details>{managerAge(season.manager, season.date)} years · {season.manager.nationality}</small>}</span></button> : <div className="manager"><span className="manager-avatar">YOU</span><div>Head coach<small>{managedTeam.name}</small></div></div>}</div>
+      <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />{season ? 'Season' : 'Exhibition'}</div><p>{season ? worldOf(season).source === 'real-data-pack' ? 'Real clubs' : 'Fictional squads' : match.home.id.startsWith('club-') ? 'Real clubs · private pack' : 'Fictional squads'}</p>{season ? <button id="manager-profile" className="manager manager-profile-button" onClick={openManagerProfile} disabled={saving || advancing} aria-label={season.manager ? 'Edit manager profile' : 'Set manager profile'}><span className="manager-avatar">{season.manager ? season.manager.name.split(/\s+/u).map(part => Array.from(part)[0]).slice(0, 2).join('').toUpperCase() : 'YOU'}</span><span className="manager-identity"><strong data-manager-name>{season.manager?.name ?? 'Set manager profile'}</strong><small>Head coach</small>{season.manager && <small data-manager-details>{managerAge(season.manager, season.date)} years · {season.manager.nationality}<ManagerFlags nationality={season.manager.nationality} /></small>}</span></button> : <div className="manager"><span className="manager-avatar">YOU</span><div>Head coach<small>{managedTeam.name}</small></div></div>}</div>
     </aside>
 
     <div className="main-shell">

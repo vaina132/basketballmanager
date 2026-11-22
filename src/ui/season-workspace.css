@@ -102,7 +102,7 @@
 .europe-workspace .season-matchday-identity{gap:12px;flex-wrap:wrap;max-width:100%}
 .calendar-table{min-width:680px}
 .calendar-table td small{display:inline;font-size:12px;color:var(--muted)}
-.season-calendar>.panel>p.muted,.europe-workspace .panel>p.muted{margin:0;padding:8px 14px 12px;font-size:12px}
+.season-calendar>.panel>p.muted,.europe-workspace .panel>p.muted,.european-leagues .panel>p.muted{margin:0;padding:8px 14px 12px;font-size:12px}
 /* Competitions > International and European Leagues (owner, 22 November 2026, evening). */
 .season-league-name>span:last-child small{color:var(--muted)}
 .season-matchday-identity h2.season-league-name{margin:0;font-size:14px}
@@ -117,7 +117,9 @@
 .league-option{display:flex;align-items:center;gap:10px;width:100%;min-height:46px;padding:6px 10px;border:1px solid var(--border);border-left:3px solid transparent;border-radius:2px;background:var(--surface-2);text-align:left}
 .league-option:hover{background:var(--surface-3)}
 .league-option.selected{border-left-color:var(--accent);background:#e5aa5514}
+.league-option-logo{display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px}
+.simulated-table{min-width:0}
 .league-option>span{display:flex;flex-direction:column;gap:2px;min-width:0}
 .league-option strong{font-size:13px;font-weight:550;color:var(--text);overflow-wrap:anywhere}
 .league-option small{font-size:12px;color:var(--muted)}
-@media(max-width:550px){.league-picker-countries{grid-template-columns:1fr;padding:10px 12px 12px}.competition-choice{width:100%}.competition-choice>button{flex:1;justify-content:center}}
+@media(max-width:550px){.league-picker-countries{grid-template-columns:1fr;gap:10px;padding:10px 12px 12px}.league-option{min-height:42px;padding:5px 9px}.competition-choice{width:100%}.competition-choice>button{flex:1;justify-content:center}}

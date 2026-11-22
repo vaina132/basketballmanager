@@ -150,4 +150,28 @@ describe('national windows in play (format 80)', () => {
     expect(isUnemployed(state)).toBe(true);
     expect(parseSeason(serializeSeason(state)).national).toEqual(state.national);
   }, 600_000);
+
+  it('keeps loading format-80 saves from before national injuries and career earnings', () => {
+    // Seed 5: the November window records no injury at a full-world club, as an earlier format-80 save would hold.
+    const played = playUntil(start, state => state.round === 13);
+    expect(played.injuries.some(injury => isNationalFixtureId(injury.fixtureId))).toBe(false);
+    const hired = acceptNationalOffer(offerNationalJob(played, 'nation-tur'), `national-offer-test-nation-tur-${played.date}`);
+    // The earlier shape: results without injury records, the national record without earnings.
+    const envelope = JSON.parse(serializeSeason(hired));
+    delete envelope.state.national.earnings;
+    for (const competition of envelope.state.national.competitions) for (const fixture of competition.fixtures) if (fixture.result) delete fixture.result.injuries;
+    const earlier = JSON.stringify(envelope);
+    expect(earlier).not.toContain('"earnings"');
+    const loaded = parseSeason(earlier);
+    expect(loaded.national!.earnings).toEqual({ paidThrough: hired.date, payments: [] });
+    expect(loaded.national!.competitions[0]!.fixtures.filter(fixture => fixture.result).every(fixture => Object.keys(fixture.result!.injuries).length === 0)).toBe(true);
+    // It continues a week under the strict check, and the salary starts on the next first of a month.
+    const next = playUntil(loaded, state => state.round === 14);
+    expect(careerEarnings(next)!.payments.map(payment => payment.date)).toEqual(['2026-12-01']);
+    expect(parseSeason(serializeSeason(next)).national).toEqual(next.national);
+    // A save that carries the fields keeps its exact checks.
+    const forged = JSON.parse(serializeSeason(next));
+    forged.state.national.earnings.payments[0].amount += 1;
+    expect(() => parseSeason(JSON.stringify(forged))).toThrow(/earnings/);
+  }, 600_000);
 });

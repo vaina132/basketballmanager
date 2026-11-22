@@ -129,7 +129,7 @@ import { playerAgeOnDate } from '../data/development-player-profiles';
 import { staffFee } from '../world/economy';
 import { PACKED_SAVE_FORMAT, packSeasonForSave, unpackSavedSeason } from './save-packing';
 import { isNationalFixtureId, nationalDutyDays } from '../world/national';
-import { validateNationalShape } from './national-validation';
+import { validateNationalShape, withEarlierNationalFields } from './national-validation';
 
 export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
@@ -3611,7 +3611,8 @@ function decodeSeasonText(text: string): { version: SeasonFormatVersion; state: 
     // Format 73 packs the finance ledger inside compact files; the checks read it as the game wrote it.
     if ((envelope.formatVersion as number) >= PACKED_SAVE_FORMAT) envelope.state = unpackSavedSeason(envelope.state);
   }
-  return { version: envelope.formatVersion as SeasonFormatVersion, state: envelope.state };
+  // Format 80 saves from before national injuries and career earnings keep loading (none recorded yet).
+  return { version: envelope.formatVersion as SeasonFormatVersion, state: envelope.formatVersion === 80 ? withEarlierNationalFields(envelope.state) : envelope.state };
 }
 
 /** Format 73: careers of real-data worlds follow the closed money gaps (staff pay, reserves, capital and offers by season money). */

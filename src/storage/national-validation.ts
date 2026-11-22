@@ -127,7 +127,9 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
       const days = nationalTournamentDays(year);
       // Drawn when the qualifiers end; played day by day in the offseason (the manager's team) or at the season change.
       const groupGames = fixtures.filter(fixture => fixture.stage === 'group'), knockouts = fixtures.filter(fixture => fixture.stage !== 'group');
-      if (competition.id !== `nt-s${year}` || competition.groups.length !== 4 || members.size !== 12 || groupGames.length !== 12 || knockouts.length > 4 || fixtures.some(fixture => fixture.window !== 3 || !days.includes(fixture.date))) fail(path, 'must be a summer tournament of twelve teams');
+      // Earlier format-80 saves played a completed tournament on the real dates (27 August on), at the season change.
+      const earlier = fixtures.every(fixture => fixture.result) ? [0, 2, 4, 10, 16].map(offset => addCalendarDays(`${Number(days[0]!.slice(0, 4))}-08-27`, offset)) : [];
+      if (competition.id !== `nt-s${year}` || competition.groups.length !== 4 || members.size !== 12 || groupGames.length !== 12 || knockouts.length > 4 || fixtures.some(fixture => fixture.window !== 3 || !days.includes(fixture.date) && !earlier.includes(fixture.date))) fail(path, 'must be a summer tournament of twelve teams');
       if (knockouts.length && groupGames.some(fixture => !fixture.result) || knockouts.some(fixture => fixture.stage !== 'semi') && knockouts.some(fixture => fixture.stage === 'semi' && !fixture.result)) fail(path, 'must play each round before the next');
       if (year < seasonNumber && fixtures.some(fixture => !fixture.result)) fail(path, 'must be played by the season change');
     }
@@ -177,4 +179,21 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
     validateMatchState(national.activeMatch);
     if (national.activeMatch.home.id !== fixture.homeTeamId || national.activeMatch.away.id !== fixture.awayTeamId) fail('national.activeMatch', 'must be its fixture\'s game');
   }
+}
+
+/**
+ * Format-80 saves written before national injuries and career earnings (22 November 2026, live for a few hours) keep
+ * loading: a national result without `injuries` recorded none, and a national record without `earnings` starts them
+ * now (nothing paid yet; a held job is paid from the next first of a month). Saves that carry the fields are untouched
+ * and keep their exact checks.
+ */
+export function withEarlierNationalFields(state: unknown): unknown {
+  if (!isObject(state) || !isObject(state.national)) return state;
+  const national = state.national;
+  const competitions = Array.isArray(national.competitions) ? national.competitions.map(competition => !isObject(competition) || !Array.isArray(competition.fixtures) ? competition : {
+    ...competition,
+    fixtures: competition.fixtures.map(fixture => isObject(fixture) && isObject(fixture.result) && !Object.hasOwn(fixture.result, 'injuries') ? { ...fixture, result: { ...fixture.result, injuries: {} } } : fixture),
+  }) : national.competitions;
+  const earnings = Object.hasOwn(national, 'earnings') ? national.earnings : { paidThrough: national.job !== null && national.job !== undefined && typeof state.date === 'string' ? state.date : null, payments: [] };
+  return { ...state, national: { ...national, competitions, earnings } };
 }

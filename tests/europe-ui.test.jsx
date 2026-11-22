@@ -4,43 +4,92 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { setEmploymentDelegation } from '../src/world/employment';
-import { EuropeWorkspace } from '../src/ui/EuropeWorkspace';
+import { clubEuropeanCompetitions, defaultOtherLeague, EuropeanLeaguesWorkspace, InternationalWorkspace, otherLeagues } from '../src/ui/EuropeWorkspace';
+import { SeasonWorkspace } from '../src/ui/SeasonWorkspace';
 import { SeasonCalendar } from '../src/ui/SeasonCalendar';
 import { estimatedTable } from '../src/world/european-places';
 import { placesWorld } from './helpers/europe-worlds';
 
 const play = state => advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
+const noop = () => {};
+const leagueProps = { onOpenMatch: noop, onNewCareer: noop, onLoad: noop };
 
-describe('European competition screens and the season calendar (step 3.5g)', () => {
-  let world, state;
+/**
+ * Competitions' tabs (owner, 22 November 2026, evening): International lists only the European competitions the
+ * manager's club plays; European Leagues lists every other domestic league (played, or with a simulated table) as
+ * buttons by country instead of the old drop-down; League is the manager's own league only.
+ */
+describe('Competitions > International, European Leagues and League, and the season calendar', () => {
+  let world, state, quiet;
   beforeAll(() => {
     world = placesWorld();
     state = setEmploymentDelegation(createSeason({ seed: 12, world, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
     for (let week = 0; week < 8; week += 1) state = play(state);
+    // A first-division club that plays no European competition.
+    quiet = createSeason({ seed: 12, world, managedClubId: world.clubs[5].id, ...NEW_CAREER_SYSTEMS });
   }, 300_000);
 
-  it('shows the manager\'s European competition: its table, games and results, and the other competitions to choose', () => {
-    const markup = renderToStaticMarkup(createElement(EuropeWorkspace, { season: state }));
+  it('International shows only the club\'s European competition: its table, games and results', () => {
+    expect(clubEuropeanCompetitions(state, state.managedClubId)).toEqual(['euroleague']);
+    const markup = renderToStaticMarkup(createElement(InternationalWorkspace, { season: state }));
+    expect(markup).toContain('data-competitions-view="international"');
     expect(markup).toContain('Test euroleague');
     expect(markup).toContain('Regular-season table');
     expect(markup).toContain('Your club');
     expect(markup).toContain('Games &amp; results');
     expect(markup).toMatch(/\d+–\d+/);
-    expect(markup).toContain('Test eurocup');
-    expect(markup).toContain('Otherland League · not played');
-    const cup = renderToStaticMarkup(createElement(EuropeWorkspace, { season: state, initialCompetition: 'eurocup' }));
-    expect(cup).toContain('Group A');
-    expect(cup).toContain('Group D');
+    // Not the competitions the club does not play, and no hidden drop-down of competitions or leagues.
+    expect(markup).not.toContain('Test eurocup');
+    expect(markup).not.toContain('Otherland League');
+    expect(markup).not.toContain('id="europe-competition"');
+    // A competition id the club does not play falls back to its own competition.
+    expect(renderToStaticMarkup(createElement(InternationalWorkspace, { season: state, competitionId: 'eurocup' }))).not.toContain('Group D');
   });
 
-  it('shows an unchosen league\'s simulated final table, labelled as not played', () => {
-    const markup = renderToStaticMarkup(createElement(EuropeWorkspace, { season: state, initialCompetition: 'otherland' }));
+  it('International says so when the club plays no European competition', () => {
+    expect(clubEuropeanCompetitions(quiet, quiet.managedClubId)).toEqual([]);
+    const markup = renderToStaticMarkup(createElement(InternationalWorkspace, { season: quiet }));
+    expect(markup).toContain('Your club plays no European competition this season.');
+    expect(markup).not.toContain('Test euroleague');
+    expect(markup).not.toContain('Games &amp; results');
+  });
+
+  it('European Leagues lists every other league as buttons by country, own country first, and opens on a top division', () => {
+    const groups = otherLeagues(state);
+    expect(groups.map(group => [group.country, group.leagues.map(league => league.id)])).toEqual([['Testland', ['second']], ['Otherland', ['otherland']]]);
+    expect(defaultOtherLeague(groups)).toBe('otherland');
+    // A second-division manager sees the first division there instead of his own league.
+    const second = createSeason({ seed: 12, world, managedClubId: world.clubs[7].id, ...NEW_CAREER_SYSTEMS });
+    expect(otherLeagues(second)[0].leagues.map(league => league.id)).toEqual(['first']);
+    const markup = renderToStaticMarkup(createElement(EuropeanLeaguesWorkspace, { season: state, ...leagueProps }));
+    expect(markup).toContain('data-competitions-view="leagues"');
+    expect(markup).toMatch(/role="group" aria-labelledby="league-country-testland"/);
+    expect(markup).toMatch(/<button type="button" class="league-option" aria-pressed="false" data-league-option="second"/);
+    expect(markup).toMatch(/<button type="button" class="league-option selected" aria-pressed="true" data-league-option="otherland"/);
+    expect(markup).not.toContain('data-league-option="first"');
+    expect(markup).not.toContain('<select aria-label="Competition"');
+  });
+
+  it('European Leagues shows an unchosen league\'s simulated final table, labelled as not played', () => {
+    const markup = renderToStaticMarkup(createElement(EuropeanLeaguesWorkspace, { season: state, leagueId: 'otherland', ...leagueProps }));
     expect(markup).toContain('Otherland League · Simulated final table');
     expect(markup).toContain('Otherland League is not played game by game in this career: its final table is simulated');
-    expect(markup).toContain('Not played game by game');
+    expect(markup).toContain('Not played · table simulated');
     expect(markup).not.toMatch(/[Ee]stimated table/);
     const first = world.clubs.find(club => club.id === estimatedTable(state, world.backgroundLeagues[0], 1)[0].clubId);
     expect(markup.indexOf(first.name)).toBeGreaterThan(-1);
+  });
+
+  it('European Leagues shows another played league in full; League shows only the manager\'s own league', () => {
+    const other = renderToStaticMarkup(createElement(EuropeanLeaguesWorkspace, { season: state, leagueId: 'second', ...leagueProps }));
+    expect(other).toContain('data-season-league="second"');
+    expect(other).toContain('Second division · 2026/27');
+    expect(other).toContain('Fixtures &amp; results');
+    expect(other).not.toContain('Your club');
+    const own = renderToStaticMarkup(createElement(SeasonWorkspace, { season: state, ...leagueProps }));
+    expect(own).toContain('First division · 2026/27');
+    expect(own).not.toContain('Second division');
+    expect(own).not.toContain('aria-label="Competition"');
   });
 
   it('lays out the whole season: weeks, competitions on each day, the manager\'s games and reserved knockout days', () => {

@@ -36,7 +36,7 @@ import { loadLocalMatch, MAX_SAVE_BYTES, parseMatch, saveLocalMatch, serializeMa
 import { Avatar } from './ui/Avatar'
 import { CreditsDialog } from './ui/CreditsDialog'
 import { Icon } from './ui/Icon'
-import { CLUB_VIEWS, competitionsViews, MainNavigation, mainNavigation, PAGE_NAMES as pageNames, PageViewTabs, resolveNavigation, showsBudgetBar, SQUAD_VIEWS, TRAINING_VIEWS, unemployedNavigation, type ClubView, type CompetitionsView, type Page, type SquadView, type TrainingView } from './ui/navigation'
+import { CLUB_VIEWS, competitionsViews, europeLinkView, MainNavigation, mainNavigation, PAGE_NAMES as pageNames, PageViewTabs, resolveNavigation, shownCompetitionsView, showsBudgetBar, SQUAD_VIEWS, TRAINING_VIEWS, unemployedNavigation, type ClubView, type CompetitionsView, type Page, type SquadView, type TrainingView } from './ui/navigation'
 import { Court } from './viewer/Court'
 import type { ScoreBug } from './viewer/Court'
 import { buildAnimation, presentationDuration, rosterOf } from './viewer/choreography'
@@ -91,7 +91,7 @@ import { SeasonEndChoice } from './ui/SeasonEndChoice'
 const RealClubFriendly = lazy(() => import('./ui/RealClubFriendly').then(module => ({ default: module.RealClubFriendly })))
 import { fetchBuiltInPack } from './world/built-in-pack'
 import { SeasonCalendar } from './ui/SeasonCalendar'
-import { EuropeWorkspace } from './ui/EuropeWorkspace'
+import { clubEuropeanCompetitions, EuropeanLeaguesWorkspace, InternationalWorkspace, otherLeagues } from './ui/EuropeWorkspace'
 import { playsEurope } from './world/europe'
 import { SeasonWorkspace } from './ui/SeasonWorkspace'
 import { TrainingWorkspace } from './ui/TrainingWorkspace'
@@ -243,8 +243,12 @@ export default function App() {
   const [rosterQuery, setRosterQuery] = useState('')
   const [relationshipPlayer, setRelationshipPlayer] = useState<string | null>(null)
   const [squadView, setSquadView] = useState<SquadView>('selection')
-  // Owner decisions (22 November 2026): Calendar and Europe are tabs of Competitions, Academy of Training, Board of Club.
+  // Owner decisions (22 November 2026): Calendar and Europe are tabs of Competitions, Academy of Training, Board of Club;
+  // that evening Europe became International (the club's European competitions) and European Leagues (the other leagues).
   const [competitionsView, setCompetitionsView] = useState<CompetitionsView>('league')
+  // The competition and league last chosen on those tabs, kept while the manager looks at other pages.
+  const [internationalCompetition, setInternationalCompetition] = useState<string | null>(null)
+  const [europeanLeague, setEuropeanLeague] = useState<string | null>(null)
   const [trainingView, setTrainingView] = useState<TrainingView>('plan')
   const [clubView, setClubView] = useState<ClubView>('club')
   const [performancePlayer, setPerformancePlayer] = useState<string | null>(null)
@@ -377,7 +381,11 @@ export default function App() {
     // Board) open that tab, so every old link, alert and deep link still lands on the same controls.
     const { page: nextPage, view } = resolveNavigation(target)
     if (view?.page === 'squad') setSquadView(view.view)
-    else if (view?.page === 'season') setCompetitionsView(view.view)
+    else if (target === 'europe') {
+      // An old link to the Europe page: the club's European competitions, or the other leagues when it plays none.
+      const current = sessionRef.current
+      setCompetitionsView(europeLinkView(current.kind === 'season' && (isUnemployed(current.season) || clubEuropeanCompetitions(current.season, current.season.managedClubId).length > 0)))
+    } else if (view?.page === 'season') setCompetitionsView(view.view)
     else if (view?.page === 'training') setTrainingView(view.view)
     else if (view?.page === 'club') setClubView(view.view)
     if (nextPage === 'squad' && selector === '.player-profile') setSquadView('selection')
@@ -864,9 +872,10 @@ export default function App() {
   useEffect(() => () => { seasonWorker.current?.terminate() }, [])
 
   const savedCareer = saveHistory?.current
-  // Competitions' tabs: League, Calendar and, in worlds with European games, Europe (only in a career).
-  const competitionTabs = season ? competitionsViews(!!(playsEurope(worldOf(season)) || worldOf(season).backgroundLeagues?.length), !!season.national) : []
-  const shownCompetitions: CompetitionsView = competitionTabs.some(tab => tab.id === competitionsView) ? competitionsView : 'league'
+  // Competitions' tabs (owner, 22 November 2026, evening): Calendar, League, International, European Leagues and National
+  // Teams, each only where it has something to show (only in a career).
+  const competitionTabs = season ? competitionsViews({ league: !isUnemployed(season), international: playsEurope(worldOf(season)), leagues: otherLeagues(season).length > 0, national: !!season.national }) : []
+  const shownCompetitions: CompetitionsView = season ? shownCompetitionsView(competitionsView, competitionTabs) : 'league'
   const competitionsTabs = competitionTabs.length > 0 && <PageViewTabs label="Competitions view" idPrefix="competitions-view" views={competitionTabs} current={shownCompetitions} onChange={setCompetitionsView} />
   const careerSummary = (state: SeasonState) => {
     // Format 80: the manager's career earnings for the Manager profile (national salary paid monthly).
@@ -924,7 +933,8 @@ export default function App() {
             {view === 'season' && competitionsTabs}
             {view === 'season' && shownCompetitions === 'league' && <SeasonWorkspace season={season} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('home')} onLoad={loadSeason} busy={advancing || saving} />}
             {view === 'season' && shownCompetitions === 'calendar' && <SeasonCalendar season={season} />}
-            {view === 'season' && shownCompetitions === 'europe' && <EuropeWorkspace season={season} />}
+            {view === 'season' && shownCompetitions === 'international' && <InternationalWorkspace season={season} competitionId={internationalCompetition} onCompetitionChange={setInternationalCompetition} />}
+            {view === 'season' && shownCompetitions === 'leagues' && <EuropeanLeaguesWorkspace season={season} leagueId={europeanLeague} onLeagueChange={setEuropeanLeague} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('home')} onLoad={loadSeason} busy={advancing || saving} />}
             {view === 'season' && shownCompetitions === 'national' && season.national && <NationalWorkspace season={season} />}
           </Suspense></PageErrorBoundary>
           <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />Save &amp; open exhibition</button><button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button><button id="open-credits" className="text-button" onClick={() => setCreditsOpen(true)}>Credits</button></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
@@ -956,7 +966,8 @@ export default function App() {
         <PageErrorBoundary key={page} title={pageNames[page]} savesFirst={!!season} onReload={() => { void saveAndReload() }}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
         {page === 'season' && competitionsTabs}
         {page === 'season' && shownCompetitions === 'calendar' && season && <SeasonCalendar season={season} />}
-        {page === 'season' && shownCompetitions === 'europe' && season && <EuropeWorkspace season={season} />}
+        {page === 'season' && shownCompetitions === 'international' && season && <InternationalWorkspace season={season} competitionId={internationalCompetition} onCompetitionChange={setInternationalCompetition} />}
+        {page === 'season' && shownCompetitions === 'leagues' && season && <EuropeanLeaguesWorkspace season={season} leagueId={europeanLeague} onLeagueChange={setEuropeanLeague} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('match')} onLoad={loadSeason} busy={advancing || saving} />}
         {page === 'season' && shownCompetitions === 'national' && season?.national && <NationalWorkspace season={season} />}
         {page === 'season' && shownCompetitions === 'league' && <SeasonWorkspace season={season} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('match')} onLoad={loadSeason} busy={advancing || saving} />}
 

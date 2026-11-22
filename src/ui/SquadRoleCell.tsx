@@ -42,8 +42,9 @@ export function SquadRoleCell({ season, playerId, busy, onRole }: { season: Seas
     <select className={`squad-role-select role-${row.role}`} aria-label={`Squad role for ${row.player.name}`} title={hint} value={row.role} disabled={busy || !open} onChange={event => { const role = event.target.value as SquadRole; if (quotes.get(role)?.canAgree) onRole(playerId, role) }}>
       {[...quotes.entries()].map(([role, quote]) => <option key={role} value={role} disabled={!!quote && !quote.canAgree} title={quote?.reason ?? undefined}>{definitions[role].label}{quote && !quote.canAgree ? definitions[role].minMinutes > row.minMinutes ? ' · not now' : ' · refuses' : ''}</option>)}
     </select>
-    {row.roleRequest ? <small className="squad-role-flag" data-squad-role-request={row.roleRequest.stage}><Icon name="mail" size={12} />{row.roleRequest.stage === 'leave' ? 'Wants to leave' : 'Wants talks'}</small>
+    {row.roleRequest ? <small className="squad-role-flag" data-squad-role-request={row.roleRequest.stage}><Icon name="mail" size={12} />{row.roleRequest.stage === 'leave' ? 'Wants to leave' : row.roleRequest.stage === 'concern' ? 'Wants minutes' : 'Wants talks'}</small>
       : row.concern ? <small className="squad-role-flag"><Icon name="people" size={12} />Below role</small>
-      : row.roleSource === 'contract' ? <small className="squad-role-note" data-squad-role-source="contract">Contract term</small> : null}
+      : row.roleSource === 'contract' ? <small className="squad-role-note" data-squad-role-source="contract">Contract term</small>
+      : row.roleSource === 'adjusted' ? <small className="squad-role-note" data-squad-role-source="adjusted">Fits his minutes</small> : null}
   </div>
 }

@@ -74,10 +74,13 @@ export function validateRelationships(state: SeasonState, version: number): void
   const raw = state.relationships as unknown as Record<string, unknown> | null;
   // Format 66 adds the relationships-2 model (squad-rank default roles and contract requests) for new careers;
   // relationships-3 (squad roles everywhere) keeps both and adds five roles, contract roles and role requests.
-  const third = raw !== null && typeof raw === 'object' && raw.model === 'relationships-3';
+  // Format 77: relationships-4 (calmer playing time) keeps relationships-3 and adds quiet role adjustments and calm concerns.
+  const fourth = raw !== null && typeof raw === 'object' && raw.model === 'relationships-4';
+  const third = raw !== null && typeof raw === 'object' && raw.model === 'relationships-3' || fourth;
   const second = raw !== null && typeof raw === 'object' && raw.model === 'relationships-2' || third;
   if (second && version < 66) fail('relationships.model', 'requires format 66 or later');
   if (third && version < 74) fail('relationships.model', 'requires format 74 or later');
+  if (fourth && version < 77) fail('relationships.model', 'requires format 77 or later');
   const fields = record(state.relationships, 'relationships', ['model', 'enabledSince', 'events', ...(second ? ['squadRanks'] : [])]);
   if (fields.model !== 'relationships-1' && !second) fail('relationships.model', 'is unsupported');
   if (!Array.isArray(fields.events) || fields.events.length > 20000) fail('relationships.events', 'must retain a bounded chronological command history');
@@ -145,7 +148,7 @@ export function validateRelationships(state: SeasonState, version: number): void
       // Format 66 (relationships-2): contract requests and the club's replies.
       : type === 'contract-request' && second ? ['clubId', 'playerId', 'trigger', 'negotiationCount'] : type === 'contract-reply' && second ? ['clubId', 'playerId', 'requestId', 'reply', 'negotiationCount']
       // relationships-3: an unmet role's requests for talks or to leave, and their settling.
-      : type === 'role-request' && third ? ['clubId', 'playerId', 'stage'] : null;
+      : type === 'role-request' && third ? ['clubId', 'playerId', 'stage'] : type === 'role-adjust' && fourth ? ['clubId', 'playerId', 'role'] : null;
     if (!extra) fail(path, 'must identify a supported player relationship command');
     const event = record(raw, path, [...ANCHOR_KEYS, 'id', 'type', ...extra]) as unknown as RelationshipEvent;
     const sealed = typeof event.seasonNumber === 'number' && event.seasonNumber < replayFrom;

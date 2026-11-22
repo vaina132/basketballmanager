@@ -16,7 +16,7 @@ beforeAll(() => {
   // rights alone, 6 before sprint 4's match calibration), all automatic: when the second offseason window opens, one club
   // starts a project and another then receives board capital for its own, so a capital receipt follows construction
   // booked inside the window. Seed-found before staff contracts (format 76): it keeps the earlier staff fee rules.
-  let state = setEmploymentDelegation(setFacilityDelegation(createSeason({ seed: 3, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, simpleFacilities: false, staffContracts: false }), true), true);
+  let state = setEmploymentDelegation(setFacilityDelegation(createSeason({ seed: 3, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, simpleFacilities: false, staffContracts: false, calmPlayingTime: false }), true), true);
   while (state.status === 'active') state = advanceMatchday(state);
   for (let step = 0; step < 80 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
   state = rolloverSeason(state);

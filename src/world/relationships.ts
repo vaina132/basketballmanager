@@ -13,7 +13,7 @@ import { ordinalRound, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek, w
 import { overallRating } from './overall-rating';
 import { scoutingActualAttributes } from './scouting-policy';
 import { contractForSeason, effectiveContractsForRound, effectiveContractsForSeason } from './employment-policy';
-import { CONTRACT_REQUEST_TEXT as TEXT, RELATIONSHIP_RULES, SQUAD_ROLE_RULES } from './relationship-rules';
+import { CONTRACT_REQUEST_TEXT as TEXT, PLAYING_TIME_RULES as CALM, RELATIONSHIP_RULES, SQUAD_ROLE_RULES } from './relationship-rules';
 import { contractRequestsFromEvents } from './contract-requests-policy';
 import { getCareerPlayerAge } from './player-catalog';
 import { contractStanding, roleLevel } from './contract-roles';
@@ -34,9 +34,10 @@ const LEGACY_ROLE_DEFINITIONS: Readonly<Record<SquadRole, RoleDefinition>> = {
   starter: { label: 'Starter', minMinutes: 24, maxMinutes: 32 },
 };
 /** The roles a career offers, highest first for `relationships-3`. */
-export function squadRoles(model: RelationshipsModel): readonly SquadRole[] { return model === 'relationships-3' ? SQUAD_ROLE_RULES.order : SQUAD_ROLES; }
+const fiveRoles = (model: RelationshipsModel) => model === 'relationships-3' || model === 'relationships-4';
+export function squadRoles(model: RelationshipsModel): readonly SquadRole[] { return fiveRoles(model) ? SQUAD_ROLE_RULES.order : SQUAD_ROLES; }
 /** The minutes a role expects in this career's rules. */
-export function squadRoleDefinitions(model: RelationshipsModel): Readonly<Record<SquadRole, RoleDefinition>> { return model === 'relationships-3' ? SQUAD_ROLE_DEFINITIONS : LEGACY_ROLE_DEFINITIONS; }
+export function squadRoleDefinitions(model: RelationshipsModel): Readonly<Record<SquadRole, RoleDefinition>> { return fiveRoles(model) ? SQUAD_ROLE_DEFINITIONS : LEGACY_ROLE_DEFINITIONS; }
 export const RELATIONSHIP_COOLDOWN_GAMES = 4;
 export const PROMISE_ELIGIBLE_GAMES = 3;
 export const PROMISE_DEADLINE_GAMES = 6;
@@ -49,13 +50,16 @@ const compareText = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 type PlayerEvent = Extract<RelationshipEvent, { type: 'role' | 'talk' }>;
 type ContractEvent = Extract<RelationshipEvent, { type: 'contract-request' | 'contract-reply' }>;
 type RoleRequestEvent = Extract<RelationshipEvent, { type: 'role-request' }>;
+type RoleAdjustEvent = Extract<RelationshipEvent, { type: 'role-adjust' }>;
 const playerEvent = (event: RelationshipEvent): event is PlayerEvent => event.type === 'role' || event.type === 'talk';
 const contractEvent = (event: RelationshipEvent): event is ContractEvent => event.type === 'contract-request' || event.type === 'contract-reply';
 const CONTRACT_RULES = RELATIONSHIP_RULES.contractRequests;
 /** Squad-rank default roles and contract requests belong to the `relationships-2` model (new careers, format 66) and its successor. */
-const ranked = (state: SeasonState) => state.relationships.model === 'relationships-2' || state.relationships.model === 'relationships-3';
+const ranked = (state: SeasonState) => state.relationships.model === 'relationships-2' || fiveRoles(state.relationships.model);
 /** Five roles, contract roles and role requests belong to the `relationships-3` model (squad roles everywhere). */
-const everywhere = (state: SeasonState) => state.relationships.model === 'relationships-3';
+const everywhere = (state: SeasonState) => fiveRoles(state.relationships.model);
+/** `relationships-4` (format 77): calmer playing time on top of squad roles everywhere (`PLAYING_TIME_RULES`). */
+const calm = (state: SeasonState) => state.relationships.model === 'relationships-4';
 const definitionsOf = (state: SeasonState) => squadRoleDefinitions(state.relationships.model);
 const sequenceOf = (id: string) => Number(id.slice(id.lastIndexOf('-') + 1));
 
@@ -98,7 +102,7 @@ function clubHistory(current: SeasonState, clubId: string) {
   // The week's games already played count from the week's end (`weekStartView`).
   const state = weekStartView(current);
   const records = seasons(state), rounds = seasonRounds(state);
-  const personal = new Map<string, PlayerEvent[]>(), contracts = new Map<string, ContractEvent[]>(), roleRequests = new Map<string, RoleRequestEvent[]>();
+  const personal = new Map<string, PlayerEvent[]>(), contracts = new Map<string, ContractEvent[]>(), roleRequests = new Map<string, RoleRequestEvent[]>(), adjusts = new Map<string, RoleAdjustEvent[]>();
   for (const event of state.relationships.events) if (playerEvent(event) && event.clubId === clubId) {
     const events = personal.get(event.playerId) ?? [];
     events.push(event); personal.set(event.playerId, events);
@@ -108,6 +112,9 @@ function clubHistory(current: SeasonState, clubId: string) {
   } else if (event.type === 'role-request' && event.clubId === clubId) {
     const events = roleRequests.get(event.playerId) ?? [];
     events.push(event); roleRequests.set(event.playerId, events);
+  } else if (event.type === 'role-adjust' && event.clubId === clubId) {
+    const events = adjusts.get(event.playerId) ?? [];
+    events.push(event); adjusts.set(event.playerId, events);
   }
   // relationships-3: roles agreed as contract terms at this club, from each contract's first matchday.
   const contractRoles = new Map<string, { role: SquadRole; at: number }[]>();
@@ -130,6 +137,17 @@ function clubHistory(current: SeasonState, clubId: string) {
     eventsFor(playerId: string): readonly PlayerEvent[] { return personal.get(playerId) ?? []; },
     contractEventsFor(playerId: string): readonly ContractEvent[] { return contracts.get(playerId) ?? []; },
     roleRequestsFor(playerId: string): readonly RoleRequestEvent[] { return roleRequests.get(playerId) ?? []; },
+    /** relationships-4: the latest quiet role adjustment from `start` through `through`, made in the season of `through`. */
+    adjustFor(playerId: string, start: number, through = now): { event: RoleAdjustEvent; at: number } | null {
+      const season = ordinalRound(through, rounds).seasonNumber;
+      let found: { event: RoleAdjustEvent; at: number } | null = null;
+      for (const event of adjusts.get(playerId) ?? []) {
+        const at = ordinal(event.seasonNumber, event.round, rounds);
+        if (at >= start && at <= through && event.seasonNumber === season) found = { event, at };
+      }
+      return found;
+    },
+    adjustsFor(playerId: string): readonly RoleAdjustEvent[] { return adjusts.get(playerId) ?? []; },
     /** relationships-3: the latest contract role in force from `start` through `through` (a later first matchday wins). */
     contractRoleFor(playerId: string, start: number, through = now): { role: SquadRole; at: number } | null {
       let found: { role: SquadRole; at: number } | null = null;
@@ -176,7 +194,9 @@ function clubHistory(current: SeasonState, clubId: string) {
         const fixture = game.fixture, result = fixture.result!, stats = fixturePlayerEvidence(fixture, playerId);
         const recoveringOutsideSquad = result.selection && Object.hasOwn(result.selection.rested, playerId) && state.injuries.some(injury => injury.playerId === playerId && isRecovering(injury, fixture.date, state.physio));
         const eligible = !!stats && result.kind === 'normal' && !result.injuries[playerId] && !recoveringOutsideSquad && stats.fouls < 5;
-        if (window.eligibleOnly && !eligible || window.beforeDate && fixture.date >= window.beforeDate) continue;
+        // relationships-4: a game outside the matchday squad (rested or left out) is not held against him.
+        const dressed = !(result.selection && Object.hasOwn(result.selection.rested, playerId));
+        if (window.eligibleOnly && !eligible || window.dressedOnly && !dressed || window.beforeDate && fixture.date >= window.beforeDate) continue;
         game.derby ??= !!governingDerby(state.rivalries, fixture.homeClubId, fixture.awayClubId, game.seasonNumber, fixture.round, worldOf(state));
         games.push({ at: game.at, id: fixture.id, date: fixture.date, eligible,
           minutes: stats ? stats.secondsPlayed / 60 : 0, won: result.winnerClubId === clubId, derby: game.derby });
@@ -210,7 +230,7 @@ function rankedDefaultRole(state: SeasonState, playerId: string, rank: number, d
   }
   return rank <= rules.starMaxRank ? 'star' : rank <= rules.starterMaxRank ? 'starter' : rank <= rules.rotationMaxRank ? 'rotation' : 'development';
 }
-type RoleSource = 'default' | 'agreed' | 'contract';
+type RoleSource = 'default' | 'agreed' | 'contract' | 'adjusted';
 /**
  * relationships-3: the role in force at `through` within a stint: the later of the latest agreement and the latest
  * contract term (an agreement made at a contract's first matchday wins), else the default by squad rank.
@@ -220,10 +240,15 @@ function roleInForce(state: SeasonState, events: readonly PlayerEvent[], start: 
   const event = events.filter((event): event is Extract<RelationshipEvent, { type: 'role' }> => event.type === 'role' && ordinal(event.seasonNumber, event.round, rounds) >= start && ordinal(event.seasonNumber, event.round, rounds) <= through).at(-1);
   const agreedAt = event ? ordinal(event.seasonNumber, event.round, rounds) : -Infinity;
   const term = history.contractRoleFor(playerId, start, through);
-  if (term && term.at > agreedAt) return { role: term.role, after: Math.max(enabled, start - 1, term.at - 1), rank: null, source: 'contract' };
-  if (event) return { role: event.role, after: Math.max(enabled, start - 1, agreedAt), rank: null, source: 'agreed' };
+  // relationships-4: playing time is judged within the season, and a quiet adjustment made this season holds until a
+  // later agreement or contract replaces it.
+  const floor = calm(state) ? Math.max(enabled, start - 1, roundOrdinal(ordinalRound(through, rounds).seasonNumber, 0, rounds)) : Math.max(enabled, start - 1);
+  const adjusted = calm(state) ? history.adjustFor(playerId, start, through) : null;
+  if (adjusted && (adjusted.at > agreedAt || adjusted.at === agreedAt && sequenceOf(adjusted.event.id) > sequenceOf(event!.id)) && (!term || adjusted.at >= term.at)) return { role: adjusted.event.role, after: Math.max(floor, adjusted.at), rank: null, source: 'adjusted' };
+  if (term && term.at > agreedAt) return { role: term.role, after: Math.max(floor, term.at - 1), rank: null, source: 'contract' };
+  if (event) return { role: event.role, after: Math.max(floor, agreedAt), rank: null, source: 'agreed' };
   const fallback = history.defaultRole(playerId, start, through);
-  return { role: fallback.role, after: Math.max(enabled, start - 1, fallback.since - 1), rank: fallback.rank, source: 'default' };
+  return { role: fallback.role, after: Math.max(floor, fallback.since - 1), rank: fallback.rank, source: 'default' };
 }
 function roleAt(state: SeasonState, events: readonly PlayerEvent[], start: number, history: ClubHistory, playerId: string): { role: SquadRole; after: number; rank: number | null; source: RoleSource } {
   if (everywhere(state)) return roleInForce(state, events, start, history, playerId, ordinal(state.seasonNumber, state.round, seasonRounds(state)));
@@ -241,7 +266,7 @@ function priorRole(state: SeasonState, history: ClubHistory, playerId: string, e
   return agreed ?? (ranked(state) ? history.defaultRole(playerId, startOfStint, at).role : 'rotation');
 }
 interface EvidenceGame { at: number; id: string; date: string; eligible: boolean; minutes: number; won: boolean; derby: boolean }
-interface EvidenceWindow { after: number; through?: number; beforeDate?: string | null; eligibleOnly?: boolean; limit: number; first?: boolean }
+interface EvidenceWindow { after: number; through?: number; beforeDate?: string | null; eligibleOnly?: boolean; dressedOnly?: boolean; limit: number; first?: boolean }
 /** First entry strictly after a round; callers retain the fixture-id ordering within a tied round. */
 function afterRoundIndex(games: readonly { at: number }[], at: number): number {
   let low = 0, high = games.length;
@@ -255,7 +280,7 @@ function promiseFor(state: SeasonState, event: Extract<RelationshipEvent, { type
   // The agreed role at creation is frozen, even if the player later leaves or returns.
   const targetMinutes = definitionsOf(state)[priorRole(state, history, event.playerId, prefix.filter(item => item.clubId === event.clubId && item.playerId === event.playerId), startOfStint, start)].minMinutes;
   const departure = history.departureDate(event.playerId, start);
-  const eligible = history.gamesFor(event.playerId, { after: start, through: deadlineRound, beforeDate: departure, eligibleOnly: true, limit: PROMISE_ELIGIBLE_GAMES, first: true });
+  const eligible = history.gamesFor(event.playerId, { after: start, through: deadlineRound, beforeDate: departure, eligibleOnly: true, dressedOnly: calm(state), limit: PROMISE_ELIGIBLE_GAMES, first: true });
   const average = eligible.length ? eligible.reduce((sum, game) => sum + game.minutes, 0) / eligible.length : null;
   const deadlineDate = dateAt(deadlineRound, seasonRounds(state));
   const expired = relationshipEventAnchor(state).completedRounds >= deadlineRound;
@@ -278,11 +303,16 @@ function playerRelationship(state: SeasonState, playerId: string, clubId: string
   const definitions = definitionsOf(state);
   const role = roleAt(state, events, currentStint, evidenceHistory, playerId), definition = definitions[role.role];
   // relationships-3 also reads a longer window: an unmet role over it makes the player ask for talks.
-  const longer = everywhere(state) ? SQUAD_ROLE_RULES.escalation.talksAfterGames : 4;
-  const window = state.relationships.enabledSince ? evidenceHistory.gamesFor(playerId, { after: role.after, eligibleOnly: true, limit: Math.max(4, longer) }) : [];
-  const evidence = window.length > 4 ? window.slice(-4) : window;
+  // relationships-4 judges only that longer window, of games in the matchday squad (`PLAYING_TIME_RULES`).
+  const calmRules = calm(state);
+  const longer = calmRules ? CALM.window.games : everywhere(state) ? SQUAD_ROLE_RULES.escalation.talksAfterGames : 4;
+  const window = state.relationships.enabledSince ? evidenceHistory.gamesFor(playerId, { after: role.after, eligibleOnly: true, dressedOnly: calmRules, limit: Math.max(4, longer) }) : [];
+  const evidence = !calmRules && window.length > 4 ? window.slice(-4) : window;
   const average = evidence.length ? evidence.reduce((sum, game) => sum + game.minutes, 0) / evidence.length : null;
-  const concern = evidence.length >= 3 && average! + 1e-9 < definition.minMinutes ? `Playing time below the agreed ${definition.label.toLowerCase()} role` : null;
+  const judged = calmRules ? evidence.length >= CALM.window.minGames : evidence.length >= 3;
+  const short = calmRules ? judged && average! + 1e-9 < definition.minMinutes * CALM.shareOfMinimum : judged && average! + 1e-9 < definition.minMinutes;
+  const adjustment = calmRules && state.relationships.enabledSince ? quietAdjustment(state, evidenceHistory, playerId, clubId, role) : null;
+  const concern = !short ? null : !calmRules ? `Playing time below the agreed ${definition.label.toLowerCase()} role` : quietlyAdjusts(role) ? null : `Would like more minutes as a ${definition.label.toLowerCase()}`;
   const personal = state.relationships.enabledSince ? events : [];
   const promises = personal.filter((event): event is Extract<RelationshipEvent, { type: 'talk' }> => event.type === 'talk' && event.choice === 'minutes-promise').map(event => promiseFor(state, event, evidenceHistory));
   let conversationImpact = 0, promiseImpact = 0;
@@ -312,11 +342,12 @@ function playerRelationship(state: SeasonState, playerId: string, clubId: string
   contractMorale = clamp(contractMorale, CONTRACT_RULES.bounds.morale.min, CONTRACT_RULES.bounds.morale.max);
   contractTrust = clamp(contractTrust, CONTRACT_RULES.bounds.trust.min, CONTRACT_RULES.bounds.trust.max);
   const trust = Math.round(clamp(50 + conversationImpact + promiseImpact + contractTrust, 0, 100));
-  const roleImpact = evidence.length < 3 ? 0 : concern ? -Math.min(15, Math.max(3, (definition.minMinutes - average!) * 1.5)) : definition.minMinutes > 0 ? 6 : 0;
+  const roleImpact = !judged ? 0 : calmRules ? (concern ? -Math.min(CALM.concern.maxMorale, Math.max(3, (definition.minMinutes * CALM.shareOfMinimum - average!) * 1.5)) : short ? 0 : definition.minMinutes > 0 ? 6 : 0)
+    : concern ? -Math.min(15, Math.max(3, (definition.minMinutes - average!) * 1.5)) : definition.minMinutes > 0 ? 6 : 0;
   const recent = state.relationships.enabledSince ? evidenceHistory.gamesFor(playerId, { after: Math.max(state.relationships.enabledSince.completedRounds, currentStint - 1), limit: 4 }) : [];
   const resultImpact = recent.length >= 3 ? clamp(recent.reduce((sum, game) => sum + decayed((game.won ? 2 : -2) * (game.derby ? RIVALRY_MORALE_WEIGHT : 1), game.date, state.date, 21), 0), -6, 6) : 0;
   const reasons = [
-    { label: concern ?? (evidence.length < 3 ? 'Building playing-time evidence' : definition.minMinutes > 0 ? 'Agreed playing time met' : 'Reserve role accepted'), impact: Math.round(roleImpact) },
+    { label: concern ?? (!judged ? 'Building playing-time evidence' : short ? 'Accepting fewer minutes' : definition.minMinutes > 0 ? 'Agreed playing time met' : 'Reserve role accepted'), impact: Math.round(roleImpact) },
     { label: 'Recent team results', impact: Math.round(resultImpact) },
     { label: 'Manager conversations', impact: Math.round(conversationImpact) },
     { label: 'Playing-time promises', impact: Math.round(promiseImpact) },
@@ -339,7 +370,8 @@ function playerRelationship(state: SeasonState, playerId: string, clubId: string
   else if (promise) talkReason = 'Review the active playing-time promise before starting another conversation.';
   else if (latest && completedRounds - latest.completedRounds < RELATIONSHIP_COOLDOWN_GAMES) talkReason = `Allow ${RELATIONSHIP_COOLDOWN_GAMES - (completedRounds - latest.completedRounds)} more completed club games before another role conversation.`;
   const history = personal.map(event => ({ id: event.id, date: event.date, label: event.type === 'role' ? `${definitions[event.role].label} role agreed` : event.choice === 'explain' ? 'Competition explained' : 'Playing time promised', detail: event.type === 'role' ? `Future expectation: ${definitions[event.role].minMinutes}–${definitions[event.role].maxMinutes} minutes per eligible game.` : event.choice === 'explain' ? 'The player was heard; the agreed playing-time role remains.' : 'Meet the agreed minimum across the next three eligible games after this matchday, within six club games.' }));
-  if (everywhere(state) && state.relationships.enabledSince) for (const event of evidenceHistory.roleRequestsFor(playerId)) history.push(roleRequestHistory(event));
+  if (everywhere(state) && state.relationships.enabledSince) for (const event of evidenceHistory.roleRequestsFor(playerId)) history.push(roleRequestHistory(event, calmRules));
+  if (calmRules && state.relationships.enabledSince) for (const event of evidenceHistory.adjustsFor(playerId)) history.push({ id: event.id, date: event.date, label: `Role adjusted to ${definitions[event.role].label}`, detail: `His minutes in recent games fit a ${definitions[event.role].label} role (${definitions[event.role].minMinutes}–${definitions[event.role].maxMinutes} minutes); he accepted it quietly.` });
   for (const item of promises) if (item.outcomeDate) history.push({ id: `${item.id}-outcome`, date: item.outcomeDate, label: item.status === 'kept' ? 'Playing-time promise kept' : item.status === 'broken' ? 'Playing-time promise broken' : item.status === 'departed' ? 'Promise closed after departure' : 'Promise closed without enough eligible games', detail: item.status === 'kept' || item.status === 'broken' ? `${item.averageMinutes} minutes per eligible game; ${item.targetMinutes} promised.` : 'No promise penalty was applied.' });
   for (const event of state.relationships.events) if (event.type === 'press' && event.clubId === clubId && event.playerIds.includes(playerId)) {
     const value = Math.round(pressMoraleValue(event, playerId) * 10) / 10;
@@ -351,16 +383,46 @@ function playerRelationship(state: SeasonState, playerId: string, clubId: string
   if (everywhere(state)) {
     const term = evidenceHistory.contractRoleFor(playerId, currentStint);
     const longAverage = window.length ? window.reduce((sum, game) => sum + game.minutes, 0) / window.length : null;
+    if (calmRules) return { ...row, squadRank: role.rank, contractRequest: requests.at(-1) ?? null, contractRequests: requests, roleSource: role.source, contractRole: term?.role ?? null, roleRequest, roleEvidence: { games: window.length, averageMinutes: average === null ? null : rounded(average), unmet: short }, roleAdjustment: adjustment };
     return { ...row, squadRank: role.rank, contractRequest: requests.at(-1) ?? null, contractRequests: requests, roleSource: role.source, contractRole: term?.role ?? null, roleRequest, roleEvidence: { games: window.length, averageMinutes: longAverage === null ? null : rounded(longAverage), unmet: window.length >= longer && longAverage! + 1e-9 < definition.minMinutes } };
   }
   return ranked(state) ? { ...row, squadRank: role.rank, contractRequest: requests.at(-1) ?? null, contractRequests: requests } : row;
 }
 
+type RoleInForce = ReturnType<typeof roleAt>;
+/**
+ * relationships-4: whether a shortfall in this role is accepted quietly: a default role, an earlier quiet adjustment or
+ * a contract role below Starter. A role agreed with the manager and a Star or Starter contract role raise a concern.
+ */
+function quietlyAdjusts(role: Pick<RoleInForce, 'role' | 'source'>): boolean {
+  return role.source === 'default' || role.source === 'adjusted' || role.source === 'contract' && roleLevel(role.role) < roleLevel('starter');
+}
+/**
+ * relationships-4: the smaller role a quietly adjusting player accepts now, or null. Read from his last eligible games
+ * in the role, where games outside the matchday squad count as zero: the highest lower role whose share of the minimum
+ * his average reaches, else Reserve (Prospect for players of the default Prospect age).
+ */
+function quietAdjustment(state: SeasonState, history: ClubHistory, playerId: string, clubId: string, role: RoleInForce): SquadRole | null {
+  const definitions = definitionsOf(state), minimum = definitions[role.role].minMinutes;
+  if (!quietlyAdjusts(role) || minimum <= 0 || state.status !== 'active' || !registeredPlayer(state, clubId, playerId)) return null;
+  const games = history.gamesFor(playerId, { after: role.after, eligibleOnly: true, limit: CALM.window.games });
+  if (games.length < CALM.window.minGames) return null;
+  const average = games.reduce((sum, game) => sum + game.minutes, 0) / games.length;
+  if (average + 1e-9 >= minimum * CALM.shareOfMinimum) return null;
+  const fits = SQUAD_ROLE_RULES.order.find(candidate => roleLevel(candidate) < roleLevel(role.role) && definitions[candidate].minMinutes > 0 && average + 1e-9 >= definitions[candidate].minMinutes * CALM.shareOfMinimum);
+  if (fits) return fits;
+  const age = getCareerPlayerAge(state, playerId, state.date);
+  return age !== null && age <= SQUAD_ROLE_RULES.defaults.prospectMaxAge ? 'prospect' : 'development';
+}
+
 /** relationships-3: the open escalation in the current stint, read from the journal (`settled` closes it). */
 function openRoleRequest(state: SeasonState, history: ClubHistory, playerId: string, stintStart: number): RoleRequest | null {
   const rounds = seasonRounds(state);
-  const step = (open: RoleRequest | null, event: RoleRequestEvent): RoleRequest | null => event.stage === 'talks'
-    ? { id: event.id, clubId: event.clubId, playerId, stage: 'talks', talksOn: event.date, leaveOn: null, answered: false, talksCompletedRounds: event.completedRounds }
+  // relationships-4: the calm concern opens it; talks (only for a Star or Starter by contract) continue the same request.
+  const step = (open: RoleRequest | null, event: RoleRequestEvent): RoleRequest | null => event.stage === 'concern'
+    ? { id: event.id, clubId: event.clubId, playerId, stage: 'concern', concernOn: event.date, concernCompletedRounds: event.completedRounds, talksOn: null, leaveOn: null, answered: false, talksCompletedRounds: null }
+    : event.stage === 'talks' ? calm(state) ? open && { ...open, id: event.id, stage: 'talks', talksOn: event.date, talksCompletedRounds: event.completedRounds }
+      : { id: event.id, clubId: event.clubId, playerId, stage: 'talks', talksOn: event.date, leaveOn: null, answered: false, talksCompletedRounds: event.completedRounds }
     : event.stage === 'leave' ? open && { ...open, stage: 'leave', leaveOn: event.date } : null;
   const found = history.roleRequestsFor(playerId).filter(event => ordinal(event.seasonNumber, event.round, rounds) >= stintStart).reduce(step, null);
   if (!found) return null;
@@ -369,11 +431,14 @@ function openRoleRequest(state: SeasonState, history: ClubHistory, playerId: str
   return { ...found, answered: history.eventsFor(playerId).some(event => sequenceOf(event.id) > after) };
 }
 const ROLE_REQUEST_TEXT: Record<RoleRequestStage, { label: string; detail: string }> = {
+  concern: { label: 'Would like more minutes', detail: 'He hopes to play more. Promise him minutes, explain his role or give him a smaller role.' },
   talks: { label: 'Asked for talks about his role', detail: 'His playing time has stayed below his role for several games. Promise playing time, explain the competition or agree a different role.' },
   leave: { label: 'Asked to leave', detail: `Still below his role, he wants a move: morale ${SQUAD_ROLE_RULES.escalation.leaveMorale} until his minutes meet the role again or he leaves.` },
   settled: { label: 'Role request settled', detail: 'His playing time meets his role again.' },
 };
-function roleRequestHistory(event: RoleRequestEvent): PlayerRelationship['history'][number] {
+function roleRequestHistory(event: RoleRequestEvent, calmRules = false): PlayerRelationship['history'][number] {
+  if (calmRules && event.stage === 'talks') return { id: event.id, date: event.date, label: 'Asked for talks about his role', detail: 'His contract role has gone clearly unmet for a long time. Promise playing time, explain his role or agree a different role.' };
+  if (calmRules && event.stage === 'settled') return { id: event.id, date: event.date, label: 'Playing time settled', detail: 'His minutes fit his role again, or his role changed.' };
   return { id: event.id, date: event.date, ...ROLE_REQUEST_TEXT[event.stage] };
 }
 
@@ -478,6 +543,9 @@ export function applyRelationshipEvent(state: SeasonState, event: RelationshipEv
   } else if (event.type === 'role-request') {
     const reason = roleRequestReason(state, event.clubId, event.playerId, event.stage);
     if (reason) throw new Error(reason);
+  } else if (event.type === 'role-adjust') {
+    const reason = roleAdjustReason(state, event.clubId, event.playerId, event.role);
+    if (reason) throw new Error(reason);
   } else throw new Error('Choose a supported player-relationship command.');
   return { ...state, relationships: { ...state.relationships, events: [...state.relationships.events, structuredClone(event)] } };
 }
@@ -516,14 +584,47 @@ export function preparationValues(state: SeasonState): { rosterIds: Record<strin
  * there `leaveAfterRounds` matchdays after the talks and no promise is running; settled once the concern has gone.
  */
 function dueRoleRequestStage(state: SeasonState, row: PlayerRelationship): RoleRequestStage | null {
+  if (calm(state)) return dueCalmStage(state, row);
   const open = row.roleRequest ?? null, rules = SQUAD_ROLE_RULES.escalation;
   if (!open) return row.concern && row.roleEvidence?.unmet ? 'talks' : null;
   if (!row.concern) return 'settled';
-  if (open.stage === 'talks' && !row.promise && relationshipEventAnchor(state).completedRounds - open.talksCompletedRounds >= rules.leaveAfterRounds) return 'leave';
+  if (open.stage === 'talks' && !row.promise && relationshipEventAnchor(state).completedRounds - open.talksCompletedRounds! >= rules.leaveAfterRounds) return 'leave';
+  return null;
+}
+/**
+ * relationships-4: one calm concern when a real shortfall starts (not again until it has been settled for
+ * `concern.repeatAfterRounds` matchdays); settled once it has gone; talks and then a wish to leave only for a Star or
+ * Starter by contract whose average stays below `escalation.belowShare` of his minimum, with no promise running.
+ */
+function dueCalmStage(state: SeasonState, row: PlayerRelationship): RoleRequestStage | null {
+  const open = row.roleRequest ?? null, rules = CALM.escalation, completed = relationshipEventAnchor(state).completedRounds;
+  if (!open) {
+    if (!row.concern) return null;
+    const events = state.relationships.events;
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index]!;
+      if (event.type === 'role-request' && event.stage === 'settled' && event.clubId === row.clubId && event.playerId === row.player.id) return completed - event.completedRounds >= CALM.concern.repeatAfterRounds ? 'concern' : null;
+    }
+    return 'concern';
+  }
+  if (!row.concern) return 'settled';
+  const lead = row.roleSource === 'contract' && (row.role === 'star' || row.role === 'starter');
+  const clearly = row.averageMinutes !== null && row.averageMinutes < row.minMinutes * rules.belowShare;
+  if (!lead || row.promise || !clearly) return null;
+  if (open.stage === 'concern' && completed - open.concernCompletedRounds! >= rules.talksAfterRounds) return 'talks';
+  if (open.stage === 'talks' && completed - open.talksCompletedRounds! >= rules.leaveAfterRounds) return 'leave';
+  return null;
+}
+function roleAdjustReason(state: SeasonState, clubId: string, playerId: string, role: SquadRole): string | null {
+  if (!calm(state) || !state.relationships.enabledSince) return 'Quiet role adjustments belong to the calmer playing-time rules.';
+  if (state.status !== 'active') return 'Roles adjust during the season.';
+  if (!registeredPlayer(state, clubId, playerId)) return 'Only a registered player\'s role adjusts.';
+  if (getPlayerRelationship(state, playerId, clubId).roleAdjustment !== role) return 'This role adjustment does not follow from the player\'s recorded playing time.';
   return null;
 }
 function roleRequestReason(state: SeasonState, clubId: string, playerId: string, stage: RoleRequestStage): string | null {
   if (!everywhere(state) || !state.relationships.enabledSince) return 'Role requests belong to the squad roles rules.';
+  if (stage === 'concern' && !calm(state)) return 'A calm playing-time concern belongs to the calmer playing-time rules.';
   if (state.status !== 'active') return 'Players raise role requests during the season.';
   if (!registeredPlayer(state, clubId, playerId)) return 'Only a registered player raises a role request.';
   if (dueRoleRequestStage(state, getPlayerRelationship(state, playerId, clubId)) !== stage) return 'This role request does not follow from the player\'s recorded playing time.';
@@ -534,6 +635,8 @@ function raiseRoleRequests(state: SeasonState, rows: ReadonlyMap<string, readonl
   if (!everywhere(state) || state.status !== 'active') return state;
   let next = state;
   for (const club of state.clubs) for (const row of rows.get(club.id) ?? []) {
+    // relationships-4: a player whose role follows his minutes accepts a smaller one quietly instead.
+    if (row.roleAdjustment) { next = applyRelationshipEvent(next, { ...relationshipEventAnchor(next), id: eventId(next), type: 'role-adjust', clubId: club.id, playerId: row.player.id, role: row.roleAdjustment }); continue; }
     const stage = dueRoleRequestStage(next, row);
     if (stage) next = applyRelationshipEvent(next, { ...relationshipEventAnchor(next), id: eventId(next), type: 'role-request', clubId: club.id, playerId: row.player.id, stage });
   }

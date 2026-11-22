@@ -441,6 +441,11 @@ export interface SeasonSystems {
    * New careers only; requires the wage pool.
    */
   staffContracts?: boolean;
+  /**
+   * Format 77 (owner feedback, 22 November 2026): calmer playing time (`relationships-4`, `PLAYING_TIME_RULES`): minutes
+   * judged over a longer stretch, quiet role adjustments and one calm concern. New careers only; requires squad relationships.
+   */
+  calmPlayingTime?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -453,7 +458,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -476,11 +481,14 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.wagePool !== undefined && typeof options.wagePool !== 'boolean') throw new Error('Choose a valid wage budget setting.');
   if (options.staffContracts !== undefined && typeof options.staffContracts !== 'boolean') throw new Error('Choose a valid staff contract setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
+  if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
   const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false, options.simpleFacilities ?? false, options.staffing ?? false, staffContracts);
   const pressed = options.media ? enableMedia(created) : created;
   // Format 70: the board's president personalities and objectives apply from the opening; the opening match is unchanged.
-  const boarded = options.presidents ? enablePresidentBoard(pressed) : pressed;
+  const presided = options.presidents ? enablePresidentBoard(pressed) : pressed;
+  // Format 77: the calmer playing-time rules; nothing has been judged at the opening, so its frozen morale is unchanged.
+  const boarded = options.calmPlayingTime && options.relationships ? { ...presided, relationships: { ...presided.relationships, model: 'relationships-4' as const } } : presided;
   // Format 75: player wages and staff fees share one pool from the opening; the opening staff and squads are unchanged.
   // Format 76: staff contracts (`coaching-4`, set before the opening staff are paid) with each person's contract length.
   if (staffContracts) return withOpeningStaffTerms(boarded);
@@ -561,6 +569,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const sponsored = commercialEnabled ? enableCommercial(built) : built;
   // Format 66: new careers use squad-rank default roles and contract requests (`relationships-2`); squad roles
   // everywhere (`relationships-3`: five roles, the role as a contract term, requests for talks or to leave) follow.
+  // Format 77 (`relationships-4`, calmer playing time) is set by the named `calmPlayingTime` option after creation.
   const related = relationshipsEnabled ? prepareRelationshipsRound(enableRelationships(sponsored, 'relationships-3')) : sponsored;
   const boarded = boardEnabled ? enableBoard(related, 'career') : related;
   const capitalised = boardFundingEnabled ? enableBoardFunding(boarded) : boarded;

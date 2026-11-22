@@ -23,7 +23,8 @@ import { getPlayerPayroll } from '../src/world/payroll';
 import { getPlayerRelationship } from '../src/world/relationships';
 
 const world = fullRosterWorld();
-const opening = () => createSeason({ seed: 8083, world, managedClubId: world.clubs[2]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
+// relationships-3 rules: a healthy player left outside the twelve counts a zero-minute game. The calmer format-77 rules exempt such games (tests/calm-playing-time.test.tsx).
+const opening = () => createSeason({ seed: 8083, world, managedClubId: world.clubs[2]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, calmPlayingTime: false });
 const completeRound = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 
 describe('full club rosters and separate matchday selection', () => {

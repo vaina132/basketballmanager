@@ -607,3 +607,5 @@ EuroLeague stays at 20 clubs (owner, 22 November: growing to 24 is off the plan,
 ## Computer clubs always fill every staff role (format 84, 22 November 2026, reversible)
 
 New careers with the wage pool: computer clubs appoint a missing training coach before other roles; each empty role takes the fitting candidate, else the cheapest affordable one, else the cheapest on the market regardless of money (minimum appointment). A fee or salary the cash cannot cover becomes unpaid costs. The manager's hires are unchanged. The strict save check does not test these careers' staff hires against club money.
+
+`position-balance-2` (owner approved, 22 November 2026): after the position ladder, a bench role costs 0.3 common spreads (about 4 overall points) per deviation below the position's average role, at most two. Role = minutes per game (`ratingMinutes`/`ratingGames`, pulled towards the position average over 10 games) minus the average of the club's five most-used rated players, compared within the position. Starters keep their rating, nobody gains. A continuous minutes factor was rejected (it rewarded long minutes on weak teams). Published as world-13.

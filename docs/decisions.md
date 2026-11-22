@@ -591,3 +591,15 @@ Free play for the first half of the first season, then a one-off payment to cont
 ## Rating balance (owner approved, 22 November 2026)
 
 `position-balance-1` in `supabase/functions/publish-starter-pack/rating-balance.ts`: the publishing function lines up abilities by position (a player's percentile within his position in the reference pool of 300+ minutes at top-division or European clubs sets his overall level on one ladder shared by all positions, and his whole skill profile moves with it, so each skill keeps its position's real profile for the match engine) and blends ratings resting on few minutes with the average player of the same position in the same league (weight m/(m+300), full from 900 minutes). The game's club-level fairness below 600 minutes still applies at career start. No game-side formula changed; old careers keep their world. Published as world-11.
+
+## Match flow (format 81, 22 November 2026)
+
+New careers use `plays-3` (option `matchFlow`): balls knocked out of bounds kept by the attack (about 13 a game), kicked balls 1.5, held balls 1.8, 8-second, 5-second and double-dribble violations, goaltending 0.3, unsportsmanlike fouls 0.3, about 5 timeouts a game, last-shot holds; calibration kept. The viewer is one continuous broadcast (`src/viewer/flow.ts`, `PACE_MS` 520 ms per game second, about 40 minutes a match at 1x). No coach's challenge (not used in most FIBA leagues).
+
+## Real head coaches (format 82, 22 November 2026)
+
+Eight 1-20 attributes (Offence, Defence, Tactics, Development, Motivation, Discipline, Youth, Adaptability; Tactics, Offence and Defence count double in the overall) estimated by a documented formula from titles, job level, years as head coach and age; four style values (pace, shooting, defence, youth trust) steer computer clubs before each game. Who coaches where is replayed from the board's coach changes; the manager's club's real coach becomes a free agent; clubs hire the best free coach their level attracts; free coaches over 70 retire. The manager starts near 10 in each attribute and moves at most one point per attribute a season (two up, two down) with verdicts, trophies, youth growth, dismissals and age.
+
+## European entry rules (format 83, 22 November 2026; owner decisions)
+
+EuroLeague 20 clubs until 24 is official; a relegated licence club sits out one season; places use the final ranking after the playoffs; the board may set a European aim (±6 in the verdict; overrides the old domestic-only rule); no FIBA Europe Cup; the reported 2027-28 franchise list is not scripted. Numbers in `EUROPEAN_ENTRY_RULES` (unpaid costs ≤10% of budget; seats 10,000/5,000/2,500/3,000 for new places; wild-card score: European results 30, final ranking 20, arena 15, budget 15, market 10, past seasons 10; renewal bar 60; computer clubs refuse a new EuroLeague place only with a small arena or a budget under €8M). A Decline changes who plays, not next season's money (`europe.offered`).

@@ -18,11 +18,33 @@ import type { Animation, BallSegment, Mark, PlayKind, PlayerTrack, Pose, Role, R
  * applies them), so they run while the ball is live and stop on whistles.
  */
 
-/** Presentation time per second of game clock at 1x (a full game lasts about half an hour at 1x). */
+/**
+ * Build time per second of game clock. The beats are built at this broadcast tempo (players at most `SPRINT`, the ball
+ * at most `BALL_SPEED`), then shown `TEMPO` times faster (see `shownMs`).
+ */
 export const PACE_MS = 520
-/** Fastest running speed shown, metres per second at 1x (a sprint); passes and shots fly at most `BALL_SPEED`. */
+/** Fastest running speed in the built beats, metres per second (a sprint); passes and shots fly at most `BALL_SPEED`. */
 export const SPRINT = 7.2
 const JOG = 3.6, WALK = 2.2, BALL_SPEED = 17
+/**
+ * How much faster the beats are shown than they are built (owner, 22 November 2026: "change it to 10 minutes"). A full
+ * game lasts about 10 minutes at 1x (5 at 2x, 2.5 at 4x) instead of about 40: the same movement, faster, with players
+ * at most `SPRINT * TEMPO` on screen. Key moments keep a minimum on screen (`SHOWN_MIN_MS`), so every whistle and its
+ * call stays readable and shots keep a visible arc.
+ */
+export const TEMPO = 5
+/** The least time a moment stays on screen at 1x, whatever the tempo. */
+export const SHOWN_MIN_MS: Partial<Record<PlayKind, number>> = {
+  'jump-ball': 1500, 'period-start': 1500, 'period-end': 1600, final: 2000, timeout: 1800,
+  foul: 1000, violation: 1000, 'out-of-bounds': 950, 'kicked-ball': 950, 'held-ball': 1100, injury: 1300, whistle: 900, turnover: 700,
+  substitution: 1000, 'free-throw-setup': 600, 'free-throw': 650, shot: 600, dunk: 550, block: 600,
+}
+/** A beat's time on screen at 1x: its built time `TEMPO` times faster, never under its moment's minimum. */
+function shownMs(beat: Beat): number {
+  const called = beat.whistle || beat.animation.marks.some(mark => mark.kind === 'call')
+  const least = Math.max(SHOWN_MIN_MS[beat.animation.kind] ?? 0, called ? 900 : 0)
+  return Math.max(1, Math.min(beat.durationMs, Math.max(least, Math.round(beat.durationMs / TEMPO))))
+}
 
 export interface Beat {
   key: string
@@ -247,16 +269,22 @@ export function buildBroadcast(events: readonly MatchEvent[], roster: Roster, pr
       let end = index + 1
       while (end < events.length && (classify(events[end]!) === 'live' || classify(events[end]!) === 'after') && events[end]!.clockSeconds === event.clockSeconds && events[end]!.period === event.period && !startsStep(events, end)) end += 1
       live = group(events, index, end, roster, live, beats)
+      shown(beats, checkpoint.beats)
       index = end
       continue
     }
     live = stoppage(events, index, roster, live, beats)
+    shown(beats, checkpoint.beats)
     // Substitutions at one stoppage share a beat.
     const covered = beats.at(-1)?.covers?.length ?? 0
     for (let skip = 0; skip < covered; skip += 1) { index += 1; applyAfter(events, index, live); live.score = { ...events[index]!.score } }
     index += 1
   }
   return { events, beats, live, key: '', checkpoint }
+}
+/** The new beats (from `from`) get their time on screen; their animations keep the built time (strides, poses). */
+function shown(beats: Beat[], from: number): void {
+  for (let index = from; index < beats.length; index += 1) beats[index] = { ...beats[index]!, durationMs: shownMs(beats[index]!) }
 }
 function startsStep(events: readonly MatchEvent[], index: number): boolean {
   const event = events[index]!, before = events[index - 1]

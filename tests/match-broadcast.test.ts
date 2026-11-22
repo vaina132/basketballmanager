@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { MatchEvent, MatchState, Side } from '../src/domain/types'
 import { createFixtureMatch, createMatch, setAutoSubstitutions, simulateToEnd, stepMatch } from '../src/engine/match'
 import { frameAt, rosterOf } from '../src/viewer/choreography'
-import { buildBroadcast, PACE_MS, SPRINT, type Beat } from '../src/viewer/flow'
+import { buildBroadcast, SHOWN_MIN_MS, SPRINT, TEMPO, type Beat } from '../src/viewer/flow'
 import { describePlay } from '../src/viewer/play-text'
 import { calibrationTeam } from './helpers/match-calibration'
 
@@ -69,12 +69,13 @@ describe('the continuous broadcast (presentation only)', () => {
     }
   })
 
-  it('keeps players under a sprint and the ball under a believable flight speed at 1x', () => {
+  it('keeps players under a sprint and the ball under a believable flight speed, shown TEMPO times faster at 1x', () => {
     for (const [label, match] of matches) {
       const { beats } = buildBroadcast(match.events, rosterOf(match))
       const result = speeds(beats)
-      expect(result.player, label).toBeLessThan(SPRINT * 1.25)
-      expect(result.ball, label).toBeLessThan(26)
+      // Faster on screen, never a jump: the built movement keeps a sprint and a flight speed, shown TEMPO times faster.
+      expect(result.player, label).toBeLessThan(SPRINT * TEMPO * 1.25)
+      expect(result.ball, label).toBeLessThan(26 * TEMPO)
     }
   })
 
@@ -87,6 +88,9 @@ describe('the continuous broadcast (presentation only)', () => {
         || event.type === 'command' && /out of bounds|Kicked ball|half-court offense|throw-in in the frontcourt|free-throw line|last shot/.test(event.text)
       for (const event of match.events) if (stoppage(event)) expect(shown.has(event), `${label}: ${event.text}`).toBe(true)
       for (const beat of beats) if (beat.whistle) expect(beat.animation.marks.some(mark => mark.kind === 'call' || mark.kind === 'info'), `${label}: ${beat.event.text}`).toBe(true)
+      // Every whistle and call stays on screen long enough to read at 1x, however fast the play runs.
+      for (const beat of beats) if (beat.whistle || beat.animation.marks.some(mark => mark.kind === 'call')) expect(beat.durationMs, `${label}: ${beat.event.text}`).toBeGreaterThanOrEqual(Math.min(900, beat.animation.durationMs))
+      for (const beat of beats) expect(beat.durationMs, `${label}: ${beat.event.text}`).toBeGreaterThanOrEqual(Math.min(SHOWN_MIN_MS[beat.animation.kind] ?? 0, beat.animation.durationMs))
       for (const [index, event] of match.events.entries()) expect(describePlay(event, roster, match.events[index - 1])).not.toMatch(/undefined|A player/)
     }
   })
@@ -98,10 +102,12 @@ describe('the continuous broadcast (presentation only)', () => {
       expect(beat.clock.to).toBeLessThanOrEqual(beat.clock.from + 1e-9)
       if (beat.shotClock) { expect(beat.shotClock.to).toBeGreaterThanOrEqual(0); expect(beat.shotClock.from).toBeLessThanOrEqual(24) }
     }
-    // A full game lasts about half an hour at 1x: live play at PACE_MS per second plus the stoppages.
-    const minutes = beats.reduce((sum, beat) => sum + beat.durationMs, 0) / 60_000
-    expect(minutes).toBeGreaterThan(2400 * PACE_MS / 60_000 * .8)
-    expect(minutes).toBeLessThan(48)
+    // A full game lasts about 10 minutes at 1x (owner, 22 November 2026; about 40 before), 5 at 2x and 2.5 at 4x.
+    for (const [label, game] of matches) {
+      const minutes = buildBroadcast(game.events, rosterOf(game)).beats.reduce((sum, beat) => sum + beat.durationMs, 0) / 60_000
+      expect(minutes, label).toBeGreaterThan(8.5)
+      expect(minutes, label).toBeLessThan(12)
+    }
   })
 
   it('shows the engine\'s own clocks at the end of each step', () => {

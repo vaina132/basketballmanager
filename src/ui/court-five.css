@@ -88,3 +88,4 @@ button.court-five-reserve-pick:hover strong{color:var(--accent)}
 .court-five-side{display:grid;gap:14px;min-width:0}
 .court-five-bench-heading .court-five-move-here{margin-left:auto;flex:none}
 .court-five-reserves.is-drop ul,.court-five-reserves.is-drop .lineup-empty{box-shadow:inset 0 0 0 2px var(--accent)}
+.court-five-side .court-five-bench-heading{min-height:30px;align-items:center}

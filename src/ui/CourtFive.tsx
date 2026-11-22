@@ -306,7 +306,8 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
   }
   /** Squad page: a list heading takes a picked player by tap or key, and the whole list takes a drop. */
   const areaButton = (area: 'bench-area' | 'reserves-area') => {
-    const resolved = active ? resolve(active, { kind: area }) : null
+    // Only for a tap or key pick: a button appearing while a drag starts would move the lists under the pointer.
+    const resolved = pick && !dragging ? resolve(pick, { kind: area }) : null
     return resolved?.kind === 'squad' ? <button type="button" className="button small court-five-move-here" data-squad-area={area === 'bench-area' ? 'bench' : 'reserves'} aria-label={describeSquadMove(resolved.playerId, resolved.spot)} onClick={event => choose({ kind: area }, event.detail === 0)}>Move here</button> : null
   }
   const matchdayCount = team.players.length

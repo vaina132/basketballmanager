@@ -4,6 +4,7 @@ import { getFinanceBalance } from '../world/finance'
 import { getClubPayrollSummary, getPlayerPayroll } from '../world/payroll'
 import { seasonLabel } from '../world/season'
 import { Avatar } from './Avatar'
+import { MoreInfo } from './MoreInfo'
 import { Icon } from './Icon'
 import './payroll-workspace.css'
 import { formatEuros } from './money-format'
@@ -37,7 +38,7 @@ export function PayrollWorkspace({ season, busy = false, onEnable, onOpenClub, o
 
   return <div className={`payroll-workspace${enabled ? ' payroll-enabled' : ''}`}>
     <section className="payroll-overview panel" aria-label="Wage commitments">
-      <header className="payroll-heading"><div><h2 id="payroll-heading" tabIndex={-1}>{club.name}</h2><span>{seasonLabel(season.seasonNumber)} · Player wages</span></div><button className="button small" onClick={onOpenClub} disabled={busy}>Open Club<Icon name="chevron" size={14} /></button></header>
+      <header className="payroll-heading"><div><h2 id="payroll-heading" tabIndex={-1}>Player wages</h2><span>{seasonLabel(season.seasonNumber)}</span></div><button className="button small" onClick={onOpenClub} disabled={busy}>Open Club<Icon name="chevron" size={14} /></button></header>
       {enabled && <dl className="payroll-summary"><div><dt>Cash</dt><dd data-payroll-cash={balance.cash}>{money(balance.cash)}</dd></div><div><dt>Wages still to pay</dt><dd data-payroll-reserve={summary.futureCommitted}>{money(summary.futureCommitted)}</dd></div><div><dt>Next weekly wages</dt><dd data-payroll-next={summary.nextInstallment}>{money(summary.nextInstallment)}</dd></div></dl>}
     </section>
 
@@ -56,9 +57,9 @@ export function PayrollWorkspace({ season, busy = false, onEnable, onOpenClub, o
         })}{!players.length && <tr><td colSpan={4} className="payroll-empty">No players match this search.</td></tr>}</tbody></table></div>
         <div className="payroll-totals"><span>Annual salaries <strong>{money(summary.seasonWages)}</strong></span><span>Paid so far <strong data-payroll-charged={summary.charged}>{money(summary.charged)}</strong></span></div>
         {startedThisSeason !== null && startedThisSeason > 1 && <p className="payroll-note">Wages started on Matchday {startedThisSeason}; nothing was charged for earlier weeks.</p>}
-        <p className="payroll-note" data-payroll-automatic="true">Wages are paid automatically every week. New players are paid from the week they join. Injuries do not change wages.</p>
+        <p className="payroll-note" data-payroll-automatic="true">Wages are paid automatically every week, from the week a player joins.</p>
       </section>
-      <p className="payroll-model-note">{season.employment.enabledSince ? 'Player wages follow signed employment contracts. Renewals are on Squad > Contracts and recruitment in Transfers.' : (season.world?.economy ? 'Wages estimated from published 2025-27 salary reports; fixed squad terms continue annually.' : 'Fictional wage estimates; fixed squad terms continue annually.')}</p>
+      <MoreInfo label="About wages"><p className="payroll-model-note">{season.employment.enabledSince ? 'Player wages follow signed employment contracts. Renewals are on Squad > Contracts and recruitment in Transfers.' : (season.world?.economy ? 'Wages estimated from published 2025-27 salary reports; fixed squad terms continue annually.' : 'Fictional wage estimates; fixed squad terms continue annually.')}</p></MoreInfo>
     </>}
   </div>
 }

@@ -10,7 +10,21 @@ export function showsBudgetBar(page: Page, squadView?: string): boolean {
 }
 export interface NavItem { id: Page; label: string; icon: IconName }
 
-export const PAGE_NAMES: Record<Page, string> = { home: "Manager's desk", inbox: 'Inbox', squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', academy: 'Youth academy', medical: 'Medical & rehabilitation', staff: 'Club staff', club: 'Club', board: 'Board', transfers: 'Transfers', calendar: 'Season calendar', europe: 'European competitions' }
+export type SquadView = 'selection' | 'performance' | 'relationships' | 'payroll' | 'contracts' | 'medical'
+/** The Squad page's views, in order. Medical joined them in the simplify pass (owner, 22 November 2026). */
+export const SQUAD_VIEWS: readonly { id: SquadView; label: string }[] = [
+  { id: 'selection', label: 'Selection' },
+  { id: 'performance', label: 'Statistics' },
+  { id: 'relationships', label: 'Dynamics' },
+  { id: 'payroll', label: 'Wages' },
+  { id: 'contracts', label: 'Contracts' },
+  { id: 'medical', label: 'Medical' },
+]
+/** Pages that became a view of another page: links to them open that view, so nothing is lost. */
+export const MERGED_PAGES: Partial<Record<Page, { page: Page; squadView: SquadView }>> = { medical: { page: 'squad', squadView: 'medical' } }
+
+/** Page titles use the menu's own words (simplify pass, owner, 22 November 2026). */
+export const PAGE_NAMES: Record<Page, string> = { home: 'Desk', inbox: 'Inbox', squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', academy: 'Academy', medical: 'Medical', staff: 'Staff', club: 'Club', board: 'Board', transfers: 'Transfers', calendar: 'Calendar', europe: 'Europe' }
 
 const ITEMS: Record<Page, NavItem> = {
   home: { id: 'home', label: 'Desk', icon: 'home' },
@@ -42,7 +56,8 @@ export function mainNavigation({ career, europe }: { career: boolean; europe: bo
     [ITEMS.squad, ITEMS.match, ITEMS.transfers, ITEMS.training, ITEMS.staff],
     [ITEMS.club, ITEMS.board],
     [ITEMS.season, ITEMS.calendar, ...(europe ? [ITEMS.europe] : [])],
-    [ITEMS.academy, ITEMS.medical],
+    // Simplify pass (owner, 22 November 2026): Medical is a view of Squad.
+    [ITEMS.academy],
   ]
 }
 

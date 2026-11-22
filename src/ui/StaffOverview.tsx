@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { SeasonState } from '../domain/season'
 import { roleStaff, sackingTerms, STAFF_ROLE_LABELS, STAFF_ROLES, staffRoleEnabled, type StaffRole } from '../world/staff-roster'
-import { remainingStaffBudget } from '../world/staff-policy'
 import { StaffStars } from './StaffRating'
 import { Icon, type IconName } from './Icon'
 import { formatEuros } from './money-format'
@@ -22,7 +21,7 @@ export function StaffOverview({ season, busy = false, onReplace, onHire, onSack 
   if (!roles.length) return null
   const open = season.status !== 'complete'
   return <section className="staff-overview panel" aria-labelledby="staff-overview-title">
-    <header className="staff-heading"><div><h2 id="staff-overview-title">Current staff</h2><span>{club.name} · Season {season.seasonNumber}</span></div><span className="staff-overview-budget">Wages left <strong data-staff-overview-budget={remainingStaffBudget(season, season.managedClubId)}>{formatEuros(remainingStaffBudget(season, season.managedClubId))}</strong></span></header>
+    <header className="staff-heading"><div><h2 id="staff-overview-title">Current staff</h2></div></header>
     <ul className="staff-overview-list">{roles.flatMap(role => {
       const members = roleStaff(season, role)
       if (!members.length) return [<li className="staff-overview-row vacant" key={role} data-staff-role={role}>

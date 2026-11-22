@@ -58,10 +58,6 @@ export function TrainingWorkspace({ season, onEnable, onEnableLifecycle, onOpenF
   const coaches = season.coaching.enabledSince === null ? [] : getClubCoaching(season.coaching, club.id)
 
   return <div className="training-workspace">
-    <section className="training-context panel" aria-label="Training schedule">
-      <div><strong>{club.name}</strong><span>{season.round === seasonRounds(season) ? 'Resumes next season' : `Plan applies after Matchday ${season.round}`}</span></div>
-      <time dateTime={season.date}>{formatDate(season.date)}</time>
-    </section>
 
     <LifecycleTrainingControl season={season} busy={busy} onEnable={onEnableLifecycle} />
     {!enabled ? <section className="training-enable panel" aria-labelledby="training-enable-title">
@@ -69,7 +65,7 @@ export function TrainingWorkspace({ season, onEnable, onEnableLifecycle, onOpenF
       <div><p>Enable workload and focus planning for recovery and skill development. Starts with the next training week and applies to every club.</p><button id="enable-training" className="button primary" onClick={onEnable} disabled={busy}>Enable training<Icon name="training" size={16} /></button></div>
     </section> : <>
       <section className="training-plan panel" aria-labelledby="training-plan-title">
-        <header className="training-heading"><h2 id="training-plan-title"><Icon name="training" size={18} />Weekly plan</h2><span>{plan.delegated ? 'Assistant control' : 'Manual control'}</span></header>
+        <header className="training-heading"><h2 id="training-plan-title"><Icon name="training" size={18} />Weekly plan</h2><span>{plan.delegated ? 'Assistant' : 'Manual'} · {season.round === seasonRounds(season) ? 'resumes next season' : `from matchday ${season.round}`}</span></header>
         <div className="training-plan-controls">
           <div className="training-control">
             <div className="training-control-label"><label htmlFor="training-control">Training control</label><output htmlFor="training-control">{plan.delegated ? 'Assistant' : 'Manual'}</output></div>

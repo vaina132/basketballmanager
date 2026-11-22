@@ -12,6 +12,14 @@ import { dateForRound } from '../world/season';
  *
  * Only the checkpoint queue's own states take this path (`checkCheckpointState` in `season-storage.ts`); imports, loads
  * of unsealed files and exports keep the full check. Nothing here is ever read from or written to a save.
+ *
+ * What is trusted (22 November 2026, formats up to 80): the season's constants (`SEASON_CONSTANTS`, the injury and play
+ * models of formats 78-79 included), the finance archives and the earlier records of the journals in `JOURNALS` (the
+ * relationships journal holds the calm-playing-time adjustments of format 77; the transfers journal the loans of format
+ * 78) and of each scouting office. Everything else is checked in full on every checkpoint: national teams, their
+ * results and national duty (format 80), the transfer and loan list (78), staff contracts and weekly staff wages (76),
+ * the current squads, registrations, training, conditions and the open match. A trusted prefix must have the digest its
+ * check recorded (`prefixDigest`) and equal the trusted state exactly; otherwise the full check runs.
  */
 export interface PrefixCut { seasonNumber: number; round: number }
 

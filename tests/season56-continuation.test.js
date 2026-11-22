@@ -6,7 +6,7 @@ import { parseSeason, serializeSeason, serializeSeasonCompact, SEASON_SCHEMA_VER
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { expandJson } from '../src/storage/compact-json';
-import { expectValidOldSaveWeek } from './helpers/old-save-week';
+import { expectValidOldSaveWeek, withFormat73Records } from './helpers/old-save-week';
 import { regularWorldRounds } from '../src/world/career-world';
 
 const root = new URL('./fixtures/', import.meta.url);
@@ -57,7 +57,7 @@ describe('original format-56 career with a listed EuroLeague (captured before fo
     expect(roundTrip(complete)).toEqual(complete);
     const opening = rolloverSeason(complete);
     const captured = fixture('opening');
-    expect(opening).toEqual({ ...captured.raw, schemaVersion: opening.schemaVersion });
+    expect(opening).toEqual(withFormat73Records({ ...captured.raw, schemaVersion: opening.schemaVersion }));
     expect(parseSeason(captured.text)).toEqual(opening);
   }, 300_000);
 

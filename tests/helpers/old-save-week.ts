@@ -4,8 +4,8 @@ import { setAutoSubstitutions, simulateToEnd } from '../../src/engine/match';
 import { parseSeason, serializeSeason } from '../../src/storage/season-storage';
 import { financeLedgerCount, financeLedgerSlice } from '../../src/world/finance-ledger';
 import { advanceSeason, managedSide } from '../../src/world/season';
-import { isAcademyOutcome, summarizeAcademyPlayer } from '../../src/world/academy-history';
-import { withoutCountedGames } from '../../src/world/sealed-history';
+import { isAcademyOutcome, summarizeAcademyHistory, summarizeAcademyPlayer } from '../../src/world/academy-history';
+import { sealCompletedHistory, withoutCountedGames } from '../../src/world/sealed-history';
 import type { AcademyWeek } from '../../src/domain/academy';
 import type { BoardReview } from '../../src/domain/board';
 import type { RelationshipEvent } from '../../src/domain/relationships';
@@ -69,6 +69,15 @@ const LIGHTENED: Partial<Record<(typeof HISTORY)[number], (items: unknown[]) => 
   'board.reviews': reviews => withoutCountedGames(reviews as BoardReview[]),
   'relationships.events': events => (events as RelationshipEvent[]).map(event => event.type === 'prepare' ? { ...event, rosterIds: {}, values: {} } : event),
 };
+
+/**
+ * A state captured before format 73, in the lighter form format 73 keeps for every career (step 3.7, save size): rival
+ * academy reports that are no longer a club's latest keep their outcome, completed seasons are sealed, and only the
+ * latest board review and morale snapshot keep their counted games and values (`sealCompletedHistory`). Migration,
+ * every week and every rollover apply these projections to old careers too, so exact comparisons with a state captured
+ * by an earlier runtime compare it in this form; every other field must still match exactly.
+ */
+export const withFormat73Records = <T extends SeasonState>(state: T): T => sealCompletedHistory(summarizeAcademyHistory(state)) as T;
 
 function arraysAt(state: unknown, path: string): [string, unknown[] | undefined][] {
   let found: [string, unknown][] = [['', state]];

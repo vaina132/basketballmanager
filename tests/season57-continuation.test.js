@@ -7,6 +7,7 @@ import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season'
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { expandJson } from '../src/storage/compact-json';
 import { regularWorldRounds } from '../src/world/career-world';
+import { withFormat73Records } from './helpers/old-save-week';
 
 const root = new URL('./fixtures/', import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL('season57-eurocup-legacy-manifest.json', root), 'utf8'));
@@ -41,7 +42,7 @@ describe('original format-57 career playing a EuroLeague (captured before format
     expect(state.fixtures.some(fixture => fixture.competition && fixture.result)).toBe(true);
     expect(roundTrip(state)).toEqual(state);
     const next = play(state);
-    expect(next).toEqual({ ...fixture('mid-next').raw, schemaVersion: next.schemaVersion });
+    expect(next).toEqual(withFormat73Records({ ...fixture('mid-next').raw, schemaVersion: next.schemaVersion }));
   }, 300_000);
 
   it('keeps its completed EuroLeague and rolls over exactly as captured', () => {
@@ -52,7 +53,7 @@ describe('original format-57 career playing a EuroLeague (captured before format
     expect(roundTrip(complete)).toEqual(complete);
     const opening = rolloverSeason(complete);
     const captured = fixture('opening');
-    expect(opening).toEqual({ ...captured.raw, schemaVersion: opening.schemaVersion });
+    expect(opening).toEqual(withFormat73Records({ ...captured.raw, schemaVersion: opening.schemaVersion }));
     expect(parseSeason(captured.text)).toEqual(opening);
   }, 300_000);
 });

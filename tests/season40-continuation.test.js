@@ -42,7 +42,8 @@ describe('genuine format-40 careers', () => {
   it('preserves every record through the new encoding and validated local checkpoint reads', async () => {
     for (const name of names) {
       const text = serializeSeasonCompact(states[name]);
-      expect(JSON.parse(text)).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-2' });
+      // Format 73 writes every save, older careers included, in the compact-3 layout.
+      expect(JSON.parse(text)).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-3' });
       expect(parseSeason(text)).toEqual(states[name]);
       expect(await sealMatches(text, await saveSeal(text))).toBe(true);
       const restored = parseSealedSeason(text);

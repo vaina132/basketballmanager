@@ -8,7 +8,7 @@ import { parseSealedSeason, parseSeason, serializeSeasonCompact } from '../src/s
 import { saveSeal, sealMatches } from '../src/storage/save-seal';
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
-import { expectValidOldSaveWeek } from './helpers/old-save-week';
+import { expectValidOldSaveWeek, withFormat73Records } from './helpers/old-save-week';
 
 // Captured at unchanged commit 11a02a9, before academy outcomes existed. Never relabel or forge their versions.
 const names = ['career', 'career-next', 'complete', 'opening'];
@@ -52,19 +52,25 @@ describe('genuine format-41 academy history', () => {
       const file = JSON.parse(files[name]);
       expect(file.formatVersion).toBe(41);
       expect(file.encoding).toBeUndefined();
-      expect(fullReference(states[name], originals[name])).toEqual(originals[name]);
+      expect(withFormat73Records(fullReference(states[name], originals[name]))).toEqual(withFormat73Records(originals[name]));
       expect(originals[name].academy.weeks.flatMap(week => Object.values(week.players)).some(report => report.detail === 'outcome')).toBe(false);
     }
-    for (const name of ['career', 'career-next', 'complete']) expect(states[name].academy.weeks).toEqual(originals[name].academy.weeks);
-    const opening = states.opening, source = originals.opening, latest = source.academy.weeks.at(-1).id;
+    for (const name of ['career', 'career-next', 'complete']) expect(states[name].academy.weeks).toEqual(withFormat73Records(originals[name]).academy.weeks);
+    // Format 73 also summarizes the current season's rival reports that are no longer a club's latest, never the manager's.
+    const career = states.career, latest = career.academy.weeks.at(-1).id;
     let count = 0;
-    for (const week of opening.academy.weeks) for (const report of Object.values(week.players)) if (report.detail === 'outcome') {
-      expect(week.seasonNumber).toBeLessThan(opening.seasonNumber);
-      expect(report.clubId).not.toBe(source.managedClubId);
+    for (const week of career.academy.weeks) for (const report of Object.values(week.players)) if (report.detail === 'outcome') {
+      expect(report.clubId).not.toBe(career.managedClubId);
       expect(week.id).not.toBe(latest);
       count += 1;
     }
     expect(count).toBeGreaterThan(0);
+    // The opening seals the completed season: each prospect keeps only its last report of that season.
+    const opening = states.opening, source = originals.opening;
+    const completed = state => state.academy.weeks.filter(week => week.seasonNumber < state.seasonNumber).flatMap(week => Object.keys(week.players));
+    expect(new Set(completed(opening)).size).toBe(completed(opening).length);
+    expect(new Set(completed(opening))).toEqual(new Set(completed(source)));
+    expect(completed(opening).length).toBeLessThan(completed(source).length);
   });
 
   // Match calibration and realistic injuries (sprint 4) changed the simulated results after this old save, so the week is
@@ -74,14 +80,15 @@ describe('genuine format-41 academy history', () => {
   }, 120_000);
 
   it('rolls over exactly as the prior implementation independently recorded', () => {
-    expect(fullReference(rolloverSeason(states.complete), originals.opening)).toEqual(originals.opening);
+    expect(withFormat73Records(fullReference(rolloverSeason(states.complete), originals.opening))).toEqual(withFormat73Records(originals.opening));
     expect(rolloverSeason(states.complete)).toEqual(states.opening);
   }, 120_000);
 
   it('keeps outcomes and gameplay identical through strict portable and verified local roundtrips', async () => {
     for (const name of names) {
       const text = serializeSeasonCompact(states[name]);
-      expect(JSON.parse(text)).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-2' });
+      // Format 73 writes every save, older careers included, in the compact-3 layout.
+      expect(JSON.parse(text)).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-3' });
       expect(parseSeason(text)).toEqual(states[name]);
       expect(await sealMatches(text, await saveSeal(text))).toBe(true);
       expect(parseSealedSeason(text)).toEqual(states[name]);

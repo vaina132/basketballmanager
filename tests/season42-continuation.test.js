@@ -8,7 +8,7 @@ import { parseSealedSeason, parseSeason, serializeSeasonCompact } from '../src/s
 import { saveSeal, sealMatches } from '../src/storage/save-seal';
 import { advanceSeason, managedSide, rolloverSeason } from '../src/world/season';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
-import { expectValidOldSaveWeek } from './helpers/old-save-week';
+import { expectValidOldSaveWeek, withFormat73Records } from './helpers/old-save-week';
 
 // Captured at unchanged 76fa3bd before youth summaries existed. Never rewrite these old envelopes.
 const names = ['career', 'career-next', 'complete', 'opening'];
@@ -44,11 +44,12 @@ describe('genuine format-42 youth fixture history', () => {
       const file = JSON.parse(files[name]);
       expect(file.formatVersion).toBe(42);
       expect(file.encoding).toBeUndefined();
-      expect(fullReference(states[name], originals[name])).toEqual(originals[name]);
+      expect(withFormat73Records(fullReference(states[name], originals[name]))).toEqual(withFormat73Records(originals[name]));
       expect(fixtures(originals[name]).some(fixture => fixture.detail === 'outcome')).toBe(false);
     }
-    for (const name of ['career', 'career-next', 'complete']) expect(states[name].youthCompetition).toEqual(originals[name].youthCompetition);
-    const summaries = fixtures(states.opening).filter(fixture => fixture.detail === 'outcome');
+    for (const name of ['career', 'career-next', 'complete']) expect(states[name].youthCompetition).toEqual(withFormat73Records(originals[name]).youthCompetition);
+    // Format 73 seals rival youth games of completed seasons at the opening (results and diagnoses only).
+    const summaries = fixtures(states.opening).filter(fixture => fixture.detail === 'season');
     expect(summaries.length).toBeGreaterThan(0);
     for (const fixture of summaries) {
       expect(fixture.seasonNumber).toBeLessThan(states.opening.seasonNumber);
@@ -63,14 +64,15 @@ describe('genuine format-42 youth fixture history', () => {
   }, 120_000);
 
   it('rolls over exactly as the prior implementation independently recorded', () => {
-    expect(fullReference(rolloverSeason(states.complete), originals.opening)).toEqual(originals.opening);
+    expect(withFormat73Records(fullReference(rolloverSeason(states.complete), originals.opening))).toEqual(withFormat73Records(originals.opening));
     expect(rolloverSeason(states.complete)).toEqual(states.opening);
   }, 120_000);
 
   it('preserves youth outcomes through strict portable saves and verified local reloads', async () => {
     for (const name of names) {
       const text = serializeSeasonCompact(states[name]);
-      expect(JSON.parse(text)).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-2' });
+      // Format 73 writes every save, older careers included, in the compact-3 layout.
+      expect(JSON.parse(text)).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-3' });
       expect(parseSeason(text)).toEqual(states[name]);
       expect(await sealMatches(text, await saveSeal(text))).toBe(true);
       expect(parseSealedSeason(text)).toEqual(states[name]);

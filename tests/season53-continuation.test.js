@@ -7,7 +7,7 @@ import { advanceSeason, getStandings, managedSide, rolloverSeason } from '../src
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { seasonLeagues } from '../src/world/divisions';
 import { expandJson } from '../src/storage/compact-json';
-import { expectValidOldSaveWeek } from './helpers/old-save-week';
+import { expectValidOldSaveWeek, withFormat73Records } from './helpers/old-save-week';
 import { classificationPoints } from '../src/world/fiba-ranking';
 
 const root = new URL('./fixtures/', import.meta.url);
@@ -64,7 +64,7 @@ describe('original format-53 two-division baseline (captured before format 54, s
     expect(roundTrip(complete)).toEqual(complete);
     const opening = rolloverSeason(complete);
     const captured = fixture('opening');
-    expect(opening).toEqual({ ...captured.raw, schemaVersion: opening.schemaVersion, background: { model: 'background-1', clubs: [], changesFrom: 2, exchanges: [] } });
+    expect(opening).toEqual(withFormat73Records({ ...captured.raw, schemaVersion: opening.schemaVersion, background: { model: 'background-1', clubs: [], changesFrom: 2, exchanges: [] } }));
     // Season two's recorded divisions differ from the opening leagues; loading must not reset them.
     const loaded = parseSeason(captured.text);
     expect(loaded.divisions).toEqual(captured.raw.divisions);

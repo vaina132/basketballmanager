@@ -43,9 +43,8 @@ describe('club money across a real rollover with promotion and relegation (forma
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      // Seed 12 (re-seeded for real head coaches' styles, format 82, 22 November 2026: with seeds 11 and 13 a computer club's
-      // in-season offer for the next season is refused by the strict check's wage-budget replay, a save-check gap reported
-      // separately). Before: seed 11 (9 before the manager's next game started from the planned five, 16 November 2026); it also covers the
+      // Seed 12 (re-seeded for real head coaches' styles, format 82, 22 November 2026; seeds 11 and 13 found the save-check
+      // gap covered by the test below). Before: seed 11 (9 before the manager's next game started from the planned five, 16 November 2026); it also covers the
       // opening review's retirement notices seeing only departures decided at earlier season ends. With seeds 9 and 10
       // a club relegated out of the full world after season one returns after season two, and the strict check of season
       // three's opening then refuses its scouting office's squad memories (reported separately; a save-check matter).
@@ -143,6 +142,67 @@ describe('club money across a real rollover with promotion and relegation (forma
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       state = rolloverSeason(state);
       expect(state.economySeasons!.seasons.map(item => item.seasonNumber)).toEqual([2, 3]);
+      expect(roundTrip(state)).toEqual(state);
+    } finally {
+      requireWorldContexts(false);
+    }
+  }, 900_000);
+});
+
+describe('contract offers are checked with the money known when they were made', () => {
+  // 22 November 2026: with seeds 11 and 13 (real head coaches on) a computer club renews a player in season two for season
+  // three within the wage pool, which counts the staff budget its standard allocation leaves unused. The season's final
+  // review then gives it a worse verdict, cutting season three's staff budget; the strict check replayed the renewal with
+  // that later review and refused the honest save. The check now sees only the reviews and money tables known at the offer.
+  it.each([11, 13])('keeps a save whose earlier renewal a later final review would no longer allow (seed %i)', seed => {
+    requireWorldContexts(true);
+    try {
+      const world = moneyWorld();
+      let state = setEmploymentDelegation(createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+      while (state.status === 'active') state = advanceSeason(play(state));
+      for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
+      // The same path as the test above: a relegated club priced at its old maximum.
+      const priced = getPostseasons(state, 1)[0]!.outcome.relegated.map(entry => entry.clubId).find((id): id is string => id !== null)!;
+      state = { ...state, finance: { ...state.finance, plans: { ...state.finance.plans, [priced]: { ...state.finance.plans[priced]!, price: maxTicketPriceFor(state, priced) } } } };
+      state = rolloverSeason(state);
+      // Season three's staff budget of each computer club when it first renewed a player for that season during season two.
+      const budgetAtRenewal = new Map<string, number>();
+      while (state.status === 'active') {
+        const before = state.negotiations.records.length;
+        state = advanceSeason(play(state));
+        for (const entry of state.negotiations.records.slice(before)) {
+          if (entry.status === 'active' && entry.startsSeason === 3 && entry.outcome === 'accepted' && entry.clubId !== state.managedClubId && !budgetAtRenewal.has(entry.clubId)) budgetAtRenewal.set(entry.clubId, staffAllocation(state, entry.clubId, 3));
+        }
+      }
+      // The final review cut at least one renewing club's staff budget for season three after its renewal.
+      expect([...budgetAtRenewal].some(([clubId, budget]) => staffAllocation(state, clubId, 3) < budget)).toBe(true);
+      expect(roundTrip(state)).toEqual(state);
+    } finally {
+      requireWorldContexts(false);
+    }
+  }, 900_000);
+});
+
+describe('a manager appointed by a club promoted from the next division', () => {
+  // 22 November 2026: with seed 30 the manager is dismissed after season two and appointed by a club that joined the full
+  // world from the third division after season one; the strict check knew only the world's opening clubs and refused it.
+  it('keeps the move and the next season (seed 30)', () => {
+    requireWorldContexts(true);
+    try {
+      const world = moneyWorld();
+      let state = setEmploymentDelegation(createSeason({ seed: 30, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+      while (state.status === 'active') state = advanceSeason(play(state));
+      for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
+      const priced = getPostseasons(state, 1)[0]!.outcome.relegated.map(entry => entry.clubId).find((id): id is string => id !== null)!;
+      state = { ...state, finance: { ...state.finance, plans: { ...state.finance.plans, [priced]: { ...state.finance.plans[priced]!, price: maxTicketPriceFor(state, priced) } } } };
+      state = rolloverSeason(state);
+      const joined = seasonExchangesOf(state.background, 1).flatMap(exchange => exchange.joining);
+      while (state.status === 'active') state = advanceSeason(play(state));
+      expect(state.career.moves.at(-1)).toMatchObject({ seasonNumber: 2, reason: 'dismissed', phase: 'end' });
+      expect(joined).toContain(state.managedClubId);
+      expect(roundTrip(state)).toEqual(state);
+      for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
+      state = rolloverSeason(state);
       expect(roundTrip(state)).toEqual(state);
     } finally {
       requireWorldContexts(false);

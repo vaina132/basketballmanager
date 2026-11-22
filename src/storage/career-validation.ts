@@ -4,7 +4,7 @@ import { jobMarketAt, jobOfferRefusal, midSeasonChanges, resignationOutlook, sea
 import { managedClubFor } from '../world/career';
 import type { CareerMove, CareerMovePhase, SeasonCareer } from '../domain/career';
 import type { BoardRestart } from '../domain/board';
-import { isWorldClub, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
+import { clubsEverInFullWorld, isWorldClub, roundOrdinal, seasonRounds, worldOf } from '../world/career-world';
 import type { WorldContext } from '../domain/world';
 import { financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
 import { allowsUnemployment, CAREER_2_MODEL, CAREER_MODEL, CAREER_RULES, careerPointKey, NO_CLUB, usesCareerRules } from '../world/career-rules';
@@ -90,7 +90,7 @@ export function validateCareer(value: unknown, state: Pick<SeasonState, 'seasonN
  * Format 63 (basic checks, development mode): career-2 moves are chronological career points between world clubs.
  * Format 69 (career-3): a dismissal or resignation may lead to no club, and only an appointment leaves no club again.
  */
-function validateCareer2Moves(moves: unknown[], state: Pick<SeasonState, 'seasonNumber' | 'round' | 'status' | 'date' | 'managedClubId' | 'finance'> & WorldContext, world: ReturnType<typeof worldOf>, unemployment: boolean, version: number): void {
+function validateCareer2Moves(moves: unknown[], state: Pick<SeasonState, 'seasonNumber' | 'round' | 'status' | 'date' | 'managedClubId' | 'finance'> & Partial<Pick<SeasonState, 'background'>> & WorldContext, world: ReturnType<typeof worldOf>, unemployment: boolean, version: number): void {
   const rounds = seasonRounds(state);
   let previous: { key: number; date: string; toClubId: string; ledgerCount: number } | null = null;
   for (const [index, raw] of moves.entries()) {
@@ -108,9 +108,11 @@ function validateCareer2Moves(moves: unknown[], state: Pick<SeasonState, 'season
     if (phase === 'season' && season === state.seasonNumber && state.status !== 'complete' && round > state.round) fail(location, 'cannot precede a week still to come');
     if (typeof move.date !== 'string' || (phase === 'offseason' ? move.date < dateForRound(rounds, season) : move.date !== dateForRound(round, season)) || move.date > state.date) fail(`${location}.date`, 'must be the calendar date of the move');
     if (!(unemployment ? PHASE_REASONS_3 : PHASE_REASONS)[phase].includes(move.reason as string)) fail(`${location}.reason`, 'must record a supported reason for that point of the season');
+    // A club that joined the full world from a next division before this season (step 3.4d-2) is a club in this league.
+    const inLeague = (clubId: unknown): boolean => isWorldClub(world, clubId) || Array.isArray(state.background?.exchanges) && clubsEverInFullWorld(state, season).some(club => club.id === clubId);
     if (move.reason === 'appointed') {
-      if (move.fromClubId !== NO_CLUB || !isWorldClub(world, move.toClubId)) fail(location, 'must appoint a manager without a club to a club in this league');
-    } else if (!isWorldClub(world, move.fromClubId) || !(isWorldClub(world, move.toClubId) || unemployment && move.toClubId === NO_CLUB && (move.reason === 'dismissed' || move.reason === 'resigned')) || move.fromClubId === move.toClubId) fail(location, 'must move between two different clubs in this league');
+      if (move.fromClubId !== NO_CLUB || !inLeague(move.toClubId)) fail(location, 'must appoint a manager without a club to a club in this league');
+    } else if (!inLeague(move.fromClubId) || !(inLeague(move.toClubId) || unemployment && move.toClubId === NO_CLUB && (move.reason === 'dismissed' || move.reason === 'resigned')) || move.fromClubId === move.toClubId) fail(location, 'must move between two different clubs in this league');
     const key = careerPointKey(season, round, phase);
     if (previous && (key < previous.key || key === previous.key && (phase !== 'offseason' || move.date <= previous.date))) fail(location, 'must be in chronological order, at most one per point of the season');
     if (previous && move.fromClubId !== previous.toClubId) fail(`${location}.fromClubId`, 'must be the club managed after the previous move');

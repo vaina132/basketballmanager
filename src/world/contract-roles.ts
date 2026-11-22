@@ -21,7 +21,7 @@ export const isSquadRole = (value: unknown): value is SquadRole => typeof value 
 
 /** Whether this career's contracts carry squad roles. */
 export function contractRolesApply(context: { relationships?: SeasonRelationships }): boolean {
-  return context.relationships?.model === 'relationships-3' && !!context.relationships.enabledSince;
+  return (context.relationships?.model === 'relationships-3' || context.relationships?.model === 'relationships-4') && !!context.relationships.enabledSince;
 }
 
 const wageOf = (context: CareerPlayerContext, playerId: string): number => { try { return getCareerWage(context, playerId); } catch { return 0; } };

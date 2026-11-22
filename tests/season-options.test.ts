@@ -5,7 +5,7 @@ const manager = { name: 'Options Manager', dateOfBirth: '1984-03-17', nationalit
 
 describe('named career options', () => {
   it('lists every optional system once and cannot be changed at runtime', () => {
-    expect(Object.keys(NEW_CAREER_SYSTEMS)).toHaveLength(32);
+    expect(Object.keys(NEW_CAREER_SYSTEMS)).toHaveLength(33);
     expect(Object.values(NEW_CAREER_SYSTEMS).every(Boolean)).toBe(true);
     expect(Object.isFrozen(NEW_CAREER_SYSTEMS)).toBe(true);
   });
@@ -15,7 +15,7 @@ describe('named career options', () => {
     // The New career screen's former positional call: every flag after the manager enabled.
     const fullPositional = createSeason(227, 'rhine-falcons', 'standard', true, true, true, true, manager, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true);
     // Sponsorship negotiations, board funding, board verdicts press and media (format 67) and naming rights (format 64) and president personalities (format 70) and six-level facilities with the bank loan (format 74) postdate the positional form, so they are reachable only by name.
-    expect(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, staffing: false, commercial: false, boardFunding: false, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false, media: false, namingRights: false, presidents: false, simpleFacilities: false })).toEqual(fullPositional);
+    expect(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, staffing: false, commercial: false, boardFunding: false, boardConsequences: false, rivalries: false, facilityMaintenance: false, careerMoves: false, media: false, namingRights: false, presidents: false, simpleFacilities: false, calmPlayingTime: false })).toEqual(fullPositional);
     const named = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS });
     expect([named.commercial.enabledSince, named.facilities.fundingSince, named.board.consequencesSince].every(anchor => anchor !== null)).toBe(true);
     expect(named.media).toEqual({ model: 'media-1', since: { seasonNumber: 1, round: 1, date: named.date } });
@@ -24,6 +24,8 @@ describe('named career options', () => {
     // Format 76: staff contracts with weekly salaries (also reachable only by name).
     expect(named.coaching.model).toBe('coaching-4');
     expect(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, staffContracts: false }).coaching.model).toBe('coaching-3');
+    // Format 77: calmer playing time (also reachable only by name).
+    expect(named.relationships.model).toBe('relationships-4');
     // Format 75: player wages and staff fees share one pool (also reachable only by name).
     expect(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, wagePool: false }).coaching.model).toBe('coaching-2');
     expect(createSeason({ seed: 9, managedClubId: 'aegean-waves', injuryMode: 'off', training: false, coaching: false, employment: true, negotiations: true, board: true }))

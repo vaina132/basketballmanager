@@ -147,7 +147,8 @@ export interface DomesticDivisions {
 /** Format 73 (step 3.7, save size): completed seasons are sealed at each rollover. Rival senior games of seasons before the latest completed one keep their results, diagnoses and each side's fouls (`fouls`) beside the season totals; rival youth games of completed seasons keep results and diagnoses (`detail: 'season'`); academy weeks of completed seasons keep each prospect's last report of the season. Strict checks replay the current season from these records (`src/world/sealed-history.ts`). */
 /** Format 74: six-level facilities with the bank loan (also accepted at format 73), opening staff for every club (`coaching-2`), squad roles (`relationships-3`) and court-picture slots. */
 /** Format 76: staff contracts of 1-3 seasons with weekly salaries and sacking compensation (`coaching-4`, `src/world/staff-contracts.ts`). */
-export const SEASON_SCHEMA_VERSION = 76;
+/** Format 77: calmer playing time for new careers (`relationships-4`, `PLAYING_TIME_RULES` in `src/world/relationship-rules.ts`): quiet role adjustments (`role-adjust` events) and one calm concern (`role-request` stage 'concern'). */
+export const SEASON_SCHEMA_VERSION = 77;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

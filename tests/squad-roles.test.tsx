@@ -31,7 +31,8 @@ const row = (state: SeasonState, playerId: string, club = clubId) => getPlayerRe
 let start: SeasonState, promoted: SeasonState, talks: SeasonState, leave: SeasonState;
 beforeAll(() => {
   // Seed 1 (5 before new careers stored the five further abilities, 18 November 2026).
-  start = createSeason({ seed: 1, world, managedClubId: clubId, injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
+  // The relationships-3 rules (careers of formats 74-76); the calmer format-77 rules are in calm-playing-time.test.ts.
+  start = createSeason({ seed: 1, world, managedClubId: clubId, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, calmPlayingTime: false });
   // The deepest reserve is promoted to Starter; the automatic rotation keeps him on the bench.
   promoted = agreeSquadRole(start, deep, 'starter');
   let state = promoted;

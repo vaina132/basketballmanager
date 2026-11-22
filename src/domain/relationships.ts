@@ -14,9 +14,13 @@ export type PressAnswer = 'back' | 'demand' | 'credit' | 'leaders' | 'routine' |
  * `relationships-3` (squad roles everywhere, new careers from format 74): five roles (Star and Prospect added) with
  * their own minutes, defaults by squad rank and age, the role as a contract term, and requests for talks or to leave.
  */
-export type RelationshipsModel = 'relationships-1' | 'relationships-2' | 'relationships-3';
-/** `relationships-3`: an unmet role escalates: the player asks for talks, then asks to leave; settled once his minutes meet the role. */
-export type RoleRequestStage = 'talks' | 'leave' | 'settled';
+export type RelationshipsModel = 'relationships-1' | 'relationships-2' | 'relationships-3' | 'relationships-4';
+/**
+ * `relationships-3`: an unmet role escalates: the player asks for talks, then asks to leave; settled once his minutes meet the role.
+ * `relationships-4` (calmer playing time, format 77) starts with one calm `concern` ("would like more minutes"); only a
+ * Star or Starter by contract later asks for talks and to leave.
+ */
+export type RoleRequestStage = 'concern' | 'talks' | 'leave' | 'settled';
 /** Why a player asked about a new contract: the middle of his final season, or another club's offer for him. */
 export type ContractRequestTrigger = 'mid-season' | 'interest';
 /** The manager's answer: open renewal talks now, promise talks at the season's end, or decline. */
@@ -44,6 +48,8 @@ export type RelationshipEvent = RelationshipAnchor & { id: string } & (
   | { type: 'contract-reply'; clubId: string; playerId: string; requestId: string; reply: ContractRequestReply; negotiationCount: number }
   /** `relationships-3`: a step of an unmet role's escalation, recorded at a matchday boundary when its condition holds. */
   | { type: 'role-request'; clubId: string; playerId: string; stage: RoleRequestStage }
+  /** `relationships-4`: a player whose role was not set by a manager's agreement or a Star/Starter contract quietly accepts the role his minutes fit. */
+  | { type: 'role-adjust'; clubId: string; playerId: string; role: SquadRole }
 );
 export interface SeasonRelationships {
   model: RelationshipsModel;
@@ -134,26 +140,31 @@ export interface PlayerRelationship {
   /** `relationships-2`: the player's rank in the registered squad that sets his default role (null when an agreed role applies or unranked). */
   squadRank?: number | null;
   /** `relationships-3`: where the role comes from (a default, an agreement or a contract term) and the contract's role. */
-  roleSource?: 'default' | 'agreed' | 'contract';
+  roleSource?: 'default' | 'agreed' | 'contract' | 'adjusted';
   contractRole?: SquadRole | null;
   /** `relationships-3`: the open request for talks or to leave about an unmet role, if any. */
   roleRequest?: RoleRequest | null;
   /** `relationships-3`: the longer evidence window (up to six eligible games in the role) behind a request for talks. */
   roleEvidence?: { games: number; averageMinutes: number | null; unmet: boolean };
+  /** `relationships-4`: the smaller role he would quietly accept at the next matchday, if his minutes call for one. */
+  roleAdjustment?: SquadRole | null;
 }
 /** `relationships-3`: the player's open escalation about an unmet role. */
 export interface RoleRequest {
   id: string;
   clubId: string;
   playerId: string;
-  stage: 'talks' | 'leave';
-  /** When he asked for talks, and (for a transfer request) when he asked to leave. */
-  talksOn: string;
+  stage: 'concern' | 'talks' | 'leave';
+  /** `relationships-4`: when he first said he would like more minutes, as a career matchday count too. */
+  concernOn?: string | null;
+  concernCompletedRounds?: number | null;
+  /** When he asked for talks (`relationships-4`: null while only a concern), and (for a transfer request) when he asked to leave. */
+  talksOn: string | null;
   leaveOn: string | null;
   /** Whether the manager has answered the request for talks with a conversation or a role change. */
   answered: boolean;
   /** The career matchday count when he asked for talks (a transfer request follows after `leaveAfterRounds`). */
-  talksCompletedRounds: number;
+  talksCompletedRounds: number | null;
 }
 export interface RoleAgreementQuote {
   role: SquadRole;

@@ -117,3 +117,28 @@ export const SQUAD_ROLE_RULES = Object.freeze({
    */
   escalation: { talksAfterGames: 6, leaveAfterRounds: 4, leaveMorale: -10 },
 });
+
+/**
+ * The `relationships-4` model (calmer playing time; owner feedback, 22 November 2026; new careers from format 77). The
+ * five roles, their minutes, defaults and contract terms stay as in `SQUAD_ROLE_RULES`; only how playing time is judged
+ * and answered changes, the same way for every club:
+ * - minutes are judged over the player's last `window.games` eligible games in his role, once at least
+ *   `window.minGames` count; games he was injured, ill, disqualified or not in the matchday squad do not count;
+ * - he is short only when he averages below `shareOfMinimum` of his role's minimum (8 of a Rotation player's 12);
+ * - a player whose role is a default, an earlier quiet adjustment or a contract role below Starter accepts the role his
+ *   minutes fit quietly (a note on Squad dynamics, no message). Here games outside the matchday squad count as zero:
+ *   a player who is never picked has no claim to his default role;
+ * - others (a role agreed with the manager, or a Star or Starter by contract) say once, calmly, that they would like more
+ *   minutes; a new message for the same player follows only after the concern has been settled for
+ *   `concern.repeatAfterRounds` club matchdays;
+ * - only a Star or Starter by contract escalates: talks when the concern has stood `escalation.talksAfterRounds`
+ *   matchdays without a running promise while he averages below `escalation.belowShare` of the minimum, then a wish to
+ *   leave `escalation.leaveAfterRounds` matchdays later under the same conditions.
+ * Reserve and Prospect roles expect no minimum, so they never complain.
+ */
+export const PLAYING_TIME_RULES = Object.freeze({
+  window: { games: 8, minGames: 6 },
+  shareOfMinimum: 2 / 3,
+  concern: { repeatAfterRounds: 8, maxMorale: 10 },
+  escalation: { talksAfterRounds: 8, leaveAfterRounds: 8, belowShare: 0.5, leaveMorale: -10 },
+});

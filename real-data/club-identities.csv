@@ -1,7 +1,7 @@
 api_sports_id,display_name,short_name,country,city,arena,primary_colour,primary_hex,secondary_colour,secondary_hex,confidence,notes
 6496,Dubai Basketball,DUB,United Arab Emirates,Dubai,Coca-Cola Arena,,,,,unknown,API lists the country as "Dubai"; colours to fill
 26,LDLC ASVEL,ASV,France,Villeurbanne,LDLC Arena,green,#00843d,white,#ffffff,likely,
-16,AS Monaco,MON,Monaco,Monaco,Salle Gaston-Médecin,red,#e2001a,white,#ffffff,sure,Played in the EuroLeague 2025-26 only
+16,AS Monaco,MON,Monaco,Monaco,Salle Gaston-Médecin,red,#e2001a,white,#ffffff,sure,"Played in the EuroLeague 2025-26 only; no team in 2026-27 (refused its Betclic Élite place on 1 August 2026), removed from the EuroCup in world-9"
 108,Paris Basketball,PRS,France,Paris,Adidas Arena,black,#111111,white,#ffffff,likely,Some games at Accor Arena
 519,Alba Berlin,ALB,Germany,Berlin,Uber Arena,yellow,#ffd200,blue,#003b8e,sure,
 520,Bamberg Baskets,BAM,Germany,Bamberg,Brose Arena,,,,,unknown,Colours to fill
@@ -216,7 +216,7 @@ api_sports_id,display_name,short_name,country,city,arena,primary_colour,primary_
 1800,Cedevita Olimpija,CED,Slovenia,Ljubljana,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
 3419,U-BT Cluj-Napoca,CLU,Romania,Cluj-Napoca,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
 1792,Hapoel Jerusalem,HJE,Israel,Jerusalem,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
-2544,KK Bosna,BOS,Bosnia and Herzegovina,Sarajevo,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
+2544,Bosna BH Telecom,BOS,Bosnia and Herzegovina,Sarajevo,Mirza Delibašić Hall,maroon,#732727,white,#ffffff,sure,"Took AS Monaco's EuroCup 2026-27 place (1 September 2026); name, arena and colours from the club's Wikipedia infobox, 22 November 2026"
 790,Lietkabelis,LIE,Lithuania,Panevėžys,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
 1329,London Lions,LON,United Kingdom,London,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill
 791,Neptūnas Klaipėda,NEP,Lithuania,Klaipėda,,,,,,unknown,Added 14 November 2026 (sprint 3); colours to fill

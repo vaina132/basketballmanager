@@ -574,3 +574,7 @@ Close the single-league 3.2 implementation after verification; retain the combin
 ## Real logos and player photos (owner decision, 22 November 2026)
 
 The owner wants the original club and competition logos, not generated badges. Source: API-Sports team and league logos (every club of the 13 competitions has one). Player photos: Wikimedia Commons where a free licence allows, with photographer credits on a Credits page; a paid source only on a later owner decision. This replaces the earlier rule that photos and logos stay out until rights are cleared; the owner accepts that a club may ask for its logo to be removed, and then it is removed.
+
+## Richer match engine (Wave 3, 22 November 2026)
+
+New careers use `matchPlays` (format 79): more distinct actions with the sprint-4 calibration kept (possessions 74.4, 113.2 points per 100, 3PA share 41.1%, turnovers 13.1, steals 7.4, blocks 2.6 per team per game over 528 seeded games). Older careers, fixtures and youth matches keep the old engine so saved matches replay exactly.

@@ -26,7 +26,7 @@ import { FacilityFinancing } from '../src/ui/FacilityFinancing';
 
 const club = 'rhine-falcons';
 const manager = { name: 'Loan Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-const career = (managedClubId = club) => createSeason({ seed: 227, managedClubId, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS, simpleFacilities: false });
+const career = (managedClubId = club) => createSeason({ seed: 227, managedClubId, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS, matchPlays: false, simpleFacilities: false });
 const debtEntries = (state: SeasonState) => state.finance.ledger.filter(entry => entry.debt);
 /** Pure guard fixtures use an artificial operating expense, without claiming to be valid career exports. */
 function spend(state: SeasonState, clubId: string, amount: number): SeasonState {
@@ -340,7 +340,7 @@ describe('arena work started at a season end', () => {
       { id: 'first', name: 'First division', country: 'Testland', tier: 1, clubIds: base.clubs.slice(0, 6).map(item => item.id), postseason: 'test-tier1-1' },
       { id: 'second', name: 'Second division', country: 'Testland', tier: 2, clubIds: base.clubs.slice(6).map(item => item.id), postseason: 'test-tier2-2' },
     ] };
-    let state = setEmploymentDelegation(createSeason({ seed: 1, world, managedClubId: managed, ...NEW_CAREER_SYSTEMS, injuryLengths: false, calmPlayingTime: false, simpleFacilities: false }), true);
+    let state = setEmploymentDelegation(createSeason({ seed: 1, world, managedClubId: managed, ...NEW_CAREER_SYSTEMS, matchPlays: false, injuryLengths: false, calmPlayingTime: false, simpleFacilities: false }), true);
     while (state.status === 'active') state = advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
     const fixture = state.fixtures.find(item => item.result && item.date > state.date && item.homeClubId === managed)!;
     expect(fixture).toBeDefined();

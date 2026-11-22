@@ -1,6 +1,6 @@
 ﻿/** Deterministic FIBA-2024 rules subset. Probability and fatigue parameters remain uncalibrated; injury rates follow research (sprint 4). */
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../data/fictional-teams';
-import type { CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, Position, PossessionPlay, Side, SkillAttributes, Tactics, Team } from '../domain/types';
+import type { CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, PlayModel, Position, PossessionPlay, Side, SkillAttributes, Tactics, Team } from '../domain/types';
 import { nextRandom, normalizeSeed } from './random';
 import { injuryPhrase, injuryRiskTotal, isInjuryKind, isMatchInjuryKind, pickInjuryKind, type InjuryKind, type InjuryRisk } from '../domain/injuries';
 import { actionScene, freeThrowPosition, passScene, reboundScene, setupScene, shotScene, turnoverScene } from './court-events';
@@ -9,6 +9,7 @@ import { ACTION_SECONDS, BLOCKS, DEFENDER_ROLES, DEFENSIVE_FOULS, LATE_GAME, REB
 import { overallRating } from '../world/overall-rating';
 import { EXTRA_MATCH } from '../world/extra-attributes';
 import { asPlayedIn, courtCircles, COURT_POSITIONS, isCourtPosition } from './positions';
+import { resolvePlaysAction, type PlayKit } from './plays';
 export const MAX_MATCH_PERIODS = 24;
 const MAX_SIMULATION_STEPS = 20_000;
 const SIDES: readonly Side[] = ['home', 'away'];
@@ -706,6 +707,12 @@ function beginPeriod(state: MatchState): void {
   recovery(state, state.period === 3 ? 8 : 3);
   emit(state, { type: 'period-start', text: state.period <= 4 ? `Quarter ${state.period} begins.` : `Overtime ${state.period - 4} begins.` });
 }
+/** The reducer's own steps, lent to the richer play model (format 79) so both share one set of rules. */
+const PLAY_KIT: PlayKit = {
+  draw, emit, player, active: activePlayers, choose, personalFoul, foulCaution, startFreeThrows, madeBasketWindow, creditPoints, exposure,
+  installControl, whistle, resetPossession, visualStart, visualBallStart, sampleInjuries, finishPeriod, resolveEligibility, remainingTimeouts,
+  moraleTurnover: moraleTurnoverAdjustment,
+};
 export interface FixtureMatchOptions {
   morale?: MatchState['morale'];
   lineups?: Partial<Record<Side, readonly string[]>>;
@@ -721,6 +728,10 @@ export interface FixtureMatchOptions {
    * that circle's position; everyone else plays his listed position.
    */
   slots?: Partial<Record<Side, Readonly<Record<string, Position>>>>;
+  /** Format 79 (new careers): the richer play model (`src/engine/plays.ts`). Omit for the earlier possession actions. */
+  playModel?: PlayModel;
+  /** With the play model: the sides run by a computer coach (timeouts in a bad run). */
+  computerCoach?: readonly Side[];
 }
 
 function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team, away: Team, options: FixtureMatchOptions = {}): MatchState {
@@ -750,6 +761,7 @@ function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team,
   }
   const risks = Object.entries(options.injuryRisk ?? {}).filter(([, risk]) => Object.keys(risk).length);
   if (risks.length) state.injuryRisk = Object.fromEntries(risks.map(([id, risk]) => [id, { ...risk }]));
+  if (options.playModel) { state.playModel = options.playModel; state.computerCoach = SIDES.filter(side => options.computerCoach?.includes(side)); }
   state.possession = draw(state) < 0.5 ? 'home' : 'away'; state.possessionArrow = other(state.possession);
   // The development league retains the existing two-player default threshold.
   // No live action or fabricated court exposure precedes a pre-match default.
@@ -803,6 +815,8 @@ export function createFixtureMatch(seed: number, home: Team, away: Team, options
     }
   }
   if (options.injuryMode !== undefined && !['standard', 'reduced', 'off'].includes(options.injuryMode)) throw new Error('Choose a valid fixture injury setting.');
+  if (options.playModel !== undefined && options.playModel !== 'plays-2') throw new Error('Choose a supported play model.');
+  if (options.computerCoach !== undefined && (!options.playModel || !Array.isArray(options.computerCoach) || options.computerCoach.some(side => side !== 'home' && side !== 'away'))) throw new Error('Computer coaches need the play model and must name teams.');
   if (options.slots !== undefined) {
     if (options.slots === null || typeof options.slots !== 'object' || Array.isArray(options.slots) || Object.keys(options.slots).some(side => side !== 'home' && side !== 'away')) throw new Error('Fixture circles must name a team.');
     for (const [side, circles] of Object.entries(options.slots) as [Side, Readonly<Record<string, Position>> | undefined][]) {
@@ -824,7 +838,7 @@ export function stepMatch(state: MatchState): MatchState {
   if (next.phase === 'period-end' || next.clockSeconds === 0 && !next.freeThrows) beginPeriod(next);
   next.status = 'playing';
   if (next.freeThrows) { if (next.engineVersion === 'possession-3') resolvePossessionFreeThrow(next); else resolveFreeThrow(next); }
-  else { next.stoppage = null; if (next.engineVersion === 'possession-3') resolvePossessionAction(next); else resolveAction(next); }
+  else { next.stoppage = null; if (next.playModel === 'plays-2') resolvePlaysAction(next, PLAY_KIT); else if (next.engineVersion === 'possession-3') resolvePossessionAction(next); else resolveAction(next); }
   if (!next.result) serviceStoppage(next); return next;
 }
 export function simulateToQuarterEnd(state: MatchState): MatchState {

@@ -7,7 +7,7 @@ import type { SeasonRivalries } from './rivalries';
 import type { SeasonCareer } from './career';
 import type { SeasonRelationships } from './relationships';
 import type { InjuryKind, InjuryModel } from './injuries';
-import type { InjuryMode, MatchResult, MatchState, PlayerStats, Position, Side, Tactics, Team } from './types';
+import type { InjuryMode, MatchResult, MatchState, PlayerStats, PlayModel, Position, Side, Tactics, Team } from './types';
 import type { SeasonTraining } from './training';
 import type { SeasonCoaching } from './coaching';
 import type { SeasonFinance } from './finance';
@@ -149,7 +149,8 @@ export interface DomesticDivisions {
 /** Format 76: staff contracts of 1-3 seasons with weekly salaries and sacking compensation (`coaching-4`, `src/world/staff-contracts.ts`). */
 /** Format 77: calmer playing time for new careers (`relationships-4`, `PLAYING_TIME_RULES` in `src/world/relationship-rules.ts`): quiet role adjustments (`role-adjust` events) and one calm concern (`role-request` stage 'concern'). */
 /** Format 78: the transfer and loan list with bids for the manager's players and loans (`recruitment-2`), and the scouting network (`scouting-2`). */
-export const SEASON_SCHEMA_VERSION = 78;
+/** Format 79: the richer play model for new careers' matches (`matchModel` 'plays-2', `src/engine/plays.ts`); older careers replay with the earlier possession actions. */
+export const SEASON_SCHEMA_VERSION = 79;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -178,6 +179,8 @@ export interface SeasonState {
   injuries: SeasonInjury[];
   /** Owner feedback (22 November 2026): new careers diagnose match injuries with the longer `injuries-2` durations. */
   injuryModel?: InjuryModel;
+  /** Format 79 (owner feedback, 22 November 2026): new careers play their matches with the richer play model. */
+  matchModel?: PlayModel;
   training: SeasonTraining;
   coaching: SeasonCoaching;
   finance: SeasonFinance;

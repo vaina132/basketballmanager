@@ -15,7 +15,7 @@ let start: SeasonState, open: SeasonState;
 beforeAll(() => {
   // Seed 1 (14 before the full new-career rules of 22 November 2026, 8 before the manager's next game started from the
   // planned five instead of the closing five, 16 November 2026): three losses in the first three matchdays.
-  start = createSeason({ seed: 1, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Press Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, media: false });
+  start = createSeason({ seed: 1, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Press Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, matchFlow: false, media: false });
   open = start;
   for (let step = 0; step < 10 && !getPressQuestion(open); step += 1) open = advanceMatchday(open);
 }, 120_000);
@@ -81,7 +81,7 @@ describe('press questions in a career', () => {
   it('rejects press answers in a format-33 file', () => {
     // A genuine format-33 career had no rivalries, so its derby crowds were never enlarged.
     // Format 33 also predates the format-63 career rules (`career-1`) and the format-67 media record.
-    let plain = beforeSavedIdeas(createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, rivalries: false, facilityMaintenance: false, ...BEFORE_SAVED_IDEAS }));
+    let plain = beforeSavedIdeas(createSeason({ seed: 8, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchFlow: false, rivalries: false, facilityMaintenance: false, ...BEFORE_SAVED_IDEAS }));
     for (let step = 0; step < 10 && !getPressQuestion(plain); step += 1) plain = advanceMatchday(plain);
     const file = JSON.parse(serializeSeason(answerPress(plain, 'routine')));
     file.formatVersion = 33; file.state.schemaVersion = 33;

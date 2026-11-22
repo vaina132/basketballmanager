@@ -695,7 +695,18 @@ function resolvePossessionFreeThrow(state: MatchState): void {
   if (sequence.remaining > 0) return;
   state.freeThrows = null;
   if (state.clockSeconds === 0) { finishPeriod(state); return; }
+  // Format 81: after an unsportsmanlike foul's free throws the fouled team keeps the ball: a throw-in at the frontcourt
+  // throw-in line with 14 on the shot clock (FIBA 37.2, 29.2.3). Read from the foul that gave these free throws.
+  if (state.playModel === 'plays-3' && /unsportsmanlike foul/.test(lastFoulText(state))) {
+    resetPossession(state, sequence.side, 14); state.frontcourt = true; whistle(state);
+    emit(state, { type: 'command', side: sequence.side, text: `${state[sequence.side].name} keep the ball after the unsportsmanlike foul: throw-in at the frontcourt line, shot clock 14.` });
+    return;
+  }
   if (made) { resetPossession(state, other(sequence.side)); whistle(state); } else possessionRebound(state, play, landing);
+}
+function lastFoulText(state: MatchState): string {
+  for (let index = state.events.length - 1; index >= 0; index -= 1) if (state.events[index]!.type === 'foul') return state.events[index]!.text;
+  return '';
 }
 function beginPeriod(state: MatchState): void {
   if (state.period >= MAX_MATCH_PERIODS) throw new Error('Simulation stopped after 20 overtimes; no winner was fabricated.');
@@ -815,7 +826,7 @@ export function createFixtureMatch(seed: number, home: Team, away: Team, options
     }
   }
   if (options.injuryMode !== undefined && !['standard', 'reduced', 'off'].includes(options.injuryMode)) throw new Error('Choose a valid fixture injury setting.');
-  if (options.playModel !== undefined && options.playModel !== 'plays-2') throw new Error('Choose a supported play model.');
+  if (options.playModel !== undefined && options.playModel !== 'plays-2' && options.playModel !== 'plays-3') throw new Error('Choose a supported play model.');
   if (options.computerCoach !== undefined && (!options.playModel || !Array.isArray(options.computerCoach) || options.computerCoach.some(side => side !== 'home' && side !== 'away'))) throw new Error('Computer coaches need the play model and must name teams.');
   if (options.slots !== undefined) {
     if (options.slots === null || typeof options.slots !== 'object' || Array.isArray(options.slots) || Object.keys(options.slots).some(side => side !== 'home' && side !== 'away')) throw new Error('Fixture circles must name a team.');
@@ -838,7 +849,7 @@ export function stepMatch(state: MatchState): MatchState {
   if (next.phase === 'period-end' || next.clockSeconds === 0 && !next.freeThrows) beginPeriod(next);
   next.status = 'playing';
   if (next.freeThrows) { if (next.engineVersion === 'possession-3') resolvePossessionFreeThrow(next); else resolveFreeThrow(next); }
-  else { next.stoppage = null; if (next.playModel === 'plays-2') resolvePlaysAction(next, PLAY_KIT); else if (next.engineVersion === 'possession-3') resolvePossessionAction(next); else resolveAction(next); }
+  else { next.stoppage = null; if (next.playModel) resolvePlaysAction(next, PLAY_KIT); else if (next.engineVersion === 'possession-3') resolvePossessionAction(next); else resolveAction(next); }
   if (!next.result) serviceStoppage(next); return next;
 }
 export function simulateToQuarterEnd(state: MatchState): MatchState {

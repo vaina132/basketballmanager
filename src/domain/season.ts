@@ -6,6 +6,7 @@ import type { SeasonCommercial } from './commercial';
 import type { SeasonRivalries } from './rivalries';
 import type { SeasonCareer } from './career';
 import type { SeasonNational } from './national';
+import type { SeasonCoaches } from './coaches';
 import type { SeasonRelationships } from './relationships';
 import type { InjuryKind, InjuryModel } from './injuries';
 import type { InjuryMode, MatchResult, MatchState, PlayerStats, PlayModel, Position, Side, Tactics, Team } from './types';
@@ -220,6 +221,8 @@ export interface DomesticDivisions {
 /** Format 78: the transfer and loan list with bids for the manager's players and loans (`recruitment-2`), and the scouting network (`scouting-2`). */
 /** Format 79: the richer play model for new careers' matches (`matchModel` 'plays-2', `src/engine/plays.ts`); older careers replay with the earlier possession actions. */
 /** Format 80: national teams, their competitions, FIBA windows that pause the domestic leagues with room, and national jobs (`national`, `src/world/national.ts`). */
+/** Format 81: the play model with the dead balls of a real game for new careers' matches (`matchModel` 'plays-3', option `matchFlow`). */
+/** Format 82: real head coaches with attributes and styles for new real-club careers, and the manager's coaching attributes (`coaches`, `src/world/head-coaches.ts`). */
 /** Format 83: European entry rules for new careers (`europe.model` 'places-2', `src/world/european-entry.ts`): place types with end seasons, the places day with the licence check, wild cards by score, declines and the board's European aim. */
 export const SEASON_SCHEMA_VERSION = 83;
 
@@ -254,6 +257,8 @@ export interface SeasonState {
   matchModel?: PlayModel;
   /** Format 80 (owner feedback item 13, 22 November 2026): national teams, competitions and the manager's national job. */
   national?: SeasonNational;
+  /** Format 82 (owner, 22 November 2026, item E): real head coaches; the manager's own coaching attributes. */
+  coaches?: SeasonCoaches;
   training: SeasonTraining;
   coaching: SeasonCoaching;
   finance: SeasonFinance;

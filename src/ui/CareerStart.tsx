@@ -13,6 +13,7 @@ import { Avatar } from './Avatar'
 import { PositionLabel } from './PositionLabel'
 import { DataPackDetails } from './DataPackDetails'
 import { CountryFlag } from './CountryFlag'
+import { ManagerFlags } from './Nationality'
 import { GameSpeed } from './GameSpeed'
 import { SquadStrength } from './SquadStrength'
 import { Icon } from './Icon'
@@ -22,6 +23,9 @@ import { NATIONALITY_SUGGESTIONS } from './nationality-suggestions'
 import { NOT_PLAYED_LEAGUE } from './career-text'
 import './career-start.css'
 import { ClubBadge } from './ClubLogo'
+import type { CoachAttributes, ManagerCoachSeason } from '../domain/coaches'
+import { coachOverall } from '../world/coach-ratings'
+import { CoachAttributeBars } from './CoachProfile'
 
 export interface CareerSetup {
   manager: ManagerProfile
@@ -38,6 +42,19 @@ interface CareerSummary {
   date: string
   /** Format 80: the manager's career earnings (national salary, euro cents) and what was paid, newest first. */
   earnings?: { total: number; payments: { date: string; source: string; amount: number }[] } | null
+  /** Format 82: the manager's coaching attributes, each season's changes (newest first) and his reputation. */
+  coaching?: { attributes: CoachAttributes; seasons: ManagerCoachSeason[]; reputation: number; bonus: number } | null
+}
+
+/** The Manager profile's coaching attributes (owner, 22 November 2026): 1-20, rising and falling with the career. */
+function ManagerCoaching({ coaching }: { coaching: NonNullable<CareerSummary['coaching']> }) {
+  const latest = coaching.seasons[0]
+  return <section className="panel" aria-labelledby="manager-coaching-title" data-manager-coaching>
+    <header className="career-start-panel-heading"><h2 id="manager-coaching-title">Your coaching</h2><strong>Overall {coachOverall(coaching.attributes)}/20</strong></header>
+    <div className="manager-coaching-body"><CoachAttributeBars attributes={coaching.attributes} changes={latest?.changes} /></div>
+    <p className="career-start-subnote">Reputation {coaching.reputation}/100{coaching.bonus ? ` (coaching ${coaching.bonus > 0 ? '+' : '−'}${Math.abs(coaching.bonus)})` : ''}. Your attributes change a little each season: results against the board's hopes, trophies, young players' progress and dismissals. At most two points up and two down a season.</p>
+    {coaching.seasons.length ? <dl className="career-start-details">{coaching.seasons.slice(0, 5).map(season => <Fragment key={season.seasonNumber}><dt>Season {season.seasonNumber}</dt><dd>{season.reasons.length ? season.reasons.join(' ') : 'No change.'}</dd></Fragment>)}</dl> : <p className="career-start-empty">Your first change comes at the end of this season.</p>}
+  </section>
 }
 
 /** The Manager profile's career earnings (owner, 22 November 2026): national salary paid monthly; no club money. */
@@ -207,9 +224,10 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
           <section className="panel" aria-labelledby="career-manager-title"><header className="career-start-panel-heading"><h2 id="career-manager-title">Your manager</h2><Icon name="people" size={17} /></header><div className="career-identity-fields">
             <div className="career-start-field career-start-field-wide"><label htmlFor="manager-name">Manager name</label><input id="manager-name" name="manager-name" autoComplete="name" value={manager.name} onChange={event => changeManager('name', event.target.value)} maxLength={MAX_MANAGER_NAME_LENGTH} aria-describedby="manager-name-help" required /><small id="manager-name-help">The name shown in your career.</small></div>
             <div className="career-start-field"><label htmlFor="manager-birth-date">Date of birth</label><input id="manager-birth-date" name="manager-birth-date" type="date" autoComplete="bday" value={manager.dateOfBirth} onChange={event => changeManager('dateOfBirth', event.target.value)} aria-describedby="manager-age" required /><small id="manager-age" className="career-identity-age" aria-live="polite">{age === null ? 'Age 18–100 at career start.' : `${age} years old on ${formatDate(DEVELOPMENT_START_DATE)}.`}</small></div>
-            <div className="career-start-field"><label htmlFor="manager-nationality">Nationality</label><input id="manager-nationality" name="manager-nationality" list="manager-nationality-options" autoComplete="off" placeholder="Type to find a nationality" value={manager.nationality} onChange={event => changeManager('nationality', event.target.value)} maxLength={MAX_MANAGER_NATIONALITY_LENGTH} aria-describedby="manager-nationality-help" required /><datalist id="manager-nationality-options">{NATIONALITY_SUGGESTIONS.map(item => <option key={item.nationality} value={item.nationality} label={item.place} />)}</datalist><small id="manager-nationality-help">Choose a suggestion or enter your own nationality. Multiple nationalities are welcome.</small></div>
+            <div className="career-start-field"><label htmlFor="manager-nationality">Nationality<ManagerFlags nationality={manager.nationality} /></label><input id="manager-nationality" name="manager-nationality" list="manager-nationality-options" autoComplete="off" placeholder="Type to find a nationality" value={manager.nationality} onChange={event => changeManager('nationality', event.target.value)} maxLength={MAX_MANAGER_NATIONALITY_LENGTH} aria-describedby="manager-nationality-help" required /><datalist id="manager-nationality-options">{NATIONALITY_SUGGESTIONS.map(item => <option key={item.nationality} value={item.nationality} label={item.place} />)}</datalist><small id="manager-nationality-help">Choose a suggestion or enter your own nationality. Multiple nationalities are welcome.</small></div>
           </div></section>
           {props.profileOnly && props.currentCareer?.earnings && <CareerEarnings earnings={props.currentCareer.earnings} />}
+          {props.profileOnly && props.currentCareer?.coaching && <ManagerCoaching coaching={props.currentCareer.coaching} />}
           <section className="panel" aria-labelledby="career-world-title"><header className="career-start-panel-heading"><h2 id="career-world-title">{props.profileOnly ? 'Profile details' : 'Career start'}</h2></header>{props.profileOnly ? <p className="career-start-empty">Your name and nationality identify your manager. Age is calculated from your date of birth. Editing this profile preserves your club and career progress.</p> : <><dl className="career-start-details"><dt>Competition</dt><dd>{world?.name ?? 'Real clubs, chosen in the next step'}</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd>{world && <><dt>Format</dt><dd>{world.clubs.length} clubs · {worldRounds(world)} matchdays</dd></>}<dt>Season</dt><dd>2026/27</dd></dl><p className="career-start-subnote">Real clubs, players and ratings from your private data pack. Wages, budgets, arenas and ticket prices are estimates from published 2025-27 club budgets and salary reports; contract lengths are estimated, and presidents and sponsors are fictional.</p></>}</section>
         </div>}
 
@@ -241,7 +259,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
 
         {!props.profileOnly && step === 2 && <>
           <div className="career-review-layout">
-            <section className="panel" aria-labelledby="career-review-title"><header className="career-start-panel-heading"><h2 id="career-review-title">Career details</h2><Icon name="people" size={17} /></header><dl className="career-start-details"><dt>Manager</dt><dd>{manager.name}</dd><dt>Date of birth</dt><dd>{formatDate(manager.dateOfBirth)} · age {age}</dd><dt>Nationality</dt><dd>{manager.nationality}</dd><dt>Club</dt><dd>{club?.name}</dd><dt>Competition</dt><dd>{world?.name}</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd></dl><p className="career-start-subnote">Real clubs and players from your private data pack; wages, budgets, arenas and ticket prices are estimates from published 2025-27 club budgets and salary reports; contract lengths are estimated, and presidents and sponsors are fictional. The career keeps its own copy of the league, so it never needs the file again.</p></section>
+            <section className="panel" aria-labelledby="career-review-title"><header className="career-start-panel-heading"><h2 id="career-review-title">Career details</h2><Icon name="people" size={17} /></header><dl className="career-start-details"><dt>Manager</dt><dd>{manager.name}</dd><dt>Date of birth</dt><dd>{formatDate(manager.dateOfBirth)} · age {age}</dd><dt>Nationality</dt><dd>{manager.nationality}<ManagerFlags nationality={manager.nationality} /></dd><dt>Club</dt><dd>{club?.name}</dd><dt>Competition</dt><dd>{world?.name}</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd></dl><p className="career-start-subnote">Real clubs and players from your private data pack; wages, budgets, arenas and ticket prices are estimates from published 2025-27 club budgets and salary reports; contract lengths are estimated, and presidents and sponsors are fictional. The career keeps its own copy of the league, so it never needs the file again.</p></section>
             <section className="panel" aria-labelledby="career-options-title"><header className="career-start-panel-heading"><h2 id="career-options-title">Leagues in your career</h2><Icon name="settings" size={17} /></header><div className="career-review-options"><ul className="career-review-leagues">{world?.domesticLeagues?.map(item => <li key={item.id}><CountryFlag country={item.country} decorative /><span>{item.name}</span><small>{item.clubIds.length} clubs</small></li>)}{world?.europeanCompetitions?.filter(item => item.format).map(item => <li key={item.id}><Icon name="star" size={16} /><span>{item.name}</span><small>{item.clubIds.length} clubs · midweek</small></li>)}{world?.backgroundLeagues?.map(item => <li key={item.id} data-not-played><CountryFlag country={item.country} decorative /><span>{item.name}</span><small>{NOT_PLAYED_LEAGUE.tag}</small></li>)}</ul>{!!world?.backgroundLeagues?.length && <p className="career-review-note">{NOT_PLAYED_LEAGUE.note}</p>}{world && <GameSpeed clubs={fullWorldClubs(world).length} weeks={worldRounds(world)} />}</div></section>
           </div>
           {props.starting && <div className="career-starting" role="status" aria-live="polite"><span className="career-starting-spinner" aria-hidden="true" /><div><strong>Preparing your career…</strong><span>Building squads, schedules, finances and staff for {world?.clubs.length ?? 'all'} clubs. With several countries this can take up to a minute.</span></div></div>}

@@ -89,7 +89,7 @@ describe('historical youth fixture retention', () => {
   });
 
   it('reconstructs both sides of an ordinary promotion boundary without adding or removing a historical player', () => {
-    let state = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
+    let state = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, matchFlow: false });
     const prospect = getClubAcademy(state)[0];
     state = advanceMatchday(offerAcademyPromotion(state, prospect.player.id, prospect.prospect.seasonWage));
     expect(state.academy.graduates.find(graduate => graduate.prospectId === prospect.player.id)).toMatchObject({ kind: 'promotion', availableSince: { seasonNumber: 1, round: 2 } });
@@ -147,7 +147,7 @@ describe('historical youth fixture retention', () => {
     // Seed 2 (11 before the full new-career rules of 22 November 2026, 8 before squad roles everywhere, 2 before the
     // planned starting five of 16 November 2026, 10 before the relationships-2 rules of format 66): another club offers
     // Rhine Falcons' manager its job.
-    let state = createSeason({ seed: 2, managedClubId: from, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves: true, presidents: false });
+    let state = createSeason({ seed: 2, managedClubId: from, injuryMode: 'standard', manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, matchFlow: false, careerMoves: true, presidents: false });
     while (state.round < 10) state = advanceMatchday(state);
     const finished = { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
     const offer = previewSeasonEnd(finished)?.offers[0];

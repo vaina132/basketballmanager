@@ -36,10 +36,11 @@ import { loadLocalMatch, MAX_SAVE_BYTES, parseMatch, saveLocalMatch, serializeMa
 import { Avatar } from './ui/Avatar'
 import { CreditsDialog } from './ui/CreditsDialog'
 import { Icon } from './ui/Icon'
-import { CLUB_VIEWS, competitionsViews, MainNavigation, mainNavigation, PAGE_NAMES as pageNames, PageViewTabs, resolveNavigation, showsBudgetBar, SQUAD_VIEWS, TRAINING_VIEWS, unemployedNavigation, type ClubView, type CompetitionsView, type Page, type SquadView, type TrainingView } from './ui/navigation'
+import { CLUB_VIEWS, competitionsViews, europeLinkView, MainNavigation, mainNavigation, PAGE_NAMES as pageNames, PageViewTabs, resolveNavigation, shownCompetitionsView, showsBudgetBar, SQUAD_VIEWS, TRAINING_VIEWS, unemployedNavigation, type ClubView, type CompetitionsView, type Page, type SquadView, type TrainingView } from './ui/navigation'
 import { Court } from './viewer/Court'
 import type { ScoreBug } from './viewer/Court'
-import { buildAnimation, presentationDuration, rosterOf } from './viewer/choreography'
+import { rosterOf } from './viewer/choreography'
+import { beatsFrom, broadcastOf } from './viewer/flow'
 import { describePlay } from './viewer/play-text'
 import { useCourtPlayback } from './viewer/useCourtPlayback'
 import { matchGate } from './viewer/crowd'
@@ -74,6 +75,8 @@ import { RestWeek } from './ui/RestWeek'
 import { acceptJob, careerPresentationMatch, createSeason, managedSide as seasonManagedSide, NEW_CAREER_SYSTEMS, resignManager, seasonLabel } from './world/season'
 import { isUnemployed } from './world/career-rules'
 import { acceptNationalOffer, careerEarnings, clubWindowCallUps, declineNationalOffer, nationalManagedSide, nationalTeam, resignNationalJob, setNationalSelection, upcomingNationalWindow } from './world/national'
+import { managerReputation } from './world/career-policy'
+import { managerAttributes, managerCoachingReputation } from './world/head-coaches'
 import { careerDay, careerPointLabel, continueDay, gameDate, worldSeasonName } from './ui/career-text'
 import { continueNotice, continueStatus, continueStepView, continueStop, remainingSteps, stoppedRun, type ContinueStop } from './ui/continue-run'
 import { continueAction } from './world/continue-step'
@@ -91,7 +94,7 @@ import { SeasonEndChoice } from './ui/SeasonEndChoice'
 const RealClubFriendly = lazy(() => import('./ui/RealClubFriendly').then(module => ({ default: module.RealClubFriendly })))
 import { fetchBuiltInPack } from './world/built-in-pack'
 import { SeasonCalendar } from './ui/SeasonCalendar'
-import { EuropeWorkspace } from './ui/EuropeWorkspace'
+import { clubEuropeanCompetitions, EuropeanLeaguesWorkspace, InternationalWorkspace, otherLeagues } from './ui/EuropeWorkspace'
 import { answerEuropeanOffer } from './world/european-entry-day'
 import { playsEurope } from './world/europe'
 import { SeasonWorkspace } from './ui/SeasonWorkspace'
@@ -119,7 +122,7 @@ import type { TrainingPlan } from './domain/training'
 import { medicalDate, PlayerHealthSummary } from './ui/SeasonMedicalReport'
 import type { SeasonReply } from './world/season.worker'
 import { SeasonProgress, seasonFacts, showsSeasonStrip } from './ui/SeasonProgress'
-import { Nationality, playerNationality } from './ui/Nationality'
+import { ManagerFlags, Nationality, playerNationality } from './ui/Nationality'
 import { worldOf } from './world/career-world'
 import { ASSISTANT_DIRECTORY } from './data/staff-directory'
 
@@ -206,9 +209,9 @@ export default function App() {
   const [textOnly, setTextOnly] = useState(false)
   const [visible, setVisible] = useState(!document.hidden)
   const reducedMotion = motionOverride ?? systemReduced
-  // Each play is shown for its own animation length (presentation only; the match clock is unrelated).
-  const playDuration = useCallback((event: MatchEvent) => presentationDuration(event, rosterOf(matchRef.current)), [])
-  const playback = useCourtPlayback(playing, speed, reducedMotion || textOnly, playDuration)
+  // The continuous broadcast (src/viewer/flow.ts): each recorded event becomes beats shown for their own length
+  // (presentation only; the simulation never waits for them).
+  const playback = useCourtPlayback(playing, speed, reducedMotion || textOnly)
   const { present, reset: resetPlayback, settle: settlePlayback } = playback
   const [seedInput, setSeedInput] = useState('42')
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -244,8 +247,17 @@ export default function App() {
   const [rosterQuery, setRosterQuery] = useState('')
   const [relationshipPlayer, setRelationshipPlayer] = useState<string | null>(null)
   const [squadView, setSquadView] = useState<SquadView>('selection')
-  // Owner decisions (22 November 2026): Calendar and Europe are tabs of Competitions, Academy of Training, Board of Club.
+  // Owner decisions (22 November 2026): Calendar and Europe are tabs of Competitions, Academy of Training, Board of Club;
+  // that evening Europe became International (the club's European competitions) and European Leagues (the other leagues).
   const [competitionsView, setCompetitionsView] = useState<CompetitionsView>('league')
+  // The competition and league last chosen on those tabs, kept while the manager looks at other pages; a new career or
+  // a new club starts afresh (International then opens on the club's own competition, or on none).
+  const [competitionChoices, setCompetitionChoices] = useState<{ career: string; international: string | null; league: string | null }>({ career: '', international: null, league: null })
+  const careerKey = season ? `${season.seed}:${season.managedClubId}` : ''
+  const choices = competitionChoices.career === careerKey ? competitionChoices : { career: careerKey, international: null, league: null }
+  const internationalCompetition = choices.international, europeanLeague = choices.league
+  const setInternationalCompetition = (id: string) => setCompetitionChoices({ ...choices, international: id })
+  const setEuropeanLeague = (id: string) => setCompetitionChoices({ ...choices, league: id })
   const [trainingView, setTrainingView] = useState<TrainingView>('plan')
   const [clubView, setClubView] = useState<ClubView>('club')
   const [performancePlayer, setPerformancePlayer] = useState<string | null>(null)
@@ -277,13 +289,14 @@ export default function App() {
       if (sessionRef.current.kind === 'season' && !sessionRef.current.season.activeMatch && !sessionRef.current.season.national?.activeMatch) return
       const before = matchRef.current
       const next = action(before)
-      const newEvents = next.events.slice(before.events.length)
       const critical = next.requiredSubstitutions.length > 0
       if (progression && !animate || critical) settlePlayback()
-      if (newEvents.some(event => event.scene)) setPresentationBase(animate && !critical ? before : null)
-      present(newEvents, before.score, animate && !critical)
+      // Before the first live step the jump ball is shown too.
+      const beats = beatsFrom(broadcastOf(next.events, rosterOf(next)), before.stepCount === 0 ? 0 : before.events.length)
+      if (beats.length) setPresentationBase(animate && !critical ? before : null)
+      present(beats, before.score, animate && !critical)
       replaceMatch(next)
-      if (critical || next.status === 'finished' && (!animate || !newEvents.some(event => event.scene))) setPlaying(false)
+      if (critical || next.status === 'finished' && (!animate || !beats.length)) setPlaying(false)
     } catch (error) { setPlaying(false); setNotice({ message: messageOf(error), error: true }) }
   }, [replaceMatch, present, settlePlayback])
 
@@ -298,7 +311,8 @@ export default function App() {
 
   useEffect(() => {
     if (!playing || !visible || playback.busy || match.status === 'finished' || match.requiredSubstitutions.length) return
-    const timer = window.setTimeout(() => apply(stepMatch, true, true), 220 / speed)
+    // The next action follows at once: the broadcast joins one step's last beat to the next step's first.
+    const timer = window.setTimeout(() => apply(stepMatch, true, true), 30)
     return () => window.clearTimeout(timer)
   }, [playing, speed, visible, playback.busy, match.status, match.requiredSubstitutions.length, match.events.length, apply])
 
@@ -313,6 +327,8 @@ export default function App() {
   }, [notice])
 
   const latestEvent = match.events.at(-1)
+  const matchBroadcast = broadcastOf(match.events, rosterOf(match))
+  const shownBeat = playback.beat ?? matchBroadcast.beats.at(-1)
   const presentedEvent = playback.event ?? [...match.events].reverse().find(event => event.scene) ?? match.events.at(-1)
   const presentedProgress = playback.event ? playback.progress : 1
   const captionEvent = playback.busy ? presentedEvent : latestEvent ?? presentedEvent
@@ -334,9 +350,12 @@ export default function App() {
   const bugTeam = (side: Side) => ({ name: match[side].shortName, color: match[side].color, score: displayScore[side], fouls: resolvedStats.teamFouls?.[side] ?? 0, timeouts: resolvedStats.timeoutUsage ? remainingTimeouts(resolvedStats, side) : 0 })
   const scoreBug: ScoreBug = { home: bugTeam('home'), away: bugTeam('away'), period: periodLabel(bugEvent?.period ?? match.period), clock: clock(bugEvent?.clockSeconds ?? match.clockSeconds) }
   const captionIndex = captionEvent ? match.events.findIndex(event => event.id === captionEvent.id) : -1
-  const playLine = captionEvent ? describePlay(captionEvent, matchRoster, captionIndex > 0 ? match.events[captionIndex - 1] : undefined) : 'Ready for tipoff.'
-  const playKind = captionEvent?.scene ? buildAnimation(captionEvent, matchRoster)?.kind : undefined
-  const inFlight = playback.busy && presentedProgress < 1 && (presentedEvent?.shot || presentedEvent?.scene?.kind === 'free-throw')
+  // The line under the court follows the beat on screen (at rest: the last beat shown, not a later command).
+  const lineBeat = playback.busy ? playback.beat : shownBeat
+  const lineIndex = lineBeat ? match.events.findIndex(event => event.id === lineBeat.event.id) : captionIndex
+  const playLine = match.stepCount === 0 && !playback.busy ? 'Jump ball: both teams line up at the centre circle.' : lineBeat?.caption ?? (lineBeat ? describePlay(lineBeat.event, matchRoster, lineIndex > 0 ? match.events[lineIndex - 1] : undefined) : captionEvent ? describePlay(captionEvent, matchRoster, captionIndex > 0 ? match.events[captionIndex - 1] : undefined) : 'Ready for tipoff.')
+  const playKind = (playback.busy ? playback.beat?.chip ?? playback.beat?.animation.kind : shownBeat?.chip ?? shownBeat?.animation.kind) ?? undefined
+  const inFlight = playback.busy && presentedProgress < 1 && !!playback.beat && ['shot', 'dunk', 'block', 'free-throw'].includes(playback.beat.animation.kind)
   const shooterName = presentedEvent?.playerId ? matchRoster.get(presentedEvent.playerId)?.name.split(' ').at(-1) : undefined
 
   const assistantContract = season ? getClubAssistant(season) : null
@@ -378,7 +397,11 @@ export default function App() {
     // Board) open that tab, so every old link, alert and deep link still lands on the same controls.
     const { page: nextPage, view } = resolveNavigation(target)
     if (view?.page === 'squad') setSquadView(view.view)
-    else if (view?.page === 'season') setCompetitionsView(view.view)
+    else if (target === 'europe') {
+      // An old link to the Europe page: the club's European competitions, or the other leagues when it plays none.
+      const current = sessionRef.current
+      setCompetitionsView(europeLinkView(current.kind === 'season' && (isUnemployed(current.season) || clubEuropeanCompetitions(current.season, current.season.managedClubId).length > 0)))
+    } else if (view?.page === 'season') setCompetitionsView(view.view)
     else if (view?.page === 'training') setTrainingView(view.view)
     else if (view?.page === 'club') setClubView(view.view)
     if (nextPage === 'squad' && selector === '.player-profile') setSquadView('selection')
@@ -871,14 +894,17 @@ export default function App() {
   useEffect(() => () => { seasonWorker.current?.terminate() }, [])
 
   const savedCareer = saveHistory?.current
-  // Competitions' tabs: League, Calendar and, in worlds with European games, Europe (only in a career).
-  const competitionTabs = season ? competitionsViews(!!(playsEurope(worldOf(season)) || worldOf(season).backgroundLeagues?.length), !!season.national) : []
-  const shownCompetitions: CompetitionsView = competitionTabs.some(tab => tab.id === competitionsView) ? competitionsView : 'league'
+  // Competitions' tabs (owner, 22 November 2026, evening): Calendar, League, International, European Leagues and National
+  // Teams, each only where it has something to show (only in a career).
+  const competitionTabs = season ? competitionsViews({ league: !isUnemployed(season), international: playsEurope(worldOf(season)), leagues: otherLeagues(season).length > 0, national: !!season.national }) : []
+  const shownCompetitions: CompetitionsView = season ? shownCompetitionsView(competitionsView, competitionTabs) : 'league'
   const competitionsTabs = competitionTabs.length > 0 && <PageViewTabs label="Competitions view" idPrefix="competitions-view" views={competitionTabs} current={shownCompetitions} onChange={setCompetitionsView} />
   const careerSummary = (state: SeasonState) => {
     // Format 80: the manager's career earnings for the Manager profile (national salary paid monthly).
     const earned = careerEarnings(state)
-    return { managerName: state.manager?.name ?? 'Manager profile not set', clubName: managedClubLabel(state), date: state.date, earnings: earned && state.national ? { total: earned.total, payments: [...earned.payments].reverse().map(payment => ({ date: payment.date, amount: payment.amount, source: nationalTeam(state.national!, payment.teamId).name })) } : null }
+    return { managerName: state.manager?.name ?? 'Manager profile not set', clubName: managedClubLabel(state), date: state.date, earnings: earned && state.national ? { total: earned.total, payments: [...earned.payments].reverse().map(payment => ({ date: payment.date, amount: payment.amount, source: nationalTeam(state.national!, payment.teamId).name })) } : null,
+      // Format 82: the manager's coaching attributes and their changes, newest season first.
+      coaching: state.coaches ? { attributes: managerAttributes(state.coaches), seasons: [...state.coaches.manager.seasons].reverse(), reputation: managerReputation(state, Math.max(0, state.seasonNumber - 1)).value, bonus: managerCoachingReputation(state.coaches, state.seasonNumber) } : null }
   }
   const overlays = <>
     <input ref={importRef} type="file" accept=".json,application/json,text/plain,application/octet-stream" onChange={importSave} className="visually-hidden" aria-label="Import game save" />
@@ -931,7 +957,8 @@ export default function App() {
             {view === 'season' && competitionsTabs}
             {view === 'season' && shownCompetitions === 'league' && <SeasonWorkspace season={season} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('home')} onLoad={loadSeason} busy={advancing || saving} />}
             {view === 'season' && shownCompetitions === 'calendar' && <SeasonCalendar season={season} />}
-            {view === 'season' && shownCompetitions === 'europe' && <EuropeWorkspace season={season} />}
+            {view === 'season' && shownCompetitions === 'international' && <InternationalWorkspace season={season} competitionId={internationalCompetition} onCompetitionChange={setInternationalCompetition} />}
+            {view === 'season' && shownCompetitions === 'leagues' && <EuropeanLeaguesWorkspace season={season} leagueId={europeanLeague} onLeagueChange={setEuropeanLeague} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('home')} onLoad={loadSeason} busy={advancing || saving} />}
             {view === 'season' && shownCompetitions === 'national' && season.national && <NationalWorkspace season={season} />}
           </Suspense></PageErrorBoundary>
           <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />Save &amp; open exhibition</button><button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button><button id="open-credits" className="text-button" onClick={() => setCreditsOpen(true)}>Credits</button></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
@@ -946,7 +973,7 @@ export default function App() {
       <div className="brand"><div className="brand-symbol"><Icon name="ball" size={29} /></div><div>COURTSIDE<small>BASKETBALL MANAGER</small></div></div>
       <div className="club-context"><ClubMark id={managedTeam.id} name={managedTeam.shortName} fullName={managedTeam.name} color={managedTeam.color} /><div><strong>{managedTeam.name}</strong><span>First team</span></div></div>
       <MainNavigation groups={mainNavigation({ career: !!season, national: !!season?.national?.job })} current={page} disabled={saving} onNavigate={navigate} />
-      <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />{season ? 'Season' : 'Exhibition'}</div><p>{season ? worldOf(season).source === 'real-data-pack' ? 'Real clubs' : 'Fictional squads' : match.home.id.startsWith('club-') ? 'Real clubs · private pack' : 'Fictional squads'}</p>{season ? <button id="manager-profile" className="manager manager-profile-button" onClick={openManagerProfile} disabled={saving || advancing} aria-label={season.manager ? 'Edit manager profile' : 'Set manager profile'}><span className="manager-avatar">{season.manager ? season.manager.name.split(/\s+/u).map(part => Array.from(part)[0]).slice(0, 2).join('').toUpperCase() : 'YOU'}</span><span className="manager-identity"><strong data-manager-name>{season.manager?.name ?? 'Set manager profile'}</strong><small>Head coach</small>{season.manager && <small data-manager-details>{managerAge(season.manager, season.date)} years · {season.manager.nationality}</small>}</span></button> : <div className="manager"><span className="manager-avatar">YOU</span><div>Head coach<small>{managedTeam.name}</small></div></div>}</div>
+      <div className="sidebar-bottom"><div className="session-mode"><span className="status-dot" />{season ? 'Season' : 'Exhibition'}</div><p>{season ? worldOf(season).source === 'real-data-pack' ? 'Real clubs' : 'Fictional squads' : match.home.id.startsWith('club-') ? 'Real clubs · private pack' : 'Fictional squads'}</p>{season ? <button id="manager-profile" className="manager manager-profile-button" onClick={openManagerProfile} disabled={saving || advancing} aria-label={season.manager ? 'Edit manager profile' : 'Set manager profile'}><span className="manager-avatar">{season.manager ? season.manager.name.split(/\s+/u).map(part => Array.from(part)[0]).slice(0, 2).join('').toUpperCase() : 'YOU'}</span><span className="manager-identity"><strong data-manager-name>{season.manager?.name ?? 'Set manager profile'}</strong><small>Head coach</small>{season.manager && <small data-manager-details>{managerAge(season.manager, season.date)} years · {season.manager.nationality}<ManagerFlags nationality={season.manager.nationality} /></small>}</span></button> : <div className="manager"><span className="manager-avatar">YOU</span><div>Head coach<small>{managedTeam.name}</small></div></div>}</div>
     </aside>
 
     <div className="main-shell">
@@ -963,7 +990,8 @@ export default function App() {
         <PageErrorBoundary key={page} title={pageNames[page]} savesFirst={!!season} onReload={() => { void saveAndReload() }}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
         {page === 'season' && competitionsTabs}
         {page === 'season' && shownCompetitions === 'calendar' && season && <SeasonCalendar season={season} />}
-        {page === 'season' && shownCompetitions === 'europe' && season && <EuropeWorkspace season={season} />}
+        {page === 'season' && shownCompetitions === 'international' && season && <InternationalWorkspace season={season} competitionId={internationalCompetition} onCompetitionChange={setInternationalCompetition} />}
+        {page === 'season' && shownCompetitions === 'leagues' && season && <EuropeanLeaguesWorkspace season={season} leagueId={europeanLeague} onLeagueChange={setEuropeanLeague} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('match')} onLoad={loadSeason} busy={advancing || saving} />}
         {page === 'season' && shownCompetitions === 'national' && season?.national && <NationalWorkspace season={season} />}
         {page === 'season' && shownCompetitions === 'league' && <SeasonWorkspace season={season} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('match')} onLoad={loadSeason} busy={advancing || saving} />}
 
@@ -991,7 +1019,7 @@ export default function App() {
           else if (target === 'dynamics') { setRelationshipPlayer(playerId ?? null); setSquadView('relationships'); navigate('squad') }
           else if (target === 'contract' && playerId) openTransfers(playerId)
           else if (target === 'bid') { setTransfersTab('search'); navigate('transfers', '#transfer-business') }
-          else if (target === 'europe') navigate('europe', '[data-european-places]')
+          else if (target === 'europe') { setCompetitionsView('international'); navigate('season', '[data-european-places]') }
           else { if (playerId) setSelectedPlayer(playerId); setRosterFilter('all'); setRosterQuery(''); navigate('squad', playerId ? '.player-profile' : '#main') }
         }} onContractReply={replyToContract} onNationalOffer={answerNationalOffer} onEuropeanOffer={answerEuropeanPlace} onBidDecision={(offerId, market, response) => updateCareer(state => market === 'season' ? decideInSeasonTransfer(state, offerId, response) : decideClubTransfer(state, offerId, response), response === 'accept' ? 'Offer accepted. The player decides by the next matchday; the fee arrives when he signs.' : response === 'counter' ? 'Counteroffer sent: the club may come back at your asking fee.' : 'Offer declined.', true)} />}
 

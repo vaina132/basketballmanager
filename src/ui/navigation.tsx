@@ -23,18 +23,57 @@ export const SQUAD_VIEWS: readonly { id: SquadView; label: string }[] = [
   { id: 'contracts', label: 'Contracts' },
   { id: 'medical', label: 'Medical' },
 ]
-export type CompetitionsView = 'league' | 'calendar' | 'europe' | 'national'
+/**
+ * Competitions' tabs (owner, 22 November 2026, evening): Calendar, League (the manager's own league), International (the
+ * European competitions his club plays), European Leagues (every other domestic league, with the simulated tables of
+ * countries not played) and National Teams. An NBA tab comes later, once the NBA is in the game.
+ */
+export type CompetitionsView = 'calendar' | 'league' | 'international' | 'leagues' | 'national'
 export type TrainingView = 'plan' | 'academy'
 export type ClubView = 'club' | 'board'
 export interface ViewTab<T extends string> { id: T; label: string; icon: IconName }
 
+/** Which of Competitions' tabs a career has. */
+export interface CompetitionsTabs {
+  /** The manager has a club, so a league of his own (an unemployed manager has none). */
+  league: boolean
+  /** The world plays European club competitions. */
+  international: boolean
+  /** The world has domestic leagues besides the manager's own (played, or with a simulated table). */
+  leagues: boolean
+  /** Format 80: the world has national teams. */
+  national: boolean
+}
 /**
- * Owner decisions (22 November 2026): Calendar and Europe are tabs of Competitions, Academy a tab of Training and Board
- * a tab of Club. Europe shows only in worlds that have European games, as its menu item did.
+ * Competitions' tabs in the owner's order (22 November 2026, evening). Calendar is always there; the others only where
+ * they have something to show, so no tab is a placeholder.
  */
-export function competitionsViews(europe: boolean, national = false): ViewTab<CompetitionsView>[] {
-  // Format 80: careers with national teams add their competitions as the last tab.
-  return [{ id: 'league', label: 'League', icon: 'ball' }, { id: 'calendar', label: 'Calendar', icon: 'calendar' }, ...(europe ? [{ id: 'europe' as const, label: 'Europe', icon: 'star' as const }] : []), ...(national ? [{ id: 'national' as const, label: 'National teams', icon: 'target' as const }] : [])]
+export function competitionsViews({ league, international, leagues, national }: CompetitionsTabs): ViewTab<CompetitionsView>[] {
+  return [
+    { id: 'calendar', label: 'Calendar', icon: 'calendar' },
+    ...(league ? [{ id: 'league' as const, label: 'League', icon: 'ball' as const }] : []),
+    ...(international ? [{ id: 'international' as const, label: 'International', icon: 'star' as const }] : []),
+    ...(leagues ? [{ id: 'leagues' as const, label: 'European Leagues', icon: 'globe' as const }] : []),
+    ...(national ? [{ id: 'national' as const, label: 'National Teams', icon: 'target' as const }] : []),
+  ]
+}
+/**
+ * The tab shown when the one asked for is not there: an unemployed manager's League opens European Leagues, and a link
+ * to European competitions in a world without them opens European Leagues too; otherwise the first tab with content.
+ */
+export function shownCompetitionsView(wanted: CompetitionsView, tabs: readonly { id: CompetitionsView }[]): CompetitionsView {
+  const has = (view: CompetitionsView) => tabs.some(tab => tab.id === view)
+  if (has(wanted)) return wanted
+  const order: readonly CompetitionsView[] = wanted === 'international' || wanted === 'league' ? ['leagues', 'league', 'international'] : ['league', 'leagues', 'international']
+  return order.find(has) ?? tabs[0]?.id ?? 'league'
+}
+/**
+ * Where an old link to the Europe page lands (it was a tab before 22 November 2026, evening): International when the
+ * manager's club plays a European competition this season (or he has no club, so International lists them all),
+ * otherwise European Leagues, which holds the other leagues the old page listed.
+ */
+export function europeLinkView(clubPlaysEurope: boolean): CompetitionsView {
+  return clubPlaysEurope ? 'international' : 'leagues'
 }
 export const TRAINING_VIEWS: readonly ViewTab<TrainingView>[] = [{ id: 'plan', label: 'Training', icon: 'training' }, { id: 'academy', label: 'Academy', icon: 'people' }]
 export const CLUB_VIEWS: readonly ViewTab<ClubView>[] = [{ id: 'club', label: 'Facilities & money', icon: 'building' }, { id: 'board', label: 'Board', icon: 'shield' }]
@@ -46,7 +85,7 @@ export type PageView = { page: 'squad'; view: SquadView } | { page: 'season'; vi
 export const MERGED_PAGES: Partial<Record<Page, PageView>> = {
   medical: { page: 'squad', view: 'medical' },
   calendar: { page: 'season', view: 'calendar' },
-  europe: { page: 'season', view: 'europe' },
+  europe: { page: 'season', view: 'international' },
   academy: { page: 'training', view: 'academy' },
   board: { page: 'club', view: 'board' },
 }

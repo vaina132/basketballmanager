@@ -22,7 +22,8 @@ export function ClubBadge({ club, className, fallback, style }: { club: BadgeClu
 }
 
 /** A small inline logo for a club or competition; renders nothing when there is none. */
-export function InlineLogo({ kind, id, name, size = 16 }: { kind: 'club' | 'competition'; id: string | null | undefined; name: string; size?: number }) {
+export function InlineLogo({ kind, id, name, size = 16, decorative = false }: { kind: 'club' | 'competition'; id: string | null | undefined; name: string; size?: number; decorative?: boolean }) {
   const logo = kind === 'club' ? clubLogoUrl(id) : competitionLogoUrl(id)
-  return logo ? <img className="inline-logo" src={logo} alt={name} width={size} height={size} loading="lazy" decoding="async" data-logo-kind={kind} /> : null
+  // Decorative beside the name written out, so a screen reader does not read the name twice.
+  return logo ? <img className="inline-logo" src={logo} alt={decorative ? '' : name} width={size} height={size} loading="lazy" decoding="async" data-logo-kind={kind} /> : null
 }

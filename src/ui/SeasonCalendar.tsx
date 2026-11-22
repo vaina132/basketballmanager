@@ -9,6 +9,7 @@ import { addCalendarDays } from '../world/competition-calendar'
 import { nationalTeam } from '../world/national'
 import './season-workspace.css'
 import { InlineLogo } from './ClubLogo'
+import { Nationality } from './Nationality'
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
@@ -63,7 +64,7 @@ export function SeasonCalendar({ season }: { season: SeasonState }) {
             <td>{index === 0 ? week.round > regular ? `Playoffs ${week.round - regular}` : `Week ${week.round}` : ''}</td>
             <td><time dateTime={day.date}>{formatDate(day.date)}</time></td>
             <td>{day.competitions.length ? day.competitions.map(([name, count], index) => <span key={name}>{index ? ' · ' : ''}<InlineLogo kind="competition" id={competitionIds.get(name)} name={name} size={14} />{name} ({count})</span>) : day.reserved.length ? '' : 'No games'}{day.reserved.length > 0 && <small>{day.competitions.length ? ' · ' : ''}Reserved: {day.reserved.join(', ')}</small>}</td>
-            <td>{own && opponent ? <>{own.homeClubId === managedId ? 'vs' : 'at'} <strong>{opponent.name}</strong> · {competitionName(own)}{own.result ? ` · ${own.result.officialScore[own.homeClubId === managedId ? 'home' : 'away']}–${own.result.officialScore[own.homeClubId === managedId ? 'away' : 'home']} ${own.result.winnerClubId === managedId ? 'W' : 'L'}` : ''}</> : ownNational && rival ? <>{ownNational.homeTeamId === jobTeam ? 'vs' : 'at'} <strong>{rival.name}</strong> · National team{ownNational.result ? ` · ${ownNational.homeTeamId === jobTeam ? ownNational.result.home : ownNational.result.away}–${ownNational.homeTeamId === jobTeam ? ownNational.result.away : ownNational.result.home}` : ''}</> : ''}</td>
+            <td>{own && opponent ? <>{own.homeClubId === managedId ? 'vs' : 'at'} <strong>{opponent.name}</strong> · {competitionName(own)}{own.result ? ` · ${own.result.officialScore[own.homeClubId === managedId ? 'home' : 'away']}–${own.result.officialScore[own.homeClubId === managedId ? 'away' : 'home']} ${own.result.winnerClubId === managedId ? 'W' : 'L'}` : ''}</> : ownNational && rival ? <>{ownNational.homeTeamId === jobTeam ? 'vs' : 'at'} <Nationality country={rival.country} compact /> <strong>{rival.name}</strong> · National team{ownNational.result ? ` · ${ownNational.homeTeamId === jobTeam ? ownNational.result.home : ownNational.result.away}–${ownNational.homeTeamId === jobTeam ? ownNational.result.away : ownNational.result.home}` : ''}</> : ''}</td>
           </tr>
         }))}</tbody></table></div>
     </section>

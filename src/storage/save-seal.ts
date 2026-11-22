@@ -15,7 +15,10 @@ import { SEASON_SCHEMA_VERSION } from '../domain/season';
 // Version 4: development-mode checkpoints (15-16 November 2026) carried version-3 seals without the full check. Re-check them.
 // Version 5 (22 November 2026): naming rights, sponsor exits, president requests, resignations and the latest completed
 // season's board history are rebuilt exactly, refusing tampered saves the earlier checks accepted.
-export const SAVE_CHECKS_VERSION = 5;
+// Version 6 (22 November 2026): sealed seasons' youth games follow their schedule and result rules (the managed club's
+// stay complete and fully accounted), sealed academy reports are rebuilt in their week, and the latest board review
+// keeps its counted games.
+export const SAVE_CHECKS_VERSION = 6;
 const SEAL_PREFIX = `courtside-save-seal|format-${SEASON_SCHEMA_VERSION}|checks-${SAVE_CHECKS_VERSION}|`;
 export const SEAL_PATTERN = /^[0-9a-f]{64}$/;
 

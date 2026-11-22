@@ -26,7 +26,7 @@ const noop = () => {};
 const finish = (state: SeasonState) => state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state;
 const step = (state: SeasonState) => advanceSeason(finish(state));
 // Career rules only: president personalities (format 70) would move each club's Under pressure line; tests/presidents.test.tsx covers them.
-const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, presidents: false }), true), true);
+const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchFlow: false, presidents: false }), true), true);
 const throughMarket = (state: SeasonState) => { let next = state; for (let day = 0; day < 80 && getMarketStartReason(next); day += 1) next = advanceMarket(next); return next; };
 const roundTrip = (state: SeasonState) => expect(parseSeason(serializeSeason(state))).toEqual(state);
 const desk = (season: SeasonState) => renderToStaticMarkup(<UnemployedDesk season={season} busy={false} onAccept={noop} onOpenCompetitions={noop} onOpenCalendar={noop} />);

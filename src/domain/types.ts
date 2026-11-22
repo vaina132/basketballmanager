@@ -5,8 +5,12 @@ export type EngineVersion = 'rules-2' | 'possession-3';
  * Format 79 (owner feedback 16, 22 November 2026): the richer play model of the possession engine (`src/engine/plays.ts`):
  * pick-and-rolls, post-ups, drives and kick-outs, fast breaks, putbacks and the other named actions. Matches without it
  * replay with the earlier possession actions unchanged.
+ * Format 81 (owner feedback, 22 November 2026 evening: "a more realistic flow ... the ball going out, backcourt
+ * violations"): `plays-3` adds the dead balls of a real game (balls knocked out of bounds, kicked balls, more held
+ * balls, 8-second, 5-second and double-dribble violations, goaltending, unsportsmanlike fouls), realistic timeouts and
+ * holds for the last shot. `plays-2` matches replay unchanged.
  */
-export type PlayModel = 'plays-2';
+export type PlayModel = 'plays-2' | 'plays-3';
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 
 /** The seven trained skills (1-20): every player record has them; training, potential and the overall rating use them. */

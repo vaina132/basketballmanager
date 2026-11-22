@@ -11,7 +11,10 @@ export interface RosterEntry { side: Side; position: Position; name: string }
 export type Roster = ReadonlyMap<string, RosterEntry>
 
 export type PlayKind = 'setup' | 'transition' | 'free-throw-setup' | 'pass' | 'drive' | 'pick-and-roll' | 'screen' | 'post-up' | 'fast-break' | 'shot' | 'dunk' | 'block' | 'free-throw' | 'rebound' | 'steal' | 'turnover'
-export type Pose = 'stand' | 'run' | 'dribble' | 'shoot' | 'block' | 'reach' | 'box-out' | 'screen' | 'defend' | 'catch'
+  // The continuous broadcast (src/viewer/flow.ts) adds the moments between and around the recorded actions.
+  | 'jump-ball' | 'inbound' | 'bring-up' | 'press' | 'half-court' | 'hold' | 'set' | 'foul' | 'violation' | 'out-of-bounds' | 'kicked-ball' | 'held-ball'
+  | 'timeout' | 'substitution' | 'injury' | 'period-end' | 'period-start' | 'final' | 'whistle'
+export type Pose = 'stand' | 'run' | 'dribble' | 'shoot' | 'block' | 'reach' | 'box-out' | 'screen' | 'defend' | 'catch' | 'hand-up' | 'down' | 'walk'
 export type Role = 'handler' | 'passer' | 'receiver' | 'shooter' | 'screener' | 'blocker' | 'rebounder' | 'stealer' | 'contest'
 
 export type Anchor = { playerId: string } | { point: CourtBallPoint }
@@ -35,7 +38,7 @@ export interface PlayerTrack {
   lifts: Timed<number>[]
   base: Pose
 }
-export interface Mark { kind: 'score' | 'miss' | 'block' | 'steal' | 'screen' | 'turnover'; label: string; at: { playerId: string } | { point: CourtPoint }; start: number; end: number }
+export interface Mark { kind: 'score' | 'miss' | 'block' | 'steal' | 'screen' | 'turnover' | 'call' | 'info'; label: string; at: { playerId: string } | { point: CourtPoint }; start: number; end: number }
 export interface Animation {
   eventId: number
   kind: PlayKind
@@ -47,6 +50,9 @@ export interface Animation {
   actors: { playerId: string; role: Role }[]
   marks: Mark[]
   result?: 'make' | 'miss' | 'block' | 'steal' | 'out'
+  /** The three referees' paths (the continuous broadcast, src/viewer/flow.ts); `signal` is the one making the call. */
+  refs?: { path: Waypoint[] }[]
+  signal?: number
 }
 export interface PlayerFrame { playerId: string; side: Side; x: number; y: number; pose: Pose; lift: number; stride: number }
 export interface Frame {
@@ -62,7 +68,9 @@ const RIM_HEIGHT = 3.05
 const metres = (a: CourtPoint, b: CourtPoint) => Math.hypot((a.x - b.x) * 28, (a.y - b.y) * 15)
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n))
 const bound = (n: number) => Math.max(.02, Math.min(.98, n))
-const ease = (u: number) => u < .5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2
+/** Players accelerate over the first fifth of a move, run at an even speed, then slow over the last fifth. */
+const EASE_RAMP = .2
+const ease = (u: number) => u < EASE_RAMP ? u * u / (2 * EASE_RAMP * (1 - EASE_RAMP)) : u <= 1 - EASE_RAMP ? (u - EASE_RAMP / 2) / (1 - EASE_RAMP) : 1 - (1 - u) ** 2 / (2 * EASE_RAMP * (1 - EASE_RAMP))
 const other = (side: Side): Side => side === 'home' ? 'away' : 'home'
 const isBig = (position?: Position) => position === 'PF' || position === 'C'
 const surname = (name: string) => name.split(' ').at(-1) ?? name
@@ -108,17 +116,32 @@ function delay(track: PlayerTrack, start: number, end = 1): void {
   const first = track.path[0]!, last = track.path.at(-1)!
   track.path = [{ t: 0, x: first.x, y: first.y }, { t: start, x: first.x, y: first.y }, { t: end, x: last.x, y: last.y }, ...(end < 1 ? [{ t: 1, x: last.x, y: last.y }] : [])]
 }
+const still = (a: Waypoint | undefined, b: Waypoint | undefined) => !a || !b || Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6
+/**
+ * Where a player is at time t of his path. A player speeds up only when starting from a standstill and slows only
+ * before stopping; through a waypoint in the middle of a run he keeps moving (a cut, a curl, a lane run).
+ */
 export function pathAt(path: readonly Waypoint[], t: number): CourtPoint {
   if (t <= path[0]!.t) return { x: path[0]!.x, y: path[0]!.y }
   for (let index = 1; index < path.length; index += 1) {
     const a = path[index - 1]!, b = path[index]!
     if (t <= b.t) {
-      const u = b.t > a.t ? ease((t - a.t) / (b.t - a.t)) : 1
+      if (b.t <= a.t) return { x: b.x, y: b.y }
+      const local = (t - a.t) / (b.t - a.t)
+      const fromRest = index === 1 || still(path[index - 2], a), toRest = index === path.length - 1 || still(b, path[index + 1])
+      const u = fromRest && toRest ? ease(local) : ramp(local, fromRest ? EASE_RAMP : 0, toRest ? EASE_RAMP : 0)
       return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u }
     }
   }
   const last = path.at(-1)!
   return { x: last.x, y: last.y }
+}
+/** A trapezoid speed profile: `up` of the leg speeding up, `down` of it slowing down (either may be zero). */
+function ramp(u: number, up: number, down: number): number {
+  const v = 1 / (1 - up / 2 - down / 2)
+  if (up > 0 && u < up) return v * u * u / (2 * up)
+  if (down > 0 && u > 1 - down) return 1 - v * (1 - u) ** 2 / (2 * down)
+  return v * (u - up / 2)
 }
 
 function setPose(track: PlayerTrack | undefined, pose: Pose, start: number, end: number, lift = 0): void {
@@ -246,6 +269,14 @@ export function buildAnimation(event: MatchEvent, roster: Roster): Animation | n
         ball.push({ kind: 'drop', from: target(scene.ball.to), to: target(scene.ball.to), start: rim, end: 1, arc: 0 })
         const value = freeThrow ? 1 : event.shot?.value ?? 2
         marks.push({ kind: 'score', label: `+${value}${!freeThrow && /through the contact/.test(event.text) ? ' AND 1' : ''}`, at: { point: hoop }, start: rim, end: 1 })
+        // Format 81: goaltending: the defender swats the ball on its way down; the basket counts.
+        const goaltender = /^(.+?) is called for goaltending/.exec(event.text)
+        const swatter = goaltender ? named(roster, defense, goaltender[1], ids) ?? event.shot?.defenderId : undefined
+        if (swatter && track(swatter)) {
+          detour(track(swatter)!, toward(startOf(swatter), hoop, Math.max(0, metres(startOf(swatter), hoop) - .7)), .45, .7)
+          setPose(track(swatter), 'block', .45, .8, .7)
+          marks.push({ kind: 'call', label: 'GOALTENDING', at: { playerId: swatter }, start: .62, end: 1 })
+        }
       } else {
         // Misses hit the rim, then carom to where the ball comes down.
         ball.push({ kind: 'shot', from: { playerId: shooter }, to: target(rimPoint), start: release, end: rim, arc: scene.ball.arcHeight, heights: [2.1, RIM_HEIGHT] })
@@ -296,7 +327,7 @@ export function buildAnimation(event: MatchEvent, roster: Roster): Animation | n
     } else {
       kind = 'turnover'; durationMs = 950; result = 'out'
       ball.push({ kind: 'roll', from: { playerId: handler }, to: target(scene.ball.to), start: .35, end: 1, arc: .15 })
-      const label = event.type === 'shot-clock' ? 'SHOT CLOCK' : /travels/.test(event.text) ? 'TRAVEL' : /three seconds/.test(event.text) ? '3 SECONDS' : /backcourt/.test(event.text) ? 'BACKCOURT' : /out of bounds/.test(event.text) ? 'OUT OF BOUNDS' : 'TURNOVER'
+      const label = turnoverLabel(event)
       marks.push({ kind: 'turnover', label, at: { playerId: handler }, start: .35, end: 1 })
     }
     setPose(track(handler), 'dribble', 0, .35)
@@ -343,6 +374,14 @@ export function buildAnimation(event: MatchEvent, roster: Roster): Animation | n
     if (handler && !freeThrowSet && maxRun >= .3) setPose(track(handler), 'dribble', at, 1)
   }
   return { eventId: event.id, kind, offense, durationMs, hoop, tracks, ball, actors, marks, ...(result ? { result } : {}) }
+}
+
+/** The referee's call on a turnover, as the court shows it. */
+export function turnoverLabel(event: MatchEvent): string {
+  const text = event.text
+  return event.type === 'shot-clock' ? 'SHOT CLOCK' : /travels/.test(text) ? 'TRAVEL' : /three seconds/.test(text) ? '3 SECONDS' : /8-second/.test(text) ? '8 SECONDS'
+    : /5-second/.test(text) ? '5 SECONDS' : /double dribble/.test(text) ? 'DOUBLE DRIBBLE' : /carrying/.test(text) ? 'CARRYING' : /Basket interference/.test(text) ? 'BASKET INTERFERENCE'
+      : /backcourt/.test(text) ? 'BACKCOURT' : /out of bounds|steps on the sideline/.test(text) ? 'OUT OF BOUNDS' : 'TURNOVER'
 }
 
 function timed<T>(items: readonly Timed<T>[], t: number): T | undefined {

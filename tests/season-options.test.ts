@@ -5,7 +5,7 @@ const manager = { name: 'Options Manager', dateOfBirth: '1984-03-17', nationalit
 
 describe('named career options', () => {
   it('lists every optional system once and cannot be changed at runtime', () => {
-    expect(Object.keys(NEW_CAREER_SYSTEMS)).toHaveLength(39);
+    expect(Object.keys(NEW_CAREER_SYSTEMS)).toHaveLength(41);
     expect(Object.values(NEW_CAREER_SYSTEMS).every(Boolean)).toBe(true);
     expect(Object.isFrozen(NEW_CAREER_SYSTEMS)).toBe(true);
   });
@@ -29,7 +29,9 @@ describe('named career options', () => {
     // Format 78: the transfer and loan list and the scouting network (also reachable only by name).
     expect([named.recruitment.model, named.scouting.model]).toEqual(['recruitment-2', 'scouting-2']);
     // Format 79: the richer play model (also reachable only by name).
-    expect([named.matchModel, named.activeMatch?.playModel]).toEqual(['plays-2', 'plays-2']);
+    expect(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, matchFlow: false }).matchModel).toBe('plays-2');
+    // Format 81: the dead balls of a real game (also reachable only by name).
+    expect([named.matchModel, named.activeMatch?.playModel]).toEqual(['plays-3', 'plays-3']);
     // Format 75: player wages and staff fees share one pool (also reachable only by name).
     expect(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, wagePool: false }).coaching.model).toBe('coaching-2');
     expect(createSeason({ seed: 9, managedClubId: 'aegean-waves', injuryMode: 'off', training: false, coaching: false, employment: true, negotiations: true, board: true }))

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { SeasonState } from '../domain/season'
 import { worldOf } from '../world/career-world'
 import { isUnemployed } from '../world/career-rules'
-import { nationalCoach, nationalPlayerPool, nationalTeam, pickNationalSquad, type NationalCandidate } from '../world/national'
+import { careerEarnings, nationalCoach, nationalPlayerPool, nationalTeam, pickNationalSquad, type NationalCandidate } from '../world/national'
 import { NATIONAL_RULES, nationalTournamentName, nationalWindowSaturday } from '../world/national-calendar'
 import { formatEuros } from './money-format'
 import { MoreInfo } from './MoreInfo'
@@ -28,7 +28,7 @@ interface NationalTeamPageProps {
  * federation's confidence, the contract and the season's results.
  */
 export function NationalTeamPage({ season, busy, onSelect, onResign, onOpenCompetitions }: NationalTeamPageProps) {
-  const national = season.national!, job = national.job!, team = nationalTeam(national, job.teamId), coach = nationalCoach(national, job.teamId)
+  const national = season.national!, job = national.job!, team = nationalTeam(national, job.teamId), coach = nationalCoach(national, job.teamId), earnings = careerEarnings(season)
   const games = national.competitions.filter(item => item.seasonNumber === season.seasonNumber).flatMap(item => item.fixtures).filter(fixture => fixture.homeTeamId === team.id || fixture.awayTeamId === team.id).sort((a, b) => a.date < b.date ? -1 : 1)
   const next = games.find(fixture => !fixture.result)
   // The pool of the next window (club conflicts and injuries as they stand now), or the summer's.
@@ -60,9 +60,10 @@ export function NationalTeamPage({ season, busy, onSelect, onResign, onOpenCompe
         <div><span>Federation</span><strong data-national-confidence={coach.confidence}>{federationMood(coach.confidence)} · {coach.confidence}/100</strong></div>
         <div><span>Next game</span><strong>{next ? `${nationalDate(next.date)} · ${next.homeTeamId === team.id ? 'v' : 'at'} ${opponent(next).name}` : 'None this season'}</strong></div>
         <div><span>Contract</span><strong>To the {tournamentShort(job.untilSeason)}</strong></div>
-        <div><span>Salary</span><strong>{formatEuros(job.salary)} a season</strong></div>
+        <div><span>Salary</span><strong>{formatEuros(job.salary)} a season · paid monthly</strong></div>
+        <div><span>Career earnings</span><strong data-national-earnings={earnings?.total ?? 0}>{formatEuros(earnings?.total ?? 0)}</strong></div>
       </div>
-      {isUnemployed(season) && <p className="muted national-panel-body">Without a club, your national games are played for you with the squad you pick here.</p>}
+      {isUnemployed(season) && <p className="muted national-panel-body">Without a club, you still coach your national games: Continue stops for them and they open in the Match center.</p>}
       <div className="national-actions"><button className="button small" onClick={() => { if (globalThis.confirm?.(`Resign as head coach of ${team.name}? Your club job is not affected.`) ?? true) onResign() }} disabled={busy}>Resign</button></div>
     </section>
 

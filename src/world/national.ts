@@ -1,5 +1,5 @@
-import type { NationalCoach, NationalCompetition, NationalFixture, NationalGroup, NationalOffer, NationalResult, NationalTeamInfo, NationalVerdict, SeasonNational } from '../domain/national';
-import type { SeasonState } from '../domain/season';
+import type { ManagerEarnings, NationalPayment, NationalCoach, NationalCompetition, NationalFixture, NationalGroup, NationalOffer, NationalResult, NationalTeamInfo, NationalVerdict, SeasonNational } from '../domain/national';
+import type { SeasonInjury, SeasonState } from '../domain/season';
 import type { MatchState, Player, Position, Side, Team } from '../domain/types';
 import type { CareerWorld } from '../domain/world';
 import { NATIONAL_TEAMS, NATIONALITY_ALIASES, QUALIFIER_GROUPS_2026, nationalPersonName } from '../data/national-teams';
@@ -7,7 +7,8 @@ import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { NATIONAL_RULES, nationalAwayDays, nationalTournamentDays, nationalTournamentName, nationalWindowDays, nationalWindowSaturday } from './national-calendar';
 import { addCalendarDays } from './competition-calendar';
 import { worldOf } from './career-world';
-import { isRecovering } from './health';
+import { createSeasonInjury, injuryRiskMap, isRecovering } from './health';
+import { medicalRecoveryPercent } from './facilities-policy';
 import { overallRating } from './overall-rating';
 import { developClub } from './training';
 import { managerReputation } from './career-policy';
@@ -74,7 +75,7 @@ export function qualifierCompetition(seasonNumber: number, groups: NationalGroup
 /** The national teams, coaches and season one's qualifiers of a new career. */
 export function createNational(seed: number, date: string): SeasonNational {
   const teams = NATIONAL_TEAMS.map(team => ({ ...team }));
-  let national: SeasonNational = { model: NATIONAL_MODEL, teams, coaches: [], coachCount: 0, competitions: [], job: null, offers: [], verdicts: [], events: [], activeFixtureId: null, activeMatch: null };
+  let national: SeasonNational = { model: NATIONAL_MODEL, teams, coaches: [], coachCount: 0, competitions: [], job: null, offers: [], verdicts: [], events: [], earnings: { paidThrough: null, payments: [] }, activeFixtureId: null, activeMatch: null };
   for (const team of teams) {
     const { coach, coachCount } = generatedCoach(national, team.id, 1, date);
     national = { ...national, coaches: [...national.coaches, coach], coachCount };
@@ -140,6 +141,9 @@ export function generatedNationalPlayer(team: NationalTeamInfo, k: number, seed:
   const height = HEIGHTS[position] + (hash >>> 24) % 5;
   return { id: `${team.id}-generated-${k}`, name: nationalPersonName(team.country, 500 + k), number: 0, position, heightCm: height, weightKg: Math.round(height * 0.48), skinTone: SKIN_TONES[hash % SKIN_TONES.length]!, hairColor: HAIR_COLORS[(hash >>> 8) % HAIR_COLORS.length]!, attributes };
 }
+
+/** Whether a fixture id is a national game's (qualifiers `nq-s<season>-…`, tournaments `nt-s<season>-…`). */
+export const isNationalFixtureId = (fixtureId: string) => /^n[qt]-s\d+-/u.test(fixtureId);
 
 export const isGeneratedNationalPlayer = (playerId: string) => playerId.startsWith('nation-') && playerId.includes('-generated-');
 
@@ -208,9 +212,20 @@ export function pickNationalSquad(team: NationalTeamInfo, candidates: readonly N
 export const managerNationalTeamId = (state: Pick<SeasonState, 'national'>): string | null => state.national?.job?.teamId ?? null;
 
 /** A team's squad for a game in this state (the manager's picks for his team). */
-export function nationalSquadFor(state: SeasonState, teamId: string, pool: Map<string, NationalCandidate[]>): NationalCandidate[] {
-  const national = state.national!, team = nationalTeam(national, teamId);
-  return pickNationalSquad(team, pool.get(team.country) ?? [], state.seed, national.job?.teamId === teamId ? national.job.selection : []);
+export function nationalSquadFor(state: SeasonState, teamId: string, pool: Map<string, NationalCandidate[]>, unavailable: ReadonlySet<string> = new Set()): NationalCandidate[] {
+  const national = state.national!, team = nationalTeam(national, teamId), candidates = pool.get(team.country) ?? [];
+  return pickNationalSquad(team, unavailable.size ? candidates.filter(item => !unavailable.has(item.player.id)) : candidates, state.seed, national.job?.teamId === teamId ? national.job.selection : []);
+}
+
+/**
+ * Players who cannot play a national game: club players recovering from an injury on its date, and every player
+ * injured in an earlier game of the same window or tournament (he misses the rest of it).
+ */
+export function nationalUnavailable(state: SeasonState, fixture: NationalFixture): Set<string> {
+  const competition = findCompetition(state.national!, fixture.competitionId), out = new Set<string>();
+  for (const injury of state.injuries) if (isRecovering(injury, fixture.date, state.physio)) out.add(injury.playerId);
+  for (const earlier of competition.fixtures) if (earlier.window === fixture.window && earlier.result && earlier.date < fixture.date) for (const id of Object.keys(earlier.result.injuries)) out.add(id);
+  return out;
 }
 
 /** A squad's strength: the average overall rating of its best eight. */
@@ -262,17 +277,21 @@ export function projectedNationalSquads(state: SeasonState, seasonNumber: number
 
 /**
  * A national game's match: both coaches' squads, numbered 4-15, with the career's play model. `live`: the manager's
- * team plays under his control (the Match center); otherwise every side has a computer coach. No injuries are drawn.
+ * team plays under his control (the Match center); otherwise every side has a computer coach. Injuries are drawn with
+ * the career's injury setting.
  */
 export function prepareNationalGame(state: SeasonState, fixture: NationalFixture, live: string | null, cache: PoolCache = new Map()): { match: MatchState; squads: Record<Side, NationalCandidate[]> } {
-  const national = state.national!, competition = findCompetition(national, fixture.competitionId), pool = poolForFixture(state, fixture, cache);
-  const squads = { home: nationalSquadFor(state, fixture.homeTeamId, pool), away: nationalSquadFor(state, fixture.awayTeamId, pool) };
+  const national = state.national!, competition = findCompetition(national, fixture.competitionId), pool = poolForFixture(state, fixture, cache), unavailable = nationalUnavailable(state, fixture);
+  const squads = { home: nationalSquadFor(state, fixture.homeTeamId, pool, unavailable), away: nationalSquadFor(state, fixture.awayTeamId, pool, unavailable) };
   const team = (side: Side): Team => { const info = nationalTeam(national, side === 'home' ? fixture.homeTeamId : fixture.awayTeamId); return { id: info.id, name: info.name, shortName: info.shortName, color: info.color, players: squads[side].map((item, index) => ({ ...item.player, number: index + 4 })) }; };
   const computer = SIDES.filter(side => (side === 'home' ? fixture.homeTeamId : fixture.awayTeamId) !== live);
+  // Owner (22 November 2026): national games draw injuries like club games, with each player's recurrence risk.
+  const injuryRisk = injuryRiskMap(state.injuries, [...squads.home, ...squads.away].map(item => item.player.id), fixture.date);
   const match = createFixtureMatch(nationalHash(state.seed, fixture.id), team('home'), team('away'), {
     lineups: { home: startingFive(squads.home), away: startingFive(squads.away) },
     conditions: nationalConditions(competition, fixture, [squads.home, squads.away]),
-    injuryMode: 'off',
+    injuryMode: state.injuryMode,
+    ...(Object.keys(injuryRisk).length ? { injuryRisk } : {}),
     autoSubstitutions: { home: computer.includes('home'), away: computer.includes('away') },
     ...(state.matchModel ? { playModel: state.matchModel, computerCoach: computer } : {}),
   });
@@ -289,11 +308,38 @@ export function nationalResult(match: MatchState, squads: Record<Side, readonly 
     minutes[player.id] = Math.min(60, Math.round(stats.secondsPlayed / 60));
     points[player.id] = stats.points;
   }
-  return { home: score.home, away: score.away, squads: { home: squads.home.map(item => item.player.id), away: squads.away.map(item => item.player.id) }, minutes, points, strength: { home: nationalStrength(squads.home), away: nationalStrength(squads.away) } };
+  const carried = new Set(match.preExistingInjuries ?? []);
+  const injuries = Object.fromEntries(Object.entries(match.injuries).filter(([id]) => !carried.has(id) && Object.hasOwn(minutes, id)).map(([id, injury]) => [id, injury.kind]));
+  return { home: score.home, away: score.away, squads: { home: squads.home.map(item => item.player.id), away: squads.away.map(item => item.player.id) }, minutes, points, strength: { home: nationalStrength(squads.home), away: nationalStrength(squads.away) }, injuries };
+}
+
+/** The club a player of the full world belongs to now (null: a generated player or one of a club outside the full world). */
+function fullWorldClubOf(state: Pick<SeasonState, 'clubs'>, playerId: string): string | null {
+  return state.clubs.find(club => club.players.some(player => player.id === playerId))?.id ?? null;
+}
+
+/**
+ * The club injuries of a national game: a full-world club's player injured with his national team gets a recorded
+ * injury with the career's injury model and his club's medical centre, as in a club game (owner, 22 November 2026).
+ */
+export function nationalGameInjuries(state: SeasonState, fixture: Pick<NationalFixture, 'id' | 'date'>, result: Pick<NationalResult, 'injuries'>): SeasonInjury[] {
+  const recorded: SeasonInjury[] = [];
+  for (const [playerId, kind] of Object.entries(result.injuries)) {
+    const clubId = fullWorldClubOf(state, playerId);
+    if (!clubId) continue;
+    recorded.push(createSeasonInjury(state.seed, fixture, clubId, playerId, kind, [...state.injuries, ...recorded], medicalRecoveryPercent(state, clubId, fixture.date), state.injuryModel));
+  }
+  return recorded;
 }
 
 function withFixtureResult(national: SeasonNational, fixtureId: string, result: NationalResult): SeasonNational {
   return { ...national, competitions: national.competitions.map(competition => competition.fixtures.some(fixture => fixture.id === fixtureId) ? { ...competition, fixtures: competition.fixtures.map(fixture => fixture.id === fixtureId ? { ...fixture, result } : fixture) } : competition) };
+}
+
+/** A national game's result recorded, with its club players' injuries. */
+function recordNationalGame(state: SeasonState, fixture: NationalFixture, result: NationalResult): SeasonState {
+  const injuries = nationalGameInjuries(state, fixture, result);
+  return { ...state, national: withFixtureResult(state.national!, fixture.id, result), ...(injuries.length ? { injuries: [...state.injuries, ...injuries] } : {}) };
 }
 
 /** Play every unplayed national game dated on or before `through` (in date order), except the manager's open live game. */
@@ -303,7 +349,7 @@ export function playNationalGames(state: SeasonState, through: string, onlyDate?
   const due = next.national!.competitions.flatMap(competition => competition.fixtures).filter(fixture => !fixture.result && fixture.date <= through && (!onlyDate || fixture.date === onlyDate) && fixture.id !== next.national!.activeFixtureId).sort(byDate);
   for (const fixture of due) {
     const { match, squads } = prepareNationalGame(next, fixture, null, cache);
-    next = { ...next, national: withFixtureResult(next.national!, fixture.id, nationalResult(simulateToEnd(match), squads)) };
+    next = recordNationalGame(next, fixture, nationalResult(simulateToEnd(match), squads));
   }
   return next;
 }
@@ -400,6 +446,38 @@ function expireOffers(national: SeasonNational, date: string): SeasonNational {
   return national.offers.some(offer => offer.status === 'open' && offer.expiresOn < date) ? { ...national, offers: national.offers.map(offer => offer.status === 'open' && offer.expiresOn < date ? { ...offer, status: 'expired' as const } : offer) } : national;
 }
 
+/** A month's salary payment: a twelfth of the season's salary. */
+export const monthlyNationalSalary = (salary: number) => Math.round(salary / 12);
+
+/** The first days of months after `from` up to and including `through`. */
+function monthStarts(from: string, through: string): string[] {
+  const days: string[] = [];
+  let year = Number(from.slice(0, 4)), month = Number(from.slice(5, 7));
+  for (;;) {
+    month += 1; if (month > 12) { month = 1; year += 1; }
+    const day = `${year}-${String(month).padStart(2, '0')}-01`;
+    if (day > through) return days;
+    days.push(day);
+  }
+}
+
+/**
+ * The national salary paid up to `through`: each first day of a month since the last payment, while the manager holds
+ * the job (owner, 22 November 2026). Without a job the record waits unchanged.
+ */
+export function payNationalSalary(national: SeasonNational, through: string): SeasonNational {
+  const job = national.job, paid = national.earnings.paidThrough;
+  if (!job || !paid || through <= paid) return national;
+  const payments: NationalPayment[] = monthStarts(paid, through).map(date => ({ date, teamId: job.teamId, amount: monthlyNationalSalary(job.salary) }));
+  return { ...national, earnings: { paidThrough: through, payments: [...national.earnings.payments, ...payments] } };
+}
+
+/** The manager's career earnings: the total and the payments, newest last (null in careers without national teams). */
+export function careerEarnings(state: Pick<SeasonState, 'national'>): (ManagerEarnings & { total: number }) | null {
+  const earnings = state.national?.earnings;
+  return earnings ? { ...earnings, total: earnings.payments.reduce((sum, payment) => sum + payment.amount, 0) } : null;
+}
+
 /**
  * The week's national business, run before the week's training (`toDate` is the next Saturday): offers expire, every
  * national game up to that Saturday is played (a manager without a club has his games simulated), and each window
@@ -407,7 +485,8 @@ function expireOffers(national: SeasonNational, date: string): SeasonNational {
  */
 export function advanceNationalWeek(state: SeasonState, fromDate: string, toDate: string): SeasonState {
   if (!state.national) return state;
-  let next: SeasonState = { ...state, national: expireOffers(state.national, toDate) };
+  // The month's salary first: a dismissal after the window comes after the payments due by then.
+  let next: SeasonState = { ...state, national: payNationalSalary(expireOffers(state.national, toDate), toDate) };
   next = playNationalGames(next, toDate);
   for (const competition of next.national!.competitions) {
     if (competition.kind !== 'qualifiers') continue;
@@ -416,28 +495,72 @@ export function advanceNationalWeek(state: SeasonState, fromDate: string, toDate
       if (!(saturday > fromDate && saturday <= toDate)) continue;
       const fixtures = competition.fixtures.filter(fixture => fixture.window === window);
       next = { ...next, national: reviewNational(next, next.national!, fixtures, `s${competition.seasonNumber}-w${window}`, saturday, window) };
+      // The qualifiers are complete: the summer tournament's groups are drawn from the final tables.
+      if (window === 2 && !nationalTournament(next.national!, competition.seasonNumber)) next = createTournament(next, findCompetition(next.national!, competition.id));
     }
   }
   return next;
 }
 
+/** A season's summer tournament, once drawn. */
+export function nationalTournament(national: Pick<SeasonNational, 'competitions'>, seasonNumber: number): NationalCompetition | null {
+  return national.competitions.find(item => item.seasonNumber === seasonNumber && item.kind === 'tournament') ?? null;
+}
+
+/** The next game day of this season's summer tournament (null before the draw or once it is played). */
+export function nextTournamentDay(state: Pick<SeasonState, 'national' | 'seasonNumber'>): string | null {
+  const tournament = state.national ? nationalTournament(state.national, state.seasonNumber) : null;
+  return tournament?.fixtures.filter(fixture => !fixture.result).map(fixture => fixture.date).sort()[0] ?? null;
+}
+
 /**
- * The manager's next national game due before this week's training: his team's earliest unplayed game in a window
- * whose Saturday is the next Saturday. Only while he coaches a club (a manager without a club has his games simulated).
+ * The offseason's next national game day when the manager coaches a team of this season's summer tournament (owner, 22
+ * November 2026): the tournament is then played day by day in the offseason, after recruitment and before the season
+ * change. Without such a team the tournament is played at the season change.
+ */
+export function offseasonNationalDay(state: SeasonState): string | null {
+  const national = state.national, teamId = national?.job?.teamId;
+  if (!national || !teamId || state.status !== 'complete') return null;
+  const tournament = nationalTournament(national, state.seasonNumber);
+  return tournament?.groups.some(group => group.teamIds.includes(teamId)) ? nextTournamentDay(state) : null;
+}
+
+/**
+ * The manager's next national game to open in the Match center: in the season, his team's earliest unplayed window
+ * game up to the next Saturday (played before the week's training); in the offseason, his team's game on the
+ * tournament's next game day. With or without a club (owner, 22 November 2026: an unemployed manager plays live too).
  */
 export function dueManagerNationalGame(state: SeasonState): NationalFixture | null {
   const national = state.national, teamId = national?.job?.teamId;
-  if (!national || !teamId || national.activeMatch || state.status !== 'active' || isUnemployed(state)) return null;
+  if (!national || !teamId || national.activeMatch) return null;
+  const own = (fixture: NationalFixture) => !fixture.result && (fixture.homeTeamId === teamId || fixture.awayTeamId === teamId);
+  if (state.status === 'complete') {
+    const day = offseasonNationalDay(state);
+    return day ? nationalTournament(national, state.seasonNumber)!.fixtures.find(fixture => own(fixture) && fixture.date === day) ?? null : null;
+  }
+  if (state.status !== 'active') return null;
   const nextSaturday = addCalendarDays(state.date, 7);
-  return national.competitions.flatMap(competition => competition.fixtures).filter(fixture => !fixture.result && fixture.window !== 3 && (fixture.homeTeamId === teamId || fixture.awayTeamId === teamId) && fixture.date > state.date && fixture.date <= nextSaturday).sort(byDate)[0] ?? null;
+  return national.competitions.flatMap(competition => competition.fixtures).filter(fixture => own(fixture) && fixture.window !== 3 && fixture.date > state.date && fixture.date <= nextSaturday).sort(byDate)[0] ?? null;
 }
 
-/** Open the manager's due national game in the Match center. */
+/** The day the next national step plays: the open game's, the manager's due game, or the offseason tournament's next day. */
+export function nationalStepDay(state: SeasonState): string | null {
+  return activeNationalFixture(state)?.date ?? dueManagerNationalGame(state)?.date ?? offseasonNationalDay(state);
+}
+
+/**
+ * One national step of Continue: open the manager's due game in the Match center; in the offseason, a tournament day
+ * without his team's game is played in full.
+ */
 export function startNationalMatch(state: SeasonState): SeasonState {
   const fixture = dueManagerNationalGame(state);
-  if (!fixture) throw new Error('Your national team has no game to play now.');
-  const { match } = prepareNationalGame(state, fixture, state.national!.job!.teamId);
-  return { ...state, national: { ...state.national!, activeFixtureId: fixture.id, activeMatch: match } };
+  if (fixture) {
+    const { match } = prepareNationalGame(state, fixture, state.national!.job!.teamId);
+    return { ...state, national: { ...state.national!, activeFixtureId: fixture.id, activeMatch: match } };
+  }
+  const day = offseasonNationalDay(state);
+  if (day) return playNationalDay(state, day);
+  throw new Error('Your national team has no game to play now.');
 }
 
 /** The open national game's fixture. */
@@ -460,8 +583,9 @@ export function commitNationalMatch(state: SeasonState): SeasonState {
   if (match.status !== 'finished' || match.requiredSubstitutions.length) throw new Error('Finish the national game and resolve required decisions before continuing.');
   // The squads are the match's players, in the coaches' order.
   const squad = (side: Side): NationalCandidate[] => match[side].players.map(player => ({ player, clubId: null, ovr: overallRating(player.attributes, player.position) }));
-  const next: SeasonState = { ...state, national: { ...withFixtureResult(national, fixture.id, nationalResult(match, { home: squad('home'), away: squad('away') })), activeFixtureId: null, activeMatch: null } };
-  return playNationalGames(next, fixture.date, fixture.date);
+  const recorded = recordNationalGame(state, fixture, nationalResult(match, { home: squad('home'), away: squad('away') }));
+  const next: SeasonState = { ...recorded, national: { ...recorded.national!, activeFixtureId: null, activeMatch: null } };
+  return playNationalDay(next, fixture.date);
 }
 
 /** Accept a federation's offer: the national job runs alongside any club job. */
@@ -474,6 +598,7 @@ export function acceptNationalOffer(state: SeasonState, offerId: string): Season
   return { ...state, national: {
     ...national,
     job: { teamId: team.id, since, untilSeason: state.seasonNumber + NATIONAL_RULES.contractSeasons - 1, salary: NATIONAL_RULES.salary[team.level], selection: [] },
+    earnings: { ...national.earnings, paidThrough: state.date },
     coaches: national.coaches.map(coach => coach.teamId === team.id ? { teamId: team.id, name: state.manager?.name ?? 'You', manager: true as const, since, confidence: NATIONAL_RULES.startingConfidence } : coach),
     offers: national.offers.map(item => item.id === offerId ? { ...item, status: 'accepted' as const } : item.status === 'open' ? { ...item, status: 'declined' as const } : item),
     events: [...national.events, { id: `national-event-${offerId}`, teamId: team.id, date: state.date, kind: 'appointed' as const }],
@@ -492,7 +617,7 @@ export function resignNationalJob(state: SeasonState): SeasonState {
   if (!national || !job) throw new Error('You do not coach a national team.');
   if (national.activeMatch) throw new Error('Finish the national game first.');
   const replaced = generatedCoach(national, job.teamId, state.seasonNumber, state.date);
-  return { ...state, national: { ...national, job: null, coaches: national.coaches.map(coach => coach.teamId === job.teamId ? replaced.coach : coach), coachCount: replaced.coachCount, events: [...national.events, { id: `national-event-resigned-s${state.seasonNumber}-${state.date}`, teamId: job.teamId, date: state.date, kind: 'resigned' as const }] } };
+  return { ...state, national: { ...payNationalSalary(national, state.date), job: null, coaches: national.coaches.map(coach => coach.teamId === job.teamId ? replaced.coach : coach), coachCount: replaced.coachCount, events: [...national.events, { id: `national-event-resigned-s${state.seasonNumber}-${state.date}`, teamId: job.teamId, date: state.date, kind: 'resigned' as const }] } };
 }
 
 /** The manager's own picks for his national team (up to twelve players of its country); the rest is picked automatically. */
@@ -539,25 +664,64 @@ export function nationalDutyDays(national: SeasonNational | undefined, fromDate:
   return Object.keys(duty).length ? duty : undefined;
 }
 
-/** The summer tournament of a season's qualifiers: the top three of each group in four groups of three, then knockouts. */
-function playTournament(state: SeasonState, qualifiers: NationalCompetition): SeasonState {
+const tournamentFixture = (id: string, suffix: string, stage: NationalFixture['stage'], groupId: string | null, date: string, home: string, away: string): NationalFixture => ({ id: `${id}-${suffix}`, competitionId: id, window: 3, stage, groupId, date, homeTeamId: home, awayTeamId: away, result: null });
+
+/**
+ * The summer tournament of a season's completed qualifiers: the top three of each group in four groups of three (one
+ * team from each of three groups), each group's three games on the first three tournament days.
+ */
+function createTournament(state: SeasonState, qualifiers: NationalCompetition): SeasonState {
   const national = state.national!, seasonNumber = qualifiers.seasonNumber, days = nationalTournamentDays(seasonNumber), id = `nt-s${seasonNumber}`;
   const tables = qualifiers.groups.map(group => nationalTable(national, qualifiers, group.id).map(row => row.teamId));
   const groups: NationalGroup[] = tables.map((_, index) => ({ id: 'ABCD'[index]!, name: `Group ${'ABCD'[index]!}`, teamIds: [tables[index]![0]!, tables[(index + 1) % 4]![1]!, tables[(index + 2) % 4]![2]!] }));
   const pairs: readonly (readonly [number, number])[] = [[0, 1], [2, 0], [1, 2]];
-  const fixture = (suffix: string, stage: NationalFixture['stage'], groupId: string | null, date: string, home: string, away: string): NationalFixture => ({ id: `${id}-${suffix}`, competitionId: id, window: 3, stage, groupId, date, homeTeamId: home, awayTeamId: away, result: null });
-  const competition: NationalCompetition = { id, seasonNumber, kind: 'tournament', name: nationalTournamentName(seasonNumber), groups, fixtures: groups.flatMap(group => pairs.map(([a, b], round) => fixture(`${group.id.toLowerCase()}-r${round + 1}`, 'group', group.id, days[round]!, group.teamIds[a]!, group.teamIds[b]!))) };
-  let next: SeasonState = { ...state, national: { ...national, competitions: [...national.competitions, competition] } };
-  next = playNationalGames(next, days[2]!);
-  const winners = groups.map(group => nationalTable(next.national!, findCompetition(next.national!, id), group.id)[0]!.teamId);
-  const add = (fixtures: NationalFixture[]) => { next = { ...next, national: { ...next.national!, competitions: next.national!.competitions.map(item => item.id === id ? { ...item, fixtures: [...item.fixtures, ...fixtures] } : item) } }; };
-  add([fixture('semi-1', 'semi', null, days[3]!, winners[0]!, winners[3]!), fixture('semi-2', 'semi', null, days[3]!, winners[1]!, winners[2]!)]);
-  next = playNationalGames(next, days[3]!);
-  const semis = findCompetition(next.national!, id).fixtures.filter(item => item.stage === 'semi');
+  const competition: NationalCompetition = { id, seasonNumber, kind: 'tournament', name: nationalTournamentName(seasonNumber), groups, fixtures: groups.flatMap(group => pairs.map(([a, b], round) => tournamentFixture(id, `${group.id.toLowerCase()}-r${round + 1}`, 'group', group.id, days[round]!, group.teamIds[a]!, group.teamIds[b]!))) };
+  return { ...state, national: { ...national, competitions: [...national.competitions, competition] } };
+}
+
+/** A tournament's next round once the one before is complete: the semi-finals (group winners), then the final and the game for third. */
+function extendTournament(national: SeasonNational, competition: NationalCompetition): SeasonNational {
+  const days = nationalTournamentDays(competition.seasonNumber), id = competition.id, add: NationalFixture[] = [];
+  const groupGames = competition.fixtures.filter(item => item.stage === 'group'), semis = competition.fixtures.filter(item => item.stage === 'semi');
   const winner = (item: NationalFixture) => item.result!.home > item.result!.away ? item.homeTeamId : item.awayTeamId;
   const loser = (item: NationalFixture) => winner(item) === item.homeTeamId ? item.awayTeamId : item.homeTeamId;
-  add([fixture('final', 'final', null, days[4]!, winner(semis[0]!), winner(semis[1]!)), fixture('third', 'third', null, days[4]!, loser(semis[0]!), loser(semis[1]!))]);
-  return playNationalGames(next, days[4]!);
+  if (!semis.length && groupGames.every(item => item.result)) {
+    const winners = competition.groups.map(group => nationalTable(national, competition, group.id)[0]!.teamId);
+    add.push(tournamentFixture(id, 'semi-1', 'semi', null, days[3]!, winners[0]!, winners[3]!), tournamentFixture(id, 'semi-2', 'semi', null, days[3]!, winners[1]!, winners[2]!));
+  } else if (semis.length && semis.every(item => item.result) && !competition.fixtures.some(item => item.stage === 'final')) {
+    add.push(tournamentFixture(id, 'final', 'final', null, days[4]!, winner(semis[0]!), winner(semis[1]!)), tournamentFixture(id, 'third', 'third', null, days[4]!, loser(semis[0]!), loser(semis[1]!)));
+  }
+  return add.length ? { ...national, competitions: national.competitions.map(item => item.id === id ? { ...item, fixtures: [...item.fixtures, ...add] } : item) } : national;
+}
+
+/**
+ * Every national game up to `through` (only that day unless `onlyDate` is empty), the manager's open game excepted; a
+ * summer tournament adds its next round as each one is completed, and those games are played too when they are due.
+ */
+function playNationalDay(state: SeasonState, through: string, onlyDate: string = through): SeasonState {
+  let next = state;
+  for (let guard = 0; guard < 6; guard += 1) {
+    next = playNationalGames(next, through, onlyDate || undefined);
+    let national = next.national!;
+    for (const competition of national.competitions) if (competition.kind === 'tournament') national = extendTournament(national, findCompetition(national, competition.id));
+    if (national === next.national) break;
+    next = { ...next, national };
+  }
+  return next;
+}
+
+/**
+ * The summer tournament of the completed season played to its end (the games not already played in the offseason),
+ * with its club players' injuries. Called at the season change; it does nothing once the tournament is over.
+ */
+export function playSummerTournament(state: SeasonState): SeasonState {
+  const national = state.national, seasonNumber = state.seasonNumber;
+  const qualifiers = national?.competitions.find(item => item.seasonNumber === seasonNumber && item.kind === 'qualifiers');
+  if (!national || !qualifiers) return state;
+  if (national.activeMatch) throw new Error('Finish the national game first.');
+  let next = playNationalGames(state, nationalWindowSaturday(seasonNumber, 2));
+  if (!nationalTournament(next.national!, seasonNumber)) next = createTournament(next, findCompetition(next.national!, qualifiers.id));
+  return playNationalDay(next, nationalTournamentDays(seasonNumber).at(-1)!, '');
 }
 
 /** A tournament's final order of the top four (champion first), when its final and game for third are played. */
@@ -581,17 +745,19 @@ function seededGroups(state: SeasonState): NationalGroup[] {
  * At the season's rollover (`state` is the completed season): the summer tournament is played, the federations judge
  * it, the manager's contract ends or is renewed, and next season's qualifiers are drawn. Older seasons are dropped.
  */
-export function rolloverNational(state: SeasonState): SeasonNational {
+export function rolloverNational(state: SeasonState, nextSeasonDate?: string): SeasonNational {
   if (!state.national) throw new Error('This career has no national teams.');
   const seasonNumber = state.seasonNumber, qualifiers = state.national.competitions.find(item => item.seasonNumber === seasonNumber && item.kind === 'qualifiers');
-  let next: SeasonState = { ...state, national: { ...expireOffers(state.national, addCalendarDays(state.date, 1)), activeFixtureId: null, activeMatch: null } };
-  if (qualifiers && !next.national!.competitions.some(item => item.seasonNumber === seasonNumber && item.kind === 'tournament')) {
-    next = playNationalGames(next, nationalWindowSaturday(seasonNumber, 2));
-    next = playTournament(next, findCompetition(next.national!, qualifiers.id));
+  let next: SeasonState = playSummerTournament(state);
+  next = { ...next, national: expireOffers(next.national!, addCalendarDays(state.date, 1)) };
+  if (qualifiers) {
+    // The salary up to the tournament's end comes before the federation's verdict on it.
     const tournament = findCompetition(next.national!, `nt-s${seasonNumber}`), last = nationalTournamentDays(seasonNumber).at(-1)!;
+    next = { ...next, national: payNationalSalary(next.national!, last) };
     next = { ...next, national: reviewNational(next, next.national!, tournament.fixtures, `s${seasonNumber}-w3`, last, 3) };
   }
-  let national = next.national!;
+  // The salary up to the tournament's end, when a contract can end; a kept job is paid on to the new season's first day.
+  let national = payNationalSalary(next.national!, nationalTournamentDays(seasonNumber).at(-1)!);
   const job = national.job;
   if (job && job.untilSeason <= seasonNumber) {
     const coach = nationalCoach(national, job.teamId), date = nationalTournamentDays(seasonNumber).at(-1)!, renewed = coach.confidence >= NATIONAL_RULES.renewFrom;
@@ -602,6 +768,7 @@ export function rolloverNational(state: SeasonState): SeasonNational {
       national = { ...national, job: null, coaches: national.coaches.map(item => item.teamId === job.teamId ? replaced.coach : item), coachCount: replaced.coachCount, verdicts: [...national.verdicts, verdict], events: [...national.events, { id: `national-event-ended-s${seasonNumber}`, teamId: job.teamId, date, kind: 'ended' as const }] };
     }
   }
+  if (nextSeasonDate) national = payNationalSalary(national, nextSeasonDate);
   const groups = seededGroups({ ...next, national });
   return { ...national, competitions: [...national.competitions.filter(item => item.seasonNumber >= seasonNumber), qualifierCompetition(seasonNumber + 1, groups)] };
 }

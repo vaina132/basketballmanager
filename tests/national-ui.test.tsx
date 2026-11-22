@@ -5,6 +5,8 @@ import { acceptNationalOffer, offerNationalJob } from '../src/world/national';
 import { NationalTeamPage, NationalJobCard } from '../src/ui/NationalTeamPage';
 import { NationalWorkspace } from '../src/ui/NationalWorkspace';
 import { InboxWorkspace } from '../src/ui/InboxWorkspace';
+import { unemployedNavigation } from '../src/ui/navigation';
+import { CareerStart } from '../src/ui/CareerStart';
 import { nationalWorld } from './helpers/national-world';
 
 const world = nationalWorld();
@@ -34,6 +36,20 @@ describe('national team screens (format 80)', () => {
     expect(html).toContain('data-national-page="nation-tur"');
     expect((html.match(/data-national-player=/g) ?? []).length).toBe(12);
     expect(html).toContain('Resign');
+    expect(html).toContain('Career earnings');
     expect(renderToStaticMarkup(<NationalJobCard season={hired} onOpen={noop} />)).toContain('You still coach');
+  });
+
+  it('gives a manager without a club the Match center while his national game is open', () => {
+    expect(unemployedNavigation(true, true).flat().map(item => item.id)).toEqual(['home', 'inbox', 'match', 'season', 'national']);
+    expect(unemployedNavigation(true).flat().map(item => item.id)).toEqual(['home', 'inbox', 'season', 'national']);
+  });
+
+  it('shows career earnings on the Manager profile', () => {
+    const career = { managerName: 'Test Coach', clubName: 'Test club', date: '2026-11-07', earnings: { total: 6_666_666, payments: [{ date: '2026-11-01', source: 'Turkey', amount: 3_333_333 }, { date: '2026-10-01', source: 'Turkey', amount: 3_333_333 }] } };
+    const html = renderToStaticMarkup(<CareerStart view="profile" busy={false} error={null} hasSession currentCareer={career} savedCareer={null} savesLoading={false} onContinue={noop} onResume={noop} onNewCareer={noop} onLoad={noop} onImport={noop} onExhibition={noop} onCancel={noop} onStart={noop} onSaveProfile={noop} pack={null} onPackLoaded={noop} />);
+    expect(html).toContain('Career earnings');
+    expect(html).toContain('data-career-earnings="6666666"');
+    expect(html).toContain('Turkey');
   });
 });

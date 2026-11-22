@@ -16,7 +16,8 @@ import type { SeasonMedia } from '../domain/media';
 import { validateRelationships } from './relationships-validation';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonArchive, SeasonEurope, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
-import { isInjuryKind } from '../domain/injuries';
+import { isInjuryKind, isMatchInjuryKind, type InjuryModel } from '../domain/injuries';
+import type { SeasonNational } from '../domain/national';
 import { STANDINGS_RULE_FORMAT } from '../domain/competition';
 import type { BackgroundClub, ClubExchange, SeasonBackground } from '../domain/background';
 import type { EmploymentDeparture } from '../domain/employment';
@@ -128,8 +129,8 @@ import { ACADEMY_GRADUATION_AGE, academyPointCap, developAcademyPlayer, emptyAca
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { staffFee } from '../world/economy';
 import { PACKED_SAVE_FORMAT, packSeasonForSave, unpackSavedSeason } from './save-packing';
-import { nationalDutyDays } from '../world/national';
-import { validateNationalShape } from './national-validation';
+import { isNationalFixtureId, nationalDutyDays } from '../world/national';
+import { validateNationalShape, withEarlierNationalFields } from './national-validation';
 
 export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
@@ -1315,6 +1316,30 @@ function backgroundSides(context: Parameters<typeof backgroundSide>[0]): (clubId
   };
 }
 
+/**
+ * Format 80: an injury from a national game (owner, 22 November 2026). While the game's competition is kept: the player
+ * was injured in it, his club was a full-world club of that season and the diagnosis is the career's deterministic one
+ * (recurrence from the earlier history, the club's medical centre). Older seasons' competitions are dropped at the
+ * rollover; their injuries keep basic checks (development mode).
+ */
+function validateNationalInjury(value: unknown, path: string, national: unknown, context: CareerPlayerContext, history: readonly SeasonInjury[], career: { seed: number; world: CareerWorld; facilities: SeasonFacilities; injuryModel: InjuryModel | undefined }): SeasonInjury {
+  const injury = record(value, path, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']) as unknown as SeasonInjury;
+  if (typeof injury.playerId !== 'string' || typeof injury.clubId !== 'string' || injury.id !== `${injury.fixtureId}:${injury.playerId}` || !isMatchInjuryKind(injury.kind) || typeof injury.occurredOn !== 'string' || typeof injury.returnOn !== 'string' || !(injury.returnOn > injury.occurredOn)) fail(path, 'must be a supported diagnosis from a national game');
+  const competitions = national !== null && typeof national === 'object' && Array.isArray((national as { competitions?: unknown }).competitions) ? (national as SeasonNational).competitions : [];
+  const competition = competitions.find(item => item !== null && typeof item === 'object' && Array.isArray(item.fixtures) && item.fixtures.some(fixture => fixture?.id === injury.fixtureId));
+  if (!competition) {
+    if (!/^n[qt]-s(\d+)-/u.test(injury.fixtureId) || Number(/^n[qt]-s(\d+)-/u.exec(injury.fixtureId)![1]) >= context.seasonNumber! - 1) fail(path, 'must come from a recorded national game');
+    return injury;
+  }
+  const fixture = competition.fixtures.find(item => item.id === injury.fixtureId)!;
+  const result = fixture.result as { injuries?: Record<string, unknown>; squads?: { home?: unknown; away?: unknown } } | null;
+  if (!result || fixture.date !== injury.occurredOn || result.injuries?.[injury.playerId] !== injury.kind) fail(path, 'must match its national game\'s injuries');
+  if (!fullWorldClubsIn(context, competition.seasonNumber).some(club => club.id === injury.clubId)) fail(path, 'must name the player\'s club');
+  const expected = createSeasonInjury(career.seed, fixture, injury.clubId, injury.playerId, injury.kind, history, medicalRecoveryPercent({ world: career.world, facilities: career.facilities }, injury.clubId, fixture.date), career.injuryModel);
+  if (!sameData(injury, expected)) fail(path, 'must retain the original diagnosis and recovery date');
+  return injury;
+}
+
 /** Rebuild treatment before using it to decide any historical fixture availability. */
 function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employment: SeasonEmployment | undefined): void {
   if (!physio.enabledSince) return;
@@ -1333,6 +1358,8 @@ function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employ
   for (const [index, value] of state.injuries.entries()) {
     const path = `injuries[${index}]`, injury = record(value, path, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);
     if (index < injuryPlan.skip) continue;
+    // Format 80: national games' injuries are checked with the chronological injury history.
+    if (state.national && typeof injury.fixtureId === 'string' && isNationalFixtureId(injury.fixtureId)) continue;
     const fixture = schedules.get(injury.fixtureId as string);
     if (!fixture || !players.has(injury.playerId as string) && !backgroundPlayer(fixture, injury.clubId as string, injury.playerId as string) || ![fixture.homeClubId, fixture.awayClubId].includes(injury.clubId as string) || !isInjuryKind(injury.kind)) fail(path, 'must identify a supported diagnosis and originating fixture');
     if (!sameData(injury, createSeasonInjury(state.seed, fixture, injury.clubId as string, injury.playerId as string, injury.kind as SeasonInjury['kind'], state.injuries, medicalRecoveryPercent(state, injury.clubId as string, fixture.date), state.injuryModel))) fail(path, 'must retain the original diagnosis and recovery date');
@@ -3345,7 +3372,23 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   validateRehabilitation(physio, state as unknown as SeasonState, employment);
   const history: SeasonInjury[] = [];
   const latestInjuries = new Map<string, SeasonInjury>();
+  // Format 80: injuries from national games join the chronological history before the first club game after them.
+  const nationalInjuries = Object.hasOwn(state, 'national') && Array.isArray(state.injuries) ? (state.injuries as unknown[]).filter(injury => injury !== null && typeof injury === 'object' && typeof (injury as { fixtureId?: unknown }).fixtureId === 'string' && isNationalFixtureId((injury as { fixtureId: string }).fixtureId)).sort((a, b) => {
+    const left = a as SeasonInjury, right = b as SeasonInjury;
+    return left.occurredOn < right.occurredOn ? -1 : left.occurredOn > right.occurredOn ? 1 : left.id < right.id ? -1 : 1;
+  }) : [];
+  let nationalAt = 0;
+  function recordNationalInjuriesBefore(date: string): void {
+    while (nationalAt < nationalInjuries.length && typeof (nationalInjuries[nationalAt] as SeasonInjury).occurredOn === 'string' && (nationalInjuries[nationalAt] as SeasonInjury).occurredOn < date) {
+      const path = `injuries.${String((nationalInjuries[nationalAt] as SeasonInjury).id)}`;
+      const injury = validateNationalInjury(nationalInjuries[nationalAt], path, state.national, careerContext, history, { seed, world, facilities, injuryModel });
+      history.push(injury);
+      latestInjuries.set(injury.playerId, injury);
+      nationalAt += 1;
+    }
+  }
   function recordFixtureInjuries(result: ArchivedFixture['result'], expected: SeasonFixture, home: Team, away: Team, path: string, stats?: FixtureResult['stats']): void {
+    recordNationalInjuriesBefore(expected.date);
     const participants = new Set([...home.players, ...away.players].map(player => player.id));
     const carried = [...latestInjuries.values()].filter(injury => participants.has(injury.playerId) && isRecovering(injury, expected.date, physio));
     for (const injury of carried) {
@@ -3382,6 +3425,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     if (typeof fixtureId === 'string') { const list = storedInjuries.get(fixtureId) ?? []; list.push(injury); storedInjuries.set(fixtureId, list); }
   }
   function recordSealedInjuries(result: ArchivedFixture['result'], expected: SeasonFixture, home: Team, away: Team, path: string): void {
+    recordNationalInjuriesBefore(expected.date);
     for (const raw of storedInjuries.get(expected.id) ?? []) {
       const injury = record(raw, `${path}.result.injuries`, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']) as unknown as SeasonInjury;
       const team = injury.clubId === home.id ? home : injury.clubId === away.id ? away : null;
@@ -3484,6 +3528,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version >= 68) validateRivalryGrowth(state as unknown as SeasonState);
   // Format 72: each season's club money follows from the validated divisions, European places and registrations.
   validateEconomyHistory(state as unknown as SeasonState);
+  recordNationalInjuriesBefore('9999-12-31');
   if (!legacy) {
     const injuries = state.injuries as unknown[];
     for (const [index, injury] of injuries.entries()) record(injury, `injuries[${index}]`, ['id', 'playerId', 'clubId', 'kind', 'fixtureId', 'occurredOn', 'returnOn']);
@@ -3770,7 +3815,8 @@ function decodeSeasonText(text: string): { version: SeasonFormatVersion; state: 
     // Format 73 packs the finance ledger inside compact files; the checks read it as the game wrote it.
     if ((envelope.formatVersion as number) >= PACKED_SAVE_FORMAT) envelope.state = unpackSavedSeason(envelope.state);
   }
-  return { version: envelope.formatVersion as SeasonFormatVersion, state: envelope.state };
+  // Format 80 saves from before national injuries and career earnings keep loading (none recorded yet).
+  return { version: envelope.formatVersion as SeasonFormatVersion, state: envelope.formatVersion === 80 ? withEarlierNationalFields(envelope.state) : envelope.state };
 }
 
 /** Format 73: careers of real-data worlds follow the closed money gaps (staff pay, reserves, capital and offers by season money). */

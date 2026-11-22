@@ -3,9 +3,10 @@ import type { SeasonState } from '../domain/season';
 import { NATIONAL_TEAMS } from '../data/national-teams';
 import { worldOf } from '../world/career-world';
 import { addCalendarDays } from '../world/competition-calendar';
-import { NATIONAL_MODEL, qualifierCompetition, usesNationalTeams } from '../world/national';
+import { monthlyNationalSalary, NATIONAL_MODEL, qualifierCompetition, usesNationalTeams } from '../world/national';
 import { NATIONAL_RULES, nationalTournamentDays } from '../world/national-calendar';
 import { validateMatchState } from './validate-match';
+import { isMatchInjuryKind } from '../domain/injuries';
 
 /**
  * Format 80 save checks for national teams (development mode: shape and key totals). Exact: the teams, each season's
@@ -41,7 +42,7 @@ function same(left: unknown, right: unknown): boolean {
 }
 
 function validateResult(value: unknown, path: string): void {
-  const result = record(value, path, ['home', 'away', 'squads', 'minutes', 'points', 'strength']);
+  const result = record(value, path, ['home', 'away', 'squads', 'minutes', 'points', 'strength', 'injuries']);
   const home = integer(result.home, `${path}.home`, 0, 250), away = integer(result.away, `${path}.away`, 0, 250);
   if (home === away) fail(path, 'must have a winner');
   const squads = record(result.squads, `${path}.squads`, ['home', 'away']), ids = new Set<string>();
@@ -60,6 +61,9 @@ function validateResult(value: unknown, path: string): void {
   if (!awarded && (totals('home') !== home || totals('away') !== away)) fail(`${path}.points`, 'must add up to the score');
   const strength = record(result.strength, `${path}.strength`, ['home', 'away']);
   integer(strength.home, `${path}.strength.home`, 1, 99); integer(strength.away, `${path}.strength.away`, 1, 99);
+  // Injured players played in the game (the club's injury record is checked with the career's injuries).
+  const injuries = record(result.injuries, `${path}.injuries`, Object.keys(result.injuries as object));
+  for (const [id, kind] of Object.entries(injuries)) if (!Object.hasOwn(result.minutes as object, id) || !isMatchInjuryKind(kind)) fail(`${path}.injuries.${id}`, 'must be a match injury of a player who played');
 }
 
 function validateFixture(value: unknown, path: string, competition: Record<string, unknown>, teamIds: ReadonlySet<string>, latest: string): NationalFixture {
@@ -78,7 +82,7 @@ function validateFixture(value: unknown, path: string, competition: Record<strin
 export function validateNationalShape(value: unknown, state: SeasonState, version: number): asserts value is SeasonNational {
   if (version < 80) fail('national', 'requires format 80 or later');
   if (!state.world || !usesNationalTeams(worldOf(state))) fail('national', 'requires a real-club world with a national team\'s country');
-  const national = record(value, 'national', ['model', 'teams', 'coaches', 'coachCount', 'competitions', 'job', 'offers', 'verdicts', 'events', 'activeFixtureId', 'activeMatch']);
+  const national = record(value, 'national', ['model', 'teams', 'coaches', 'coachCount', 'competitions', 'job', 'offers', 'verdicts', 'events', 'earnings', 'activeFixtureId', 'activeMatch']);
   if (national.model !== NATIONAL_MODEL) fail('national.model', 'is unsupported');
   if (!same(national.teams, NATIONAL_TEAMS)) fail('national.teams', 'must be the game\'s national teams');
   const teamIds = new Set(NATIONAL_TEAMS.map(team => team.id)), seasonNumber = state.seasonNumber;
@@ -112,7 +116,7 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
       if (!Array.isArray(fields.teamIds) || fields.teamIds.some(id => !teamIds.has(id as string) || members.has(id as string))) fail(`${path}.groups.${groupIndex}.teamIds`, 'must list distinct national teams');
       for (const id of fields.teamIds as string[]) members.add(id);
     }
-    // A summer tournament is played at the rollover, so its last games can come after the new season's first day.
+    // A summer tournament's games are later than the offseason's recruitment days.
     const fixtures = competition.fixtures.map((fixture, fixtureIndex) => validateFixture(fixture, `${path}.fixtures.${fixtureIndex}`, competition, teamIds, competition.kind === 'tournament' ? '9999-12-31' : latest));
     for (const fixture of fixtures) { if (fixtureIds.has(fixture.id)) fail(`${path}.fixtures`, 'must have distinct ids'); fixtureIds.add(fixture.id); }
     if (competition.kind === 'qualifiers') {
@@ -121,7 +125,13 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
       if (competition.id !== expected.id || competition.name !== expected.name || competition.groups.length !== 4 || members.size !== NATIONAL_TEAMS.length || !same(fixtures.map(fixture => ({ ...fixture, result: null })), expected.fixtures)) fail(path, 'must follow the qualifier schedule of its groups');
     } else {
       const days = nationalTournamentDays(year);
-      if (competition.id !== `nt-s${year}` || members.size !== 12 || fixtures.length > 16 || fixtures.some(fixture => fixture.window !== 3 || !days.includes(fixture.date) || !fixture.result)) fail(path, 'must be a played summer tournament of twelve teams');
+      // Drawn when the qualifiers end; played day by day in the offseason (the manager's team) or at the season change.
+      const groupGames = fixtures.filter(fixture => fixture.stage === 'group'), knockouts = fixtures.filter(fixture => fixture.stage !== 'group');
+      // Earlier format-80 saves played a completed tournament on the real dates (27 August on), at the season change.
+      const earlier = fixtures.every(fixture => fixture.result) ? [0, 2, 4, 10, 16].map(offset => addCalendarDays(`${Number(days[0]!.slice(0, 4))}-08-27`, offset)) : [];
+      if (competition.id !== `nt-s${year}` || competition.groups.length !== 4 || members.size !== 12 || groupGames.length !== 12 || knockouts.length > 4 || fixtures.some(fixture => fixture.window !== 3 || !days.includes(fixture.date) && !earlier.includes(fixture.date))) fail(path, 'must be a summer tournament of twelve teams');
+      if (knockouts.length && groupGames.some(fixture => !fixture.result) || knockouts.some(fixture => fixture.stage !== 'semi') && knockouts.some(fixture => fixture.stage === 'semi' && !fixture.result)) fail(path, 'must play each round before the next');
+      if (year < seasonNumber && fixtures.some(fixture => !fixture.result)) fail(path, 'must be played by the season change');
     }
   }
   const job = national.job;
@@ -135,6 +145,20 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
     if (!Object.values(NATIONAL_RULES.salary).includes(fields.salary as number)) fail('national.job.salary', 'must be a national salary');
     if (!Array.isArray(fields.selection) || fields.selection.length > NATIONAL_RULES.squadSize || fields.selection.some(id => typeof id !== 'string') || new Set(fields.selection).size !== fields.selection.length) fail('national.job.selection', `must list up to ${NATIONAL_RULES.squadSize} distinct players`);
   }
+  // The manager's career earnings: monthly national salary payments, in order, up to the day they are paid through.
+  const earnings = record(national.earnings, 'national.earnings', ['paidThrough', 'payments']);
+  const paidThrough = earnings.paidThrough === null ? null : date(earnings.paidThrough, 'national.earnings.paidThrough');
+  if (paidThrough !== null && paidThrough > latest || job !== null && (paidThrough === null || paidThrough < ((job as { since: { date: string } }).since.date))) fail('national.earnings.paidThrough', 'must follow the national job');
+  const monthly = new Set(Object.values(NATIONAL_RULES.salary).map(monthlyNationalSalary));
+  if (!Array.isArray(earnings.payments) || earnings.payments.length > 12 * (seasonNumber + 1)) fail('national.earnings.payments', 'must be a bounded list');
+  let previous = '';
+  earnings.payments.forEach((value, index) => {
+    const path = `national.earnings.payments.${index}`, payment = record(value, path, ['date', 'teamId', 'amount']);
+    const day = date(payment.date, `${path}.date`);
+    if (!day.endsWith('-01') || day <= previous || paidThrough === null || day > paidThrough) fail(`${path}.date`, 'must be the first day of a later month, already paid');
+    if (!teamIds.has(payment.teamId as string) || !monthly.has(payment.amount as number)) fail(path, 'must be a month of a national salary');
+    previous = day;
+  });
   for (const [key, keys] of [['offers', ['id', 'teamId', 'date', 'expiresOn', 'status']], ['verdicts', ['id', 'teamId', 'date', 'confidence', 'change', 'outcome']], ['events', ['id', 'teamId', 'date', 'kind']]] as const) {
     const list = national[key];
     if (!Array.isArray(list) || list.length > 400) fail(`national.${key}`, 'must be a bounded list');
@@ -155,4 +179,21 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
     validateMatchState(national.activeMatch);
     if (national.activeMatch.home.id !== fixture.homeTeamId || national.activeMatch.away.id !== fixture.awayTeamId) fail('national.activeMatch', 'must be its fixture\'s game');
   }
+}
+
+/**
+ * Format-80 saves written before national injuries and career earnings (22 November 2026, live for a few hours) keep
+ * loading: a national result without `injuries` recorded none, and a national record without `earnings` starts them
+ * now (nothing paid yet; a held job is paid from the next first of a month). Saves that carry the fields are untouched
+ * and keep their exact checks.
+ */
+export function withEarlierNationalFields(state: unknown): unknown {
+  if (!isObject(state) || !isObject(state.national)) return state;
+  const national = state.national;
+  const competitions = Array.isArray(national.competitions) ? national.competitions.map(competition => !isObject(competition) || !Array.isArray(competition.fixtures) ? competition : {
+    ...competition,
+    fixtures: competition.fixtures.map(fixture => isObject(fixture) && isObject(fixture.result) && !Object.hasOwn(fixture.result, 'injuries') ? { ...fixture, result: { ...fixture.result, injuries: {} } } : fixture),
+  }) : national.competitions;
+  const earnings = Object.hasOwn(national, 'earnings') ? national.earnings : { paidThrough: national.job !== null && national.job !== undefined && typeof state.date === 'string' ? state.date : null, payments: [] };
+  return { ...state, national: { ...national, competitions, earnings } };
 }

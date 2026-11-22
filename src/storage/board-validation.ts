@@ -16,6 +16,7 @@ import { REQUEST_KINDS } from '../world/board-requests';
 import { managedClubAtRound } from '../world/career';
 import { maxTicketPriceFor, TICKET_PRICE_STEP } from '../world/finance';
 import { SEALED_HISTORY_FORMAT, withoutCountedGames } from '../world/sealed-history';
+import { isNationalFixtureId } from '../world/national';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'ledgerCount', 'rosterCount'] as const;
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
@@ -44,7 +45,11 @@ function seasonRecords(state: SeasonState, year: number) {
 }
 
 /** Board assessments see only registrations, cash and results that existed at their recorded boundary. */
-function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard): BoardCalculationContext {
+/**
+ * `opening`: a mandate frozen at a season opening or at activation. It comes before every move of its own week, so the
+ * club managed then is the one before them (a resignation on the first day kept the opening's objectives).
+ */
+function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard, opening = false): BoardCalculationContext {
   const source = seasonRecords(state, anchor.seasonNumber), rosters = source.rosters.slice(0, anchor.rosterCount);
   const completed = anchor.completedRounds - ordinal(anchor.seasonNumber, 0, seasonRounds(state));
   const fixtures = source.fixtures.map(fixture => ({ ...fixture, result: fixture.round <= completed ? fixture.result : null })) as SeasonFixture[];
@@ -60,11 +65,12 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard):
     rosters, fixtures, board, employment: { transfers: state.employment.transfers }, physio: state.physio, rivalries: state.rivalries,
     // That season's own full-world clubs (step 3.4d-2).
     clubs: fullWorldClubsIn(state, anchor.seasonNumber).map(({ id }) => ({ id })),
-    injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
+    // Format 80: national games' injuries recorded by then (their games come before the week's business).
+    injuries: state.injuries.filter(injury => committed.has(injury.fixtureId) || isNationalFixtureId(injury.fixtureId) && injury.occurredOn <= anchor.date),
     finance: { ...finance, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
     // Format 70 (board-2): the academy, the previous season's squads, the managed club and the president's requests.
     // Step 3.7: the club managed at the anchor's own week (a season opening before a mid-season dismissal kept the club).
-    ...(usesPresidentBoard(board) ? { academy: state.academy, history: history.filter(archive => archive.seasonNumber === anchor.seasonNumber - 1), managedClubId: managedClubAtRound(state, anchor.seasonNumber, anchor.round), boardRequests: (state.board.requests ?? []) as BoardRequest[] } : {}),
+    ...(usesPresidentBoard(board) ? { academy: state.academy, history: history.filter(archive => archive.seasonNumber === anchor.seasonNumber - 1), managedClubId: managedClubAtRound(state, anchor.seasonNumber, opening ? anchor.round - 1 : anchor.round), boardRequests: (state.board.requests ?? []) as BoardRequest[] } : {}),
   };
 }
 
@@ -251,7 +257,7 @@ export function validateBoard(state: SeasonState, version: number): void {
       if (sponsorship.length !== openingSponsorshipClubs(state.commercial, fullWorldClubsIn(state, year), year).length || opening.some(({ index }) => index >= anchor.ledgerCount)) fail(path, 'must include the new-season funding before setting expectations');
     }
     chronological(anchor, path);
-    try { expected = validationReplayCache.calculate('board-mandate', { state: contextAt(state, anchor, board), startsRound }, input => buildBoardMandate(input.state, input.startsRound)); } catch (error) { fail(path, `cannot rebuild objectives: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
+    try { expected = validationReplayCache.calculate('board-mandate', { state: contextAt(state, anchor, board, true), startsRound }, input => buildBoardMandate(input.state, input.startsRound)); } catch (error) { fail(path, `cannot rebuild objectives: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
     if (!equal(raw, expected)) fail(path, 'must retain the exact objective and resources frozen from its original registrations and payment prefix');
     board = { ...board, mandates: [...board.mandates, expected] }; mandateIndex += 1;
     }

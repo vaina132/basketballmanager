@@ -80,10 +80,13 @@ export function nationalTournamentName(seasonNumber: number): string {
   return year % 2 === 0 ? `Olympic Games ${year}` : year % 4 === 3 ? `World Cup ${year}` : `EuroBasket ${year}`;
 }
 
-/** The real 2027 World Cup ran 27 August - 12 September; later tournaments take the same dates in their year. */
+/**
+ * The summer tournament's five game days: three group days, the semi-finals, then the final and the game for third place.
+ * The real 2027 World Cup runs 27 August - 12 September; the game plays its tournament in the late-August days before
+ * the next season's first Saturday (owner, 22 November 2026: real game days in the offseason, before the season change),
+ * ending on the Thursday before it.
+ */
 export function nationalTournamentDays(seasonNumber: number): string[] {
-  const year = seasonYear(seasonNumber) + 1;
-  const start = `${year}-08-27`;
-  // Three group days, semi-finals, then the final and the game for third place.
-  return [0, 2, 4, 10, 16].map(offset => addCalendarDays(start, offset));
+  const nextStart = firstSeasonSaturday(seasonYear(seasonNumber) + 1);
+  return [-14, -12, -10, -6, -2].map(offset => addCalendarDays(nextStart, offset));
 }

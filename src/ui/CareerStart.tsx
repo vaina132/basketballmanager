@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { ManagerProfile } from '../domain/manager'
 import type { InjuryMode } from '../domain/types'
@@ -16,6 +16,7 @@ import { CountryFlag } from './CountryFlag'
 import { GameSpeed } from './GameSpeed'
 import { SquadStrength } from './SquadStrength'
 import { Icon } from './Icon'
+import { formatEuros } from './money-format'
 import type { IconName } from './Icon'
 import { NATIONALITY_SUGGESTIONS } from './nationality-suggestions'
 import { NOT_PLAYED_LEAGUE } from './career-text'
@@ -35,6 +36,17 @@ interface CareerSummary {
   managerName: string
   clubName: string
   date: string
+  /** Format 80: the manager's career earnings (national salary, euro cents) and what was paid, newest first. */
+  earnings?: { total: number; payments: { date: string; source: string; amount: number }[] } | null
+}
+
+/** The Manager profile's career earnings (owner, 22 November 2026): national salary paid monthly; no club money. */
+function CareerEarnings({ earnings }: { earnings: NonNullable<CareerSummary['earnings']> }) {
+  return <section className="panel" aria-labelledby="career-earnings-title" data-career-earnings={earnings.total}>
+    <header className="career-start-panel-heading"><h2 id="career-earnings-title">Career earnings</h2><strong>{formatEuros(earnings.total)}</strong></header>
+    {earnings.payments.length ? <dl className="career-start-details">{earnings.payments.slice(0, 6).map(payment => <Fragment key={payment.date}><dt><time dateTime={payment.date}>{formatDate(payment.date)}</time></dt><dd>{formatEuros(payment.amount)} · {payment.source}</dd></Fragment>)}</dl> : <p className="career-start-empty">Nothing paid yet.</p>}
+    <p className="career-start-subnote">A national team pays its head coach monthly. Club jobs carry no personal salary in the game. Your earnings never enter club money.</p>
+  </section>
 }
 
 interface CareerStartProps {
@@ -197,6 +209,7 @@ function CareerForm(props: CareerStartProps & { profileOnly: boolean }) {
             <div className="career-start-field"><label htmlFor="manager-birth-date">Date of birth</label><input id="manager-birth-date" name="manager-birth-date" type="date" autoComplete="bday" value={manager.dateOfBirth} onChange={event => changeManager('dateOfBirth', event.target.value)} aria-describedby="manager-age" required /><small id="manager-age" className="career-identity-age" aria-live="polite">{age === null ? 'Age 18–100 at career start.' : `${age} years old on ${formatDate(DEVELOPMENT_START_DATE)}.`}</small></div>
             <div className="career-start-field"><label htmlFor="manager-nationality">Nationality</label><input id="manager-nationality" name="manager-nationality" list="manager-nationality-options" autoComplete="off" placeholder="Type to find a nationality" value={manager.nationality} onChange={event => changeManager('nationality', event.target.value)} maxLength={MAX_MANAGER_NATIONALITY_LENGTH} aria-describedby="manager-nationality-help" required /><datalist id="manager-nationality-options">{NATIONALITY_SUGGESTIONS.map(item => <option key={item.nationality} value={item.nationality} label={item.place} />)}</datalist><small id="manager-nationality-help">Choose a suggestion or enter your own nationality. Multiple nationalities are welcome.</small></div>
           </div></section>
+          {props.profileOnly && props.currentCareer?.earnings && <CareerEarnings earnings={props.currentCareer.earnings} />}
           <section className="panel" aria-labelledby="career-world-title"><header className="career-start-panel-heading"><h2 id="career-world-title">{props.profileOnly ? 'Profile details' : 'Career start'}</h2></header>{props.profileOnly ? <p className="career-start-empty">Your name and nationality identify your manager. Age is calculated from your date of birth. Editing this profile preserves your club and career progress.</p> : <><dl className="career-start-details"><dt>Competition</dt><dd>{world?.name ?? 'Real clubs, chosen in the next step'}</dd><dt>Opening day</dt><dd><time dateTime={DEVELOPMENT_START_DATE}>{formatDate(DEVELOPMENT_START_DATE)}</time></dd>{world && <><dt>Format</dt><dd>{world.clubs.length} clubs · {worldRounds(world)} matchdays</dd></>}<dt>Season</dt><dd>2026/27</dd></dl><p className="career-start-subnote">Real clubs, players and ratings from your private data pack. Wages, budgets, arenas and ticket prices are estimates from published 2025-27 club budgets and salary reports; contract lengths are estimated, and presidents and sponsors are fictional.</p></>}</section>
         </div>}
 

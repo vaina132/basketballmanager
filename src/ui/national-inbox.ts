@@ -1,6 +1,7 @@
 import type { SeasonState } from '../domain/season'
 import type { InboxItem } from './inbox-items'
-import { clubWindowCallUps, nationalPlayerInfo, nationalTeam, upcomingNationalWindow } from '../world/national'
+import { clubWindowCallUps, isNationalFixtureId, nationalPlayerInfo, nationalTeam, upcomingNationalWindow } from '../world/national'
+import { injuryLabel } from '../domain/injuries'
 import { NATIONAL_RULES, nationalTournamentName, nationalWindowDays } from '../world/national-calendar'
 import { isUnemployed } from '../world/career-rules'
 import { addCalendarDays } from '../world/competition-calendar'
@@ -25,7 +26,7 @@ export function nationalInboxItems(season: SeasonState): InboxItem[] {
   const items: InboxItem[] = [], name = (teamId: string) => nationalTeam(national, teamId).name
   for (const offer of national.offers) {
     const team = nationalTeam(national, offer.teamId), open = offer.status === 'open' && offer.expiresOn >= season.date
-    const contract = `The contract runs to the end of the ${nationalTournamentName(season.seasonNumber + NATIONAL_RULES.contractSeasons - 1).replace(/ \(.*\)$/u, '')} summer; salary ${formatEuros(NATIONAL_RULES.salary[team.level])} a season, paid by the federation (it does not enter club budgets).`
+    const contract = `The contract runs to the end of the ${nationalTournamentName(season.seasonNumber + NATIONAL_RULES.contractSeasons - 1).replace(/ \(.*\)$/u, '')} summer; salary ${formatEuros(NATIONAL_RULES.salary[team.level])} a season, paid monthly by the federation into your career earnings (it does not enter club budgets).`
     items.push({
       id: offer.id, date: offer.date, category: 'board', target: 'national', offerId: offer.id, needsAction: open,
       title: open ? `Job offer · ${team.name} national team` : offer.status === 'accepted' ? `You accepted ${team.name}'s offer` : `${team.name}'s offer ${offer.status === 'declined' ? 'declined' : 'expired'}`,
@@ -44,7 +45,17 @@ export function nationalInboxItems(season: SeasonState): InboxItem[] {
     const outcome = verdict.outcome === 'dismissed' ? ' The federation has dismissed you.' : verdict.outcome === 'renewed' ? ' The federation renews your contract for two more seasons.' : verdict.outcome === 'left' ? ' The federation does not renew your contract.' : ''
     items.push({ id: verdict.id, date: verdict.date, category: 'board', title: `${name(verdict.teamId)} federation · ${federationMood(verdict.confidence)}`, detail: `Confidence ${verdict.confidence}/100${verdict.change ? ` (${verdict.change > 0 ? '+' : '−'}${Math.abs(verdict.change)})` : ''} ${after}. Wins against stronger teams raise it; losses against weaker teams lower it.${outcome}`, needsAction: false, target: 'national' })
   }
-  if (isUnemployed(season) || season.status !== 'active') return items
+  if (isUnemployed(season)) return items
+  // Owner (22 November 2026): the club's players injured with their national teams.
+  const own = new Set(season.clubs.find(club => club.id === season.managedClubId)?.players.map(player => player.id) ?? [])
+  const fixtures = new Map(national.competitions.flatMap(competition => competition.fixtures).map(fixture => [fixture.id, fixture]))
+  for (const injury of season.injuries) {
+    if (!isNationalFixtureId(injury.fixtureId) || injury.clubId !== season.managedClubId || !own.has(injury.playerId)) continue
+    const fixture = fixtures.get(injury.fixtureId), side = fixture?.result?.squads.home.includes(injury.playerId) ? 'home' : 'away'
+    const team = fixture ? name(side === 'home' ? fixture.homeTeamId : fixture.awayTeamId) : 'his national team'
+    items.push({ id: `national-injury-${injury.id}`, date: injury.occurredOn, category: 'players', title: `${nationalPlayerInfo(season, injury.playerId).name} was injured with ${team}`, detail: `${injuryLabel(injury.kind)} on ${medicalDate(injury.occurredOn)}. He is back with the club injured and expected to return on ${medicalDate(injury.returnOn)}. See Squad > Medical.`, needsAction: false, target: 'squad', playerId: injury.playerId })
+  }
+  if (season.status !== 'active') return items
   // The club: players back from this season's windows, and those the coaches would call up for the next one.
   for (const window of [1, 2] as const) {
     const callUps = clubWindowCallUps(season, season.managedClubId, season.seasonNumber, window)

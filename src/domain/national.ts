@@ -1,4 +1,5 @@
 import type { MatchState } from './types';
+import type { InjuryKind } from './injuries';
 
 /**
  * Format 80 (owner feedback item 13, 22 November 2026): national teams, their competitions and coaches, and national
@@ -37,6 +38,12 @@ export interface NationalResult {
   points: Record<string, number>;
   /** Each squad's strength at tip-off (the average overall rating of its best eight), for the federations' judgement. */
   strength: { home: number; away: number };
+  /**
+   * Players injured in this game, with the injury's kind (owner, 22 November 2026: national games record injuries with
+   * the career's injury model). An injured club player returns to his club injured (`SeasonState.injuries`); every
+   * injured player misses the rest of the window or tournament.
+   */
+  injuries: Record<string, InjuryKind>;
 }
 
 /** `window` 1 is November, 2 February, 3 the summer tournament. */
@@ -78,7 +85,7 @@ export interface NationalJob {
   since: { seasonNumber: number; date: string };
   /** The contract runs until this season's summer tournament has been played (at the next rollover). */
   untilSeason: number;
-  /** Euro cents a season; shown only (the game has no personal money). */
+  /** Euro cents a season, paid monthly into the manager's career earnings (never into club money). */
   salary: number;
   selection: string[];
 }
@@ -96,6 +103,20 @@ export interface NationalVerdict {
 /** A change in the manager's national career: appointed, resigned, dismissed or contract ended. */
 export interface NationalJobEvent { id: string; teamId: string; date: string; kind: 'appointed' | 'resigned' | 'dismissed' | 'ended' }
 
+/** One monthly salary payment from a federation to the manager (euro cents). */
+export interface NationalPayment { date: string; teamId: string; amount: number }
+
+/**
+ * The manager's career earnings (owner, 22 November 2026: "salary that matters"). The game has no personal money and the
+ * club job carries no personal salary, so the record holds the national salary: a twelfth of the season's salary on the
+ * first day of each month while he holds the job. It never enters club money.
+ */
+export interface ManagerEarnings {
+  /** The salary is paid up to this day (null before any national job). */
+  paidThrough: string | null;
+  payments: NationalPayment[];
+}
+
 export interface SeasonNational {
   model: NationalModel;
   teams: NationalTeamInfo[];
@@ -107,6 +128,7 @@ export interface SeasonNational {
   offers: NationalOffer[];
   verdicts: NationalVerdict[];
   events: NationalJobEvent[];
+  earnings: ManagerEarnings;
   /** The manager's national game being played in the Match center. */
   activeFixtureId: string | null;
   activeMatch: MatchState | null;

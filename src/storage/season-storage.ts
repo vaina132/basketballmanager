@@ -16,6 +16,7 @@ import type { SeasonMedia } from '../domain/media';
 import { validateRelationships } from './relationships-validation';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonArchive, SeasonEurope, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
+import { usesEconomyBalance } from '../world/economy-balance';
 import { isInjuryKind, isMatchInjuryKind, type InjuryModel } from '../domain/injuries';
 import type { SeasonNational } from '../domain/national';
 import { STANDINGS_RULE_FORMAT } from '../domain/competition';
@@ -1828,7 +1829,8 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
     const payroll = payrollVisible ? { ...state.payroll, agreements: state.payroll.agreements.filter(agreement => agreement.seasonNumber < year || agreement.seasonNumber === year && agreement.startsRound <= round && (!employment.enabledSince || contractForRound(employment, agreement.playerId, year, agreement.startsRound)?.clubId === agreement.clubId)) } : createPayroll(clubs, state.managedClubId);
     const trainingAnchor = state.training.enabledSince;
     const training = trainingAnchor && roundKey(trainingAnchor.seasonNumber, trainingAnchor.round) <= roundKey(year, round) ? state.training : { ...state.training, enabledSince: null };
-    let replay: SeasonState = { ...state, managedClubId: managedClubAtLedger(state, event.ledgerIndex), training, seasonNumber: year, round, date: event.date, status: round === seasonRounds(state) && ledger.some(entry => entry.seasonNumber === year && entry.round === seasonRounds(state) && entry.kind === 'operations') ? 'complete' : 'active', clubs, academy, lifecycle, employment, facilities, finance, payroll, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, event.negotiationCount) }, recruitment: { ...state.recruitment, events: state.recruitment.events.slice(0, event.recruitmentEventCount), offers: live }, market };
+    // Format 87: automatic spending reads that season's own schedule (`remainingHomeShare`).
+    let replay: SeasonState = { ...state, managedClubId: managedClubAtLedger(state, event.ledgerIndex), training, seasonNumber: year, round, date: event.date, status: round === seasonRounds(state) && ledger.some(entry => entry.seasonNumber === year && entry.round === seasonRounds(state) && entry.kind === 'operations') ? 'complete' : 'active', clubs, academy, lifecycle, employment, facilities, finance, payroll, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, event.negotiationCount) }, recruitment: { ...state.recruitment, events: state.recruitment.events.slice(0, event.recruitmentEventCount), offers: live }, market , ...(usesEconomyBalance(state) && year !== state.seasonNumber ? { fixtures: (state.history.find(archive => archive.seasonNumber === year)?.fixtures ?? []) as unknown as SeasonState['fixtures'] } : {}) };
     if (event.ledgerIndex < previousLedger) fail(path, 'cannot rewind cash after a funded approval');
     for (const [i, command] of state.recruitment.events.entries()) {
       const nextLedger = event.ledgerIndex + Number(['start', 'repair', 'loan', 'lease', 'repay', 'end-lease', 'borrow'].includes(event.type));

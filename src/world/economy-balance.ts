@@ -1,7 +1,6 @@
 import type { EconomyBand, WorldContext } from '../domain/world';
 import type { SeasonFixture } from '../domain/season';
 import { clubEconomy } from './economy';
-import { playsAtNeutralVenue } from './career-world';
 
 /**
  * Format 87 (economy balance, 22 November 2026; reversible game defaults, not researched figures): weak clubs stay
@@ -17,7 +16,7 @@ import { playsAtNeutralVenue } from './career-world';
  * 1. League solidarity: clubs of the smaller money bands receive `solidarityPercent` of their season budget with their
  *    season funding (one `funding-s<season>` entry, as the league and federation distributions already are).
  * 2. Automatic facility spending (computer clubs, "Let the board handle facilities") counts the expected gate only for
- *    the club's home games still to play this season (`remainingHomeShare`), not for every remaining week.
+ *    the share of the club's regular-season home games still to play (`remainingHomeShare`), not for every week left.
  * 3. Automatic wage targets (computer clubs, delegated recruitment; `src/world/automatic-wages.ts`): while a club's
  *    projected season-end cash is below `wageCap.targetCashShare` of its budget, its new player wages for a season stay
  *    within `wageCap.fullShare` of the wage bill its figures fund, less `wageCap.recovery` of the cash shortfall, never
@@ -53,15 +52,18 @@ export function solidarityPayment(context: WorldContext, clubId: string): number
 }
 
 /**
- * Format 87: the share of this season's gate still to come for a club: its home games without a result over all its
- * home games scheduled this season (games at one venue earn no gate). 1 before any home game is scheduled.
+ * Format 87: the share of this season's gate still to come for a club: its domestic regular-season home games from the
+ * context's week on, over all of them (`isRegularFixture`: scheduled in full at the season's opening, so the share
+ * depends only on the schedule and the week, and the save check's replay reads the same share). Postseason and European
+ * games, partly scheduled later, are left out. 1 for a club without regular home games or a context without a week.
  */
-export function remainingHomeShare(context: WorldContext & { fixtures?: readonly SeasonFixture[] }, clubId: string): number {
+export function remainingHomeShare(context: WorldContext & { fixtures?: readonly Pick<SeasonFixture, 'homeClubId' | 'round' | 'stage' | 'competition'>[]; round?: number }, clubId: string): number {
+  if (context.round === undefined) return 1;
   let total = 0, remaining = 0;
   for (const fixture of context.fixtures ?? []) {
-    if (fixture.homeClubId !== clubId || playsAtNeutralVenue(context, fixture)) continue;
+    if (fixture.homeClubId !== clubId || fixture.stage || fixture.competition) continue;
     total += 1;
-    if (!fixture.result) remaining += 1;
+    if (fixture.round >= context.round) remaining += 1;
   }
   return total ? remaining / total : 1;
 }

@@ -115,6 +115,7 @@ This file holds only the current state, the next steps and the rules that must n
 - Temporary checks (`tests/zz-*`) are deleted before any commit.
 
 **Before release** (deferred work to bring back)
+- **Sales model (owner decision, 22 November 2026; noted only, not to build yet):** the first half of the first season is free to play; to continue, the player pays (price not decided yet). Sales through Gumroad (a licence key or similar unlock to be designed when the owner asks). Settle licensing (next item) before selling.
 - **Licensing before selling the game (owner, 22 November 2026; do not forget):** before any commercial release, settle rights with the owner and a sports/IP lawyer: (1) photos (Wikimedia licences allow commercial use with credits; paid news-photo licences usually exclude games), (2) players' names and faces (personality rights; collective licences via leagues or players' unions), (3) club and league logos (trademark licences from EuroLeague Basketball and each national league or club). Paths: licences; sell with fictional data plus an optional fan-made real-data pack; or a mix (one licensed league first). While free: remove anything on request.
 - Old-save support: capture fixtures, continuation and migration tests for the formats released to players.
 - Full save replay checks for features added in development mode.

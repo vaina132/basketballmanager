@@ -583,3 +583,7 @@ New careers use `matchPlays` (format 79): more distinct actions with the sprint-
 
 Season one uses the real 2027 World Cup European Qualifiers second round (24 teams, groups I-L) and its two remaining windows; the draw inside groups and a zero start table are the game's own. The summer tournament for the 12 qualifiers is simulated at the season change (groups of three, semi-finals, final). National job offers need reputation 70, 55 or 42 by team strength (10 less for the manager's own country); federations sack below 30 (the manager below 25) and renew from 50. Players whose club has a game in the window week are not called up.
 National teams, later on 22 November 2026: national games record injuries with the career's injury model; the summer tournament is drawn after the February window and played on five late-August days before the next season (live for a manager with a qualified team); an unemployed manager plays his national games live; the national salary is paid monthly into a manager's "Career earnings" record and never touches club money.
+
+## Sales model (owner decision, 22 November 2026)
+
+Free play for the first half of the first season, then a one-off payment to continue (price to be decided), sold through Gumroad. Not built yet; licensing of names, faces, photos and logos must be settled before any sale (HANDOVER, "Before release").

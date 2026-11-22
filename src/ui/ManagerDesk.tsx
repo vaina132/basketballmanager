@@ -39,6 +39,9 @@ import './manager-desk.css'
 import { seasonRounds, worldOf } from '../world/career-world'
 import { formatEuros } from './money-format'
 import { ClubBadge } from './ClubLogo'
+import { clubHeadCoach, MANAGER_COACH } from '../world/head-coaches'
+import { styleWords } from '../world/coach-ratings'
+import './coach-profile.css'
 
 interface ManagerDeskProps {
   match: MatchState
@@ -67,6 +70,14 @@ interface ManagerDeskProps {
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
 const money = (cents: number) => formatEuros(cents)
+
+/** Format 82: the opponent's head coach and his style in a few words (real head coaches only). */
+function OpponentCoach({ season, clubId }: { season?: SeasonState | null; clubId: string }) {
+  const coach = season?.coaches ? clubHeadCoach(season, clubId) : undefined
+  if (!coach || coach === MANAGER_COACH) return null
+  const words = styleWords(coach.style), pace = words.pace.split(',')[0]!.toLowerCase(), defence = coach.style.pressure >= 13 ? 'pressing defence' : coach.style.pressure <= 7 ? 'soft defence' : 'normal defence'
+  return <small className="desk-opponent-coach" data-opponent-coach={coach.id}>Coach {coach.name} · {pace} pace, {defence}</small>
+}
 
 export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenContracts, onOpenScouting, onOpenRelationships, onOpenBoard, onOpenInbox }: ManagerDeskProps) {
   const team = match[managedSide]
@@ -207,9 +218,9 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     <section className="desk-fixture panel" aria-label="Current fixture">
       <div className="desk-fixture-label"><span>{complete ? 'Last match \u00b7 ' : ''}{fixtureLabel}</span><strong className={needsReplacement ? 'desk-status-urgent' : ''}>{status}</strong></div>
       <div className="desk-fixture-content">
-        <div className="desk-fixture-team"><ClubBadge club={match.home} className="desk-club-code" /><div><strong>{match.home.name}</strong><span>{managedSide === 'home' ? 'Home · Your team' : 'Home'}</span></div></div>
+        <div className="desk-fixture-team"><ClubBadge club={match.home} className="desk-club-code" /><div><strong>{match.home.name}</strong><span>{managedSide === 'home' ? 'Home · Your team' : 'Home'}</span>{managedSide !== 'home' && <OpponentCoach season={season} clubId={match.home.id} />}</div></div>
         <div className="desk-fixture-score"><strong aria-label={`Score: ${score.home} to ${score.away}`}>{score.home}<span>:</span>{score.away}</strong><span>{ready ? 'Awaiting tipoff' : complete ? match.result?.kind === 'default' ? 'Awarded by default' : `${period(match.period)} · Final` : `${period(match.period)} · ${clock(match.clockSeconds)}`}</span></div>
-        <div className="desk-fixture-team desk-fixture-away"><ClubBadge club={match.away} className="desk-club-code" /><div><strong>{match.away.name}</strong><span>{managedSide === 'away' ? 'Away · Your team' : 'Away'}</span></div></div>
+        <div className="desk-fixture-team desk-fixture-away"><ClubBadge club={match.away} className="desk-club-code" /><div><strong>{match.away.name}</strong><span>{managedSide === 'away' ? 'Away · Your team' : 'Away'}</span>{managedSide !== 'away' && <OpponentCoach season={season} clubId={match.away.id} />}</div></div>
         {/* The one Continue on the top bar opens the match (owner request, 16 November 2026: no separate "Go to match"). */}
         {(complete || needsReplacement) && <button className="button primary desk-match-action" onClick={needsReplacement ? onOpenCoaching : onOpenMatch}>{complete ? 'View result' : 'Resolve replacement'}<Icon name="arrow" size={16} /></button>}
       </div>

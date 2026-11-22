@@ -74,6 +74,8 @@ import { RestWeek } from './ui/RestWeek'
 import { acceptJob, careerPresentationMatch, createSeason, managedSide as seasonManagedSide, NEW_CAREER_SYSTEMS, resignManager, seasonLabel } from './world/season'
 import { isUnemployed } from './world/career-rules'
 import { acceptNationalOffer, careerEarnings, clubWindowCallUps, declineNationalOffer, nationalManagedSide, nationalTeam, resignNationalJob, setNationalSelection, upcomingNationalWindow } from './world/national'
+import { managerReputation } from './world/career-policy'
+import { managerAttributes, managerCoachingReputation } from './world/head-coaches'
 import { careerDay, careerPointLabel, continueDay, gameDate, worldSeasonName } from './ui/career-text'
 import { continueNotice, continueStatus, continueStepView, continueStop, remainingSteps, stoppedRun, type ContinueStop } from './ui/continue-run'
 import { continueAction } from './world/continue-step'
@@ -871,7 +873,9 @@ export default function App() {
   const careerSummary = (state: SeasonState) => {
     // Format 80: the manager's career earnings for the Manager profile (national salary paid monthly).
     const earned = careerEarnings(state)
-    return { managerName: state.manager?.name ?? 'Manager profile not set', clubName: managedClubLabel(state), date: state.date, earnings: earned && state.national ? { total: earned.total, payments: [...earned.payments].reverse().map(payment => ({ date: payment.date, amount: payment.amount, source: nationalTeam(state.national!, payment.teamId).name })) } : null }
+    return { managerName: state.manager?.name ?? 'Manager profile not set', clubName: managedClubLabel(state), date: state.date, earnings: earned && state.national ? { total: earned.total, payments: [...earned.payments].reverse().map(payment => ({ date: payment.date, amount: payment.amount, source: nationalTeam(state.national!, payment.teamId).name })) } : null,
+      // Format 82: the manager's coaching attributes and their changes, newest season first.
+      coaching: state.coaches ? { attributes: managerAttributes(state.coaches), seasons: [...state.coaches.manager.seasons].reverse(), reputation: managerReputation(state, Math.max(0, state.seasonNumber - 1)).value, bonus: managerCoachingReputation(state.coaches, state.seasonNumber) } : null }
   }
   const overlays = <>
     <input ref={importRef} type="file" accept=".json,application/json,text/plain,application/octet-stream" onChange={importSave} className="visually-hidden" aria-label="Import game save" />

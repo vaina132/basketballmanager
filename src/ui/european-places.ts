@@ -7,6 +7,7 @@ import { placesDayInput } from '../world/european-entry-day'
 import { europeanPlacesAfter, MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { isUnemployed } from '../world/career-rules'
 import { formatEuros } from './money-format'
+import { clubEconomy } from '../world/economy'
 
 /**
  * Format 83: words for the European entry rules (`places-2`): place types, reasons, the Inbox messages of the places day
@@ -127,11 +128,13 @@ export function yourClubCard(season: SeasonState): YourClubCard | null {
     { label: 'Arena seats for a wild card', ok: facts.seats >= seatsNeeded, value: `${facts.seats.toLocaleString('en-GB')} / ${seatsNeeded.toLocaleString('en-GB')}` },
   ]
   const fixes: string[] = []
+  // A licence or a multi-year place running beyond next season only needs the licence check.
+  const held = next ?? now, secure = !!held && (held.place.type === 'licence' || held.place.type === 'multi-year' && (held.place.until ?? 0) > season.seasonNumber + 1)
   if (!checks[0]!.ok) fixes.push('Win promotion back to the top division.')
   if (!checks[1]!.ok) fixes.push('Clear unpaid costs (Club > Facilities & money).')
-  if (!checks[2]!.ok) fixes.push('Expand the arena (Club > Facilities & money).')
-  if (score.europe < 140) fixes.push('Go far in Europe: winning the EuroCup is the direct route.')
-  if (score.domestic < 150) fixes.push('Finish higher in the league (the ranking after the playoffs counts).')
+  if (!secure && !checks[2]!.ok) fixes.push('Expand the arena (Club > Facilities & money).')
+  if (!secure && score.europe < 140) fixes.push('Go far in Europe: winning the EuroCup is the direct route.')
+  if (!secure && score.domestic < 150) fixes.push('Finish higher in the league (the ranking after the playoffs counts).')
   const lastWildCard = lowestWildCard(season.europe?.decision)
   return { clubId, now, next, decided: !!decided, checks, score, lastWildCard, seatsNeeded, fixes }
 }
@@ -174,7 +177,7 @@ export function europeanInboxItems(season: SeasonState): InboxItem[] {
   if (decided?.decision) report(decided.decision, decided, true)
   // During the season: one warning when unpaid costs pass 5% of the budget.
   const review = season.board.reviews.filter(item => item.seasonNumber === season.seasonNumber).at(-1), unpaid = review?.clubs[clubId]?.unpaid ?? null
-  const budget = entryFacts(season)?.facts.get(clubId)?.budget ?? null
+  const budget = clubEconomy(season, clubId)?.budget ?? null
   if (season.status === 'active' && review && unpaid !== null && budget !== null && unpaid > budget * EUROPEAN_ENTRY_RULES.warnShare) items.push({ id: `europe-unpaid-s${season.seasonNumber}`, date: review.date, category: 'club', target: 'club', needsAction: false,
     title: 'European places at risk: unpaid costs',
     detail: `Unpaid costs are ${formatEuros(unpaid)}, above ${EUROPEAN_ENTRY_RULES.warnShare * 100}% of the ${formatEuros(budget)} budget. Above ${EUROPEAN_ENTRY_RULES.unpaidShare * 100}% at the season end, the club cannot take a European place.` })

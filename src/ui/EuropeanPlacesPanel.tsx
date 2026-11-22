@@ -56,6 +56,7 @@ export function EuropeanPlacesPanel({ season }: { season: SeasonState }) {
       {card.fixes.length > 0 && <ul className="european-fixes">{card.fixes.map(fix => <li key={fix}>{fix}</li>)}</ul>}
     </div>}
 
+    <MoreInfo label={decided ? `Every club's place · ${year(1)} decided` : "Every club's place"} className="european-places-list">
     <div className="european-places-controls">
       {decided && <div className="european-places-toggle" role="group" aria-label="Season of places">
         <button className={view === 'now' ? 'selected' : ''} aria-pressed={view === 'now'} onClick={() => setView('now')}>{year(0)}</button>
@@ -65,15 +66,16 @@ export function EuropeanPlacesPanel({ season }: { season: SeasonState }) {
         {places.entrants.map(item => <option key={item.competitionId} value={item.competitionId}>{competitionName(season, item.competitionId)}</option>)}
       </select></label>
     </div>
-    {entry && <div className="season-table-scroll"><table className="season-standings-table european-places-table" data-european-list={entry.competitionId}><caption className="sr-only">{competitionName(season, entry.competitionId)} places {showNext ? year(1) : year(0)}</caption>
+    {entry && <div className="season-table-scroll"><table className="european-table european-places-table" data-european-list={entry.competitionId}><caption className="sr-only">{competitionName(season, entry.competitionId)} places {showNext ? year(1) : year(0)}</caption>
       <thead><tr><th scope="col">Club</th><th scope="col">Place</th><th scope="col">Why</th></tr></thead>
       <tbody>{entry.clubIds.map((clubId, index) => <tr key={clubId} className={clubId === season.managedClubId ? 'season-managed-row' : ''}><th scope="row">{clubName(season, clubId)}</th><td>{entry.places ? placeLabel(entry.places[index]!) : '–'}</td><td>{entry.places ? placeReason(entry.places[index]!) : '–'}</td></tr>)}</tbody>
     </table></div>}
+    </MoreInfo>
     {(places.held ?? []).length > 0 && <p className="muted european-held">Waiting: {(places.held ?? []).map(item => `${clubName(season, item.clubId)} (${competitionName(season, item.competitionId)}, ${item.reason === 'higher' ? 'playing higher' : item.reason === 'declined' ? 'declined' : item.reason === 'unpaid' ? 'unpaid costs' : 'relegated'})`).join(', ')}.</p>}
 
     {decision && decision.wildCards.length > 0 && <div className="european-wildcards" data-european-wildcards>
       <h3>EuroLeague wild-card ranking · places day {medicalDate(decision.date)}</h3>
-      <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">Club</th><th scope="col">Score</th><th scope="col">Main reasons</th><th scope="col">Result</th></tr></thead>
+      <div className="season-table-scroll"><table className="european-table"><thead><tr><th scope="col">Club</th><th scope="col">Score</th><th scope="col">Main reasons</th><th scope="col">Result</th></tr></thead>
         <tbody>{decision.wildCards.map(score => <tr key={score.clubId} className={score.clubId === season.managedClubId ? 'season-managed-row' : ''}><th scope="row">{clubName(season, score.clubId)}</th><td>{scoreText(score)}</td><td>{topReasons(score)}</td><td>{decision.chosen.includes(score.clubId) ? 'Wild card' : places.entrants.some(item => item.clubIds.includes(score.clubId) && item.places?.[item.clubIds.indexOf(score.clubId)]?.reason === 'renewed') ? 'Renewed' : '–'}</td></tr>)}</tbody></table></div>
     </div>}
   </section>

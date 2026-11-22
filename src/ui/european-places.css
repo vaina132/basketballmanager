@@ -19,4 +19,9 @@
 .european-places-toggle button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .european-held{padding:0 14px;font-size:13px}
 .european-wildcards{padding:8px 14px 0}
-.european-places-table td{white-space:normal}
+.european-table{width:100%;border-collapse:collapse;font-size:13px}
+.european-table th,.european-table td{text-align:left;padding:7px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+.european-table thead th{color:var(--muted);font-weight:600;font-size:12px}
+.european-table tbody th{font-weight:600}
+.european-checks{max-width:560px}
+.european-places-list .european-places-controls{padding-top:4px}

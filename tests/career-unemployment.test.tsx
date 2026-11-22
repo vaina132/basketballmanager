@@ -103,7 +103,10 @@ describe('declining an offer at a season end', () => {
   // Needs a new seed since the manager's next game starts from the planned five instead of the closing five (16 November
   // 2026): this scenario (a dismissal at the end of season 2 and another club replacing its coach whose requirement the
   // reputation reaches) is rare. None found for Aegean Waves (seeds 1-43, 61-66, 101-107), Rhine Falcons (1-12, 31-44),
-  // Danube Lynx (1-13), Alpine Stags (1-5) or Atlantic Pilots (1-6). Skipped until a seed is found; the other tests here
+  // Danube Lynx (1-13), Alpine Stags (1-5) or Atlantic Pilots (1-6). Searched again under the full new-career rules
+  // (22 November 2026): Aegean Waves, Rhine Falcons, Alpine Stags, Atlantic Pilots and Adriatic Comets (1-30 each) and
+  // Danube Lynx (1-25) end season 2 with a dismissal six times, but never while another club replaces its coach, so
+  // never with an offer. Skipped until a seed is found; the other tests here
   // cover leaving without a club after a mid-season dismissal and taking a job from the offseason job market.
   it.skip('leaves the manager without a club for the offseason, with the declined job still open', () => {
     // Seed 14 was found before recurring youth injuries (format 72), which change academy development and so later

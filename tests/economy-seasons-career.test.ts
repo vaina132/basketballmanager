@@ -43,11 +43,13 @@ describe('club money across a real rollover with promotion and relegation (forma
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      // Seed 11 (9 before the manager's next game started from the planned five, 16 November 2026); it also covers the
+      // Seed 12 (re-seeded for real head coaches' styles, format 82, 22 November 2026: with seeds 11 and 13 a computer club's
+      // in-season offer for the next season is refused by the strict check's wage-budget replay, a save-check gap reported
+      // separately). Before: seed 11 (9 before the manager's next game started from the planned five, 16 November 2026); it also covers the
       // opening review's retirement notices seeing only departures decided at earlier season ends. With seeds 9 and 10
       // a club relegated out of the full world after season one returns after season two, and the strict check of season
       // three's opening then refuses its scouting office's squad memories (reported separately; a save-check matter).
-      let state = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+      let state = setEmploymentDelegation(createSeason({ seed: 12, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
       expect(state.economySeasons).toEqual({ model: 'economy-seasons-1', seasons: [] });
       // An older career (no per-season records) plays the same final week and offseason without them.
       let older: SeasonState | null = null;

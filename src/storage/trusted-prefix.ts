@@ -16,7 +16,7 @@ import { dateForRound } from '../world/season';
  * What is trusted (22 November 2026, formats up to 80): the season's constants (`SEASON_CONSTANTS`, the injury and play
  * models of formats 78-79 included), the finance archives and the earlier records of the journals in `JOURNALS` (the
  * relationships journal holds the calm-playing-time adjustments of format 77; the transfers journal the loans of format
- * 78) and of each scouting office. Everything else is checked in full on every checkpoint: national teams, their
+ * 78; the naming-rights journal the exact naming replay of 22 November 2026) and of each scouting office. Everything else is checked in full on every checkpoint: national teams, their
  * results and national duty (format 80), the transfer and loan list (78), staff contracts and weekly staff wages (76),
  * the current squads, registrations, training, conditions and the open match. A trusted prefix must have the digest its
  * check recorded (`prefixDigest`) and equal the trusted state exactly; otherwise the full check runs.
@@ -233,6 +233,8 @@ const JOURNALS = new Map<string, Journal>([
   ['finance.ledger', { items: state => state.finance?.ledger, at: dated }],
   ['market.windows', { items: state => state.market?.windows, at: (window: { seasonNumber: number }) => roundKey(window.seasonNumber, OFFSEASON) }],
   ['commercial.events', { items: state => state.commercial?.events, at: dated }],
+  // Format 64: arena naming rights (empty in careers without them), replayed like the main sponsor since 22 November 2026.
+  ['commercial.naming.events', { items: state => state.commercial ? state.commercial.naming?.events ?? [] : undefined, at: dated }],
   // A board review follows its matchday's results, and the latest one is still rewritten (format 73).
   ['board.reviews', { items: state => state.board?.reviews, at: dated1 }],
   ['board.restarts', { items: state => state.board?.restarts ?? [], at: careerPoint }],

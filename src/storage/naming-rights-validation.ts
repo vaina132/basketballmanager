@@ -6,10 +6,10 @@ import { MAX_SEASON_NUMBER, seasonStartDate } from '../world/season';
 import { financeLedgerCount } from '../world/finance-ledger';
 
 /**
- * Format 64 (development mode): basic checks for arena naming rights — exact shapes, sequential identities, offers and
- * agreements that agree with each other, exits whose amounts follow the clause, and events in calendar order. The
- * finance validator checks every installment and exit payment against these agreements. Regenerating each naming offer
- * from the calendar, as the main-sponsor replay does, returns with the full save checks before release.
+ * Format 64: the shape checks for arena naming rights — exact shapes, sequential identities, offers and agreements that
+ * agree with each other, exits whose amounts follow the clause, and events in calendar order. The finance validator
+ * checks every installment and exit payment against these agreements. Since 22 November 2026 `validateCommercial` also
+ * rebuilds every naming offer, exit and acceptance from the calendar (`replayNaming`), as the main-sponsor replay does.
  */
 const OFFER_KEYS = ['id', 'clubId', 'sponsorId', 'window', 'madeAt', 'appeal', 'forSeason', 'seasons', 'initialAnnualFee', 'annualFee', 'arenaName', 'basis', 'expiresOn', 'status', 'closedOn', 'request'] as const;
 const AGREEMENT_KEYS = ['id', 'clubId', 'sponsorId', 'offerId', 'arenaName', 'startsSeason', 'endsSeason', 'annualFee', 'signedOn', 'automatic', 'clause', 'exit'] as const;

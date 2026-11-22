@@ -56,10 +56,11 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
 
   it('exchanges clubs with the next division at each season end: leaving, returning and first-time clubs, with strict saves', () => {
     const world = lowerWorld();
-    // Seed 97 (23 before the new-career rules of formats 74-80, 2 before AI clubs followed their president's youth
-    // objectives and youth injuries recurred, 31 before the saved ideas level): a first-time club joins in season one,
-    // the relegated club returns in season two and another first-time club comes up in season three.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 97, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    // Seed 23 (97 before the match flow, real coaches and European entry of formats 81-83, 23 before the new-career
+    // rules of formats 74-80, 2 before AI clubs followed their president's youth objectives and youth injuries recurred,
+    // 31 before the saved ideas level): a first-time club joins in season one, the relegated club returns in season two
+    // (in place of that first-time club, which goes back down) and another first-time club comes up in season three.
+    let state = setEmploymentDelegation(createSeason({ world, seed: 23, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
     const generated = new Set(world.clubs.filter(club => club.id.startsWith('third-')).flatMap(club => club.players.map(player => player.id)));
     const finishSeason = () => {
       while (state.status === 'active') { state = play(state); if (state.round === 5) expect(roundTrip(state)).toEqual(state); }
@@ -135,11 +136,13 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
 
   it('lets a club back from a season away forget players who left before it went (step 3.7 acceptance)', () => {
     const world = lowerWorld();
-    let state = setEmploymentDelegation(createSeason({ world, seed: 2, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    // Seed 9 (2 before the match flow, real coaches and European entry of formats 81-83): Alpine Stags go down in season
+    // one and come back after one season.
+    let state = setEmploymentDelegation(createSeason({ world, seed: 9, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
     const finish = () => { while (state.status === 'active') state = play(state); for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state); };
     while (state.status === 'active') state = play(state);
     expect(state.background.exchanges[0].leaving).toEqual(['w1-alpine-stags']);
-    // The managed club signs one of the leaving club's free agents; with seed 2 the club then returns after one season.
+    // The managed club signs one of the leaving club's free agents; with seed 9 the club then returns after one season.
     state = advanceMarket(state);
     expect(contractForSeason(state.employment, 'w1-alp-7', 2)).toBeNull();
     state = submitMarketOffer(state, 'w1-alp-7', requiredNegotiationWage('w1-alp-7', 1, undefined, state) + 100_000, 1);
@@ -157,9 +160,10 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
 
   it('treats a manager whose club leaves the full world as dismissed, with a job offer at a full-world club (owner decision a)', () => {
     const world = lowerWorld();
-    // Seed 6 (33 before the new-career rules of formats 74-80, 11 before the match calibration of sprint 4): the managed
-    // club finishes last in the second division.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 6, managedClubId: 'w1-rhine-falcons', ...NEW_CAREER_SYSTEMS }), true);
+    // Seed 2 (6 before the match flow, real coaches and European entry of formats 81-83, 33 before the new-career rules
+    // of formats 74-80, 11 before the match calibration of sprint 4): the managed club finishes last in the second
+    // division.
+    let state = setEmploymentDelegation(createSeason({ world, seed: 2, managedClubId: 'w1-rhine-falcons', ...NEW_CAREER_SYSTEMS }), true);
     while (state.status === 'active') state = play(state);
     expect(state.background.exchanges[0].leaving).toEqual(['w1-rhine-falcons']);
     expect(state.career.moves).toMatchObject([{ seasonNumber: 1, fromClubId: 'w1-rhine-falcons', reason: 'dismissed' }]);

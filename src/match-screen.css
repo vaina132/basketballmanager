@@ -123,6 +123,10 @@
 .score-bug .bug-score { min-width: 26px; text-align: right; font-size: 15px; font-weight: 800; }
 .score-bug .bug-meta { min-width: 64px; text-align: right; font-size: 10px; color: var(--muted); }
 .score-bug .bug-clock { display: flex; justify-content: space-between; margin-top: 3px; padding: 2px 8px; border-top: 1px solid var(--border); font-size: 11px; font-weight: 700; color: var(--accent); }
+.score-bug .bug-clock .bug-shot { min-width: 22px; margin-left: auto; padding: 0 4px; border-radius: 2px; background: #2b1d12; color: #ffb35c; text-align: center; }
+.score-bug .bug-clock span:first-child + span { margin-left: 8px; }
+.score-bug .bug-clock .bug-shot.low { color: #ff6f61; }
+.score-bug .bug-clock .bug-shot.off { background: transparent; color: var(--muted); }
 .match-screen .court-caption.play-line { height: 34px; min-height: 34px; overflow: hidden; }
 .match-screen .court-caption.play-line p { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
 .court-mark { pointer-events: none; }

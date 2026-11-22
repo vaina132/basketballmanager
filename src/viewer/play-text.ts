@@ -52,6 +52,8 @@ export function describePlay(event: MatchEvent, roster: Roster, previous?: Match
       const shot = event.shot
       const blocked = /^(.+?) blocks /.exec(text)
       if (blocked) return `${who} goes up, ${last(blocked[1])} blocks it!`
+      const goaltending = /^(.+?) is called for goaltending/.exec(text)
+      if (goaltending) return `Goaltending on ${last(goaltending[1])}: ${who}'s basket counts. ${score}`
       const assisted = event.assistPlayerId ? ` (${name(event.assistPlayerId)} assist)` : ''
       const andOne = /through the contact/.test(text) ? ' And one!' : ''
       const made = shot?.made
@@ -78,6 +80,7 @@ export function describePlay(event: MatchEvent, roster: Roster, previous?: Match
     }
     case 'foul':
       if (/technical foul/.test(text)) return `Technical foul on ${who}.`
+      if (/unsportsmanlike/.test(text)) return `Unsportsmanlike foul on ${who}: two shots and the ball.`
       if (/charge/.test(text)) return `Charge! Offensive foul on ${who}.`
       if (/Illegal screen/.test(text)) return `Illegal screen by ${who}.`
       if (/pushes off/.test(text)) return `Offensive foul on ${who}.`
@@ -90,16 +93,31 @@ export function describePlay(event: MatchEvent, roster: Roster, previous?: Match
       if (stolen) return /'s pass/.test(text) ? `${last(stolen[1])} picks off the pass!` : `${last(stolen[1])} steals it from ${who}!`
       if (/travels/.test(text)) return `${who} travels.`
       if (/three seconds/.test(text)) return `Three seconds on ${who}.`
+      if (/8-second/.test(text)) return '8-second violation: they could not cross halfcourt in time.'
+      if (/5-second/.test(text)) return '5-second violation on the throw-in.'
+      if (/double dribble/.test(text)) return `Double dribble on ${who}.`
+      if (/carrying/.test(text)) return `Carrying on ${who}.`
+      if (/Basket interference/.test(text)) return `Basket interference on ${who}: no basket.`
+      if (/goes back over halfcourt/.test(text)) return `${who}'s pass goes into the backcourt: violation.`
       if (/backcourt violation/.test(text)) return `Backcourt violation on ${who}.`
+      if (/steps on the sideline/.test(text)) return `${who} steps on the sideline.`
       if (/pass sails/.test(text)) return `${who}'s pass sails out of bounds.`
       if (/steps out of bounds/.test(text)) return `${who} steps out of bounds.`
       return `${who} loses it out of bounds.`
     }
     case 'shot-clock': return 'Shot clock violation. Turnover.'
+    case 'held-ball': { const arrow = /awards the throw-in to (.+?)\.$/.exec(text)?.[1]; const pair = /^Held ball between (.+?) and (.+?)\./.exec(text); return `Held ball${pair ? ` (${last(pair[1])}, ${last(pair[2])})` : ''}: the arrow gives it to ${arrow ?? 'the other team'}.` }
+    case 'substitution': return event.outgoingPlayerId && event.playerId ? `${who} checks in for ${name(event.outgoingPlayerId)}.` : text
     case 'command':
       if (/free-throw line/.test(text)) return `${who} steps to the free-throw line.`
       if (/sets a ball screen/.test(text)) { const screener = /^(.+?) sets a ball screen/.exec(text)![1]; return `${last(screener)} screens for ${who}.` }
+      if (/takes the throw-in in the frontcourt/.test(text)) return `${who} takes the throw-in.`
+      if (/holds the ball for the last shot/.test(text)) return `${who} holds for the last shot.`
+      if (/runs down the clock/.test(text)) return `${who} runs down the clock.`
       if (/half-court offense|brings the ball forward|frontcourt/.test(text)) return `${who} brings it up.`
+      if (/Kicked ball/.test(text)) { const team = /\. (.+?) keep the ball/.exec(text)?.[1]; return `Kicked ball on ${who}${team ? `: ${team} keep it` : ''}.` }
+      if (/out of bounds: .+ keep the ball/.test(text)) { const team = /: (.+?) keep the ball/.exec(text)?.[1]; const line = /(sideline|baseline) throw-in/.exec(text)?.[1]; return `Out of bounds off ${who}: ${team} ball${line ? `, ${line} throw-in` : ''}.` }
+      if (/keep the ball after the unsportsmanlike/.test(text)) return `${/^(.+?) keep the ball/.exec(text)?.[1] ?? 'They'} keep the ball after the free throws.`
       if (/organizes the attack/.test(text)) return `${who} sets up the offense.`
       if (/after the block/.test(text)) return 'Blocked out of bounds: they keep it.'
       return text

@@ -97,10 +97,11 @@ describe('completed academy report retention', () => {
 
   it('rolls over a real accepted job offer and preserves the former club detailed academy history', () => {
     const from = 'rhine-falcons';
-    // Seed 11 (8 before squad roles everywhere, 2 before the planned starting five of 16 November 2026, 10 before the
-    // relationships-2 rules of format 66): another club offers Rhine Falcons' manager its job.
-    let state = createSeason({ seed: 11, managedClubId: from, injuryMode: 'standard',
-      manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, injuryLengths: false, calmPlayingTime: false, staffing: false, careerMoves: true, presidents: false });
+    // Seed 2 (11 before the full new-career rules of 22 November 2026, 8 before squad roles everywhere, 2 before the
+    // planned starting five of 16 November 2026, 10 before the relationships-2 rules of format 66): another club offers
+    // Rhine Falcons' manager its job.
+    let state = createSeason({ seed: 2, managedClubId: from, injuryMode: 'standard',
+      manager: { name: 'Moving Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, careerMoves: true, presidents: false });
     while (state.round < 10) state = advanceMatchday(state);
     const finished = { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) };
     const offer = previewSeasonEnd(finished)?.offers[0];

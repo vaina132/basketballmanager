@@ -9,7 +9,7 @@ import { advanceMatchday } from './helpers/board-funding';
 const noop = () => {};
 const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={season} onEnable={noop} onEnableFunding={noop} onEnableConsequences={noop} onEnableRivalries={noop} onEnableCareerMoves={noop} />);
 // Seed-found scenario from before every club started with staff (format 74): it keeps the earlier staffing.
-const career = (rivalries: boolean) => createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Derby Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, staffing: false, rivalries });
+const career = (rivalries: boolean) => createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Derby Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, matchPlays: false, staffing: false, rivalries });
 let afterDerby: SeasonState;
 
 beforeAll(() => {

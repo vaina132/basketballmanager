@@ -14,7 +14,7 @@ export const advanceMatchday = (state: SeasonState) => advanceSeason({ ...state,
 /** Seed-227 Rhine career with automatic contracts and facilities, played to the end of the first offseason market. */
 export function playFirstSeason(boardConsequences: boolean): SeasonState {
   const manager = { name: 'Verdict Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-  let state = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, staffing: false, simpleFacilities: false, boardConsequences });
+  let state = createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, matchPlays: false, staffing: false, simpleFacilities: false, boardConsequences });
   state = setEmploymentDelegation(setFacilityDelegation(state, true), true);
   while (state.status === 'active') state = advanceMatchday(state);
   for (let step = 0; step < 80 && getMarketStartReason(state); step += 1) state = advanceMarket(state);

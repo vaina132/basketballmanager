@@ -26,7 +26,7 @@ const noop = () => {};
 const finish = (state: SeasonState) => state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state;
 const step = (state: SeasonState) => advanceSeason(finish(state));
 // Career rules only: president personalities (format 70) would move each club's Under pressure line; tests/presidents.test.tsx covers them.
-const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, injuryLengths: false, presidents: false, calmPlayingTime: false }), true), true);
+const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchPlays: false, injuryLengths: false, presidents: false, calmPlayingTime: false }), true), true);
 const throughMarket = (state: SeasonState) => { let next = state; for (let day = 0; day < 80 && getMarketStartReason(next); day += 1) next = advanceMarket(next); return next; };
 const roundTrip = (state: SeasonState) => expect(parseSeason(serializeSeason(state))).toEqual(state);
 const desk = (season: SeasonState) => renderToStaticMarkup(<UnemployedDesk season={season} busy={false} onAccept={noop} onOpenCompetitions={noop} onOpenCalendar={noop} />);
@@ -233,7 +233,7 @@ describe('taking a job', () => {
 
   it('keeps careers without a club running in a world with divisions, playoffs and Europe', () => {
     const world = placesWorld();
-    let state = setEmploymentDelegation(createSeason({ world, managedClubId: world.domesticLeagues[0].clubIds[0], ...NEW_CAREER_SYSTEMS, presidents: false, injuryMode: 'off' }), true);
+    let state = setEmploymentDelegation(createSeason({ world, managedClubId: world.domesticLeagues[0].clubIds[0], ...NEW_CAREER_SYSTEMS, matchPlays: false, presidents: false, injuryMode: 'off' }), true);
     while (state.round < 3) state = step(state);
     state = resignManager(state, NO_CLUB);
     while (state.status === 'active') state = advanceSeason(state);
@@ -244,14 +244,14 @@ describe('taking a job', () => {
 
 describe('older careers', () => {
   it('keep a guaranteed offer and refuse to leave without a club', () => {
-    const career2 = asCareer2(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }));
+    const career2 = asCareer2(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchPlays: false }));
     expect(career2.career.model).toBe('career-2');
     const outlook = resignationOutlook(career2)!;
     expect(outlook.offers.length).toBeGreaterThan(0);
     expect(outlook.unemployment).toBeUndefined();
     expect(() => resignManager(career2, NO_CLUB)).toThrow(/offered you its job/);
     expect(() => advanceSeason(finish(career2), { moveTo: NO_CLUB })).toThrow();
-    expect(resignationOutlook(asCareer1(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS })))).toBeNull();
+    expect(resignationOutlook(asCareer1(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchPlays: false })))).toBeNull();
     roundTrip(career2);
   });
 

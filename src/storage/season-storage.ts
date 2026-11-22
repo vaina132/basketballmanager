@@ -3132,8 +3132,6 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Owner feedback (22 November 2026): new careers diagnose match injuries with the longer `injuries-2` durations.
   if (Object.hasOwn(state, 'injuryModel') && state.injuryModel !== INJURY_MODEL_2) fail('injuryModel', 'must be injuries-2 when recorded');
   const injuryModel = Object.hasOwn(state, 'injuryModel') ? INJURY_MODEL_2 : undefined;
-  // Format 79 guard: careers created with the richer play model (`plays-2`) need format 79 or later.
-  if (Object.hasOwn(state, 'matchModel') && (state.matchModel !== 'plays-2' || version < 79)) fail('matchModel', 'must be plays-2 and requires format 79 or later');
   // The bound scales with the games recorded (step 3.7): realistic injuries in a 70-club world with Europe pass 600 a season.
   const recordedGames = (Array.isArray(state.fixtures) ? state.fixtures.length : 0) + (Array.isArray(state.history) ? state.history.reduce((count: number, archive: unknown) => count + (archive && typeof archive === 'object' && Array.isArray((archive as { fixtures?: unknown }).fixtures) ? (archive as { fixtures: unknown[] }).fixtures.length : 0), 0) : 0);
   if (!legacy && (!Array.isArray(state.injuries) || state.injuries.length > 600 * seasonNumber + 3 * recordedGames)) fail('injuries', 'must be a bounded injury history');
@@ -3379,8 +3377,6 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const match = state.activeMatch as SeasonState['activeMatch'];
   if (match && active) {
   if (match.engineVersion !== 'possession-3' || match.seed !== fixtureSeed(seed, active.id)) fail('activeMatch', 'has the wrong engine or fixture seed');
-  // Format 79: the match uses the career's play model, with a computer coach for every side but the manager's.
-  if ((match.playModel ?? null) !== (state.matchModel ?? null) || match.playModel && !sameData(match.computerCoach, SIDES.filter(side => (side === 'home' ? active.homeClubId : active.awayClubId) !== state.managedClubId))) fail('activeMatch.playModel', 'must use the career\'s play model and computer coaches');
   // Step 3.5b: a European opponent outside the full world plays its background selection, undeveloped.
   const backgroundTeam = (clubId: string) => active.competition && !clubs.some(club => club.id === clubId) ? backgroundSelection(seasonNumber, active)(clubId).team : undefined;
   const homeBackground = backgroundTeam(active.homeClubId), awayBackground = backgroundTeam(active.awayClubId);
@@ -3397,6 +3393,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (!sameData(match.home, developed(home, homeBackground)) || !sameData(match.away, developed(away, awayBackground))) fail('activeMatch', 'must use the fixture home and away squads with their current development');
   const opposition: Side = active.homeClubId === matchClub ? 'away' : 'home';
   if (!match.autoSubstitutions[opposition]) fail('activeMatch.autoSubstitutions', 'must enable opponent substitutions');
+  // Format 79: the match uses the career's play model, and the opponent has a computer coach.
+  if ((match.playModel ?? null) !== (state.matchModel ?? null) || match.playModel && !match.computerCoach?.includes(opposition)) fail('activeMatch.playModel', 'must use the career\'s play model with a computer coach for the opponent');
   // Format 74: only the manager chooses circles on the court picture; computer clubs play listed positions.
   if (match.slots?.[opposition] || match.startingSlots?.[opposition]) fail('activeMatch.slots', 'must leave the opponent in its listed positions');
   if (match.injuryMode !== injuryMode) fail('activeMatch.injuryMode', 'must match the season-wide injury setting');
@@ -3444,6 +3442,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   }
   // Format 70 guard: careers created with president personalities (board-2) need format 70 or later.
   if ((state.board as SeasonBoard | undefined)?.model === 'board-2' && version < 70) fail('board.model', 'requires format 70 or later');
+  // Format 79 guard: careers created with the richer play model (`plays-2`) need format 79 or later.
+  if (Object.hasOwn(state, 'matchModel') && (state.matchModel !== 'plays-2' || version < 79)) fail('matchModel', 'must be plays-2 and requires format 79 or later');
 }
 
 /** Validate every reference and committed round before replacing any live season. */

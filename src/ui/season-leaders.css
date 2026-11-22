@@ -16,3 +16,5 @@
 .season-leaders-empty{padding:12px 14px;color:var(--muted);font-size:13px;line-height:1.5}
 .season-leaders-empty .text-button{margin-top:7px}
 @media(max-width:700px){.season-leader-controls>label:first-child{flex:1;min-width:170px}.season-leader-controls>label:first-child select{width:100%}.season-leader-controls .season-leader-search{max-width:none}.season-leaders-heading{align-items:flex-start}}
+/* Regular season | Playoffs beside the statistic display (owner suggestion, 22 November 2026). */
+.season-leaders-toggles{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}

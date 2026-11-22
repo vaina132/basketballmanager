@@ -38,7 +38,7 @@ describe('press conference and media standing screens', () => {
     const html = renderToStaticMarkup(<MediaStanding season={open} />);
     expect(html).toContain(`data-media-standing="${mediaReputation(open).value}"`);
     for (const effect of ['board', 'players', 'sponsors', 'supporters']) expect(html).toContain(`data-media-effect="${effect}"`);
-    expect(html).toContain('Separate from your reputation for job offers');
+    expect(html).toContain('Not the same as your reputation for job offers');
     expect(renderToStaticMarkup(<MediaStanding season={{ ...open, media: undefined }} />)).toBe('');
   });
 });

@@ -18,13 +18,13 @@ export function MediaStanding({ season }: { season: SeasonState }) {
       <div className="media-standing-value">
         <div><strong>{media.value} / 100</strong><span>{media.label}</span></div>
         <meter min={0} max={100} low={30} high={70} optimum={100} value={media.value} aria-label={`Media standing ${media.value} out of 100`} />
-        <small>How the press sees you, from your answers and results. Separate from your reputation for job offers, which follows final board ratings.</small>
+        <small>How the press sees you. Not the same as your reputation for job offers.</small>
       </div>
       <dl className="media-standing-effects">
-        <div data-media-effect="board"><dt>Board</dt><dd>{signed(effects.board)}<small>assessment points at the next review, with recent press answers (±{MEDIA_RULES.board.cap} at most)</small></dd></div>
-        <div data-media-effect="players"><dt>Players</dt><dd>×{effects.moraleFactor.toFixed(2)}<small>weight of your press answers on morale</small></dd></div>
-        <div data-media-effect="sponsors"><dt>Sponsors</dt><dd>{signed(effects.sponsorBonus)}<small>flexibility when you ask a sponsor for better terms (scale 0-12)</small></dd></div>
-        <div data-media-effect="supporters"><dt>Supporters</dt><dd>{signed(effects.supporterPercent)}%<small>home crowd demand from recent press answers</small></dd></div>
+        <div data-media-effect="board"><dt>Board</dt><dd>{signed(effects.board)}<small>points at the next board review (±{MEDIA_RULES.board.cap} at most)</small></dd></div>
+        <div data-media-effect="players"><dt>Players</dt><dd>×{effects.moraleFactor.toFixed(2)}<small>effect of your press answers on morale</small></dd></div>
+        <div data-media-effect="sponsors"><dt>Sponsors</dt><dd>{signed(effects.sponsorBonus)}<small>help when you ask a sponsor for more (0-12)</small></dd></div>
+        <div data-media-effect="supporters"><dt>Supporters</dt><dd>{signed(effects.supporterPercent)}%<small>home crowd from press answers</small></dd></div>
       </dl>
     </div>
     <h3 className="board-section-heading"><Icon name="clock" size={16} />Recent changes</h3>

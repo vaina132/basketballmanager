@@ -2,6 +2,11 @@ import { useState } from 'react'
 import { PLAYER_PHOTOS } from '../data/player-photos'
 import './player-photo.css'
 
+/** Credit for the real club and competition logos, on the setup screen and in the Credits view. */
+export function LogoCredit() {
+  return <p data-credits="logos"><strong>Credits:</strong> club and competition logos come from API-Sports. They belong to their clubs and competitions and are removed on request.</p>
+}
+
 /**
  * Credits for the real player photos (owner decision, 22 November 2026): every photo's player, author,
  * licence (linked) and Commons file page. The long list renders only once the disclosure is opened.

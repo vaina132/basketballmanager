@@ -26,10 +26,3 @@ export function Avatar({ player, color, size = 42 }: { player: Player; color: st
     <text x="32" y="61" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff">{player.number}</text>
   </svg>
 }
-
-/** The tiny photo credit under a profile portrait: author (linked to the Commons file) and licence (linked). */
-export function PhotoCredit({ playerId }: { playerId: string }) {
-  const photo = playerPhoto(playerId)
-  if (!photo) return null
-  return <small className="photo-credit" data-photo-credit={playerId}>Photo: <a href={photo.source} target="_blank" rel="noreferrer">{photo.author}</a>, {photo.licenceUrl ? <a href={photo.licenceUrl} target="_blank" rel="noreferrer">{photo.licence}</a> : photo.licence}</small>
-}

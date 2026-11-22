@@ -43,6 +43,24 @@ describe('European entry in a career (format 83)', () => {
     expect(places.decision.offers.some(offer => offer.clubId === world.clubs[0].id)).toBe(true);
   });
 
+  it('gives boards a European aim that is decided by the season end and counts in the verdict', () => {
+    const mandate = complete.board.mandates.find(item => item.seasonNumber === 1);
+    const aims = Object.entries(mandate.clubs).filter(([, objective]) => objective.europe);
+    expect(aims.length).toBeGreaterThan(0);
+    for (const [, objective] of Object.entries(mandate.clubs)) expect(Object.hasOwn(objective, 'europe')).toBe(true);
+    const final = complete.board.reviews.filter(review => review.seasonNumber === 1).at(-1);
+    const placed = new Set(europeanPlacesAfter(complete, { withoutAnswers: true }).entrants.flatMap(entry => entry.clubIds));
+    for (const [clubId, objective] of aims) {
+      const club = final.clubs[clubId];
+      expect(['met', 'missed']).toContain(club.europeProgress);
+      expect(club.europeImpact).toBe(club.europeProgress === 'met' ? 6 : -6);
+      if (objective.europe.kind === 'european-place') expect(club.europeProgress).toBe(placed.has(clubId) ? 'met' : 'missed');
+    }
+    // A route holder's board asks for the playoffs to keep the place.
+    const route = complete.europe.entrants.flatMap(entry => entry.clubIds.filter((_, index) => entry.places[index].type === 'route'));
+    for (const clubId of route) if (mandate.clubs[clubId]) expect(mandate.clubs[clubId].europe).toMatchObject({ kind: 'euroleague-playoffs', keep: true });
+  });
+
   it('records the manager\'s Decline: the club leaves the EuroLeague, another club takes the place, and saves check it', () => {
     const clubId = world.clubs[0].id;
     const before = europeanPlacesAfter(complete), after = europeanPlacesAfter(answered);

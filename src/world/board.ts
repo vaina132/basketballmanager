@@ -5,7 +5,8 @@ import type { FinanceEntry } from '../domain/finance';
 import { getFinanceBalance } from './finance';
 import { isRecovering } from './health';
 import { rosterForRound } from './rosters';
-import { dateForRound, isRegularFixture } from './season';
+import { dateForRound, europeanPlacesAfter, isRegularFixture } from './season';
+import type { PlacesDayState } from './european-entry-day';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { BOARD_VERDICT_EFFECTS, verdictForConfidence, verdictOnLine } from './board-consequences';
 import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS } from './rivalries';
@@ -18,6 +19,9 @@ import { boardDebtImpacts } from './facility-debt';
 import { ambitionWinRate, assessCultureObjective, assessYouthObjective, clubTier, playerSeconds, PRESIDENT_RULES, presidentMandate, presidentTraits, requestImpactAt, usesPresidentBoard, type PresidentContext } from './presidents';
 import { issueBoardRequest, resolveBoardRequests } from './board-requests';
 import { withoutCountedGames } from './sealed-history';
+import { europeanAimProgress, europeanAims } from './board-europe';
+import { usesEuropeanEntry } from './european-entry';
+import type { SeasonEurope } from '../domain/season';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
@@ -36,6 +40,11 @@ export type BoardCalculationContext = Pick<SeasonState, 'world' | 'dataPackId' |
   debtImpacts?: Readonly<Record<string, number>>;
   /** Format 70, board-2: the president's requests with their outcomes settled at this review. */
   boardRequests?: readonly BoardRequest[];
+  /** Format 83, careers with European entry rules: the season's places and draws (for the European aim). */
+  seed?: number;
+  europe?: SeasonEurope;
+  /** Format 83: at the season's last review, the clubs with a European place next season (the places day, before answers). */
+  europeanPlaceIds?: readonly string[];
 } & PresidentContext;
 
 export function createBoard(model: SeasonBoard['model'] = 'board-1'): SeasonBoard {
@@ -78,7 +87,7 @@ export function buildBoardMandate<T extends BoardCalculationContext>(state: T, s
     return { clubId: club.id, rosterId: roster.id, strength: top.reduce((sum, value) => sum + value, 0) / 8 };
   });
   const legacyGames = Math.max(0, seasonRounds(state) + 1 - startsRound);
-  return { ...boardEventAnchor(state), id: `board-mandate-${state.board.mandates.length + 1}`, startsRound, deadlineDate: dateForRound(seasonRounds(state), state.seasonNumber), clubs: Object.fromEntries(resources.map(resource => {
+  const mandate: BoardMandate = { ...boardEventAnchor(state), id: `board-mandate-${state.board.mandates.length + 1}`, startsRound, deadlineDate: dateForRound(seasonRounds(state), state.seasonNumber), clubs: Object.fromEntries(resources.map(resource => {
     const league = worldOf(state).domesticLeagues ? seasonLeagues(worldOf(state), (state as { divisions?: SeasonState['divisions'] }).divisions).find(league => league.clubIds.includes(resource.clubId)) : undefined;
     const rivals = league ? resources.filter(other => league.clubIds.includes(other.clubId)) : resources;
     const games = league ? state.fixtures.filter(fixture => isRegularFixture(fixture) && fixture.round >= startsRound && [fixture.homeClubId, fixture.awayClubId].includes(resource.clubId)).length : legacyGames;
@@ -91,6 +100,15 @@ export function buildBoardMandate<T extends BoardCalculationContext>(state: T, s
     const playerIds = rosterForRound(state.rosters, resource.clubId, state.round).players.map(player => player.id);
     return [resource.clubId, { ...mandate, targetWins: Math.ceil(games * rate), ...presidentMandate(state, { clubId: resource.clubId, seasonNumber: state.seasonNumber, date: state.date, games, tier: clubTier(resourceRank, rivals.length), playerIds }) }];
   })) };
+  // Format 83: the board's European aim, from the club's place this season (or its league rank outside Europe).
+  if (!usesEuropeanEntry(state.europe)) return mandate;
+  const leagues = seasonLeagues(worldOf(state), (state as { divisions?: SeasonState['divisions'] }).divisions);
+  const topThird = (clubId: string) => {
+    const league = leagues.find(item => item.clubIds.includes(clubId));
+    return !!league && league.tier === 1 && mandate.clubs[clubId]!.resourceRank <= Math.ceil(resources.filter(other => league.clubIds.includes(other.clubId)).length / 3);
+  };
+  const aims = europeanAims(state, resources.map(resource => resource.clubId), topThird);
+  return { ...mandate, clubs: Object.fromEntries(Object.entries(mandate.clubs).map(([clubId, objective]) => [clubId, { ...objective, europe: aims.get(clubId) ?? null }])) };
 }
 
 /** New-career initialization is separate from existing-career opt-in, which excludes today's match. */
@@ -128,6 +146,8 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
   // Derbies count only once rivalries govern this review's matchday, so earlier reviews rebuild unchanged.
   const from = state.rivalries?.enabledSince?.effectiveFrom;
   const rivalriesCount = !!from && roundKey(state.seasonNumber, state.round) >= roundKey(from.seasonNumber, from.round);
+  // Format 83: the European aim's progress from the season's European games (and the places day at the last review).
+  const europeAim = usesEuropeanEntry(state.europe) ? europeanAimProgress(state) : null;
   for (const club of state.clubs) {
     const objective = mandate.clubs[club.id];
     if (!objective) throw new Error('Review a club with a communicated sporting objective.');
@@ -154,7 +174,8 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     const debtImpact = state.debtImpacts?.[club.id] || undefined;
     // Format 70, board-2: youth and culture objectives count in the assessment; met or ignored requests move confidence.
     const president = usesPresidentBoard(state.board) ? presidentReview(state, mandate, club.id, games, played) : null;
-    const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact + rivalryImpact + (mediaImpact ?? 0) + (debtImpact ?? 0) + (president?.youth?.impact ?? 0) + (president?.culture?.impact ?? 0), 0, 100);
+    const europe = europeAim?.(club.id, objective) ?? null;
+    const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact + rivalryImpact + (mediaImpact ?? 0) + (debtImpact ?? 0) + (president?.youth?.impact ?? 0) + (president?.culture?.impact ?? 0) + (europe?.europeImpact ?? 0), 0, 100);
     // Format 63: a new coach's board starts from the fresh confidence recorded after the latest review.
     const previousConfidence = startingConfidence(state.board, club.id);
     // Format 70: the president's patience sets the most confidence can move in one review.
@@ -163,7 +184,7 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     const confidence = president && president.requestImpact !== null ? clamp(moved + president.requestImpact, 0, 100) : moved;
     clubs[club.id] = { fixtureIds: games.map(fixture => fixture.id), played, wins, targetPace: rounded(targetPace), carriedAbsences, rosterPlaces, unpaid, resultsImpact, injuryRelief, financeImpact, ...(rivalriesCount ? { rivalryImpact } : {}), ...(mediaImpact !== undefined ? { mediaImpact } : {}), ...(debtImpact !== undefined ? { debtImpact } : {}),
       ...(president?.youth ? { youthProgress: president.youth.progress, youthImpact: president.youth.impact } : {}), ...(president?.culture ? { cultureProgress: president.culture.progress, cultureImpact: president.culture.impact } : {}), ...(president && president.requestImpact !== null ? { requestImpact: president.requestImpact } : {}),
-      assessment, previousConfidence, confidence };
+      ...(europe ?? {}), assessment, previousConfidence, confidence };
   }
   // A review follows its week's commit, so that week counts as completed even when it had no game (format 57).
   return { ...boardEventAnchor(state), completedRounds: roundOrdinal(state.seasonNumber, state.round, seasonRounds(state)), id: `board-review-${state.board.reviews.length + 1}`, mandateId: mandate.id, clubs };
@@ -201,13 +222,16 @@ export function processBoardRound(state: SeasonState): SeasonState {
   const pressMedia = boardMediaEvidence(state, state.seasonNumber, state.round, state.date);
   // Format 71: each club's debt at this review, in careers with facility financing.
   const debtImpacts = boardDebtImpacts(state);
+  // Format 83: the places day's places, at the last review of a season whose boards aim for a European place.
+  const europeanPlaceIds = boardEuropeEvidence(state, mandate, state.round, clubId => boardUnpaidCosts(state, clubId));
+  const evidence = europeanPlaceIds ? { europeanPlaceIds } : {};
   if (!usesPresidentBoard(state.board)) {
-    const review = buildBoardReview({ ...state, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}) }, mandate);
+    const review = buildBoardReview({ ...state, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}), ...evidence }, mandate);
     return { ...state, board: { ...state.board, reviews: [...withoutCountedGames(state.board.reviews), review] } };
   }
   // Format 70: settle the president's open requests, review, then perhaps raise a new request for the manager's club.
   const requests = resolveBoardRequests(state);
-  const review = buildBoardReview({ ...state, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}), boardRequests: requests }, mandate);
+  const review = buildBoardReview({ ...state, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}), ...evidence, boardRequests: requests }, mandate);
   // Format 73: only the latest review keeps each club's list of counted games.
   const reviewed = { ...state, board: { ...state.board, reviews: [...withoutCountedGames(state.board.reviews), review], requests } };
   const clubId = state.managedClubId;
@@ -240,4 +264,14 @@ export function getBoardSummary(state: SeasonState, clubId = state.managedClubId
   const financeStatus: BoardSummary['financeStatus'] = !objective || objective.startingUnpaid === null ? 'unassessed' : !latest ? 'waiting' : latest.club.unpaid !== null && latest.club.unpaid > objective.startingUnpaid ? 'behind' : 'on-track';
   const restarts = (state.board.restarts ?? []).filter(restart => restart.clubId === clubId);
   return { enabled: state.board.enabledSince !== null, confidence, confidenceLabel: clubConfidenceLabel(confidence, objective?.pressureBelow), mandate, objective, latest, history, nextReviewDate: nextFixture?.date ?? null, sportingStatus, financeStatus, restarts };
+}
+
+/**
+ * Format 83: at a season's last review, when some board aims for a European place, the clubs the places day gives a
+ * place next season (before the manager's answers), with unpaid costs as this review counts them. Undefined otherwise.
+ */
+export function boardEuropeEvidence(state: PlacesDayState, mandate: BoardMandate, round: number, unpaidOf: (clubId: string) => number | null): string[] | undefined {
+  if (!usesEuropeanEntry(state.europe) || round !== seasonRounds(state) || !Object.values(mandate.clubs).some(objective => objective.europe?.kind === 'european-place')) return undefined;
+  if (state.fixtures.some(fixture => !fixture.result)) return undefined;
+  return europeanPlacesAfter(state, { unpaidOf, withoutAnswers: true }).entrants.flatMap(entry => entry.clubIds).sort();
 }

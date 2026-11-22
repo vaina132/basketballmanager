@@ -1,6 +1,7 @@
 import { requireCalendarWeek } from './calendar-boundary';
 import { competitionTable } from './competition-table';
-import { BOARD_REVIEW_STEP, createBoard, enableBoard, enableBoardConsequences, enablePresidentBoard, prepareBoardSeason, processBoardRound } from './board';
+import { BOARD_REVIEW_STEP, buildBoardMandate, createBoard, enableBoard, enableBoardConsequences, enablePresidentBoard, prepareBoardSeason, processBoardRound } from './board';
+import { financeAtLedgerBoundary } from './finance-ledger';
 import { objectiveStartingFive } from './presidents';
 import { summarizeAcademyHistory } from './academy-history';
 import { summarizeYouthHistory } from './youth-history';
@@ -540,7 +541,10 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   let created: SeasonState;
   try { created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false, options.simpleFacilities ?? false, options.staffing ?? false, staffContracts); }
   finally { openingNational = false; }
-  const pressed = options.media ? enableMedia(created) : created;
+  // Format 83: European entry rules; the opening places name the same clubs, so nothing scheduled changes. The boards'
+  // opening objectives are set again with them (the European aim), as they stood when they were set.
+  const entered = options.europeanEntry && created.europe && created.world ? withOpeningObjectives({ ...created, europe: openingEuropeTwo(created.world) }) : created;
+  const pressed = options.media ? enableMedia(entered) : entered;
   // Format 70: the board's president personalities and objectives apply from the opening; the opening match is unchanged.
   const presided = options.presidents ? enablePresidentBoard(pressed) : pressed;
   // Format 77: the calmer playing-time rules; nothing has been judged at the opening, so its frozen morale is unchanged.
@@ -553,12 +557,17 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   // Format 78: the transfer and loan list, and the scouting network; nothing at the opening depends on either.
   const listed = options.transferLists && healed.recruitment.enabledSince ? { ...healed, recruitment: { ...healed.recruitment, model: 'recruitment-2' as const, listings: [] } } : healed;
   const scouted = options.scoutNetwork && listed.scouting.enabledSince ? { ...listed, scouting: { ...listed.scouting, model: 'scouting-2' as const } } : listed;
-  // Format 83: European entry rules; the opening places name the same clubs, so nothing scheduled changes.
-  const entered = options.europeanEntry && scouted.europe && scouted.world ? { ...scouted, europe: openingEuropeTwo(scouted.world) } : scouted;
   // Format 79: the richer play model; the opening match is prepared again with it.
-  if (!options.matchPlays) return entered;
-  const played: SeasonState = { ...entered, matchModel: 'plays-2' };
+  if (!options.matchPlays) return scouted;
+  const played: SeasonState = { ...scouted, matchModel: 'plays-2' };
   return played.activeMatch && played.activeFixtureId ? { ...played, activeMatch: prepareMatch(played, getActiveFixture(played)) } : played;
+}
+
+/** The opening objectives built again from the career's opening state, each at its own ledger point (format 83). */
+function withOpeningObjectives(state: SeasonState): SeasonState {
+  if (!state.board.enabledSince || !state.board.mandates.length) return state;
+  const opened = { ...state, board: { ...state.board, mandates: [] } };
+  return { ...state, board: { ...state.board, mandates: state.board.mandates.map(mandate => buildBoardMandate({ ...opened, finance: financeAtLedgerBoundary(opened.finance, mandate.ledgerCount) }, mandate.startsRound)) } };
 }
 
 /** Format 80: set by `createSeason` while the opening of a career with national teams is built. */

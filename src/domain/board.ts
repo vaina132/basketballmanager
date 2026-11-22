@@ -22,6 +22,19 @@ export interface BoardClubMandate {
   youth?: BoardYouthObjective | null;
   /** Format 70, board-2: the culture objective, or null when this board sets none. */
   culture?: BoardCultureObjective | null;
+  /** Format 83 (careers with European entry rules): the European aim, or null when this board sets none. */
+  europe?: BoardEuropeanAim | null;
+}
+
+/**
+ * Format 83 (owner decision, 22 November 2026: a European aim counts in the season verdict): a stage to reach in the
+ * club's European competition this season (`keep`: a EuroCup-route holder keeps its place by reaching the playoffs), or
+ * a European place for next season (`european-place`, decided on the places day at the season's last review).
+ */
+export interface BoardEuropeanAim {
+  kind: 'euroleague-playoffs' | 'euroleague-play-in' | 'eurocup-quarter-finals' | 'eurocup-eighth-finals' | 'bcl-quarter-finals' | 'bcl-round-of-16' | 'european-place';
+  competitionId: string | null;
+  keep?: true;
 }
 
 /**
@@ -102,6 +115,9 @@ export interface BoardClubReview {
   cultureImpact?: number;
   /** Format 70, board-2: confidence added or removed by the president's requests met or ignored at this review. */
   requestImpact?: number;
+  /** Format 83, with a European aim: whether it is met, missed or still open, and its assessment points. */
+  europeProgress?: 'open' | 'met' | 'missed';
+  europeImpact?: number;
   assessment: number;
   previousConfidence: number;
   confidence: number;

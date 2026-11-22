@@ -1,7 +1,9 @@
+import { usesEuropeanEntry } from '../world/european-entry';
+import type { PlacesDayState } from '../world/european-entry-day';
 import type { BoardAnchor, BoardMandate, BoardRequest, BoardRestart, SeasonBoard } from '../domain/board';
 import { usesCareerRules } from '../world/career-rules';
 import type { SeasonFixture, SeasonState } from '../domain/season';
-import { buildBoardMandate, buildBoardReview, createBoard, type BoardCalculationContext } from '../world/board';
+import { boardEuropeEvidence, boardUnpaidCosts, buildBoardMandate, buildBoardReview, createBoard, type BoardCalculationContext } from '../world/board';
 import { boardMediaEvidence } from '../world/media';
 import { validationReplayCache } from './replay-cache';
 import { dateForRound } from '../world/season';
@@ -38,6 +40,12 @@ function equal(left: unknown, right: unknown): boolean {
   const a = Object.keys(left), b = Object.keys(right);
   return a.length === b.length && a.every(key => Object.hasOwn(right, key) && equal((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]));
 }
+/** Format 83: the career as the places day of `year` saw it (an archived season's results, divisions and places). */
+function placesStateIn(state: SeasonState, year: number): PlacesDayState {
+  if (year === state.seasonNumber) return state;
+  const archive = state.history.find(item => item.seasonNumber === year)!;
+  return { ...state, seasonNumber: year, fixtures: archive.fixtures as unknown as SeasonState['fixtures'], ...(archive.europe ? { europe: archive.europe } : {}), divisions: archive.divisions } as PlacesDayState;
+}
 function seasonRecords(state: SeasonState, year: number) {
   const source = year === state.seasonNumber ? state : state.history.find(archive => archive.seasonNumber === year);
   if (!source) fail('board', 'requires the original registered squads and fixtures');
@@ -63,6 +71,8 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard, 
     // That season's own divisions (step 3.4c).
     ...({ divisions: anchor.seasonNumber === state.seasonNumber ? state.divisions : state.history.find(archive => archive.seasonNumber === anchor.seasonNumber)?.divisions } as object),
     rosters, fixtures, board, employment: { transfers: state.employment.transfers }, physio: state.physio, rivalries: state.rivalries,
+    // Format 83: that season's European places and the career's seed (the board's European aim).
+    ...(usesEuropeanEntry(source.europe) ? { seed: state.seed, europe: source.europe! } : {}),
     // That season's own full-world clubs (step 3.4d-2).
     clubs: fullWorldClubsIn(state, anchor.seasonNumber).map(({ id }) => ({ id })),
     // Format 80: national games' injuries recorded by then (their games come before the week's business).
@@ -324,7 +334,10 @@ export function validateBoard(state: SeasonState, version: number): void {
       const context = contextAt(state, reviewAnchor, board);
       // Format 71: each club's debt at the review's own payment boundary.
       const debtImpacts = boardDebtImpacts({ ...context, facilities: state.facilities });
-      try { review = validationReplayCache.calculate('board-review', { state: { ...context, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}) }, mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
+      // Format 83: the places day at the season's last review, with unpaid costs as that review counts them.
+      let europeanPlaceIds: string[] | undefined;
+      try { europeanPlaceIds = boardEuropeEvidence(placesStateIn(state, year), expected, round, clubId => boardUnpaidCosts(context, clubId)); } catch (error) { fail(reviewPath, `cannot decide the European places: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
+      try { review = validationReplayCache.calculate('board-review', { state: { ...context, ...(pressMedia ? { pressMedia } : {}), ...(debtImpacts ? { debtImpacts } : {}), ...(europeanPlaceIds ? { europeanPlaceIds } : {}) }, mandate: expected }, input => buildBoardReview(input.state, input.mandate)); } catch (error) { fail(reviewPath, `cannot rebuild review: ${error instanceof Error ? error.message : 'invalid evidence'}`); }
       // Format 73: only the latest review keeps each club's list of counted games (a full earlier review stays valid; the
       // rest of the review is compared exactly in any format).
       if (Object.values(reviewRaw.clubs as Record<string, object>).every(club => !Object.hasOwn(club, 'fixtureIds'))) review = withoutCountedGames([review])[0]!;

@@ -197,7 +197,7 @@ describe('media saves', () => {
     file.formatVersion = 62; file.state.schemaVersion = 62;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/Invalid season save/);
     // Format 68 rivalries are older-format safe only as fixed rivalries; the media guard is the one under test.
-    const opening = JSON.parse(serializeSeason(withFixedRivalries(beforeSavedIdeas(createSeason({ seed: 8, managedClubId: CLUB, injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, namingRights: false, simpleFacilities: false, staffing: false })))));
+    const opening = JSON.parse(serializeSeason(withFixedRivalries(beforeSavedIdeas(createSeason({ seed: 8, managedClubId: CLUB, injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, namingRights: false, simpleFacilities: false, staffing: false, injuryLengths: false })))));
     opening.formatVersion = 62; opening.state.schemaVersion = 62;
     expect(() => parseSeason(JSON.stringify(opening))).toThrow(/media requires format 67/);
   });

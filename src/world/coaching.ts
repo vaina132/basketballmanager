@@ -54,15 +54,23 @@ export function availableCoaches(coaching: SeasonCoaching, world: Pick<CareerWor
   const active = new Set(coaching.contracts.filter(contract => contract.releasedRound === null).map(contract => contract.coachId));
   return staffMarket(COACH_DIRECTORY, staffMarketWorld({ ...world, coaching })).filter(coach => !active.has(coach.id));
 }
+/**
+ * Whether a coach can join this club now. A coach the club keeps at a new season (`kept`) only needs to be free: the
+ * market is sized to the clubs, so a coach hired from it can drop out of it at a rollover (clubs promoted from a next
+ * division have no country in the world, which shortens the local pools), and staff under contract stay (format 76).
+ */
+function coachAvailable(coaching: SeasonCoaching, world: Pick<CareerWorld, 'clubs'> & WorldContext, coachId: string, kept: boolean): boolean {
+  return kept ? !coaching.contracts.some(contract => contract.coachId === coachId && contract.releasedRound === null) : availableCoaches(coaching, world).some(available => available.id === coachId);
+}
 
 /** The same commitment, vacancy and availability checks serve human and AI clubs. */
-function hireForClub(coaching: SeasonCoaching, clubs: readonly Team[], clubId: string, seasonNumber: number, round: number, coachId: string, focus: TrainingFocus, context: WorldContext = {}): SeasonCoaching {
+function hireForClub(coaching: SeasonCoaching, clubs: readonly Team[], clubId: string, seasonNumber: number, round: number, coachId: string, focus: TrainingFocus, context: WorldContext = {}, kept = false): SeasonCoaching {
   if (!coaching.enabledSince) throw new Error('Enable coaching staff before recruiting.');
   validateBoundary(seasonNumber, round); validateFocus(focus);
   if (!clubs.some(club => club.id === clubId)) throw new Error('The coaching contract needs a club in this league.');
   const coach = coachById(coachId);
   if (getClubCoaching(coaching, clubId).length >= MAX_COACHES) throw new Error('All three coaching positions are occupied.');
-  if (!availableCoaches(coaching, { ...context, clubs }).some(available => available.id === coachId)) throw new Error('This coach is not available: he already works for a club.');
+  if (!coachAvailable(coaching, { ...context, clubs }, coachId, kept)) throw new Error('This coach is not available: he already works for a club.');
   if (!usesClubLevelStaff({ coaching }) && coachingCommitted(coaching, clubId) + coach.fee > COACHING_BUDGET) throw new Error('This contract exceeds the remaining coaching budget. Released contracts remain committed for the season.');
   return { ...coaching, contracts: [...coaching.contracts, { id: `coach-s${seasonNumber}-c${coaching.contracts.length + 1}`, coachId, clubId, seasonNumber, startedRound: round, releasedRound: null, focus, renew: true }] };
 }
@@ -113,12 +121,12 @@ function canPayCoach(state: SeasonState, clubId: string, coach: Coach): boolean 
 }
 
 /** Contracts and their cash payment are one immutable operation for every club. */
-function hireContractForClub(state: SeasonState, clubId: string, coachId: string, focus: TrainingFocus): SeasonState {
+function hireContractForClub(state: SeasonState, clubId: string, coachId: string, focus: TrainingFocus, kept = false): SeasonState {
   if (usesClubLevelStaff(state)) {
-    const reason = coachHireReason(state, coachId, clubId);
+    const reason = hireReason(state, coachId, clubId, kept);
     if (reason) throw new Error(reason);
   } else if (staffCommitted(state, clubId) > coachingCommitted(state.coaching, clubId) && staffCommitted(state, clubId) + staffFee(state, clubId, coachById(coachId).fee) > staffLimit(state, clubId)) throw new Error('This contract exceeds the shared staff budget. Released staff fees remain committed for the season.');
-  const coaching = hireForClub(state.coaching, state.clubs, clubId, state.seasonNumber, state.round, coachId, focus, state);
+  const coaching = hireForClub(state.coaching, state.clubs, clubId, state.seasonNumber, state.round, coachId, focus, state, kept);
   return recordCoachFee({ ...state, coaching }, coaching.contracts.at(-1)!);
 }
 
@@ -127,13 +135,14 @@ function hireContractForClub(state: SeasonState, clubId: string, coachId: string
  * are refused only by the real rules: a free coaching place, the coach being available, Wages left (or the scaled staff
  * budget) for the season fee and Spending left to pay it now; `coaching-1` careers also keep the catalog coaching limit.
  */
-export function coachHireReason(state: SeasonState, coachId: string, clubId = state.managedClubId): string | null {
+export function coachHireReason(state: SeasonState, coachId: string, clubId = state.managedClubId): string | null { return hireReason(state, coachId, clubId, false); }
+function hireReason(state: SeasonState, coachId: string, clubId: string, kept: boolean): string | null {
   const coach = staffMember(COACH_DIRECTORY, coachId);
   if (state.status === 'complete') return 'Start the next season before recruiting a coach.';
   if (!state.coaching.enabledSince) return 'Enable coaching staff before recruiting.';
   if (!coach || !state.clubs.some(club => club.id === clubId)) return 'Choose a coach and club from this career.';
   if (getClubCoaching(state.coaching, clubId).length >= MAX_COACHES) return 'All three coaching places are filled. Release a coach first.';
-  if (!availableCoaches(state.coaching, state).some(available => available.id === coachId)) return 'This coach is not available: he already works for a club.';
+  if (!coachAvailable(state.coaching, state, coachId, kept)) return 'This coach is not available: he already works for a club.';
   if (!usesClubLevelStaff(state) && coachingCommitted(state.coaching, clubId) + coach.fee > COACHING_BUDGET) return 'This contract exceeds the remaining coaching budget. Released contracts remain committed for the season.';
   const fee = staffFee(state, clubId, coach.fee);
   if (state.finance.enabledSince) {
@@ -251,7 +260,8 @@ function renewCoaches(state: SeasonState, previous: SeasonCoaching): SeasonState
   for (const contract of previous.contracts.filter(contract => contract.releasedRound === null && contract.renew && next.clubs.some(club => club.id === contract.clubId))) {
     const coach = coachById(contract.coachId);
     if (getClubCoaching(next.coaching, contract.clubId).length < MAX_COACHES && staffCommitted(next, contract.clubId) + staffFee(next, contract.clubId, coach.fee) <= staffLimit(next, contract.clubId) && canPayCoach(next, contract.clubId, coach)) {
-      next = hireContractForClub(next, contract.clubId, contract.coachId, contract.focus);
+      // A renewal keeps the club's own coach, even one the new season's market no longer lists.
+      next = hireContractForClub(next, contract.clubId, contract.coachId, contract.focus, true);
     }
   }
   return next;
@@ -263,7 +273,7 @@ export function rolloverCoaching(coaching: SeasonCoaching, clubs: readonly Team[
   if (!coaching.enabledSince) return next;
   for (const contract of coaching.contracts.filter(contract => contract.releasedRound === null && contract.renew)) {
     if (getClubCoaching(next, contract.clubId).length < MAX_COACHES && (usesClubLevelStaff({ coaching }) || coachingCommitted(next, contract.clubId) + coachById(contract.coachId).fee <= COACHING_BUDGET)) {
-      next = hireForClub(next, clubs, contract.clubId, nextSeasonNumber, 1, contract.coachId, contract.focus);
+      next = hireForClub(next, clubs, contract.clubId, nextSeasonNumber, 1, contract.coachId, contract.focus, {}, true);
     }
   }
   return next;

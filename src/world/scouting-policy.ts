@@ -153,15 +153,17 @@ export function getPlayerKnowledge(state: SeasonState, playerId: string, clubId 
   if (!source?.attributes) return networkKnowledge(state, playerId, clubId) ?? empty;
   const level = (useOwn || own ? 3 : Math.min(3, Math.floor(reviews.reduce((sum, review) => sum + clubScoutingEvidence(state, clubId, review), 0) / 100))) as 1 | 2 | 3;
   const ageDays = Math.max(0, Math.round((Date.parse(`${state.date}T00:00:00Z`) - Date.parse(`${source.date}T00:00:00Z`)) / 86_400_000));
-  return { playerId, kind: 'report', level, attributes: null, ranges: scoutingRanges(state.seed, clubId, playerId, { ...source.attributes, ...scoutingExtraAttributes(state, playerId, source.date) }, level, ageDays), observedOn: source.date, observedClubId: source.clubId, ageDays, freshness: ageDays <= 28 ? 'recent' : ageDays <= 84 ? 'aging' : 'stale', source: useOwn ? 'squad' : 'observation', observations: reviews.length };
+  // Format 78 (`scouting-2`): the manager's report is at least one point sharper than his scouting network.
+  const rangeLevel = usesScoutNetwork(state) && clubId === state.managedClubId && state.scouting.enabledSince ? Math.max(level, 6 - scoutNetworkRange(state, clubId)) : level;
+  return { playerId, kind: 'report', level, attributes: null, ranges: scoutingRanges(state.seed, clubId, playerId, { ...source.attributes, ...scoutingExtraAttributes(state, playerId, source.date) }, rangeLevel, ageDays), observedOn: source.date, observedClubId: source.clubId, ageDays, freshness: ageDays <= 28 ? 'recent' : ageDays <= 84 ? 'aging' : 'stale', source: useOwn ? 'squad' : 'observation', observations: reviews.length };
 }
 
 /**
  * Format 78 (`scouting-2`, owner feedback 22 November 2026): the scouts' total quality, the sum of each scout's two
- * skills (2-20 each), sets how sharp the network's estimates are: ±8 without scouts, one point narrower for every 8
- * quality points, never sharper than ±4, so an observed report (±2 to ±4) stays the best reading.
+ * skills (2-20 each), sets how sharp the network's estimates are: ±5 without scouts, one point narrower for every 8
+ * quality points, never sharper than ±2. A scout report is always at least one point sharper than the network.
  */
-export const SCOUT_NETWORK_RULES = Object.freeze({ widestRange: 8, narrowestRange: 4, qualityPerPoint: 8 });
+export const SCOUT_NETWORK_RULES = Object.freeze({ widestRange: 5, narrowestRange: 2, qualityPerPoint: 8 });
 
 export function usesScoutNetwork(state: Pick<SeasonState, 'scouting'>): boolean { return state.scouting?.model === 'scouting-2'; }
 

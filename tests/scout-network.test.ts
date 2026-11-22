@@ -40,8 +40,8 @@ describe('scouting network', () => {
   it('widens the network and sharpens estimates with the scouts\' total quality', () => {
     const bare = withoutScouts(start);
     expect(scoutNetworkQuality(start)).toBeGreaterThan(0);
-    expect(scoutNetworkRange(bare)).toBe(8);
-    expect(scoutNetworkRange(start)).toBeLessThan(8);
+    expect(scoutNetworkRange(bare)).toBe(5);
+    expect(scoutNetworkRange(start)).toBeLessThan(5);
     expect(getScoutingDiscovery(start).networkOutsideCount).toBeGreaterThan(getScoutingDiscovery(bare).networkOutsideCount);
     const inside = getScoutingDiscovery(bare).networkPlayerIds[0]!;
     expect(width(getPlayerKnowledge(start, inside))).toBeLessThan(width(getPlayerKnowledge(bare, inside)));

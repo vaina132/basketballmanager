@@ -24,8 +24,8 @@ export function enableAssistant(state: SeasonState, opening = false): SeasonStat
   return keepingHeldStaff(() => recruitAiAssistants({ ...state, assistant: { ...state.assistant, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
 }
 
-function hireForClub(state: SeasonState, assistantId: string, clubId: string): SeasonState {
-  const quote = quoteAssistantHire(state, assistantId, clubId);
+function hireForClub(state: SeasonState, assistantId: string, clubId: string, kept = false): SeasonState {
+  const quote = quoteAssistantHire(state, assistantId, clubId, kept);
   if (!quote.canHire) throw new Error(quote.reason!);
   const contract: AssistantContract = { id: `assistant-contract-${state.assistant.contracts.length + 1}`, assistantId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: financeLedgerCount(state.finance) };
   return recordAssistantFee({ ...state, assistant: { ...state.assistant, contracts: [...state.assistant.contracts, contract] } }, contract);
@@ -89,7 +89,7 @@ function renewAssistant(state: SeasonState): SeasonState {
   if (!state.assistant.enabledSince) return state;
   let next = state;
   for (const contract of state.assistant.contracts.filter(contract => contract.seasonNumber === state.seasonNumber - 1 && contract.releasedRound === null && contract.renew)) {
-    if (quoteAssistantHire(next, contract.assistantId, contract.clubId).canHire) next = hireForClub(next, contract.assistantId, contract.clubId);
+    if (quoteAssistantHire(next, contract.assistantId, contract.clubId, true).canHire) next = hireForClub(next, contract.assistantId, contract.clubId, true);
   }
   return next;
 }

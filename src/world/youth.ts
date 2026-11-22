@@ -22,8 +22,8 @@ export function enableYouth(state: SeasonState, opening = false): SeasonState {
   // The career's opening staff are held, not hired: Spending left does not decide them (format 76).
   return keepingHeldStaff(() => recruitAiYouthCoaches({ ...state, youth: { ...state.youth, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
 }
-function hireForClub(state: SeasonState, coachId: string, clubId: string): SeasonState {
-  const quote = quoteYouthCoachHire(state, coachId, clubId);
+function hireForClub(state: SeasonState, coachId: string, clubId: string, kept = false): SeasonState {
+  const quote = quoteYouthCoachHire(state, coachId, clubId, kept);
   if (!quote.canHire) throw new Error(quote.reason!);
   const contract: YouthCoachContract = { id: `youth-contract-${state.youth.contracts.length + 1}`, coachId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: financeLedgerCount(state.finance) };
   return recordYouthFee({ ...state, youth: { ...state.youth, contracts: [...state.youth.contracts, contract] } }, contract);
@@ -74,6 +74,6 @@ function renewYouth(state: SeasonState): SeasonState {
   if (state.status !== 'active' || state.round !== 1) throw new Error('Renew youth coaches on the new season opening day.');
   if (!state.youth.enabledSince) return state;
   let next = state;
-  for (const contract of state.youth.contracts.filter(contract => contract.seasonNumber === state.seasonNumber - 1 && contract.releasedRound === null && contract.renew)) if (quoteYouthCoachHire(next, contract.coachId, contract.clubId).canHire) next = hireForClub(next, contract.coachId, contract.clubId);
+  for (const contract of state.youth.contracts.filter(contract => contract.seasonNumber === state.seasonNumber - 1 && contract.releasedRound === null && contract.renew)) if (quoteYouthCoachHire(next, contract.coachId, contract.clubId, true).canHire) next = hireForClub(next, contract.coachId, contract.clubId, true);
   return next;
 }

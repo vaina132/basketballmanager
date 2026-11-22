@@ -27,8 +27,8 @@ export function enableScouts(state: SeasonState, opening = false): SeasonState {
   return keepingHeldStaff(() => prepareScoutingAssignments(recruitAiScouts(next, opening)), opening);
 }
 
-function hireForClub(state: SeasonState, scoutId: string, clubId: string): SeasonState {
-  const quote = quoteScoutHire(state, scoutId, clubId);
+function hireForClub(state: SeasonState, scoutId: string, clubId: string, kept = false): SeasonState {
+  const quote = quoteScoutHire(state, scoutId, clubId, kept);
   if (!quote.canHire) throw new Error(quote.reason!);
   const contract: ScoutContract = { id: `scout-contract-${state.scouts.contracts.length + 1}`, scoutId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: financeLedgerCount(state.finance) };
   return recordScoutFee({ ...state, scouts: { ...state.scouts, contracts: [...state.scouts.contracts, contract] } }, contract);
@@ -93,6 +93,6 @@ function renewScouts(state: SeasonState): SeasonState {
   if (!state.scouts.enabledSince) return state;
   let next = state;
   const previous = state.scouts.contracts.filter(contract => contract.seasonNumber === state.seasonNumber - 1 && contract.releasedRound === null && contract.renew);
-  for (const contract of previous) if (SCOUT_DIRECTORY.some(scout => scout.id === contract.scoutId) && quoteScoutHire(next, contract.scoutId, contract.clubId).canHire) next = hireForClub(next, contract.scoutId, contract.clubId);
+  for (const contract of previous) if (SCOUT_DIRECTORY.some(scout => scout.id === contract.scoutId) && quoteScoutHire(next, contract.scoutId, contract.clubId, true).canHire) next = hireForClub(next, contract.scoutId, contract.clubId, true);
   return next;
 }

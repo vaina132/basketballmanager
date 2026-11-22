@@ -24,8 +24,8 @@ export function enableFitness(state: SeasonState, opening = false): SeasonState 
   return keepingHeldStaff(() => recruitAiFitnessCoaches({ ...state, fitness: { ...state.fitness, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
 }
 
-function hireForClub(state: SeasonState, coachId: string, clubId: string): SeasonState {
-  const quote = quoteFitnessHire(state, coachId, clubId);
+function hireForClub(state: SeasonState, coachId: string, clubId: string, kept = false): SeasonState {
+  const quote = quoteFitnessHire(state, coachId, clubId, kept);
   if (!quote.canHire) throw new Error(quote.reason!);
   const contract: FitnessContract = { id: `fitness-contract-${state.fitness.contracts.length + 1}`, coachId, clubId, seasonNumber: state.seasonNumber, startedRound: state.round, releasedRound: null, releasedLedgerIndex: null, renew: true, hiredLedgerIndex: financeLedgerCount(state.finance) };
   return recordFitnessFee({ ...state, fitness: { ...state.fitness, contracts: [...state.fitness.contracts, contract] } }, contract);
@@ -85,7 +85,7 @@ function renewFitness(state: SeasonState): SeasonState {
   if (!state.fitness.enabledSince) return state;
   let next = state;
   for (const contract of state.fitness.contracts.filter(contract => contract.seasonNumber === state.seasonNumber - 1 && contract.releasedRound === null && contract.renew)) {
-    if (quoteFitnessHire(next, contract.coachId, contract.clubId).canHire) next = hireForClub(next, contract.coachId, contract.clubId);
+    if (quoteFitnessHire(next, contract.coachId, contract.clubId, true).canHire) next = hireForClub(next, contract.coachId, contract.clubId, true);
   }
   return next;
 }

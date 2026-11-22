@@ -4,7 +4,7 @@ import type { SeasonState } from '../domain/season';
 import type { Team } from '../domain/types';
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { getFinanceBalance } from './finance';
-import { remainingStaffBudget, staffAllocation, staffCommitted, staffMoneyReason } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason } from './staff-policy';
 import { staffMarketWorld } from './staff-levels';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { seasonRounds, worldOf } from './career-world';
@@ -33,7 +33,8 @@ export function getClubFitnessEffects(state: Pick<SeasonState, 'fitness' | 'trai
   return { contractId: contract.id, coachId: contract.coachId, ...fitnessEffects(staffMember(FITNESS_DIRECTORY, contract.coachId)!) };
 }
 
-export function quoteFitnessHire(state: SeasonState, coachId: string, clubId = state.managedClubId): FitnessHireQuote {
+/** `kept`: a season-opening renewal, which only needs the coach free in careers with staff contracts (`staffCanJoin`). */
+export function quoteFitnessHire(state: SeasonState, coachId: string, clubId = state.managedClubId, kept = false): FitnessHireQuote {
   const coach = staffMember(FITNESS_DIRECTORY, coachId);
   const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
@@ -43,7 +44,7 @@ export function quoteFitnessHire(state: SeasonState, coachId: string, clubId = s
   else if (state.status !== 'active' || state.round === seasonRounds(state)) reason = 'No weekly training remains this season. Recruit a fitness coach when the next season starts.';
   else if (!state.clubs.some(club => club.id === clubId) || !coach) reason = 'Choose a fitness coach and club from this career.';
   else if (getClubFitnessCoach(state, clubId)) reason = 'The fitness coach position is already occupied.';
-  else if (!availableFitnessCoaches(state).some(available => available.id === coachId)) reason = 'This fitness coach already has an active club contract.';
+  else if (!staffCanJoin(state, kept, state.fitness.contracts.some(contract => contract.coachId === coachId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null), () => availableFitnessCoaches(state).some(available => available.id === coachId))) reason = 'This fitness coach already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a fitness coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a fitness coach.';
   else reason = staffMoneyReason(state, 'fitness coach', staffFee(state, clubId, coach.fee), remainingAllocation, remainingBudget, clubId);

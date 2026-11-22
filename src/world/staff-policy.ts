@@ -75,6 +75,17 @@ export function keepingHeldStaff<T>(run: () => T, held = true): T {
   try { return run(); } finally { heldStaffDepth -= 1; }
 }
 
+/**
+ * Whether a scout, fitness coach, physio, assistant or youth coach can join a club now. A season-opening renewal
+ * (`kept`) in a career with staff contracts (format 76) only needs him free: staff under contract stay, even one the new
+ * season's market no longer lists (the market is sized to the clubs, and clubs promoted from a next division have no
+ * country in the world, which shortens the local pools). New hires, and renewals in older careers (whose rollovers stay
+ * as they were), need the market. Head coaches follow the same rule in `src/world/coaching.ts`.
+ */
+export function staffCanJoin(state: Pick<SeasonState, 'coaching'>, kept: boolean, employed: boolean, inMarket: () => boolean): boolean {
+  return kept && usesStaffContracts(state) ? !employed : inMarket();
+}
+
 /** The Spending left check of a hire at this salary, or null when no check applies (older careers, no finances). */
 export function staffHireSpending(state: SeasonState, clubId: string, salary: number): StaffSpendingCheck | null {
   if (heldStaffDepth > 0 || !usesStaffContracts(state) || !state.finance.enabledSince) return null;

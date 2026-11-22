@@ -4,7 +4,7 @@ import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { getFinanceBalance } from './finance';
 import { MAX_REHABILITATION_REDUCTION_PERCENT } from './rehabilitation-policy';
-import { remainingStaffBudget, staffAllocation, staffCommitted, staffMoneyReason } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason } from './staff-policy';
 import { staffMarketWorld } from './staff-levels';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { seasonRounds, worldOf } from './career-world';
@@ -23,7 +23,8 @@ export function availablePhysios(state: Pick<SeasonState, 'physio' | 'seasonNumb
   const employed = new Set(state.physio.contracts.filter(contract => contract.seasonNumber === state.seasonNumber && contract.releasedRound === null).map(contract => contract.physioId));
   return staffMarket(PHYSIO_DIRECTORY, staffMarketWorld(state)).filter(physio => !employed.has(physio.id));
 }
-export function quotePhysioHire(state: SeasonState, physioId: string, clubId = state.managedClubId): PhysioHireQuote {
+/** `kept`: a season-opening renewal, which only needs the physio free in careers with staff contracts (`staffCanJoin`). */
+export function quotePhysioHire(state: SeasonState, physioId: string, clubId = state.managedClubId, kept = false): PhysioHireQuote {
   const physio = staffMember(PHYSIO_DIRECTORY, physioId);
   const remainingAllocation = Math.max(0, staffLimit(state, clubId) - staffCommitted(state, clubId));
   const remainingBudget = remainingStaffBudget(state, clubId);
@@ -33,7 +34,7 @@ export function quotePhysioHire(state: SeasonState, physioId: string, clubId = s
   else if (state.status !== 'active' || state.round === seasonRounds(state)) reason = 'No weekly medical review remains this season. Recruit a physio when the next season starts.';
   else if (!state.clubs.some(club => club.id === clubId) || !physio) reason = 'Choose a physio and club from this career.';
   else if (getClubPhysio(state, clubId)) reason = 'The physio position is already occupied.';
-  else if (!availablePhysios(state).some(available => available.id === physioId)) reason = 'This physio already has an active club contract.';
+  else if (!staffCanJoin(state, kept, state.physio.contracts.some(contract => contract.physioId === physioId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null), () => availablePhysios(state).some(available => available.id === physioId))) reason = 'This physio already has an active club contract.';
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a physio.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a physio.';
   else reason = staffMoneyReason(state, 'physio', staffFee(state, clubId, physio.fee), remainingAllocation, remainingBudget, clubId);

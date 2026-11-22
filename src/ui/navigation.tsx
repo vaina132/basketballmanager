@@ -1,6 +1,6 @@
 import { Icon, type IconName } from './Icon'
 
-export type Page = 'home' | 'inbox' | 'squad' | 'match' | 'season' | 'training' | 'staff' | 'club' | 'board' | 'transfers' | 'medical' | 'academy' | 'calendar' | 'europe'
+export type Page = 'home' | 'inbox' | 'squad' | 'match' | 'season' | 'training' | 'staff' | 'club' | 'board' | 'transfers' | 'medical' | 'academy' | 'calendar' | 'europe' | 'national'
 /**
  * Owner feedback (18 November 2026): the budget bar shows only where money is decided: the desk, Transfers,
  * Squad > Contracts, Staff and Club (facilities and the bank).
@@ -23,7 +23,7 @@ export const SQUAD_VIEWS: readonly { id: SquadView; label: string }[] = [
   { id: 'contracts', label: 'Contracts' },
   { id: 'medical', label: 'Medical' },
 ]
-export type CompetitionsView = 'league' | 'calendar' | 'europe'
+export type CompetitionsView = 'league' | 'calendar' | 'europe' | 'national'
 export type TrainingView = 'plan' | 'academy'
 export type ClubView = 'club' | 'board'
 export interface ViewTab<T extends string> { id: T; label: string; icon: IconName }
@@ -32,8 +32,9 @@ export interface ViewTab<T extends string> { id: T; label: string; icon: IconNam
  * Owner decisions (22 November 2026): Calendar and Europe are tabs of Competitions, Academy a tab of Training and Board
  * a tab of Club. Europe shows only in worlds that have European games, as its menu item did.
  */
-export function competitionsViews(europe: boolean): ViewTab<CompetitionsView>[] {
-  return [{ id: 'league', label: 'League', icon: 'ball' }, { id: 'calendar', label: 'Calendar', icon: 'calendar' }, ...(europe ? [{ id: 'europe' as const, label: 'Europe', icon: 'star' as const }] : [])]
+export function competitionsViews(europe: boolean, national = false): ViewTab<CompetitionsView>[] {
+  // Format 80: careers with national teams add their competitions as the last tab.
+  return [{ id: 'league', label: 'League', icon: 'ball' }, { id: 'calendar', label: 'Calendar', icon: 'calendar' }, ...(europe ? [{ id: 'europe' as const, label: 'Europe', icon: 'star' as const }] : []), ...(national ? [{ id: 'national' as const, label: 'National teams', icon: 'target' as const }] : [])]
 }
 export const TRAINING_VIEWS: readonly ViewTab<TrainingView>[] = [{ id: 'plan', label: 'Training', icon: 'training' }, { id: 'academy', label: 'Academy', icon: 'people' }]
 export const CLUB_VIEWS: readonly ViewTab<ClubView>[] = [{ id: 'club', label: 'Facilities & money', icon: 'building' }, { id: 'board', label: 'Board', icon: 'shield' }]
@@ -64,7 +65,7 @@ export function PageViewTabs<T extends string>({ label, idPrefix, views, current
 }
 
 /** Page titles use the menu's own words (simplify pass, owner, 22 November 2026). */
-export const PAGE_NAMES: Record<Page, string> = { home: 'Desk', inbox: 'Inbox', squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', academy: 'Academy', medical: 'Medical', staff: 'Staff', club: 'Club', board: 'Board', transfers: 'Transfers', calendar: 'Calendar', europe: 'Europe' }
+export const PAGE_NAMES: Record<Page, string> = { home: 'Desk', inbox: 'Inbox', squad: 'Squad', match: 'Match center', season: 'Competitions', training: 'Training', academy: 'Academy', medical: 'Medical', staff: 'Staff', club: 'Club', board: 'Board', transfers: 'Transfers', calendar: 'Calendar', europe: 'Europe', national: 'National team' }
 
 const ITEMS: Record<Page, NavItem> = {
   home: { id: 'home', label: 'Desk', icon: 'home' },
@@ -82,13 +83,14 @@ const ITEMS: Record<Page, NavItem> = {
   europe: { id: 'europe', label: 'Europe', icon: 'star' },
   academy: { id: 'academy', label: 'Academy', icon: 'people' },
   medical: { id: 'medical', label: 'Medical', icon: 'medical' },
+  national: { id: 'national', label: 'National team', icon: 'target' },
 }
 
 /**
  * The left menu, ordered by use in small groups (owner, 16 November 2026: a short menu for a swifter game; nothing that
  * exists is hidden). An exhibition match has only the desk, squad, match and competitions.
  */
-export function mainNavigation({ career }: { career: boolean }): NavItem[][] {
+export function mainNavigation({ career, national = false }: { career: boolean; national?: boolean }): NavItem[][] {
   if (!career) return [[ITEMS.home], [ITEMS.squad, ITEMS.match], [ITEMS.season]]
   // Owner decisions (22 November 2026): Medical is a view of Squad; Calendar and Europe are tabs of Competitions,
   // Academy a tab of Training and Board a tab of Club (MERGED_PAGES): 14 menu items became 9.
@@ -96,13 +98,14 @@ export function mainNavigation({ career }: { career: boolean }): NavItem[][] {
     [ITEMS.home, ITEMS.inbox],
     // Owner feedback (22 November 2026): scouting lives inside Transfers; scouts are hired on Staff.
     [ITEMS.squad, ITEMS.match, ITEMS.transfers, ITEMS.training, ITEMS.staff],
-    [ITEMS.club, ITEMS.season],
+    // Format 80: the national team's page only while the manager coaches one.
+    [ITEMS.club, ITEMS.season, ...(national ? [ITEMS.national] : [])],
   ]
 }
 
 /** Without a club: the desk with job offers, the inbox and the world's competitions (Calendar and Europe are its tabs). */
-export function unemployedNavigation(): NavItem[][] {
-  return [[ITEMS.home, ITEMS.inbox], [ITEMS.season]]
+export function unemployedNavigation(national = false): NavItem[][] {
+  return [[ITEMS.home, ITEMS.inbox], [ITEMS.season, ...(national ? [ITEMS.national] : [])]]
 }
 
 /** The left menu's buttons; a thin rule separates the groups. */

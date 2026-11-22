@@ -8,7 +8,8 @@ import { clubRosterLimit } from './club-roster-policy';
 import { getClubContractSummary, MIN_ROSTER_SIZE } from './employment-policy';
 import { advanceMarket } from './market';
 import { getMarketStartReason, getNextMarketDate } from './market-policy';
-import { advanceSeason, MAX_SEASON_NUMBER, midSeasonDismissalPossible, previewSeasonEnd, rolloverSeason } from './season';
+import { commitNationalMatch, dueManagerNationalGame, startNationalMatch } from './national';
+import { advanceSeason, currentGameDay, MAX_SEASON_NUMBER, midSeasonDismissalPossible, previewSeasonEnd, rolloverSeason } from './season';
 
 /**
  * What the one Continue control does next (owner request, 16 November 2026: one Continue button that moves the calendar
@@ -22,6 +23,7 @@ import { advanceSeason, MAX_SEASON_NUMBER, midSeasonDismissalPossible, previewSe
  */
 export type ContinueAction =
   | { kind: 'match' }
+  | { kind: 'national' }
   | { kind: 'round' }
   | { kind: 'market'; date: string }
   | { kind: 'rollover' }
@@ -30,7 +32,12 @@ export type ContinueAction =
 export function continueAction(state: SeasonState): ContinueAction {
   if (state.status === 'active') {
     const match = state.activeMatch;
-    return match && (match.status !== 'finished' || match.requiredSubstitutions.length) ? { kind: 'match' } : { kind: 'round' };
+    if (match && (match.status !== 'finished' || match.requiredSubstitutions.length)) return { kind: 'match' };
+    // Format 80: the manager's national game (FIBA window) is played before the week closes: open it, then record it.
+    const national = state.national?.activeMatch;
+    if (national) return national.status !== 'finished' || national.requiredSubstitutions.length ? { kind: 'match' } : { kind: 'national' };
+    if (closesWeek(state) && dueManagerNationalGame(state)) return { kind: 'national' };
+    return { kind: 'round' };
   }
   if (state.seasonNumber >= MAX_SEASON_NUMBER) return { kind: 'blocked', reason: 'The calendar has reached its final supported season.' };
   if (state.market?.enabledSince) {
@@ -47,6 +54,12 @@ export function continueAction(state: SeasonState): ContinueAction {
   return { kind: 'rollover' };
 }
 
+/** Whether the next game day is the week's last (or the week has none left): its step closes the week. */
+function closesWeek(state: SeasonState): boolean {
+  const day = currentGameDay(state);
+  return !day || !state.fixtures.some(fixture => fixture.round === state.round && !fixture.result && fixture.date > day);
+}
+
 /**
  * Format 63: a week whose review could end the manager's job (the final matchday, or a mid-season review within reach
  * of dismissal) is previewed first, so the manager can choose among job offers before it is committed.
@@ -56,7 +69,7 @@ export function needsSeasonEndPreview(state: SeasonState): boolean {
 }
 
 /** A step's result: the next state and the operation that made it, or the board's decision for the manager to answer first. */
-export type ContinueStepResult = { state: SeasonState; step: 'round' | 'market' | 'rollover' } | { outlook: SeasonEndOutlook };
+export type ContinueStepResult = { state: SeasonState; step: 'round' | 'market' | 'rollover' | 'national' } | { outlook: SeasonEndOutlook };
 
 /**
  * One Continue step from `state`. `decided` is set once the manager answered the season-end choice (`decision` empty:
@@ -66,6 +79,7 @@ export function runContinueStep(state: SeasonState, choice: { decided?: boolean;
   const action = continueAction(state);
   if (action.kind === 'match') throw new Error('Finish the current match and resolve required decisions before continuing.');
   if (action.kind === 'blocked') throw new Error(action.reason);
+  if (action.kind === 'national') return { state: state.national?.activeMatch ? commitNationalMatch(state) : startNationalMatch(state), step: 'national' };
   if (action.kind === 'round') {
     if (!choice.decided && needsSeasonEndPreview(state)) {
       const outlook = previewSeasonEnd(state);

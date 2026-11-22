@@ -20,13 +20,15 @@ export interface InboxActions {
   onContractReply?: (playerId: string, reply: ContractRequestReply) => void
   /** Format 78: answer a club's offer for one of your players (`season`: in-season market; `offseason`: offseason market). */
   onBidDecision?: (offerId: string, market: 'season' | 'offseason', response: 'accept' | 'reject' | 'counter') => void
+  /** Format 80: answer a national federation's job offer. */
+  onNationalOffer?: (offerId: string, accept: boolean) => void
 }
 
 /** Owner feedback (18 November 2026): one list of every message, newest first, with an Unread filter instead of category tabs. */
 type Filter = 'all' | 'unread'
 const FILTERS: { id: Filter; label: string }[] = [{ id: 'all', label: 'All' }, { id: 'unread', label: 'Unread' }]
 const ICONS: Record<InboxCategory, IconName> = { press: 'mail', board: 'shield', club: 'building', players: 'people' }
-const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad', contract: 'Open contract offer', jobs: 'Open job market', bid: 'Open transfers' }
+const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad', contract: 'Open contract offer', jobs: 'Open job market', bid: 'Open transfers', national: 'Open national team' }
 const signed = (value: number) => `${value > 0 ? '+' : '−'}${Math.abs(value)}`
 
 export function pressEffectText(answer: PressAnswer, topic?: PressTopic, subject?: string): string {
@@ -132,7 +134,7 @@ function BidDecision({ season, item, busy, onDecision }: { season: SeasonState; 
   </div>
 }
 
-export function InboxWorkspace({ season, busy = false, onAnswerPress, onOpen, onContractReply, onBidDecision, initialSelectedId = null }: InboxActions & { season: SeasonState; busy?: boolean; initialSelectedId?: string | null }) {
+export function InboxWorkspace({ season, busy = false, onAnswerPress, onOpen, onContractReply, onBidDecision, onNationalOffer, initialSelectedId = null }: InboxActions & { season: SeasonState; busy?: boolean; initialSelectedId?: string | null }) {
   const [filter, setFilter] = useState<Filter>('all')
   const readKey = inboxReadKey(season)
   const [read, setRead] = useState<Set<string>>(() => loadRead(readKey))
@@ -178,6 +180,10 @@ export function InboxWorkspace({ season, busy = false, onAnswerPress, onOpen, on
             {pressOpen ? <PressConference season={season} question={pressOpen} busy={busy} onAnswer={onAnswerPress} />
               : <p className="inbox-reader-text">{selected.detail}</p>}
             {selected.target === 'bid' && selected.needsAction && onBidDecision && <BidDecision season={season} item={selected} busy={busy} onDecision={onBidDecision} />}
+            {selected.target === 'national' && selected.needsAction && selected.offerId && onNationalOffer && <div className="inbox-bid" data-national-offer={selected.offerId}><div className="inbox-bid-actions">
+              <button className="button primary small" data-national-accept={selected.offerId} onClick={() => onNationalOffer(selected.offerId!, true)} disabled={busy}>Accept<Icon name="check" size={14} /></button>
+              <button className="button small" data-national-decline={selected.offerId} onClick={() => onNationalOffer(selected.offerId!, false)} disabled={busy}>Decline</button>
+            </div></div>}
             {request && onContractReply && <div id="contract-requests" className="inbox-contract-requests" tabIndex={-1}><ContractRequestCard season={season} request={request} busy={busy} onReply={onContractReply} /></div>}
             <div className="inbox-reader-actions">
               {selected.target !== 'press' && <button className="button small" onClick={() => onOpen(selected.target as Exclude<InboxTarget, 'press'>, selected.playerId)} disabled={busy}>{OPEN_LABELS[selected.target as Exclude<InboxTarget, 'press'>]}<Icon name="chevron" size={14} /></button>}

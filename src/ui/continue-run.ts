@@ -76,6 +76,11 @@ export function continueStop(before: SeasonState, after: SeasonState): ContinueS
     const recruitment = !unemployed && isMarketActive(after) ? ' Make offers for next season in Transfers; Continue moves through the offseason.' : ''
     return { kind: moved ? 'career' : 'season-end', message: `${after.status === 'complete' ? `Season complete. ${text}` : text}${recruitment}`, page: moved ? 'home' : recruitment ? 'transfers' : to('season') }
   }
+  // Format 80: the manager's national game is ready in the Match center.
+  const nationalMatch = after.national?.activeMatch
+  if (after.status === 'active' && nationalMatch && nationalMatch.status !== 'finished' && !before.national?.activeMatch) {
+    return { kind: 'match', message: `Your national team plays: ${nationalMatch.home.name} vs ${nationalMatch.away.name}.`, page: 'match' }
+  }
   if (after.status === 'active' && after.activeMatch && (after.activeMatch.status !== 'finished' || after.activeMatch.result?.kind === 'default')) {
     const fixture = after.fixtures.find(item => item.id === after.activeFixtureId)
     return { kind: 'match', message: `Your next game is ready${fixture ? `: ${nextGameText(after, fixture)}` : ''}.${pressWaiting(after) ? ' A press question waits in the Inbox.' : ''}`, page: 'match' }
@@ -111,6 +116,7 @@ export function continueStepView(state: SeasonState): ContinueStepView {
   const action = continueAction(state)
   if (action.kind === 'market') return { day: action.date, label: 'Recruitment day: player replies and signings' }
   if (action.kind === 'rollover') return { day: state.date, label: `Preparing the ${seasonLabel(state.seasonNumber + 1)} season` }
+  if (action.kind === 'national') return { day: careerToday(state), label: state.national?.activeMatch ? 'National games of the day' : 'Your national team\'s next game' }
   if (action.kind !== 'round') return { day: careerToday(state), label: '' }
   // Without a club, a step plays the whole week (no managed match to stop for).
   if (isUnemployed(state)) {

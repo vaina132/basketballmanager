@@ -1,0 +1,22 @@
+.national-team-name{display:inline-flex;align-items:center;gap:8px;min-width:0;font-weight:500;font-size:12px}
+.national-team-name small{color:var(--accent);font-weight:400;font-size:12px;margin-left:7px}
+.national-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:0 12px}
+.national-panel-body{padding:10px 14px}
+.national-callups{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:12px}
+.national-callups li{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.national-page{display:flex;flex-direction:column;gap:12px;min-width:0}
+.national-page .panel{border-radius:2px;min-width:0;overflow:hidden;background:var(--surface)}
+.national-facts{display:flex;flex-wrap:wrap;gap:8px 22px;padding:12px 14px;font-size:12px}
+.national-facts div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.national-facts span{color:var(--muted)}
+.national-actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 14px 12px}
+.national-squad-table td,.national-squad-table th{white-space:nowrap}
+.national-squad-table input{accent-color:var(--accent);width:16px;height:16px}
+.national-offer{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.national-offer-actions{display:flex;gap:8px;flex-wrap:wrap}
+@media (max-width:600px){.national-facts{gap:8px 16px}}
+.national-groups .season-standings-table{min-width:0}
+.national-workspace .season-matchday-identity,.national-workspace .season-matchday-action{flex:1 1 auto;min-width:0;max-width:100%}
+.national-workspace .season-year-filter select{width:100%}
+@media (max-width:600px){.national-workspace .season-matchday{flex-direction:column;align-items:stretch;gap:10px}.national-workspace .season-matchday-action{justify-content:flex-start}}
+.national-workspace .season-table-scroll,.national-page .season-table-scroll,.national-team-name{position:relative}

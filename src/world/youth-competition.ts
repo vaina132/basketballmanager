@@ -5,7 +5,7 @@ import { financeLedgerCount } from './finance-ledger';
 import type { SeasonAcademy } from '../domain/academy';
 import type { SeasonInjury, SeasonState, Standing } from '../domain/season';
 import type { Team } from '../domain/types';
-import type { SeasonYouthCompetition, YouthCompetitionSeason, YouthFixture, YouthFixtureFull, YouthPlayerStatus } from '../domain/youth-competition';
+import type { SeasonYouthCompetition, YouthCompetitionSeason, YouthFixture, YouthFixtureFull, YouthFixtureResult, YouthPlayerStatus } from '../domain/youth-competition';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { domesticSchedule } from './season';
 import { developAcademyPlayer, emptyAcademyPoints, getAcademyProspect } from './academy-policy';
@@ -62,8 +62,8 @@ export function getYouthFixtureTeams(fixture: YouthFixture, state?: Pick<SeasonS
   return { home, away };
 }
 
-/** The same ordered prospect membership and shirt-number assignment serve live matches and historical reviews. */
-function buildYouthClubTeam(state: Pick<SeasonState, 'clubs' | 'academy' | 'seasonNumber' | 'round'> & WorldContext, clubId: string): Team {
+/** The same ordered prospect membership and shirt-number assignment serve live matches, historical reviews and save checks. */
+export function buildYouthClubTeam(state: Pick<SeasonState, 'clubs' | 'academy' | 'seasonNumber' | 'round'> & WorldContext, clubId: string): Team {
   // Historical games may involve a club that has since left the full world (step 3.4d-2): its identity is in the world.
   const club = state.clubs.find(club => club.id === clubId) ?? (state.world ?? state.dataPackId !== undefined ? worldOf(state).clubs.find(club => club.id === clubId) : undefined);
   if (!club) throw new Error('A youth fixture must use clubs in this league.');
@@ -133,9 +133,14 @@ function supplement(state: SeasonState): { academy: SeasonAcademy; intakeIds: st
   return { academy, intakeIds };
 }
 
+/** A youth season's scheduled games from `fromRound`, unplayed: the senior calendar's pairings with youth identities. */
+export function youthSeasonFixtures(state: SeasonState, fromRound: number): YouthFixtureFull[] {
+  return domesticSchedule(state.clubs, state.seasonNumber, state).filter(fixture => fixture.round >= fromRound).map(fixture => ({ ...fixture, id: `youth-s${state.seasonNumber}-r${fixture.round}-${worldOf(state).domesticLeagues ? fixture.id : fixture.id.slice(fixture.id.lastIndexOf('g'))}`, seasonNumber: state.seasonNumber, home: null, away: null, startingConditions: null, result: null }));
+}
+
 function prepare(state: SeasonState, fromRound: number): SeasonState {
   const added = supplement(state);
-  const fixtures: YouthFixture[] = domesticSchedule(state.clubs, state.seasonNumber, state).filter(fixture => fixture.round >= fromRound).map(fixture => ({ ...fixture, id: `youth-s${state.seasonNumber}-r${fixture.round}-${worldOf(state).domesticLeagues ? fixture.id : fixture.id.slice(fixture.id.lastIndexOf('g'))}`, seasonNumber: state.seasonNumber, home: null, away: null, startingConditions: null, result: null }));
+  const fixtures: YouthFixture[] = youthSeasonFixtures(state, fromRound);
   const season: YouthCompetitionSeason = { seasonNumber: state.seasonNumber, fromRound, preparedOn: state.date, supplementalIntakeIds: added.intakeIds, fixtures };
   return { ...state, academy: added.academy, youthCompetition: { ...state.youthCompetition, seasons: [...state.youthCompetition.seasons, season] } };
 }
@@ -181,21 +186,26 @@ export function prepareYouthFixture(state: SeasonState, fixture: YouthFixture): 
   return { home, away, startingConditions, unavailable, lineups: { home: lineup(home), away: lineup(away) } };
 }
 
+export const YOUTH_DEFAULT_REASON = 'The match ended after a team had fewer than two eligible players.';
+
+/** The unplayed decision when a side has fewer than five available players: a 20-0 forfeit, or no contest for both. */
+export function youthShortageResult(home: Pick<Team, 'id' | 'name'>, away: Pick<Team, 'id' | 'name'>, homeShort: boolean, awayShort: boolean): YouthFixtureResult {
+  const both = homeShort && awayShort, score = both ? { home: 0, away: 0 } : { home: homeShort ? 0 : 20, away: awayShort ? 0 : 20 };
+  return { kind: both ? 'no-contest' : 'default', played: false, score, officialScore: { ...score }, winnerClubId: both ? null : homeShort ? away.id : home.id, periods: 0, stats: {}, injuries: [], reason: both ? 'Both academies have fewer than five available players; no contest.' : `${homeShort ? home.name : away.name} have fewer than five available players; 20–0 forfeit.` };
+}
+
 /** Actual engine statistics when playable; explicit unplayed decisions never manufacture minutes or an MVP. */
 export function settleYouthFixture(state: SeasonState, fixture: YouthFixture): YouthFixtureFull {
   if (fixture.result) throw new Error('A youth fixture can be settled only once.');
   const prepared = prepareYouthFixture(state, fixture), { home, away, startingConditions, lineups, unavailable } = prepared;
   const homeShort = lineups.home.length < 5, awayShort = lineups.away.length < 5;
-  if (homeShort || awayShort) {
-    const both = homeShort && awayShort, score = both ? { home: 0, away: 0 } : { home: homeShort ? 0 : 20, away: awayShort ? 0 : 20 };
-    return { ...fixture, home, away, startingConditions, result: { kind: both ? 'no-contest' : 'default', played: false, score, officialScore: { ...score }, winnerClubId: both ? null : homeShort ? away.id : home.id, periods: 0, stats: {}, injuries: [], reason: both ? 'Both academies have fewer than five available players; no contest.' : `${homeShort ? home.name : away.name} have fewer than five available players; 20–0 forfeit.` } };
-  }
+  if (homeShort || awayShort) return { ...fixture, home, away, startingConditions, result: youthShortageResult(home, away, homeShort, awayShort) };
   // `youth-competition-2`: earlier youth injuries raise the risk of the same kind again and lengthen a recurrence.
   const playerIds = [...home.players, ...away.players].map(player => player.id), earlier = youthInjuryHistory(state.youthCompetition, playerIds, fixture.date);
   const injuryRisk = state.injuryMode === 'off' ? {} : injuryRiskMap(earlier, playerIds, fixture.date);
   const match = simulateToEnd(createFixtureMatch(youthFixtureSeed(state.seed, fixture.id), home, away, { lineups, conditions: startingConditions, preExistingInjuries: unavailable, injuryMode: state.injuryMode, autoSubstitutions: { home: true, away: true }, ...(Object.keys(injuryRisk).length ? { injuryRisk } : {}) }));
   if (!match.result || match.status !== 'finished') throw new Error('The youth match must complete before its result is recorded.');
-  return { ...fixture, home, away, startingConditions, result: { kind: match.result.kind === 'default' ? 'default' : 'played', played: true, score: { ...match.score }, officialScore: { ...match.result.officialScore }, winnerClubId: match[match.result.winner].id, periods: match.period, stats: Object.fromEntries(Object.entries(match.stats).map(([id, stats]) => [id, { ...stats }])), injuries: injuriesFromMatch(state.seed, fixture, match, earlier), reason: match.result.kind === 'default' ? 'The match ended after a team had fewer than two eligible players.' : null } };
+  return { ...fixture, home, away, startingConditions, result: { kind: match.result.kind === 'default' ? 'default' : 'played', played: true, score: { ...match.score }, officialScore: { ...match.result.officialScore }, winnerClubId: match[match.result.winner].id, periods: match.period, stats: Object.fromEntries(Object.entries(match.stats).map(([id, stats]) => [id, { ...stats }])), injuries: injuriesFromMatch(state.seed, fixture, match, earlier), reason: match.result.kind === 'default' ? YOUTH_DEFAULT_REASON : null } };
 }
 
 export function processYouthRound(state: SeasonState): SeasonState {

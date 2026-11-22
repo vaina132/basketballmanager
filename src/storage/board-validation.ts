@@ -150,8 +150,9 @@ function replayRequests(state: SeasonState, asked: BoardRequest[], recorded: rea
   const path = stored ? `board.requests[${recorded.indexOf(stored)}]` : 'board.requests';
   if (!draw) { if (stored) fail(path, 'must follow the president\'s seeded draw at its review'); return settled; }
   const pick = (candidates: readonly RequestTerms[]) => candidates.length ? candidates[draw.kindHash % candidates.length]! : null;
-  // Without a ticket request (no ticket plan, or the price already at its maximum), or with one in first place.
-  const options = [pick(draw.squad), draw.ticketPlan ? pick([{ kind: 'raise-ticket-price' }, ...draw.squad]) : null];
+  // Without a ticket request (finances off, or the price already at its maximum), or with one in first place. Every
+  // full-world club has a ticket plan while finances are on (the final state's plans may have dropped a club since).
+  const options = [pick(draw.squad), context.finance.enabledSince ? pick([{ kind: 'raise-ticket-price' }, ...draw.squad]) : null];
   if (!stored) {
     if (draw.squad.length) fail(path, `must record the president's request at the review of week ${round} of season ${year}`);
     return settled;

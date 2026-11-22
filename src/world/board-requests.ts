@@ -99,12 +99,12 @@ export function issueBoardRequest(state: RequestState, clubId: string, interfere
 }
 
 /** A review's request draw: the seeded kind draw and the candidates that read only the squad, results and injuries. */
-export interface RequestDraw { deadlineRound: number; kindHash: number; squad: RequestTerms[]; ticketPlan: boolean }
+export interface RequestDraw { deadlineRound: number; kindHash: number; squad: RequestTerms[] }
 
 /**
  * Whether the president asks at this review (null when the rules or the seeded draw say no), with what the save check
  * can rebuild (22 November 2026). The ticket request reads the club's ticket plan of that moment, which the save does
- * not journal; `ticketPlan` says only whether the club had a plan then.
+ * not journal, so the caller decides whether a ticket request was possible.
  */
 export function requestDraw(state: RequestState, clubId: string, interference: PresidentTraitLevel): RequestDraw | null {
   const rules = PRESIDENT_RULES.requests, requests = state.board.requests ?? [];
@@ -114,7 +114,7 @@ export function requestDraw(state: RequestState, clubId: string, interference: P
   const chance = rules.weeklyChance[level(interference)]!;
   if (hash(state.seed, `president-request|${state.seasonNumber}|${state.round}|${clubId}`) % 10_000 >= Math.round(chance * 10_000)) return null;
   if (!state.fixtures.some(fixture => isRegularFixture(fixture) && !fixture.result && fixture.round > state.round && fixture.round <= deadlineRound && [fixture.homeClubId, fixture.awayClubId].includes(clubId))) return null;
-  return { deadlineRound, kindHash: hash(state.seed, `president-request-kind|${state.seasonNumber}|${state.round}|${clubId}`), squad: squadCandidates(state, clubId, deadlineRound), ticketPlan: !!(state.finance.enabledSince && state.finance.plans[clubId]) };
+  return { deadlineRound, kindHash: hash(state.seed, `president-request-kind|${state.seasonNumber}|${state.round}|${clubId}`), squad: squadCandidates(state, clubId, deadlineRound) };
 }
 
 export const REQUEST_KINDS: readonly BoardRequestKind[] = ['raise-ticket-price', 'sign-player', 'play-player'];

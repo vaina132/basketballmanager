@@ -1,6 +1,19 @@
+import { useState } from 'react'
 import type { Player } from '../domain/types'
+import { PLAYER_PHOTOS, type PlayerPhoto } from '../data/player-photos'
+import './player-photo.css'
+
+/**
+ * Real player photos from Wikimedia Commons (owner decision, 22 November 2026). Only real-pack players
+ * with a freely licensed photo have entries, so fictional worlds and generated players keep the drawn avatar.
+ */
+export const playerPhoto = (playerId: string | null | undefined): PlayerPhoto | null => playerId && Object.hasOwn(PLAYER_PHOTOS, playerId) ? PLAYER_PHOTOS[playerId]! : null
+export const playerPhotoUrl = (photo: PlayerPhoto): string => `/photos/players/${photo.file}`
 
 export function Avatar({ player, color, size = 42 }: { player: Player; color: string; size?: number }) {
+  const photo = playerPhoto(player.id)
+  const [failed, setFailed] = useState(false)
+  if (photo && !failed) return <img className="avatar avatar-photo" src={playerPhotoUrl(photo)} alt={player.name} width={size} height={size} loading="lazy" decoding="async" data-player-photo={player.id} onError={() => setFailed(true)} />
   return <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label={`${player.name}, number ${player.number}`} className="avatar">
     <rect width="64" height="64" rx="18" fill="var(--surface-3)" />
     <path d="M8 64v-8c0-12 11-19 24-19s24 7 24 19v8" fill={color} />
@@ -12,4 +25,11 @@ export function Avatar({ player, color, size = 42 }: { player: Player; color: st
     <path d="m20 42 6 6m18-6-6 6" fill="none" stroke="#fff" strokeOpacity=".5" strokeWidth="2" />
     <text x="32" y="61" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff">{player.number}</text>
   </svg>
+}
+
+/** The tiny photo credit under a profile portrait: author (linked to the Commons file) and licence (linked). */
+export function PhotoCredit({ playerId }: { playerId: string }) {
+  const photo = playerPhoto(playerId)
+  if (!photo) return null
+  return <small className="photo-credit" data-photo-credit={playerId}>Photo: <a href={photo.source} target="_blank" rel="noreferrer">{photo.author}</a>, {photo.licenceUrl ? <a href={photo.licenceUrl} target="_blank" rel="noreferrer">{photo.licence}</a> : photo.licence}</small>
 }

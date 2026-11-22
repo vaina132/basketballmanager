@@ -4,7 +4,7 @@ import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { getFinanceBalance } from './finance';
 import { MAX_REHABILITATION_REDUCTION_PERCENT } from './rehabilitation-policy';
-import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason, minimumStaffAppointment } from './staff-policy';
 import { staffMarketWorld } from './staff-levels';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { seasonRounds, worldOf } from './career-world';
@@ -35,6 +35,8 @@ export function quotePhysioHire(state: SeasonState, physioId: string, clubId = s
   else if (!state.clubs.some(club => club.id === clubId) || !physio) reason = 'Choose a physio and club from this career.';
   else if (getClubPhysio(state, clubId)) reason = 'The physio position is already occupied.';
   else if (!staffCanJoin(state, kept, state.physio.contracts.some(contract => contract.physioId === physioId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null), () => availablePhysios(state).some(available => available.id === physioId))) reason = 'This physio already has an active club contract.';
+  // Format 84: a computer club's minimum appointment is not refused for money.
+  else if (minimumStaffAppointment()) reason = null;
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a physio.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a physio.';
   else reason = staffMoneyReason(state, 'physio', staffFee(state, clubId, physio.fee), remainingAllocation, remainingBudget, clubId);

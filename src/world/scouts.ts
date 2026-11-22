@@ -12,7 +12,7 @@ import { SCOUT_DIRECTORY } from '../data/staff-directory';
 import type { Scout } from '../domain/scouts';
 import { scoutRating } from './scout-policy';
 import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
-import { keepingHeldStaff, staffHireBudget } from './staff-policy';
+import { appointingMinimumStaff, cheapestStaff, keepingHeldStaff, staffHireBudget, usesFullStaff } from './staff-policy';
 import { staffFee } from './economy';
 
 export function createScouts(): SeasonScouts { return { model: 'scouts-1', enabledSince: null, contracts: [] }; }
@@ -27,6 +27,10 @@ export function enableScouts(state: SeasonState, opening = false): SeasonState {
   return keepingHeldStaff(() => prepareScoutingAssignments(recruitAiScouts(next, opening)), opening);
 }
 
+/** Format 84: the minimum appointment of a club that can afford no one (no money check applies). */
+function minimumAppointment(state: SeasonState, clubId: string, member: { id: string } | undefined): SeasonState {
+  return member ? appointingMinimumStaff(() => hireForClub(state, member.id, clubId)) : state;
+}
 function hireForClub(state: SeasonState, scoutId: string, clubId: string, kept = false): SeasonState {
   const quote = quoteScoutHire(state, scoutId, clubId, kept);
   if (!quote.canHire) throw new Error(quote.reason!);
@@ -72,6 +76,8 @@ export function recruitAiScouts(state: SeasonState, includeManaged = false): Sea
     if (getClubScouts(next, club.id).length) continue;
     const scout = levelled ? fittingScout(next, club.id) : withCalculationCache(() => availableScouts(next).filter(scout => quoteScoutHire(next, scout.id, club.id).canHire)).sort((left, right) => scoutEvidence(right) / right.fee - scoutEvidence(left) / left.fee || left.id.localeCompare(right.id, 'en'))[0];
     if (scout) next = hireForClub(next, scout.id, club.id);
+    // Format 84: a club that can afford no one still appoints the cheapest candidate (the minimum appointment).
+    else if (levelled && usesFullStaff(next)) next = minimumAppointment(next, club.id, withCalculationCache(() => cheapestStaff(availableScouts(next), member => staffFee(next, club.id, member.fee))));
   }
   return next;
 }

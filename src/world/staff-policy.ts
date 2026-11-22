@@ -1,5 +1,6 @@
 import { staffLimit } from './wage-pool';
 import type { SeasonState } from '../domain/season';
+import type { SeasonCoaching } from '../domain/coaching';
 import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
@@ -76,6 +77,37 @@ export function keepingHeldStaff<T>(run: () => T, held = true): T {
 }
 
 /**
+ * Format 84 (`coaching.fullStaff`, new careers; owner report, 22 November 2026: computer clubs started a season without a
+ * coach): a professional club always fills its six staff roles. A computer club with an empty role first takes the
+ * candidate fitting its level and the role's share of the staff budget, then the cheapest candidate its money allows
+ * (Wages left, Spending left), and when it can afford no one, the cheapest candidate on the market regardless of money:
+ * the minimum appointment. Its salary (or, before staff contracts, its fee) is then owed like any other cost, so what
+ * the club's cash cannot cover becomes unpaid costs under the existing rules. The manager's hires are unchanged.
+ */
+export function usesFullStaff(state: { coaching?: Pick<SeasonCoaching, 'fullStaff'> }): boolean {
+  return state.coaching?.fullStaff === true;
+}
+
+let minimumStaffDepth = 0;
+/** Runs `run` as a minimum appointment (format 84): the money checks of a hire do not apply. */
+export function appointingMinimumStaff<T>(run: () => T): T {
+  minimumStaffDepth += 1;
+  try { return run(); } finally { minimumStaffDepth -= 1; }
+}
+/** Whether a minimum appointment is being made now (`appointingMinimumStaff`). */
+export function minimumStaffAppointment(): boolean { return minimumStaffDepth > 0; }
+
+/** The cheapest candidate (lower fee at the club's money level, then identity), for a minimum appointment. */
+export function cheapestStaff<T extends { id: string }>(candidates: readonly T[], fee: (member: T) => number): T | undefined {
+  let best: T | undefined, bestFee = Infinity;
+  for (const member of candidates) {
+    const value = fee(member);
+    if (value < bestFee || value === bestFee && best !== undefined && member.id < best.id) { best = member; bestFee = value; }
+  }
+  return best;
+}
+
+/**
  * Whether a scout, fitness coach, physio, assistant or youth coach can join a club now. A season-opening renewal
  * (`kept`) in a career with staff contracts (format 76) only needs him free: staff under contract stay, even one the new
  * season's market no longer lists (the market is sized to the clubs, and clubs promoted from a next division have no
@@ -88,7 +120,7 @@ export function staffCanJoin(state: Pick<SeasonState, 'coaching'>, kept: boolean
 
 /** The Spending left check of a hire at this salary, or null when no check applies (older careers, no finances). */
 export function staffHireSpending(state: SeasonState, clubId: string, salary: number): StaffSpendingCheck | null {
-  if (heldStaffDepth > 0 || !usesStaffContracts(state) || !state.finance.enabledSince) return null;
+  if (heldStaffDepth > 0 || minimumStaffDepth > 0 || !usesStaffContracts(state) || !state.finance.enabledSince) return null;
   const needed = staffHireReserve(state, salary), available = getSpendableCash(state, clubId);
   return { needed, available, after: available - needed };
 }

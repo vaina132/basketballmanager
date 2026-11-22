@@ -17,6 +17,7 @@ import { staffHireSpending } from '../src/world/staff-policy';
 import { availablePhysios, getClubPhysio, quotePhysioHire } from '../src/world/physio-policy';
 import { hirePhysio, recruitAiPhysios } from '../src/world/physio';
 import { staffFee } from '../src/world/economy';
+import { PHYSIO_DIRECTORY, staffMember } from '../src/data/staff-directory';
 import { payrollInstallment } from '../src/world/payroll-policy';
 import { formatEuros } from '../src/ui/money-format';
 import { financeLedgerCount } from '../src/world/finance-ledger';
@@ -215,12 +216,21 @@ describe('a staff hire needs Spending left for the rest of the season (format 76
     const cheapest = cheapestPhysio(state);
     const levels = ais.map((clubId, index) => ({ clubId, amount: [0, staffHireReserve(state, staffFee(state, clubId, cheapest.fee)) - 1, 1_000_000_000_000][index % 3]! }));
     for (const { clubId, amount } of levels) state = withSpending(state, clubId, amount);
-    const after = recruitAiPhysios(state);
+    // The format-76 rule on its own (careers before format 84, whose computer clubs may stay without a physio).
+    const { fullStaff: _rule, ...earlier } = state.coaching;
+    const after = recruitAiPhysios({ ...state, coaching: earlier });
     for (const { clubId, amount } of levels) {
       const hired = getClubPhysio(after, clubId) !== null;
       if (amount < 1_000_000_000_000) expect(hired).toBe(false);
       if (hired) expect(getSpendablePosition(after, clubId)).toBeGreaterThanOrEqual(0);
     }
     expect(levels.some(({ clubId, amount }) => amount === 1_000_000_000_000 && getClubPhysio(after, clubId) !== null)).toBe(true);
+    // Format 84: a club whose Spending left carries no one still appoints the cheapest physio (the minimum appointment).
+    expect(state.coaching.fullStaff).toBe(true);
+    const full = recruitAiPhysios(state), left = Math.min(...availablePhysios(full).map(physio => physio.fee));
+    for (const { clubId, amount } of levels) {
+      expect(getClubPhysio(full, clubId), clubId).not.toBeNull();
+      if (amount < 1_000_000_000_000) expect(staffMember(PHYSIO_DIRECTORY, getClubPhysio(full, clubId)!.physioId)!.fee).toBeLessThanOrEqual(left);
+    }
   }, 600_000);
 });

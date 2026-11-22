@@ -3,7 +3,7 @@ import type { AssistantCoach, AssistantContract, AssistantHireQuote } from '../d
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { getFinanceBalance } from './finance';
-import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason, minimumStaffAppointment } from './staff-policy';
 import { staffMarketWorld } from './staff-levels';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { seasonRounds, worldOf } from './career-world';
@@ -37,6 +37,8 @@ export function quoteAssistantHire(state: SeasonState, assistantId: string, club
   else if (!state.clubs.some(club => club.id === clubId) || !coach) reason = 'Choose an assistant coach and club from this career.';
   else if (getClubAssistant(state, clubId)) reason = 'The assistant-coach position is already occupied.';
   else if (!staffCanJoin(state, kept, state.assistant.contracts.some(contract => contract.assistantId === assistantId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null), () => availableAssistants(state).some(available => available.id === assistantId))) reason = 'This assistant coach already has an active club contract.';
+  // Format 84: a computer club's minimum appointment is not refused for money.
+  else if (minimumStaffAppointment()) reason = null;
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring an assistant coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring an assistant coach.';
   else reason = staffMoneyReason(state, 'assistant coach', staffFee(state, clubId, coach.fee), remainingAllocation, remainingBudget, clubId);

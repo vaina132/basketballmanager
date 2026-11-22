@@ -34,6 +34,11 @@ export interface SeasonCoaching {
   contracts: CoachingContract[];
   /** Format 76 ('coaching-4'): each employed person's contract (every staff role), by person. */
   terms?: Record<string, StaffTerm>;
+  /**
+   * Format 84 (new careers with the wage pool): computer clubs always fill their six staff roles, the training (head)
+   * coach first, down to the cheapest candidate regardless of money (`usesFullStaff` in `src/world/staff-policy.ts`).
+   */
+  fullStaff?: true;
 }
 
 /** A staff member's contract at a club: from the season signed to the last season (1-3 seasons). */

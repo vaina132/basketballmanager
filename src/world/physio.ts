@@ -10,7 +10,7 @@ import type { Physio } from '../domain/physio';
 import { physioRating } from './physio-policy';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
-import { keepingHeldStaff, staffHireBudget } from './staff-policy';
+import { appointingMinimumStaff, cheapestStaff, keepingHeldStaff, staffHireBudget, usesFullStaff } from './staff-policy';
 import { staffFee } from './economy';
 
 export function createPhysio(): SeasonPhysio { return { model: 'physio-1', enabledSince: null, contracts: [], rehabilitation: [] }; }
@@ -21,6 +21,10 @@ export function enablePhysio(state: SeasonState, opening = false): SeasonState {
   if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Enable physios while weekly reviews are available, before the final matchday.');
   // The career's opening staff are held, not hired: Spending left does not decide them (format 76).
   return keepingHeldStaff(() => recruitAiPhysios({ ...state, physio: { ...state.physio, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
+}
+/** Format 84: the minimum appointment of a club that can afford no one (no money check applies). */
+function minimumAppointment(state: SeasonState, clubId: string, member: { id: string } | undefined): SeasonState {
+  return member ? appointingMinimumStaff(() => hireForClub(state, member.id, clubId)) : state;
 }
 function hireForClub(state: SeasonState, physioId: string, clubId: string, kept = false): SeasonState {
   const quote = quotePhysioHire(state, physioId, clubId, kept);
@@ -51,6 +55,8 @@ export function recruitAiPhysios(state: SeasonState, includeManaged = false): Se
     if (getClubPhysio(next, club.id)) continue;
     const physio = levelled ? fittingPhysio(next, club.id) : withCalculationCache(() => availablePhysios(next).filter(physio => quotePhysioHire(next, physio.id, club.id).canHire)).sort((left, right) => physioEffects(right).creditPerDay / right.fee - physioEffects(left).creditPerDay / left.fee || left.id.localeCompare(right.id, 'en'))[0];
     if (physio) next = hireForClub(next, physio.id, club.id);
+    // Format 84: a club that can afford no one still appoints the cheapest candidate (the minimum appointment).
+    else if (levelled && usesFullStaff(next)) next = minimumAppointment(next, club.id, withCalculationCache(() => cheapestStaff(availablePhysios(next), member => staffFee(next, club.id, member.fee))));
   }
   return next;
 }

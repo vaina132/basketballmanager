@@ -3,7 +3,7 @@ import type { Scout, ScoutContract, ScoutHireQuote } from '../domain/scouts';
 import type { SeasonState } from '../domain/season';
 import { DEVELOPMENT_SCOUTS } from '../data/development-scouts';
 import { getFinanceBalance } from './finance';
-import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason, minimumStaffAppointment } from './staff-policy';
 import { staffMarketWorld } from './staff-levels';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { SCOUT_DIRECTORY, staffMarket, staffMember } from '../data/staff-directory';
@@ -34,6 +34,8 @@ export function quoteScoutHire(state: SeasonState, scoutId: string, clubId = sta
   else if (!state.clubs.some(club => club.id === clubId) || !scout) reason = 'Choose a scout and club from this career.';
   else if (getClubScouts(state, clubId).length >= MAX_SCOUTS) reason = 'All three scout positions are occupied.';
   else if (!staffCanJoin(state, kept, state.scouts.contracts.some(contract => contract.scoutId === scoutId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null), () => availableScouts(state).some(available => available.id === scoutId))) reason = 'This scout already has an active club contract.';
+  // Format 84: a computer club's minimum appointment is not refused for money.
+  else if (minimumStaffAppointment()) reason = null;
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a scout.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a scout.';
   else reason = staffMoneyReason(state, 'scout', staffFee(state, clubId, scout.fee), remainingAllocation, remainingBudget, clubId);

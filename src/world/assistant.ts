@@ -9,7 +9,7 @@ import type { AssistantCoach } from '../domain/assistant';
 import { assistantRating } from './assistant-policy';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
-import { keepingHeldStaff, staffHireBudget } from './staff-policy';
+import { appointingMinimumStaff, cheapestStaff, keepingHeldStaff, staffHireBudget, usesFullStaff } from './staff-policy';
 import { staffFee } from './economy';
 import { withCalculationCache } from './pure-cache';
 
@@ -24,6 +24,10 @@ export function enableAssistant(state: SeasonState, opening = false): SeasonStat
   return keepingHeldStaff(() => recruitAiAssistants({ ...state, assistant: { ...state.assistant, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
 }
 
+/** Format 84: the minimum appointment of a club that can afford no one (no money check applies). */
+function minimumAppointment(state: SeasonState, clubId: string, member: { id: string } | undefined): SeasonState {
+  return member ? appointingMinimumStaff(() => hireForClub(state, member.id, clubId)) : state;
+}
 function hireForClub(state: SeasonState, assistantId: string, clubId: string, kept = false): SeasonState {
   const quote = quoteAssistantHire(state, assistantId, clubId, kept);
   if (!quote.canHire) throw new Error(quote.reason!);
@@ -63,6 +67,8 @@ export function recruitAiAssistants(state: SeasonState, includeManaged = false):
       return rightValue - leftValue || left.fee - right.fee || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
     })[0];
     if (coach) next = hireForClub(next, coach.id, club.id);
+    // Format 84: a club that can afford no one still appoints the cheapest candidate (the minimum appointment).
+    else if (levelled && usesFullStaff(next)) next = minimumAppointment(next, club.id, withCalculationCache(() => cheapestStaff(availableAssistants(next).filter(member => !member.id.startsWith('assistant-real-')), member => staffFee(next, club.id, member.fee))));
   }
   return next;
 }

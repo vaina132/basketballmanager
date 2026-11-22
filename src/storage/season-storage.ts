@@ -94,7 +94,7 @@ import { createLifecycle, enableLifecycle, lifecycleAtBoundary, prepareLifecycle
 import { getPlayerAging, type LifecycleContext } from '../world/lifecycle-policy';
 import { processRehabilitationWeek } from '../world/rehabilitation';
 import { MAX_SCOUTS, scoutEvidence } from '../world/scout-policy';
-import { staffAllocation } from '../world/staff-policy';
+import { staffAllocation, usesFullStaff } from '../world/staff-policy';
 import type { SeasonRivalries } from '../domain/rivalries';
 import { createRivalries } from '../world/rivalries';
 import { validateRivalries, validateRivalryGrowth } from './rivalries-validation';
@@ -139,7 +139,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -554,7 +554,8 @@ function maximumCoachingContracts(clubs: number, levelled: boolean): number {
 /** Current-year contracts retain released appointments so expenditure and past weeks reconcile. */
 function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: number, round: number, rounds: number, version: number): SeasonCoaching {
   const contracted = value !== null && typeof value === 'object' && (value as { model?: unknown }).model === 'coaching-4';
-  const fields = record(value, 'coaching', ['model', 'enabledSince', 'contracts', ...(contracted ? ['terms'] : [])]);
+  const full = value !== null && typeof value === 'object' && Object.hasOwn(value, 'fullStaff');
+  const fields = record(value, 'coaching', ['model', 'enabledSince', 'contracts', ...(contracted ? ['terms'] : []), ...(full ? ['fullStaff'] : [])]);
   // Format 74 ('coaching-2'): every club starts staffed and a sacked coach's fee stops counting against the limits.
   // Format 75 ('coaching-3'): 'coaching-2' with one wage pool for player wages and staff fees.
   // Format 76 ('coaching-4'): 'coaching-3' with staff contracts of 1-3 seasons (`terms`), weekly salaries and compensation.
@@ -573,6 +574,8 @@ function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: 
   }
   if (levelled && version < 74) fail('coaching.model', 'requires format 74 or later');
   if (fields.model === 'coaching-3' && version < 75) fail('coaching.model', 'requires format 75 or later');
+  // Format 84: computer clubs always fill every staff role (careers with the wage pool, `coaching-3` and later).
+  if (full && (fields.fullStaff !== true || version < 84 || (fields.model !== 'coaching-3' && fields.model !== 'coaching-4'))) fail('coaching.fullStaff', 'must be true, in a format 84 career with the wage pool');
   let earliestRound = 1;
   if (fields.enabledSince !== null) {
     const anchor = record(fields.enabledSince, 'coaching.enabledSince', ['seasonNumber', 'round']);
@@ -2903,6 +2906,9 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   for (const buyout of buyoutRecords.values()) add({ clubId: buyout.clubId, seasonNumber: buyout.seasonNumber, round: seasonLength, kind: 'buyout', sourceId: buyout.id, amount: -buyout.amount });
   // Format 76 ('coaching-4'): appointments pay nothing up front (their entries keep amount 0); salaries are weekly.
   const staffContracts = usesStaffContracts({ coaching });
+  // Format 84: a computer club's minimum appointment is made whatever its money (unpaid costs or not enough cash), so in
+  // these careers staff appointments are not checked against the club's money (a basic check, development mode).
+  const fullStaff = usesFullStaff({ coaching });
   const upfront = (year: number, clubId: string, fee: number) => staffContracts ? 0 : -staffFee(yearContext(year), clubId, fee);
   const staffAppointments = new Map<string, number>(staffContracts ? [
     ...scouts.contracts.map(contract => [`scouts/${contract.id}`, contract.hiredLedgerIndex] as const), ...fitness.contracts.map(contract => [`fitness/${contract.id}`, contract.hiredLedgerIndex] as const),
@@ -3138,7 +3144,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
       const transferReserve = transfers.reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       const overdue = transfers.some(transfer => transfer.installments.filter(item => item.dueOn <= dateForRound(entryRound, year)).reduce((sum, item) => sum + item.amount, 0) > paidTransferTotals.get(transfer.id)!);
-      if (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the fitness fee after protecting wages and transfer holds and settling arrears');
+      if (!fullStaff && (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index))) fail(path, 'must fund the fitness fee after protecting wages and transfer holds and settling arrears');
       required.delete(key);
     } else if (kind === 'physio') {
       if (entry.ticket !== null || entry.coach !== null) fail(path, 'must record the physio fee without unrelated details');
@@ -3152,7 +3158,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
       const transferReserve = transfers.reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       const overdue = transfers.some(transfer => transfer.installments.filter(item => item.dueOn <= dateForRound(entryRound, year)).reduce((sum, item) => sum + item.amount, 0) > paidTransferTotals.get(transfer.id)!);
-      if (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the physio fee after protecting wages and transfer holds and settling arrears');
+      if (!fullStaff && (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index))) fail(path, 'must fund the physio fee after protecting wages and transfer holds and settling arrears');
       required.delete(key);
     } else if (kind === 'assistant') {
       if (entry.ticket !== null || entry.coach !== null) fail(path, 'must record the assistant fee without unrelated details');
@@ -3166,7 +3172,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
       const transferReserve = transfers.reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       const overdue = transfers.some(transfer => transfer.installments.filter(item => item.dueOn <= dateForRound(entryRound, year)).reduce((sum, item) => sum + item.amount, 0) > paidTransferTotals.get(transfer.id)!);
-      if (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the assistant fee after protecting wages and transfer holds and settling arrears');
+      if (!fullStaff && (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index))) fail(path, 'must fund the assistant fee after protecting wages and transfer holds and settling arrears');
       required.delete(key);
     } else if (kind === 'youth') {
       if (entry.ticket !== null || entry.coach !== null) fail(path, 'must record the youth fee without unrelated details');
@@ -3180,7 +3186,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
       const transferReserve = transfers.reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       const overdue = transfers.some(transfer => transfer.installments.filter(item => item.dueOn <= dateForRound(entryRound, year)).reduce((sum, item) => sum + item.amount, 0) > paidTransferTotals.get(transfer.id)!);
-      if (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the youth fee after protecting wages and transfer holds and settling arrears');
+      if (!fullStaff && (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index))) fail(path, 'must fund the youth fee after protecting wages and transfer holds and settling arrears');
       required.delete(key);
     } else if (kind === 'scouting') {
       if (entry.ticket !== null || entry.coach !== null) fail(path, 'must record the scout fee without unrelated details');
@@ -3194,7 +3200,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
       const transferReserve = transfers.reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       const overdue = transfers.some(transfer => transfer.installments.filter(item => item.dueOn <= dateForRound(entryRound, year)).reduce((sum, item) => sum + item.amount, 0) > paidTransferTotals.get(transfer.id)!);
-      if (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the scout fee after protecting wages and transfer holds and settling arrears');
+      if (!fullStaff && (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index))) fail(path, 'must fund the scout fee after protecting wages and transfer holds and settling arrears');
       required.delete(key);
     } else if (kind === 'coaching') {
       if (entry.ticket !== null) fail(`${path}.ticket`, 'must be empty for a coaching fee');
@@ -3218,7 +3224,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       if (!levelledStaff || year === seasonNumber) feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transferReserve = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id)).reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
-      if (balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'cannot hire or renew a coach without sufficient cash, settled obligations, reserved player wages and agreed transfer installments');
+      if (!fullStaff && (balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index))) fail(path, 'cannot hire or renew a coach without sufficient cash, settled obligations, reserved player wages and agreed transfer installments');
     } else if (kind === 'staff-wages' || kind === 'staff-compensation') {
       // Format 76: weekly staff salaries (checked against the contracts of the current season) and sacking compensation.
       if (entry.ticket !== null || entry.coach !== null || amount >= 0) fail(path, 'must be a staff salary or compensation payment');

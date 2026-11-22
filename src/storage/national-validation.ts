@@ -112,7 +112,8 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
       if (!Array.isArray(fields.teamIds) || fields.teamIds.some(id => !teamIds.has(id as string) || members.has(id as string))) fail(`${path}.groups.${groupIndex}.teamIds`, 'must list distinct national teams');
       for (const id of fields.teamIds as string[]) members.add(id);
     }
-    const fixtures = competition.fixtures.map((fixture, fixtureIndex) => validateFixture(fixture, `${path}.fixtures.${fixtureIndex}`, competition, teamIds, latest));
+    // A summer tournament is played at the rollover, so its last games can come after the new season's first day.
+    const fixtures = competition.fixtures.map((fixture, fixtureIndex) => validateFixture(fixture, `${path}.fixtures.${fixtureIndex}`, competition, teamIds, competition.kind === 'tournament' ? '9999-12-31' : latest));
     for (const fixture of fixtures) { if (fixtureIds.has(fixture.id)) fail(`${path}.fixtures`, 'must have distinct ids'); fixtureIds.add(fixture.id); }
     if (competition.kind === 'qualifiers') {
       // The qualifier schedule follows from the groups exactly.

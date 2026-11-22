@@ -4,6 +4,8 @@ import { nationalPausedWeeks, nationalTournamentName, nationalWindowDays, nation
 import { generatedNationalPlayer, nationalPlayerPool, nationalTable, pickNationalSquad, rolloverNational } from '../src/world/national';
 import { NATIONAL_TEAMS } from '../src/data/national-teams';
 import { nationalWorld } from './helpers/national-world';
+import { validateNationalShape } from '../src/storage/national-validation';
+import { SEASON_SCHEMA_VERSION } from '../src/domain/season';
 
 const world = nationalWorld();
 const create = (options: Record<string, unknown> = {}) => createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, ...options });
@@ -66,5 +68,8 @@ describe('national teams (format 80)', () => {
     const next = national.competitions.find(item => item.id === 'nq-s2')!;
     expect(next.groups.map(group => group.teamIds.length)).toEqual([6, 6, 6, 6]);
     expect(next.fixtures.every(fixture => fixture.date > '2027-09-01')).toBe(true);
+    // The save check accepts the national records of the new season (the tournament ends after its first day).
+    expect(() => validateNationalShape(national, { ...state, seasonNumber: 2, date: '2027-09-04' }, SEASON_SCHEMA_VERSION)).not.toThrow();
+    expect(() => validateNationalShape(national, state, 79)).toThrow(/format 80/);
   });
 });

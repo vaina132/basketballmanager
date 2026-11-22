@@ -6,7 +6,7 @@ import { runContinueStep } from '../src/world/continue-step';
 import { continueUntilStop } from '../src/ui/continue-run';
 import { getInboxItems } from '../src/ui/inbox-items';
 import { acceptNationalOffer, clubWindowCallUps, nationalManagedSide, offerNationalJob, resignNationalJob, setNationalSelection } from '../src/world/national';
-import { parseSeason, serializeSeason } from '../src/storage/season-storage';
+import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { nationalWorld } from './helpers/national-world';
 
 const world = nationalWorld();
@@ -50,6 +50,8 @@ describe('national windows in play (format 80)', () => {
     expect(getInboxItems(after).some(item => item.id === 'national-back-s1-w1')).toBe(true);
     // The strict save check accepts the window and replays the training week with national duty.
     expect(parseSeason(serializeSeason(after)).national).toEqual(after.national);
+    // The compact save the game writes keeps the national records too.
+    expect(parseSeason(serializeSeasonCompact(after)).national).toEqual(after.national);
     // A changed result is refused: points must add up to the score.
     const tampered = { ...after, national: { ...after.national!, competitions: after.national!.competitions.map((competition, index) => index ? competition : { ...competition, fixtures: competition.fixtures.map((fixture, at) => at || !fixture.result ? fixture : { ...fixture, result: { ...fixture.result, home: fixture.result.home + 1 } }) }) } };
     expect(() => parseSeason(serializeSeason(tampered))).toThrow(/national/);

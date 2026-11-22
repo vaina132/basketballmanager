@@ -15,3 +15,8 @@
 .national-offer{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .national-offer-actions{display:flex;gap:8px;flex-wrap:wrap}
 @media (max-width:600px){.national-facts{gap:8px 16px}}
+.national-groups .season-standings-table{min-width:0}
+.national-workspace .season-matchday-identity,.national-workspace .season-matchday-action{flex:1 1 auto;min-width:0;max-width:100%}
+.national-workspace .season-year-filter select{width:100%}
+@media (max-width:600px){.national-workspace .season-matchday{flex-direction:column;align-items:stretch;gap:10px}.national-workspace .season-matchday-action{justify-content:flex-start}}
+.national-workspace .season-table-scroll,.national-page .season-table-scroll,.national-team-name{position:relative}

@@ -48,7 +48,10 @@ describe('the left menu', () => {
     // Nothing that exists is hidden: every page has its menu item or is a tab of a page that has one.
     const merged = Object.keys(MERGED_PAGES) as Page[];
     expect(merged.sort()).toEqual(['academy', 'board', 'calendar', 'europe', 'medical']);
-    expect(groups.flat().map(item => item.id).sort()).toEqual((Object.keys(PAGE_NAMES) as Page[]).filter(page => !merged.includes(page)).sort());
+    // Format 80: the national team page is an item only while the manager has a national job.
+    expect(groups.flat().map(item => item.id).sort()).toEqual((Object.keys(PAGE_NAMES) as Page[]).filter(page => !merged.includes(page) && page !== 'national').sort());
+    expect(mainNavigation({ career: true, national: true }).at(-1)!.map(item => item.id)).toEqual(['club', 'season', 'national']);
+    expect(unemployedNavigation(true).flat().map(item => item.id)).toEqual(['home', 'inbox', 'season', 'national']);
     for (const page of merged) expect(groups.flat().some(item => item.id === MERGED_PAGES[page]!.page)).toBe(true);
     expect(mainNavigation({ career: false }).flat().map(item => item.id)).toEqual(['home', 'squad', 'match', 'season']);
     expect(unemployedNavigation().flat().map(item => item.id)).toEqual(['home', 'inbox', 'season']);

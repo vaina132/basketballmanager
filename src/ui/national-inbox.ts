@@ -57,7 +57,7 @@ export function nationalInboxItems(season: SeasonState): InboxItem[] {
     const callUps = clubWindowCallUps(season, season.managedClubId, upcoming.seasonNumber, upcoming.window)
     if (callUps && !callUps.played && callUps.players.length) {
       const days = nationalWindowDays(upcoming.seasonNumber, upcoming.window)
-      items.push({ id: `national-callups-s${upcoming.seasonNumber}-w${upcoming.window}`, date: addCalendarDays(upcoming.saturday, -13) > season.date ? addCalendarDays(upcoming.saturday, -13) : season.date, category: 'players', title: `${plural(callUps.players.length, 'player', 'players')} called up for the ${WINDOW_NAMES[upcoming.window]}`, detail: `${callUps.players.map(item => `${nationalPlayerInfo(season, item.playerId).name} (${name(item.teamId)})`).join(', ')}. National games on ${medicalDate(days[0])} and ${medicalDate(days[1])}; they are away from Wednesday to Saturday. Your league does not play that weekend. The list can still change until the window.`, needsAction: false, target: 'squad' })
+      items.push({ id: `national-callups-s${upcoming.seasonNumber}-w${upcoming.window}`, date: addCalendarDays(upcoming.saturday, -13) > season.date ? season.date : addCalendarDays(upcoming.saturday, -13), category: 'players', title: `${plural(callUps.players.length, 'player', 'players')} called up for the ${WINDOW_NAMES[upcoming.window]}`, detail: `${callUps.players.map(item => `${nationalPlayerInfo(season, item.playerId).name} (${name(item.teamId)})`).join(', ')}. National games on ${medicalDate(days[0])} and ${medicalDate(days[1])}; they are away from Wednesday to Saturday. Your league does not play that weekend. The list can still change until the window.`, needsAction: false, target: 'squad' })
     }
   }
   return items

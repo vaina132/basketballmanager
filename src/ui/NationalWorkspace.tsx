@@ -57,7 +57,7 @@ export function NationalWorkspace({ season }: { season: SeasonState }) {
   }, [season, window, unemployed, national.competitions])
   const podium = competition.kind === 'tournament' ? nationalPodium(competition) : null
   const unplayed = competition.fixtures.filter(fixture => !fixture.result).map(fixture => fixture.date).sort()
-  const games = competition.fixtures.filter(fixture => !ownOnly || fixture.homeTeamId === yours || fixture.awayTeamId === yours)
+  const games = competition.fixtures.filter(fixture => !ownOnly || fixture.homeTeamId === yours || fixture.awayTeamId === yours).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
   const knockouts = competition.fixtures.filter(fixture => fixture.stage !== 'group')
 
   return <div className="season-workspace national-workspace" data-national-workspace>

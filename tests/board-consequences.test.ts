@@ -16,9 +16,10 @@ const verdictOf = (state: SeasonState, clubId: string) => seasonVerdict(state.bo
 let complete: SeasonState, opening: SeasonState, legacyComplete: SeasonState, legacyOpening: SeasonState;
 
 beforeAll(() => {
-  complete = playFirstSeason(true);
+  // Seed 1 (227 before the full new-career rules of 22 November 2026): a club over a reduced staff budget in season two.
+  complete = playFirstSeason(true, 1);
   opening = rolloverSeason(complete);
-  legacyComplete = playFirstSeason(false);
+  legacyComplete = playFirstSeason(false, 1);
   legacyOpening = rolloverSeason(legacyComplete);
 }, 240_000);
 

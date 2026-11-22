@@ -99,7 +99,7 @@ describe('Continue through a season end, the offseason and the next season', () 
   let seasonEnd: SeasonState;
   let seasonRuns: ContinueRun[];
   beforeAll(() => {
-    const opening = createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, injuryLengths: false });
+    const opening = createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS });
     const result = compareRuns(opening, current => current.status === 'complete');
     seasonEnd = result.state; seasonRuns = result.runs;
   }, 300_000);

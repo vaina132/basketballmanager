@@ -153,9 +153,12 @@ describe('the court picture upside down (owner request, 18 November 2026)', () =
     const season = createSeason({ seed: 77, managedClubId: 'rhine-falcons', injuryMode: 'off' });
     const squad = (state: typeof season) => renderToStaticMarkup(<SquadStartingFive season={state} busy={false} onUpdate={noop} onOpenMatch={noop} />);
     const html = squad(season);
-    expect(html).toContain('>Starting five</h2>');
+    expect(html).toContain('>Starting five, bench and reserves</h2>');
     expect(html).toContain('Next game: ');
-    expect(html).toContain('Your five for the next game.');
+    expect(html).toContain('Your five and bench for the next game.');
+    // Without matchday squads (every registered player dresses) there is no reserves list.
+    expect(html).not.toContain('data-squad-reserves');
+    expect(html).toContain('data-auto-pick');
     expect(html.match(/data-court-circle="/g)).toHaveLength(5);
     expect(html).toContain('data-best-five');
     expect(html).toMatch(/data-court-reserve="/);

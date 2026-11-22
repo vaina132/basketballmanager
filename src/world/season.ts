@@ -387,16 +387,20 @@ export function startingFivePlanMatch(state: SeasonState): MatchState {
  * selection does; between games the plan is changed and the next game starts from it. The same guards as the match's:
  * five different available players from the matchday squad, one different court position each.
  */
-export function setPlannedFive(state: SeasonState, lineup: readonly string[], slots: Readonly<Record<string, Position>>): SeasonState {
+export function setPlannedFive(state: SeasonState, lineup: readonly string[], slots: Readonly<Record<string, Position>>, matchday?: readonly string[] | null): SeasonState {
   const block = startingFivePlanBlock(state);
   if (block) throw new Error(block);
   const club = state.clubs.find(club => club.id === state.managedClubId)!;
+  // Squad page bench and reserves (owner feedback, 22 November 2026): the matchday squad changes with the five, in one step.
+  if (matchday !== undefined && !usesFullClubRoster(state)) throw new Error('This career has no reserves: every registered player is in the matchday squad.');
+  if (matchday) selectedTeam(club, matchday);
+  const day = matchday === undefined ? {} : { matchday: matchday === null ? null : club.players.filter(player => matchday.includes(player.id)).map(player => player.id) };
   if (!Array.isArray(lineup) || lineup.length !== 5 || new Set(lineup).size !== 5 || lineup.some(id => !club.players.some(player => player.id === id))) throw new Error('Choose five different players from your squad.');
   const circles = Object.entries(slots ?? {});
   if (circles.some(([id, position]) => !lineup.includes(id) || !isCourtPosition(position)) || new Set(circles.map(([, position]) => position)).size !== circles.length) throw new Error('Give each starter a different position.');
   const active = state.activeMatch, side = active ? managedSide(state) : null, plan = state.plans[club.id]!;
   const kept = active && side ? { tactics: { ...active.tactics[side] }, autoSubstitutions: active.autoSubstitutions[side] } : {};
-  const next: SeasonState = { ...state, plans: { ...state.plans, [club.id]: withPlanCircles({ ...plan, ...kept, lineup: [...lineup] }, Object.fromEntries(circles)) } };
+  const next: SeasonState = { ...state, plans: { ...state.plans, [club.id]: withPlanCircles({ ...plan, ...kept, ...day, lineup: [...lineup] }, Object.fromEntries(circles)) } };
   const prepared = active ? prepareMatch(next, getActiveFixture(next)) : careerPresentationMatch(next);
   const preparedSide: Side = prepared.home.id === club.id ? 'home' : 'away', five = prepared.lineups[preparedSide];
   if (five.length !== 5 || lineup.some(id => !five.includes(id) || !isPlayerEligible(prepared, id))) throw new Error('Choose five available players from the matchday squad.');

@@ -10,6 +10,7 @@ import { getClubScouts, scoutEvidence } from './scout-policy';
 import { SCOUT_DIRECTORY, staffMember } from '../data/staff-directory';
 import { potentialAttributes, trainingHeadroom } from './potential';
 import { scoutingEvidencePercent } from './facilities-policy';
+import { getScoutingDiscovery } from './scouting-discovery';
 
 export const SCOUTING_CAPACITY = 2;
 export const MAX_KNOWLEDGE_LEVEL = 3;
@@ -96,6 +97,8 @@ function stablePotentialBias(seed: number, clubId: string, playerId: string, att
 export function getPotentialKnowledge(state: SeasonState, playerId: string, clubId = state.managedClubId): PlayerKnowledge {
   const knowledge = getPlayerKnowledge(state, playerId, clubId);
   if (knowledge.kind === 'unknown') return knowledge;
+  // Format 78: a network estimate says nothing about potential; only an observation does.
+  if (knowledge.source === 'network') return { ...knowledge, kind: 'unknown', level: 0, ranges: null, observedOn: null, observedClubId: null, ageDays: null, freshness: 'unknown', source: null };
   const peak = potentialAttributes(state, getCareerPlayer(state, playerId), trainingHeadroom(state, playerId));
   const reachableOn = (date: string | null) => date ? applyAgingAttributes(state, playerId, peak, date) : peak;
   if (knowledge.kind === 'own') {
@@ -147,10 +150,47 @@ export function getPlayerKnowledge(state: SeasonState, playerId: string, clubId 
   const review = reviews.at(-1), own = knowledge.squadKnowledge[playerId];
   const useOwn = own && (!review || own.date >= review.date);
   const source = useOwn ? own : review;
-  if (!source?.attributes) return empty;
+  if (!source?.attributes) return networkKnowledge(state, playerId, clubId) ?? empty;
   const level = (useOwn || own ? 3 : Math.min(3, Math.floor(reviews.reduce((sum, review) => sum + clubScoutingEvidence(state, clubId, review), 0) / 100))) as 1 | 2 | 3;
   const ageDays = Math.max(0, Math.round((Date.parse(`${state.date}T00:00:00Z`) - Date.parse(`${source.date}T00:00:00Z`)) / 86_400_000));
   return { playerId, kind: 'report', level, attributes: null, ranges: scoutingRanges(state.seed, clubId, playerId, { ...source.attributes, ...scoutingExtraAttributes(state, playerId, source.date) }, level, ageDays), observedOn: source.date, observedClubId: source.clubId, ageDays, freshness: ageDays <= 28 ? 'recent' : ageDays <= 84 ? 'aging' : 'stale', source: useOwn ? 'squad' : 'observation', observations: reviews.length };
+}
+
+/**
+ * Format 78 (`scouting-2`, owner feedback 22 November 2026): the scouts' total quality, the sum of each scout's two
+ * skills (2-20 each), sets how sharp the network's estimates are: ±8 without scouts, one point narrower for every 8
+ * quality points, never sharper than ±4, so an observed report (±2 to ±4) stays the best reading.
+ */
+export const SCOUT_NETWORK_RULES = Object.freeze({ widestRange: 8, narrowestRange: 4, qualityPerPoint: 8 });
+
+export function usesScoutNetwork(state: Pick<SeasonState, 'scouting'>): boolean { return state.scouting?.model === 'scouting-2'; }
+
+export function scoutNetworkQuality(state: SeasonState, clubId = state.managedClubId): number {
+  return state.scouts.enabledSince ? getClubScouts(state, clubId).reduce((sum, contract) => { const scout = staffMember(SCOUT_DIRECTORY, contract.scoutId)!; return sum + scout.skills.evaluation + scout.skills.reporting; }, 0) : 0;
+}
+
+/** The ± range of the network's estimates for a club. */
+export function scoutNetworkRange(state: SeasonState, clubId = state.managedClubId): number {
+  const { widestRange, narrowestRange, qualityPerPoint } = SCOUT_NETWORK_RULES;
+  return Math.max(narrowestRange, widestRange - Math.floor(scoutNetworkQuality(state, clubId) / qualityPerPoint));
+}
+
+const networkCache = new WeakMap<SeasonState, { clubId: string; ids: ReadonlySet<string>; range: number }>();
+function scoutNetwork(state: SeasonState, clubId: string): { ids: ReadonlySet<string>; range: number } {
+  const known = networkCache.get(state);
+  if (known?.clubId === clubId) return known;
+  const value = { clubId, ids: new Set(getScoutingDiscovery(state, clubId).networkPlayerIds), range: scoutNetworkRange(state, clubId) };
+  networkCache.set(state, value);
+  return value;
+}
+
+/** The manager's estimate of a player inside the scouting network without an observation (`scouting-2` careers only). */
+function networkKnowledge(state: SeasonState, playerId: string, clubId: string): PlayerKnowledge | null {
+  if (!usesScoutNetwork(state) || clubId !== state.managedClubId || !state.scouting.enabledSince || isPlayerRetired(state, playerId)) return null;
+  const network = scoutNetwork(state, clubId);
+  if (!network.ids.has(playerId)) return null;
+  const attributes = { ...scoutingActualAttributes(state, playerId), ...scoutingExtraAttributes(state, playerId) };
+  return { playerId, kind: 'report', level: 0, attributes: null, ranges: scoutingRanges(state.seed, clubId, playerId, attributes, 5 - network.range, 0), observedOn: state.date, observedClubId: null, ageDays: 0, freshness: 'current', source: 'network', observations: 0 };
 }
 
 /** Owned match ability stays at the prepared roster; later calendar aging cannot rewrite it. */

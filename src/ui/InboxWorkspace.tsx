@@ -4,7 +4,9 @@ import type { SeasonState } from '../domain/season'
 import { getCareerPlayer } from '../world/player-catalog'
 import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, PRESS_HALF_LIFE_DAYS, pressQuote, type LegacyPressAnswer } from '../world/press-policy'
 import { isPressStyle, MEDIA_RULES, mediaLabel, mediaMoraleFactor, PRESS_TOPIC_TITLES, pressStyleEffect } from '../world/media'
-import { getInboxItems, type InboxCategory, type InboxTarget } from './inbox-items'
+import { getInboxItems, type InboxCategory, type InboxItem, type InboxTarget } from './inbox-items'
+import { quoteInSeasonSale } from '../world/recruitment-policy'
+import { formatEuros } from './money-format'
 import { awaitsContractReply, getClubContractRequests } from '../world/relationships'
 import { ContractRequestCard } from './ContractRequestCard'
 import { Icon, type IconName } from './Icon'
@@ -16,13 +18,15 @@ export interface InboxActions {
   onOpen: (target: Exclude<InboxTarget, 'press'>, playerId?: string) => void
   /** Format 66: answer a player's contract request; opening talks also opens his contract offer. */
   onContractReply?: (playerId: string, reply: ContractRequestReply) => void
+  /** Format 78: answer a club's offer for one of your players (`season`: in-season market; `offseason`: offseason market). */
+  onBidDecision?: (offerId: string, market: 'season' | 'offseason', response: 'accept' | 'reject' | 'counter') => void
 }
 
 /** Owner feedback (18 November 2026): one list of every message, newest first, with an Unread filter instead of category tabs. */
 type Filter = 'all' | 'unread'
 const FILTERS: { id: Filter; label: string }[] = [{ id: 'all', label: 'All' }, { id: 'unread', label: 'Unread' }]
 const ICONS: Record<InboxCategory, IconName> = { press: 'mail', board: 'shield', club: 'building', players: 'people' }
-const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad', contract: 'Open contract offer', jobs: 'Open job market' }
+const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad', contract: 'Open contract offer', jobs: 'Open job market', bid: 'Open transfers' }
 const signed = (value: number) => `${value > 0 ? '+' : '−'}${Math.abs(value)}`
 
 export function pressEffectText(answer: PressAnswer, topic?: PressTopic, subject?: string): string {
@@ -107,7 +111,28 @@ export function inboxView<T extends { id: string; date: string; needsAction: boo
  * the unread dot; the chosen message opens on the right with its full text and actions. Choosing a message marks it
  * read. On a phone the list opens the message full width with a Back button.
  */
-export function InboxWorkspace({ season, busy = false, onAnswerPress, onOpen, onContractReply, initialSelectedId = null }: InboxActions & { season: SeasonState; busy?: boolean; initialSelectedId?: string | null }) {
+/** Owner feedback (22 November 2026): a club's offer for one of your players, with Accept, Counter and Decline. */
+function BidDecision({ season, item, busy, onDecision }: { season: SeasonState; item: InboxItem; busy: boolean; onDecision: NonNullable<InboxActions['onBidDecision']> }) {
+  const offerId = item.offerId!, market = item.market!
+  const offer = market === 'season' ? season.recruitment.offers.find(entry => entry.id === offerId) : season.market.windows.flatMap(window => window.offers).find(entry => entry.id === offerId)
+  if (!offer?.transfer) return null
+  const transfer = offer.transfer, loan = transfer.mode === 'loan'
+  let canAccept = true, reason: string | null = null, canCounter = !loan && transfer.fee < transfer.requiredFee
+  if (market === 'season') { const quote = quoteInSeasonSale(season, offerId); canAccept = quote.canAccept; reason = quote.acceptReason; canCounter = quote.canCounter }
+  const buyer = season.clubs.find(club => club.id === offer.clubId)?.name ?? 'The club'
+  return <div className="inbox-bid" data-inbox-bid={offerId} data-bid-kind={loan ? 'loan' : 'transfer'}>
+    <dl><div><dt>{loan ? 'Loan fee' : 'Transfer fee'}</dt><dd>{formatEuros(transfer.fee)}</dd></div><div><dt>From</dt><dd>{buyer}</dd></div>{!loan && <div><dt>Asking fee</dt><dd>{formatEuros(transfer.requiredFee)}</dd></div>}</dl>
+    <p className="inbox-bid-note">{loan ? 'He plays for them until the season ends and they pay his wages. His contract with you continues next season.' : 'The fee goes to Spending left and his wages leave your Wages left once he signs.'}</p>
+    <div className="inbox-bid-actions">
+      <button className="button primary small" data-bid-accept={offerId} onClick={() => onDecision(offerId, market, 'accept')} disabled={busy || !canAccept}>Accept<Icon name="check" size={14} /></button>
+      {canCounter && <button className="button small" data-bid-counter={offerId} onClick={() => onDecision(offerId, market, 'counter')} disabled={busy}>Ask {formatEuros(transfer.requiredFee)}</button>}
+      <button className="button small" data-bid-decline={offerId} onClick={() => onDecision(offerId, market, 'reject')} disabled={busy}>Decline</button>
+    </div>
+    {!canAccept && reason && <p className="inbox-bid-note">{reason}</p>}
+  </div>
+}
+
+export function InboxWorkspace({ season, busy = false, onAnswerPress, onOpen, onContractReply, onBidDecision, initialSelectedId = null }: InboxActions & { season: SeasonState; busy?: boolean; initialSelectedId?: string | null }) {
   const [filter, setFilter] = useState<Filter>('all')
   const readKey = inboxReadKey(season)
   const [read, setRead] = useState<Set<string>>(() => loadRead(readKey))
@@ -152,6 +177,7 @@ export function InboxWorkspace({ season, busy = false, onAnswerPress, onOpen, on
             {!pressOpen && <header className="inbox-reader-heading"><span className="inbox-icon" aria-hidden="true"><Icon name={ICONS[selected.category]} size={18} /></span><div><h3>{selected.title}</h3><time dateTime={selected.date}>{medicalDate(selected.date)}</time></div></header>}
             {pressOpen ? <PressConference season={season} question={pressOpen} busy={busy} onAnswer={onAnswerPress} />
               : <p className="inbox-reader-text">{selected.detail}</p>}
+            {selected.target === 'bid' && selected.needsAction && onBidDecision && <BidDecision season={season} item={selected} busy={busy} onDecision={onBidDecision} />}
             {request && onContractReply && <div id="contract-requests" className="inbox-contract-requests" tabIndex={-1}><ContractRequestCard season={season} request={request} busy={busy} onReply={onContractReply} /></div>}
             <div className="inbox-reader-actions">
               {selected.target !== 'press' && <button className="button small" onClick={() => onOpen(selected.target as Exclude<InboxTarget, 'press'>, selected.playerId)} disabled={busy}>{OPEN_LABELS[selected.target as Exclude<InboxTarget, 'press'>]}<Icon name="chevron" size={14} /></button>}

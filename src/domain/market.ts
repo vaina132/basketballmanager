@@ -5,7 +5,7 @@ export interface TransferProposal {
   sellerClubId: string;
   contractId: string;
   fee: number;
-  mode?: 'release-clause';
+  mode?: 'release-clause' | 'loan';
   paymentPlan: TransferPaymentPlan;
   requiredFee: number;
   clubStatus: 'pending' | 'review' | 'accepted' | 'countered' | 'rejected';

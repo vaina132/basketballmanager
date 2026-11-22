@@ -46,6 +46,7 @@ import { keepContractedStaff, payComputerStaffCompensation, processStaffWagesRou
 import { planComputerStaffRenewals } from './staff-levels';
 import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
+import { scheduleListingBids } from './listings';
 import { createInSeasonRecruitment, enableInSeasonRecruitment, enableInSeasonTransfers, resolveInSeasonRecruitment, scheduleInSeasonRecruitment } from './recruitment';
 import { createPayroll, enablePayroll, preparePayrollRound, processPayrollRound, startPayrollSeason } from './payroll';
 import { validateManagerProfile } from './manager';
@@ -452,6 +453,17 @@ export interface SeasonSystems {
    * `INJURY_DURATIONS_2` in `src/domain/injuries.ts`), so long injuries happen over a season. New careers only.
    */
   injuryLengths?: boolean;
+  /**
+   * Format 78 (owner feedback, 22 November 2026): the transfer and loan list (`recruitment-2`, `src/world/listings.ts`):
+   * computer clubs bid for the manager's players, more often when listed, and loans for the rest of a season. New careers
+   * only; requires in-season recruitment.
+   */
+  transferLists?: boolean;
+  /**
+   * Format 78 (owner feedback, 22 November 2026): the scouting network (`scouting-2`): players inside the scouts' range
+   * show an estimated rating whose accuracy grows with the scouts' total quality. New careers only; requires scouting.
+   */
+  scoutNetwork?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -464,7 +476,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -487,6 +499,8 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.wagePool !== undefined && typeof options.wagePool !== 'boolean') throw new Error('Choose a valid wage budget setting.');
   if (options.staffContracts !== undefined && typeof options.staffContracts !== 'boolean') throw new Error('Choose a valid staff contract setting.');
   if (options.injuryLengths !== undefined && typeof options.injuryLengths !== 'boolean') throw new Error('Choose a valid injury setting.');
+  if (options.transferLists !== undefined && typeof options.transferLists !== 'boolean') throw new Error('Choose a valid transfer list setting.');
+  if (options.scoutNetwork !== undefined && typeof options.scoutNetwork !== 'boolean') throw new Error('Choose a valid scouting network setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -500,7 +514,10 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   // Format 76: staff contracts (`coaching-4`, set before the opening staff are paid) with each person's contract length.
   const staffed = staffContracts ? withOpeningStaffTerms(boarded) : options.wagePool && options.staffing ? { ...boarded, coaching: { ...boarded.coaching, model: 'coaching-3' as const } } : boarded;
   // Owner feedback (22 November 2026): longer recoveries for match injuries in new careers.
-  return options.injuryLengths ? { ...staffed, injuryModel: INJURY_MODEL_2 } : staffed;
+  const healed = options.injuryLengths ? { ...staffed, injuryModel: INJURY_MODEL_2 } : staffed;
+  // Format 78: the transfer and loan list, and the scouting network; nothing at the opening depends on either.
+  const listed = options.transferLists && healed.recruitment.enabledSince ? { ...healed, recruitment: { ...healed.recruitment, model: 'recruitment-2' as const, listings: [] } } : healed;
+  return options.scoutNetwork && listed.scouting.enabledSince ? { ...listed, scouting: { ...listed.scouting, model: 'scouting-2' as const } } : listed;
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.
@@ -872,7 +889,7 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState, coachCh
   next = processTransferPayments(next);
   if (next.rosters.length !== registeredBefore) next = refreshSquadKnowledge(next);
   next = prepareScoutingAssignments(next);
-  next = scheduleInSeasonRecruitment(next);
+  next = scheduleListingBids(scheduleInSeasonRecruitment(next));
   next = automateFacilities(next);
   next = processContractRequests(automateRelationships(prepareRelationshipsRound(next)));
   // Career-2: an in-season review's coach changes take effect before this week's games, like a resignation would.
@@ -1079,7 +1096,7 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = preparePayrollRound(next);
   next = processTransferPayments(next);
   next = prepareScoutingAssignments(refreshSquadKnowledge(next));
-  next = scheduleInSeasonRecruitment(next);
+  next = scheduleListingBids(scheduleInSeasonRecruitment(next));
   next = automateFacilities(next);
   next = processContractRequests(automateRelationships(prepareRelationshipsRound(next)));
   next = prepareBoardSeason(next);

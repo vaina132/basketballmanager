@@ -5,8 +5,10 @@ import { buildAnimation, frameAt, rosterOf } from './choreography'
 import type { Frame, Pose } from './choreography'
 import { playbackProgress } from './playback'
 import type { PlaybackClock } from './useCourtPlayback'
-
-function project(x: number, y: number) { return { x: 74 + x * 484 + y * 224, y: 244 + x * 102 - y * 172 } }
+import { buildCrowd, crowdCheer } from './crowd'
+import type { Gate } from './crowd'
+import { CrowdLayers } from './CrowdStands'
+import { COURT_VIEW_BOX, project, rgb } from './projection'
 /** Pixels per metre of height (the rim, at 3.05 m, is drawn 36 px above the floor). */
 const LIFT = 12
 
@@ -14,12 +16,6 @@ export interface ScoreBugTeam { name: string; color: string; score: number; foul
 export interface ScoreBug { home: ScoreBugTeam; away: ScoreBugTeam; period: string; clock: string }
 
 export interface Jersey { fill: string; text: string; trim: string }
-function rgb(color: string): [number, number, number] | null {
-  const hex = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim())?.[1]
-  if (!hex) return null
-  const full = hex.length === 3 ? [...hex].map(c => c + c).join('') : hex
-  return [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16)) as [number, number, number]
-}
 /** Teams in similar colours (or without verified colours) stay apart: the away side then wears light jerseys with its colour as trim. */
 export function jerseys(home: string, away: string): Record<Side, Jersey> {
   const a = rgb(home), b = rgb(away)
@@ -102,14 +98,17 @@ function Hoop({ x, swish }: { x: number; swish: number | null }) {
 
 const MARK_COLORS: Record<Frame['marks'][number]['kind'], string> = { score: '#f2b84b', miss: '#c9ccc4', block: '#ff7a6b', steal: '#6fc3ff', screen: '#e6dcc3', turnover: '#ff9d6b' }
 
-function ScoreBugView({ bug, kits }: { bug: ScoreBug; kits: Record<Side, Jersey> }) {
+const count = new Intl.NumberFormat('en-GB')
+function ScoreBugView({ bug, kits, gate }: { bug: ScoreBug; kits: Record<Side, Jersey>; gate?: Gate | null }) {
   const row = (team: ScoreBugTeam, side: Side) => <div className="bug-row" data-side={side}>
     <i style={{ background: kits[side].fill, boxShadow: `inset 0 0 0 1px ${kits[side].trim}` }} aria-hidden="true" /><b>{team.name}</b><span className="bug-score">{team.score}</span>
     <span className="bug-meta" title={`${team.fouls} team fouls this quarter, ${team.timeouts} timeouts left`}>F{team.fouls}{team.fouls >= 5 ? '+' : ''} · TO{team.timeouts}</span>
   </div>
-  return <div className="score-bug" aria-label={`${bug.home.name} ${bug.home.score}, ${bug.away.name} ${bug.away.score}, ${bug.period} ${bug.clock}`}>
+  const attendance = gate ? `Attendance ${count.format(gate.attendance)} / ${count.format(gate.capacity)}` : null
+  return <div className="score-bug" aria-label={`${bug.home.name} ${bug.home.score}, ${bug.away.name} ${bug.away.score}, ${bug.period} ${bug.clock}${attendance ? `. ${attendance}` : ''}`}>
     {row(bug.home, 'home')}{row(bug.away, 'away')}
     <div className="bug-clock"><span>{bug.period}</span><span>{bug.clock}</span></div>
+    {attendance && <div className="bug-crowd">{attendance}</div>}
   </div>
 }
 
@@ -128,8 +127,8 @@ function legacyFrame(match: MatchState): Frame {
   return { players, ball: { x: shotEvent?.shot?.x ?? .5, y: shotEvent?.shot?.y ?? .5, height: 2 }, marks: [] }
 }
 
-export function Court({ match, event, progress = 1, clock, reducedMotion = false, bug }: { match: MatchState; event?: MatchEvent; progress?: number; clock?: PlaybackClock; reducedMotion?: boolean; bug?: ScoreBug }) {
-  const snapshot = useSyncExternalStore(clock?.subscribe ?? noSubscribe, clock?.getSnapshot ?? noSnapshot)
+export function Court({ match, event, progress = 1, clock, reducedMotion = false, bug, gate }: { match: MatchState; event?: MatchEvent; progress?: number; clock?: PlaybackClock; reducedMotion?: boolean; bug?: ScoreBug; gate?: Gate | null }) {
+  const snapshot = useSyncExternalStore(clock?.subscribe ?? noSubscribe, clock?.getSnapshot ?? noSnapshot, clock?.getSnapshot ?? noSnapshot)
   const live = snapshot?.events[snapshot.index]
   const current = live ?? event ?? [...match.events].reverse().find(item => item.scene)
   const shownProgress = live && snapshot ? playbackProgress(snapshot) : progress
@@ -138,6 +137,10 @@ export function Court({ match, event, progress = 1, clock, reducedMotion = false
   const frame = animation ? frameAt(animation, shownProgress, reducedMotion) : legacyFrame(match)
   const players = useMemo(() => new Map((['home', 'away'] as Side[]).flatMap(side => match[side].players.map(player => [player.id, player] as const))), [match.home.players, match.away.players]) // eslint-disable-line react-hooks/exhaustive-deps
   const kits = useMemo(() => jerseys(match.home.color, match.away.color), [match.home.color, match.away.color])
+  const crowd = useMemo(() => buildCrowd({ homeId: match.home.id, awayId: match.away.id, homeColor: match.home.color, awayColor: match.away.color, gate: gate ? { attendance: gate.attendance, capacity: gate.capacity } : null }),
+    [match.home.id, match.away.id, match.home.color, match.away.color, gate?.attendance, gate?.capacity]) // eslint-disable-line react-hooks/exhaustive-deps
+  const cheer = crowdCheer({ event: current, animation, progress: shownProgress, sideOf: id => players.get(id) ? match.home.players.some(player => player.id === id) ? 'home' : 'away' : undefined,
+    finished: match.status === 'finished' && (!snapshot || snapshot.done), winner: match.result?.winner })
   // Names for the players the play is about (not the contesting defender), kept from overlapping one another.
   const roles = new Set(animation?.actors.filter(actor => actor.role !== 'contest').map(actor => actor.playerId))
   const ordered = frame.players.filter(pose => players.has(pose.playerId)).sort((a, b) => project(a.x, a.y).y - project(b.x, b.y).y)
@@ -165,8 +168,10 @@ export function Court({ match, event, progress = 1, clock, reducedMotion = false
   const swish = frame.marks.find(mark => mark.kind === 'score')?.x ?? null
   const description = current?.text ?? 'Both teams are ready for the opening possession.'
   return <div className="court-presentation" data-scene-kind={current?.scene?.kind ?? 'legacy'} data-play={animation?.kind ?? 'legacy'} data-event-id={current?.id ?? 0} data-progress={shownProgress.toFixed(3)}>
-    {bug && <ScoreBugView bug={bug} kits={kits} />}
-    <svg viewBox="18 20 820 365" className="court-svg" role="img" aria-label={`Diagonal basketball court. ${description}`}>
+    {bug && <ScoreBugView bug={bug} kits={kits} gate={gate} />}
+    <div className="court-stage">
+    <CrowdLayers crowd={crowd} cheer={cheer} reducedMotion={reducedMotion} />
+    <svg viewBox={COURT_VIEW_BOX} className="court-svg" role="img" aria-label={`Diagonal basketball court. ${description}`}>
       <CourtFloor />
       {arcPath && <path d={arcPath} fill="none" stroke={flight!.kind === 'shot' ? '#b5541f' : '#4f5d55'} strokeWidth="1.8" strokeDasharray="4 5" opacity=".7" />}
       {[...ordered.map(pose => ({ depth: project(pose.x, pose.y).y, pose })), ...HOOP_X.map(x => ({ depth: hoopDepth(x) + .5, hoop: x }))].sort((a, b) => a.depth - b.depth).map(item => {
@@ -183,6 +188,7 @@ export function Court({ match, event, progress = 1, clock, reducedMotion = false
         return <text key={mark.kind} className="court-mark" x={p.x.toFixed(1)} y={(p.y - above).toFixed(1)} textAnchor="middle" fill={MARK_COLORS[mark.kind]} opacity={mark.alpha.toFixed(2)} stroke="#1c2521" strokeWidth="3" paintOrder="stroke" fontSize={mark.kind === 'score' ? 18 : 12} fontWeight="800" letterSpacing=".5">{mark.label}</text>
       })}
     </svg>
+    </div>
   </div>
 }
 const noSubscribe = () => () => {}

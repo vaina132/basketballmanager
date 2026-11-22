@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../src/data/fictional-teams';
 import type { MatchState } from '../src/domain/types';
-import { createFixtureMatch, createMatch, placeInCircle, setAutoSubstitutions, setInjuryMode, simulateToEnd, stepMatch } from '../src/engine/match';
+import { cancelSubstitution, createFixtureMatch, createMatch, placeInCircle, setAutoSubstitutions, setInjuryMode, simulateToEnd, stepMatch } from '../src/engine/match';
 import { createSeason } from '../src/world/season';
 import { SquadStartingFive } from '../src/ui/SquadStartingFive';
 import { courtCircles } from '../src/engine/positions';
@@ -99,6 +99,38 @@ describe('the court picture on the match screen (owner request, 16 November 2026
     const exhibition = render(createMatch(7), false);
     expect(exhibition).not.toContain('data-court-circle');
     expect(exhibition).toContain('Drag or select two on-court players to swap their places at once.');
+  });
+});
+
+describe('withdrawing a queued substitution (owner feedback, 22 November 2026)', () => {
+  it('offers Cancel on the list, the circle and the bench row, restores the five, and is refused once the change is made', () => {
+    let live = ready(9);
+    while (live.stepCount < 20 || live.stoppage || !live.possessionPlay) live = stepMatch(live);
+    const shown = courtCircles(live, 'home'), occupant = Object.keys(shown).find(id => shown[id] === 'PF')!;
+    const reserveId = live.home.players.find(player => !live.lineups.home.includes(player.id))!.id;
+    const queued = placeInCircle(live, 'home', reserveId, 'PF');
+    expect(queued.pendingSubstitutions.home).toEqual([{ outId: occupant, inId: reserveId }]);
+    const html = render(queued);
+    // One tap or key on any of three buttons: the queued list, the label under the circle and the reserve's row.
+    expect(html).toMatch(new RegExp(`<button[^>]*data-cancel-lineup-sub="${occupant}"[^>]*>`));
+    expect(html).toMatch(new RegExp(`<button[^>]*data-cancel-court-sub="${occupant}"[^>]*>`));
+    expect(html).toMatch(new RegExp(`<button[^>]*data-cancel-bench-sub="${occupant}"[^>]*>`));
+    expect(html).toContain('drag the reserve back to the bench');
+    // Cancelling restores the five, the circles and the randomness exactly.
+    const cancelled = cancelSubstitution(queued, 'home', occupant);
+    expect(cancelled.pendingSubstitutions.home).toEqual([]);
+    expect(cancelled.lineups).toEqual(live.lineups);
+    expect(cancelled.slots?.home ?? {}).toEqual(live.slots?.home ?? {});
+    expect(cancelled.rngState).toBe(live.rngState);
+    expect(render(cancelled)).not.toContain('data-cancel-lineup-sub');
+    // Played on, a cancelled change never happens; a change that was made cannot be cancelled any more.
+    let played = cancelled;
+    for (let step = 0; step < 40 && played.status !== 'finished'; step += 1) played = stepMatch(played);
+    expect(played.events.some(event => event.type === 'substitution' && event.playerId === reserveId)).toBe(false);
+    let applied = queued;
+    while (applied.pendingSubstitutions.home.length && applied.status !== 'finished') applied = stepMatch(applied);
+    expect(applied.lineups.home).toContain(reserveId);
+    expect(() => cancelSubstitution(applied, 'home', occupant)).toThrow(/no longer waiting/);
   });
 });
 

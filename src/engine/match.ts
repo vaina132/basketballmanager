@@ -857,10 +857,18 @@ export function substitutePlayer(state: MatchState, side: Side, outId: string, i
   pruneCircles(next);
   emit(next, { type: 'command', side, text: `${player(next, side, inId).name} is requested for ${player(next, side, outId).name}; changes apply at a legal opportunity.` }); serviceStoppage(next); return next;
 }
+/**
+ * Withdraws a queued substitution (owner feedback, 22 November 2026): the player stays on, the reserve stays on the
+ * bench and any circle chosen for the reserve is dropped. Only a change still waiting can be withdrawn: once a stoppage
+ * has applied it, it is a substitution like any other and is refused here.
+ */
 export function cancelSubstitution(state: MatchState, side: Side, outId: string): MatchState {
-  assertSide(side); assertOpen(state); const next = copy(state); next.pendingSubstitutions[side] = next.pendingSubstitutions[side].filter(r => r.outId !== outId);
+  assertSide(side); assertOpen(state);
+  const request = state.pendingSubstitutions[side].find(r => r.outId === outId);
+  if (!request) throw new Error('That substitution is no longer waiting: it has already been made or withdrawn.');
+  const next = copy(state); next.pendingSubstitutions[side] = next.pendingSubstitutions[side].filter(r => r.outId !== outId);
   pruneCircles(next);
-  emit(next, { type: 'command', side, text: 'Queued substitution cancelled.' }); return next;
+  emit(next, { type: 'command', side, text: `Queued substitution cancelled: ${player(next, side, outId).name} stays on, ${player(next, side, request.inId).name} stays on the bench.` }); return next;
 }
 /**
  * Two players on the floor trade places in the five (owner feedback, 16 November 2026). The five's order sets each

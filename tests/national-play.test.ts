@@ -164,6 +164,8 @@ describe('national windows in play (format 80)', () => {
     const hired = acceptNationalOffer(offerNationalJob(played, 'nation-tur'), `national-offer-test-nation-tur-${played.date}`);
     // The earlier shape: results without injury records, the national record without earnings.
     const envelope = JSON.parse(serializeSeason(hired));
+    // Written as format 80 (later formats always carry the fields).
+    envelope.formatVersion = 80; envelope.state.schemaVersion = 80;
     delete envelope.state.national.earnings;
     for (const competition of envelope.state.national.competitions) for (const fixture of competition.fixtures) if (fixture.result) delete fixture.result.injuries;
     const earlier = JSON.stringify(envelope);

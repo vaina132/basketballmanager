@@ -23,7 +23,16 @@ export interface CheckRecord {
   readonly counts: ReadonlyMap<string, number>;
   /** Replay values (named `journal:key`) at those counts. */
   readonly values: ReadonlyMap<string, unknown>;
+  /**
+   * A digest of the trusted prefix exactly as this check accepted it (`prefixDigest`), taken right after the check. A
+   * later state is trusted only when its own prefix has the same digest, so a trusted state changed in place afterwards
+   * (a shared object, a reloaded or edited career) can never lend its trust: the comparison falls back to the full check.
+   */
+  readonly digest: PrefixDigest;
 }
+
+/** The trusted prefix's digest, with the record counts it covered per journal (`journal` names as in `JOURNALS`). */
+export interface PrefixDigest { readonly hash: string; readonly counts: ReadonlyMap<string, number> }
 
 interface ActiveCheck {
   cut: PrefixCut;
@@ -74,7 +83,8 @@ export function withPrefixCheck(state: SeasonState, trusted: CheckRecord | null,
   active = check;
   try { run(); }
   finally { active = previous; lastSkipped = check.skipped; }
-  return record ? { state, cut: check.cut, counts: check.counts!, values: check.values! } : null;
+  // The digest is taken right after the check accepted the state, before anything else can touch it.
+  return record ? { state, cut: check.cut, counts: check.counts!, values: check.values!, digest: prefixDigest(state, check.cut)! } : null;
 }
 
 export interface PrefixPlan {
@@ -251,7 +261,8 @@ function sameTransfer(left: Record<string, unknown>, right: Record<string, unkno
 }
 
 /** Top-level parts that cannot change during a season (season-end exchanges, money and archives change at the rollover). */
-const SEASON_CONSTANTS = ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'world', 'manager', 'injuryMode', 'history', 'divisions', 'europe', 'background', 'economySeasons'] as const;
+// Format 78-79: the injury and play models are fixed for a career (diagnoses of trusted injuries read the injury model).
+const SEASON_CONSTANTS = ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'world', 'manager', 'injuryMode', 'injuryModel', 'matchModel', 'history', 'divisions', 'europe', 'background', 'economySeasons'] as const;
 
 /**
  * Whether `state` keeps the trusted state's past exactly: the same career and season, time moving forward, the season's
@@ -267,6 +278,11 @@ export function trustedPrefixMismatch(trusted: CheckRecord, state: SeasonState):
   const before = trusted.state, cut = trusted.cut, limit = cutKey(cut), trustedBefore = beforeCut(cut);
   if (!state || typeof state !== 'object' || state.seasonNumber !== before.seasonNumber || typeof state.round !== 'number' || state.round < before.round) return 'season or matchday';
   if (typeof state.date !== 'string' || state.date < before.date || state.round === before.round && before.status === 'complete' && state.status !== 'complete') return 'calendar';
+  // The prefix must be exactly the one the trusted check accepted (its digest), whatever the trusted object holds now.
+  const digest = prefixDigest(state, cut, trusted.digest.counts);
+  if (!digest || digest.hash !== trusted.digest.hash) return 'trusted prefix digest';
+  // Format 80: national teams pause the domestic calendar; the national section itself is checked in full every time.
+  if (Object.hasOwn(before, 'national') !== Object.hasOwn(state, 'national')) return 'national';
   for (const key of SEASON_CONSTANTS) if (Object.hasOwn(before, key) !== Object.hasOwn(state, key) || !sameJson(before[key], state[key])) return key;
   if (!sameJson((before.finance as { archives?: unknown })?.archives, (state.finance as { archives?: unknown })?.archives)) return 'finance.archives';
   for (const [name, journal] of JOURNALS) {
@@ -300,4 +316,77 @@ export function trustedPrefixMismatch(trusted: CheckRecord, state: SeasonState):
   }
   for (const fixture of state.fixtures) if (fixture !== null && typeof fixture === 'object' && !known.has(fixture.id) && !(fixture.round >= cut.round)) return `fixtures.${fixture.id} back-dated`;
   return null;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The trusted prefix's digest.
+
+/** A 64-bit digest of text pieces (two independent 32-bit lanes); identical pieces in the same order give the same digest. */
+class Digest {
+  private h1 = 0xdeadbeef;
+  private h2 = 0x41c6ce57;
+  add(text: string): void {
+    let h1 = this.h1, h2 = this.h2;
+    for (let index = 0; index < text.length; index += 1) {
+      const code = text.charCodeAt(index);
+      h1 = Math.imul(h1 ^ code, 2654435761);
+      h2 = Math.imul(h2 ^ code, 1597334677);
+    }
+    // A separator, so that piece boundaries count.
+    h1 = Math.imul(h1 ^ 0x1f, 2654435761); h2 = Math.imul(h2 ^ 0x1f, 1597334677);
+    this.h1 = h1; this.h2 = h2;
+  }
+  value(): string {
+    let h1 = this.h1, h2 = this.h2;
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return `${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
+  }
+}
+
+const json = (value: unknown): string => { const text = JSON.stringify(value); return text === undefined ? 'undefined' : text; };
+
+/**
+ * The digest of a state's prefix before `cut`: the season's constants, the finance archives, each journal's records
+ * dated before the cut (a transfer with only its installments paid before the cut), each scouting office's earlier
+ * reports and the games of earlier weeks (by identity). With `counts` (the trusted digest's), each journal covers exactly
+ * that many leading records; the result is null when a journal is shorter. Never throws on malformed data: it is null then.
+ */
+export function prefixDigest(state: SeasonState, cut: PrefixCut, counts?: ReadonlyMap<string, number>): PrefixDigest | null {
+  try {
+    const digest = new Digest(), covered = new Map<string, number>(), limit = cutKey(cut);
+    const source = state as unknown as Record<string, unknown>;
+    for (const key of SEASON_CONSTANTS) digest.add(Object.hasOwn(source, key) ? `${key}:${json(source[key])}` : `${key}!`);
+    digest.add(`archives:${json((state.finance as { archives?: unknown } | undefined)?.archives)}`);
+    const journal = (name: string, items: readonly unknown[] | undefined, at: (item: never) => Position, piece: (item: unknown) => string = json): boolean => {
+      if (!Array.isArray(items)) { digest.add(`${name}!`); covered.set(name, -1); return true; }
+      const count = counts ? counts.get(name) ?? -2 : leadingBefore(items, at as (item: unknown) => Position, cut);
+      if (count < 0 ? count === -2 : items.length < count) return false;
+      covered.set(name, count);
+      digest.add(`${name}#${count}`);
+      for (let index = 0; index < count; index += 1) digest.add(piece(items[index]));
+      return true;
+    };
+    for (const [name, entry] of JOURNALS) {
+      const piece = name === 'employment.transfers' ? (item: unknown) => transferBeforeCut(item, cut) : undefined;
+      if (!journal(name, entry.items(state), entry.at, piece)) return null;
+    }
+    const offices = (state.scouting as { clubs?: Record<string, { reviews?: unknown }> } | undefined)?.clubs ?? {};
+    // Offices by observing club, in a fixed order (the trusted digest names the offices it covered).
+    const officeIds = counts ? [...counts.keys()].filter(name => name.startsWith(SCOUTING_REVIEWS)).map(name => name.slice(SCOUTING_REVIEWS.length)) : Object.keys(offices);
+    for (const clubId of officeIds.sort()) if (!journal(`${SCOUTING_REVIEWS}${clubId}`, offices[clubId]?.reviews as unknown[] | undefined, dated as (item: never) => Position)) return null;
+    if (!Array.isArray(state.fixtures)) return null;
+    const earlier = state.fixtures.filter(fixture => fixture !== null && typeof fixture === 'object' && typeof fixture.round === 'number' && fixture.round < cut.round).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    digest.add(`fixtures#${earlier.length}`);
+    for (const fixture of earlier) digest.add(json(fixture));
+    digest.add(`cut:${limit}`);
+    return { hash: digest.value(), counts: covered };
+  } catch { return null; }
+}
+
+/** A transfer as the trusted prefix keeps it: every term, and only the installments paid before the cut. */
+function transferBeforeCut(item: unknown, cut: PrefixCut): string {
+  if (item === null || typeof item !== 'object' || !Array.isArray((item as { payments?: unknown }).payments)) return json(item);
+  const payments = (item as { payments: unknown[] }).payments;
+  return json({ ...(item as object), payments: payments.slice(0, leadingBefore(payments, dated as (item: unknown) => Position, cut)) });
 }

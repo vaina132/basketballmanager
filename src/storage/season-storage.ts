@@ -3662,12 +3662,15 @@ export function checkCheckpointState(state: SeasonState): 'incremental' | 'full'
     trusted = mismatch === null ? previous : null;
     lastFallback = mismatch;
   } catch (error) { trusted = null; lastFallback = `prefix comparison failed: ${error instanceof Error ? error.message : 'unknown error'}`; }
+  // Trust is given up until a check accepts this state: after any refusal the next checkpoint starts from a full check, so
+  // replay values an interrupted check may have touched are never reused.
+  lastCheckpoint = null;
   if (trusted) {
     try { lastCheckpoint = checkAgainstTrustedPrefix(state, trusted); return 'incremental'; }
     // The full check below decides: an incremental refusal or error never refuses a checkpoint on its own.
     catch (error) { lastFallback = `incremental check: ${error instanceof Error ? error.message : 'unknown error'}`; }
   }
-  lastCheckpoint = withPrefixCheck(state, null, true, () => validateSeasonState(state)) ?? previous;
+  lastCheckpoint = withPrefixCheck(state, null, true, () => validateSeasonState(state));
   return 'full';
 }
 

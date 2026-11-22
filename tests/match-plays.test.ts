@@ -11,6 +11,8 @@ import { advanceMatchday } from './helpers/board-funding';
 import { economyPack } from './helpers/economy-pack';
 import { currentSeasonFile } from './helpers/season-format';
 import { calibrationSummary, calibrationTeam, gameLine, type GameLine } from './helpers/match-calibration';
+import { buildAnimation, rosterOf } from '../src/viewer/choreography';
+import { describePlay } from '../src/viewer/play-text';
 
 /**
  * Format 79 (owner feedback 16, 22 November 2026): the richer play model (`plays-2`, src/engine/plays.ts). Named
@@ -117,6 +119,28 @@ describe('richer play model (format 79)', () => {
     const end = simulateToEnd(createFixtureMatch(4242, teams[4]!, teams[7]!, { autoSubstitutions: { home: true, away: true }, injuryMode: 'standard' }));
     expect(end.playModel).toBeUndefined();
     expect(fingerprint(end)).toBe(OLD_ENGINE_FINGERPRINT);
+  });
+});
+
+describe('the visual match shows the new actions', () => {
+  it('animates each named action and gives it a short line', () => {
+    const kinds = new Set<string>(), lines = new Set<string>();
+    for (const seed of [31, 32, 33, 34]) {
+      const end = simulateToEnd(createFixtureMatch(seed, teams[2]!, teams[9]!, { autoSubstitutions: { home: true, away: true }, injuryMode: 'off', ...PLAYS }));
+      const roster = rosterOf(end);
+      end.events.forEach((event, index) => {
+        const animation = buildAnimation(event, roster);
+        if (event.scene) { expect(animation).not.toBeNull(); kinds.add(animation!.kind); expect(animation!.durationMs).toBeLessThanOrEqual(2000); }
+        const line = describePlay(event, roster, end.events[index - 1]);
+        expect(line.length).toBeLessThanOrEqual(110);
+        expect(line).not.toMatch(/undefined|A player/);
+        lines.add(line.replace(/[\d-]+$/, ''));
+      });
+    }
+    for (const kind of ['screen', 'pick-and-roll', 'post-up', 'fast-break', 'dunk', 'block', 'steal', 'rebound']) expect(kinds, kind).toContain(kind);
+    expect([...lines].some(line => /screens for/.test(line))).toBe(true);
+    expect([...lines].some(line => /backs down in the post/.test(line))).toBe(true);
+    expect([...lines].some(line => /kicks it out to/.test(line))).toBe(true);
   });
 });
 

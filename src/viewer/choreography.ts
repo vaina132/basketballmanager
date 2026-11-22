@@ -10,7 +10,7 @@ import type { CourtBallPoint, CourtPoint, CourtPosition, MatchEvent, Position, S
 export interface RosterEntry { side: Side; position: Position; name: string }
 export type Roster = ReadonlyMap<string, RosterEntry>
 
-export type PlayKind = 'setup' | 'transition' | 'free-throw-setup' | 'pass' | 'drive' | 'pick-and-roll' | 'shot' | 'block' | 'free-throw' | 'rebound' | 'steal' | 'turnover'
+export type PlayKind = 'setup' | 'transition' | 'free-throw-setup' | 'pass' | 'drive' | 'pick-and-roll' | 'screen' | 'post-up' | 'fast-break' | 'shot' | 'dunk' | 'block' | 'free-throw' | 'rebound' | 'steal' | 'turnover'
 export type Pose = 'stand' | 'run' | 'dribble' | 'shoot' | 'block' | 'reach' | 'box-out' | 'screen' | 'defend' | 'catch'
 export type Role = 'handler' | 'passer' | 'receiver' | 'shooter' | 'screener' | 'blocker' | 'rebounder' | 'stealer' | 'contest'
 
@@ -164,14 +164,38 @@ export function buildAnimation(event: MatchEvent, roster: Roster): Animation | n
     ball.push({ kind: 'pass', from: { playerId: event.playerId }, to: { playerId: event.receiverId }, start: .2, end: .74, arc: Math.max(.35, scene.ball.arcHeight) })
     ball.push({ kind: 'hold', from: { playerId: event.receiverId }, to: { playerId: event.receiverId }, start: .74, end: 1, arc: 0 })
     setPose(track(event.playerId), 'catch', 0, .3)
-    setPose(track(event.receiverId), 'catch', .6, 1)
+    // A lob (alley-oop) is caught in the air.
+    setPose(track(event.receiverId), 'catch', .6, 1, /throws the lob/.test(event.text) ? .55 : 0)
   } else if (scene.kind === 'drive' && event.playerId && track(event.playerId)) {
     const handler = event.playerId, handlerStart = startOf(handler)
     actors.push({ playerId: handler, role: 'handler' })
-    const screener = metres(handlerStart, hoop) > 5.5 && !isBig(roster.get(handler)?.position)
+    // The earlier engine names every drive alike, so its screens are inferred; the richer play model (format 79) names
+    // the action: a screen of its own, coming off it, a post-up or a fast break.
+    const legacy = /drives toward the basket\.$/.test(event.text)
+    const offScreen = /off the screen|turns the corner/.test(event.text)
+    const post = /backs down|drop step|faces up|into a hook/.test(event.text)
+    const transition = /fast break|races up the floor|pushes for a quick shot/.test(event.text)
+    const screener = legacy && metres(handlerStart, hoop) > 5.5 && !isBig(roster.get(handler)?.position)
       ? nearest(scene.start, handlerStart, id => id !== handler && onSide(offense)(id) && isBig(roster.get(id)?.position)) : undefined
     const handlerDefender = nearest(scene.start, handlerStart, onSide(defense))
-    if (screener) {
+    const setScreener = offScreen ? nearest(scene.start, handlerStart, id => id !== handler && onSide(offense)(id)) : undefined
+    if (setScreener && track(setScreener)) {
+      // Coming off a screen already set: the screener holds, the handler's defender is caught on it.
+      kind = 'pick-and-roll'; durationMs = 1100
+      actors.push({ playerId: setScreener, role: 'screener' })
+      setPose(track(setScreener), 'screen', 0, .35)
+      delay(track(setScreener)!, .3)
+      if (handlerDefender) delay(track(handlerDefender)!, .4)
+      tracks.filter(item => item.side === defense && item.playerId !== handlerDefender).forEach(item => delay(item, .15))
+    } else if (post) {
+      // Backing down: slow, shoulder to chest with the defender, who gives ground.
+      kind = 'post-up'; durationMs = 1250
+      if (handlerDefender) { delay(track(handlerDefender)!, .1); setPose(track(handlerDefender), 'box-out', 0, 1) }
+      tracks.filter(item => item.side === defense && item.playerId !== handlerDefender).forEach(item => delay(item, .2))
+    } else if (transition) {
+      kind = 'fast-break'; durationMs = maxRun > 10 ? 1300 : 1000
+      tracks.filter(item => item.side === defense).forEach(item => delay(item, .22))
+    } else if (screener) {
       kind = 'pick-and-roll'; durationMs = 1350
       actors.push({ playerId: screener, role: 'screener' })
       // The big steps up beside the ball handler's defender, holds the screen, then rolls back toward the rim.
@@ -212,22 +236,23 @@ export function buildAnimation(event: MatchEvent, roster: Roster): Animation | n
       }
     } else {
       const three = event.shot?.value === 3
-      kind = freeThrow ? 'free-throw' : 'shot'; durationMs = freeThrow ? 1150 : three ? 1450 : 1300; result = made ? 'make' : 'miss'
-      const release = freeThrow ? .3 : .22, rim = made ? .82 : .72
+      const dunk = !freeThrow && /the dunk|'s dunk|alley-oop/.test(event.text), heave = !freeThrow && /heaves? from long range|banks in a heave/.test(event.text), tip = !freeThrow && /the putback|'s putback|tips it in|tip it in|'s tip-in/.test(event.text)
+      kind = freeThrow ? 'free-throw' : dunk ? 'dunk' : 'shot'; durationMs = freeThrow ? 1150 : heave ? 1800 : dunk ? 1000 : tip ? 950 : three ? 1450 : 1300; result = made ? 'make' : 'miss'
+      const release = freeThrow ? .3 : dunk || tip ? .28 : .22, rim = made ? dunk ? .5 : .82 : .72
       const rimPoint: CourtBallPoint = { ...hoop, height: RIM_HEIGHT }
       ball.push({ kind: 'hold', from: { playerId: shooter }, to: { playerId: shooter }, start: 0, end: release, arc: 0 })
       if (made) {
         ball.push({ kind: 'shot', from: { playerId: shooter }, to: target(scene.ball.to), start: release, end: rim, arc: scene.ball.arcHeight, heights: [2.1, scene.ball.to.height] })
         ball.push({ kind: 'drop', from: target(scene.ball.to), to: target(scene.ball.to), start: rim, end: 1, arc: 0 })
         const value = freeThrow ? 1 : event.shot?.value ?? 2
-        marks.push({ kind: 'score', label: `+${value}`, at: { point: hoop }, start: rim, end: 1 })
+        marks.push({ kind: 'score', label: `+${value}${!freeThrow && /through the contact/.test(event.text) ? ' AND 1' : ''}`, at: { point: hoop }, start: rim, end: 1 })
       } else {
         // Misses hit the rim, then carom to where the ball comes down.
         ball.push({ kind: 'shot', from: { playerId: shooter }, to: target(rimPoint), start: release, end: rim, arc: scene.ball.arcHeight, heights: [2.1, RIM_HEIGHT] })
         ball.push({ kind: 'bounce', from: target(rimPoint), to: target(scene.ball.to), start: rim, end: 1, arc: .55 })
         marks.push({ kind: 'miss', label: 'MISS', at: { point: hoop }, start: rim, end: 1 })
       }
-      setPose(track(shooter), 'shoot', freeThrow ? .15 : .08, release + .2, freeThrow ? .08 : event.shot && (event.shot.distanceM ?? 9) < 2 ? .6 : .4)
+      setPose(track(shooter), 'shoot', freeThrow ? .15 : .08, release + .2, freeThrow ? .08 : dunk ? .85 : event.shot && (event.shot.distanceM ?? 9) < 2 ? .6 : .4)
       const contestId = !freeThrow ? event.shot?.defenderId ?? nearest(scene.start, startOf(shooter), onSide(defense)) : undefined
       if (contestId && track(contestId) && event.shot?.contest !== 'open') {
         actors.push({ playerId: contestId, role: 'contest' })
@@ -271,9 +296,24 @@ export function buildAnimation(event: MatchEvent, roster: Roster): Animation | n
     } else {
       kind = 'turnover'; durationMs = 950; result = 'out'
       ball.push({ kind: 'roll', from: { playerId: handler }, to: target(scene.ball.to), start: .35, end: 1, arc: .15 })
-      marks.push({ kind: 'turnover', label: event.type === 'shot-clock' ? 'SHOT CLOCK' : 'TURNOVER', at: { playerId: handler }, start: .35, end: 1 })
+      const label = event.type === 'shot-clock' ? 'SHOT CLOCK' : /travels/.test(event.text) ? 'TRAVEL' : /three seconds/.test(event.text) ? '3 SECONDS' : /backcourt/.test(event.text) ? 'BACKCOURT' : /out of bounds/.test(event.text) ? 'OUT OF BOUNDS' : 'TURNOVER'
+      marks.push({ kind: 'turnover', label, at: { playerId: handler }, start: .35, end: 1 })
     }
     setPose(track(handler), 'dribble', 0, .35)
+  } else if (scene.kind === 'setup' && /^(.+?) sets a ball screen for /.test(event.text)) {
+    // A ball screen (format 79): the screener steps up beside the handler's defender and plants; the handler waits.
+    kind = 'screen'; durationMs = 900
+    const screenerName = /^(.+?) sets a ball screen for /.exec(event.text)![1]
+    const screener = named(roster, offense, screenerName, ids)
+    const handler = event.playerId && track(event.playerId) ? event.playerId : nearest(scene.end, scene.ball.to, onSide(offense))
+    if (handler) { actors.push({ playerId: handler, role: 'handler' }); ball.push({ kind: 'dribble', from: { playerId: handler }, to: { playerId: handler }, start: 0, end: 1, arc: 0 }); setPose(track(handler), 'dribble', 0, 1) }
+    else ball.push({ kind: 'hold', from: target(scene.ball.from), to: target(scene.ball.to), start: 0, end: 1, arc: 0 })
+    if (screener && track(screener)) {
+      actors.push({ playerId: screener, role: 'screener' })
+      setPose(track(screener), 'screen', .55, 1)
+      marks.push({ kind: 'screen', label: 'SCREEN', at: { playerId: screener }, start: .45, end: 1 })
+    }
+    tracks.filter(item => item.side === defense).forEach(item => delay(item, .2))
   } else {
     // Setup scenes: bringing the ball up, transitions after a change of possession, inbounds and free-throw line-ups.
     // The ball ends with the handler (a substitution event names the incoming player instead).

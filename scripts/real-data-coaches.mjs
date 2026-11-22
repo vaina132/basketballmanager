@@ -15,11 +15,51 @@
  * 3. Each coach's own article ("Infobox basketball biography"): birth date, nationality, the coaching career
  *    (first head-coach season, the team marked "present") and the career highlights listed under "As head coach".
  *    A coach whose article names another current team is kept with a note; the review decides.
+ * 0. Before all of these, the clubs in `CHECKED` take the head coach a current 2026-27 source names (checked by hand on
+ *    `CHECKED_ON`): league team pages, club pages and dated press reports. These clubs had no head coach in a free
+ *    encyclopedia, or a stale one. Their posts are marked `checked`: the emit step keeps them over any older claim.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { plain, templateParams } from './real-data-wikipedia-people.mjs';
+
+/**
+ * Head coaches checked by hand against a current source (22 November 2026), for clubs the encyclopedias left without a
+ * coach or with a stale one. `evidence` says what the source shows; `facts` replace what the coach's own pages give
+ * (each stated by a named page, never guessed); `lookup: false` skips the coach-article and Wikidata searches for a name
+ * too common to match safely. Still unknown on that day: MKE Ankaragücü (its coach left for Konya on 10 November 2026
+ * and no successor was announced). Sites that ask AI agents not to read them were not used.
+ */
+const CHECKED_ON = '2026-11-22';
+const CHECKED = [
+  { club: 'Avellino Basket', coach: 'Gennaro Di Carlo', source: 'https://www.legapallacanestro.com/squadra/wp/1501090', evidence: 'LNP team page, staff 2026-27' },
+  { club: 'JuVi Cremona', coach: 'Marco Cardani', source: 'https://www.legapallacanestro.com/squadra/wp/9612', evidence: 'LNP team page, staff 2026-27' },
+  { club: 'Juvecaserta', coach: 'Lino Lardo', source: 'https://www.legapallacanestro.com/squadra/wp/36002', evidence: 'LNP team page, staff 2026-27' },
+  { club: 'Montecatini', coach: 'Marco Andreazza', source: 'https://www.legapallacanestro.com/serie-a2/la-t-tecnica-gema-montecatini?qt-squadra=5', evidence: 'LNP team staff 2026-27: coach' },
+  { club: 'UEB Cividale', coach: 'Stefano Pillastrini', source: 'https://www.legapallacanestro.com/squadra/wp/1501072', evidence: 'LNP team page, staff 2026-27' },
+  { club: 'Urania Milano', coach: 'Stefano Sacripanti', source: 'https://www.legapallacanestro.com/squadra/wp/32014', evidence: 'LNP team page, staff 2026-27 (his Wikipedia article still names Pesaro)' },
+  { club: 'Vigevano', coach: 'Stefano Salieri', source: 'https://www.legapallacanestro.com/serie-a2/elachem-vigevano-1955?qt-squadra=5', evidence: 'LNP team staff 2026-27: capo allenatore' },
+  { club: 'Batumi', coach: 'Anatoli Berishvili', source: 'https://basketball.eurobasket.com/team/Basketball-Club-Batumi/3543', evidence: 'Eurobasket team page: head coach 2021-27, 2026-27 staff (Flashscore agrees)' },
+  { club: 'Manchester Basketball', coach: 'Matt Otten', source: 'https://www.manchester.basketball/news/manchester-land-keon-thompson', evidence: 'club news, 3 August 2026: "Head Coach Matt Otten"' },
+  { club: 'Patrioti Levice', coach: 'Michal Madzin', source: 'https://www.teraz.sk/sport/zacina-sa-sbl-titul-opat-obhajuju/994075-clanok.html', evidence: 'TASR, 22 September 2026: "tréner Levíc Michal Madzin"' },
+  { club: 'Slavia Prague', coach: 'Oren Amiel', source: 'https://ceskenoviny.cz/zpravy/basketbaliste-slavie-nbk-na-uvod-lm-prohrali-s-albou-berlin/2883894', evidence: 'ČTK, 7 October 2026: "trenéra Orena Amiela"' },
+  { club: 'Çayırova Belediyesi', coach: 'Ender Arslan', source: 'https://en.wikipedia.org/wiki/Ender_Arslan', evidence: 'his article: Çayırova 2026-present; September 2026 interviews as head coach' },
+  { club: 'London Lions', coach: 'Tautvydas Sabonis', source: 'https://www.eurohoops.net/en/eurocup/2035868/ade-adebayo-and-dominykas-grunkis-to-london-lions-eurocup/', evidence: 'Eurohoops, 16 November 2026: "Head coach Tautvydas Sabonis"', facts: { nationality: 'Lithuania' } }, // his article: "a Lithuanian professional basketball coach" (Wikidata lists Spain first)
+  { club: 'Tizona Burgos', coach: 'Denis Pombar', source: 'https://cyldigital.com/2026/09/25/cuatro-bajas-en-el-grupo-ureta-tizona-para-su-estreno-en-ourense/', evidence: 'CyL Digital, 25 September 2026: "Denis Pombar, que repite como técnico" (not Porfirio Fisac, San Pablo Burgos)' },
+  { club: 'CO Basket', coach: 'Abdulkadir Serdar', source: 'https://www.bursasporx.com/finalspor-cedi-osman-basketbolu-88-73-maglup-etti', evidence: 'match report, 8 November 2026: "Başantrenör: Abdulkadir Serdar"', lookup: false },
+  { club: 'Fenerbahçe II', coach: 'Ömer Uğurata', source: 'https://en.wikipedia.org/wiki/Fenerbah%C3%A7e_Geli%C5%9Fim', evidence: 'club article infobox (updated after the August 2026 renaming); Flashscore lists him as Fenerbahçe 2 head coach', lookup: false },
+  { club: 'Harem Spor', coach: 'Faruk Beşok', source: 'https://www.yalovamiz.com/spor/yalova-haremspor-cedi-osman-a-konuk-olacak-67961', evidence: 'Yalovamız, 18 November 2026: "Başantrenör Faruk Beşok"', facts: { nationality: 'Turkey' } }, // Turkish Wikipedia's 2026-27 TBL table (flag)
+  { club: 'Kahramanmaraş', coach: 'Candost Volkan', source: 'https://www.ajans344.com/video/kahramanmaras-haberleri/candost-volkan-12-oyuncumuzdan-da-katki-almamiz-bizi-sevindirdi/412605', evidence: 'Ajans 344, 22 November 2026: "Başantrenör Candost Volkan"', lookup: false },
+  { club: 'Keçiören Bağlum', coach: 'Timuçin Meriç', source: 'https://basketfaul.com.tr/turkiye/tbl/kecioren-belediyesi-baglumda-koc-degisikligi/', evidence: 'Basketfaul, 26 October 2026: Timuçin Meriç replaced Kemal Akay', lookup: false },
+  { club: 'Konya BBSK', coach: 'Korhan Aydanarığ', source: 'https://www.konyapostasi.com.tr/spor/buyuksehir-basketbol-korhan-aydanarigi-duyurdu/785971', evidence: 'club statement, 11 November 2026 (from MKE Ankaragücü)', lookup: false },
+  { club: 'iLab Basketbol', coach: 'Murat Yılmaz', source: 'https://www.eurobasket.com/Turkey/news/1007846/iLab-inks-Alperen-Duruksu', evidence: 'Eurobasket, 9 July 2026: "iLab Basketbol roster for 2026-27 ... Coach: Murat Yilmaz" (Flashscore agrees)', lookup: false },
+  { club: 'ASA', coach: 'Nebojša Bogavac', source: 'https://www.asa-basket.fr/pages/lequipe-elite-2', evidence: 'club page, Élite 2 staff 2026-27' },
+  { club: 'Fos Provence', coach: 'Abgué Barakaou', source: 'https://lemeridional.com/a-la-une/fos-un-ete-pour-tout-reconstruire/', evidence: 'Le Méridional, 29 September 2026: "Emmanuel Schmitt a quitté Fos Provence après une saison, remplacé par Abgué Barakaou" (Rémy Valin now coaches Nantes)' },
+  { club: 'Hermine Nantes', coach: 'Rémy Valin', source: 'https://www.nantes-basket.com/equipe/effectif/', evidence: 'club page and Nantes Métropole, 17 September 2026: "Rémy Valin ... reste le chef d\'orchestre" (not Neno Ašćerić, ALM Évreux)' },
+];
+const CHECKED_BY_CLUB = new Map(CHECKED.map(item => [item.club, item]));
+const CHECKED_BY_COACH = new Map(CHECKED.map(item => [item.coach, item]));
 
 const WIKI = 'https://en.wikipedia.org';
 const AGENT = 'CourtsideGameData/1.0 (basketball game research; one request a second)';
@@ -71,8 +111,13 @@ const NATIONALITY = {
 /** The nationality the infobox states (its first one), or null. */
 function statedNationality(params) {
   const value = fold(plain(params.nationality ?? ''));
-  for (const [word, country] of Object.entries(NATIONALITY)) if (value.split(' / ')[0].includes(word)) return country;
-  return null;
+  // The first nationality named ("Lithuanian / Spanish" -> Lithuania); `fold` has removed the slash.
+  let best = null;
+  for (const [word, country] of Object.entries(NATIONALITY)) {
+    const at = ` ${value} `.indexOf(` ${word} `);
+    if (at >= 0 && (!best || at < best.at)) best = { at, country };
+  }
+  return best?.country ?? null;
 }
 /** The country of the birthplace (a last resort: people born abroad keep another nationality). */
 function nationalityOf(params) {
@@ -121,7 +166,7 @@ function coachHighlights(params) {
     const lower = text.toLowerCase();
     if (/coach of the (year|season)|coach award|best coach/.test(lower) && section !== 'assistant') { titles.awards += count; items.push(text); continue; }
     if (section !== 'coach' || /assistant/.test(lower)) continue;
-    if (/super ?cup|supercopa|supercoppa|all-star|intercontinental|youth|junior|\bu\d\d\b|under-\d\d|runner-up|finalist|second division|lega ?due|pro ?b\b|leb oro|serie a2|\btbl\b|1\. liga|a2 league|promotion/.test(lower)) continue;
+    if (/super ?cup|supercopa|supercoppa|all-star|intercontinental|youth|junior|\bu\d\d\b|under-\d\d|runner-up|finalist|second division|lega ?due|pro ?b\b|leb oro|serie a2|\btbl\b|t[üu]rkiye basketbol ligi|federation cup|1\. liga|a2 league|promotion/.test(lower)) continue;
     const won = /champion|winner|\bgold\b|silver|bronze|medal/.test(lower);
     if (!won) continue;
     if (NATIONAL_TOURNAMENT.test(text)) titles.national += /gold/.test(lower) ? count * 1.5 : count;
@@ -224,6 +269,13 @@ async function main() {
 
   for (const club of pack.clubs) {
     const entry = { kind: 'club', id: club.id, name: club.name, country: club.country, competitions: competitionsOf.get(club.id) ?? [], coach: null, source: null, notes: [] };
+    const checked = CHECKED_BY_CLUB.get(club.name);
+    if (checked) {
+      Object.assign(entry, { coach: checked.coach, source: checked.source, checked: CHECKED_ON });
+      entry.notes.push(`checked current on ${CHECKED_ON}: ${checked.evidence}`);
+      result.teams.push(entry);
+      continue;
+    }
     const listed = known.get(club.id);
     if (listed) { entry.coach = listed.name; entry.source = listed.source; result.teams.push(entry); continue; }
     try {
@@ -266,7 +318,9 @@ async function main() {
   const names = [...new Set(result.teams.map(team => team.coach).filter(Boolean))];
   for (const name of names) {
     const coach = { name, article: null, birthDate: null, nationality: null, firstHeadCoachYear: null, currentTeam: null, titles: null, highlights: [], career: [], notes: [] };
+    const checked = CHECKED_BY_COACH.get(name);
     try {
+      if (checked?.lookup === false) throw new Error('name too common to look up safely (checked by hand)');
       const page = await coachArticle(name);
       if (page) {
         const params = templateParams(page.text, 'Infobox basketball biography');
@@ -285,6 +339,8 @@ async function main() {
       coach.nationality ??= coach.birthplaceNationality ?? null;
       delete coach.birthplaceNationality;
     } catch (error) { coach.notes.push(String(error.message ?? error)); }
+    // Facts a checked source states replace what the encyclopedias give.
+    Object.assign(coach, checked?.facts ?? {});
     result.coaches.push(coach);
     console.log(`${name}: ${coach.birthDate ?? '?'} ${coach.nationality ?? '?'} since ${coach.firstHeadCoachYear ?? '?'} now ${coach.currentTeam ?? '?'} ${JSON.stringify(coach.titles)}`);
   }

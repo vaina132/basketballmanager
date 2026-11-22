@@ -78,7 +78,15 @@ async function main() {
   }
   const clubTeams = input.teams.filter(item => item.coach && item.kind === 'club');
   const dropped = new Set();
+  // A post checked by hand against a current source (`checked`) is kept as it is; another club naming the same coach
+  // from an older page is stale and dropped.
+  const checkedPost = new Map(clubTeams.filter(team => team.checked).map(team => [team.coach, team]));
   for (const team of clubTeams) {
+    const owner = checkedPost.get(team.coach);
+    if (owner && owner !== team) { dropped.add(team.id); console.log(`stale: ${team.coach} at ${team.name} (checked current at ${owner.name} on ${owner.checked})`); }
+  }
+  for (const team of clubTeams) {
+    if (team.checked || dropped.has(team.id)) continue;
     const current = facts.get(team.coach)?.currentTeam;
     if (!current || names(team, current)) continue;
     const elsewhere = clubTeams.find(other => other !== team && names(other, current));
@@ -88,7 +96,7 @@ async function main() {
     const holders = clubTeams.filter(team => team.coach === name && !dropped.has(team.id));
     if (holders.length < 2) continue;
     const current = facts.get(name)?.currentTeam;
-    const keep = holders.find(team => !team.notes.length) ?? holders.find(team => current && names(team, current)) ?? holders[0];
+    const keep = holders.find(team => team.checked) ?? holders.find(team => !team.notes.length) ?? holders.find(team => current && names(team, current)) ?? holders[0];
     for (const team of holders) if (team !== keep) { dropped.add(team.id); console.log(`dropped: ${name} at ${team.name} (kept ${keep.name})`); }
   }
   for (const team of input.teams.filter(item => item.coach && !dropped.has(item.id))) {
@@ -98,7 +106,7 @@ async function main() {
     else coaches.set(id, {
       id, name: team.coach, born: coach?.birthDate ?? null, nationality: coach?.nationality ?? null, since: coach?.firstHeadCoachYear ?? null,
       titles: coach?.titles ?? { euroleague: 0, europe: 0, league: 0, cup: 0, national: 0, awards: 0 }, level, source: coach?.article ?? coach?.wikidata ?? team.source, hints: HINTS[team.coach] ?? [],
-      note: coach?.currentTeam ? `article: ${coach.currentTeam}` : coach?.article ? 'article without a current team' : 'no article found',
+      note: team.checked ? 'checked current' : coach?.currentTeam ? `article: ${coach.currentTeam}` : coach?.article ? 'article without a current team' : 'no article found',
     });
     posts.push({ teamId: team.id, team: team.name, coachId: id, source: team.source });
   }
@@ -108,7 +116,8 @@ async function main() {
     ' * the 24 national teams, with the facts the game estimates their 1-20 attributes from (`src/world/coach-ratings.ts`).',
     ` * Sources: English Wikipedia (CC BY-SA 4.0; for nine clubs the Italian, French, Turkish or Czech Wikipedia) and Wikidata`,
     ' * (CC0), facts only (who coaches which team, birth date, nationality, first season as a head coach, titles won as a',
-    ' * head coach), each with its page link; fetched by `scripts/real-data-coaches.mjs` and',
+    ` * head coach), each with its page link; ${input.teams.filter(team => team.checked).length} club posts checked by hand against a current 2026-27 league, club or press page`,
+    ' * (`CHECKED` in the fetch script, which also drops older claims on the same coach); fetched by `scripts/real-data-coaches.mjs` and',
     ` * written by \`scripts/real-data-coaches-emit.mjs\` on ${input.fetchedOn}. Teams not listed have no head coach in a free`,
     ' * source and get a generated coach (marked). `level`: the job level the formula uses; `hints`: the game\'s own estimate',
     ' * of what a few widely known coaches are known for. Unknown facts are null.',

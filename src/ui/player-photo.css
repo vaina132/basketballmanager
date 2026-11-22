@@ -1,9 +1,8 @@
 .avatar-photo{object-fit:cover;object-position:center top;border-radius:28%;background:var(--surface-3)}
 .photo-credit{display:block;margin:2px 0 6px;font-size:11px;line-height:1.35;color:var(--muted);overflow-wrap:anywhere}
 .photo-credit a{color:inherit;text-decoration:underline;text-underline-offset:2px}
-.photo-credits-list{max-height:360px;overflow:auto;margin-top:6px;border:1px solid var(--border)}
-.photo-credits-list table{width:100%;border-collapse:collapse;font-size:12px}
-.photo-credits-list th,.photo-credits-list td{padding:4px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border);overflow-wrap:anywhere}
-.photo-credits-list thead th{position:sticky;top:0;background:var(--surface-2,var(--surface));color:var(--text)}
-.photo-credits-list a{color:inherit;text-decoration:underline;text-underline-offset:2px}
-@media(max-width:650px){.photo-credits-list th:nth-child(4),.photo-credits-list td:nth-child(4){display:none}}
+.photo-credits-list{max-height:360px;overflow:auto;margin:6px 0 0;padding:0;list-style:none;border:1px solid var(--border)}
+.photo-credits-list li{padding:4px 8px;border-bottom:1px solid var(--border);font-size:12px;line-height:1.45;overflow-wrap:break-word}
+.photo-credits-list li:last-child{border-bottom:0}
+.photo-credits-list strong{color:var(--text);font-weight:600}
+.photo-credits-list a{color:inherit;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}

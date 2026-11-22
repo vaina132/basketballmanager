@@ -199,7 +199,7 @@ function licenceOf(info) {
   const publicDomain = /^(cc0|public domain|pd)/i.test(licence)
   if (!publicDomain && (!author || !/^https?:\/\/creativecommons\.org\//.test(url))) return { reason: 'no author or licence link' }
   if (!/^image\/(jpeg|png|webp|tiff)$/.test(info.mime ?? '') || info.width < 120 || info.height < 120) return { reason: 'not a usable photo' }
-  return { licence, url: url || null, author: author ? author.slice(0, 120) : 'Unknown author', shareAlike: /-sa\b/i.test(licence) }
+  return { licence, url: url || null, author: author ? author.replace(/^User:/i, '').slice(0, 120) : 'Unknown author', shareAlike: /-sa\b/i.test(licence) }
 }
 const accepted = [], rejected = {}
 for (const match of withImage) {

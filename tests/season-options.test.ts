@@ -5,7 +5,7 @@ const manager = { name: 'Options Manager', dateOfBirth: '1984-03-17', nationalit
 
 describe('named career options', () => {
   it('lists every optional system once and cannot be changed at runtime', () => {
-    expect(Object.keys(NEW_CAREER_SYSTEMS)).toHaveLength(37);
+    expect(Object.keys(NEW_CAREER_SYSTEMS)).toHaveLength(38);
     expect(Object.values(NEW_CAREER_SYSTEMS).every(Boolean)).toBe(true);
     expect(Object.isFrozen(NEW_CAREER_SYSTEMS)).toBe(true);
   });

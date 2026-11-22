@@ -5,6 +5,7 @@ import type { SeasonBoard } from './board';
 import type { SeasonCommercial } from './commercial';
 import type { SeasonRivalries } from './rivalries';
 import type { SeasonCareer } from './career';
+import type { SeasonNational } from './national';
 import type { SeasonRelationships } from './relationships';
 import type { InjuryKind, InjuryModel } from './injuries';
 import type { InjuryMode, MatchResult, MatchState, PlayerStats, PlayModel, Position, Side, Tactics, Team } from './types';
@@ -150,7 +151,8 @@ export interface DomesticDivisions {
 /** Format 77: calmer playing time for new careers (`relationships-4`, `PLAYING_TIME_RULES` in `src/world/relationship-rules.ts`): quiet role adjustments (`role-adjust` events) and one calm concern (`role-request` stage 'concern'). */
 /** Format 78: the transfer and loan list with bids for the manager's players and loans (`recruitment-2`), and the scouting network (`scouting-2`). */
 /** Format 79: the richer play model for new careers' matches (`matchModel` 'plays-2', `src/engine/plays.ts`); older careers replay with the earlier possession actions. */
-export const SEASON_SCHEMA_VERSION = 79;
+/** Format 80: national teams, their competitions, FIBA windows that pause the domestic leagues with room, and national jobs (`national`, `src/world/national.ts`). */
+export const SEASON_SCHEMA_VERSION = 80;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -181,6 +183,8 @@ export interface SeasonState {
   injuryModel?: InjuryModel;
   /** Format 79 (owner feedback, 22 November 2026): new careers play their matches with the richer play model. */
   matchModel?: PlayModel;
+  /** Format 80 (owner feedback item 13, 22 November 2026): national teams, competitions and the manager's national job. */
+  national?: SeasonNational;
   training: SeasonTraining;
   coaching: SeasonCoaching;
   finance: SeasonFinance;

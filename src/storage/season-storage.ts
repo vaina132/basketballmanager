@@ -127,12 +127,14 @@ import { ACADEMY_GRADUATION_AGE, academyPointCap, developAcademyPlayer, emptyAca
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { staffFee } from '../world/economy';
 import { PACKED_SAVE_FORMAT, packSeasonForSave, unpackSavedSeason } from './save-packing';
+import { nationalDutyDays } from '../world/national';
+import { validateNationalShape } from './national-validation';
 
 export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -151,7 +153,7 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
 
 /** The canonical games of a season given its own results (regular calendar plus due postseason games, step 3.4b). */
-function canonicalFixtures(context: { clubs: readonly Team[]; fixtures: unknown; world: CareerWorld; divisions?: DomesticDivisions; seed: number; europe?: SeasonEurope }, seasonNumber: number, path: string): SeasonFixture[] {
+function canonicalFixtures(context: { clubs: readonly Team[]; fixtures: unknown; world: CareerWorld; divisions?: DomesticDivisions; seed: number; europe?: SeasonEurope; national?: unknown }, seasonNumber: number, path: string): SeasonFixture[] {
   if (!Array.isArray(context.fixtures)) fail(path, 'must be an array');
   try { return scheduledFixtures({ ...context, fixtures: context.fixtures as SeasonFixture[] }, seasonNumber); }
   catch { return fail(path, 'does not match the versioned schedule'); }
@@ -1291,7 +1293,7 @@ function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employ
   for (const [index, value] of physio.rehabilitation.entries()) record(value, `physio.rehabilitation[${index}]`, ['id', 'injuryId', 'playerId', 'clubId', 'seasonNumber', 'afterRound', 'fromDate', 'toDate', 'rosterId', 'contractId', 'physioId', 'eligibleDays', 'creditBefore', 'creditEarned', 'creditAfter', 'returnBefore', 'returnAfter']);
   const schedules = new Map<string, SeasonFixture>(), years = new Map<string, number>();
   // Each season's canonical games, including the postseason games its own results made due (step 3.4b).
-  for (let year = 1; year <= state.seasonNumber; year += 1) for (const fixture of canonicalFixtures({ clubs: state.clubs, fixtures: year === state.seasonNumber ? state.fixtures : state.history[year - 1]?.fixtures, world: worldOf(state), divisions: year === state.seasonNumber ? state.divisions : state.history[year - 1]?.divisions, seed: state.seed, ...((year === state.seasonNumber ? state.europe : state.history[year - 1]?.europe) ? { europe: year === state.seasonNumber ? state.europe : state.history[year - 1]!.europe } : {}) }, year, 'injuries')) { schedules.set(fixture.id, fixture); years.set(fixture.id, year); }
+  for (let year = 1; year <= state.seasonNumber; year += 1) for (const fixture of canonicalFixtures({ clubs: state.clubs, fixtures: year === state.seasonNumber ? state.fixtures : state.history[year - 1]?.fixtures, world: worldOf(state), divisions: year === state.seasonNumber ? state.divisions : state.history[year - 1]?.divisions, seed: state.seed, ...(state.national ? { national: true } : {}), ...((year === state.seasonNumber ? state.europe : state.history[year - 1]?.europe) ? { europe: year === state.seasonNumber ? state.europe : state.history[year - 1]!.europe } : {}) }, year, 'injuries')) { schedules.set(fixture.id, fixture); years.set(fixture.id, year); }
   const players = new Set(getCareerPlayers(state).map(player => player.id));
   // Step 3.5b: a background side's player injured in a European game.
   const backgroundPlayer = (fixture: SeasonFixture, clubId: string, playerId: string) => !!fixture.competition && !fullWorldClubsIn(state, years.get(fixture.id)!).some(club => club.id === clubId) && backgroundSide(state, clubId, years.get(fixture.id)!).players.some(player => player.id === playerId);
@@ -2956,7 +2958,7 @@ function migrateTrainingCoaching(training: SeasonTraining): SeasonTraining {
 }
 
 /** Reconcile the retained week; older development remains bounded state, not invented history. */
-function validateTraining(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], injuries: SeasonInjury[], seasonNumber: number, round: number, coaching?: SeasonCoaching, rosters?: readonly RosterSnapshot[], fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), version = 30, context: CareerPlayerContext & LifecycleContext & Partial<Pick<SeasonState, 'seed'>> & { facilities?: SeasonFacilities; restWeeks?: SeasonState['restWeeks'] } = {}): { training: SeasonTraining; conditionsAfter: Record<string, number> | null } {
+function validateTraining(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], injuries: SeasonInjury[], seasonNumber: number, round: number, coaching?: SeasonCoaching, rosters?: readonly RosterSnapshot[], fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), version = 30, context: CareerPlayerContext & LifecycleContext & Partial<Pick<SeasonState, 'seed'>> & { facilities?: SeasonFacilities; restWeeks?: SeasonState['restWeeks']; national?: SeasonState['national'] } = {}): { training: SeasonTraining; conditionsAfter: Record<string, number> | null } {
   // Sprint 4: each player's hidden potential, derived from the career seed, limits his training points.
   const seed = context.seed ?? fail('seed', 'is required to check training against player potential');
   const fields = record(value, 'training', ['model', 'enabledSince', 'plans', 'points', 'lastWeek']);
@@ -3041,6 +3043,8 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
     // Final-round injuries happen after the last training day and must not be replayed into it.
     injuries: injuries.filter(injury => injury.occurredOn <= (report.fromDate as string)),
     seasonNumber, afterRound, fromDate: report.fromDate as string, toDate: report.toDate as string, coaching: appliedCoaching, rosters, fitness, physio, lifecycle: context.lifecycle, academy: context.academy, facilities: context.facilities,
+    // Format 80: called-up players' national duty, from the stored national squads and minutes.
+    ...(context.national ? { nationalDuty: nationalDutyDays(context.national, report.fromDate as string, report.toDate as string) } : {}),
   });
   const replayedReport = rosters ? replayed.training.lastWeek : withoutRosterReport(replayed.training.lastWeek);
   if (!sameData(coaching ? replayedReport : withoutCoachingReport(replayedReport), training.lastWeek) || !sameData(replayed.training.points, training.points)) fail('training.lastWeek', 'does not reconcile with training plans, coaching, fitness staffing, availability, recovery and development');
@@ -3077,7 +3081,7 @@ function validateState(value: unknown, version: SeasonFormatVersion): void {
 function validateStateUncached(value: unknown, version: SeasonFormatVersion): void {
   const legacy = version === 1, career = version >= 3;
   checkJsonTree(value);
-  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 53 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'background') ? ['background'] : []), ...(version >= 60 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'europe') ? ['europe'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'media') ? ['media'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'economySeasons') ? ['economySeasons'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'injuryModel') ? ['injuryModel'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'matchModel') ? ['matchModel'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
+  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 53 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'background') ? ['background'] : []), ...(version >= 60 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'europe') ? ['europe'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'media') ? ['media'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'economySeasons') ? ['economySeasons'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'injuryModel') ? ['injuryModel'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'matchModel') ? ['matchModel'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'national') ? ['national'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
   if (state.schemaVersion !== version || state.engineVersion !== 'possession-3') fail('state', 'uses an unsupported schema or engine');
   // Format 39: careers outside the built-in league carry their world, which must be complete and named by dataPackId.
   if (Object.hasOwn(state, 'world')) {
@@ -3248,7 +3252,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       const archiveClubs = clubsForEmploymentYear(employment, archiveIndex + 1, worldRounds(world), careerContext);
       const archivedRosters = version >= 9 ? validateRosters(archive.rosters, `${path}.rosters`, archiveClubs, archiveIndex + 1, employment, worldRounds(world), careerContext) : undefined;
       const archiveEurope = usesEurope ? validateEuropeShape(archive.europe, world, `${path}.europe`) : undefined;
-      const schedule = canonicalFixtures({ clubs: archiveClubs, fixtures: archive.fixtures, world, divisions: archiveDivisions, seed, ...(archiveEurope ? { europe: archiveEurope } : {}) }, archiveIndex + 1, `${path}.fixtures`);
+      const schedule = canonicalFixtures({ clubs: archiveClubs, fixtures: archive.fixtures, world, divisions: archiveDivisions, seed, ...(archiveEurope ? { europe: archiveEurope } : {}), ...(Object.hasOwn(state, 'national') ? { national: true } : {}) }, archiveIndex + 1, `${path}.fixtures`);
       const fixtures = array(archive.fixtures, `${path}.fixtures`, schedule.length);
       let hasPlayerStats: boolean | undefined;
       for (const [index, value] of fixtures.entries()) {
@@ -3285,7 +3289,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       else if (version >= 45) validateSeniorSummary(archive as unknown as SeasonState['history'][number], managedClubFor(state as unknown as SeasonState, archiveIndex + 1, false), path);
     }
   }
-  const schedule = canonicalFixtures({ clubs, fixtures: state.fixtures, world, divisions: seasonDivisions, seed, ...(seasonEurope ? { europe: seasonEurope } : {}) }, seasonNumber, 'fixtures'), fixtures = array(state.fixtures, 'fixtures', schedule.length);
+  const schedule = canonicalFixtures({ clubs, fixtures: state.fixtures, world, divisions: seasonDivisions, seed, ...(seasonEurope ? { europe: seasonEurope } : {}), ...(Object.hasOwn(state, 'national') ? { national: true } : {}) }, seasonNumber, 'fixtures'), fixtures = array(state.fixtures, 'fixtures', schedule.length);
   const committedRound = state.status === 'complete' ? round : round - 1;
   // Step 3.4a: the current week's game day is its earliest date with an unplayed game; earlier game days are committed.
   let pendingDay: string | null = null;
@@ -3351,7 +3355,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const normalizedState = { ...state, scouts, fitness, physio, assistant, academy, youth, lifecycle, youthCompetition, facilities, relationships, board, commercial, ...(employment ? { employment } : {}), recruitment: version >= 19 ? state.recruitment : version === 18 ? migrateRecruitmentTransfers(state.recruitment as unknown as SeasonRecruitment) : createRecruitment() } as unknown as SeasonState;
   const recruitmentHolds = version >= 18 ? validateRecruitment(state.recruitment, normalizedState, version) : [];
   if (version >= 6) validateFinance(state.finance, clubs, fixtures as SeasonFixture[], state.history as SeasonArchive[], coaching!, seasonNumber, round, state.status, state.managedClubId, payroll, employment, recruitmentHolds, scouts, fitness, physio, assistant, youth, version, facilities, commercial, state.board, rivalries, world, state.divisions as DomesticDivisions | undefined, state.background as SeasonBackground | undefined, Object.hasOwn(state, 'media') ? { media: state.media as SeasonMedia, relationships: state.relationships as SeasonRelationships } : undefined, economySeasons);
-  const development = version >= 4 ? validateTraining(state.training, clubs, fixtures as SeasonFixture[], history, seasonNumber, round, coaching, rosters, fitness, physio, version, { ...careerContext, facilities, restWeeks }) : null;
+  const development = version >= 4 ? validateTraining(state.training, clubs, fixtures as SeasonFixture[], history, seasonNumber, round, coaching, rosters, fitness, physio, version, { ...careerContext, facilities, restWeeks, ...(Object.hasOwn(state, 'national') ? { national: state.national as SeasonState['national'] } : {}) }) : null;
   if (version >= 11) validateScouting(state.scouting, normalizedState, version);
   const marketSnapshots: MarketReplaySnapshot[] = [];
   if (version >= 13) validateMarket(state.market, normalizedState, version, marketSnapshots);
@@ -3442,6 +3446,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   }
   // Format 70 guard: careers created with president personalities (board-2) need format 70 or later.
   if ((state.board as SeasonBoard | undefined)?.model === 'board-2' && version < 70) fail('board.model', 'requires format 70 or later');
+  // Format 80 guard: national teams (`national-1`) need format 80 or later and a real-club world with a national team's country.
+  if (Object.hasOwn(state, 'national')) validateNationalShape(state.national, state as unknown as SeasonState, version);
   // Format 79 guard: careers created with the richer play model (`plays-2`) need format 79 or later.
   if (Object.hasOwn(state, 'matchModel') && (state.matchModel !== 'plays-2' || version < 79)) fail('matchModel', 'must be plays-2 and requires format 79 or later');
 }

@@ -1,3 +1,4 @@
+import { nationalGameCost } from './national';
 import { facilityPracticeBonusPercent } from './facilities-policy';
 import type { SeasonInjury, SeasonState } from '../domain/season';
 import type { SeasonTraining, TrainingFocus, TrainingIntensity, TrainingPlan, TrainingPoints, TrainingWeekReport } from '../domain/training';
@@ -137,6 +138,11 @@ export interface TrainingWeekInput {
   /** The career's world, for player ages (built-in league when omitted). */
   world?: CareerWorld;
   dataPackId?: string;
+  /**
+   * Format 80: called-up players' days away on national duty (`nationalDutyDays`): no club practice; a national game
+   * day (whole minutes played) costs condition by `nationalGameCost`.
+   */
+  nationalDuty?: Readonly<Record<string, Readonly<Record<string, number | null>>>>;
 }
 
 /** One authoritative weekly pass updates every club; it consumes no match RNG. */
@@ -169,7 +175,9 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       const fitness = appliedFitness?.[club.id];
       let condition = conditionBefore, conditionWithoutCoach = conditionBefore, budget = 0, weightedBudget = 0, facilityUnits = 0, availableDays = 0;
       for (const date of dates) {
-        const available = !injuries.some(injury => injury.playerId === player.id && isRecovering(injury, date, input.physio));
+        const duty = input.nationalDuty?.[player.id]?.[date], away = duty !== undefined;
+        const gameCost = typeof duty === 'number' ? nationalGameCost(duty) : 0;
+        const available = !away && !injuries.some(injury => injury.playerId === player.id && isRecovering(injury, date, input.physio));
         if (available) {
           availableDays += 1;
           const practice = condition < 70 ? Math.floor(workload.points / 2) : workload.points;
@@ -180,8 +188,8 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
         }
         const recoveryBonus = available ? fitness?.recoveryPerDay ?? 0 : 0;
         const practiceCost = available ? workload.cost * (1 - (fitness?.practiceCostReductionPercent ?? 0) / 100) : 0;
-        condition = Math.max(35, Math.min(100, Math.round((condition + workload.recovery + recoveryBonus - practiceCost) * 1000) / 1000));
-        conditionWithoutCoach = Math.max(35, Math.min(100, Math.round((conditionWithoutCoach + workload.recovery - (available ? workload.cost : 0)) * 1000) / 1000));
+        condition = Math.max(35, Math.min(100, Math.round((condition + workload.recovery + recoveryBonus - practiceCost - gameCost) * 1000) / 1000));
+        conditionWithoutCoach = Math.max(35, Math.min(100, Math.round((conditionWithoutCoach + workload.recovery - (available ? workload.cost : 0) - gameCost) * 1000) / 1000));
       }
       const ordinaryPracticePoints = budget;
       if (agingActive) budget = Math.floor(weightedBudget / 10_000);

@@ -10,7 +10,7 @@ import { runContinueStep } from './continue-step'
  * the career here only once. The page installs each step's state and decides whether to stop or send `next`.
  */
 export interface SeasonJob { requestId: number; state?: SeasonState; action?: 'create' | 'continue' | 'next'; decided?: boolean; decision?: SeasonEndDecision; options?: SeasonOptions }
-export type SeasonReply = { requestId: number; state: SeasonState; step?: 'round' | 'market' | 'rollover' } | { requestId: number; outlook: SeasonEndOutlook | null } | { requestId: number; error: string }
+export type SeasonReply = { requestId: number; state: SeasonState; step?: 'round' | 'market' | 'rollover' | 'national' } | { requestId: number; outlook: SeasonEndOutlook | null } | { requestId: number; error: string }
 
 // Each step is computed in isolation. The UI installs its result, and stopping discards this worker without changing
 // the installed career. The board's season-end decision stops a run before the week is committed.

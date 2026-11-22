@@ -49,10 +49,11 @@ describe('injury lengths for new careers (owner feedback, 22 November 2026)', ()
   });
 
   it('records every match injury for its full length in a season, keeps the player out until then, and passes the strict check', () => {
-    // Seed 5 (25 before the full new-career rules of 22 November 2026): enough long injuries to keep players out.
-    let state = createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchFlow: false });
+    // Seed 6 (5 before the match flow, real coaches and European entry of formats 81-83, 25 before the full new-career
+    // rules of 22 November 2026): enough long injuries to keep players out.
+    let state = createSeason({ seed: 6, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS });
     expect(state.injuryModel).toBe(INJURY_MODEL_2);
-    expect(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchFlow: false, matchPlays: false, injuryLengths: false }).injuryModel).toBeUndefined();
+    expect(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchPlays: false, injuryLengths: false }).injuryModel).toBeUndefined();
     const rounds = seasonRounds(state);
     for (let guard = 0; guard < 200 && state.round < rounds; guard += 1) state = advanceSeason(finish(state));
     const counts: Record<string, number> = { 'under a week': 0, '1-3 weeks': 0, '3-8 weeks': 0, longer: 0 };

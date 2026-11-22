@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { PLAYER_PHOTOS } from '../src/data/player-photos';
-import { Avatar, PhotoCredit } from '../src/ui/Avatar';
+import * as AvatarModule from '../src/ui/Avatar';
+import { CreditsDialog } from '../src/ui/CreditsDialog';
 import { PhotoCredits } from '../src/ui/PhotoCredits';
+import app from '../src/App.tsx?raw';
+
+const { Avatar } = AvatarModule;
 
 /** Real player photos (owner decision, 22 November 2026): free Wikimedia Commons photos with credits, the drawn avatar otherwise. */
 const matches = JSON.parse(readFileSync('real-data/player-photo-matches.json', 'utf8'));
@@ -45,10 +49,30 @@ describe('player photos', () => {
     const drawn = renderToStaticMarkup(<Avatar player={player('fictional-player', 'Sam Harbour')} color="#123456" />);
     expect(drawn).not.toContain('<img');
     expect(drawn).toContain('<svg');
-    expect(renderToStaticMarkup(<PhotoCredit playerId="fictional-player" />)).toBe('');
-    const credit = renderToStaticMarkup(<PhotoCredit playerId={id} />);
-    expect(credit).toContain('Photo:');
-    expect(credit).toContain(photo.licence);
+  });
+
+  it('shows no photo credit line under the profile portrait (owner, 22 November 2026)', () => {
+    expect(AvatarModule).not.toHaveProperty('PhotoCredit');
+    expect(app).not.toMatch(/PhotoCredit\b|photo-credit"|Photo: /);
+    const profile = app.slice(app.indexOf('function PlayerProfile('));
+    expect(profile).toContain('<div className="profile-portrait"><Avatar player={player}');
+    expect(profile).not.toMatch(/photo-?credit/i);
+  });
+
+  it('opens one Credits view from the footer of every career page, with logos and every photographer', () => {
+    // Both career layouts (with a club and without one) have the footer link; the dialog sits in the shared overlays.
+    const footers = app.match(/<footer className="workspace-footer">.*?<\/footer>/g);
+    expect(footers).toHaveLength(2);
+    for (const footer of footers) expect(footer).toContain('<button id="open-credits" className="text-button" onClick={() => setCreditsOpen(true)}>Credits</button>');
+    expect(app).toContain('{creditsOpen && <CreditsDialog onClose={() => setCreditsOpen(false)} />}');
+    const html = renderToStaticMarkup(<CreditsDialog onClose={() => {}} />);
+    expect(html).toContain('aria-labelledby="credits-dialog-title"');
+    expect(html).toMatch(/<h2 id="credits-dialog-title">Credits<\/h2>/);
+    expect(html).toContain('id="credits-dialog-close"');
+    expect(html).toContain('club and competition logos come from API-Sports');
+    expect(html).toContain('photos under CC BY-SA stay under CC BY-SA');
+    expect(html.match(/data-photo-credit-row=/g)).toHaveLength(entries.length);
+    for (const [, photo] of entries.slice(0, 25)) expect(html).toContain(renderToStaticMarkup(<>{photo.author}</>));
   });
 
   it('lists every photo with its author, licence and Commons page in the Credits view', () => {

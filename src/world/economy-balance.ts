@@ -1,6 +1,7 @@
 import type { EconomyBand, WorldContext } from '../domain/world';
 import type { SeasonFixture } from '../domain/season';
 import { clubEconomy } from './economy';
+import { EUROPEAN_FORMATS } from './european-formats';
 
 /**
  * Format 87 (economy balance, 22 November 2026; reversible game defaults, not researched figures): weak clubs stay
@@ -52,16 +53,19 @@ export function solidarityPayment(context: WorldContext, clubId: string): number
 }
 
 /**
- * Format 87: the share of this season's gate still to come for a club: its domestic regular-season home games from the
- * context's week on, over all of them (`isRegularFixture`: scheduled in full at the season's opening, so the share
- * depends only on the schedule and the week, and the save check's replay reads the same share). Postseason and European
- * games, partly scheduled later, are left out. 1 for a club without regular home games or a context without a week.
+ * Format 87: the share of this season's gate still to come for a club: its regular-season home games (domestic, and
+ * European ones of competitions without a qualification stage) from the context's week on, over all of them. These are
+ * all scheduled at the season's opening, so the share depends only on the schedule and the week, and the save check's
+ * replay reads the same share. Postseason, knockout and staged European games (scheduled later) are left out. 1 for a
+ * club without such home games or a context without a week.
  */
 export function remainingHomeShare(context: WorldContext & { fixtures?: readonly Pick<SeasonFixture, 'homeClubId' | 'round' | 'stage' | 'competition'>[]; round?: number }, clubId: string): number {
   if (context.round === undefined) return 1;
+  const competitions = context.world?.europeanCompetitions ?? [];
+  const scheduled = (competitionId: string) => { const format = competitions.find(item => item.id === competitionId)?.format; return !!format && !EUROPEAN_FORMATS[format].staged; };
   let total = 0, remaining = 0;
   for (const fixture of context.fixtures ?? []) {
-    if (fixture.homeClubId !== clubId || fixture.stage || fixture.competition) continue;
+    if (fixture.homeClubId !== clubId || fixture.stage || fixture.competition && !scheduled(fixture.competition)) continue;
     total += 1;
     if (fixture.round >= context.round) remaining += 1;
   }

@@ -603,3 +603,7 @@ Eight 1-20 attributes (Offence, Defence, Tactics, Development, Motivation, Disci
 ## European entry rules (format 83, 22 November 2026; owner decisions)
 
 EuroLeague stays at 20 clubs (owner, 22 November: growing to 24 is off the plan, maybe after release); a relegated licence club sits out one season; places use the final ranking after the playoffs; the board may set a European aim (±6 in the verdict; overrides the old domestic-only rule); no FIBA Europe Cup; the reported 2027-28 franchise list is not scripted. Numbers in `EUROPEAN_ENTRY_RULES` (unpaid costs ≤10% of budget; seats 10,000/5,000/2,500/3,000 for new places; wild-card score: European results 30, final ranking 20, arena 15, budget 15, market 10, past seasons 10; renewal bar 60; computer clubs refuse a new EuroLeague place only with a small arena or a budget under €8M). A Decline changes who plays, not next season's money (`europe.offered`).
+
+## Computer clubs always fill every staff role (format 84, 22 November 2026, reversible)
+
+New careers with the wage pool: computer clubs appoint a missing training coach before other roles; each empty role takes the fitting candidate, else the cheapest affordable one, else the cheapest on the market regardless of money (minimum appointment). A fee or salary the cash cannot cover becomes unpaid costs. The manager's hires are unchanged. The strict save check does not test these careers' staff hires against club money.

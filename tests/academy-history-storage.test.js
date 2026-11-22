@@ -178,6 +178,10 @@ describe('sealed academy history (format 73)', () => {
     const counted = structuredClone(opening);
     for (const item of Object.values(counted.board.reviews[0].clubs)) item.fixtureIds = [];
     rejected(counted);
+    // The latest review keeps each club's counted games.
+    const latest = structuredClone(opening);
+    for (const item of Object.values(latest.board.reviews.at(-1).clubs)) delete item.fixtureIds;
+    rejected(latest);
   });
 });
 

@@ -62,7 +62,11 @@ function stageOf(kind: 'euroleague' | 'eurocup' | 'bcl', clubId: string, series:
 
 /** Format 83: next season's places from a completed season (the places day). */
 export function europeanEntryAfter(state: PlacesDayState, options: PlacesDayOptions = {}): SeasonEurope {
-  return decidePlaces(placesDayInput(state, options));
+  const input = placesDayInput(state, options), decided = decidePlaces(input);
+  if (!input.answers.some(answer => !answer.accept && answer.clubId === input.managedClubId)) return decided;
+  // The money of next season was set on the places day: a Decline keeps the places as offered beside the final ones.
+  const offered = decidePlaces({ ...input, answers: [] }).entrants.map(entry => ({ competitionId: entry.competitionId, clubIds: entry.clubIds }));
+  return offered.every((entry, index) => entry.clubIds.join() === decided.entrants[index]!.clubIds.join()) ? decided : { ...decided, offered };
 }
 
 /** Everything the places day reads from a career, as facts. */
@@ -142,7 +146,8 @@ export function placesDayInput(state: PlacesDayState, options: PlacesDayOptions 
 
 /**
  * Format 83: the manager answers an offered place for next season (no answer means accept). Answers that no longer match
- * an offer (a later answer changed what is offered) are dropped, and next season's club money follows the new places.
+ * an offer (a later answer changed what is offered) are dropped. Next season's club money stays as the places day set
+ * it (`offered`): contracts for that season may already be signed with it.
  */
 export function answerEuropeanOffer(state: SeasonState, competitionId: string, accept: boolean): SeasonState {
   if (state.europe?.model !== 'places-2') throw new Error('This career uses the earlier European places.');

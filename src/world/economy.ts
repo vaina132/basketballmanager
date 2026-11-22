@@ -577,7 +577,8 @@ function seasonLayout(world: CareerWorld, divisions: DomesticDivisions | undefin
   const leagues = seasonLeagues(world, divisions), inLeague = new Set(leagues.flatMap(league => league.clubIds));
   const opening = world.domesticLeagues ?? [];
   const lower = (world.lowerDivisions ?? []).flatMap(list => 'clubIds' in list ? [{ country: list.country, tier: list.tier, clubIds: [...new Set([...list.clubIds, ...opening.filter(league => league.country === list.country).flatMap(league => league.clubIds)])].filter(clubId => !inLeague.has(clubId)) }] : []);
-  const competitions = (world.europeanCompetitions ?? []).map(competition => { const entry = europe?.entrants.find(item => item.competitionId === competition.id); return entry ? { ...competition, clubIds: entry.clubIds } : competition; });
+  // Format 83: a season's money follows its places as offered on the places day (a later Decline changes who plays, not the money).
+  const competitions = (world.europeanCompetitions ?? []).map(competition => { const entry = (europe?.offered ?? europe?.entrants)?.find(item => item.competitionId === competition.id); return entry ? { ...competition, clubIds: entry.clubIds } : competition; });
   return economyLayout({ leagues, lower, background: world.backgroundLeagues ?? [], competitions, clubIds: world.clubs.map(club => club.id), strength, countryOf: clubId => clubCountry(world, clubId) });
 }
 

@@ -197,7 +197,7 @@ function validateDivisionHistory(state: SeasonState): void {
 function validateEuropeShape(value: unknown, world: CareerWorld, path: string, version = SEASON_SCHEMA_VERSION): SeasonEurope {
   const two = value !== null && typeof value === 'object' && (value as { model?: unknown }).model === 'places-2';
   if (two && version < 83) fail(`${path}.model`, 'places-2 requires format 83 or later');
-  const optional = two ? (['held', 'decision', 'answers'] as const).filter(key => Object.hasOwn(value as object, key)) : [];
+  const optional = two ? (['held', 'decision', 'answers', 'offered'] as const).filter(key => Object.hasOwn(value as object, key)) : [];
   const europe = record(value, path, ['model', 'entrants', 'oneYear', ...optional]);
   if (europe.model !== 'places-1' && !two) fail(`${path}.model`, 'is unsupported');
   const competitions = playedEuropeanCompetitions(world), entrants = array(europe.entrants, `${path}.entrants`, competitions.length), seen = new Set<string>();
@@ -220,6 +220,10 @@ function validateEuropeShape(value: unknown, world: CareerWorld, path: string, v
   if (two && Object.hasOwn(europe, 'answers')) for (const [index, item] of boundedList(europe.answers, `${path}.answers`, 6).entries()) {
     const answer = record(item, `${path}.answers[${index}]`, ['clubId', 'competitionId', 'accept']);
     if (typeof answer.clubId !== 'string' || !competitions.some(competition => competition.id === answer.competitionId) || typeof answer.accept !== 'boolean') fail(`${path}.answers[${index}]`, 'must answer an offered competition');
+  }
+  if (two && Object.hasOwn(europe, 'offered')) {
+    const offered = array(europe.offered, `${path}.offered`, competitions.length);
+    offered.forEach((value, index) => { const entry = record(value, `${path}.offered[${index}]`, ['competitionId', 'clubIds']); if (entry.competitionId !== competitions[index]!.id || !Array.isArray(entry.clubIds) || entry.clubIds.length !== competitions[index]!.clubIds.length || (entry.clubIds as unknown[]).some(id => typeof id !== 'string' || !world.clubs.some(club => club.id === id))) fail(`${path}.offered[${index}]`, 'must list the competition at its field size'); });
   }
   if (two && Object.hasOwn(europe, 'decision')) record(europe.decision, `${path}.decision`, ['seasonNumber', 'date', 'offers', 'lost', 'wildCards', 'chosen']);
   return europe as unknown as SeasonEurope;

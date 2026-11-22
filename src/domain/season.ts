@@ -117,6 +117,11 @@ export interface SeasonEurope {
   held?: HeldEuropeanPlace[];
   decision?: EuropeanPlacesDecision;
   answers?: EuropeanAnswer[];
+  /**
+   * Format 83: the places as the places day offered them, kept only when the manager's Decline changed who plays. The
+   * season's club money follows these (contracts for the season were already signed with it).
+   */
+  offered?: { competitionId: string; clubIds: string[] }[];
 }
 
 /**

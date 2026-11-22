@@ -72,6 +72,9 @@ describe('European entry in a career (format 83)', () => {
     expect(clubPlace(before, clubId).competitionId).toBe('euroleague');
     expect(clubPlace(after, clubId)?.competitionId).not.toBe('euroleague');
     expect(after.entrants[0].clubIds).toHaveLength(10);
+    // Next season's money stays as the places day set it: the places as offered are kept beside the final ones.
+    expect(after.offered[0].clubIds).toContain(clubId);
+    expect(before.offered).toBeUndefined();
     expect(after.decision.offers).toContainEqual(expect.objectContaining({ clubId, competitionId: 'euroleague', outcome: 'declined', by: 'manager', answered: true }));
     expect(roundTrip(answered)).toEqual(answered);
     const changed = (state, change, pattern) => { const copy = structuredClone(state); change(copy); expect(() => parseSeason(currentSeasonFile(copy))).toThrow(pattern); };

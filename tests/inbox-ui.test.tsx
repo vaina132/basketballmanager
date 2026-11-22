@@ -13,8 +13,9 @@ const render = (season: SeasonState) => renderToStaticMarkup(<InboxWorkspace sea
 let start: SeasonState, open: SeasonState;
 
 beforeAll(() => {
-  // Seed 1 (8 before the full new-career rules of 22 November 2026): three defeats open a press conference.
-  start = createSeason({ seed: 1, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Inbox Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, matchFlow: false, media: false });
+  // Seed 10 (1 before the match flow, real coaches and European entry of formats 81-83, 8 before the full new-career
+  // rules of 22 November 2026): three defeats open a press conference.
+  start = createSeason({ seed: 10, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Inbox Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, media: false });
   open = start;
   for (let step = 0; step < 10 && !getPressQuestion(open); step += 1) open = advanceMatchday(open);
 }, 120_000);

@@ -15,7 +15,7 @@ import { DEVELOPMENT_WORLD } from '../src/data/development-world';
 const manager = { name: 'Derby Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
 // The career without rivalries stands for an older save, so it also has no press and media record (format 67) keeps
 // the sponsorship model from before format 64 and has no president board (format 70).
-const career = (rivalries: boolean) => createSeason({ seed: 2, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, rivalries, media: rivalries, namingRights: rivalries, presidents: rivalries, simpleFacilities: rivalries });
+const career = (rivalries: boolean) => createSeason({ seed: 2, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, matchFlow: false, rivalries, media: rivalries, namingRights: rivalries, presidents: rivalries, simpleFacilities: rivalries });
 const resultsReason = (state: SeasonState, playerId: string) => getPlayerRelationship(state, playerId).reasons.find(reason => reason.label === 'Recent team results')!.impact;
 let derbyWeek: SeasonState, legacy: SeasonState, switched: SeasonState;
 
@@ -93,7 +93,7 @@ describe('rivalries in a career', () => {
 
   it('rejects rivalries in a format-34 file', () => {
     // A genuine format-34 career used the relationships-1 rules (format 66 gives new careers relationships-2).
-    let older = beforeSavedIdeas(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, rivalries: false, ...BEFORE_SAVED_IDEAS }));
+    let older = beforeSavedIdeas(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager, ...NEW_CAREER_SYSTEMS, matchFlow: false, rivalries: false, ...BEFORE_SAVED_IDEAS }));
     while (older.round < 4) older = advanceMatchday(older);
     const file = JSON.parse(serializeSeason(older));
     file.formatVersion = 34; file.state.schemaVersion = 34;

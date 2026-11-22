@@ -31,7 +31,7 @@ function playUntil(start: SeasonState, until: (state: SeasonState) => boolean, o
 }
 
 describe('national windows in play (format 80)', () => {
-  const start = createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS });
+  const start = createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, matchFlow: false });
 
   it('calls up players, plays the November window and replays national duty in the strict training check', () => {
     // At round 11 the November window is within two weeks: the club sees who would be called up.
@@ -106,7 +106,7 @@ describe('national windows in play (format 80)', () => {
 
   it('records injuries from national games: the player returns to his club injured (strict check included)', () => {
     // Seed 11: a player of the manager's club gets a calf strain with his national team in the November window.
-    const career = createSeason({ seed: 11, world, managedClubId: world.clubs[4]!.id, ...NEW_CAREER_SYSTEMS });
+    const career = createSeason({ seed: 11, world, managedClubId: world.clubs[4]!.id, ...NEW_CAREER_SYSTEMS, matchFlow: false });
     const after = playUntil(career, state => state.round === 13);
     const national = after.injuries.filter(injury => isNationalFixtureId(injury.fixtureId));
     const own = national.find(injury => injury.clubId === after.managedClubId)!;
@@ -130,7 +130,7 @@ describe('national windows in play (format 80)', () => {
   }, 600_000);
 
   it('an unemployed manager plays his national games live: Continue stops for them in the Match center', () => {
-    const career = createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS });
+    const career = createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, matchFlow: false });
     let state = resignManager(career, NO_CLUB);
     expect(isUnemployed(state)).toBe(true);
     state = offerNationalJob(state, 'nation-tur');
@@ -164,6 +164,8 @@ describe('national windows in play (format 80)', () => {
     const hired = acceptNationalOffer(offerNationalJob(played, 'nation-tur'), `national-offer-test-nation-tur-${played.date}`);
     // The earlier shape: results without injury records, the national record without earnings.
     const envelope = JSON.parse(serializeSeason(hired));
+    // Written as format 80 (format 81 only adds the plays-3 matches of new careers; this career plays plays-2).
+    envelope.formatVersion = 80; envelope.state.schemaVersion = 80;
     delete envelope.state.national.earnings;
     for (const competition of envelope.state.national.competitions) for (const fixture of competition.fixtures) if (fixture.result) delete fixture.result.injuries;
     const earlier = JSON.stringify(envelope);

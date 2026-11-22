@@ -755,7 +755,7 @@ function upcourt(event: MatchEvent, roster: Roster, live: Live, durationMs: numb
 function probeCaption(event: MatchEvent, roster: Roster, live: Live, salt: number): string {
   const offense = event.scene?.offense ?? live.offense
   const handler = live.holder ? surname(roster.get(live.holder)?.name) : 'The guard'
-  const lines = [`${handler} sizes up the defence.`, `${handler} runs the offence.`, `${handler} calls the set.`, `The ball handler probes; the others move without the ball.`]
+  const lines = [`${handler} sizes up the defence.`, `${handler} runs the offence.`, `${handler} calls the set.`, `${handler} probes; the others cut and screen.`]
   void offense
   return lines[Math.floor(vary(event.id, salt + 9) * lines.length)]!
 }

@@ -26,7 +26,7 @@ beforeAll(() => {
 
 describe('board panel: president and capital', () => {
   it('introduces the president, the capital left this season and the confidence the board needs', () => {
-    const html = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, simpleFacilities: false }));
+    const html = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, matchFlow: false, simpleFacilities: false }));
     expect(html).toContain('data-board-president="rhine-falcons"');
     expect(html).toContain('Helena Varga');
     expect(html).toContain('Club president · Measured investor');
@@ -41,7 +41,7 @@ describe('board panel: president and capital', () => {
   });
 
   it('offers prospective activation to older careers and explains when facilities must come first', () => {
-    const legacy = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, simpleFacilities: false, boardFunding: false }));
+    const legacy = board(createSeason({ seed: 227, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, matchFlow: false, simpleFacilities: false, boardFunding: false }));
     expect(legacy).toMatch(/id="enable-board-funding"[^>]*>Enable funding requests/);
     expect(legacy).not.toMatch(/id="enable-board-funding"[^>]*disabled/);
     expect(legacy).toContain('Rival clubs can ask their boards under the same rules once this is on.');

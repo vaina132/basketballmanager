@@ -8,7 +8,7 @@ import { advanceMatchday } from './helpers/board-funding';
 
 const noop = () => {};
 const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={season} onEnable={noop} onEnableFunding={noop} onEnableConsequences={noop} onEnableRivalries={noop} onEnableCareerMoves={noop} />);
-const career = (rivalries: boolean) => createSeason({ seed: 2, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Derby Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, rivalries });
+const career = (rivalries: boolean) => createSeason({ seed: 2, managedClubId: 'rhine-falcons', injuryMode: 'standard', manager: { name: 'Derby Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, matchFlow: false, rivalries });
 let afterDerby: SeasonState;
 
 beforeAll(() => {

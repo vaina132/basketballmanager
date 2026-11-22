@@ -1,5 +1,5 @@
 import type { NationalCoach, NationalCompetition, NationalFixture, NationalGroup, NationalOffer, NationalResult, NationalTeamInfo, NationalVerdict, SeasonNational } from '../domain/national';
-import type { SeasonState } from '../domain/season';
+import type { SeasonInjury, SeasonState } from '../domain/season';
 import type { MatchState, Player, Position, Side, Team } from '../domain/types';
 import type { CareerWorld } from '../domain/world';
 import { NATIONAL_TEAMS, NATIONALITY_ALIASES, QUALIFIER_GROUPS_2026, nationalPersonName } from '../data/national-teams';
@@ -7,7 +7,8 @@ import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { NATIONAL_RULES, nationalAwayDays, nationalTournamentDays, nationalTournamentName, nationalWindowDays, nationalWindowSaturday } from './national-calendar';
 import { addCalendarDays } from './competition-calendar';
 import { worldOf } from './career-world';
-import { isRecovering } from './health';
+import { createSeasonInjury, injuryRiskMap, isRecovering } from './health';
+import { medicalRecoveryPercent } from './facilities-policy';
 import { overallRating } from './overall-rating';
 import { developClub } from './training';
 import { managerReputation } from './career-policy';
@@ -141,6 +142,9 @@ export function generatedNationalPlayer(team: NationalTeamInfo, k: number, seed:
   return { id: `${team.id}-generated-${k}`, name: nationalPersonName(team.country, 500 + k), number: 0, position, heightCm: height, weightKg: Math.round(height * 0.48), skinTone: SKIN_TONES[hash % SKIN_TONES.length]!, hairColor: HAIR_COLORS[(hash >>> 8) % HAIR_COLORS.length]!, attributes };
 }
 
+/** Whether a fixture id is a national game's (qualifiers `nq-s<season>-…`, tournaments `nt-s<season>-…`). */
+export const isNationalFixtureId = (fixtureId: string) => /^n[qt]-s\d+-/u.test(fixtureId);
+
 export const isGeneratedNationalPlayer = (playerId: string) => playerId.startsWith('nation-') && playerId.includes('-generated-');
 
 /** Clubs with a game in a window's week (Sunday to the window Saturday): their players stay with them. */
@@ -208,9 +212,20 @@ export function pickNationalSquad(team: NationalTeamInfo, candidates: readonly N
 export const managerNationalTeamId = (state: Pick<SeasonState, 'national'>): string | null => state.national?.job?.teamId ?? null;
 
 /** A team's squad for a game in this state (the manager's picks for his team). */
-export function nationalSquadFor(state: SeasonState, teamId: string, pool: Map<string, NationalCandidate[]>): NationalCandidate[] {
-  const national = state.national!, team = nationalTeam(national, teamId);
-  return pickNationalSquad(team, pool.get(team.country) ?? [], state.seed, national.job?.teamId === teamId ? national.job.selection : []);
+export function nationalSquadFor(state: SeasonState, teamId: string, pool: Map<string, NationalCandidate[]>, unavailable: ReadonlySet<string> = new Set()): NationalCandidate[] {
+  const national = state.national!, team = nationalTeam(national, teamId), candidates = pool.get(team.country) ?? [];
+  return pickNationalSquad(team, unavailable.size ? candidates.filter(item => !unavailable.has(item.player.id)) : candidates, state.seed, national.job?.teamId === teamId ? national.job.selection : []);
+}
+
+/**
+ * Players who cannot play a national game: club players recovering from an injury on its date, and every player
+ * injured in an earlier game of the same window or tournament (he misses the rest of it).
+ */
+export function nationalUnavailable(state: SeasonState, fixture: NationalFixture): Set<string> {
+  const competition = findCompetition(state.national!, fixture.competitionId), out = new Set<string>();
+  for (const injury of state.injuries) if (isRecovering(injury, fixture.date, state.physio)) out.add(injury.playerId);
+  for (const earlier of competition.fixtures) if (earlier.window === fixture.window && earlier.result && earlier.date < fixture.date) for (const id of Object.keys(earlier.result.injuries)) out.add(id);
+  return out;
 }
 
 /** A squad's strength: the average overall rating of its best eight. */
@@ -262,17 +277,21 @@ export function projectedNationalSquads(state: SeasonState, seasonNumber: number
 
 /**
  * A national game's match: both coaches' squads, numbered 4-15, with the career's play model. `live`: the manager's
- * team plays under his control (the Match center); otherwise every side has a computer coach. No injuries are drawn.
+ * team plays under his control (the Match center); otherwise every side has a computer coach. Injuries are drawn with
+ * the career's injury setting.
  */
 export function prepareNationalGame(state: SeasonState, fixture: NationalFixture, live: string | null, cache: PoolCache = new Map()): { match: MatchState; squads: Record<Side, NationalCandidate[]> } {
-  const national = state.national!, competition = findCompetition(national, fixture.competitionId), pool = poolForFixture(state, fixture, cache);
-  const squads = { home: nationalSquadFor(state, fixture.homeTeamId, pool), away: nationalSquadFor(state, fixture.awayTeamId, pool) };
+  const national = state.national!, competition = findCompetition(national, fixture.competitionId), pool = poolForFixture(state, fixture, cache), unavailable = nationalUnavailable(state, fixture);
+  const squads = { home: nationalSquadFor(state, fixture.homeTeamId, pool, unavailable), away: nationalSquadFor(state, fixture.awayTeamId, pool, unavailable) };
   const team = (side: Side): Team => { const info = nationalTeam(national, side === 'home' ? fixture.homeTeamId : fixture.awayTeamId); return { id: info.id, name: info.name, shortName: info.shortName, color: info.color, players: squads[side].map((item, index) => ({ ...item.player, number: index + 4 })) }; };
   const computer = SIDES.filter(side => (side === 'home' ? fixture.homeTeamId : fixture.awayTeamId) !== live);
+  // Owner (22 November 2026): national games draw injuries like club games, with each player's recurrence risk.
+  const injuryRisk = injuryRiskMap(state.injuries, [...squads.home, ...squads.away].map(item => item.player.id), fixture.date);
   const match = createFixtureMatch(nationalHash(state.seed, fixture.id), team('home'), team('away'), {
     lineups: { home: startingFive(squads.home), away: startingFive(squads.away) },
     conditions: nationalConditions(competition, fixture, [squads.home, squads.away]),
-    injuryMode: 'off',
+    injuryMode: state.injuryMode,
+    ...(Object.keys(injuryRisk).length ? { injuryRisk } : {}),
     autoSubstitutions: { home: computer.includes('home'), away: computer.includes('away') },
     ...(state.matchModel ? { playModel: state.matchModel, computerCoach: computer } : {}),
   });
@@ -289,11 +308,38 @@ export function nationalResult(match: MatchState, squads: Record<Side, readonly 
     minutes[player.id] = Math.min(60, Math.round(stats.secondsPlayed / 60));
     points[player.id] = stats.points;
   }
-  return { home: score.home, away: score.away, squads: { home: squads.home.map(item => item.player.id), away: squads.away.map(item => item.player.id) }, minutes, points, strength: { home: nationalStrength(squads.home), away: nationalStrength(squads.away) } };
+  const carried = new Set(match.preExistingInjuries ?? []);
+  const injuries = Object.fromEntries(Object.entries(match.injuries).filter(([id]) => !carried.has(id) && Object.hasOwn(minutes, id)).map(([id, injury]) => [id, injury.kind]));
+  return { home: score.home, away: score.away, squads: { home: squads.home.map(item => item.player.id), away: squads.away.map(item => item.player.id) }, minutes, points, strength: { home: nationalStrength(squads.home), away: nationalStrength(squads.away) }, injuries };
+}
+
+/** The club a player of the full world belongs to now (null: a generated player or one of a club outside the full world). */
+function fullWorldClubOf(state: Pick<SeasonState, 'clubs'>, playerId: string): string | null {
+  return state.clubs.find(club => club.players.some(player => player.id === playerId))?.id ?? null;
+}
+
+/**
+ * The club injuries of a national game: a full-world club's player injured with his national team gets a recorded
+ * injury with the career's injury model and his club's medical centre, as in a club game (owner, 22 November 2026).
+ */
+export function nationalGameInjuries(state: SeasonState, fixture: Pick<NationalFixture, 'id' | 'date'>, result: Pick<NationalResult, 'injuries'>): SeasonInjury[] {
+  const recorded: SeasonInjury[] = [];
+  for (const [playerId, kind] of Object.entries(result.injuries)) {
+    const clubId = fullWorldClubOf(state, playerId);
+    if (!clubId) continue;
+    recorded.push(createSeasonInjury(state.seed, fixture, clubId, playerId, kind, [...state.injuries, ...recorded], medicalRecoveryPercent(state, clubId, fixture.date), state.injuryModel));
+  }
+  return recorded;
 }
 
 function withFixtureResult(national: SeasonNational, fixtureId: string, result: NationalResult): SeasonNational {
   return { ...national, competitions: national.competitions.map(competition => competition.fixtures.some(fixture => fixture.id === fixtureId) ? { ...competition, fixtures: competition.fixtures.map(fixture => fixture.id === fixtureId ? { ...fixture, result } : fixture) } : competition) };
+}
+
+/** A national game's result recorded, with its club players' injuries. */
+function recordNationalGame(state: SeasonState, fixture: NationalFixture, result: NationalResult): SeasonState {
+  const injuries = nationalGameInjuries(state, fixture, result);
+  return { ...state, national: withFixtureResult(state.national!, fixture.id, result), ...(injuries.length ? { injuries: [...state.injuries, ...injuries] } : {}) };
 }
 
 /** Play every unplayed national game dated on or before `through` (in date order), except the manager's open live game. */
@@ -303,7 +349,7 @@ export function playNationalGames(state: SeasonState, through: string, onlyDate?
   const due = next.national!.competitions.flatMap(competition => competition.fixtures).filter(fixture => !fixture.result && fixture.date <= through && (!onlyDate || fixture.date === onlyDate) && fixture.id !== next.national!.activeFixtureId).sort(byDate);
   for (const fixture of due) {
     const { match, squads } = prepareNationalGame(next, fixture, null, cache);
-    next = { ...next, national: withFixtureResult(next.national!, fixture.id, nationalResult(simulateToEnd(match), squads)) };
+    next = recordNationalGame(next, fixture, nationalResult(simulateToEnd(match), squads));
   }
   return next;
 }
@@ -460,7 +506,8 @@ export function commitNationalMatch(state: SeasonState): SeasonState {
   if (match.status !== 'finished' || match.requiredSubstitutions.length) throw new Error('Finish the national game and resolve required decisions before continuing.');
   // The squads are the match's players, in the coaches' order.
   const squad = (side: Side): NationalCandidate[] => match[side].players.map(player => ({ player, clubId: null, ovr: overallRating(player.attributes, player.position) }));
-  const next: SeasonState = { ...state, national: { ...withFixtureResult(national, fixture.id, nationalResult(match, { home: squad('home'), away: squad('away') })), activeFixtureId: null, activeMatch: null } };
+  const recorded = recordNationalGame(state, fixture, nationalResult(match, { home: squad('home'), away: squad('away') }));
+  const next: SeasonState = { ...recorded, national: { ...recorded.national!, activeFixtureId: null, activeMatch: null } };
   return playNationalGames(next, fixture.date, fixture.date);
 }
 

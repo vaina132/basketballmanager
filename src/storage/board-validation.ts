@@ -15,6 +15,7 @@ import { REQUEST_KINDS } from '../world/board-requests';
 import { managedClubAtRound } from '../world/career';
 import { maxTicketPriceFor, TICKET_PRICE_STEP } from '../world/finance';
 import { SEALED_HISTORY_FORMAT, withoutCountedGames } from '../world/sealed-history';
+import { isNationalFixtureId } from '../world/national';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'ledgerCount', 'rosterCount'] as const;
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
@@ -59,7 +60,8 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard):
     rosters, fixtures, board, employment: { transfers: state.employment.transfers }, physio: state.physio, rivalries: state.rivalries,
     // That season's own full-world clubs (step 3.4d-2).
     clubs: fullWorldClubsIn(state, anchor.seasonNumber).map(({ id }) => ({ id })),
-    injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
+    // Format 80: national games' injuries recorded by then (their games come before the week's business).
+    injuries: state.injuries.filter(injury => committed.has(injury.fixtureId) || isNationalFixtureId(injury.fixtureId) && injury.occurredOn <= anchor.date),
     finance: { ...finance, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
     // Format 70 (board-2): the academy, the previous season's squads, the managed club and the president's requests.
     // Step 3.7: the club managed at the anchor's own week (a season opening before a mid-season dismissal kept the club).

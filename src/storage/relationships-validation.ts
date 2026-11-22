@@ -7,6 +7,7 @@ import { managedClubAtRound, managedClubFor } from '../world/career';
 import { fullWorldClubsIn, roundOrdinal, seasonRounds } from '../world/career-world';
 import { SEALED_HISTORY_FORMAT } from '../world/sealed-history';
 import type { RelationshipEvent as Command } from '../domain/relationships';
+import { isNationalFixtureId } from '../world/national';
 
 const ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'completedRounds', 'contractCount', 'rosterCount'] as const;
 /** Matchdays as one sequence across seasons, as stored in anchors; it uses the career's season length. */
@@ -49,7 +50,8 @@ function contextAt(state: SeasonState, anchor: RelationshipAnchor, relationships
     ...state, managedClubId: localCompleted === seasonRounds(state) ? managedClubFor(state, anchor.seasonNumber, true) : managedClubAtRound(state, anchor.seasonNumber, anchor.round), seasonNumber: anchor.seasonNumber, round: anchor.round, date: anchor.date,
     status: localCompleted === seasonRounds(state) ? 'complete' : 'active', clubs, rosters, history, fixtures, relationships,
     activeFixtureId: fixtures.find(fixture => fixture.round === anchor.round && [fixture.homeClubId, fixture.awayClubId].includes(managedClubAtRound(state, anchor.seasonNumber, anchor.round)))?.id ?? null,
-    injuries: state.injuries.filter(injury => committed.has(injury.fixtureId)),
+    // Format 80: national games' injuries recorded by then (their games come before the week's business).
+    injuries: state.injuries.filter(injury => committed.has(injury.fixtureId) || isNationalFixtureId(injury.fixtureId) && injury.occurredOn <= anchor.date),
     employment: { ...state.employment, contracts: state.employment.contracts.slice(0, anchor.contractCount) },
   };
 }

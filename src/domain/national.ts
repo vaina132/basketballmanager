@@ -1,4 +1,5 @@
 import type { MatchState } from './types';
+import type { InjuryKind } from './injuries';
 
 /**
  * Format 80 (owner feedback item 13, 22 November 2026): national teams, their competitions and coaches, and national
@@ -37,6 +38,12 @@ export interface NationalResult {
   points: Record<string, number>;
   /** Each squad's strength at tip-off (the average overall rating of its best eight), for the federations' judgement. */
   strength: { home: number; away: number };
+  /**
+   * Players injured in this game, with the injury's kind (owner, 22 November 2026: national games record injuries with
+   * the career's injury model). An injured club player returns to his club injured (`SeasonState.injuries`); every
+   * injured player misses the rest of the window or tournament.
+   */
+  injuries: Record<string, InjuryKind>;
 }
 
 /** `window` 1 is November, 2 February, 3 the summer tournament. */

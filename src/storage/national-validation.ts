@@ -6,6 +6,7 @@ import { addCalendarDays } from '../world/competition-calendar';
 import { NATIONAL_MODEL, qualifierCompetition, usesNationalTeams } from '../world/national';
 import { NATIONAL_RULES, nationalTournamentDays } from '../world/national-calendar';
 import { validateMatchState } from './validate-match';
+import { isMatchInjuryKind } from '../domain/injuries';
 
 /**
  * Format 80 save checks for national teams (development mode: shape and key totals). Exact: the teams, each season's
@@ -41,7 +42,7 @@ function same(left: unknown, right: unknown): boolean {
 }
 
 function validateResult(value: unknown, path: string): void {
-  const result = record(value, path, ['home', 'away', 'squads', 'minutes', 'points', 'strength']);
+  const result = record(value, path, ['home', 'away', 'squads', 'minutes', 'points', 'strength', 'injuries']);
   const home = integer(result.home, `${path}.home`, 0, 250), away = integer(result.away, `${path}.away`, 0, 250);
   if (home === away) fail(path, 'must have a winner');
   const squads = record(result.squads, `${path}.squads`, ['home', 'away']), ids = new Set<string>();
@@ -60,6 +61,9 @@ function validateResult(value: unknown, path: string): void {
   if (!awarded && (totals('home') !== home || totals('away') !== away)) fail(`${path}.points`, 'must add up to the score');
   const strength = record(result.strength, `${path}.strength`, ['home', 'away']);
   integer(strength.home, `${path}.strength.home`, 1, 99); integer(strength.away, `${path}.strength.away`, 1, 99);
+  // Injured players played in the game (the club's injury record is checked with the career's injuries).
+  const injuries = record(result.injuries, `${path}.injuries`, Object.keys(result.injuries as object));
+  for (const [id, kind] of Object.entries(injuries)) if (!Object.hasOwn(result.minutes as object, id) || !isMatchInjuryKind(kind)) fail(`${path}.injuries.${id}`, 'must be a match injury of a player who played');
 }
 
 function validateFixture(value: unknown, path: string, competition: Record<string, unknown>, teamIds: ReadonlySet<string>, latest: string): NationalFixture {

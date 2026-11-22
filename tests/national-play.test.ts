@@ -5,7 +5,8 @@ import { createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/seas
 import { runContinueStep } from '../src/world/continue-step';
 import { continueUntilStop } from '../src/ui/continue-run';
 import { getInboxItems } from '../src/ui/inbox-items';
-import { acceptNationalOffer, clubWindowCallUps, nationalManagedSide, offerNationalJob, resignNationalJob, setNationalSelection } from '../src/world/national';
+import { acceptNationalOffer, clubWindowCallUps, isNationalFixtureId, nationalManagedSide, offerNationalJob, resignNationalJob, setNationalSelection } from '../src/world/national';
+import { getPlayerHealth } from '../src/world/health';
 import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { nationalWorld } from './helpers/national-world';
 
@@ -91,5 +92,30 @@ describe('national windows in play (format 80)', () => {
     expect(resigned.national!.job).toBeNull();
     expect(resigned.managedClubId).toBe(state.managedClubId);
     expect(parseSeason(serializeSeason(resigned)).national!.job).toBeNull();
+  }, 600_000);
+
+  it('records injuries from national games: the player returns to his club injured (strict check included)', () => {
+    // Seed 11: a player of the manager's club gets a calf strain with his national team in the November window.
+    const career = createSeason({ seed: 11, world, managedClubId: world.clubs[4]!.id, ...NEW_CAREER_SYSTEMS });
+    const after = playUntil(career, state => state.round === 13);
+    const national = after.injuries.filter(injury => isNationalFixtureId(injury.fixtureId));
+    const own = national.find(injury => injury.clubId === after.managedClubId)!;
+    expect(own).toBeDefined();
+    const fixture = after.national!.competitions[0]!.fixtures.find(item => item.id === own.fixtureId)!;
+    expect(fixture.result!.injuries[own.playerId]).toBe(own.kind);
+    expect(getPlayerHealth(after, own.playerId)?.id).toBe(own.id);
+    expect(getInboxItems(after).find(item => item.id === `national-injury-${own.id}`)?.title).toMatch(/was injured with/);
+    // Computer clubs' players are recorded the same way.
+    expect(national.some(injury => injury.clubId !== after.managedClubId)).toBe(true);
+    expect(parseSeason(serializeSeason(after)).injuries).toEqual(after.injuries);
+    // The next club game counts him out, and the strict check still replays the career.
+    const next = playUntil(after, state => state.round === 15);
+    const game = next.fixtures.find(item => item.round === 14 && item.result && [item.homeClubId, item.awayClubId].includes(next.managedClubId))!;
+    expect(game.result!.injuries[own.playerId]).toBe(own.kind);
+    expect(game.result!.stats[own.playerId]?.secondsPlayed ?? 0).toBe(0);
+    expect(parseSeason(serializeSeasonCompact(next)).injuries).toEqual(next.injuries);
+    // A changed diagnosis is refused.
+    const tampered = { ...next, injuries: next.injuries.map(injury => injury.id === own.id ? { ...injury, returnOn: '2027-01-30' } : injury) };
+    expect(() => parseSeason(serializeSeason(tampered))).toThrow(/Invalid season save/);
   }, 600_000);
 });

@@ -578,3 +578,7 @@ The owner wants the original club and competition logos, not generated badges. S
 ## Richer match engine (Wave 3, 22 November 2026)
 
 New careers use `matchPlays` (format 79): more distinct actions with the sprint-4 calibration kept (possessions 74.4, 113.2 points per 100, 3PA share 41.1%, turnovers 13.1, steals 7.4, blocks 2.6 per team per game over 528 seeded games). Older careers, fixtures and youth matches keep the old engine so saved matches replay exactly.
+
+## National teams defaults (Wave 4, 22 November 2026)
+
+Season one uses the real 2027 World Cup European Qualifiers second round (24 teams, groups I-L) and its two remaining windows; the draw inside groups and a zero start table are the game's own. The summer tournament for the 12 qualifiers is simulated at the season change (groups of three, semi-finals, final). National job offers need reputation 70, 55 or 42 by team strength (10 less for the manager's own country); federations sack below 30 (the manager below 25) and renew from 50. Players whose club has a game in the window week are not called up.

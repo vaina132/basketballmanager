@@ -1,4 +1,5 @@
 import type { ContractRequest, ContractRequestReply, ContractRequestTrigger, PlayerRelationship, PlayingTimePromise, PressAnswer, RelationshipAnchor, RelationshipEvent, RelationshipsModel, RelationshipTalk, RelationshipTalkQuote, RoleAgreementQuote, RoleRequest, RoleRequestStage, SeasonRelationships, SquadRole } from '../domain/relationships';
+import { clubMoraleImpact } from './head-coaches';
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import { dateForRound } from './season';
@@ -359,7 +360,10 @@ function playerRelationship(state: SeasonState, playerId: string, clubId: string
   const roleRequest = everywhere(state) && state.relationships.enabledSince ? openRoleRequest(state, evidenceHistory, playerId, currentStint) : null;
   const leaveImpact = roleRequest?.stage === 'leave' ? SQUAD_ROLE_RULES.escalation.leaveMorale : 0;
   if (roleRequest?.stage === 'leave') reasons.push({ label: 'Asked to leave', impact: leaveImpact });
-  const morale = Math.round(clamp(50 + roleImpact + resultImpact + conversationImpact + promiseImpact + press.impact + contractMorale + leaveImpact, 0, 100));
+  // Format 86: the head coach's Motivation (the manager's for his own club), -3 to +3.
+  const coachImpact = state.relationships.enabledSince ? clubMoraleImpact(state, clubId) : 0;
+  if (coachImpact) reasons.push({ label: 'Head coach\'s motivation', impact: coachImpact });
+  const morale = Math.round(clamp(50 + roleImpact + resultImpact + conversationImpact + promiseImpact + press.impact + contractMorale + leaveImpact + coachImpact, 0, 100));
   const promise = promises.find(promise => promise.status === 'active') ?? null;
   const latest = personal.at(-1), completedRounds = relationshipEventAnchor(state).completedRounds;
   let talkReason: string | null = null;

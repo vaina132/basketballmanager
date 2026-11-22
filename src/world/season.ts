@@ -25,7 +25,7 @@ import type { ClubExchange } from '../domain/background';
 import { computeExchanges, departureFor, joinedContracts, leavingRecord } from './exchanges';
 import type { SeasonEndDecision } from '../domain/career';
 import { completeCommercialSeason, createCommercial, enableCommercial, processCommercialRound, startCommercialSeason } from './commercial';
-import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale } from './relationships';
+import { createRelationships, enableRelationships, automateRelationships, prepareRelationshipsRound, getPreparedRelationshipMorale, preparationValues } from './relationships';
 import { enableMedia } from './media';
 import { processContractRequests } from './contract-requests';
 import { createFacilities, enableBoardFunding, enableFacilities, enableFacilityMaintenance, processFacilityProjects, automateFacilities } from './facilities';
@@ -646,7 +646,11 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
 function withRealCoaches(state: SeasonState, steering: boolean): SeasonState {
   // Format 86: with steering, head coaches also run training, rotation and signings (`coaches-2`).
   const coaches = createCoaches(state.manager, state.seed, worldOf(state).startDate, steering);
-  return { ...state, coaches, ...(state.national ? { national: withRealNationalCoaches(state.national, worldOf(state)) } : {}) };
+  const coached: SeasonState = { ...state, coaches, ...(state.national ? { national: withRealNationalCoaches(state.national, worldOf(state)) } : {}) };
+  // Format 86: the opening week's frozen morale includes each head coach's Motivation (the match is prepared again after).
+  const events = coached.relationships.events, last = events.length - 1;
+  if (!steering || last < 0 || events[last]!.type !== 'prepare') return coached;
+  return { ...coached, relationships: { ...coached.relationships, events: events.map((event, index) => index === last ? { ...event, ...preparationValues(coached) } : event) } };
 }
 
 /** The opening objectives built again from the career's opening state, each at its own ledger point (format 83). */

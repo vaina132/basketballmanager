@@ -327,8 +327,23 @@ type SteeringContext = PlacesContext & Partial<Pick<SeasonState, 'coaches'>>;
  * attributes in that season with his style, or the manager's attributes in that season (no style: he decides himself).
  * Undefined in careers without steering. A club without a head coach (a promoted club before its first change) is absent.
  */
+const steeringCache = new WeakMap<SeasonCoaches, WeakMap<readonly BoardRestart[], Map<string, Readonly<Record<string, SteeringCoach>>>>>();
 export function steeringCoaches(context: SteeringContext, point: { seasonNumber: number; round: number; phase: BoardRestart['phase'] }): Readonly<Record<string, SteeringCoach>> | undefined {
   if (!steersCoaches(context) || !context.coaches) return undefined;
+  // Read for every player's morale and every game: cached per career coaches, board changes and point (all immutable).
+  const restarts = context.board?.restarts ?? NO_RESTARTS, key = `${worldOf(context).id}|${careerPointKey(point.seasonNumber, point.round, point.phase)}`;
+  let byRestarts = steeringCache.get(context.coaches);
+  if (!byRestarts) { byRestarts = new WeakMap(); steeringCache.set(context.coaches, byRestarts); }
+  let cache = byRestarts.get(restarts);
+  if (!cache) { cache = new Map(); byRestarts.set(restarts, cache); }
+  const known = cache.get(key);
+  if (known) return known;
+  const result = buildSteeringCoaches(context as SteeringContext & { coaches: SeasonCoaches }, point);
+  cache.set(key, result);
+  return result;
+}
+
+function buildSteeringCoaches(context: SteeringContext & { coaches: SeasonCoaches }, point: { seasonNumber: number; round: number; phase: BoardRestart['phase'] }): Readonly<Record<string, SteeringCoach>> {
   const world = worldOf(context), pool = coachWorld(world), places = coachPlaces(context, point), manager = managerAttributes(context.coaches, point.seasonNumber);
   const result: Record<string, SteeringCoach> = {};
   for (const [clubId, coachId] of Object.entries(places.clubs)) {

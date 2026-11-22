@@ -30,6 +30,8 @@ import { createFacilities, enableBoardFunding, enableFacilities, enableFacilityM
 import { medicalRecurrencePercent } from './facilities-policy';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonEurope, SeasonFixture, SeasonState, Standing } from '../domain/season';
 import { nextEuropeanPlaces, openingEurope } from './european-places';
+import { openingEuropeTwo } from './european-entry';
+import { europeanEntryAfter, type PlacesDayOptions, type PlacesDayState } from './european-entry-day';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import { archiveFinancialHistory } from './finance-archives';
 import type { InjuryMode, MatchState, Position, Side, Team } from '../domain/types';
@@ -484,6 +486,12 @@ export interface SeasonSystems {
    * national team's country; other worlds and older careers are unchanged.
    */
   nationalTeams?: boolean;
+  /**
+   * Format 83 (owner's item C, 22 November 2026): European entry rules (`places-2`, `src/world/european-entry.ts`):
+   * place types with end seasons, the places day with the licence check and wild cards, the manager's answers and the
+   * board's European aim. New careers of worlds with European places; older careers keep `places-1`.
+   */
+  europeanEntry?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -496,7 +504,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, nationalTeams: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, nationalTeams: true, europeanEntry: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -523,6 +531,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.scoutNetwork !== undefined && typeof options.scoutNetwork !== 'boolean') throw new Error('Choose a valid scouting network setting.');
   if (options.matchPlays !== undefined && typeof options.matchPlays !== 'boolean') throw new Error('Choose a valid match engine setting.');
   if (options.nationalTeams !== undefined && typeof options.nationalTeams !== 'boolean') throw new Error('Choose a valid national teams setting.');
+  if (options.europeanEntry !== undefined && typeof options.europeanEntry !== 'boolean') throw new Error('Choose a valid European entry setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -544,9 +553,11 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   // Format 78: the transfer and loan list, and the scouting network; nothing at the opening depends on either.
   const listed = options.transferLists && healed.recruitment.enabledSince ? { ...healed, recruitment: { ...healed.recruitment, model: 'recruitment-2' as const, listings: [] } } : healed;
   const scouted = options.scoutNetwork && listed.scouting.enabledSince ? { ...listed, scouting: { ...listed.scouting, model: 'scouting-2' as const } } : listed;
+  // Format 83: European entry rules; the opening places name the same clubs, so nothing scheduled changes.
+  const entered = options.europeanEntry && scouted.europe && scouted.world ? { ...scouted, europe: openingEuropeTwo(scouted.world) } : scouted;
   // Format 79: the richer play model; the opening match is prepared again with it.
-  if (!options.matchPlays) return scouted;
-  const played: SeasonState = { ...scouted, matchModel: 'plays-2' };
+  if (!options.matchPlays) return entered;
+  const played: SeasonState = { ...entered, matchModel: 'plays-2' };
   return played.activeMatch && played.activeFixtureId ? { ...played, activeMatch: prepareMatch(played, getActiveFixture(played)) } : played;
 }
 
@@ -975,7 +986,9 @@ export function oneYearSeasons(state: Pick<SeasonState, 'seasonNumber' | 'histor
 }
 
 /** Next season's European places from a completed season (step 3.5f): its top divisions' final orders and its European results. */
-export function europeanPlacesAfter(state: Pick<SeasonState, 'seed' | 'seasonNumber' | 'history' | 'fixtures' | 'clubs' | 'europe'> & Partial<Pick<SeasonState, 'divisions' | 'background' | 'lifecycle' | 'academy'>> & WorldContext): SeasonEurope {
+export function europeanPlacesAfter(state: PlacesDayState, options?: PlacesDayOptions): SeasonEurope {
+  // Format 83: new careers' places day (`places-2`).
+  if (state.europe?.model === 'places-2') return europeanEntryAfter(state, options);
   const world = worldOf(state), standings = getStandings(state);
   const topDivisions = seasonLeagues(world, state.divisions).filter(league => league.tier === 1);
   const domesticOrders = new Map(topDivisions.map(league => [league.id, standings.filter(row => league.clubIds.includes(row.clubId)).sort((a, b) => a.position - b.position).map(row => row.clubId)]));

@@ -29,7 +29,7 @@ function hash(seed: number, key: string): number {
 }
 
 /** A squad's strength: the mean position-weighted rating of its best eight. */
-const strengthOf = (players: readonly { attributes: Parameters<typeof overallRating>[0]; position: Parameters<typeof overallRating>[1] }[]) => {
+export const strengthOf = (players: readonly { attributes: Parameters<typeof overallRating>[0]; position: Parameters<typeof overallRating>[1] }[]) => {
   const best = players.map(player => overallRating(player.attributes, player.position)).sort((a, b) => b - a).slice(0, 8);
   return best.reduce((sum, value) => sum + value, 0) / best.length;
 };

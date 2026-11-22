@@ -58,7 +58,7 @@ describe('background tables and European places in the world (step 3.5f)', () =>
   });
 
   it('estimates an unchosen league\'s table from squad strength with a seeded random element', () => {
-    const world = placesWorld(), state = createSeason({ world, seed: 3, ...NEW_CAREER_SYSTEMS });
+    const world = placesWorld(), state = createSeason({ world, seed: 3, ...NEW_CAREER_SYSTEMS, europeanEntry: false });
     const league = world.backgroundLeagues[0];
     const table = estimatedTable(state, league, 1);
     expect(table.map(row => row.clubId).sort()).toEqual([...league.clubIds].sort());
@@ -78,7 +78,7 @@ describe('next season\'s European places (step 3.5f)', () => {
   let world, complete, next, places;
   beforeAll(() => {
     world = placesWorld();
-    let state = setEmploymentDelegation(createSeason({ seed: 12, world, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ seed: 12, world, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS, europeanEntry: false }), true);
     while (state.status === 'active') state = play(state);
     complete = state;
     places = europeanPlacesAfter(complete);

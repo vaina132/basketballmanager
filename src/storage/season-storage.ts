@@ -26,6 +26,7 @@ import { createBackground, validateBackground } from '../world/background';
 import { backgroundConditions, backgroundRosterId, backgroundSide } from '../world/europe';
 import { EUROPEAN_FORMAT_VERSION, playedEuropeanCompetitions } from '../world/european-formats';
 import { openingEurope } from '../world/european-places';
+import { openingEuropeTwo } from '../world/european-entry';
 import { selectBackgroundMatchday } from '../world/background';
 import type { FacilityAnchor, FacilityEvent, FacilityType, SeasonFacilities } from '../domain/facilities';
 import { createFacilities, applyFacilityEvent, facilitiesAtEventCount } from '../world/facilities';
@@ -136,7 +137,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -193,32 +194,80 @@ function validateDivisionHistory(state: SeasonState): void {
 }
 
 /** Step 3.5f: a season's European places list every played competition in order at its field size, each club once. */
-function validateEuropeShape(value: unknown, world: CareerWorld, path: string): SeasonEurope {
-  const europe = record(value, path, ['model', 'entrants', 'oneYear']);
-  if (europe.model !== 'places-1') fail(`${path}.model`, 'is unsupported');
+function validateEuropeShape(value: unknown, world: CareerWorld, path: string, version = SEASON_SCHEMA_VERSION): SeasonEurope {
+  const two = value !== null && typeof value === 'object' && (value as { model?: unknown }).model === 'places-2';
+  if (two && version < 83) fail(`${path}.model`, 'places-2 requires format 83 or later');
+  const optional = two ? (['held', 'decision', 'answers'] as const).filter(key => Object.hasOwn(value as object, key)) : [];
+  const europe = record(value, path, ['model', 'entrants', 'oneYear', ...optional]);
+  if (europe.model !== 'places-1' && !two) fail(`${path}.model`, 'is unsupported');
   const competitions = playedEuropeanCompetitions(world), entrants = array(europe.entrants, `${path}.entrants`, competitions.length), seen = new Set<string>();
   for (const [index, value] of entrants.entries()) {
-    const entry = record(value, `${path}.entrants[${index}]`, ['competitionId', 'clubIds']), competition = competitions[index]!;
+    const entry = record(value, `${path}.entrants[${index}]`, ['competitionId', 'clubIds', ...(two ? ['places'] : [])]), competition = competitions[index]!;
     if (entry.competitionId !== competition.id || !Array.isArray(entry.clubIds) || entry.clubIds.length !== competition.clubIds.length) fail(`${path}.entrants[${index}]`, 'must list the competition at its field size');
     for (const id of entry.clubIds as unknown[]) { if (typeof id !== 'string' || seen.has(id) || !world.clubs.some(club => club.id === id)) fail(`${path}.entrants[${index}].clubIds`, 'must list clubs of this world, each in one competition'); seen.add(id); }
+    if (two) {
+      const places = array(entry.places, `${path}.entrants[${index}].places`, (entry.clubIds as unknown[]).length);
+      if (places.length !== (entry.clubIds as unknown[]).length) fail(`${path}.entrants[${index}].places`, 'must give every entrant one place');
+      for (const [at, place] of places.entries()) validatePlace(place, `${path}.entrants[${index}].places[${at}]`);
+    }
   }
   const euroleague = competitions.findIndex(competition => competition.kind === 'euroleague');
   if (!Array.isArray(europe.oneYear) || (europe.oneYear as unknown[]).some(id => euroleague < 0 || !((entrants[euroleague] as { clubIds: unknown[] }).clubIds.includes(id)))) fail(`${path}.oneYear`, 'must list EuroLeague entrants');
+  if (two && Object.hasOwn(europe, 'held')) for (const [index, item] of boundedList(europe.held, `${path}.held`, 400).entries()) {
+    const held = record(item, `${path}.held[${index}]`, ['clubId', 'competitionId', 'type', 'until', 'reason']);
+    if (!world.clubs.some(club => club.id === held.clubId) || !competitions.some(competition => competition.id === held.competitionId) || !['licence', 'multi-year'].includes(held.type as string) || !(held.until === null || Number.isInteger(held.until)) || !['relegated', 'unpaid', 'declined', 'higher'].includes(held.reason as string)) fail(`${path}.held[${index}]`, 'must keep a licence or multi-year place of a club of this world');
+  }
+  if (two && Object.hasOwn(europe, 'answers')) for (const [index, item] of boundedList(europe.answers, `${path}.answers`, 6).entries()) {
+    const answer = record(item, `${path}.answers[${index}]`, ['clubId', 'competitionId', 'accept']);
+    if (typeof answer.clubId !== 'string' || !competitions.some(competition => competition.id === answer.competitionId) || typeof answer.accept !== 'boolean') fail(`${path}.answers[${index}]`, 'must answer an offered competition');
+  }
+  if (two && Object.hasOwn(europe, 'decision')) record(europe.decision, `${path}.decision`, ['seasonNumber', 'date', 'offers', 'lost', 'wildCards', 'chosen']);
   return europe as unknown as SeasonEurope;
 }
 
+const boundedList = (value: unknown, path: string, max: number): unknown[] => { if (!Array.isArray(value) || value.length > max) fail(path, 'must be a short list'); return value; };
+const PLACE_TYPES = ['licence', 'multi-year', 'route', 'wild-card', 'one-year', 'drop-down', 'league', 'title-holder', 'invitation'];
+/** Format 83: one entrant's place: a known type, an end season (none only for a permanent licence) and a reason. */
+function validatePlace(value: unknown, path: string): void {
+  const raw = value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const place = record(value, path, ['type', 'until', 'reason', ...(['rank', 'route'] as const).filter(key => Object.hasOwn(raw, key))]);
+  if (!PLACE_TYPES.includes(place.type as string) || (place.until === null) !== (place.type === 'licence') || place.until !== null && !Number.isInteger(place.until) || typeof place.reason !== 'string') fail(path, 'must name a place type, its end season and its reason');
+  if (Object.hasOwn(place, 'rank')) number(place.rank, `${path}.rank`, 1, 100);
+  if (Object.hasOwn(place, 'route')) { number(place.route, `${path}.route`, 1, 3); if (place.type !== 'route') fail(`${path}.route`, 'belongs to a EuroCup route place'); }
+}
+
+/** A season's places as its places day decided them (the manager's later answers are kept beside them). */
+const withoutAnswers = (europe: SeasonEurope | undefined): SeasonEurope | undefined => {
+  if (!europe || !Object.hasOwn(europe, 'answers')) return europe;
+  const { answers: _answers, ...rest } = europe;
+  return rest;
+};
+
 /** Step 3.5f: the opening season uses the world's lists; every later season's places follow from the season before. */
 function validateEuropeHistory(state: SeasonState, context: CareerPlayerContext): void {
-  const world = worldOf(state);
-  let expected = openingEurope(world);
+  const world = worldOf(state), two = state.europe?.model === 'places-2';
+  // Format 83: every season of a career uses one model; the places day rebuilds each season exactly, with the manager's answers.
+  let expected = two ? openingEuropeTwo(world) : openingEurope(world);
+  const extra = two ? { managedClubId: state.managedClubId, ...(state.career ? { career: state.career } : {}), board: state.board, ...(state.facilities ? { facilities: state.facilities } : {}), ...(state.economySeasons ? { economySeasons: state.economySeasons } : {}) } : {};
+  const answersUsed = (europe: SeasonEurope, decided: SeasonEurope, path: string) => {
+    for (const answer of europe.answers ?? []) if (!decided.decision?.offers.some(offer => offer.clubId === answer.clubId && offer.competitionId === answer.competitionId)) fail(`${path}.answers`, 'must answer a place offered to the club');
+  };
   for (const archive of state.history) {
     const path = `history[${archive.seasonNumber - 1}].europe`;
-    if (!sameData(archive.europe, expected)) fail(path, 'must follow from the opening lists and each completed season\'s orders and European results');
+    if (two !== (archive.europe?.model === 'places-2')) fail(path, 'must use the career\'s European places model');
+    if (!sameData(withoutAnswers(archive.europe), expected)) fail(path, 'must follow from the opening lists and each completed season\'s orders and European results');
     try {
-      expected = europeanPlacesAfter({ ...context, world, seed: state.seed, seasonNumber: archive.seasonNumber, history: state.history, fixtures: archive.fixtures as unknown as SeasonFixture[], clubs: state.clubs, europe: archive.europe!, ...(archive.divisions ? { divisions: archive.divisions } : {}), ...(state.background ? { background: state.background } : {}) });
+      expected = europeanPlacesAfter({ ...context, ...extra, world, seed: state.seed, seasonNumber: archive.seasonNumber, history: state.history, fixtures: archive.fixtures as unknown as SeasonFixture[], clubs: state.clubs, europe: archive.europe!, ...(archive.divisions ? { divisions: archive.divisions } : {}), ...(state.background ? { background: state.background } : {}) });
     } catch (error) { fail(path, `cannot decide the next season's places: ${error instanceof Error ? error.message : 'invalid results'}`); }
+    if (two) answersUsed(archive.europe!, expected, path);
   }
-  if (!sameData(state.europe, expected)) fail('europe', 'must follow from the opening lists and each completed season\'s orders and European results');
+  if (!sameData(withoutAnswers(state.europe), expected)) fail('europe', 'must follow from the opening lists and each completed season\'s orders and European results');
+  if (two && state.europe!.answers) {
+    if (state.status !== 'complete' || !state.managedClubId || state.europe!.answers.some(answer => answer.clubId !== state.managedClubId)) fail('europe.answers', 'are given by the manager\'s club once the season is complete');
+    let decided: SeasonEurope | undefined;
+    try { decided = europeanPlacesAfter({ ...context, ...extra, ...state, world } as unknown as SeasonState); } catch (error) { fail('europe.answers', `cannot decide the next season's places: ${error instanceof Error ? error.message : 'invalid results'}`); }
+    answersUsed(state.europe!, decided!, 'europe');
+  }
 }
 
 /** Whether a club was in the full world in that season (step 3.4d-2): staff appointments name a club of their own season. */
@@ -3293,7 +3342,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const economySeasons = Object.hasOwn(state, 'economySeasons') ? state.economySeasons as SeasonEconomy : undefined;
   const usesEurope = version >= 60 && Object.hasOwn(world, 'europeanPlaces');
   if (usesEurope !== Object.hasOwn(state, 'europe')) fail('europe', usesEurope ? 'must record this season\'s European places' : 'requires format 60 and a world with European places');
-  const seasonEurope = usesEurope ? validateEuropeShape(state.europe, world, 'europe') : undefined;
+  const seasonEurope = usesEurope ? validateEuropeShape(state.europe, world, 'europe', version) : undefined;
   // Format 53 listed identities only; from format 54 the next-division clubs are in the world.
   if (world.lowerDivisions?.some(entry => isMemberList(entry) !== (version >= 54))) fail('world.lowerDivisions', version >= 54 ? 'must list clubs of the world from format 54' : 'requires format 54 to list clubs of the world');
   // Format 50: careers whose leagues have postseasons record each season's divisions.
@@ -3450,7 +3499,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       // That season's own full-world clubs (step 3.4d-2).
       const archiveClubs = clubsForEmploymentYear(employment, archiveIndex + 1, worldRounds(world), careerContext);
       const archivedRosters = version >= 9 ? validateRosters(archive.rosters, `${path}.rosters`, archiveClubs, archiveIndex + 1, employment, worldRounds(world), careerContext) : undefined;
-      const archiveEurope = usesEurope ? validateEuropeShape(archive.europe, world, `${path}.europe`) : undefined;
+      const archiveEurope = usesEurope ? validateEuropeShape(archive.europe, world, `${path}.europe`, version) : undefined;
       const schedule = canonicalFixtures({ clubs: archiveClubs, fixtures: archive.fixtures, world, divisions: archiveDivisions, seed, ...(archiveEurope ? { europe: archiveEurope } : {}), ...(Object.hasOwn(state, 'national') ? { national: true } : {}) }, archiveIndex + 1, `${path}.fixtures`);
       const fixtures = array(archive.fixtures, `${path}.fixtures`, schedule.length);
       let hasPlayerStats: boolean | undefined;

@@ -104,8 +104,71 @@ export interface ArchivedAppearance { secondsPlayed: number; fouls: number; appe
 export interface ArchivedPlayerTotals { clubId: string; playerId: string; games: number; totals: Omit<PlayerStats, 'condition'> }
 export interface SeniorSeasonSummary { model: 'senior-totals-1'; players: ArchivedPlayerTotals[] }
 
-/** Format 60 (step 3.5f): a season's European entrants (the opening lists, then each season end's places) and the EuroLeague's one-year place holders. */
-export interface SeasonEurope { model: 'places-1'; entrants: { competitionId: string; clubIds: string[] }[]; oneYear: string[] }
+/**
+ * Format 60 (step 3.5f): a season's European entrants (the opening lists, then each season end's places) and the
+ * EuroLeague's one-year place holders. Format 83 (`places-2`, new careers): every entrant's place has a type and an end
+ * season (`entrants[].places`, aligned with `clubIds`), licences of clubs sitting out are kept (`held`), the places day
+ * that decided this season is recorded (`decision`) and the manager's answers to next season's offers (`answers`).
+ */
+export interface SeasonEurope {
+  model: 'places-1' | 'places-2';
+  entrants: { competitionId: string; clubIds: string[]; places?: EuropeanPlace[] }[];
+  oneYear: string[];
+  held?: HeldEuropeanPlace[];
+  decision?: EuropeanPlacesDecision;
+  answers?: EuropeanAnswer[];
+}
+
+/**
+ * Format 83: the kind of a club's European place. `licence` is permanent; `multi-year` ends after `until`; `route` is
+ * the EuroCup route to the EuroLeague (renewed by reaching the playoffs); `wild-card`, `one-year`, `drop-down`
+ * (leaving the EuroLeague), `league` (a country place), `title-holder` and `invitation` last one season.
+ */
+export type EuropeanPlaceType = 'licence' | 'multi-year' | 'route' | 'wild-card' | 'one-year' | 'drop-down' | 'league' | 'title-holder' | 'invitation';
+/** Format 83: why a club holds its place, for the Inbox and the explainer. */
+export type EuropeanPlaceReason =
+  | 'opening' | 'licence' | 'licence-back' | 'multi-year' | 'renewed' | 'route-kept' | 'route-champion' | 'route-runner-up'
+  | 'wild-card' | 'licence-renewed' | 'drop-down' | 'country-quota' | 'country-kept' | 'quota-score' | 'title-holder'
+  | 'invitation-drop' | 'invitation-score' | 'size-fill' | 'declined-higher';
+export interface EuropeanPlace {
+  type: EuropeanPlaceType;
+  /** The last season (season number) the place covers; null for a permanent licence. */
+  until: number | null;
+  reason: EuropeanPlaceReason;
+  /** The club's place in its final domestic ranking (1 = champion), for country places. */
+  rank?: number;
+  /** EuroCup route places: the route season this is (1-3). */
+  route?: number;
+}
+/** Format 83: a licence or multi-year place whose club sits out this season; it comes back when the club passes the licence check. */
+export interface HeldEuropeanPlace { clubId: string; competitionId: string; type: 'licence' | 'multi-year'; until: number | null; reason: 'relegated' | 'unpaid' | 'declined' | 'higher' }
+/** Format 83: the manager's answer to an offered place for next season (no answer means accept). */
+export interface EuropeanAnswer { clubId: string; competitionId: string; accept: boolean }
+/** Format 83: a wild-card score (0-1000 tenths of a point) and its parts, in tenths. */
+export interface WildCardScore { clubId: string; total: number; europe: number; domestic: number; arena: number; budget: number; market: number; history: number }
+export interface EuropeanOffer {
+  clubId: string;
+  competitionId: string;
+  type: EuropeanPlaceType;
+  outcome: 'accepted' | 'declined';
+  /** Why a computer club said no (`budget`, `arena`), or `manager` for the manager's answer. */
+  by?: 'budget' | 'arena' | 'manager';
+  /** The manager's club: whether the manager answered (otherwise the assistant accepted). */
+  answered?: boolean;
+}
+export interface LostEuropeanPlace { clubId: string; competitionId: string; reason: 'relegated' | 'unpaid' | 'ended' | 'route-limit' | 'route-playoffs' }
+/** Format 83: the places day that decided a season's places, at the end of the season before. */
+export interface EuropeanPlacesDecision {
+  seasonNumber: number;
+  date: string;
+  /** New EuroLeague places offered (route, renewal and wild cards) and every place offered to the manager's club. */
+  offers: EuropeanOffer[];
+  lost: LostEuropeanPlace[];
+  /** The ten best EuroLeague wild-card scores and the renewal reviews. */
+  wildCards: WildCardScore[];
+  /** The clubs given EuroLeague wild cards. */
+  chosen: string[];
+}
 
 export interface SeasonArchive {
   seasonNumber: number;
@@ -152,7 +215,8 @@ export interface DomesticDivisions {
 /** Format 78: the transfer and loan list with bids for the manager's players and loans (`recruitment-2`), and the scouting network (`scouting-2`). */
 /** Format 79: the richer play model for new careers' matches (`matchModel` 'plays-2', `src/engine/plays.ts`); older careers replay with the earlier possession actions. */
 /** Format 80: national teams, their competitions, FIBA windows that pause the domestic leagues with room, and national jobs (`national`, `src/world/national.ts`). */
-export const SEASON_SCHEMA_VERSION = 80;
+/** Format 83: European entry rules for new careers (`europe.model` 'places-2', `src/world/european-entry.ts`): place types with end seasons, the places day with the licence check, wild cards by score, declines and the board's European aim. */
+export const SEASON_SCHEMA_VERSION = 83;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

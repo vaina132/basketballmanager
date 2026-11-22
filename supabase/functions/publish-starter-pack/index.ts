@@ -7,6 +7,12 @@
 // 2026): `club_id` moves a player, `squad_status` 'left' removes him, and club `added_players` adds current players
 // with estimated abilities ('all-abilities'; the game lifts them to their club's level).
 //
+// Rating balance (owner decision, 22 November 2026; ./rating-balance.ts): abilities are lined up by position (a good
+// small forward and a good centre reach similar overall ratings, while each skill keeps its position's real profile for
+// the match engine) and blended with the average player of the same position and league when they rest on fewer than
+// 900 minutes. It applies to every pack this function builds from now on; `source.ratingBalance` records it.
+// scripts/real-data-rating-balance.mjs applies the same calculation offline to a published pack for a preview.
+//
 // It acts only on an authorised request: a pending, unexpired `publish-pack` row in `data_change_requests` (written
 // only by the service role or the owner's dashboard), which names the new version. `preview` returns the built pack
 // for checking with the game's own parser; `publish` uploads it only if its checksum equals the request's
@@ -14,6 +20,7 @@
 //
 //   POST /functions/v1/publish-starter-pack   body: { "request": <id>, "mode": "preview" | "publish" }
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { balanceRatings } from './rating-balance.ts';
 
 const VERSION = '2026.11-world-1', SEASON = '2026-27', OBJECT = 'real-pack.json';
 const ABILITIES = ['two_point', 'three_point', 'free_throw', 'passing', 'defense', 'rebounding', 'stamina'];
@@ -157,12 +164,14 @@ Deno.serve(async request => {
     // The same contents as the recorded pack, for checking that the database still rebuilds it exactly.
     const plain = buildPlayers(false), plainParts = assemble(plain);
     const recorded = await sha256(JSON.stringify({ format: 'basketball-manager-data-pack', formatVersion: 1, version: VERSION, season: SEASON, source, notice: 'Private evaluation data from API-SPORTS. Rights for publication or distribution are not cleared; do not upload or share.', competitions: plainParts.packCompetitions, clubs: plainParts.packClubs, players: plain }));
-    const packPlayers = buildPlayers(true), { packCompetitions, packClubs } = assemble(packPlayers);
+    const correctedPlayers = buildPlayers(true), { packCompetitions, packClubs } = assemble(correctedPlayers);
+    // Rating balance by position and minutes, on the finished squads and positions (squads do not depend on abilities).
+    const { players: packPlayers, summary: ratingBalance } = balanceRatings(correctedPlayers as any[], packCompetitions as any[]);
     const corrected = packPlayers.filter(player => player.profileEvidence);
     const profileCorrections = { model: 'profile-overrides-1', players: corrected.length, currentSquads: { moved: overrideRows.filter(row => row.field === 'club_id').length, left: overrideRows.filter(row => row.field === 'squad_status').length, added: clubRows.reduce((sum, row) => sum + row.value.value.length, 0) }, exactPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'official').length, reportedPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'provider').length, estimatedPositions: packPlayers.filter(player => player.estimated.includes('game_position')).length, note: 'Official EuroLeague/EuroCup registrations and official league and club roster pages; Wikipedia rosters and player articles (CC BY-SA 4.0) where no official page gives an exact position, shown as reported; a broad role (Guard, Forward) keeps the exact position an estimate.' };
-    const pack = { format: 'basketball-manager-data-pack', formatVersion: 1, version: ask.version, season: SEASON, source: { ...source, profileCorrections }, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026). Player positions, heights, birth dates and names corrected from official competition and club sources where available (16 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
+    const pack = { format: 'basketball-manager-data-pack', formatVersion: 1, version: ask.version, season: SEASON, source: { ...source, profileCorrections, ratingBalance }, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026). Player positions, heights, birth dates and names corrected from official competition and club sources where available (16 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
     const checksum = await sha256(JSON.stringify(pack));
-    const summary = { version: pack.version, checksum, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, profileCorrections, cut, matchesRecordedChecksum: recorded === versionRow.checksum, replaces: existingVersion };
+    const summary = { version: pack.version, checksum, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, profileCorrections, ratingBalance: { model: ratingBalance.model, changedPlayers: ratingBalance.changedPlayers }, cut, matchesRecordedChecksum: recorded === versionRow.checksum, replaces: existingVersion };
     const text = JSON.stringify({ checksum, writtenAt: new Date().toISOString(), pack });
     if (mode === 'preview') return new Response(JSON.stringify({ status: 'preview', ...summary, envelope: JSON.parse(text) }), { headers: { 'Content-Type': 'application/json' } });
     if (checksum !== ask.expected_sha256) return json({ status: 'refused', error: 'The built pack does not match the requested checksum; preview and check it again.', ...summary }, 409);

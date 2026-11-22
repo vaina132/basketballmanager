@@ -62,7 +62,7 @@ export function NationalTeamPage({ season, busy, onSelect, onResign, onOpenCompe
         <div><span>Contract</span><strong>To the {tournamentShort(job.untilSeason)}</strong></div>
         <div><span>Salary</span><strong>{formatEuros(job.salary)} a season</strong></div>
       </div>
-      {isUnemployed(season) && <p className="muted national-panel-body">Without a club, your national games are played for you with the squad you pick here.</p>}
+      {isUnemployed(season) && <p className="muted national-panel-body">Without a club, you still coach your national games: Continue stops for them and they open in the Match center.</p>}
       <div className="national-actions"><button className="button small" onClick={() => { if (globalThis.confirm?.(`Resign as head coach of ${team.name}? Your club job is not affected.`) ?? true) onResign() }} disabled={busy}>Resign</button></div>
     </section>
 

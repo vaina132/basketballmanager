@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
-import { createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
+import { createSeason, managedSide, NEW_CAREER_SYSTEMS, resignManager } from '../src/world/season';
+import { isUnemployed, NO_CLUB } from '../src/world/career-rules';
+import { continueAction } from '../src/world/continue-step';
 import { runContinueStep } from '../src/world/continue-step';
 import { continueUntilStop } from '../src/ui/continue-run';
 import { getInboxItems } from '../src/ui/inbox-items';
@@ -117,5 +119,28 @@ describe('national windows in play (format 80)', () => {
     // A changed diagnosis is refused.
     const tampered = { ...next, injuries: next.injuries.map(injury => injury.id === own.id ? { ...injury, returnOn: '2027-01-30' } : injury) };
     expect(() => parseSeason(serializeSeason(tampered))).toThrow(/Invalid season save/);
+  }, 600_000);
+
+  it('an unemployed manager plays his national games live: Continue stops for them in the Match center', () => {
+    const career = createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS });
+    let state = resignManager(career, NO_CLUB);
+    expect(isUnemployed(state)).toBe(true);
+    state = offerNationalJob(state, 'nation-tur');
+    state = acceptNationalOffer(state, state.national!.offers.find(offer => offer.status === 'open')!.id);
+    // A week before the window, Continue opens his game instead of simulating the week.
+    state = playUntil(state, current => current.round === 12);
+    expect(continueAction(state).kind).toBe('national');
+    const run = continueUntilStop(state);
+    expect(run.stop?.kind).toBe('match');
+    expect(run.stop?.page).toBe('match');
+    expect(run.state.national!.activeFixtureId).toMatch(/^nq-s1-/);
+    expect(parseSeason(serializeSeason(run.state)).national!.activeFixtureId).toBe(run.state.national!.activeFixtureId);
+    const opened: string[] = [];
+    state = playUntil(run.state, current => current.round === 13, current => opened.push(current.national!.activeFixtureId!));
+    const own = state.national!.competitions[0]!.fixtures.filter(fixture => fixture.window === 1 && (fixture.homeTeamId === 'nation-tur' || fixture.awayTeamId === 'nation-tur'));
+    expect(own.every(fixture => fixture.result)).toBe(true);
+    expect(new Set([run.state.national!.activeFixtureId!, ...opened])).toEqual(new Set(own.map(fixture => fixture.id)));
+    expect(isUnemployed(state)).toBe(true);
+    expect(parseSeason(serializeSeason(state)).national).toEqual(state.national);
   }, 600_000);
 });

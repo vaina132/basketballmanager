@@ -36,7 +36,8 @@ export function continueAction(state: SeasonState): ContinueAction {
     // Format 80: the manager's national game (FIBA window) is played before the week closes: open it, then record it.
     const national = state.national?.activeMatch;
     if (national) return national.status !== 'finished' || national.requiredSubstitutions.length ? { kind: 'match' } : { kind: 'national' };
-    if (closesWeek(state) && !isUnemployed(state) && dueManagerNationalGame(state)) return { kind: 'national' };
+    // Without a club a step plays the whole week, so his national game comes first (owner, 22 November 2026: played live).
+    if ((closesWeek(state) || isUnemployed(state)) && dueManagerNationalGame(state)) return { kind: 'national' };
     return { kind: 'round' };
   }
   // Format 80: the manager's summer tournament game, once opened in the offseason, is finished and recorded first.

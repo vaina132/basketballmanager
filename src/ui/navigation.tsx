@@ -103,9 +103,12 @@ export function mainNavigation({ career, national = false }: { career: boolean; 
   ]
 }
 
-/** Without a club: the desk with job offers, the inbox and the world's competitions (Calendar and Europe are its tabs). */
-export function unemployedNavigation(national = false): NavItem[][] {
-  return [[ITEMS.home, ITEMS.inbox], [ITEMS.season, ...(national ? [ITEMS.national] : [])]]
+/**
+ * Without a club: the desk with job offers, the inbox and the world's competitions (Calendar and Europe are its tabs).
+ * Format 80: the national team's page with a national job, and the Match center while his national game is open.
+ */
+export function unemployedNavigation(national = false, nationalMatch = false): NavItem[][] {
+  return [[ITEMS.home, ITEMS.inbox], [...(nationalMatch ? [ITEMS.match] : []), ITEMS.season, ...(national ? [ITEMS.national] : [])]]
 }
 
 /** The left menu's buttons; a thin rule separates the groups. */

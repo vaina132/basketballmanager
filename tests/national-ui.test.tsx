@@ -5,6 +5,7 @@ import { acceptNationalOffer, offerNationalJob } from '../src/world/national';
 import { NationalTeamPage, NationalJobCard } from '../src/ui/NationalTeamPage';
 import { NationalWorkspace } from '../src/ui/NationalWorkspace';
 import { InboxWorkspace } from '../src/ui/InboxWorkspace';
+import { unemployedNavigation } from '../src/ui/navigation';
 import { nationalWorld } from './helpers/national-world';
 
 const world = nationalWorld();
@@ -35,5 +36,10 @@ describe('national team screens (format 80)', () => {
     expect((html.match(/data-national-player=/g) ?? []).length).toBe(12);
     expect(html).toContain('Resign');
     expect(renderToStaticMarkup(<NationalJobCard season={hired} onOpen={noop} />)).toContain('You still coach');
+  });
+
+  it('gives a manager without a club the Match center while his national game is open', () => {
+    expect(unemployedNavigation(true, true).flat().map(item => item.id)).toEqual(['home', 'inbox', 'match', 'season', 'national']);
+    expect(unemployedNavigation(true).flat().map(item => item.id)).toEqual(['home', 'inbox', 'season', 'national']);
   });
 });

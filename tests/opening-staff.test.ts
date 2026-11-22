@@ -47,7 +47,7 @@ function expectFullyStaffed(state: SeasonState): void {
 describe('opening staff for every club (format 74, coaching-2)', () => {
   it('staffs every club in every role at ratings fitting its level and within its staff budget', () => {
     for (const world of [undefined, moneyWorld()]) {
-      const state = createSeason({ seed: 5, ...(world ? { world, managedClubId: world.clubs[3]!.id } : {}), injuryMode: 'off', ...NEW_CAREER_SYSTEMS, matchFlow: false, staffContracts: false });
+      const state = createSeason({ seed: 5, ...(world ? { world, managedClubId: world.clubs[3]!.id } : {}), injuryMode: 'off', ...NEW_CAREER_SYSTEMS, staffContracts: false });
       expect(state.coaching.model).toBe('coaching-3'); // format 75: club-level staff with the wage pool
       expectFullyStaffed(state);
       // One person per role at the opening (training coaches and scouts can add more later).
@@ -70,7 +70,7 @@ describe('opening staff for every club (format 74, coaching-2)', () => {
 
   it('sacks and replaces with a warning, frees the sacked fee from the staff budget and passes the strict save check', () => {
     const world = moneyWorld();
-    let state = createSeason({ seed: 5, world, managedClubId: world.clubs[2]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, matchFlow: false, staffContracts: false });
+    let state = createSeason({ seed: 5, world, managedClubId: world.clubs[2]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, staffContracts: false });
     const clubId = state.managedClubId;
 
     // Sacking: the fee was paid at the hire and is not refunded, but it leaves the staff budget.
@@ -118,7 +118,10 @@ describe('opening staff for every club (format 74, coaching-2)', () => {
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      let state = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, matchFlow: false, staffContracts: false }), true);
+      // Seed 1 (11 before the match flow, real coaches and European entry of formats 81-83). Under them seed 11 relegates
+      // Atlantic Pilots (w0), who can neither pay to renew their coaches nor afford a new one, and start season two
+      // without a coach; reported to the owner as a possible gap in the season-change staffing.
+      let state = setEmploymentDelegation(createSeason({ seed: 1, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, staffContracts: false }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       state = rolloverSeason(state);

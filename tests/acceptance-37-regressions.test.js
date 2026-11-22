@@ -39,9 +39,9 @@ describe('step 3.7 acceptance careers in the strict save check', () => {
   it('accepts sponsor exits and second-round offers when the final was settled before the last reserved week', () => {
     const world = greekWorld();
     expect(() => validateWorld(world)).not.toThrow();
-    // Seed 11 (5 before the full new-career rules of 22 November 2026, 11 before the planned starting five of 16 November
+    // Seed 14 (11 before head coaches steered computer clubs, format 86; 5 before the full new-career rules of 22 November 2026, 11 before the planned starting five of 16 November
     // 2026): the final ends in a sweep, so the season's last week has no game; sponsors leave at the season end.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 11, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ world, seed: 14, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
     while (state.status === 'active') state = play(state);
     const rounds = seasonRounds(state);
     expect(state.fixtures.some(fixture => fixture.round === rounds)).toBe(false);

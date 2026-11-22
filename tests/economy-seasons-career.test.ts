@@ -191,7 +191,9 @@ describe('a manager appointed by a club promoted from the next division', () => 
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      let state = setEmploymentDelegation(createSeason({ seed: 36, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+      // Stopgap (format 86): this rare path (a dismissal after season two, then a promoted club's offer) is kept without
+      // steering head coaches; re-seed it with them before release.
+      let state = setEmploymentDelegation(createSeason({ seed: 36, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, coachSteering: false }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       const priced = getPostseasons(state, 1)[0]!.outcome.relegated.map(entry => entry.clubId).find((id): id is string => id !== null)!;

@@ -214,10 +214,10 @@ describe('a sponsor leaving after relegation', () => {
   let complete: SeasonState;
   beforeAll(() => {
     const world = twoDivisionWorld();
-    // Seed 2 (1 before the match flow, real coaches and European entry of formats 81-83, when seed 1 also had a sponsor
+    // Seed 3 (2 before head coaches steered computer clubs, format 86; 1 before the match flow, real coaches and European entry of formats 81-83, when seed 1 also had a sponsor
     // leave a club that was not relegated; 9 before the manager's next game started from the planned five, 16 November
     // 2026): sponsors leave relegated clubs, and only them.
-    complete = setEmploymentDelegation(createSeason({ seed: 2, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+    complete = setEmploymentDelegation(createSeason({ seed: 3, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
     while (complete.status === 'active') complete = advance(complete);
   }, 240_000);
 

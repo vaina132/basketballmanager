@@ -3862,7 +3862,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Format 86: each computer side runs its head coach's rotation, exactly as derived from the coach and its players' ages.
   for (const side of SIDES) {
     let expected: ReturnType<typeof computerCoachRotation> = null;
-    try { expected = computerCoachRotation(state as unknown as SeasonState, match[side], { seasonNumber, round: active.round, date: active.date }); } catch { fail('coaches', 'must name each club\'s head coach through the board\'s changes'); }
+    // The match's own manager side (after a move at a season end, his former club's final match) runs no coach's rotation.
+    try { expected = computerCoachRotation({ ...(state as unknown as SeasonState), managedClubId: matchClub }, match[side], { seasonNumber, round: active.round, date: active.date }); } catch { fail('coaches', 'must name each club\'s head coach through the board\'s changes'); }
     if (!sameData(match.coachRotation?.[side] ?? null, expected)) fail(`activeMatch.coachRotation.${side}`, 'must follow the side\'s head coach in careers where head coaches steer, and only then');
   }
   // Format 74: only the manager chooses circles on the court picture; computer clubs play listed positions.

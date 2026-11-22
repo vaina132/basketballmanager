@@ -18,7 +18,6 @@ import { getInboxItems } from '../src/ui/inbox-items';
 import { SeasonEndChoice } from '../src/ui/SeasonEndChoice';
 import { UnemployedDesk } from '../src/ui/UnemployedDesk';
 import { asCareer1, asCareer2 } from './helpers/career-rules';
-import { withLegacyYouthCompetition } from './helpers/legacy-season';
 // @ts-expect-error: a plain JavaScript helper shared with the European competition tests (no type declarations).
 import { placesWorld } from './helpers/europe-worlds.js';
 
@@ -46,6 +45,7 @@ const resignedAt = (seed: number, week: number) => { let state = start(seed); wh
 // flow, real coaches and European entry of formats 81-83: seed 59 (14) dismisses after week 7 of season 2, seed 56 (3)
 // ends Danube Lynx's season Under pressure, and seed 27 (50) opens Danube Lynx's job after week 7 (6).
 const DISMISSAL_SEED = 59, DISMISSAL_CLUB = 'danube-lynx', DISMISSAL_WEEK = 7;
+const DECLINE_SEED = 102, DECLINE_CLUB = 'atlantic-pilots', DECLINE_SEASON = 3, DECLINE_OFFER = 'aegean-waves';
 const RESIGN_WEEK = 3, SEASON_END_SEED = 56, SEASON_END_JOB = 'danube-lynx', MID_SEASON_SEED = 27, MID_SEASON_JOB = 'danube-lynx', JOB_WEEK = 8;
 let beforeDismissal: SeasonState, unemployed: SeasonState, seasonEnd: SeasonState, offseason: SeasonState;
 
@@ -101,39 +101,37 @@ describe('declining every offer', () => {
 });
 
 describe('declining an offer at a season end', () => {
-  // Seed 14 (Aegean Waves): season 2 ends Under pressure (29) and Alpine Stags, also replacing their coach, offer their job.
-  // Needs a new seed since the manager's next game starts from the planned five instead of the closing five (16 November
-  // 2026): this scenario (a dismissal at the end of season 2 and another club replacing its coach whose requirement the
-  // reputation reaches) is rare. None found for Aegean Waves (seeds 1-43, 61-66, 101-107), Rhine Falcons (1-12, 31-44),
-  // Danube Lynx (1-13), Alpine Stags (1-5) or Atlantic Pilots (1-6). Searched again under the full new-career rules
-  // (22 November 2026): Aegean Waves, Rhine Falcons, Alpine Stags, Atlantic Pilots and Adriatic Comets (1-30 each) and
-  // Danube Lynx (1-25) end season 2 with a dismissal six times, but never while another club replaces its coach, so
-  // never with an offer. Skipped until a seed is found; the other tests here
-  // cover leaving without a club after a mid-season dismissal and taking a job from the offseason job market.
-  it.skip('leaves the manager without a club for the offseason, with the declined job still open', () => {
-    // Seed 14 was found before recurring youth injuries (format 72), which change academy development and so later
-    // seasons; this career-rules scenario keeps the original youth model (tests/youth-competition.test.ts covers recurrence).
-    let state = withLegacyYouthCompetition(start(14, 'aegean-waves'));
-    while (state.status === 'active') state = step(state);
-    state = rolloverSeason(throughMarket(state));
+  // Seed 14 (Aegean Waves, season 2 ending Under pressure while Alpine Stags also replaced their coach) was lost when the
+  // manager's next game started from the planned five (16 November 2026): a season-end dismissal while another club is
+  // replacing its coach and the manager's reputation reaches its requirement is rare in the six-club test league (no seed
+  // among Aegean Waves 1-43, 61-66 and 101-107, the other five clubs 1-30, Danube Lynx 1-25 under the earlier rules).
+  // Seed 102 (Atlantic Pilots), found under the match flow, real coaches and European entry of formats 81-83 by searching
+  // every club to the end of season 3: season 3 ends Under pressure (season 2 does not) while Aegean Waves, also
+  // replacing their coach, offer their job (requirement 25, reputation 45).
+  it('leaves the manager without a club for the offseason, with the declined job still open', () => {
+    let state = start(DECLINE_SEED, DECLINE_CLUB);
+    for (let season = 1; season < DECLINE_SEASON; season += 1) {
+      while (state.status === 'active') state = step(state);
+      state = rolloverSeason(throughMarket(state));
+    }
     while (state.round < 10) state = step(state);
     const finalDay = finish(state), outlook = previewSeasonEnd(finalDay)!;
-    expect(outlook).toMatchObject({ dismissed: true, unemployment: true, offers: [{ clubId: 'alpine-stags' }] });
+    expect(outlook).toMatchObject({ seasonNumber: DECLINE_SEASON, dismissed: true, unemployment: true, offers: [{ clubId: DECLINE_OFFER }] });
     const dialog = renderToStaticMarkup(<SeasonEndChoice season={finalDay} outlook={outlook} onChoose={noop} onClose={noop} />);
     expect(dialog).toMatch(/id="season-end-unemployed"[^>]*>Decline all and continue without a club/);
-    expect(dialog).toContain('data-join-club="alpine-stags"');
+    expect(dialog).toContain(`data-join-club="${DECLINE_OFFER}"`);
     const declined = advanceSeason(finalDay, { moveTo: NO_CLUB });
-    expect(declined.career.moves).toEqual([expect.objectContaining({ seasonNumber: 2, phase: 'end', reason: 'dismissed', fromClubId: 'aegean-waves', toClubId: NO_CLUB })]);
+    expect(declined.career.moves).toEqual([expect.objectContaining({ seasonNumber: DECLINE_SEASON, phase: 'end', reason: 'dismissed', fromClubId: DECLINE_CLUB, toClubId: NO_CLUB })]);
     // The former club's final match stays the manager's last match; both clubs replace their coach.
     expect([declined.status, declined.activeFixtureId, declined.activeMatch?.status ?? null]).toEqual(['complete', finalDay.activeFixtureId, finalDay.activeMatch ? 'finished' : null]);
-    expect(declined.board.restarts!.slice(-2).map(item => [item.clubId, item.coach, item.phase])).toEqual([['alpine-stags', 'ai', 'end'], ['aegean-waves', 'ai', 'end']]);
+    expect(declined.board.restarts!.slice(-2).map(item => [item.clubId, item.coach, item.phase])).toEqual([[DECLINE_OFFER, 'ai', 'end'], [DECLINE_CLUB, 'ai', 'end']]);
     roundTrip(declined);
     const offseasonState = throughMarket(declined);
-    expect(jobMarket(offseasonState)!.vacancies).toEqual([expect.objectContaining({ clubId: 'alpine-stags', opened: 'end', offered: true })]);
-    const appointed = acceptJob(offseasonState, 'alpine-stags');
+    expect(jobMarket(offseasonState)!.vacancies).toEqual([expect.objectContaining({ clubId: DECLINE_OFFER, opened: 'end', offered: true })]);
+    const appointed = acceptJob(offseasonState, DECLINE_OFFER);
     expect(appointed.career.moves.map(move => move.reason)).toEqual(['dismissed', 'appointed']);
     roundTrip(appointed);
-  }, 120_000);
+  }, 180_000);
 });
 
 describe('seasons without a club', () => {

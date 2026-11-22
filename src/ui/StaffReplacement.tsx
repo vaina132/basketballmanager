@@ -3,7 +3,7 @@ import type { SeasonState } from '../domain/season'
 import { quoteStaffReplacement, replacementWarning, roleStaff, STAFF_ROLE_LABELS, staffReplacementSpending, type StaffMemberSummary, type StaffRole } from '../world/staff-roster'
 import { staffHireSpending, type StaffSpendingCheck } from '../world/staff-policy'
 import { Icon } from './Icon'
-import { usesStaffContracts } from '../world/staff-contracts'
+import { contractUntil, usesStaffContracts } from '../world/staff-contracts'
 import { formatEuros } from './money-format'
 
 /** Candidate lists open only when the player asks; a replacement names the person who leaves (format 74 staff page). */
@@ -14,6 +14,22 @@ export interface StaffCandidateControls {
   /** The contract the player chose to replace from the staff overview, if any. */
   replaceContractId?: string | null
   onReplaceStaff?: (role: StaffRole, contractId: string, personId: string) => void
+  /** Replace this person: opens the role's candidates with him as the one who leaves (the staff list's Replace). */
+  onReplace?: (contractId: string) => void
+}
+
+/**
+ * One staff list (owner decision, 22 November 2026): the role cards are the only list of current staff, so each card
+ * carries what the old "Current staff" table had: the contract's last season and a Replace action.
+ */
+export function StaffContractEnd({ season, personId }: { season: SeasonState; personId: string }) {
+  if (!usesStaffContracts(season)) return null
+  const until = contractUntil(season, personId, season.managedClubId)
+  return <small className="staff-contract-end" data-contract-until={until}>Until season {until}</small>
+}
+export function ReplaceStaffButton({ season, name, contractId, onReplace, busy = false }: { season: SeasonState; name: string; contractId: string; onReplace?: (contractId: string) => void; busy?: boolean }) {
+  if (!onReplace) return null
+  return <button className="text-button" onClick={() => onReplace(contractId)} disabled={busy || season.status === 'complete'} aria-label={`Replace ${name}`} data-replace-staff={contractId}>Replace</button>
 }
 
 /** Opens a role's candidates, then focuses its search field once the list is shown. */

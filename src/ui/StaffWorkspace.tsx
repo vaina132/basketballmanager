@@ -25,8 +25,7 @@ import { Icon } from './Icon'
 import './staff-workspace.css'
 import { formatEuros } from './money-format'
 import { staffFee } from '../world/economy'
-import { StaffOverview } from './StaffOverview'
-import { replacementTarget, revealCandidates, ShowCandidatesButton, SpendingAfterHire, StaffReplacementOffer, type StaffCandidateControls } from './StaffReplacement'
+import { ReplaceStaffButton, StaffContractEnd, replacementTarget, revealCandidates, ShowCandidatesButton, SpendingAfterHire, StaffReplacementOffer, type StaffCandidateControls } from './StaffReplacement'
 import { sackingTerms, STAFF_ROLE_LABELS, roleStaff, type StaffRole } from '../world/staff-roster'
 import { usesClubLevelStaff } from '../world/staff-levels'
 import { usesStaffContracts } from '../world/staff-contracts'
@@ -41,8 +40,6 @@ interface StaffWorkspaceProps extends ScoutStaffProps, FitnessStaffProps, Physio
   onAssignment: (contractId: string, focus: TrainingFocus) => void
   onRenewal: (contractId: string, renew: boolean) => void
   onOpenTraining: () => void
-  /** Sacking from the staff overview (format 74): the person leaves; the paid fee is not refunded. */
-  onSackStaff?: (role: StaffRole, contractId: string) => void
   busy?: boolean
   /** Format 76: hires carry the contract length chosen on this page (1, 2 or 3 seasons). */
   onHireScout: (scoutId: string, seasons?: number) => void
@@ -89,16 +86,16 @@ export function StaffWorkspace(props: StaffWorkspaceProps) {
   const replacingHere = replacing?.role === props.role ? replacing : null
   const outgoing = replacingHere ? roleStaff(props.season, replacingHere.role).find(member => member.contractId === replacingHere.contractId) : undefined
   const length = contracts ? seasons : undefined
-  const role = { ...props, showCandidates: candidatesFor === props.role, onShowCandidates: () => { setCandidatesFor(props.role); setReplacing(null) }, replaceContractId: replacingHere?.contractId ?? null,
+  const role = { ...props, showCandidates: candidatesFor === props.role, onShowCandidates: () => { setCandidatesFor(props.role); setReplacing(null) }, replaceContractId: replacingHere?.contractId ?? null, onReplace: (contractId: string) => pick(props.role, contractId),
     onHire: (coachId: string, focus: TrainingFocus) => props.onHire(coachId, focus, length), onHireScout: (id: string) => props.onHireScout(id, length), onHireFitness: (id: string) => props.onHireFitness(id, length),
     onHirePhysio: (id: string) => props.onHirePhysio(id, length), onHireAssistant: (id: string) => props.onHireAssistant(id, length), onHireYouthCoach: (id: string) => props.onHireYouthCoach(id, length),
     onReplaceStaff: props.onReplaceStaff ? (staffRole: StaffRole, contractId: string, personId: string) => { setReplacing(null); setCandidatesFor(null); props.onReplaceStaff!(staffRole, contractId, personId, length) } : undefined }
-  return <div className="staff-workspace"><StaffOverview season={props.season} busy={props.busy} onReplace={(staffRole, contractId) => pick(staffRole, contractId)} onHire={staffRole => pick(staffRole, null)} onSack={props.onSackStaff} />
+  return <div className="staff-workspace">
     {outgoing && <section className="staff-replacing panel" aria-live="polite"><Icon name="swap" size={16} /><span>Replacing <strong>{outgoing.name}</strong> as {STAFF_ROLE_LABELS[outgoing.role].toLowerCase()}: choose a candidate below.</span><button className="text-button" onClick={() => setReplacing(null)} disabled={props.busy}>Cancel</button></section>}
     <section className="staff-role-selector panel" aria-label="Staff roles"><div className="segmented" role="group" aria-label="Choose staff role"><button id="staff-role-coaches" aria-pressed={props.role === 'coaches'} className={props.role === 'coaches' ? 'selected' : ''} onClick={() => props.onRoleChange('coaches')} disabled={props.busy}><Icon name="training" size={15} />Training coaches <span>{getClubCoaching(props.season.coaching, props.season.managedClubId).length}/3</span></button><button id="staff-role-scouts" aria-pressed={props.role === 'scouts'} className={props.role === 'scouts' ? 'selected' : ''} onClick={() => props.onRoleChange('scouts')} disabled={props.busy}><Icon name="search" size={15} />Scouts <span>{getClubScouts(props.season).length}/3</span></button><button id="staff-role-fitness" aria-pressed={props.role === 'fitness'} className={props.role === 'fitness' ? 'selected' : ''} onClick={() => props.onRoleChange('fitness')} disabled={props.busy}><Icon name="shield" size={15} />Fitness coach <span>{getClubFitnessCoach(props.season) ? 1 : 0}/1</span></button><button id="staff-role-physio" aria-pressed={props.role === 'physio'} className={props.role === 'physio' ? 'selected' : ''} onClick={() => props.onRoleChange('physio')} disabled={props.busy}><Icon name="medical" size={15} />Physio <span>{getClubPhysio(props.season) ? 1 : 0}/1</span></button><button id="staff-role-assistant" aria-pressed={props.role === 'assistant'} className={props.role === 'assistant' ? 'selected' : ''} onClick={() => props.onRoleChange('assistant')} disabled={props.busy}><Icon name="court" size={15} />Assistant coach <span>{getClubAssistant(props.season) ? 1 : 0}/1</span></button><button id="staff-role-youth" aria-pressed={props.role === 'youth'} className={props.role === 'youth' ? 'selected' : ''} onClick={() => props.onRoleChange('youth')} disabled={props.busy}><Icon name="people" size={15} />Youth coach <span>{getClubYouthCoach(props.season) ? 1 : 0}/1</span></button></div>{contracts && <label className="staff-contract-length">Contract length<select id="staff-contract-length" value={seasons} onChange={event => setSeasons(Number(event.target.value))} disabled={props.busy}>{[1, 2, 3].map(value => <option key={value} value={value}>{value === 1 ? '1 season' : `${value} seasons`}</option>)}</select></label>}</section>{props.role === 'scouts' ? <ScoutStaff {...role} /> : props.role === 'fitness' ? <FitnessStaff {...role} /> : props.role === 'physio' ? <PhysioStaff {...role} /> : props.role === 'assistant' ? <AssistantStaff {...role} /> : props.role === 'youth' ? <YouthCoachStaff {...role} /> : <TrainingStaff {...role} />}</div>
 }
 
-function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRenewal, onOpenTraining, busy = false, showCandidates = true, onShowCandidates, replaceContractId, onReplaceStaff }: StaffWorkspaceProps) {
+function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRenewal, onOpenTraining, busy = false, showCandidates = true, onShowCandidates, replaceContractId, onReplaceStaff, onReplace }: StaffWorkspaceProps) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<CoachSort>('rating-desc')
   const [candidatePage, setCandidatePage] = useState(0)
@@ -186,10 +183,10 @@ function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRe
         <div className="staff-roster">{contracts.map(contract => {
           const coach = coachById(contract.coachId)
           return <article className="staff-owned-card" key={contract.id} data-contract-id={contract.id}>
-            <div className="staff-owned-identity"><CoachPortrait coach={coach} color={club.color} size={80} /><div><span className="staff-role">Training coach</span><h3>{coach.name}</h3><StaffStars rating={coachRating(coach)} /><span className="staff-card-fee">{money(feeOf(coach.fee))} <small>/ season</small></span></div></div>
+            <div className="staff-owned-identity"><CoachPortrait coach={coach} color={club.color} size={80} /><div><span className="staff-role">Training coach</span><h3>{coach.name}</h3><StaffStars rating={coachRating(coach)} /><span className="staff-card-fee">{money(feeOf(coach.fee))} <small>/ season</small></span><StaffContractEnd season={season} personId={coach.id} /></div></div>
             <CoachSkills coach={coach} compact />
             <label className="staff-assignment-control">Assignment<select data-coach-assignment={contract.id} aria-label={coach.name + ' assignment'} value={contract.focus} onChange={event => onAssignment(contract.id, event.target.value as TrainingFocus)} disabled={busy}><FocusOptions /></select></label>
-            <div className="staff-contract-controls"><label className="staff-renew"><input type="checkbox" data-coach-renewal={contract.id} checked={contract.renew} onChange={event => onRenewal(contract.id, event.target.checked)} disabled={busy} aria-label={'Renew ' + coach.name + ' next season'} />Renew next season</label><button className="text-button" data-release-coach={contract.id} onClick={event => { releaseTrigger.current = event.currentTarget; setReleaseId(contract.id) }} aria-label={'Release ' + coach.name} disabled={busy}>Release</button></div>
+            <div className="staff-contract-controls"><label className="staff-renew"><input type="checkbox" data-coach-renewal={contract.id} checked={contract.renew} onChange={event => onRenewal(contract.id, event.target.checked)} disabled={busy} aria-label={'Renew ' + coach.name + ' next season'} />Renew next season</label><ReplaceStaffButton season={season} name={coach.name} contractId={contract.id} onReplace={onReplace} busy={busy} /><button className="text-button" data-release-coach={contract.id} onClick={event => { releaseTrigger.current = event.currentTarget; setReleaseId(contract.id) }} aria-label={'Release ' + coach.name} disabled={busy}>Release</button></div>
             <details className="staff-owned-skills" data-coach-skills={contract.id}><summary aria-label={coach.name + ' coaching skills'}>Full skill profile</summary><CoachSkills coach={coach} /><small>Signed on Matchday {contract.startedRound}</small></details>
           </article>
         })}{Array.from({ length: Math.max(0, MAX_COACHES - contracts.length) }, (_, index) => <button className="staff-vacancy" key={'vacancy-' + index} onClick={() => revealCandidates(onShowCandidates, 'coach-search', 'staff-recruitment-title')} disabled={busy}><span className="staff-vacancy-image" aria-hidden="true"><Icon name="staff" size={46} /><span>+</span></span><span><strong>Vacant position</strong><small>Training coach</small><span className="staff-vacancy-action">Find a coach<Icon name="chevron" size={14} /></span></span></button>)}</div>

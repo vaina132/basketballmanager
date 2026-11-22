@@ -36,3 +36,5 @@
 .head-coaches .generated-tag { margin-left: 6px; }
 .manager-coaching-body { padding: 4px 16px 4px; }
 .desk-fixture-team > div > .desk-opponent-coach { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
+.manager-coaching-help { padding: 0 16px 4px; }
+.manager-coaching-help h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #a3abb8); margin: 10px 0 6px; }

@@ -109,7 +109,7 @@ describe('FIBA Official Basketball Rules 2026, Appendix D (the labelled default,
 
   it('ranks a career\'s live and archived tables by the rule, with real byes, strict saves and the rule kept after rollover', () => {
     // Level 7 career rules (`career-1`): new careers (format 63) protect the first season, and this test needs a dismissal in it.
-    let state = setEmploymentDelegation(asCareer1(createSeason({ world: fibaWorld(), seed: 5, ...NEW_CAREER_SYSTEMS, matchPlays: false, presidents: false, injuryMode: 'off', calmPlayingTime: false })), true);
+    let state = setEmploymentDelegation(asCareer1(createSeason({ world: fibaWorld(), seed: 10, ...NEW_CAREER_SYSTEMS, matchPlays: false, presidents: false, injuryMode: 'off', calmPlayingTime: false })), true);
     const north = state.world.domesticLeagues[0];
     state = play(state);
     // Week one: in the five-club league one club had a bye and has 0 points, below the two clubs that lost (1 point each).
@@ -131,7 +131,7 @@ describe('FIBA Official Basketball Rules 2026, Appendix D (the labelled default,
     }
     const table = getStandings(state);
     expect(table.every(entry => entry.rankingTie !== 'unresolved')).toBe(true);
-    // This seed's manager (seed 5; 11 before the planned starting five of 16 November 2026, 3 before the relationships-2
+    // This seed's manager (seed 10; 5 before head coaches steered computer clubs (format 86), 11 before the planned starting five of 16 November 2026, 3 before the relationships-2
     // rules of format 66 and 3141 before the match calibration of sprint 4) is dismissed and joins another club of this
     // world. Strict checks once accepted only clubs of the built-in league here, so such a career could not be saved.
     expect(state.career.moves).toMatchObject([{ seasonNumber: 1, fromClubId: 'w0-rhine-falcons', reason: 'dismissed' }]);

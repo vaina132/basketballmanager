@@ -6,7 +6,8 @@ import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import { getCareerPlayer } from './player-catalog';
 import { contractForSeason, effectiveContractsForSeason, getAvailablePlayers, getClubContractSummary, getContractedClubs, MIN_ROSTER_SIZE, quotePlayerContract } from './employment-policy';
-import { scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
+import { coachRecruitmentRating, scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
+import { clubStyleFit } from './head-coaches';
 import { evaluateNegotiation } from './negotiations-policy';
 import { appendNegotiationResponse, getLatestNegotiation } from './negotiations';
 import { finishMarketWindow, prepareMarketWindow, scheduleMarketRecruitment, submitMarketOffer } from './market';
@@ -99,7 +100,9 @@ function rankCandidates(state: SeasonState, clubId: string, players: readonly Pl
     const position = getCareerPlayer(state, contract.playerId).position;
     positions.set(position, (positions.get(position) ?? 0) + 1);
   }
-  const assessed = (player: Player): number => state.scouting.enabledSince ? scoutingRecruitmentRating(state, clubId, player.id) : Object.values(state.lifecycle?.enabledSince ? scoutingActualAttributes(state, player.id) : player.attributes).reduce((sum, skill) => sum + skill, 0);
+  // Format 86: a club whose head coach steers prefers players who fit his style (`clubStyleFit`).
+  const fit = clubStyleFit(state, clubId), fitted = fit ? coachRecruitmentRating(state, clubId, fit) : null;
+  const assessed = (player: Player): number => fitted ? fitted(player.id) : state.scouting.enabledSince ? scoutingRecruitmentRating(state, clubId, player.id) : Object.values(state.lifecycle?.enabledSince ? scoutingActualAttributes(state, player.id) : player.attributes).reduce((sum, skill) => sum + skill, 0);
   return [...players].sort((left, right) => (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || assessed(right) - assessed(left) || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
 }
 

@@ -478,7 +478,8 @@ function coachTimeout(ctx: Ctx): void {
   const run = state.score[scoring] - low, behind = state.score[scoring] - own;
   // Format 81: coaches stop shorter runs and draw up plays over the last two minutes (about three timeouts a team a game).
   const late = ctx.flow ? state.period >= 4 && state.clockSeconds <= FLOW.lateSeconds && behind >= 1 && behind <= FLOW.lateBehind : state.period >= 4 && state.clockSeconds <= 40 && behind >= 1 && behind <= 3;
-  if (remaining < (late ? 1 : keep) || !late && run < (ctx.flow ? FLOW.timeoutRun : PLAYS.timeoutRun)) return;
+  // Format 86: a head coach's Tactics moves how long a run he lets go (a good tactician stops it a point sooner).
+  if (remaining < (late ? 1 : keep) || !late && run < (ctx.flow ? FLOW.timeoutRun : PLAYS.timeoutRun) + (state.coachRotation?.[side]?.timeoutRun ?? 0)) return;
   kit.emit(state, { type: 'command', side, text: late ? `${state[side].name} call time to set up the next play.` : `${state[side].name} call time to stop the ${run}-0 run.` });
   state.timeoutRequested[side] = true;
 }

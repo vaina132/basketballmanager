@@ -43,7 +43,21 @@ interface CareerSummary {
   /** Format 80: the manager's career earnings (national salary, euro cents) and what was paid, newest first. */
   earnings?: { total: number; payments: { date: string; source: string; amount: number }[] } | null
   /** Format 82: the manager's coaching attributes, each season's changes (newest first) and his reputation. */
-  coaching?: { attributes: CoachAttributes; seasons: ManagerCoachSeason[]; reputation: number; bonus: number } | null
+  coaching?: { attributes: CoachAttributes; seasons: ManagerCoachSeason[]; reputation: number; bonus: number; help?: { practice: number; morale: number } | null } | null
+}
+
+const signed = (value: number, unit = '') => value === 0 ? `no change` : `${value > 0 ? '+' : '−'}${Math.abs(value)}${unit}`
+
+/** Format 86: what the manager's own attributes do for his club, small and bounded (computer clubs' coaches follow the same rules). */
+function ManagerCoachingHelp({ attributes, help }: { attributes: CoachAttributes; help: { practice: number; morale: number } }) {
+  return <div className="manager-coaching-help" data-manager-coaching-help>
+    <h3>How your attributes help</h3>
+    <dl className="career-start-details">
+      <dt>Development {attributes.development}</dt><dd>Your players' training: {signed(help.practice, '%')} progress.</dd>
+      <dt>Motivation {attributes.motivation}</dt><dd>Squad morale: {signed(help.morale)}.</dd>
+      <dt>Other attributes</dt><dd>You choose tactics, the rotation and training yourself. Other clubs' head coaches use theirs.</dd>
+    </dl>
+  </div>
 }
 
 /** The Manager profile's coaching attributes (owner, 22 November 2026): 1-20, rising and falling with the career. */
@@ -53,6 +67,7 @@ function ManagerCoaching({ coaching }: { coaching: NonNullable<CareerSummary['co
     <header className="career-start-panel-heading"><h2 id="manager-coaching-title">Your head coach profile</h2><strong>Overall {coachOverall(coaching.attributes)}/20</strong></header>
     <div className="manager-coaching-body"><CoachAttributeBars attributes={coaching.attributes} changes={latest?.changes} /></div>
     <p className="career-start-subnote">Reputation {coaching.reputation}/100{coaching.bonus ? ` (head coach attributes ${coaching.bonus > 0 ? '+' : '−'}${Math.abs(coaching.bonus)})` : ''}. Your attributes change a little each season: results against the board's hopes, trophies, young players' progress and dismissals. At most two points up and two down a season.</p>
+    {coaching.help && <ManagerCoachingHelp attributes={coaching.attributes} help={coaching.help} />}
     {coaching.seasons.length ? <dl className="career-start-details">{coaching.seasons.slice(0, 5).map(season => <Fragment key={season.seasonNumber}><dt>Season {season.seasonNumber}</dt><dd>{season.reasons.length ? season.reasons.join(' ') : 'No change.'}</dd></Fragment>)}</dl> : <p className="career-start-empty">Your first change comes at the end of this season.</p>}
   </section>
 }

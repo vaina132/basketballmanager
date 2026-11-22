@@ -16,6 +16,8 @@ import { seasonVerdict } from './board-consequences';
 import { getPostseasons, isRegularFixture } from './season';
 import { getEuropeanCompetitions } from './europe';
 import { isYouthPlayer } from './presidents';
+import { COACH_STEERING_MODEL, coachRotation, isSteeringYoung, moraleImpact, styleFit, type SteeringCoach } from './coach-steering';
+import type { CoachRotation, SkillAttributes } from '../domain/types';
 
 /**
  * Format 82 (owner, 22 November 2026, item E): real head coaches for new real-club careers. Every club of the world has
@@ -313,6 +315,82 @@ export function computerCoachTactics(state: PlacesContext & Partial<Pick<SeasonS
   return coachTactics(coach, five.length ? five : team.players.slice(0, 5));
 }
 
+// Format 86: head coaches steer their clubs (`src/world/coach-steering.ts`).
+
+/** Whether this career's head coaches steer training, rotation and signings (format 86, `coaches-2`). */
+export const steersCoaches = (state: Partial<Pick<SeasonState, 'coaches'>>): boolean => state.coaches?.model === COACH_STEERING_MODEL;
+
+type SteeringContext = PlacesContext & Partial<Pick<SeasonState, 'coaches'>>;
+
+/**
+ * Every club's head coach before a career point (changes recorded before it count), for the steering rules: a person's
+ * attributes in that season with his style, or the manager's attributes in that season (no style: he decides himself).
+ * Undefined in careers without steering. A club without a head coach (a promoted club before its first change) is absent.
+ */
+const steeringCache = new WeakMap<SeasonCoaches, WeakMap<readonly BoardRestart[], Map<string, Readonly<Record<string, SteeringCoach>>>>>();
+export function steeringCoaches(context: SteeringContext, point: { seasonNumber: number; round: number; phase: BoardRestart['phase'] }): Readonly<Record<string, SteeringCoach>> | undefined {
+  if (!steersCoaches(context) || !context.coaches) return undefined;
+  // Read for every player's morale and every game: cached per career coaches, board changes and point (all immutable).
+  const restarts = context.board?.restarts ?? NO_RESTARTS, key = `${worldOf(context).id}|${careerPointKey(point.seasonNumber, point.round, point.phase)}`;
+  let byRestarts = steeringCache.get(context.coaches);
+  if (!byRestarts) { byRestarts = new WeakMap(); steeringCache.set(context.coaches, byRestarts); }
+  let cache = byRestarts.get(restarts);
+  if (!cache) { cache = new Map(); byRestarts.set(restarts, cache); }
+  const known = cache.get(key);
+  if (known) return known;
+  const result = buildSteeringCoaches(context as SteeringContext & { coaches: SeasonCoaches }, point);
+  cache.set(key, result);
+  return result;
+}
+
+function buildSteeringCoaches(context: SteeringContext & { coaches: SeasonCoaches }, point: { seasonNumber: number; round: number; phase: BoardRestart['phase'] }): Readonly<Record<string, SteeringCoach>> {
+  const world = worldOf(context), pool = coachWorld(world), places = coachPlaces(context, point), manager = managerAttributes(context.coaches, point.seasonNumber);
+  const result: Record<string, SteeringCoach> = {};
+  for (const [clubId, coachId] of Object.entries(places.clubs)) {
+    if (coachId === MANAGER_COACH) { result[clubId] = { attributes: manager, style: null }; continue; }
+    const coach = pool.coaches.get(coachId);
+    if (coach) { const now = coachInSeason(coach, point.seasonNumber, world.startDate); result[clubId] = { attributes: now.attributes, style: now.style }; }
+  }
+  return result;
+}
+
+/**
+ * The head coaches during the training that follows week `afterRound`'s games: changes made before that week ends
+ * count; a change before the next week's games (an in-season review, a resignation) comes after this training.
+ */
+export function trainingCoaches(context: SteeringContext, seasonNumber: number, afterRound: number): Readonly<Record<string, SteeringCoach>> | undefined {
+  return steeringCoaches(context, { seasonNumber, round: afterRound + 1, phase: 'season' });
+}
+
+/** A club's head coach at the current week (changes before this week's games count only from the next week), for morale. */
+export function clubMoraleImpact(state: SteeringContext & Pick<SeasonState, 'seasonNumber' | 'round'>, clubId: string): number {
+  const coach = steeringCoaches(state, { seasonNumber: state.seasonNumber, round: state.round, phase: 'season' })?.[clubId];
+  return coach ? moraleImpact(coach.attributes) : 0;
+}
+
+/**
+ * A computer side's rotation by its head coach for a game of week `round` on `date` (format 86), or null (the manager,
+ * no coach, older careers). Coach changes before that week's games count; later ones (season end) do not.
+ */
+export function computerCoachRotation(state: SteeringContext & Partial<Pick<SeasonState, 'managedClubId' | 'academy'>>, team: Team, game: { seasonNumber: number; round: number; date: string }): CoachRotation | null {
+  if (!steersCoaches(state) || team.id === state.managedClubId) return null;
+  const coach = steeringCoaches(state, { seasonNumber: game.seasonNumber, round: game.round, phase: 'end' })?.[team.id];
+  if (!coach?.style) return null;
+  return coachRotation({ attributes: coach.attributes, style: coach.style }, team.players.filter(player => isSteeringYoung(state, player.id, game.date)).map(player => player.id));
+}
+
+/**
+ * How well a player fits a computer club's head coach (format 86), in the club's rating units; null when the club's
+ * signings follow no coach (the manager's club, no coach, older careers). `skill` reads what the club knows.
+ */
+export function clubStyleFit(state: SteeringContext & Partial<Pick<SeasonState, 'managedClubId' | 'academy' | 'date'>>, clubId: string): ((playerId: string, skill: (key: keyof SkillAttributes) => number) => number) | null {
+  if (!steersCoaches(state) || clubId === state.managedClubId) return null;
+  const coach = clubHeadCoach(state, clubId);
+  if (!coach || coach === MANAGER_COACH) return null;
+  const date = state.date ?? worldOf(state).startDate;
+  return (playerId, skill) => styleFit(coach, skill, isSteeringYoung(state, playerId, date));
+}
+
 // The manager's own attributes.
 
 /** The manager's starting attributes: 10 each, moved by age (under 35 or 50 and over) and a seeded -1/0/+1 spread. */
@@ -322,8 +400,9 @@ export function managerStartAttributes(manager: ManagerProfile | null, seed: num
   return Object.fromEntries(COACH_ATTRIBUTES.map(key => [key, clamp(10 + (ageShift[key] ?? 0) + (coachHash(`manager|${seed}|${key}`) % 3) - 1, 1, 20)])) as CoachAttributes;
 }
 
-export function createCoaches(manager: ManagerProfile | null, seed: number, date: string): SeasonCoaches {
-  return { model: COACHES_MODEL, manager: { start: managerStartAttributes(manager, seed, date), seasons: [] } };
+/** Format 86: `coaches-2` when head coaches also steer training, rotation and signings (option `coachSteering`). */
+export function createCoaches(manager: ManagerProfile | null, seed: number, date: string, steering = false): SeasonCoaches {
+  return { model: steering ? COACH_STEERING_MODEL : COACHES_MODEL, manager: { start: managerStartAttributes(manager, seed, date), seasons: [] } };
 }
 
 /** The manager's attributes after the seasons recorded before `beforeSeason` (all of them by default). */

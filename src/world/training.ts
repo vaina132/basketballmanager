@@ -16,6 +16,7 @@ import { seasonRounds } from './career-world';
 import { EXTRA_MATCH, storedExtras } from './extra-attributes';
 import type { CareerWorld } from '../domain/world';
 import { potentialPointCap, trainingHeadroom, type PotentialContext } from './potential';
+import { COACH_STEERING, coachTrainingPlan, isSteeringYoung, practicePercent, type SteeringCoach } from './coach-steering';
 
 export const TRAINING_ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 export const TRAINING_FOCUSES = ['balanced', ...TRAINING_ATTRIBUTES] as const;
@@ -143,6 +144,11 @@ export interface TrainingWeekInput {
    * day (whole minutes played) costs condition by `nationalGameCost`.
    */
   nationalDuty?: Readonly<Record<string, Readonly<Record<string, number | null>>>>;
+  /**
+   * Format 86 (`coaches-2`): each club's head coach during this training (`trainingCoaches`). A person's style plans a
+   * computer club's delegated week (`coachTrainingPlan`); every head coach's Development adds a little practice.
+   */
+  headCoaches?: Readonly<Record<string, SteeringCoach>>;
 }
 
 /** One authoritative weekly pass updates every club; it consumes no match RNG. */
@@ -165,7 +171,10 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
     const registeredIds = new Set(registered.players.map(player => player.id));
     if (registeredIds.size !== registered.players.length || club.players.length !== registeredIds.size || club.players.some(player => !registeredIds.has(player.id))) throw new Error('Training must use the players registered for its completed interval.');
     report.rosterIds[club.id] = registered.id;
-    const plan = resolveTrainingPlan(training.plans[club.id]!, club, conditions);
+    const resolved = resolveTrainingPlan(training.plans[club.id]!, club, conditions), coach = input.headCoaches?.[club.id];
+    const room = (playerId: string, skill: keyof SkillAttributes) => { const player = club.players.find(item => item.id === playerId)!; return trainingPointCap({ ...input, training }, player, skill) - (training.points[playerId]?.[skill] ?? 0) >= COACH_STEERING.training.room; };
+    const plan = coach?.style && resolved.delegated ? coachTrainingPlan({ attributes: coach.attributes, style: coach.style }, resolved, club, conditions, afterRound, id => isSteeringYoung(input, id, fromDate), room) : resolved;
+    const practicePlus = coach ? practicePercent(coach.attributes) : 0;
     report.plans[club.id] = plan;
     for (const player of club.players) {
       const individual = plan.individual[player.id]!;
@@ -194,6 +203,8 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       const ordinaryPracticePoints = budget;
       if (agingActive) budget = Math.floor(weightedBudget / 10_000);
       const aging = agingActive ? { ordinaryPracticePoints, adjustedPracticePoints: budget, rateBasisPoints: ordinaryPracticePoints > 0 ? Math.floor(weightedBudget / ordinaryPracticePoints) : ageTrainingRate(input, player.id, toDate) } : undefined;
+      // Format 86: the head coach's Development (-3% to +4%), before the player's own Discipline.
+      if (practicePlus) budget = Math.max(0, Math.floor(budget * (100 + practicePlus) / 100));
       // Discipline (stored in careers started with the five abilities): 2% more practice per point above 10, less below.
       if (player.attributes.discipline !== undefined) budget = disciplinedPractice(budget, player.attributes.discipline);
       const desired = emptyPoints(), gains = emptyPoints(), coachingGains = emptyPoints(), previous = training.points[player.id];

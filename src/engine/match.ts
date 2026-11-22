@@ -1,6 +1,6 @@
 ﻿/** Deterministic FIBA-2024 rules subset. Probability and fatigue parameters remain uncalibrated; injury rates follow research (sprint 4). */
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../data/fictional-teams';
-import type { CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, PlayModel, Position, PossessionPlay, Side, SkillAttributes, Tactics, Team } from '../domain/types';
+import type { CoachRotation, CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, PlayModel, Position, PossessionPlay, Side, SkillAttributes, Tactics, Team } from '../domain/types';
 import { nextRandom, normalizeSeed } from './random';
 import { injuryPhrase, injuryRiskTotal, isInjuryKind, isMatchInjuryKind, pickInjuryKind, type InjuryKind, type InjuryRisk } from '../domain/injuries';
 import { actionScene, freeThrowPosition, passScene, reboundScene, setupScene, shotScene, turnoverScene } from './court-events';
@@ -201,25 +201,46 @@ export function preTipoffLineup(state: MatchState, side: Side): { five: string[]
  */
 function rotationNeeds(state: MatchState, side: Side): Map<string, number> {
   const starters = startingFive(state, side), unavailable = new Set(state.preExistingInjuries ?? []);
-  const ranked = state[side].players.filter(p => !unavailable.has(p.id)).map(player => ({ player, quality: overallRating(player.attributes, player.position) + (starters.has(player.id) ? ROTATION.starterBonus : 0), base: overallRating(player.attributes, player.position) }))
+  // Format 86: a computer side's head coach shapes the rotation (`CoachRotation`); without one the usual values apply.
+  const coach = state.coachRotation?.[side], young = new Set(coach?.young ?? []), trust = (id: string) => young.has(id) ? coach!.youthBonus : 0;
+  const ranked = state[side].players.filter(p => !unavailable.has(p.id)).map(player => ({ player, quality: overallRating(player.attributes, player.position) + (starters.has(player.id) ? ROTATION.starterBonus : 0) + trust(player.id), base: overallRating(player.attributes, player.position) + trust(player.id) }))
     .sort((a, b) => b.quality - a.quality || a.player.id.localeCompare(b.player.id));
   const core = ranked.slice(0, 10), average = core.reduce((sum, entry) => sum + entry.base, 0) / Math.max(1, core.length);
-  const minutes = ranked.map((entry, rank) => Math.max(0, (ROTATION.plannedMinutes[rank] ?? 0) + ROTATION.qualityMinutes * (entry.base - average)));
+  const minutes = ranked.map((entry, rank) => Math.max(0, (ROTATION.plannedMinutes[rank] ?? 0) + (coach ? coachDepthMinutes(coach.depth, rank) : 0) + ROTATION.qualityMinutes * (entry.base - average)));
   const total = minutes.reduce((sum, value) => sum + value, 0) || 1, played = elapsed(state), margin = Math.abs(state.score.home - state.score.away);
   const garbage = state.period === 4 && state.clockSeconds <= ROTATION.garbageSeconds && margin >= ROTATION.garbageMargin;
-  const closing = !garbage && state.period >= 4 && state.clockSeconds <= ROTATION.closingSeconds && margin <= ROTATION.closingMargin;
+  const closing = !garbage && state.period >= 4 && state.clockSeconds <= (coach?.closingSeconds ?? ROTATION.closingSeconds) && margin <= ROTATION.closingMargin;
   const closers = new Set(ranked.filter(entry => isPlayerEligible(state, entry.player.id)).slice(0, 5).map(entry => entry.player.id));
   const foulLimit = state.period === 1 ? 2 : state.period === 2 ? 3 : 4;
+  const rest = coach?.restCondition ?? ROTATION.restCondition, foulTrouble = coach?.foulTrouble ?? ROTATION.foulTrouble;
+  const rotationSize = ROTATION.rotationSize + (coach ? Math.sign(coach.depth) * Number(Math.abs(coach.depth) >= 2) : 0);
   const needs = new Map<string, number>(state[side].players.map(p => [p.id, -100]));
   ranked.forEach((entry, rank) => {
     const stats = state.stats[entry.player.id]!;
     const deficit = (minutes[rank]! / total * 12_000 * played / 2400 - stats.secondsPlayed) / 60;
-    const fatigue = Math.max(0, ROTATION.restCondition - stats.condition) * ROTATION.fatigueWeight * (closing ? .5 : 1);
-    const fouls = stats.fouls >= foulLimit && !closing ? ROTATION.foulTrouble : 0;
-    const role = closing ? (closers.has(entry.player.id) ? ROTATION.closingBonus : 0) : garbage ? (rank >= ROTATION.garbageRank ? ROTATION.garbageBonus : rank < 5 ? -ROTATION.garbageBonus : 0) : rank >= ROTATION.rotationSize ? -ROTATION.depthPenalty : 0;
+    const fatigue = Math.max(0, rest - stats.condition) * ROTATION.fatigueWeight * (closing ? .5 : 1);
+    const fouls = stats.fouls >= foulLimit && !closing ? foulTrouble : 0;
+    const role = closing ? (closers.has(entry.player.id) ? ROTATION.closingBonus : 0) : garbage ? (rank >= ROTATION.garbageRank ? ROTATION.garbageBonus : rank < 5 ? -ROTATION.garbageBonus : 0) : rank >= rotationSize ? -ROTATION.depthPenalty : 0;
     needs.set(entry.player.id, deficit - fatigue - fouls + role);
   });
   return needs;
+}
+/**
+ * Format 86: planned minutes moved by a head coach's bench depth (-2 short to +2 deep): the starters give or take 1.2
+ * minutes each per step, ranks six to nine one minute each and the tenth man two.
+ */
+function coachDepthMinutes(depth: number, rank: number): number {
+  return depth * (rank < 5 ? -1.2 : rank < 9 ? 1 : rank === 9 ? 2 : 0);
+}
+/** A head coach's rotation within its supported values, naming players of its own team (format 86). */
+export function validCoachRotation(value: unknown, team: Team): value is CoachRotation {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const rotation = value as Record<string, unknown>, keys = ['depth', 'youthBonus', 'young', 'restCondition', 'foulTrouble', 'swapThreshold', 'closingSeconds', 'timeoutRun'];
+  if (Object.keys(rotation).length !== keys.length || keys.some(key => !Object.hasOwn(rotation, key))) return false;
+  const within = (key: string, min: number, max: number) => typeof rotation[key] === 'number' && Number.isFinite(rotation[key]) && (rotation[key] as number) >= min && (rotation[key] as number) <= max;
+  const own = new Set(team.players.map(p => p.id)), young = rotation.young;
+  return within('depth', -2, 2) && Number.isInteger(rotation.depth) && within('youthBonus', -2, 9) && Number.isInteger(rotation.youthBonus) && Array.isArray(young) && new Set(young).size === young.length && young.every(id => typeof id === 'string' && own.has(id))
+    && within('restCondition', 89, 95) && within('foulTrouble', 3, 6.5) && within('swapThreshold', 2.2, 3.6) && within('closingSeconds', 120, 240) && within('timeoutRun', -1, 1) && Number.isInteger(rotation.timeoutRun);
 }
 /** Up to ROTATION.maxSwaps changes whose gain in rotation need clears the threshold, best first. */
 function automaticSwaps(state: MatchState, side: Side): [Player, Player][] {
@@ -230,7 +251,7 @@ function automaticSwaps(state: MatchState, side: Side): [Player, Player][] {
     let best: { out: Player; incoming: Player; gain: number } | null = null;
     for (const out of court) for (const incoming of bench) {
       const gain = need.get(incoming.id)! - need.get(out.id)! - positionGap(out, incoming) * ROTATION.positionStep;
-      if (gain > ROTATION.swapThreshold && (!best || gain > best.gain)) best = { out, incoming, gain };
+      if (gain > (state.coachRotation?.[side]?.swapThreshold ?? ROTATION.swapThreshold) && (!best || gain > best.gain)) best = { out, incoming, gain };
     }
     if (!best) break;
     const chosen = best;
@@ -745,6 +766,8 @@ export interface FixtureMatchOptions {
   computerCoach?: readonly Side[];
   /** Format 85 (new careers): a game at one venue, played without home-court advantage. Omit for a home game. */
   neutralVenue?: true;
+  /** Format 86 (new careers): the automatic rotation of a computer side as its head coach runs it. Omit for the usual rotation. */
+  coachRotation?: Partial<Record<Side, CoachRotation>>;
 }
 
 function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team, away: Team, options: FixtureMatchOptions = {}): MatchState {
@@ -776,6 +799,7 @@ function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team,
   if (risks.length) state.injuryRisk = Object.fromEntries(risks.map(([id, risk]) => [id, { ...risk }]));
   if (options.playModel) { state.playModel = options.playModel; state.computerCoach = SIDES.filter(side => options.computerCoach?.includes(side)); }
   if (options.neutralVenue) state.neutralVenue = true;
+  if (options.coachRotation && SIDES.some(side => options.coachRotation![side])) state.coachRotation = Object.fromEntries(SIDES.flatMap(side => options.coachRotation![side] ? [[side, { ...options.coachRotation![side]!, young: [...options.coachRotation![side]!.young] }]] : []));
   state.possession = draw(state) < 0.5 ? 'home' : 'away'; state.possessionArrow = other(state.possession);
   // The development league retains the existing two-player default threshold.
   // No live action or fabricated court exposure precedes a pre-match default.
@@ -830,6 +854,11 @@ export function createFixtureMatch(seed: number, home: Team, away: Team, options
   }
   if (options.injuryMode !== undefined && !['standard', 'reduced', 'off'].includes(options.injuryMode)) throw new Error('Choose a valid fixture injury setting.');
   if (options.neutralVenue !== undefined && options.neutralVenue !== true) throw new Error('A neutral venue is marked true or omitted.');
+  if (options.coachRotation !== undefined) {
+    const rotations = options.coachRotation;
+    if (rotations === null || typeof rotations !== 'object' || Array.isArray(rotations) || Object.keys(rotations).some(side => side !== 'home' && side !== 'away')) throw new Error('A head coach\'s rotation must name a team.');
+    for (const side of SIDES) { const rotation = rotations[side]; if (rotation !== undefined && !validCoachRotation(rotation, side === 'home' ? home : away)) throw new Error('A head coach\'s rotation must stay within the supported values for players of its own team.'); }
+  }
   if (options.playModel !== undefined && options.playModel !== 'plays-2' && options.playModel !== 'plays-3') throw new Error('Choose a supported play model.');
   if (options.computerCoach !== undefined && (!options.playModel || !Array.isArray(options.computerCoach) || options.computerCoach.some(side => side !== 'home' && side !== 'away'))) throw new Error('Computer coaches need the play model and must name teams.');
   if (options.slots !== undefined) {

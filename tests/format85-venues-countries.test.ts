@@ -64,7 +64,8 @@ describe('format 85: no home advantage at one venue', () => {
 describe('format 85: a Primera FEB season and the promoted clubs that follow', () => {
   let finalStage: SeasonState | undefined, complete: SeasonState, next: SeasonState;
   beforeAll(() => {
-    let state = setEmploymentDelegation(createSeason({ seed: 3, world: packWorld, managedClubId: 'feb-3', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true);
+    // Seed 4 since format 86 (head coaches steer computer clubs): feb-3 reaches the one-venue final stage.
+    let state = setEmploymentDelegation(createSeason({ seed: 4, world: packWorld, managedClubId: 'feb-3', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true);
     while (state.status === 'active') {
       if (!finalStage && state.fixtures.find(fixture => fixture.id === state.activeFixtureId)?.neutral) finalStage = state;
       state = play(state);

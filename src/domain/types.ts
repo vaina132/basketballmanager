@@ -142,6 +142,30 @@ export interface PossessionPlay {
   matchups: { attackerId: string; defenderId: string }[];
 }
 
+/**
+ * Format 86: a computer side's head coach's automatic rotation (`src/world/coach-steering.ts`, `coachRotation`): how deep
+ * the bench plays, how much young players are trusted, when tired or foul-troubled players sit, how quickly he changes,
+ * when his best five close a tight game and how soon he stops a run with a timeout. Derived from the coach; never random.
+ */
+export interface CoachRotation {
+  /** -2 (short bench: the starters play more) to +2 (deep bench). */
+  depth: number;
+  /** Rating points added to the young players (`young`) when the rotation ranks its players; negative: veterans first. */
+  youthBonus: number;
+  /** The side's players aged 22 or under on the game's date. */
+  young: string[];
+  /** Condition below which a player wants rest (usual 92). */
+  restCondition: number;
+  /** Minutes of need against a player in foul trouble (usual 5). */
+  foulTrouble: number;
+  /** Minutes of need a change must gain (usual 3): a good tactician changes sooner. */
+  swapThreshold: number;
+  /** Seconds left in which the best five close a tight game (usual 180). */
+  closingSeconds: number;
+  /** Added to the points of an unanswered run that bring a timeout (-1 a good tactician, +1 a poor one). */
+  timeoutRun: number;
+}
+
 /** Serializable, deterministic action-boundary snapshot. No wall-clock state. */
 export interface MatchState {
   schemaVersion: 2;
@@ -153,6 +177,8 @@ export interface MatchState {
   computerCoach?: Side[];
   /** Format 85: a game at one venue (Primera FEB's final stage, Final Fours, BCL qualification): no home-court advantage. */
   neutralVenue?: true;
+  /** Format 86: how a computer side's head coach runs its automatic rotation (absent: the usual rotation). */
+  coachRotation?: Partial<Record<Side, CoachRotation>>;
   /** Frozen when the career round is prepared; later conversations never rewrite a match. */
   morale?: { model: 'morale-1'; eventCount: number; values: Record<string, number> };
   seed: number;

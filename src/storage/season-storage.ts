@@ -134,12 +134,14 @@ import { PACKED_SAVE_FORMAT, packSeasonForSave, unpackSavedSeason } from './save
 import { isNationalFixtureId, nationalDutyDays } from '../world/national';
 import { validateNationalShape, withEarlierNationalFields } from './national-validation';
 import { validateCoachesShape } from './coaches-validation';
+import { COACH_STEERING_MODEL, type SteeringCoach } from '../world/coach-steering';
+import { computerCoachRotation, trainingCoaches } from '../world/head-coaches';
 
 export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -3372,7 +3374,7 @@ function migrateTrainingCoaching(training: SeasonTraining): SeasonTraining {
 }
 
 /** Reconcile the retained week; older development remains bounded state, not invented history. */
-function validateTraining(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], injuries: SeasonInjury[], seasonNumber: number, round: number, coaching?: SeasonCoaching, rosters?: readonly RosterSnapshot[], fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), version = 30, context: CareerPlayerContext & LifecycleContext & Partial<Pick<SeasonState, 'seed'>> & { facilities?: SeasonFacilities; restWeeks?: SeasonState['restWeeks']; national?: SeasonState['national'] } = {}): { training: SeasonTraining; conditionsAfter: Record<string, number> | null } {
+function validateTraining(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], injuries: SeasonInjury[], seasonNumber: number, round: number, coaching?: SeasonCoaching, rosters?: readonly RosterSnapshot[], fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), version = 30, context: CareerPlayerContext & LifecycleContext & Partial<Pick<SeasonState, 'seed'>> & { facilities?: SeasonFacilities; restWeeks?: SeasonState['restWeeks']; national?: SeasonState['national']; trainingCoaches?: (seasonNumber: number, afterRound: number) => Readonly<Record<string, SteeringCoach>> | undefined } = {}): { training: SeasonTraining; conditionsAfter: Record<string, number> | null } {
   // Sprint 4: each player's hidden potential, derived from the career seed, limits his training points.
   const seed = context.seed ?? fail('seed', 'is required to check training against player potential');
   const fields = record(value, 'training', ['model', 'enabledSince', 'plans', 'points', 'lastWeek']);
@@ -3451,8 +3453,10 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
       pointsBefore[player.id] = previous;
     }
   }
+  // Format 86: each club's head coach during this training, from the opening coaches and the board's changes before it.
+  const headCoaches = context.trainingCoaches?.(seasonNumber, afterRound);
   const replayed = processTrainingWeek({
-    ...(context.world ? { world: context.world } : {}), seed,
+    ...(context.world ? { world: context.world } : {}), seed, ...(headCoaches ? { headCoaches } : {}),
     training: { ...training, plans: appliedPlans, points: pointsBefore, lastWeek: null }, clubs: intervalClubs, conditions: conditionsBefore,
     // Final-round injuries happen after the last training day and must not be replayed into it.
     injuries: injuries.filter(injury => injury.occurredOn <= (report.fromDate as string)),
@@ -3523,6 +3527,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 62 && Object.hasOwn(world, 'economy')) fail('world.economy', 'requires format 62 or later');
   // Format 85: neutral venues and next-division countries are rules of new careers only.
   for (const key of ['neutralVenues', 'nextDivisionCountries'] as const) if (version < 85 && Object.hasOwn(world, key)) fail(`world.${key}`, 'requires format 85 or later');
+  // Format 86: head coaches who steer their clubs (`coaches-2`) are a rule of new careers only; checked before anything they change.
+  if (version < 86 && state.coaches !== null && typeof state.coaches === 'object' && (state.coaches as { model?: unknown }).model === COACH_STEERING_MODEL) fail('coaches.model', 'needs format 86 or later to steer clubs');
   // Format 63: the career-2 rules (protected first season, fresh confidence, mid-season moves, resignations) need it.
   const careerModel = state.career !== null && typeof state.career === 'object' ? (state.career as { model?: unknown }).model : undefined;
   if (version < 63 && (careerModel === 'career-2' || state.board !== null && typeof state.board === 'object' && Object.hasOwn(state.board, 'restarts'))) fail('career.model', 'requires format 63 or later');
@@ -3803,7 +3809,11 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const normalizedState = { ...state, scouts, fitness, physio, assistant, academy, youth, lifecycle, youthCompetition, facilities, relationships, board, commercial, ...(employment ? { employment } : {}), recruitment: version >= 19 ? state.recruitment : version === 18 ? migrateRecruitmentTransfers(state.recruitment as unknown as SeasonRecruitment) : createRecruitment() } as unknown as SeasonState;
   const recruitmentHolds = version >= 18 ? validateRecruitment(state.recruitment, normalizedState, version) : [];
   if (version >= 6) validateFinance(state.finance, clubs, fixtures as SeasonFixture[], state.history as SeasonArchive[], coaching!, seasonNumber, round, state.status, state.managedClubId, payroll, employment, recruitmentHolds, scouts, fitness, physio, assistant, youth, version, facilities, commercial, state.board, rivalries, world, state.divisions as DomesticDivisions | undefined, state.background as SeasonBackground | undefined, Object.hasOwn(state, 'media') ? { media: state.media as SeasonMedia, relationships: state.relationships as SeasonRelationships } : undefined, economySeasons);
-  const development = version >= 4 ? validateTraining(state.training, clubs, fixtures as SeasonFixture[], history, seasonNumber, round, coaching, rosters, fitness, physio, version, { ...careerContext, facilities, restWeeks, ...(Object.hasOwn(state, 'national') ? { national: state.national as SeasonState['national'] } : {}) }) : null;
+  // Format 86: head coaches steer training (`coaches-2`); who coaches where is replayed from the board's changes.
+  const steering = version >= 86 && state.coaches !== null && typeof state.coaches === 'object' && (state.coaches as { model?: unknown }).model === COACH_STEERING_MODEL ? (seasonNumber: number, afterRound: number) => {
+    try { return trainingCoaches(state as unknown as SeasonState, seasonNumber, afterRound); } catch { return fail('coaches', 'must name each club\'s head coach through the board\'s changes'); }
+  } : undefined;
+  const development = version >= 4 ? validateTraining(state.training, clubs, fixtures as SeasonFixture[], history, seasonNumber, round, coaching, rosters, fitness, physio, version, { ...careerContext, facilities, restWeeks, ...(Object.hasOwn(state, 'national') ? { national: state.national as SeasonState['national'] } : {}), ...(steering ? { trainingCoaches: steering } : {}) }) : null;
   if (version >= 11) validateScouting(state.scouting, normalizedState, version);
   const marketSnapshots: MarketReplaySnapshot[] = [];
   if (version >= 13) validateMarket(state.market, normalizedState, version, marketSnapshots);
@@ -3849,6 +3859,13 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if ((match.playModel ?? null) !== (state.matchModel ?? null) || match.playModel && !match.computerCoach?.includes(opposition)) fail('activeMatch.playModel', 'must use the career\'s play model with a computer coach for the opponent');
   // Format 85: a game at one venue is played without home advantage in careers with that rule, and only then.
   if (!!match.neutralVenue !== playsAtNeutralVenue({ world }, active as SeasonFixture)) fail('activeMatch.neutralVenue', 'must mark exactly the games at one venue in careers with neutral venues');
+  // Format 86: each computer side runs its head coach's rotation, exactly as derived from the coach and its players' ages.
+  for (const side of SIDES) {
+    let expected: ReturnType<typeof computerCoachRotation> = null;
+    // The match's own manager side (after a move at a season end, his former club's final match) runs no coach's rotation.
+    try { expected = computerCoachRotation({ ...(state as unknown as SeasonState), managedClubId: matchClub }, match[side], { seasonNumber, round: active.round, date: active.date }); } catch { fail('coaches', 'must name each club\'s head coach through the board\'s changes'); }
+    if (!sameData(match.coachRotation?.[side] ?? null, expected)) fail(`activeMatch.coachRotation.${side}`, 'must follow the side\'s head coach in careers where head coaches steer, and only then');
+  }
   // Format 74: only the manager chooses circles on the court picture; computer clubs play listed positions.
   if (match.slots?.[opposition] || match.startingSlots?.[opposition]) fail('activeMatch.slots', 'must leave the opponent in its listed positions');
   if (match.injuryMode !== injuryMode) fail('activeMatch.injuryMode', 'must match the season-wide injury setting');

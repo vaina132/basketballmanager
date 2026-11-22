@@ -41,6 +41,7 @@ export interface ManagerCoachSeason { seasonNumber: number; changes: Partial<Rec
 
 /** The career's coaches: the model and the manager's own attributes (start values and each season's change). */
 export interface SeasonCoaches {
-  model: 'coaches-1';
+  /** `coaches-2` (format 86, option `coachSteering`): head coaches also steer training, rotation and signings (`src/world/coach-steering.ts`). */
+  model: 'coaches-1' | 'coaches-2';
   manager: { start: CoachAttributes; seasons: ManagerCoachSeason[] };
 }

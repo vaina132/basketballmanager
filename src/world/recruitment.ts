@@ -17,7 +17,8 @@ import { addInSeasonWageAgreement } from './payroll';
 import { getInSeasonCandidates, getInSeasonOffers, IN_SEASON_EVENT_LIMIT, isLiveInSeasonOffer, quoteInSeasonOffer } from './recruitment-policy';
 import { getInSeasonReleasedContractIds, getInSeasonTransferCandidates, quoteInSeasonSale, quoteInSeasonTransferOffer, requiredInSeasonTransferFee } from './midseason-transfer-policy';
 import { registerInSeasonArrivals } from './rosters';
-import { scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
+import { coachRecruitmentRating, scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
+import { clubStyleFit } from './head-coaches';
 import { dateForRound } from './season';
 import { getTransferPaymentSchedule } from './transfer-payments';
 import { getApplicableReleaseClause, offerOptionsReason } from './release-clauses';
@@ -239,7 +240,9 @@ export function scheduleInSeasonRecruitment(state: SeasonState): SeasonState {
         const position = getCareerPlayer(next, playerId).position;
         positions.set(position, (positions.get(position) ?? 0) + 1);
       }
-      const assessed = (playerId: string): number => next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, playerId) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, playerId) : getCareerPlayer(next, playerId).attributes).reduce((sum, value) => sum + value, 0);
+      // Format 86: a club whose head coach steers prefers players who fit his style (`clubStyleFit`).
+      const fit = clubStyleFit(next, club.id), fitted = fit ? coachRecruitmentRating(next, club.id, fit) : null;
+      const assessed = (playerId: string): number => fitted ? fitted(playerId) : next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, playerId) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, playerId) : getCareerPlayer(next, playerId).attributes).reduce((sum, value) => sum + value, 0);
       const academy = next.academy?.enabledSince ? getClubAcademy(next, club.id).filter(row => !pending.some(offer => offer.playerId === row.player.id)).sort((left, right) => (positions.get(left.player.position) ?? 0) - (positions.get(right.player.position) ?? 0) || Object.values(right.player.attributes).reduce((a, b) => a + b, 0) - Object.values(left.player.attributes).reduce((a, b) => a + b, 0) || left.player.id.localeCompare(right.player.id, 'en')).find(row => quoteInSeasonOffer(next, row.player.id, academyWage(next, row.prospect), club.id, undefined, {}, row.player.id).canOffer) : null;
       if (academy) { next = submitInSeasonOffer(next, academy.player.id, academyWage(next, academy.prospect), club.id, {}, academy.player.id); continue; }
       const candidates = getInSeasonCandidates(next).filter(player => !pending.some(offer => offer.playerId === player.id) && !next.injuries.some(injury => injury.playerId === player.id && isRecovering(injury, responseOn, knownMedical))).sort((left, right) => (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || assessed(right.id) - assessed(left.id) || left.id.localeCompare(right.id, 'en'));

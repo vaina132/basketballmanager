@@ -36,7 +36,7 @@ function twoDivisionWorld(): CareerWorld {
 let complete: SeasonState;
 beforeAll(() => {
   const world = twoDivisionWorld();
-  complete = setEmploymentDelegation(createSeason({ seed: 1, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, matchFlow: false }), true);
+  complete = setEmploymentDelegation(createSeason({ seed: 1, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
   while (complete.status === 'active') complete = play(complete);
 }, 600_000);
 
@@ -91,7 +91,7 @@ describe('sponsors\' clause exits are decided again at each season end', () => {
 describe('a resignation takes a job offered at that point', () => {
   it('accepts an offered job and refuses a club that made no offer', () => {
     // Career-2 rules (format 63): a resigning manager always has an offer, at least from the least confident board.
-    let state = setEmploymentDelegation(asCareer2(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS, matchFlow: false })), true);
+    let state = setEmploymentDelegation(asCareer2(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'off', ...NEW_CAREER_SYSTEMS })), true);
     while (state.status === 'active') state = play(state);
     const outlook = resignationOutlook(state)!;
     expect(outlook.offers.length).toBeGreaterThan(0);
@@ -109,7 +109,7 @@ describe('president requests are rebuilt from each review', () => {
   let asked: SeasonState | undefined, settled: SeasonState | undefined;
   beforeAll(() => {
     for (let seed = 1; seed <= 40 && !asked; seed += 1) {
-      let state = createSeason({ seed, managedClubId: 'adriatic-comets', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchFlow: false });
+      let state = createSeason({ seed, managedClubId: 'adriatic-comets', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS });
       while (state.status === 'active' && !(state.board.requests ?? []).length) state = play(state);
       if (state.board.requests?.[0] && state.board.requests[0].kind !== 'raise-ticket-price') asked = state;
     }
@@ -141,7 +141,7 @@ describe('president requests are rebuilt from each review', () => {
 describe('the latest completed season\'s board history is rebuilt after sealing (format 73)', () => {
   it('refuses a changed review of the previous season in season three', () => {
     const finish = (from: SeasonState) => { let state = from; while (state.status === 'active') state = play(state); for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state); return state; };
-    let state = setEmploymentDelegation(createSeason({ seed: 31, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchFlow: false }), true);
+    let state = setEmploymentDelegation(createSeason({ seed: 31, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true);
     state = rolloverSeason(finish(rolloverSeason(finish(state))));
     state = play(state);
     expect(state.seasonNumber).toBe(3);

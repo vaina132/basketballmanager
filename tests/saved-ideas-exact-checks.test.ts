@@ -32,11 +32,11 @@ function twoDivisionWorld(): CareerWorld {
   ] };
 }
 
-// Seed 1 (as in commercial-clauses): sponsors leave relegated clubs at the season end.
+// Seed 2 (as in commercial-clauses; 1 before formats 81-83): sponsors leave relegated clubs at the season end.
 let complete: SeasonState;
 beforeAll(() => {
   const world = twoDivisionWorld();
-  complete = setEmploymentDelegation(createSeason({ seed: 1, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+  complete = setEmploymentDelegation(createSeason({ seed: 2, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
   while (complete.status === 'active') complete = play(complete);
 }, 600_000);
 

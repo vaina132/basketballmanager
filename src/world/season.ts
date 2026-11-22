@@ -47,7 +47,8 @@ import { isCourtPosition } from '../engine/positions';
 import { INJURY_MODEL_2 } from '../domain/injuries';
 import { clubRecoveryPercent, injuriesFromMatch, injuryRiskMap, isRecovering, withMedicalRecurrence } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
-import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
+import { usesWagePool } from './wage-pool';
+import { appointMissingCoaches, createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
 import { keepContractedStaff, payComputerStaffCompensation, processStaffWagesRound, settleStaffTerms, withComputerStaffTerms, withOpeningStaffTerms } from './staff-contracts';
 import { planComputerStaffRenewals } from './staff-levels';
 import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
@@ -514,6 +515,12 @@ export interface SeasonSystems {
    * board's European aim. New careers of worlds with European places; older careers keep `places-1`.
    */
   europeanEntry?: boolean;
+  /**
+   * Format 84 (owner report, 22 November 2026: relegated computer clubs started a season without a coach): computer
+   * clubs always fill their six staff roles, the training (head) coach first, down to the cheapest candidate on the
+   * market when they can afford no one (`coaching.fullStaff`, `usesFullStaff`). New careers with the wage pool only.
+   */
+  fullStaff?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -526,7 +533,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -556,6 +563,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.nationalTeams !== undefined && typeof options.nationalTeams !== 'boolean') throw new Error('Choose a valid national teams setting.');
   if (options.realCoaches !== undefined && typeof options.realCoaches !== 'boolean') throw new Error('Choose a valid head coaches setting.');
   if (options.europeanEntry !== undefined && typeof options.europeanEntry !== 'boolean') throw new Error('Choose a valid European entry setting.');
+  if (options.fullStaff !== undefined && typeof options.fullStaff !== 'boolean') throw new Error('Choose a valid staffing setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -574,7 +582,9 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   const boarded = options.calmPlayingTime && options.relationships ? { ...presided, relationships: { ...presided.relationships, model: 'relationships-4' as const } } : presided;
   // Format 75: player wages and staff fees share one pool from the opening; the opening staff and squads are unchanged.
   // Format 76: staff contracts (`coaching-4`, set before the opening staff are paid) with each person's contract length.
-  const staffed = staffContracts ? withOpeningStaffTerms(boarded) : options.wagePool && options.staffing ? { ...boarded, coaching: { ...boarded.coaching, model: 'coaching-3' as const } } : boarded;
+  const contracted = staffContracts ? withOpeningStaffTerms(boarded) : options.wagePool && options.staffing ? { ...boarded, coaching: { ...boarded.coaching, model: 'coaching-3' as const } } : boarded;
+  // Format 84: computer clubs always fill every staff role from now on; the opening staff (all roles filled) are unchanged.
+  const staffed = options.fullStaff && usesWagePool(contracted) ? { ...contracted, coaching: { ...contracted.coaching, fullStaff: true as const } } : contracted;
   // Owner feedback (22 November 2026): longer recoveries for match injuries in new careers.
   const healed = options.injuryLengths ? { ...staffed, injuryModel: INJURY_MODEL_2 } : staffed;
   // Format 78: the transfer and loan list, and the scouting network; nothing at the opening depends on either.
@@ -950,7 +960,8 @@ function commitMatchday(state: SeasonState): { next: SeasonState; weekDone: bool
 function prepareNextMatchday(state: SeasonState, committed: SeasonState, coachChanges?: { changes: MidSeasonChanges; moveTo: string | undefined }): SeasonState {
   // Training and recovery start from the week's last game day (step 3.4a), read before the week moves on.
   const trainedFrom = weekLastGameDate(committed.fixtures, committed.round, committed.seasonNumber);
-  let next = recruitAiScouts(committed);
+  // Format 84: a computer club without a training (head) coach appoints one before any other role.
+  let next = recruitAiScouts(appointMissingCoaches(committed));
   next = recruitAiFitnessCoaches(next);
   next = recruitAiPhysios(next);
   next = recruitAiAssistants(next);
@@ -1182,7 +1193,8 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = renewSeasonPhysio(next);
   next = renewSeasonAssistant(next);
   next = settleStaffTerms(renewSeasonYouth(next), state.coaching);
-  next = recruitAiScouts(next);
+  // Format 84: computer clubs left without a training (head) coach appoint one first, then fill every other role.
+  next = recruitAiScouts(appointMissingCoaches(next));
   next = recruitAiFitnessCoaches(next);
   next = recruitAiPhysios(next);
   next = recruitAiAssistants(next);

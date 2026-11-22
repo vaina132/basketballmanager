@@ -10,7 +10,7 @@ import type { YouthCoach } from '../domain/youth';
 import { youthCoachRating } from './youth-policy';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
 import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
-import { keepingHeldStaff, staffHireBudget } from './staff-policy';
+import { appointingMinimumStaff, cheapestStaff, keepingHeldStaff, staffHireBudget, usesFullStaff } from './staff-policy';
 import { staffFee } from './economy';
 
 export function createYouth(): SeasonYouth { return { model: 'youth-1', enabledSince: null, contracts: [] }; }
@@ -21,6 +21,10 @@ export function enableYouth(state: SeasonState, opening = false): SeasonState {
   if (state.status !== 'active' || state.round === seasonRounds(state)) throw new Error('Recruit youth coaches while academy training weeks remain, before the final matchday.');
   // The career's opening staff are held, not hired: Spending left does not decide them (format 76).
   return keepingHeldStaff(() => recruitAiYouthCoaches({ ...state, youth: { ...state.youth, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
+}
+/** Format 84: the minimum appointment of a club that can afford no one (no money check applies). */
+function minimumAppointment(state: SeasonState, clubId: string, member: { id: string } | undefined): SeasonState {
+  return member ? appointingMinimumStaff(() => hireForClub(state, member.id, clubId)) : state;
 }
 function hireForClub(state: SeasonState, coachId: string, clubId: string, kept = false): SeasonState {
   const quote = quoteYouthCoachHire(state, coachId, clubId, kept);
@@ -51,6 +55,8 @@ export function recruitAiYouthCoaches(state: SeasonState, includeManaged = false
     if (getClubYouthCoach(next, club.id)) continue;
     const coach = levelled ? fittingYouthCoach(next, club.id) : withCalculationCache(() => availableYouthCoaches(next).filter(coach => quoteYouthCoachHire(next, coach.id, club.id).canHire)).sort((left, right) => youthCoachEffects(right).bonusPercent / right.fee - youthCoachEffects(left).bonusPercent / left.fee || left.fee - right.fee || left.id.localeCompare(right.id, 'en'))[0];
     if (coach) next = hireForClub(next, coach.id, club.id);
+    // Format 84: a club that can afford no one still appoints the cheapest candidate (the minimum appointment).
+    else if (levelled && usesFullStaff(next)) next = minimumAppointment(next, club.id, withCalculationCache(() => cheapestStaff(availableYouthCoaches(next), member => staffFee(next, club.id, member.fee))));
   }
   return next;
 }

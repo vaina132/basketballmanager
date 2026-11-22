@@ -168,6 +168,7 @@ describe('national windows in play (format 80)', () => {
     const envelope = JSON.parse(serializeSeason(hired));
     // A format-80 file: no real head coaches (format 82) yet.
     envelope.formatVersion = 80; envelope.state.schemaVersion = 80; delete envelope.state.coaches;
+    delete envelope.state.coaching.fullStaff; // format 84: computer clubs always fill every staff role
     delete envelope.state.national.earnings;
     for (const competition of envelope.state.national.competitions) for (const fixture of competition.fixtures) if (fixture.result) delete fixture.result.injuries;
     const earlier = JSON.stringify(envelope);

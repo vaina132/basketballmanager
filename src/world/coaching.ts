@@ -8,7 +8,7 @@ import { DEVELOPMENT_COACHES } from '../data/development-coaches';
 import { getFinanceBalance, recordCoachFee } from './finance';
 import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary } from './transfer-payments';
-import { keepingHeldStaff, staffCommitted, staffHireSpending, staffMoneyReason, staffSpendingReason, staffSpendingSalaryCap } from './staff-policy';
+import { appointingMinimumStaff, cheapestStaff, keepingHeldStaff, minimumStaffAppointment, staffCommitted, staffHireSpending, staffMoneyReason, staffSpendingReason, staffSpendingSalaryCap, usesFullStaff } from './staff-policy';
 import { formatEuros } from '../ui/money-format';
 import { payStaffCompensation, usesStaffContracts } from './staff-contracts';
 import { STAFF_BUDGET } from './staff-constants';
@@ -143,6 +143,8 @@ function hireReason(state: SeasonState, coachId: string, clubId: string, kept: b
   if (!coach || !state.clubs.some(club => club.id === clubId)) return 'Choose a training coach and club from this career.';
   if (getClubCoaching(state.coaching, clubId).length >= MAX_COACHES) return 'All three training coach places are filled. Release a training coach first.';
   if (!coachAvailable(state.coaching, state, coachId, kept)) return 'This training coach is not available: he already works for a club.';
+  // Format 84: a computer club's minimum appointment is not refused for money.
+  if (minimumStaffAppointment()) return null;
   if (!usesClubLevelStaff(state) && coachingCommitted(state.coaching, clubId) + coach.fee > COACHING_BUDGET) return 'This contract exceeds the remaining training coach budget. Released contracts remain committed for the season.';
   const fee = staffFee(state, clubId, coach.fee);
   if (state.finance.enabledSince) {
@@ -244,7 +246,24 @@ function appointFittingCoach(state: SeasonState, clubId: string): SeasonState {
   const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'coaches', availableCoaches(state.coaching, state), {
     rating: coachRating, fee: coach => staffFee(state, clubId, coach.fee), target: staffTargetRating(state, clubId, 'coaches', coachRatingRange()), cap: staffShareCap(state, clubId, 'coaches'), budget,
   }));
-  return choice && canPayCoach(state, clubId, choice) ? hireContractForClub(state, clubId, choice.id, 'balanced') : state;
+  if (choice && canPayCoach(state, clubId, choice)) return hireContractForClub(state, clubId, choice.id, 'balanced');
+  // Format 84: a club that can afford no one still appoints the cheapest coach on the market (the minimum appointment).
+  if (!usesFullStaff(state)) return state;
+  const minimum = withCalculationCache(() => cheapestStaff(availableCoaches(state.coaching, state), coach => staffFee(state, clubId, coach.fee)));
+  return minimum ? appointingMinimumStaff(() => hireContractForClub(state, clubId, minimum.id, 'balanced')) : state;
+}
+
+/**
+ * Format 84: computer clubs without a training (head) coach appoint one before any other staff role is filled, so the
+ * other roles cannot use up the money the head coach needs; extra coaches still come last (`recruitAiCoaches`).
+ */
+export function appointMissingCoaches(state: SeasonState): SeasonState {
+  if (!usesFullStaff(state) || !usesClubLevelStaff(state) || !state.coaching.enabledSince || state.status === 'complete' || state.round === seasonRounds(state)) return state;
+  let next = state;
+  for (const club of clubsByStaffLevel(state, state.clubs.filter(club => club.id !== state.managedClubId))) {
+    if (!getClubCoaching(next.coaching, club.id).length) next = appointFittingCoach(next, club.id);
+  }
+  return next;
 }
 
 /** Funding arrives first; unaffordable renewals lapse without borrowing or disturbing other clubs. */

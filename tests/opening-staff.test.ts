@@ -5,7 +5,7 @@ import type { SeasonState } from '../src/domain/season';
 import { testWorld } from './world-fixtures';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
-import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
+import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
 import { setEmploymentDelegation } from '../src/world/employment';
@@ -17,6 +17,7 @@ import { clubStaffLevels, STAFF_LEVEL_RULES } from '../src/world/staff-levels';
 import { availableCoaches } from '../src/world/coaching';
 import { availableFitnessCoaches } from '../src/world/fitness-policy';
 import { availablePhysios } from '../src/world/physio-policy';
+import { availableYouthCoaches } from '../src/world/youth-policy';
 import { hirePhysio } from '../src/world/physio';
 import { quoteStaffReplacement, releaseStaff, replaceStaff, replacementWarning, roleStaff, sackingTerms, STAFF_ROLES, type StaffRole } from '../src/world/staff-roster';
 import { staffFee } from '../src/world/economy';
@@ -118,19 +119,79 @@ describe('opening staff for every club (format 74, coaching-2)', () => {
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      // Seed 1 (11 before the match flow, real coaches and European entry of formats 81-83). Under them seed 11 relegates
-      // Atlantic Pilots (w0), who can neither pay to renew their coaches nor afford a new one, and start season two
-      // without a coach; reported to the owner as a possible gap in the season-change staffing.
-      let state = setEmploymentDelegation(createSeason({ seed: 1, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, staffContracts: false }), true);
+      // Seed 11 relegates Atlantic Pilots (w0), who can neither renew their coaches nor afford a fitting new one. Before
+      // format 84 they started season two without a coach; now the training (head) coach is appointed first and, when the
+      // club can afford no one, the cheapest coach on the market is the minimum appointment.
+      let state = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, staffContracts: false }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       state = rolloverSeason(state);
       expect(state.seasonNumber).toBe(2);
       expect(state.coaching.model).toBe('coaching-3'); // format 75: club-level staff with the wage pool
       for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) for (const role of STAFF_ROLES) expect(roleStaff(state, role, club.id).length, `${club.id} ${role}`).toBeGreaterThanOrEqual(1);
-      // Format 75: staff fees may also use unused player salary budget (one wage pool).
-      for (const club of state.clubs) expect(staffCommitted(state, club.id), club.id).toBeLessThanOrEqual(staffLimit(state, club.id));
+      // Format 75: staff fees may also use unused player salary budget (one wage pool). Format 84: only a minimum
+      // appointment goes beyond it. Atlantic Pilots' coach (first) and four cheapest people leave less than the cheapest
+      // youth coach costs, so their youth coach is the cheapest on the market and Wages left is exceeded by less than his fee.
+      const over = state.clubs.filter(club => staffCommitted(state, club.id) > staffLimit(state, club.id)).map(club => club.id);
+      expect(over).toEqual(['w0-atlantic-pilots']);
+      const pilots = 'w0-atlantic-pilots', youthCoach = roleStaff(state, 'youth', pilots)[0]!;
+      expect(youthCoach.fee).toBe(Math.min(...availableYouthCoaches(state).map(coach => staffFee(state, pilots, coach.fee))));
+      expect(staffCommitted(state, pilots) - staffLimit(state, pilots)).toBeLessThan(youthCoach.fee);
+      expect(roleStaff(state, 'coaches', pilots)).toHaveLength(1);
       expect(roundTrip(state)).toEqual(state);
+    } finally { requireWorldContexts(false); }
+  }, 600_000);
+});
+
+/** A computer club's empty staff roles after a season change (none expected from format 84). */
+function staffGaps(state: SeasonState): string[] {
+  return state.clubs.filter(club => club.id !== state.managedClubId).flatMap(club => STAFF_ROLES.filter(role => !roleStaff(state, role, club.id).length).map(role => `${club.id} ${role}`));
+}
+function playToRollover(state: SeasonState): SeasonState {
+  let next = state;
+  while (next.status === 'active') next = advanceSeason(play(next));
+  for (let steps = 0; steps < 120 && getMarketStartReason(next); steps += 1) next = advanceMarket(next);
+  return rolloverSeason(next);
+}
+
+// Format 84 (`coaching.fullStaff`, owner report 22 November 2026): a professional club never starts a season short of staff.
+describe('computer clubs always fill every staff role (format 84)', () => {
+  it('leaves no computer club without a training coach or any other role after season changes, and saves pass the strict check', () => {
+    requireWorldContexts(true);
+    try {
+      // Seed 11 under staff contracts (format 76): before format 84 Adriatic Comets started season two with no fitness
+      // coach or physio and Danube Lynx with no physio or youth coach; seeds 1-5 each left three to five clubs short.
+      for (const [seed, seasons] of [[11, 2], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1]] as const) {
+        const world = moneyWorld();
+        let state = setEmploymentDelegation(createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+        expect(state.coaching).toMatchObject({ model: 'coaching-4', fullStaff: true });
+        for (let season = 2; season <= 1 + seasons; season += 1) {
+          state = playToRollover(state);
+          expect(state.seasonNumber).toBe(season);
+          expect(staffGaps(state), `seed ${seed} season ${season}`).toEqual([]);
+        }
+        expect(roundTrip(state)).toEqual(state);
+      }
+    } finally { requireWorldContexts(false); }
+  }, 900_000);
+
+  it('keeps careers without the rule unchanged and refuses the rule in older saves', () => {
+    requireWorldContexts(true);
+    try {
+      // Without the rule (careers before format 84) seed 11 still relegates Atlantic Pilots into a season without a coach.
+      const world = moneyWorld();
+      const opening = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, staffContracts: false, fullStaff: false }), true);
+      expect(Object.hasOwn(opening.coaching, 'fullStaff')).toBe(false);
+      expect(staffGaps(playToRollover(opening))).toEqual(['w0-atlantic-pilots coaches']);
+      // The rule is stored as `coaching.fullStaff: true` from format 84, only with the wage pool.
+      const created = createSeason({ seed: 5, world, managedClubId: world.clubs[3]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
+      const plain = JSON.parse(serializeSeason(created));
+      const variant = (version: number, coaching: object) => JSON.stringify({ ...plain, formatVersion: version, state: { ...plain.state, schemaVersion: version, coaching: { ...plain.state.coaching, ...coaching } } });
+      expect(parseSeason(variant(84, {}))).toEqual(created);
+      expect(() => parseSeason(variant(83, {}))).toThrow(/coaching\.fullStaff/);
+      expect(() => parseSeason(variant(84, { fullStaff: false }))).toThrow(/coaching\.fullStaff/);
+      const { fullStaff: _rule, ...older } = plain.state.coaching;
+      expect(parseSeason(JSON.stringify({ ...plain, formatVersion: 83, state: { ...plain.state, schemaVersion: 83, coaching: older } })).coaching).not.toHaveProperty('fullStaff');
     } finally { requireWorldContexts(false); }
   }, 600_000);
 });

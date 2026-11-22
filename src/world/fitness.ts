@@ -10,7 +10,7 @@ import type { FitnessCoach } from '../domain/fitness';
 import { fitnessRating } from './fitness-policy';
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
-import { keepingHeldStaff, staffHireBudget } from './staff-policy';
+import { appointingMinimumStaff, cheapestStaff, keepingHeldStaff, staffHireBudget, usesFullStaff } from './staff-policy';
 import { staffFee } from './economy';
 
 export function createFitness(): SeasonFitness { return { model: 'fitness-1', enabledSince: null, contracts: [] }; }
@@ -24,6 +24,10 @@ export function enableFitness(state: SeasonState, opening = false): SeasonState 
   return keepingHeldStaff(() => recruitAiFitnessCoaches({ ...state, fitness: { ...state.fitness, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } }, opening), opening);
 }
 
+/** Format 84: the minimum appointment of a club that can afford no one (no money check applies). */
+function minimumAppointment(state: SeasonState, clubId: string, member: { id: string } | undefined): SeasonState {
+  return member ? appointingMinimumStaff(() => hireForClub(state, member.id, clubId)) : state;
+}
 function hireForClub(state: SeasonState, coachId: string, clubId: string, kept = false): SeasonState {
   const quote = quoteFitnessHire(state, coachId, clubId, kept);
   if (!quote.canHire) throw new Error(quote.reason!);
@@ -59,6 +63,8 @@ export function recruitAiFitnessCoaches(state: SeasonState, includeManaged = fal
     if (getClubFitnessCoach(next, club.id)) continue;
     const coach = levelled ? fittingFitnessCoach(next, club.id) : withCalculationCache(() => availableFitnessCoaches(next).filter(coach => quoteFitnessHire(next, coach.id, club.id).canHire)).sort((left, right) => (right.skills.recovery + right.skills.workload) / right.fee - (left.skills.recovery + left.skills.workload) / left.fee || left.id.localeCompare(right.id, 'en'))[0];
     if (coach) next = hireForClub(next, coach.id, club.id);
+    // Format 84: a club that can afford no one still appoints the cheapest candidate (the minimum appointment).
+    else if (levelled && usesFullStaff(next)) next = minimumAppointment(next, club.id, withCalculationCache(() => cheapestStaff(availableFitnessCoaches(next), member => staffFee(next, club.id, member.fee))));
   }
   return next;
 }

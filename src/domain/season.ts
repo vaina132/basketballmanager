@@ -224,7 +224,8 @@ export interface DomesticDivisions {
 /** Format 81: the play model with the dead balls of a real game for new careers' matches (`matchModel` 'plays-3', option `matchFlow`). */
 /** Format 82: real head coaches with attributes and styles for new real-club careers, and the manager's coaching attributes (`coaches`, `src/world/head-coaches.ts`). */
 /** Format 83: European entry rules for new careers (`europe.model` 'places-2', `src/world/european-entry.ts`): place types with end seasons, the places day with the licence check, wild cards by score, declines and the board's European aim. */
-export const SEASON_SCHEMA_VERSION = 83;
+/** Format 84: computer clubs always fill their six staff roles, the training (head) coach first, down to the cheapest candidate when they can afford no one (`coaching.fullStaff`, new careers with the wage pool). */
+export const SEASON_SCHEMA_VERSION = 84;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

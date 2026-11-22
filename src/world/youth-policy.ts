@@ -5,7 +5,7 @@ import type { Team } from '../domain/types';
 import type { AcademyWeek } from '../domain/academy';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
 import { getFinanceBalance } from './finance';
-import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason } from './staff-policy';
+import { remainingStaffBudget, staffAllocation, staffCanJoin, staffCommitted, staffMoneyReason, minimumStaffAppointment } from './staff-policy';
 import { staffMarketWorld } from './staff-levels';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { roundKey, seasonRounds, worldOf } from './career-world';
@@ -35,6 +35,8 @@ export function quoteYouthCoachHire(state: SeasonState, coachId: string, clubId 
   else if (!coach || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a youth coach and club from this career.';
   else if (getClubYouthCoach(state, clubId)) reason = 'The youth-coach position is already occupied.';
   else if (!staffCanJoin(state, kept, state.youth.contracts.some(contract => contract.coachId === coachId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null), () => availableYouthCoaches(state).some(coach => coach.id === coachId))) reason = 'This youth coach already has an active club contract.';
+  // Format 84: a computer club's minimum appointment is not refused for money.
+  else if (minimumStaffAppointment()) reason = null;
   else if (getFinanceBalance(state.finance, clubId).unpaid) reason = 'Settle unpaid club costs before hiring a youth coach.';
   else if (getTransferPaymentSummary(state, clubId).overdue) reason = 'Settle overdue transfer payments before hiring a youth coach.';
   else reason = staffMoneyReason(state, 'youth coach', staffFee(state, clubId, coach.fee), remainingAllocation, remainingBudget, clubId);

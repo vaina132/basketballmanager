@@ -7,6 +7,9 @@ import { createSeason } from '../src/world/season';
 import { SquadStartingFive } from '../src/ui/SquadStartingFive';
 import { courtCircles } from '../src/engine/positions';
 import { MatchLineup } from '../src/ui/MatchLineup';
+import type { SeasonState } from '../src/domain/season';
+import { worldOf } from '../src/world/career-world';
+import app from '../src/App.tsx?raw';
 import { outOfPositionWarning, resolveCourtPick, sortBench, type CourtPick } from '../src/ui/court-five-moves';
 
 const noop = () => {};
@@ -167,5 +170,28 @@ describe('the court picture upside down (owner request, 18 November 2026)', () =
     expect(playing).toContain('A game is in play. Change your five in the Match center.');
     expect(playing).toContain('Open Match center');
     expect(squad({ ...season, status: 'complete' })).toBe('');
+  });
+
+  it('shows a small flag on the bench and reserve rows on the Squad page and the match screen (owner request, 22 November 2026)', () => {
+    // Match screen: each bench row carries the player's flag after his number and position; the circles stay as they are.
+    const match = ready();
+    const flagged = renderToStaticMarkup(<MatchLineup match={match} managedSide="home" courtPicture apply={noop} onInteractionStart={noop} nationalityOf={id => id === 'rhf-1' || id === 'rhf-7' ? 'Croatia' : 'Germany'} />);
+    expect(flagged.match(/data-nationality="/g)).toHaveLength(5);
+    expect(flagged).toMatch(/data-court-reserve="rhf-7".*?#\d+ · [A-Z]+<span class="nationality nationality-compact" data-nationality="Croatia"/);
+    expect(flagged.match(/data-nationality="Croatia"/g)).toHaveLength(1);
+    // Unknown countries and matches without the callback show no flag.
+    expect(renderToStaticMarkup(<MatchLineup match={match} managedSide="home" courtPicture apply={noop} onInteractionStart={noop} nationalityOf={() => null} />)).not.toContain('data-nationality');
+    expect(render(match)).not.toContain('data-nationality');
+    // The career match screen passes the players' countries (not in national-team games, where every flag is the same).
+    expect(app).toContain('nationalityOf={season && !season.national?.activeMatch ? id => playerNationality(season, id) : undefined}');
+    // Squad page: the bench rows show the countries from the world's player profiles.
+    const base = createSeason({ seed: 77, managedClubId: 'rhine-falcons', injuryMode: 'off' });
+    const world = worldOf(base);
+    const profiles = Object.fromEntries(Object.entries(world.playerProfiles).map(([id, profile]) => [id, { ...profile, nationality: 'Spain' }]));
+    const season = { ...base, world: { ...world, playerProfiles: profiles } } as SeasonState;
+    const html = renderToStaticMarkup(<SquadStartingFive season={season} busy={false} onUpdate={noop} onOpenMatch={noop} />);
+    const benchRows = html.match(/data-court-reserve="/g)?.length ?? 0;
+    expect(benchRows).toBeGreaterThan(0);
+    expect(html.match(/data-nationality="Spain"/g)).toHaveLength(benchRows);
   });
 });

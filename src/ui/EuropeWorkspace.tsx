@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArchivedFixture, SeasonFixture, SeasonState, Standing } from '../domain/season'
 import type { Team } from '../domain/types'
 import type { BackgroundLeague } from '../domain/world'
@@ -9,10 +9,12 @@ import { seasonLeagues, type DomesticLeague } from '../world/divisions'
 import { europeanEntrants, getEuropeanCompetitions } from '../world/europe'
 import { playedEuropeanCompetitions } from '../world/european-formats'
 import { estimatedTable } from '../world/european-places'
+import { getSeasonRosterData } from '../world/rosters'
 import { seasonLabel } from '../world/season'
 import { NOT_PLAYED_LEAGUE } from './career-text'
 import { ClubBadge, InlineLogo } from './ClubLogo'
 import { CountryFlag } from './CountryFlag'
+import { SeasonLeaders } from './SeasonLeaders'
 import { SeasonWorkspace } from './SeasonWorkspace'
 import './season-workspace.css'
 import { EuropeanPlacesPanel } from './EuropeanPlacesPanel'
@@ -81,6 +83,12 @@ export function InternationalWorkspace({ season, competitionId, onCompetitionCha
   const games = entry ? fixtures.filter(fixture => fixture.competition === entry.competition.id && (!ownOnly || fixture.homeClubId === managedId || fixture.awayClubId === managedId)) : []
   const label = (fixture: SeasonFixture | ArchivedFixture) => fixture.stage ? `${STAGES[fixture.stage] ?? fixture.stage}${fixture.stage === 'round-of-16' ? ` · Group ${fixture.seriesId?.replace('r16-', '')}` : fixture.game && entry?.series.find(series => series.id === fixture.seriesId)?.bestOf !== 1 ? ` · Game ${fixture.game}` : ''}` : 'Regular season'
   const champion = entry?.outcome.champion ? club(entry.outcome.champion) : null
+  // Player statistics of the competition shown: only clubs of the career's full world keep box scores.
+  const competitionClubs = useMemo(() => entry ? [...new Set(fixtures.filter(fixture => fixture.competition === entry.competition.id).flatMap(fixture => [fixture.homeClubId, fixture.awayClubId]))] : [], [entry, fixtures])
+  const statClubs = useMemo(() => {
+    const registered = new Set(getSeasonRosterData(season, selectedSeason).rosters.map(roster => roster.clubId))
+    return competitionClubs.filter(id => registered.has(id) && season.clubs.some(team => team.id === id))
+  }, [competitionClubs, season, selectedSeason])
 
   return <div className="season-workspace europe-workspace" data-competitions-view="international">
     <section className="season-matchday panel" aria-label="European competition">
@@ -113,6 +121,7 @@ export function InternationalWorkspace({ season, competitionId, onCompetitionCha
             <td>{series.wins[series.higher!.clubId]}–{series.wins[series.lower!.clubId]}</td><td><ClubName club={club(series.lower!.clubId)} yours={series.lower!.clubId === managedId} />{series.winner === series.lower!.clubId && <small> · through</small>}</td>
             <td>{series.bestOf === 1 ? 'Single game' : `Best of ${series.bestOf}`}{series.neutral ? ' · one venue' : ''}</td></tr>)}</tbody></table></div>
       </section>}
+      {statClubs.length > 0 && <SeasonLeaders key={`international-leaders:${selectedSeason}:${entry.competition.id}`} season={season} seasonNumber={selectedSeason} clubIds={statClubs} competitionId={entry.competition.id} title={`${entry.competition.name} player statistics`} scopeNote={statClubs.length < competitionClubs.length ? 'Only clubs from the countries in your career keep player statistics; the other clubs play their games without box scores.' : undefined} />}
       <section className="season-fixtures panel" aria-labelledby="europe-fixtures-title">
         <header className="season-panel-heading season-fixtures-heading"><h2 id="europe-fixtures-title">Games &amp; results</h2>{managedId && ownEntry && <label className="season-own-filter"><input type="checkbox" checked={ownOnly} onChange={event => setOwnOnly(event.target.checked)} /> Your club only</label>}</header>
         <div className="season-table-scroll"><table className="season-fixtures-table"><thead><tr><th scope="col">Date</th><th scope="col">Home</th><th scope="col">Score</th><th scope="col">Away</th><th scope="col">Stage</th></tr></thead>
@@ -162,11 +171,19 @@ export function EuropeanLeaguesWorkspace({ season, leagueId, onLeagueChange, onO
   const all = groups.flatMap(group => group.leagues)
   const selected = all.find(league => league.id === chosen) ?? all.find(league => league.id === defaultOtherLeague(groups))
   const choose = (id: string) => { setChosen(id); onLeagueChange?.(id) }
+  // On a phone the buttons form one row that scrolls sideways: keep the chosen league in view without moving the page.
+  const row = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const container = row.current, button = container?.querySelector<HTMLElement>('.league-option.selected')
+    if (!container || !button || container.scrollWidth <= container.clientWidth) return
+    const left = button.getBoundingClientRect().left - container.getBoundingClientRect().left + container.scrollLeft, right = left + button.offsetWidth
+    if (left < container.scrollLeft || right > container.scrollLeft + container.clientWidth) container.scrollLeft = Math.max(0, left - 12)
+  }, [selected?.id])
   if (!selected) return <div className="season-workspace"><section className="panel season-intro"><p>No other league is in this career.</p></section></div>
   return <div className="season-workspace european-leagues" data-competitions-view="leagues">
     <section className="panel league-picker" aria-labelledby="league-picker-title">
       <header className="season-panel-heading"><h2 id="league-picker-title">Choose a league</h2><span>{all.length} {all.length === 1 ? 'league' : 'leagues'}</span></header>
-      <div className="league-picker-countries">{groups.map(group => {
+      <div ref={row} className="league-picker-countries">{groups.map(group => {
         const titleId = `league-country-${group.country.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
         return <div key={group.country} className="league-picker-country" role="group" aria-labelledby={titleId}>
           <h3 id={titleId}><CountryFlag country={group.country} decorative />{group.country}</h3>

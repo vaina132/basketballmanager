@@ -112,6 +112,9 @@
   .desk-side-column { display: flex; align-items: stretch; }
   .manager-desk .desk-lineup-table th:nth-child(2), .manager-desk .desk-lineup-table td:nth-child(2) { display: none; }
   .desk-player > .avatar { width: 27px; height: 27px; }
+  /* Long names wrap so the Fouls column stays on screen (phone layout, 22 November 2026). */
+  .desk-player strong { white-space: normal; overflow-wrap: anywhere; }
+  .desk-player > span { min-width: 0; }
   .manager-desk .desk-lineup .stamina-meter-compact { width: 62px; }
   .desk-reserves { padding: 10px; flex-direction: column; gap: 5px; }
 }

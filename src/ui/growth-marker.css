@@ -1,0 +1,5 @@
+.growth-marker{display:inline-flex;align-items:center;gap:2px;margin-left:6px;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.growth-marker.is-up{color:var(--green)}
+.growth-marker.is-down{color:#e69588}
+.attribute .growth-marker{margin:0 6px 0 0}
+.academy-skill strong .growth-marker{margin:0 6px 0 0}

@@ -1,6 +1,12 @@
 import type { InjuryKind, InjuryRisk } from './injuries';
 export type Side = 'home' | 'away';
 export type EngineVersion = 'rules-2' | 'possession-3';
+/**
+ * Format 79 (owner feedback 16, 22 November 2026): the richer play model of the possession engine (`src/engine/plays.ts`):
+ * pick-and-rolls, post-ups, drives and kick-outs, fast breaks, putbacks and the other named actions. Matches without it
+ * replay with the earlier possession actions unchanged.
+ */
+export type PlayModel = 'plays-2';
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 
 /** The seven trained skills (1-20): every player record has them; training, potential and the overall rating use them. */
@@ -137,6 +143,10 @@ export interface MatchState {
   schemaVersion: 2;
   engineVersion: EngineVersion;
   possessionPlay?: PossessionPlay | null;
+  /** Format 79: the richer play model (possession engine only); absent in older matches, which keep the earlier actions. */
+  playModel?: PlayModel;
+  /** Format 79, with the play model: the sides run by a computer coach, who call timeouts in a bad run. */
+  computerCoach?: Side[];
   /** Frozen when the career round is prepared; later conversations never rewrite a match. */
   morale?: { model: 'morale-1'; eventCount: number; values: Record<string, number> };
   seed: number;

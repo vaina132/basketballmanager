@@ -292,7 +292,7 @@ export function managedSide(season: SeasonState): Side {
   throw new Error('The active fixture must include the managed club.');
 }
 
-function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background' | 'facilities' | 'board'>> & WorldContext, fixture: SeasonFixture): MatchState {
+function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background' | 'facilities' | 'board' | 'matchModel'>> & WorldContext, fixture: SeasonFixture): MatchState {
   const homeClub = season.clubs.find(club => club.id === fixture.homeClubId);
   const awayClub = season.clubs.find(club => club.id === fixture.awayClubId);
   // Step 3.5b: a European game's club outside the full world plays as a background side.
@@ -335,6 +335,8 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
     injuryMode: season.injuryMode,
     preExistingInjuries,
     ...(Object.keys(injuryRisk).length ? { injuryRisk } : {}),
+    // Format 79: the richer play model; every side but the manager's has a computer coach.
+    ...(season.matchModel ? { playModel: season.matchModel, computerCoach: SIDES.filter(side => (side === 'home' ? fixture.homeClubId : fixture.awayClubId) !== season.managedClubId) } : {}),
   });
   if (season.assistant?.enabledSince) for (const side of SIDES) {
     if (match[side].id === season.managedClubId) continue;
@@ -468,6 +470,11 @@ export interface SeasonSystems {
    * show an estimated rating whose accuracy grows with the scouts' total quality. New careers only; requires scouting.
    */
   scoutNetwork?: boolean;
+  /**
+   * Format 79 (owner feedback, 22 November 2026: "a more realistic simulator with more actions"): matches use the richer
+   * play model (`plays-2`, `src/engine/plays.ts`). New careers only; older careers keep the earlier possession actions.
+   */
+  matchPlays?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -480,7 +487,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -505,6 +512,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.injuryLengths !== undefined && typeof options.injuryLengths !== 'boolean') throw new Error('Choose a valid injury setting.');
   if (options.transferLists !== undefined && typeof options.transferLists !== 'boolean') throw new Error('Choose a valid transfer list setting.');
   if (options.scoutNetwork !== undefined && typeof options.scoutNetwork !== 'boolean') throw new Error('Choose a valid scouting network setting.');
+  if (options.matchPlays !== undefined && typeof options.matchPlays !== 'boolean') throw new Error('Choose a valid match engine setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -521,7 +529,11 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   const healed = options.injuryLengths ? { ...staffed, injuryModel: INJURY_MODEL_2 } : staffed;
   // Format 78: the transfer and loan list, and the scouting network; nothing at the opening depends on either.
   const listed = options.transferLists && healed.recruitment.enabledSince ? { ...healed, recruitment: { ...healed.recruitment, model: 'recruitment-2' as const, listings: [] } } : healed;
-  return options.scoutNetwork && listed.scouting.enabledSince ? { ...listed, scouting: { ...listed.scouting, model: 'scouting-2' as const } } : listed;
+  const scouted = options.scoutNetwork && listed.scouting.enabledSince ? { ...listed, scouting: { ...listed.scouting, model: 'scouting-2' as const } } : listed;
+  // Format 79: the richer play model; the opening match is prepared again with it.
+  if (!options.matchPlays) return scouted;
+  const played: SeasonState = { ...scouted, matchModel: 'plays-2' };
+  return played.activeMatch && played.activeFixtureId ? { ...played, activeMatch: prepareMatch(played, getActiveFixture(played)) } : played;
 }
 
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.

@@ -248,8 +248,14 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     'pendingSubstitutions', 'requiredSubstitutions', 'freeThrows', 'stoppage', 'substitutionLocks',
     'autoSubstitutions', 'injuryMode', 'injuries', 'courtSeconds', 'result',
     ...(modern ? ['possessionPlay'] : []),
-  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk', 'slots', 'startingSlots'] : []);
+  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk', 'slots', 'startingSlots', 'playModel', 'computerCoach'] : []);
   if (state.schemaVersion !== 2 || !['rules-2', 'possession-3'].includes(state.engineVersion as string)) fail('state', 'uses an unsupported schema or engine version');
+  // Format 79: the richer play model, with the sides a computer coach runs.
+  if (Object.hasOwn(state, 'playModel') && state.playModel !== 'plays-2') fail('playModel', 'must be plays-2 when recorded');
+  if (Object.hasOwn(state, 'computerCoach')) {
+    const coached = state.computerCoach;
+    if (!Object.hasOwn(state, 'playModel') || !Array.isArray(coached) || coached.length > 2 || new Set(coached).size !== coached.length || coached.some(side => !SIDES.includes(side as Side))) fail('computerCoach', 'must name distinct teams of a match with the play model');
+  } else if (Object.hasOwn(state, 'playModel')) fail('computerCoach', 'must be recorded with the play model');
   number(state.seed, 'seed', 0, 0xffff_ffff);
   number(state.rngState, 'rngState', 1, 0xffff_ffff);
   const period = number(state.period, 'period', 1, MAX_MATCH_PERIODS);

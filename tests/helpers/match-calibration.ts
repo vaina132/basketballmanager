@@ -1,4 +1,28 @@
-import type { MatchState, Side } from '../../src/domain/types';
+import type { MatchState, Player, PlayerAttributes, Position, Side, Team } from '../../src/domain/types';
+import { withExtraAttributes } from '../../src/world/extra-attributes';
+
+/** Position means of the real-data regulars (sprint 4), as in tests/match-calibration.test.ts. */
+const POSITION_MEANS: Readonly<Record<Position, PlayerAttributes>> = {
+  PG: { twoPoint: 10.3, threePoint: 12.8, freeThrow: 14, passing: 16.8, defense: 13.7, rebounding: 9.4, stamina: 13.3 },
+  SG: { twoPoint: 10.4, threePoint: 13.9, freeThrow: 13.9, passing: 12, defense: 12.6, rebounding: 9.9, stamina: 13.1 },
+  SF: { twoPoint: 11.7, threePoint: 12.8, freeThrow: 12, passing: 10.3, defense: 12.4, rebounding: 11.7, stamina: 13.1 },
+  PF: { twoPoint: 14.8, threePoint: 10.1, freeThrow: 10, passing: 9.7, defense: 12.6, rebounding: 16.1, stamina: 12.4 },
+  C: { twoPoint: 16.3, threePoint: 7.8, freeThrow: 9, passing: 9.7, defense: 11.9, rebounding: 17, stamina: 11.6 },
+};
+const HEIGHTS: Readonly<Record<Position, number>> = { PG: 188, SG: 194, SF: 200, PF: 206, C: 211 };
+const SQUAD: readonly Position[] = ['PG', 'SG', 'SF', 'SF', 'C', 'PG', 'SG', 'SF', 'PF', 'C', 'SF', 'PF'];
+/** A generated twelve-player calibration squad `strength` skill points above the regulars' mean (same generator as the calibration test). */
+export function calibrationTeam(index: number, strength: number): Team {
+  let state = 0x9e3779b9 ^ (index + 1) * 2654435761;
+  const random = () => { state ^= state << 13; state ^= state >>> 17; state ^= state << 5; return (state >>> 0) / 0x1_0000_0000; };
+  const players: Player[] = SQUAD.map((position, slot) => {
+    const depth = slot < 5 ? 0 : slot < 9 ? -1 : -2;
+    const attributes = Object.fromEntries(Object.entries(POSITION_MEANS[position]).map(([key, mean]) => [key, Math.max(1, Math.min(20, Math.round(mean + strength + depth + (random() - .5) * 4)))])) as unknown as PlayerAttributes;
+    const id = `cal-${index}-${slot}`;
+    return { id, name: `Player ${index}-${slot}`, number: slot + 4, position, heightCm: HEIGHTS[position], weightKg: 95, skinTone: '#9aa0a8', hairColor: '#3b3f45', attributes: withExtraAttributes({ id, position, heightCm: HEIGHTS[position], attributes }) };
+  });
+  return { id: `cal-${index}`, name: `Calibration ${index}`, shortName: `CAL${index}`, color: '#6b7280', players };
+}
 
 /** One side's box-score totals in one finished match (player rebounds split by the rebound events). */
 export interface SideLine {

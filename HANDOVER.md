@@ -34,6 +34,8 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Save check fix (22 November 2026, evening):** the strict save check now rebuilds each contract offer and in-season signing with only the board reviews and money tables known when it was made (a later final review no longer refuses an honest renewal), and accepts managers hired by clubs promoted from the next division (`src/storage/season-storage.ts`, `career-validation.ts`; seeds 1-30 of economy-seasons-career scanned with coaches on). Slow tests to re-seed: `career-moves` (setup) and 3 in `lower-division-world` shifted by formats 81-83.
 
+**Deferred until the current jobs are finished (owner, 22 November 2026; the owner will decide details first):** (1) the paid version (half a season free, then a Gumroad licence key), (2) the final full checks before release, (3) the NBA.
+
 **Owner's list of 22 November 2026, evening ("excellent attention in all of these"):**
 - (A) Match view realism at 1x: a continuous, detailed flow like a real broadcast instead of alternating attack/defence "like tennis"; show the many real events (ball out of bounds and inbounds, backcourt violations, transitions, etc.). Format 81 if the engine changes (new careers only).
 - (B) Competitions tabs: Calendar, League, International (the competitions the club plays: EuroLeague, EuroCup, BCL), European Leagues (the other domestic leagues, replacing the dropdown), National Teams; an NBA tab later when the NBA exists.

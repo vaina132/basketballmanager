@@ -3,6 +3,17 @@ import { Icon } from './Icon'
 import { LogoCredit, PhotoCredits } from './PhotoCredits'
 import './player-photo.css'
 
+/** The flag set's MIT licence, which must travel with its pictures (owner feedback, 22 November 2026, evening). */
+export function FlagCredit() {
+  return <details className="photo-credits" data-credits="flags">
+    <summary>Flags: <a href="https://gitlab.com/catamphetamine/country-flag-icons" target="_blank" rel="noreferrer">country-flag-icons</a> by catamphetamine, MIT License</summary>
+    <p className="flag-licence">Copyright (c) 2020 @catamphetamine</p>
+    <p className="flag-licence">Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</p>
+    <p className="flag-licence">The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</p>
+    <p className="flag-licence">THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+  </details>
+}
+
 /**
  * The one Credits view (owner decision, 22 November 2026): logos and every player photo's author and licence,
  * reachable from the footer of every career page instead of a credit line under each photo.
@@ -29,6 +40,7 @@ export function CreditsDialog({ onClose }: { onClose: () => void }) {
     </header>
     <div className="credits-dialog-body" tabIndex={0} role="region" aria-label="Credits">
       <LogoCredit />
+      <FlagCredit />
       <PhotoCredits defaultOpen />
     </div>
   </dialog>

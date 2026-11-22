@@ -176,13 +176,14 @@
 .game-disclosure>summary svg{flex:none}
 .game-disclosure>summary:focus-visible{outline-offset:-3px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-/* Player nationality (owner feedback, 22 November 2026). */
+/* Player nationality (owner feedback, 22 November 2026); real SVG flags, 3:2, that evening. */
+.country-flag { display: inline-block; flex: none; object-fit: cover; border-radius: 2px; box-shadow: 0 0 0 1px #ffffff26; vertical-align: middle; }
 .nationality { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
-.nationality .country-flag { width: 20px; height: 14px; border-radius: 2px; flex: none; }
-.nationality-emoji { font-size: 15px; line-height: 1; }
+.nationality .country-flag { width: 21px; height: 14px; }
 .nationality-compact { margin-left: 6px; }
-.nationality-compact .country-flag { width: 16px; height: 11px; }
-.nationality-compact .nationality-emoji { font-size: 13px; }
+.nationality-compact .country-flag { width: 18px; height: 12px; }
+.manager-flags { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
+.manager-flags .country-flag { width: 18px; height: 12px; }
 .transfers-player .nationality-compact { margin: 0 6px 0 0; }
 .profile-nationality { margin: 4px 0 0; font-size: 13px; color: var(--text); }
 /* Format 78: the scouting network note on Staff > Scouts. */

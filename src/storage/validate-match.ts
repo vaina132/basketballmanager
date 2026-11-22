@@ -1,6 +1,6 @@
-import type { CourtScene, MatchEvent, MatchState, Position, Side } from '../domain/types';
+import type { CourtScene, MatchEvent, MatchState, Position, Side, Team } from '../domain/types';
 import { INJURY_KINDS, MATCH_INJURY_KINDS } from '../domain/injuries';
-import { MAX_INJURY_RISK, MAX_MATCH_PERIODS } from '../engine/match';
+import { MAX_INJURY_RISK, MAX_MATCH_PERIODS, validCoachRotation } from '../engine/match';
 import { COURT_POSITIONS } from '../engine/positions';
 import { abilityShapeProblem } from '../world/extra-attributes';
 
@@ -248,7 +248,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     'pendingSubstitutions', 'requiredSubstitutions', 'freeThrows', 'stoppage', 'substitutionLocks',
     'autoSubstitutions', 'injuryMode', 'injuries', 'courtSeconds', 'result',
     ...(modern ? ['possessionPlay'] : []),
-  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk', 'slots', 'startingSlots', 'playModel', 'computerCoach', 'neutralVenue'] : []);
+  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk', 'slots', 'startingSlots', 'playModel', 'computerCoach', 'neutralVenue', 'coachRotation'] : []);
   if (state.schemaVersion !== 2 || !['rules-2', 'possession-3'].includes(state.engineVersion as string)) fail('state', 'uses an unsupported schema or engine version');
   // Format 79: the richer play model, with the sides a computer coach runs.
   // Format 81: the richer play model with the dead balls of a real game (`plays-3`).
@@ -259,6 +259,15 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
   } else if (Object.hasOwn(state, 'playModel')) fail('computerCoach', 'must be recorded with the play model');
   // Format 85: a game at one venue has no home-court advantage.
   if (Object.hasOwn(state, 'neutralVenue') && state.neutralVenue !== true) fail('neutralVenue', 'must be true when recorded');
+  // Format 86: a computer side's head coach's rotation, for players of its own team.
+  if (Object.hasOwn(state, 'coachRotation')) {
+    const rotations = state.coachRotation;
+    if (rotations === null || typeof rotations !== 'object' || Array.isArray(rotations) || !Object.keys(rotations).length || Object.keys(rotations).some(side => !SIDES.includes(side as Side))) fail('coachRotation', 'must name the teams a head coach runs');
+    for (const [side, rotation] of Object.entries(rotations as Record<string, unknown>)) {
+      const team = (state as Record<string, unknown>)[side] as Team | undefined;
+      if (!team || !Array.isArray(team.players) || !validCoachRotation(rotation, team)) fail(`coachRotation.${side}`, 'must stay within the supported values for players of its own team');
+    }
+  }
   number(state.seed, 'seed', 0, 0xffff_ffff);
   number(state.rngState, 'rngState', 1, 0xffff_ffff);
   const period = number(state.period, 'period', 1, MAX_MATCH_PERIODS);

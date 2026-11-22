@@ -71,7 +71,9 @@ describe('real head coaches (format 82)', () => {
 
   it('gives every club a head coach and makes the real coach of the manager\'s club a free agent', () => {
     const state = create();
-    expect(state.coaches?.model).toBe('coaches-1');
+    // Format 86: new careers' head coaches also steer training, rotation and signings.
+    expect(state.coaches?.model).toBe('coaches-2');
+    expect(create({ coachSteering: false }).coaches?.model).toBe('coaches-1');
     const pool = coachWorld(world);
     expect(pool.coaches.get(pool.opening.get(FENERBAHCE)!)!.name).toBe('Šarūnas Jasikevičius');
     expect(pool.coaches.get(pool.opening.get(EFES)!)!.name).toBe('Pablo Laso');
@@ -136,9 +138,10 @@ describe('real head coaches (format 82)', () => {
     expect(Object.values(poor.changes).filter(change => change === -1).length).toBeLessThanOrEqual(2);
     const state = create();
     expect(managerAttributes(state.coaches!)).toEqual(state.coaches!.manager.start);
-    validateCoachesShape(state.coaches, state, 82);
-    expect(() => validateCoachesShape({ ...state.coaches, manager: { ...state.coaches!.manager, start: { ...state.coaches!.manager.start, tactics: 19 } } }, state, 82)).toThrow(/starting formula/);
+    validateCoachesShape(state.coaches, state, 86);
+    expect(() => validateCoachesShape({ ...state.coaches, manager: { ...state.coaches!.manager, start: { ...state.coaches!.manager.start, tactics: 19 } } }, state, 86)).toThrow(/starting formula/);
     expect(() => validateCoachesShape(state.coaches, state, 80)).toThrow(/format 82/);
+    expect(() => validateCoachesShape(state.coaches, state, 85)).toThrow(/format 86/);
   });
 
   it('saves and loads a real-coach career under the strict check; computer clubs play their coach\'s style', () => {
@@ -152,7 +155,12 @@ describe('real head coaches (format 82)', () => {
     const forged = JSON.parse(serializeSeason(played));
     forged.state.coaches.manager.start.offence = 16;
     expect(() => parseSeason(JSON.stringify(forged))).toThrow(/coaches/);
-    const older = JSON.parse(serializeSeason(played));
+    // Format 86: a steering career written as format 85 is refused by its own guard.
+    const before86 = JSON.parse(serializeSeason(played));
+    before86.formatVersion = 85; before86.state.schemaVersion = 85;
+    expect(() => parseSeason(JSON.stringify(before86))).toThrow(/format 86/);
+    // Format 82's guard, on a career without steering (format 86) at its opening.
+    const older = JSON.parse(serializeSeason(create({ coachSteering: false })));
     older.formatVersion = 80; older.state.schemaVersion = 80;
     delete older.state.coaching.fullStaff; // format 84's staffing rule, refused on its own in a format-80 save delete older.state.world.neutralVenues; delete older.state.world.nextDivisionCountries;
     expect(() => parseSeason(JSON.stringify(older))).toThrow(/format 82/);

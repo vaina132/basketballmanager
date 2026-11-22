@@ -5,6 +5,7 @@ import { managedClubFor } from '../world/career';
 import { seasonVerdict } from '../world/board-consequences';
 import { coachHash } from '../world/coach-ratings';
 import { COACHES_MODEL, COACH_RULES, headCoachWorld } from '../world/head-coaches';
+import { COACH_STEERING_MODEL } from '../world/coach-steering';
 
 /**
  * Format 82 save checks for real head coaches. Who coaches where is not saved: it is replayed from the opening coaches
@@ -26,7 +27,9 @@ export function validateCoachesShape(value: unknown, state: SeasonState, version
   if (version < 82) fail('coaches', 'need format 82 or later');
   if (!headCoachWorld(worldOf(state)) || !state.career?.enabledSince || !state.board?.enabledSince) fail('coaches', 'belong only to real-club careers with board reviews and job changes');
   const coaches = record(value, 'coaches', ['model', 'manager']);
-  if (coaches.model !== COACHES_MODEL) fail('coaches.model', 'must be a supported model');
+  if (coaches.model !== COACHES_MODEL && coaches.model !== COACH_STEERING_MODEL) fail('coaches.model', 'must be a supported model');
+  // Format 86: head coaches who steer their clubs (`coaches-2`) are a rule of new careers only.
+  if (coaches.model === COACH_STEERING_MODEL && version < 86) fail('coaches.model', 'needs format 86 or later to steer clubs');
   const manager = record(coaches.manager, 'coaches.manager', ['start', 'seasons']);
   const start = record(manager.start, 'coaches.manager.start', COACH_ATTRIBUTES);
   const spread = (key: CoachAttribute) => 10 + (coachHash(`manager|${state.seed}|${key}`) % 3) - 1;

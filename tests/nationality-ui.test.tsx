@@ -24,8 +24,10 @@ describe('player nationality', () => {
     const full = renderToStaticMarkup(<Nationality country="Turkey" />);
     expect(full).toContain('class="country-flag"');
     expect(full).toContain('<span>Turkey</span>');
+    // Real SVG flags since 22 November 2026, evening (no emoji, which Windows shows as letters).
     const emoji = renderToStaticMarkup(<Nationality country="USA" compact />);
-    expect(emoji).toContain('🇺🇸');
+    expect(emoji).toContain('data-flag="US"');
+    expect(emoji).not.toContain('🇺🇸');
     expect(emoji).toContain('title="USA"');
     expect(emoji).toContain('class="sr-only">USA');
     expect(renderToStaticMarkup(<Nationality country={null} />)).toBe('');

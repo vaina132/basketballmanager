@@ -29,6 +29,7 @@ import { ReplaceStaffButton, StaffContractEnd, replacementTarget, revealCandidat
 import { sackingTerms, STAFF_ROLE_LABELS, roleStaff, type StaffRole } from '../world/staff-roster'
 import { usesClubLevelStaff } from '../world/staff-levels'
 import { usesStaffContracts } from '../world/staff-contracts'
+import { StaffNationality } from './Nationality'
 
 interface StaffWorkspaceProps extends ScoutStaffProps, FitnessStaffProps, PhysioStaffProps, AssistantStaffProps, YouthCoachStaffProps, StaffCandidateControls {
   role: 'coaches' | 'scouts' | 'fitness' | 'physio' | 'assistant' | 'youth'
@@ -183,7 +184,7 @@ function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRe
         <div className="staff-roster">{contracts.map(contract => {
           const coach = coachById(contract.coachId)
           return <article className="staff-owned-card" key={contract.id} data-contract-id={contract.id}>
-            <div className="staff-owned-identity"><CoachPortrait coach={coach} color={club.color} size={80} /><div><span className="staff-role">Training coach</span><h3>{coach.name}</h3><StaffStars rating={coachRating(coach)} /><span className="staff-card-fee">{money(feeOf(coach.fee))} <small>/ season</small></span><StaffContractEnd season={season} personId={coach.id} /></div></div>
+            <div className="staff-owned-identity"><CoachPortrait coach={coach} color={club.color} size={80} /><div><span className="staff-role">Training coach</span><h3>{coach.name}<StaffNationality personId={coach.id} /></h3><StaffStars rating={coachRating(coach)} /><span className="staff-card-fee">{money(feeOf(coach.fee))} <small>/ season</small></span><StaffContractEnd season={season} personId={coach.id} /></div></div>
             <CoachSkills coach={coach} compact />
             <label className="staff-assignment-control">Assignment<select data-coach-assignment={contract.id} aria-label={coach.name + ' assignment'} value={contract.focus} onChange={event => onAssignment(contract.id, event.target.value as TrainingFocus)} disabled={busy}><FocusOptions /></select></label>
             <div className="staff-contract-controls"><label className="staff-renew"><input type="checkbox" data-coach-renewal={contract.id} checked={contract.renew} onChange={event => onRenewal(contract.id, event.target.checked)} disabled={busy} aria-label={'Renew ' + coach.name + ' next season'} />Renew next season</label><ReplaceStaffButton season={season} name={coach.name} contractId={contract.id} onReplace={onReplace} busy={busy} /><button className="text-button" data-release-coach={contract.id} onClick={event => { releaseTrigger.current = event.currentTarget; setReleaseId(contract.id) }} aria-label={'Release ' + coach.name} disabled={busy}>Release</button></div>
@@ -217,7 +218,7 @@ function TrainingStaff({ season, onEnable, onHire, onRelease, onAssignment, onRe
         <div className="staff-candidate-grid">{visibleCandidates.map(coach => {
           const reason = hiringReason(coach)
           return <article className={'staff-candidate-card' + (selectedId === coach.id ? ' staff-selected-candidate' : '')} key={coach.id}>
-            <button className="staff-candidate-identity" data-candidate-coach={coach.id} aria-label={'Review ' + coach.name} aria-expanded={selectedId === coach.id} aria-controls="coach-candidate-detail" onClick={event => openCandidate(coach, event.currentTarget)} disabled={busy}><CoachPortrait coach={coach} size={64} /><span><strong>{coach.name}</strong><StaffStars rating={coachRating(coach)} /><small>{TRAINING_FOCUS_LABELS[strongestSkills(coach)[0]]} specialist</small></span><Icon name="chevron" size={15} /></button>
+            <button className="staff-candidate-identity" data-candidate-coach={coach.id} aria-label={'Review ' + coach.name} aria-expanded={selectedId === coach.id} aria-controls="coach-candidate-detail" onClick={event => openCandidate(coach, event.currentTarget)} disabled={busy}><CoachPortrait coach={coach} size={64} /><span><strong>{coach.name}<StaffNationality personId={coach.id} /></strong><StaffStars rating={coachRating(coach)} /><small>{TRAINING_FOCUS_LABELS[strongestSkills(coach)[0]]} specialist</small></span><Icon name="chevron" size={15} /></button>
             <CoachSkills coach={coach} compact /><div className="staff-candidate-footer"><span className="staff-card-fee">{money(feeOf(coach.fee))} <small>/ season</small></span><button className={'button small' + (reason ? '' : ' primary')} onClick={event => openCandidate(coach, event.currentTarget)} aria-label={(reason ? 'Review' : 'Recruit') + ' ' + coach.name} disabled={busy}>{reason ? 'View coach' : 'Recruit'}<Icon name="chevron" size={13} /></button></div>
             {reason && <span className="staff-card-status">{contracts.length >= MAX_COACHES ? 'Replaces a current coach' : season.status === 'complete' ? 'Recruit next season' : 'Outside current budget'}</span>}
           </article>

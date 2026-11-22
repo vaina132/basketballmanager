@@ -15,3 +15,6 @@
 .credits-dialog-body summary{font-weight:600;color:var(--text)}
 .credits-dialog-body .photo-credits p{margin:6px 0;color:var(--muted)}
 .credits-dialog .photo-credits-list{max-height:none}
+.credits-dialog-body [data-credits="flags"]{margin:0 0 10px}
+.credits-dialog-body [data-credits="flags"] summary a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.credits-dialog-body .flag-licence{font-size:11px;overflow-wrap:break-word}

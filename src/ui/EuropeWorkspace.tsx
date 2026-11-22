@@ -1,44 +1,78 @@
 import { useMemo, useState } from 'react'
 import type { ArchivedFixture, SeasonFixture, SeasonState, Standing } from '../domain/season'
 import type { Team } from '../domain/types'
+import type { BackgroundLeague } from '../domain/world'
 import { worldOf } from '../world/career-world'
 import { managedClubFor } from '../world/career'
-import { getEuropeanCompetitions } from '../world/europe'
+import { isUnemployed } from '../world/career-rules'
+import { seasonLeagues, type DomesticLeague } from '../world/divisions'
+import { europeanEntrants, getEuropeanCompetitions } from '../world/europe'
+import { playedEuropeanCompetitions } from '../world/european-formats'
 import { estimatedTable } from '../world/european-places'
 import { seasonLabel } from '../world/season'
 import { NOT_PLAYED_LEAGUE } from './career-text'
-import './season-workspace.css'
 import { ClubBadge, InlineLogo } from './ClubLogo'
+import { CountryFlag } from './CountryFlag'
+import { SeasonWorkspace } from './SeasonWorkspace'
+import './season-workspace.css'
 
+const STAGES: Record<string, string> = { qualifying: 'Qualification', 'play-in': 'Play-in', 'round-of-16': 'Round of 16', 'quarter-final': 'Quarter-finals', 'semi-final': 'Semi-finals', 'third-place': 'Third place', final: 'Final' }
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
-const STAGES: Record<string, string> = { qualifying: 'Qualification', 'play-in': 'Play-in', 'round-of-16': 'Round of 16', 'quarter-final': 'Quarter-finals', 'semi-final': 'Semi-finals', 'third-place': 'Third place', final: 'Final' }
 const signed = (value: number) => value > 0 ? `+${value}` : String(value)
 
 function ClubName({ club, yours = false }: { club: Team; yours?: boolean }) {
   return <span className="season-club-name"><ClubBadge club={club} className="season-club-code" /><span>{club.name}{yours && <small>Your club</small>}</span></span>
 }
 
+/** A season's European places: the current season's, or an archived season's. */
+function seasonEurope(season: SeasonState, seasonNumber: number) {
+  return seasonNumber === season.seasonNumber ? season.europe : season.history.find(entry => entry.seasonNumber === seasonNumber)?.europe
+}
+
 /**
- * European competitions (step 3.5g): each competition's tables, knockout series and games for a season, and the
- * simulated final tables of the top divisions not chosen (not played game by game). Everything shown comes from the
- * career's games and records.
+ * The European competitions a club plays in a season (owner, 22 November 2026, evening: International lists only
+ * these), from the season's entrant lists.
  */
-export function EuropeWorkspace({ season, initialCompetition }: { season: SeasonState; initialCompetition?: string }) {
+export function clubEuropeanCompetitions(season: SeasonState, clubId: string, seasonNumber = season.seasonNumber): string[] {
+  if (!clubId) return []
+  const europe = seasonEurope(season, seasonNumber)
+  return playedEuropeanCompetitions(worldOf(season)).filter(competition => europeanEntrants(competition, europe).includes(clubId)).map(competition => competition.id)
+}
+
+function SeasonPicker({ id, season, value, onChange }: { id: string; season: SeasonState; value: number; onChange: (seasonNumber: number) => void }) {
+  return <div className="season-year-filter"><label htmlFor={id}>Season</label><select id={id} value={value} onChange={event => onChange(Number(event.target.value))}>
+    <option value={season.seasonNumber}>{seasonLabel(season.seasonNumber)} · Current</option>
+    {[...season.history].reverse().map(item => <option key={item.seasonNumber} value={item.seasonNumber}>{seasonLabel(item.seasonNumber)} · Archived</option>)}
+  </select></div>
+}
+
+/**
+ * Competitions > International (owner, 22 November 2026, evening; step 3.5g before): the European competitions the
+ * manager's club plays in the season shown, with their tables or groups, knockout rounds, games and results; the other
+ * European competitions stay a click away in a smaller set of buttons (a EuroCup club can still follow the EuroLeague).
+ * A manager without a club sees every competition. Everything shown comes from the career's games and records.
+ */
+export function InternationalWorkspace({ season, competitionId, onCompetitionChange }: { season: SeasonState; competitionId?: string | null; onCompetitionChange?: (id: string) => void }) {
   const world = worldOf(season)
   const [selectedSeason, setSelectedSeason] = useState(season.seasonNumber)
   const archive = season.history.find(entry => entry.seasonNumber === selectedSeason)
   const fixtures: readonly (SeasonFixture | ArchivedFixture)[] = archive?.fixtures ?? season.fixtures
   const europe = archive ? archive.europe : season.europe
   const competitions = useMemo(() => getEuropeanCompetitions({ world, seed: season.seed, fixtures, ...(europe ? { europe } : {}) }, selectedSeason), [world, season.seed, fixtures, europe, selectedSeason])
-  const backgroundLeagues = world.backgroundLeagues ?? []
+  // The club the manager ran in the season shown ('' without a club: then every competition is listed).
   const managedId = managedClubFor(season, selectedSeason, false)
-  const own = competitions.find(entry => entry.table.some(row => row.clubId === managedId) || entry.fixtures.some(fixture => fixture.homeClubId === managedId || fixture.awayClubId === managedId))
-  const [selected, setSelected] = useState(() => initialCompetition ?? own?.competition.id ?? competitions[0]?.competition.id ?? backgroundLeagues[0]?.id ?? '')
+  const own = useMemo(() => new Set(clubEuropeanCompetitions(season, managedId, selectedSeason)), [season, managedId, selectedSeason])
+  const shown = managedId ? competitions.filter(item => own.has(item.competition.id) || fixtures.some(fixture => fixture.competition === item.competition.id && (fixture.homeClubId === managedId || fixture.awayClubId === managedId))) : competitions
+  // The competitions the club does not play, behind smaller buttons; never opened by default.
+  const others = managedId ? competitions.filter(item => !shown.includes(item)) : []
+  const [chosen, setChosen] = useState<string | null>(competitionId ?? null)
+  const entry = competitions.find(item => item.competition.id === chosen) ?? shown[0]
+  const ownEntry = !!entry && shown.includes(entry)
   const [ownOnly, setOwnOnly] = useState(false)
   const club = (id: string) => season.clubs.find(team => team.id === id) ?? world.clubs.find(team => team.id === id)!
-  const entry = competitions.find(item => item.competition.id === selected)
-  const league = backgroundLeagues.find(item => item.id === selected)
+  const choose = (id: string) => { setChosen(id); onCompetitionChange?.(id) }
+  const current = selectedSeason === season.seasonNumber
 
   const table = (rows: readonly Standing[], caption: string) => <div className="season-table-scroll"><table className="season-standings-table"><caption className="sr-only">{caption}</caption><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th><th scope="col" title="Points scored">PF</th><th scope="col" title="Points conceded">PA</th><th scope="col" title="Point difference">+/-</th></tr></thead>
     <tbody>{rows.map(row => <tr key={row.clubId} className={row.clubId === managedId ? 'season-managed-row' : ''}><td>{row.position}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} /></th><td>{row.played}</td><td>{row.wins}</td><td>{row.losses}</td><td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{signed(row.difference)}</td></tr>)}</tbody></table></div>
@@ -47,19 +81,15 @@ export function EuropeWorkspace({ season, initialCompetition }: { season: Season
   const label = (fixture: SeasonFixture | ArchivedFixture) => fixture.stage ? `${STAGES[fixture.stage] ?? fixture.stage}${fixture.stage === 'round-of-16' ? ` · Group ${fixture.seriesId?.replace('r16-', '')}` : fixture.game && entry?.series.find(series => series.id === fixture.seriesId)?.bestOf !== 1 ? ` · Game ${fixture.game}` : ''}` : 'Regular season'
   const champion = entry?.outcome.champion ? club(entry.outcome.champion) : null
 
-  return <div className="season-workspace europe-workspace">
+  return <div className="season-workspace europe-workspace" data-competitions-view="international">
     <section className="season-matchday panel" aria-label="European competition">
       <div className="season-matchday-identity">
-        <div className="season-year-filter"><label htmlFor="europe-competition">Competition</label><select id="europe-competition" aria-label="European competition" value={selected} onChange={event => setSelected(event.target.value)}>
-          {competitions.map(item => <option key={item.competition.id} value={item.competition.id}>{item.competition.name}</option>)}
-          {backgroundLeagues.map(item => <option key={item.id} value={item.id}>{item.name} · not played</option>)}
-        </select></div>
-        <div className="season-year-filter"><label htmlFor="europe-season">Season</label><select id="europe-season" aria-label="Season" value={selectedSeason} onChange={event => setSelectedSeason(Number(event.target.value))}>
-          <option value={season.seasonNumber}>{seasonLabel(season.seasonNumber)} · Current</option>
-          {[...season.history].reverse().map(item => <option key={item.seasonNumber} value={item.seasonNumber}>{seasonLabel(item.seasonNumber)} · Archived</option>)}
-        </select></div>
+        {shown.length > 1 || shown.length === 1 && others.length > 0 ? <div className="segmented competition-choice" role="group" aria-label={managedId ? 'Your European competitions' : 'European competition'}>{shown.map(item => <button key={item.competition.id} type="button" data-competition-option={item.competition.id} aria-pressed={entry?.competition.id === item.competition.id} className={entry?.competition.id === item.competition.id ? 'selected' : ''} onClick={() => choose(item.competition.id)}><InlineLogo kind="competition" id={item.competition.id} name={item.competition.name} size={18} decorative />{item.competition.name}</button>)}</div>
+          : entry && !others.length ? <h2 className="season-club-name season-league-name"><InlineLogo kind="competition" id={entry.competition.id} name={entry.competition.name} size={26} decorative /><span>{entry.competition.name}</span></h2> : null}
+        {others.length > 0 && <div className="competition-others" role="group" aria-labelledby="competition-others-label"><span id="competition-others-label">Other European competitions</span><div>{others.map(item => <button key={item.competition.id} type="button" data-other-competition={item.competition.id} aria-pressed={entry?.competition.id === item.competition.id} className={entry?.competition.id === item.competition.id ? 'selected' : ''} onClick={() => choose(item.competition.id)}><InlineLogo kind="competition" id={item.competition.id} name={item.competition.name} size={14} decorative />{item.competition.name}</button>)}</div></div>}
+        <SeasonPicker id="europe-season" season={season} value={selectedSeason} onChange={value => { setSelectedSeason(value); setChosen(null) }} />
       </div>
-      <div className="season-matchday-action"><p>{entry && <InlineLogo kind="competition" id={entry.competition.id} name={entry.competition.name} size={20} />}{entry ? champion ? <><strong>{champion.name}</strong> win the {entry.competition.name}.</> : `${entry.format.label}: ${entry.table.length || entry.competition.clubIds.length} clubs.` : league ? `${league.name} is not played game by game in this career: ${NOT_PLAYED_LEAGUE.table}` : 'No European competition is played in this career.'}</p></div>
+      <div className="season-matchday-action"><p data-international-status>{managedId && !shown.length && competitions.length > 0 && <>{current ? 'Your club plays no European competition this season.' : `Your club played no European competition in ${seasonLabel(selectedSeason)}.`}{entry && ' '}</>}{entry ? champion ? <><strong>{champion.name}</strong> win the {entry.competition.name}.</> : `${entry.format.label}: ${entry.table.length || europeanEntrants(entry.competition, europe).length} clubs.` : !competitions.length ? 'No European competition is played in this career.' : null}</p></div>
     </section>
 
     {entry && <>
@@ -81,7 +111,7 @@ export function EuropeWorkspace({ season, initialCompetition }: { season: Season
             <td>{series.bestOf === 1 ? 'Single game' : `Best of ${series.bestOf}`}{series.neutral ? ' · one venue' : ''}</td></tr>)}</tbody></table></div>
       </section>}
       <section className="season-fixtures panel" aria-labelledby="europe-fixtures-title">
-        <header className="season-panel-heading season-fixtures-heading"><h2 id="europe-fixtures-title">Games &amp; results</h2><label className="season-own-filter"><input type="checkbox" checked={ownOnly} onChange={event => setOwnOnly(event.target.checked)} /> Your club only</label></header>
+        <header className="season-panel-heading season-fixtures-heading"><h2 id="europe-fixtures-title">Games &amp; results</h2>{managedId && ownEntry && <label className="season-own-filter"><input type="checkbox" checked={ownOnly} onChange={event => setOwnOnly(event.target.checked)} /> Your club only</label>}</header>
         <div className="season-table-scroll"><table className="season-fixtures-table"><thead><tr><th scope="col">Date</th><th scope="col">Home</th><th scope="col">Score</th><th scope="col">Away</th><th scope="col">Stage</th></tr></thead>
           <tbody>{games.map(fixture => <tr key={fixture.id} className={fixture.homeClubId === managedId || fixture.awayClubId === managedId ? 'season-managed-row' : ''}>
             <td><time dateTime={fixture.date}>{formatDate(fixture.date)}</time></td><td><ClubName club={club(fixture.homeClubId)} /></td>
@@ -89,12 +119,85 @@ export function EuropeWorkspace({ season, initialCompetition }: { season: Season
         {!games.length && <p className="muted">No games yet.</p>}
       </section>
     </>}
+  </div>
+}
 
-    {league && <section className="season-standings panel" aria-labelledby="europe-estimated-title">
+/** A league of European Leagues: another played domestic league, or a country's league with a simulated table. */
+interface LeagueChoice { id: string; name: string; country: string; tier: number; played: boolean }
+const TIERS: Record<number, string> = { 1: 'Top division', 2: 'Second division', 3: 'Third division' }
+
+/**
+ * Every domestic league besides the manager's own, by country (his own country first, then A-Z), top division first:
+ * the played leagues, then the leagues of countries not chosen at career start (simulated tables).
+ */
+export function otherLeagues(season: SeasonState): { country: string; leagues: LeagueChoice[] }[] {
+  const world = worldOf(season)
+  const played: readonly DomesticLeague[] = world.domesticLeagues ? seasonLeagues(world, season.divisions) : []
+  const own = isUnemployed(season) ? undefined : played.find(league => league.clubIds.includes(season.managedClubId))
+  const choices: LeagueChoice[] = [
+    ...played.filter(league => league.id !== own?.id).map(league => ({ id: league.id, name: league.name, country: league.country, tier: league.tier, played: true })),
+    ...(world.backgroundLeagues ?? []).map((league: BackgroundLeague) => ({ id: league.id, name: league.name, country: league.country, tier: league.tier, played: false })),
+  ]
+  const countries = [...new Set(choices.map(choice => choice.country))].sort((a, b) => (a === own?.country ? -1 : b === own?.country ? 1 : a.localeCompare(b, 'en')))
+  return countries.map(country => ({ country, leagues: choices.filter(choice => choice.country === country).sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name, 'en')) }))
+}
+
+/** The league European Leagues opens on: the first top division listed, else the first league. */
+export function defaultOtherLeague(groups: readonly { leagues: readonly LeagueChoice[] }[]): string | null {
+  const all = groups.flatMap(group => group.leagues)
+  return (all.find(league => league.tier === 1) ?? all[0])?.id ?? null
+}
+
+/**
+ * Competitions > European Leagues (owner, 22 November 2026, evening: it replaces the Europe page's drop-down list):
+ * every other domestic league, picked from a list of buttons grouped by country. A played league shows its table,
+ * playoffs, statistics and games; a league of a country not chosen shows its simulated final table.
+ */
+export function EuropeanLeaguesWorkspace({ season, leagueId, onLeagueChange, onOpenMatch, onNewCareer, onLoad, busy = false }: { season: SeasonState; leagueId?: string | null; onLeagueChange?: (id: string) => void; onOpenMatch: () => void; onNewCareer: () => void; onLoad: () => void; busy?: boolean }) {
+  const groups = useMemo(() => otherLeagues(season), [season])
+  const [chosen, setChosen] = useState<string | null>(leagueId ?? null)
+  const all = groups.flatMap(group => group.leagues)
+  const selected = all.find(league => league.id === chosen) ?? all.find(league => league.id === defaultOtherLeague(groups))
+  const choose = (id: string) => { setChosen(id); onLeagueChange?.(id) }
+  if (!selected) return <div className="season-workspace"><section className="panel season-intro"><p>No other league is in this career.</p></section></div>
+  return <div className="season-workspace european-leagues" data-competitions-view="leagues">
+    <section className="panel league-picker" aria-labelledby="league-picker-title">
+      <header className="season-panel-heading"><h2 id="league-picker-title">Choose a league</h2><span>{all.length} {all.length === 1 ? 'league' : 'leagues'}</span></header>
+      <div className="league-picker-countries">{groups.map(group => {
+        const titleId = `league-country-${group.country.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+        return <div key={group.country} className="league-picker-country" role="group" aria-labelledby={titleId}>
+          <h3 id={titleId}><CountryFlag country={group.country} decorative />{group.country}</h3>
+          <div className="league-picker-options">{group.leagues.map(league => <button key={league.id} type="button" className={`league-option${league.id === selected.id ? ' selected' : ''}`} aria-pressed={league.id === selected.id} data-league-option={league.id} onClick={() => choose(league.id)}>
+            <span className="league-option-logo"><InlineLogo kind="competition" id={league.id} name={league.name} size={22} decorative /></span>
+            <span><strong>{league.name}</strong><small>{league.played ? TIERS[league.tier] ?? `Division ${league.tier}` : NOT_PLAYED_LEAGUE.tag}</small></span>
+          </button>)}</div>
+        </div>
+      })}</div>
+    </section>
+    {selected.played
+      ? <SeasonWorkspace season={season} leagueId={selected.id} onOpenMatch={onOpenMatch} onNewCareer={onNewCareer} onLoad={onLoad} busy={busy} />
+      : <SimulatedLeague key={selected.id} season={season} league={(worldOf(season).backgroundLeagues ?? []).find(league => league.id === selected.id)!} />}
+  </div>
+}
+
+/** A league of a country not chosen at career start: its simulated final table for the season shown. */
+function SimulatedLeague({ season, league }: { season: SeasonState; league: BackgroundLeague }) {
+  const world = worldOf(season)
+  const [selectedSeason, setSelectedSeason] = useState(season.seasonNumber)
+  const club = (id: string) => season.clubs.find(team => team.id === id) ?? world.clubs.find(team => team.id === id)!
+  return <>
+    <section className="season-matchday panel" aria-label={`${league.name} season`} data-season-league={league.id}>
+      <div className="season-matchday-identity">
+        <span className="season-club-name season-league-name"><InlineLogo kind="competition" id={league.id} name={league.name} size={26} decorative /><span>{league.name}<small>{league.country}</small></span></span>
+        <SeasonPicker id="simulated-league-season" season={season} value={selectedSeason} onChange={setSelectedSeason} />
+      </div>
+      <div className="season-matchday-action"><p>{league.name} is not played game by game in this career: {NOT_PLAYED_LEAGUE.table}</p></div>
+    </section>
+    <section className="season-standings panel" aria-labelledby="europe-estimated-title">
       <header className="season-panel-heading"><h2 id="europe-estimated-title">{league.name} · Simulated final table</h2></header>
-      <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Strength of the best eight players plus the season's random element">Strength</th></tr></thead>
+      <div className="season-table-scroll"><table className="season-standings-table simulated-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Strength of the best eight players plus the season's random element">Strength</th></tr></thead>
         <tbody>{estimatedTable(season, league, selectedSeason).map((row, index) => <tr key={row.clubId}><td>{index + 1}</td><th scope="row"><ClubName club={club(row.clubId)} /></th><td>{row.estimate.toFixed(1)}</td></tr>)}</tbody></table></div>
       <p className="muted">Not played game by game: clubs are ranked by the strength of their best eight players plus a random element. The order only decides who plays in Europe next season.</p>
-    </section>}
-  </div>
+    </section>
+  </>
 }

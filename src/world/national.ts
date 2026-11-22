@@ -13,6 +13,7 @@ import { overallRating } from './overall-rating';
 import { developClub } from './training';
 import { managerReputation } from './career-policy';
 import { isUnemployed } from './career-rules';
+import { coachPlaces, coachWorld, headCoach } from './head-coaches';
 
 /**
  * Format 80 (owner feedback item 13, 22 November 2026): national teams, their competitions and coaches, and national
@@ -45,6 +46,37 @@ export function nationalHash(seed: number, text: string): number {
 export function generatedCoach(national: Pick<SeasonNational, 'teams' | 'coachCount'>, teamId: string, seasonNumber: number, date: string): { coach: NationalCoach; coachCount: number } {
   const team = nationalTeam(national, teamId);
   return { coach: { teamId, name: nationalPersonName(team.country, national.coachCount), since: { seasonNumber, date }, confidence: NATIONAL_RULES.startingConfidence }, coachCount: national.coachCount + 1 };
+}
+
+/**
+ * Format 82: the coach a federation appoints. With real head coaches, the free agent of the team's country with the
+ * best reputation who coaches no other national team (a free agent from abroad when none is from the country); else
+ * a generated coach, as before.
+ */
+export function replacementCoach(state: Pick<SeasonState, 'coaches' | 'board' | 'seasonNumber' | 'world' | 'dataPackId'>, national: Pick<SeasonNational, 'teams' | 'coachCount' | 'coaches'>, teamId: string, seasonNumber: number, date: string): { coach: NationalCoach; coachCount: number } {
+  if (state.coaches) {
+    const team = nationalTeam(national, teamId), names = new Set(national.coaches.filter(coach => coach.teamId !== teamId).map(coach => coach.name));
+    const free = coachPlaces({ ...state, seasonNumber }).free.map(id => headCoach({ ...state, seasonNumber }, id)!).filter(coach => !names.has(coach.name));
+    const best = (list: typeof free) => [...list].sort((a, b) => b.reputation - a.reputation || (a.id < b.id ? -1 : 1))[0];
+    const chosen = best(free.filter(coach => coach.nationality === team.country)) ?? best(free);
+    if (chosen) return { coach: { teamId, name: chosen.name, since: { seasonNumber, date }, confidence: NATIONAL_RULES.startingConfidence }, coachCount: national.coachCount };
+  }
+  return generatedCoach(national, teamId, seasonNumber, date);
+}
+
+/** Format 82: the national teams' real head coaches replace the generated names at a career's start (unknown ones stay generated). */
+export function withRealNationalCoaches(national: SeasonNational, world: CareerWorld): SeasonNational {
+  const real = coachWorld(world).national;
+  return { ...national, coaches: national.coaches.map(coach => { const id = real.get(coach.teamId); return id && !coach.manager ? { ...coach, name: coachWorld(world).coaches.get(id)!.name } : coach; }) };
+}
+
+/** Format 82: the person behind a national coach entry (a real or market coach of this career), when there is one. */
+export function nationalCoachPerson(state: Pick<SeasonState, 'coaches' | 'world' | 'dataPackId' | 'seasonNumber' | 'national'>, teamId: string): string | null {
+  if (!state.coaches || !state.national) return null;
+  const entry = state.national.coaches.find(coach => coach.teamId === teamId);
+  if (!entry || entry.manager) return null;
+  for (const [id, coach] of coachWorld(worldOf(state)).coaches) if (coach.name === entry.name) return id;
+  return null;
 }
 
 /**
@@ -421,14 +453,14 @@ function reviewNational(state: SeasonState, national: SeasonNational, fixtures: 
       if (dismissed) {
         next.events.push({ id: `national-event-${key}`, teamId: coach.teamId, date, kind: 'dismissed' });
         next.job = null;
-        const replaced = generatedCoach(next, coach.teamId, seasonNumber, date);
+        const replaced = replacementCoach(state, next, coach.teamId, seasonNumber, date);
         next.coaches[index] = replaced.coach; next.coachCount = replaced.coachCount;
       } else next.coaches[index] = { ...coach, confidence };
       continue;
     }
     const stepsDown = nationalHash(state.seed, `${coach.teamId}|${key}|steps-down`) % 100 < (window === 3 ? 15 : 6);
     if (confidence < NATIONAL_RULES.replaceBelow || stepsDown) {
-      const replaced = generatedCoach(next, coach.teamId, seasonNumber, date);
+      const replaced = replacementCoach(state, next, coach.teamId, seasonNumber, date);
       next.coaches[index] = replaced.coach; next.coachCount = replaced.coachCount;
       vacancies.push(coach.teamId);
     } else next.coaches[index] = { ...coach, confidence };
@@ -616,7 +648,7 @@ export function resignNationalJob(state: SeasonState): SeasonState {
   const national = state.national, job = national?.job;
   if (!national || !job) throw new Error('You do not coach a national team.');
   if (national.activeMatch) throw new Error('Finish the national game first.');
-  const replaced = generatedCoach(national, job.teamId, state.seasonNumber, state.date);
+  const replaced = replacementCoach(state, national, job.teamId, state.seasonNumber, state.date);
   return { ...state, national: { ...payNationalSalary(national, state.date), job: null, coaches: national.coaches.map(coach => coach.teamId === job.teamId ? replaced.coach : coach), coachCount: replaced.coachCount, events: [...national.events, { id: `national-event-resigned-s${state.seasonNumber}-${state.date}`, teamId: job.teamId, date: state.date, kind: 'resigned' as const }] } };
 }
 
@@ -764,7 +796,7 @@ export function rolloverNational(state: SeasonState, nextSeasonDate?: string): S
     const verdict: NationalVerdict = { id: `national-contract-s${seasonNumber}`, teamId: job.teamId, date, confidence: coach.confidence, change: 0, outcome: renewed ? 'renewed' : 'left' };
     if (renewed) national = { ...national, job: { ...job, untilSeason: seasonNumber + NATIONAL_RULES.contractSeasons }, verdicts: [...national.verdicts, verdict] };
     else {
-      const replaced = generatedCoach(national, job.teamId, seasonNumber + 1, date);
+      const replaced = replacementCoach(next, national, job.teamId, seasonNumber + 1, date);
       national = { ...national, job: null, coaches: national.coaches.map(item => item.teamId === job.teamId ? replaced.coach : item), coachCount: replaced.coachCount, verdicts: [...national.verdicts, verdict], events: [...national.events, { id: `national-event-ended-s${seasonNumber}`, teamId: job.teamId, date, kind: 'ended' as const }] };
     }
   }

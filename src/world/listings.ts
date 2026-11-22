@@ -11,6 +11,7 @@ import { maxTransferFee, MIN_TRANSFER_FEE, requiredTransferFee, TRANSFER_FEE_STE
 import { seasonRounds } from './career-world';
 import { dateForRound } from './season';
 import { leavingClubIds } from './background';
+import { automaticWageCheck } from './automatic-wages';
 
 /**
  * Format 78 (`recruitment-2`, owner feedback 22 November 2026): the transfer and loan list. Computer clubs bid for
@@ -131,7 +132,8 @@ export function scheduleListingBids(state: SeasonState): SeasonState {
     for (const seasons of target.kind === 'loan' ? [1] : [2, 1]) {
       // The wage the player asks for this term and his natural role at the buyer, so he would sign.
       const wage = Math.max(contractAskingWage(state, buyer.id, target.playerId), requiredNegotiationWage(target.playerId, seasons, undefined, state, offeredContractRole(state, buyer.id, target.playerId)));
-      if (quoteInSeasonTransferOffer(state, target.playerId, wage, seasons, target.fee, buyer.id, 'upfront', undefined, options).canOffer) return submitInSeasonTransferOffer(state, target.playerId, wage, seasons, target.fee, buyer.id, 'upfront', options);
+      // Format 87: a buyer whose cash is low keeps its wages within what its money funds.
+      if (quoteInSeasonTransferOffer(state, target.playerId, wage, seasons, target.fee, buyer.id, 'upfront', undefined, options).canOffer && automaticWageCheck(state, buyer.id)(wage, seasons, state.seasonNumber)) return submitInSeasonTransferOffer(state, target.playerId, wage, seasons, target.fee, buyer.id, 'upfront', options);
     }
   }
   return state;

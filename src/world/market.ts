@@ -18,6 +18,7 @@ import { DAILY_RECOVERY, dateForRound, MAX_SEASON_NUMBER } from './season';
 import { addMarketDays, compareMarketOffers, getLiveMarketOffers, getMarketStartReason, getMarketWindow, getNextMarketDate, isCompetitiveMarket, isLiveMarketOffer, isMarketActive, MARKET_MAX_EVENTS, MARKET_OFFER_DAYS, MARKET_RESPONSE_DAYS, MARKET_WINDOW_DAYS } from './market-policy';
 import { playerInList, seasonRounds } from './career-world';
 import { contractAskingWage, offeredContractRole } from './contract-roles';
+import { automaticWageCheck } from './automatic-wages';
 
 export function createMarket(): SeasonMarket { return { model: 'market-1', enabledSince: null, windows: [] }; }
 
@@ -254,7 +255,9 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
       const quote = playerContractQuoter(next, club.id);
       // relationships-3: computer clubs offer each player his natural role at the asking wage for it.
       const wage = (id: string) => contractAskingWage(next, club.id, id);
-      const player = ranked.find(player => quote(player.id, wage(player.id), 1).canOffer);
+      // Format 87: while its cash is low, a club keeps its new wages within what its money funds (`automaticWageCheck`).
+      const affordable = automaticWageCheck(next, club.id), startsSeason = next.seasonNumber + 1;
+      const player = ranked.find(player => quote(player.id, wage(player.id), 1).canOffer && affordable(wage(player.id), 1, startsSeason));
       // A club that has sold a player can buy a stronger, known replacement.
       // Retain/free recruitment remains the default, with identical fee guards.
       const sold = next.employment.transfers.some(transfer => transfer.seasonNumber === next.seasonNumber && transfer.fromClubId === club.id);
@@ -265,7 +268,7 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
           const asking = requiredTransferFee(next, id), clause = getApplicableReleaseClause(next, id);
           return clause.canTrigger && clause.fee! <= asking && quoteTransferOffer(next, id, wage(id), 1, clause.fee!, club.id, 'upfront', { transferMode: 'release-clause' }).canOffer ? { fee: clause.fee!, options: { transferMode: 'release-clause' } } : { fee: asking, options: {} };
         };
-        const paid = [...getTransferCandidates(next, club.id)].filter(candidate => !getMarketWindow(next)!.offers.some(offer => offer.clubId === club.id && offer.playerId === candidate.id && offer.transfer)).sort((a, b) => assessed(b.id) - assessed(a.id) || a.id.localeCompare(b.id, 'en')).find(candidate => { const terms = approach(candidate.id); return (!player || assessed(candidate.id) > assessed(player.id)) && quoteTransferOffer(next, candidate.id, wage(candidate.id), 1, terms.fee, club.id, 'upfront', terms.options).canOffer; });
+        const paid = [...getTransferCandidates(next, club.id)].filter(candidate => !getMarketWindow(next)!.offers.some(offer => offer.clubId === club.id && offer.playerId === candidate.id && offer.transfer)).sort((a, b) => assessed(b.id) - assessed(a.id) || a.id.localeCompare(b.id, 'en')).find(candidate => { const terms = approach(candidate.id); return (!player || assessed(candidate.id) > assessed(player.id)) && affordable(wage(candidate.id), 1, startsSeason) && quoteTransferOffer(next, candidate.id, wage(candidate.id), 1, terms.fee, club.id, 'upfront', terms.options).canOffer; });
         if (paid) {
           const terms = approach(paid.id);
           const openingFee = terms.options.transferMode === 'release-clause' ? terms.fee : Math.max(MIN_TRANSFER_FEE, Math.floor(terms.fee * .9 / TRANSFER_FEE_STEP) * TRANSFER_FEE_STEP);

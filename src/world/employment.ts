@@ -16,6 +16,7 @@ import { sellerReplacementReason } from './transfers-policy';
 import { getTransferPaymentSchedule } from './transfer-payments';
 import { scheduleInSeasonRecruitment } from './recruitment';
 import { contractAskingWage, offeredContractRole } from './contract-roles';
+import { automaticWageCheck } from './automatic-wages';
 
 export function createEmployment(): SeasonEmployment {
   return { model: 'employment-1', enabledSince: null, delegated: false, contracts: [], transfers: [], buyouts: [], market: null };
@@ -108,7 +109,8 @@ function retainPlayers(state: SeasonState, clubId: string, target: number): Seas
   const club = state.clubs.find(club => club.id === clubId)!;
   while (getClubContractSummary(next, clubId).rosterSize < target) {
     const candidates = rankCandidates(next, clubId, club.players.filter(player => !contractForSeason(next.employment, player.id, next.seasonNumber + 1)));
-    const player = candidates.find(player => quotePlayerContract(next, player.id, contractAskingWage(next, clubId, player.id), 1, clubId).canOffer);
+    const affordable = automaticWageCheck(next, clubId);
+    const player = candidates.find(player => quotePlayerContract(next, player.id, contractAskingWage(next, clubId, player.id), 1, clubId).canOffer && affordable(contractAskingWage(next, clubId, player.id), 1, next.seasonNumber + 1));
     if (!player) break;
     next = commitPlayerOffer(next, clubId, player.id, contractAskingWage(next, clubId, player.id), 1);
   }
@@ -118,7 +120,8 @@ function retainPlayers(state: SeasonState, clubId: string, target: number): Seas
 function recruitPlayers(state: SeasonState, clubId: string, target: number): SeasonState {
   let next = state;
   while (getClubContractSummary(next, clubId).rosterSize < target) {
-    const player = rankCandidates(next, clubId, getAvailablePlayers(next)).find(player => quotePlayerContract(next, player.id, contractAskingWage(next, clubId, player.id), 1, clubId).canOffer);
+    const affordable = automaticWageCheck(next, clubId);
+    const player = rankCandidates(next, clubId, getAvailablePlayers(next)).find(player => quotePlayerContract(next, player.id, contractAskingWage(next, clubId, player.id), 1, clubId).canOffer && affordable(contractAskingWage(next, clubId, player.id), 1, next.seasonNumber + 1));
     if (!player) break;
     next = commitPlayerOffer(next, clubId, player.id, contractAskingWage(next, clubId, player.id), 1);
   }

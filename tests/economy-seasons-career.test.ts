@@ -19,6 +19,7 @@ import { seasonExchangesOf } from '../src/world/season';
 import { clubSalaryBudget } from '../src/world/club-roster-policy';
 import { governingVerdict, ownerCapital, presidentCapital, staffAllocation, verdictBudgets } from '../src/world/board-consequences';
 import { clubPresident } from '../src/world/career-world';
+import { solidarityPayment } from '../src/world/economy-balance';
 
 /**
  * One test country with two divisions (six clubs each: the first's last two relegated, the second's first two promoted
@@ -112,8 +113,9 @@ describe('club money across a real rollover with promotion and relegation (forma
       for (const clubId of [...promoted, ...relegated]) {
         const economy = clubEconomy(state, clubId)!;
         expect(economy).toBe(table.clubs[clubId]);
-        expect(ledgerAmount(state, clubId, fundingSourceId(2))).toBe(economy.funding);
-        expect(ledgerAmount(state, clubId, fundingSourceId(1))).toBe(opening(world, clubId).funding);
+        // Format 87: smaller clubs' league solidarity comes with the season funding, at each season's figures.
+        expect(ledgerAmount(state, clubId, fundingSourceId(2))).toBe(economy.funding + solidarityPayment(state, clubId));
+        expect(ledgerAmount(state, clubId, fundingSourceId(1))).toBe(opening(world, clubId).funding + solidarityPayment({ world: state.world! }, clubId));
         expect(ledgerAmount(state, clubId, 'operations-s1-r1')).toBe(-Math.round(opening(world, clubId).operatingCost / seasonRounds(state)));
       }
       // The strict check replays season one at its figures and season two at the new ones.
@@ -121,7 +123,7 @@ describe('club money across a real rollover with promotion and relegation (forma
 
       const previous = rolloverSeason(older!);
       expect(previous.economySeasons).toBeUndefined();
-      for (const clubId of [...promoted, ...relegated]) expect(ledgerAmount(previous, clubId, fundingSourceId(2))).toBe(opening(world, clubId).funding);
+      for (const clubId of [...promoted, ...relegated]) expect(ledgerAmount(previous, clubId, fundingSourceId(2))).toBe(opening(world, clubId).funding + solidarityPayment({ world: previous.world! }, clubId));
       expect(roundTrip(previous)).toEqual(previous);
 
       for (let week = 0; week < 2; week += 1) state = advanceSeason(play(state));
@@ -184,14 +186,14 @@ describe('contract offers are checked with the money known when they were made',
 });
 
 describe('a manager appointed by a club promoted from the next division', () => {
-  // 22 November 2026: with seed 36 (30 before format 84's full staffing) the manager is dismissed after season two and
+  // 22 November 2026: with seed 58 (36 before format 87's economy balance, 30 before format 84's full staffing) the manager is dismissed after season two and
   // appointed by a club that joined the full world from the third division after season one; the strict check knew only
   // the world's opening clubs and refused it.
-  it('keeps the move and the next season (seed 36)', () => {
+  it('keeps the move and the next season (seed 58)', () => {
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      let state = setEmploymentDelegation(createSeason({ seed: 36, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+      let state = setEmploymentDelegation(createSeason({ seed: 58, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       const priced = getPostseasons(state, 1)[0]!.outcome.relegated.map(entry => entry.clubId).find((id): id is string => id !== null)!;

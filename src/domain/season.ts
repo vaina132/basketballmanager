@@ -226,7 +226,8 @@ export interface DomesticDivisions {
 /** Format 83: European entry rules for new careers (`europe.model` 'places-2', `src/world/european-entry.ts`): place types with end seasons, the places day with the licence check, wild cards by score, declines and the board's European aim. */
 /** Format 84: computer clubs always fill their six staff roles, the training (head) coach first, down to the cheapest candidate when they can afford no one (`coaching.fullStaff`, new careers with the wage pool). */
 /** Format 85: new real-club careers play games at one venue without home advantage or gate (`world.neutralVenues`) and give next-division clubs their country (`world.nextDivisionCountries`). */
-export const SEASON_SCHEMA_VERSION = 85;
+/** Format 87: weak clubs stay sustainable in new real-money careers (`world.economyBalance`, `src/world/economy-balance.ts`): league solidarity money, automatic facility spending by home games left, and automatic wage targets that follow the club's money when cash is low. */
+export const SEASON_SCHEMA_VERSION = 87;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

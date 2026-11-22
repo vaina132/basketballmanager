@@ -9,6 +9,7 @@ import { getTransferPaymentSummary } from './transfer-payments';
 import { dateForRound, MAX_SEASON_NUMBER } from './season';
 import { memoizePure } from './pure-cache';
 import { automationCushion, clubEconomy, REAL_ECONOMY_RULES, scaledMoney, worldEconomy } from './economy';
+import { remainingHomeShare, usesEconomyBalance } from './economy-balance';
 import { activeLease } from './facility-debt';
 
 /** The three facilities of `facilities-1` careers (formats 28-64). */
@@ -35,14 +36,27 @@ export const facilityAutomationBuffer = (context: WorldContext, clubId: string):
  * the club's figures expect for the same weeks, plus `seasonEndCashShare` of the budget: a club run automatically ends
  * every season with cash, and invests what its season leaves over. Without an economy, the development cushion.
  */
-export function upgradeAutomationCushion(context: FacilitiesContext & Partial<Pick<SeasonState, 'round' | 'status'>>, clubId: string): number {
+export function upgradeAutomationCushion(context: FacilitiesContext & Partial<Pick<SeasonState, 'round' | 'status' | 'fixtures'>>, clubId: string): number {
   const base = facilityAutomationBuffer(context, clubId), economy = clubEconomy(context, clubId);
   if (!economy) return base;
+  return Math.max(scaledMoney(context, clubId, FACILITY_AUTOMATION_BUFFER), Math.round((economy.budget * REAL_ECONOMY_RULES.automaticSpending.seasonEndCashShare + remainingSeasonShortfall(context, clubId)) / 10_000) * 10_000);
+}
+
+/**
+ * The money a club's figures say the rest of the season still needs beyond its gate (worlds with an economy): the
+ * operating costs and facility upkeep of the weeks left, less `gateCautionShare` of the gate the figures expect for them;
+ * never negative, and zero once the season is complete. Format 87 (`usesEconomyBalance`): the gate still to come follows
+ * the home games still to play, which end weeks before the season's last costs; older careers spread it over the weeks.
+ */
+export function remainingSeasonShortfall(context: FacilitiesContext & Partial<Pick<SeasonState, 'round' | 'status' | 'fixtures'>>, clubId: string): number {
+  const economy = clubEconomy(context, clubId);
+  if (!economy) return 0;
   const rules = REAL_ECONOMY_RULES.automaticSpending, rounds = seasonRounds(context);
   const weeksLeft = context.status !== 'active' || context.round === undefined ? 0 : Math.max(0, rounds - context.round + 1);
   const expectedGate = Math.max(0, economy.budget - economy.sponsorship - economy.funding);
-  const costs = weeksLeft * (economy.operatingCost / rounds + getFacilityUpkeep(context, clubId)), gate = weeksLeft * expectedGate / rounds * rules.gateCautionShare;
-  return Math.max(scaledMoney(context, clubId, FACILITY_AUTOMATION_BUFFER), Math.round((economy.budget * rules.seasonEndCashShare + Math.max(0, costs - gate)) / 10_000) * 10_000);
+  const costs = weeksLeft * (economy.operatingCost / rounds + getFacilityUpkeep(context, clubId));
+  const gate = !usesEconomyBalance(context) ? weeksLeft * expectedGate / rounds * rules.gateCautionShare : weeksLeft ? remainingHomeShare(context, clubId) * expectedGate * rules.gateCautionShare : 0;
+  return Math.max(0, costs - gate);
 }
 /**
  * Whether automatic control and rival clubs may take on a facility upkeep of `upkeepPerMatchday` (money gaps fix): in

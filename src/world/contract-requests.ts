@@ -7,6 +7,7 @@ import { getInSeasonOffers } from './recruitment-policy';
 import { RELATIONSHIP_RULES } from './relationship-rules';
 import { countsTowardsObjectives, PRESIDENT_RULES } from './presidents';
 import { offeredContractRole } from './contract-roles';
+import { automaticWageCheck } from './automatic-wages';
 
 const RULES = RELATIONSHIP_RULES.contractRequests;
 
@@ -25,7 +26,8 @@ function answerAsAiClub(state: SeasonState, clubId: string, playerId: string, la
   for (const seasons of [...new Set([RULES.ai.renewalSeasons, 1])]) {
     let wage: number;
     try { wage = requiredNegotiationWage(playerId, seasons, undefined, state, role); } catch { break; } // No wage terms: let him go.
-    if (quotePlayerContract(state, playerId, wage, seasons, clubId).canOffer) return commitPlayerOffer(replyToContractRequest(state, playerId, 'talks', clubId), clubId, playerId, wage, seasons);
+    // Format 87: while its cash is low, the club keeps its new wages within what its money funds.
+    if (quotePlayerContract(state, playerId, wage, seasons, clubId).canOffer && automaticWageCheck(state, clubId)(wage, seasons, state.seasonNumber + 1)) return commitPlayerOffer(replyToContractRequest(state, playerId, 'talks', clubId), clubId, playerId, wage, seasons);
   }
   const saleOpen = getInSeasonOffers(state, undefined, true).some(offer => offer.playerId === playerId && offer.transfer?.sellerClubId === clubId);
   return saleOpen && !lastChance ? state : replyToContractRequest(state, playerId, 'decline', clubId);

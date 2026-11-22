@@ -536,6 +536,14 @@ export interface SeasonSystems {
    * real-club careers with a next division; older careers keep no country for those clubs.
    */
   clubCountries?: boolean;
+  /**
+   * Format 87 (economy balance, 22 November 2026): in worlds with researched club money, weak clubs stay sustainable
+   * over long careers (`world.economyBalance`, `src/world/economy-balance.ts`): smaller clubs receive league
+   * solidarity money with their season funding, automatic facility spending counts only the gate of the home games
+   * still to come, and automatic wage targets (computer clubs, delegated recruitment) follow the club's money when its
+   * cash is low. New careers only; older careers keep the earlier money rules.
+   */
+  economyBalance?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -549,7 +557,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true,
+  neutralVenues: true, clubCountries: true, economyBalance: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -582,6 +590,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.fullStaff !== undefined && typeof options.fullStaff !== 'boolean') throw new Error('Choose a valid staffing setting.');
   if (options.neutralVenues !== undefined && typeof options.neutralVenues !== 'boolean') throw new Error('Choose a valid neutral venue setting.');
   if (options.clubCountries !== undefined && typeof options.clubCountries !== 'boolean') throw new Error('Choose a valid club country setting.');
+  if (options.economyBalance !== undefined && typeof options.economyBalance !== 'boolean') throw new Error('Choose a valid club money setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -628,7 +637,9 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   if (world.id === DEVELOPMENT_WORLD.id) return world;
   const oneVenue = !!world.domesticLeagues?.some(league => league.postseason && POSTSEASON_FORMATS[league.postseason].series.some(spec => spec.neutral)) || !!world.europeanCompetitions?.some(competition => competition.format && competition.kind !== 'eurocup');
   const neutral = !!options.neutralVenues && !world.neutralVenues && oneVenue, countries = !!options.clubCountries && !world.nextDivisionCountries && !!world.lowerDivisions?.some(isMemberList);
-  return neutral || countries ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}) } : world;
+  // Format 87: the economy balance, in worlds with researched club money only.
+  const balanced = !!options.economyBalance && !world.economyBalance && !!world.economy;
+  return neutral || countries || balanced ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}) } : world;
 }
 
 /** Format 82: the career's coaches (the manager's starting attributes) and the national teams' real coaches. */

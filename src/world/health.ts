@@ -173,18 +173,34 @@ export function getSeasonInjuries(season: SeasonState): SeasonInjury[] {
   return [...injuries.values()];
 }
 
+/**
+ * The day the medical screens read: the season's date, or in the offseason the latest summer tournament day already
+ * played (format 80: its days, 21 August on, come after the offseason date), so its injuries show from their day.
+ */
+export function medicalViewDate(state: Pick<SeasonState, 'date' | 'status' | 'seasonNumber' | 'national'>): string {
+  let date = state.date;
+  if (state.status !== 'complete') return date;
+  for (const competition of state.national?.competitions ?? []) {
+    if (competition.seasonNumber !== state.seasonNumber) continue;
+    for (const fixture of competition.fixtures) if (fixture.result && fixture.date > date) date = fixture.date;
+  }
+  return date;
+}
+
 export function getPlayerHealth(season: SeasonState, playerId: string): SeasonInjury | null {
-  return getSeasonInjuries(season).reverse().find(injury => injury.playerId === playerId && isRecovering(injury, season.date, season.physio)) ?? null;
+  const today = medicalViewDate(season);
+  return getSeasonInjuries(season).reverse().find(injury => injury.playerId === playerId && isRecovering(injury, today, season.physio)) ?? null;
 }
 
 export function getInjuryMedicalSummary(state: SeasonState, injury: SeasonInjury): PlayerMedicalSummary {
-  const returnOn = effectiveReturnOn(state.physio, injury, state.date);
-  const elapsed = Math.max(0, Math.round((Date.parse(`${state.date}T00:00:00Z`) - Date.parse(`${injury.occurredOn}T00:00:00Z`)) / DAY_MS));
+  const today = medicalViewDate(state);
+  const returnOn = effectiveReturnOn(state.physio, injury, today);
+  const elapsed = Math.max(0, Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${injury.occurredOn}T00:00:00Z`)) / DAY_MS));
   const duration = Math.max(1, Math.round((Date.parse(`${returnOn}T00:00:00Z`) - Date.parse(`${injury.occurredOn}T00:00:00Z`)) / DAY_MS));
   const registered = state.clubs.find(club => club.players.some(player => player.id === injury.playerId));
   const contract = state.physio?.contracts.find(contract => contract.clubId === registered?.id && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null);
-  const lastReview = latestRehabilitation(state.physio, injury.id, state.date);
-  return { injury, originalReturnOn: injury.returnOn, effectiveReturnOn: returnOn, daysRemaining: daysUntilReturn(state.date, returnOn), daysSaved: daysUntilReturn(returnOn, injury.returnOn), progress: Math.min(100, Math.round(elapsed / duration * 100)), credit: lastReview?.creditAfter ?? 0, creditCap: rehabilitationCreditCap(injury), physioId: contract?.physioId ?? null, lastReview, pending: !state.injuries.some(existing => existing.id === injury.id) };
+  const lastReview = latestRehabilitation(state.physio, injury.id, today);
+  return { injury, originalReturnOn: injury.returnOn, effectiveReturnOn: returnOn, daysRemaining: daysUntilReturn(today, returnOn), daysSaved: daysUntilReturn(returnOn, injury.returnOn), progress: Math.min(100, Math.round(elapsed / duration * 100)), credit: lastReview?.creditAfter ?? 0, creditCap: rehabilitationCreditCap(injury), physioId: contract?.physioId ?? null, lastReview, pending: !state.injuries.some(existing => existing.id === injury.id) };
 }
 
 /** Latest recorded or current-match episode, including a recently completed recovery. */
@@ -197,5 +213,6 @@ export function getClubMedicalCases(state: SeasonState, clubId = state.managedCl
   const club = state.clubs.find(club => club.id === clubId);
   if (!club) throw new Error('Choose a club in this career.');
   const registered = new Set(club.players.map(player => player.id));
-  return getSeasonInjuries(state).filter(injury => registered.has(injury.playerId) && isRecovering(injury, state.date, state.physio)).map(injury => getInjuryMedicalSummary(state, injury));
+  const today = medicalViewDate(state);
+  return getSeasonInjuries(state).filter(injury => registered.has(injury.playerId) && isRecovering(injury, today, state.physio)).map(injury => getInjuryMedicalSummary(state, injury));
 }

@@ -3310,6 +3310,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (!['standard', 'reduced', 'off'].includes(injuryMode as string)) fail('injuryMode', 'must be standard, reduced or off');
   // Owner feedback (22 November 2026): new careers diagnose match injuries with the longer `injuries-2` durations.
   if (Object.hasOwn(state, 'injuryModel') && state.injuryModel !== INJURY_MODEL_2) fail('injuryModel', 'must be injuries-2 when recorded');
+  // Format 76 guard: the longer injury lengths arrived with format 76; older saves without the field are unaffected.
+  if (Object.hasOwn(state, 'injuryModel') && version < 76) fail('injuryModel', 'requires format 76 or later (careers created with the longer injury lengths)');
   const injuryModel = Object.hasOwn(state, 'injuryModel') ? INJURY_MODEL_2 : undefined;
   // The bound scales with the games recorded (step 3.7): realistic injuries in a 70-club world with Europe pass 600 a season.
   const recordedGames = (Array.isArray(state.fixtures) ? state.fixtures.length : 0) + (Array.isArray(state.history) ? state.history.reduce((count: number, archive: unknown) => count + (archive && typeof archive === 'object' && Array.isArray((archive as { fixtures?: unknown }).fixtures) ? (archive as { fixtures: unknown[] }).fixtures.length : 0), 0) : 0);
@@ -3669,10 +3671,13 @@ export function serializeSeason(state: SeasonState): string {
  * Format 40's compact layout (`compact-json.ts`): repeated field names and long identifiers are stored once, which
  * makes a real 18-club season about 30% of the plain size. Local saves, checkpoints and exported files use it.
  */
-export function serializeSeasonCompact(state: SeasonState, options: { check?: boolean } = {}): string {
-  // Development mode (owner, 15 November 2026): the game's own checkpoints skip the full career check (`check: false`);
-  // imported files still get it when they are read.
-  if (options.check !== false) validateSeasonState(state);
+export function serializeSeasonCompact(state: SeasonState): string {
+  validateSeasonState(state);
+  return encodeSeasonCompact(state);
+}
+
+/** The compact encoding alone, for a state the caller has just checked (`serializeCheckpoint`). */
+function encodeSeasonCompact(state: SeasonState): string {
   // Format 73: the finance ledger is packed losslessly (`save-packing.ts`) and written in the compact-3 layout.
   const { strings, shapes, nodes, value } = compactJson3(packSeasonForSave(state));
   const envelope = { format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', encoding: COMPACT_JSON_3_ENCODING, strings, shapes, nodes, state: value };
@@ -3729,7 +3734,7 @@ export function resetCheckpointTrust(): void { lastCheckpoint = null; }
 /** Check a checkpoint of the game's own state (incrementally when possible), then encode it like `serializeSeasonCompact`. */
 export function serializeCheckpoint(state: SeasonState): string {
   checkCheckpointState(state);
-  return serializeSeasonCompact(state, { check: false });
+  return encodeSeasonCompact(state);
 }
 
 /** Old schemas had immutable pack rosters; ownership is recoverable, discarded box scores are not. */

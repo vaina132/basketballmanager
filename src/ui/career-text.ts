@@ -7,6 +7,8 @@ import { getBoardSummary } from '../world/board'
 import { regularWorldRounds, seasonRounds, worldOf } from '../world/career-world'
 import { currentGameDay, seasonLabel } from '../world/season'
 import { isMarketActive } from '../world/market-policy'
+import { continueAction } from '../world/continue-step'
+import { nationalStepDay } from '../world/national'
 
 /**
  * Leagues of countries not chosen at career start (owner feedback, 16 November 2026: "Estimated table" meant nothing).
@@ -106,6 +108,16 @@ export function gameDate(date: string, withYear = false): string {
 /** The day the career stands on: the week's next game day during a season (a midweek day included), else its date. */
 export function careerToday(season: Pick<SeasonState, 'status' | 'fixtures' | 'round' | 'date'>): string {
   return season.status === 'active' ? currentGameDay(season) ?? season.date : season.date
+}
+
+/**
+ * The day the top bar's Continue shows: the national game's day while the manager's national game is open or is the next
+ * step (format 80: window games fall between the week's Saturdays, summer tournament days after the offseason date),
+ * otherwise `careerToday`.
+ */
+export function continueDay(season: SeasonState): string {
+  const national = season.national?.activeMatch || season.national?.job && continueAction(season).kind === 'national' ? nationalStepDay(season) : null
+  return national ?? careerToday(season)
 }
 
 /** The point of the career a save holds, as the top bar names it: "Matchday 14", "Matchday 1, Tue 8 Sept", "Offseason, Sat 3 July". */

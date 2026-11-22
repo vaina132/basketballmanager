@@ -148,6 +148,8 @@ describe('facilities-2 in a career', () => {
     file.formatVersion = 64; file.state.schemaVersion = 64;
     // Format 69 careers (`career-3`, unemployed seasons) and recurring youth injuries (format 72) are refused first; keep this check on facilities.
     file.state.career.model = 'career-2'; file.state.youthCompetition.model = 'youth-competition-1';
+    // The longer injury lengths (format 76) too (injuries are off in this career).
+    delete file.state.injuryModel;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/facilities\.model requires format 65/);
   });
 

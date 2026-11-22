@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { SeasonState } from '../domain/season'
 import { injuryLabel } from '../domain/injuries'
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios'
-import { daysUntilReturn, getClubMedicalCases, getInjuryMedicalSummary, getPlayerMedicalSummary, getSeasonInjuries } from '../world/health'
+import { daysUntilReturn, getClubMedicalCases, getInjuryMedicalSummary, getPlayerMedicalSummary, getSeasonInjuries, medicalViewDate } from '../world/health'
 import { getClubPhysio } from '../world/physio-policy'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
@@ -22,10 +22,10 @@ export function MedicalWorkspace({ season, busy = false, onSelectPlayer, onOpenP
   const [view, setView] = useState<MedicalView>('recovering')
   const club = season.clubs.find(item => item.id === season.managedClubId)!
   const roster = new Set(club.players.map(player => player.id))
-  const active = getClubMedicalCases(season)
+  const active = getClubMedicalCases(season), today = medicalViewDate(season)
   const injured = new Set(active.map(summary => summary.injury.playerId))
   const history = getSeasonInjuries(season).filter(injury => injury.clubId === club.id || roster.has(injury.playerId)).map(injury => getInjuryMedicalSummary(season, injury))
-  const cleared = history.filter(summary => roster.has(summary.injury.playerId) && !injured.has(summary.injury.playerId) && summary.effectiveReturnOn <= season.date && daysUntilReturn(summary.effectiveReturnOn, season.date) <= 7)
+  const cleared = history.filter(summary => roster.has(summary.injury.playerId) && !injured.has(summary.injury.playerId) && summary.effectiveReturnOn <= today && daysUntilReturn(summary.effectiveReturnOn, today) <= 7)
   const rows = [...(view === 'recovering' ? active : view === 'cleared' ? cleared : history)].sort((left, right) => view === 'recovering' ? left.effectiveReturnOn.localeCompare(right.effectiveReturnOn) || left.injury.playerId.localeCompare(right.injury.playerId) : right.injury.occurredOn.localeCompare(left.injury.occurredOn) || right.injury.id.localeCompare(left.injury.id))
   const contract = getClubPhysio(season)
   const physio = contract ? PHYSIO_DIRECTORY.find(item => item.id === contract.physioId)! : null
@@ -50,7 +50,7 @@ function MedicalCaseRow({ season, summary, busy, onSelectPlayer }: { season: Sea
   const recovering = summary.daysRemaining > 0
   const condition = inSquad ? season.status === 'complete' ? season.conditions[player.id] : season.activeMatch?.stats[player.id]?.condition ?? season.conditions[player.id] : null
   const physio = summary.lastReview ? PHYSIO_DIRECTORY.find(item => item.id === summary.lastReview?.physioId) : null
-  const reviews = season.physio.rehabilitation.filter(record => record.injuryId === injury.id && record.toDate <= season.date).slice().sort((left, right) => right.toDate.localeCompare(left.toDate))
+  const reviews = season.physio.rehabilitation.filter(record => record.injuryId === injury.id && record.toDate <= medicalViewDate(season)).slice().sort((left, right) => right.toDate.localeCompare(left.toDate))
   return <article className={`medical-case${recovering ? ' is-recovering' : ''}`} data-medical-injury={injury.id} data-medical-player={player.id}>
     <div className="medical-case-main"><div className="medical-case-identity"><Avatar player={player} color={currentClub?.color ?? originalClub.color} size={48} /><div>{inSquad ? <button className="text-button" onClick={() => onSelectPlayer(player.id)} disabled={busy}><strong>{player.name}</strong><Icon name="chevron" size={13} /></button> : <strong>{player.name}</strong>}<span>{player.position} &middot; {injuryLabel(injury.kind)}</span><small className={recovering ? 'medical-unavailable' : 'medical-cleared'}>{recovering ? 'Unavailable' : 'Cleared'}{!inSquad && ` / ${currentClub?.name ?? 'Free agent'}`}</small></div></div>
       <div className="medical-case-recovery"><div><span>{recovering ? 'Expected return' : 'Cleared on'}</span><strong data-medical-return={summary.effectiveReturnOn}><time dateTime={summary.effectiveReturnOn}>{medicalDate(summary.effectiveReturnOn)}</time></strong></div><progress value={summary.progress} max={100} aria-label={`${player.name} recovery period ${Math.round(summary.progress)} percent elapsed`} /><div><small>Recovery period</small><span>{recovering ? `${summary.daysRemaining} ${summary.daysRemaining === 1 ? 'day' : 'days'} left` : 'Complete'}</span></div></div>

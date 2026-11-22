@@ -7,7 +7,8 @@ import { continueAction } from '../src/world/continue-step';
 import { runContinueStep } from '../src/world/continue-step';
 import { continueUntilStop } from '../src/ui/continue-run';
 import { getInboxItems } from '../src/ui/inbox-items';
-import { acceptNationalOffer, careerEarnings, clubWindowCallUps, isNationalFixtureId, monthlyNationalSalary, nationalManagedSide, offerNationalJob, resignNationalJob, setNationalSelection } from '../src/world/national';
+import { continueDay } from '../src/ui/career-text';
+import { acceptNationalOffer, activeNationalFixture, careerEarnings, clubWindowCallUps, dueManagerNationalGame, isNationalFixtureId, monthlyNationalSalary, nationalManagedSide, offerNationalJob, resignNationalJob, setNationalSelection } from '../src/world/national';
 import { getPlayerHealth } from '../src/world/health';
 import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { nationalWorld } from './helpers/national-world';
@@ -137,7 +138,12 @@ describe('national windows in play (format 80)', () => {
     // A week before the window, Continue opens his game instead of simulating the week.
     state = playUntil(state, current => current.round === 12);
     expect(continueAction(state).kind).toBe('national');
+    // The top bar shows that game's day, not the week's Saturday.
+    const due = dueManagerNationalGame(state)!;
+    expect(due.date).not.toBe(state.date);
+    expect(continueDay(state)).toBe(due.date);
     const run = continueUntilStop(state);
+    expect(continueDay(run.state)).toBe(activeNationalFixture(run.state)!.date);
     expect(run.stop?.kind).toBe('match');
     expect(run.stop?.page).toBe('match');
     expect(run.state.national!.activeFixtureId).toMatch(/^nq-s1-/);

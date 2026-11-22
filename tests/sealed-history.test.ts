@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SeasonState } from '../src/domain/season';
+import { compactJson3 } from '../src/storage/compact-json';
+import { packSeasonForSave } from '../src/storage/save-packing';
 import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { getYouthStandings } from '../src/world/youth-competition';
 import { getSeasonPerformance } from '../src/world/performance';
@@ -96,7 +98,9 @@ describe('sealed completed seasons (format 73)', () => {
     // A strict save round trip after two rollovers, and again a week into the new season.
     const text = serializeSeasonCompact(state);
     expect(parseSeason(text)).toEqual(state);
-    expect(text.length).toBeLessThan(serializeSeasonCompact({ ...state, history: [end2.history[0]!, state.history[1]!] }, { check: false }).length);
+    // Season two's history unsealed encodes larger (encoding only: the mixed history is not a career the check accepts).
+    const encodedLength = (career: SeasonState) => JSON.stringify(compactJson3(packSeasonForSave(career))).length;
+    expect(encodedLength(state)).toBeLessThan(encodedLength({ ...state, history: [end2.history[0]!, state.history[1]!] }));
     const next = advanceMatchday(advanceMatchday(state));
     expect(parseSeason(serializeSeasonCompact(next))).toEqual(next);
   }, 1_800_000);

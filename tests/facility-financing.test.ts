@@ -142,6 +142,8 @@ describe('a loan-financed upgrade', () => {
     const file = JSON.parse(serializeSeason(paid));
     // Recurring youth injuries (format 72) would be refused first; this check is about loans and leases.
     file.formatVersion = 70; file.state.schemaVersion = 70; file.state.youthCompetition.model = 'youth-competition-1';
+    // The longer injury lengths (format 76) too (injuries are off in this career).
+    delete file.state.injuryModel;
     expect(() => parseSeason(JSON.stringify(file))).toThrow(/facilities\.financing requires format 71/);
   });
 });

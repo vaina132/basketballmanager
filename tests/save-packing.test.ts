@@ -53,7 +53,7 @@ describe('record packing in compact saves (format 73)', () => {
     expect(text(restored)).toBe(text(state));
     expect(compactLength(packed)).toBeLessThan(compactLength(state));
     // The writer packs, every reader restores; plain files stay unpacked.
-    const saved = serializeSeasonCompact(state, { check: false });
+    const saved = serializeSeasonCompact(state);
     expect(JSON.parse(saved).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(parseSealedSeason(saved)).toEqual(state);
     expect(text(parseSealedSeason(saved))).toBe(text(state));

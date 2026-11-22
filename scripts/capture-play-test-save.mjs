@@ -11,7 +11,8 @@
 // browser's options (every new-career system, standard injuries) at the fourth club. On its first day the manager buys
 // a player from the weakest club (an in-season transfer, fee paid upfront) and, where the format has transfer lists
 // (78 on), lists one of his own players. Weeks are played with automatic substitutions until the career has played at
-// least four weeks, completed the transfer and recorded an injury. Three files are written:
+// least four weeks, completed the transfer and recorded an injury; from format 80 (national teams) also until the
+// November window has been played. Three files are written:
 //   season<version>-playtest-career.json.gz       that save (compact, exactly as `serializeSeasonCompact` writes it)
 //   season<version>-playtest-career-next.json.gz  the next week, played by the same runtime
 //   season<version>-playtest-manifest.json        commit, file hashes, what the career holds, and every loaded module's hash
@@ -64,8 +65,10 @@ try {
     state = listings.setPlayerListing(state, listed, { transfer: true, loan: false });
   }
   const signed = current => current.employment.transfers.some(transfer => transfer.playerId === signing);
-  while (state.round < 5 || !signed(state) || state.injuries.length === 0) {
-    assert.ok(state.round < 12 && state.status === 'active', 'The career must complete the transfer and record an injury within eleven weeks.');
+  // Format 80 on (national teams, a Turkish world): the career also plays through the November window (window 1).
+  const windowOpen = current => !!current.national?.competitions.some(competition => competition.fixtures.some(fixture => fixture.window === 1 && !fixture.result));
+  while (state.round < 5 || !signed(state) || state.injuries.length === 0 || windowOpen(state)) {
+    assert.ok(state.round < (state.national ? 20 : 12) && state.status === 'active', 'The career must complete the transfer and record an injury within eleven weeks (and the November window within nineteen).');
     state = play(state);
   }
   const career = state;
@@ -97,6 +100,8 @@ try {
     managedClubId: career.managedClubId, signing, listed,
     transfers: career.employment.transfers.length, injuries: career.injuries.length,
     playedFixtures: career.fixtures.filter(fixture => fixture.result).length,
+    // Format 80 on: the national games played so far (the November window).
+    ...(career.national ? { nationalPlayed: career.national.competitions.flatMap(competition => competition.fixtures).filter(fixture => fixture.result).length } : {}),
     // Every system's model (the walk of `careerRules` in tests/helpers/old-save-week.ts, models only).
     models: Object.fromEntries(Object.entries(career).flatMap(([key, value]) => key === 'world' || key === 'activeMatch' ? [] : /(^model|Model)$/.test(key) ? [[key, value]] : value && typeof value === 'object' && !Array.isArray(value) && typeof value.model === 'string' ? [[`${key}.model`, value.model]] : [])),
   };

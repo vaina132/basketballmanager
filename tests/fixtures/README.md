@@ -122,3 +122,7 @@ The `season73-playtest-*` to `season79-playtest-*` files are genuine saves of th
 - Format 77 (calm playing time): commit `fb5fefa`, 157 modules; `relationships-4`, the older injury lengths.
 - Format 78 (transfer and loan lists, the scout network): commit `c2a8331`, 159 modules; `recruitment-2`, `injuries-2`, one listed player.
 - Format 79 (richer match play model): commit `1ba22a4`, 160 modules; `plays-2`.
+
+## Play-test format 80 (national teams)
+
+The `season80-playtest-*` files were captured on 22 November 2026 with the same script and career (seed 7380), run from the clean working tree of commit `9e678ee` (format 80 is still the current format, so this is its own runtime; `src` and `tests/helpers` unchanged, 165 loaded modules; `national-1` besides the format-79 models). Turkey is one of the national-team countries, so the career has national teams; from format 80 the script also plays on until the November window (26-30 November 2026) is complete. `career` is the save at round 13 (dated 2026-11-28), after the window: 24 national games played by computer coaches, 13 injuries and 48 played club games; `career-next` is round 14 (2026-12-05). `tests/season80-continuation.test.js` runs the shared checks, which also expect the national record (and its 24 played games) exactly when the manifest records `nationalPlayed`. Never regenerate them from later code.

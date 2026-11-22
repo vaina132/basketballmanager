@@ -56,10 +56,10 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
 
   it('exchanges clubs with the next division at each season end: leaving, returning and first-time clubs, with strict saves', () => {
     const world = lowerWorld();
-    // Seed 23 (2 before AI clubs followed their president's youth objectives and youth injuries recurred, 31 before the
-    // saved ideas level): a first-time club joins in season one, the relegated club returns in season two and another
-    // first-time club comes up in season three.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 23, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    // Seed 97 (23 before the new-career rules of formats 74-80, 2 before AI clubs followed their president's youth
+    // objectives and youth injuries recurred, 31 before the saved ideas level): a first-time club joins in season one,
+    // the relegated club returns in season two and another first-time club comes up in season three.
+    let state = setEmploymentDelegation(createSeason({ world, seed: 97, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
     const generated = new Set(world.clubs.filter(club => club.id.startsWith('third-')).flatMap(club => club.players.map(player => player.id)));
     const finishSeason = () => {
       while (state.status === 'active') { state = play(state); if (state.round === 5) expect(roundTrip(state)).toEqual(state); }
@@ -157,8 +157,9 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
 
   it('treats a manager whose club leaves the full world as dismissed, with a job offer at a full-world club (owner decision a)', () => {
     const world = lowerWorld();
-    // Seed 33 (11 before the match calibration of sprint 4): the managed club finishes last in the second division.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 33, managedClubId: 'w1-rhine-falcons', ...NEW_CAREER_SYSTEMS }), true);
+    // Seed 6 (33 before the new-career rules of formats 74-80, 11 before the match calibration of sprint 4): the managed
+    // club finishes last in the second division.
+    let state = setEmploymentDelegation(createSeason({ world, seed: 6, managedClubId: 'w1-rhine-falcons', ...NEW_CAREER_SYSTEMS }), true);
     while (state.status === 'active') state = play(state);
     expect(state.background.exchanges[0].leaving).toEqual(['w1-rhine-falcons']);
     expect(state.career.moves).toMatchObject([{ seasonNumber: 1, fromClubId: 'w1-rhine-falcons', reason: 'dismissed' }]);

@@ -26,7 +26,7 @@ const noop = () => {};
 const finish = (state: SeasonState) => state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state;
 const step = (state: SeasonState) => advanceSeason(finish(state));
 // Career rules only: president personalities (format 70) would move each club's Under pressure line; tests/presidents.test.tsx covers them.
-const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchFlow: false, presidents: false }), true), true);
+const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, presidents: false }), true), true);
 const throughMarket = (state: SeasonState) => { let next = state; for (let day = 0; day < 80 && getMarketStartReason(next); day += 1) next = advanceMarket(next); return next; };
 const roundTrip = (state: SeasonState) => expect(parseSeason(serializeSeason(state))).toEqual(state);
 const desk = (season: SeasonState) => renderToStaticMarkup(<UnemployedDesk season={season} busy={false} onAccept={noop} onOpenCompetitions={noop} onOpenCalendar={noop} />);
@@ -42,9 +42,11 @@ const resignedAt = (seed: number, week: number) => { let state = start(seed); wh
 // staff for every club and squad roles (format 74): seed 7 (35) dismisses after week 7 (9) of season 2, and seed 20 (39)
 // ends Danube Lynx's season Under pressure; seed 27 is unchanged. With the full new-career rules of 22 November 2026
 // (current match engine, injury lengths, calmer playing time): seed 14 (7) dismisses after week 7 of season 2, seed 3
-// (20) ends Danube Lynx's season Under pressure, and seed 50 (27) opens Danube Lynx's job after week 6.
-const DISMISSAL_SEED = 14, DISMISSAL_CLUB = 'danube-lynx', DISMISSAL_WEEK = 7;
-const RESIGN_WEEK = 3, SEASON_END_SEED = 3, SEASON_END_JOB = 'danube-lynx', MID_SEASON_SEED = 50, MID_SEASON_JOB = 'danube-lynx', JOB_WEEK = 7;
+// (20) ends Danube Lynx's season Under pressure, and seed 50 (27) opens Danube Lynx's job after week 6. With the match
+// flow, real coaches and European entry of formats 81-83: seed 59 (14) dismisses after week 7 of season 2, seed 56 (3)
+// ends Danube Lynx's season Under pressure, and seed 27 (50) opens Danube Lynx's job after week 7 (6).
+const DISMISSAL_SEED = 59, DISMISSAL_CLUB = 'danube-lynx', DISMISSAL_WEEK = 7;
+const RESIGN_WEEK = 3, SEASON_END_SEED = 56, SEASON_END_JOB = 'danube-lynx', MID_SEASON_SEED = 27, MID_SEASON_JOB = 'danube-lynx', JOB_WEEK = 8;
 let beforeDismissal: SeasonState, unemployed: SeasonState, seasonEnd: SeasonState, offseason: SeasonState;
 
 beforeAll(() => {

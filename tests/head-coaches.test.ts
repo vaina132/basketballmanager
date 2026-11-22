@@ -46,6 +46,18 @@ describe('real head coaches (format 82)', () => {
     const ids = new Set(REAL_COACHES.map(coach => coach.id));
     expect(ids.size).toBe(REAL_COACHES.length);
     for (const post of REAL_COACH_POSTS) expect(ids.has(post.coachId)).toBe(true);
+    // 221 of 222 clubs (not MKE Ankaragücü) and all 24 national teams; a coach holds at most one club post, and a post
+    // checked against a current source wins over an older page (Rémy Valin left Fos for Nantes; Sacripanti coaches
+    // Urania, not Pesaro).
+    expect(REAL_COACH_POSTS.filter(post => !post.teamId.startsWith('nation-'))).toHaveLength(221);
+    expect(REAL_COACH_POSTS.filter(post => post.teamId.startsWith('nation-'))).toHaveLength(24);
+    const clubPosts = REAL_COACH_POSTS.filter(post => !post.teamId.startsWith('nation-')).map(post => post.coachId);
+    expect(new Set(clubPosts).size).toBe(clubPosts.length);
+    const coachOf = (team: string) => REAL_COACHES.find(coach => coach.id === REAL_COACH_POSTS.find(post => post.team === team)?.coachId)?.name;
+    expect(coachOf('Hermine Nantes')).toBe('Rémy Valin');
+    expect(coachOf('Fos Provence')).toBe('Abgué Barakaou');
+    expect(coachOf('Urania Milano')).toBe('Stefano Sacripanti');
+    expect(coachOf('Tizona Burgos')).toBe('Denis Pombar');
     const jasikevicius = REAL_COACHES.find(coach => coach.name === 'Šarūnas Jasikevičius')!;
     const once = estimateCoach(jasikevicius.id, jasikevicius, jasikevicius.level, '2026-09-05'), again = estimateCoach(jasikevicius.id, jasikevicius, jasikevicius.level, '2026-09-05');
     expect(once).toEqual(again);

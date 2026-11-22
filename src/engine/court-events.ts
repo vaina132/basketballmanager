@@ -1,4 +1,5 @@
 import type { CourtBallPoint, CourtPoint, CourtPosition, CourtScene, MatchState, Position, Side } from '../domain/types';
+import { matchPlayer } from './positions';
 
 const SIDES: readonly Side[] = ['home', 'away'];
 const FORMATION: Record<Position, CourtPoint> = {
@@ -22,12 +23,13 @@ function lastScene(state: MatchState): CourtScene | undefined {
 /** Formation is authored here, once, and saved with each action. No RNG is consumed. */
 function formation(state: MatchState, offense: Side): CourtPosition[] {
   return SIDES.flatMap(side => state.lineups[side].map((playerId, index) => {
-    const player = state[side].players.find(candidate => candidate.id === playerId)!;
+    // A side with the court picture's circles stands in its circles (format 74).
+    const player = matchPlayer(state, side, playerId)!;
     const base = FORMATION[player.position];
     // Defensive roles shade the offensive formation toward the basket.
     const point = side === offense ? base : { x: Math.min(0.91, base.x + 0.045), y: 0.5 + (base.y - 0.5) * 0.8 };
     // Duplicate positional roles still occupy distinct lanes.
-    const duplicates = state.lineups[side].slice(0, index).filter(id => state[side].players.find(candidate => candidate.id === id)!.position === player.position).length;
+    const duplicates = state.lineups[side].slice(0, index).filter(id => matchPlayer(state, side, id)!.position === player.position).length;
     return { playerId, ...mirror(state, offense, { x: point.x, y: bound(point.y + duplicates * 0.055) }) };
   }));
 }

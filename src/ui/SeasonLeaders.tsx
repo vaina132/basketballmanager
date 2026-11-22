@@ -83,16 +83,15 @@ export function SeasonLeaders({ season, seasonNumber, clubIds, busy = false, onR
         <label className="season-leader-qualification" htmlFor="league-player-qualified"><input id="league-player-qualified" type="checkbox" checked={qualifiedOnly} onChange={event => setQualifiedOnly(event.target.checked)} aria-describedby="league-qualification-rule" disabled={busy} /><span>Qualified only</span></label>
         {hasFilters && <button className="text-button season-leader-reset" onClick={resetFilters} disabled={busy}>Reset filters</button>}
       </div>
-      <p id="league-qualification-rule" className="season-leader-rule">Qualified: appearances in at least half of completed club games (rounded up), plus 5 minutes per completed club game. Applies to all views.</p>
+      <p id="league-qualification-rule" className="season-leader-rule">Qualified: played in half the club's games and 5 minutes a club game.</p>
       <div className="season-leader-result-count" role="status">{hasResults ? `${visibleRows.length} ${visibleRows.length === 1 ? 'player' : 'players'} shown` : 'No recorded matchdays yet'}</div>
       {!hasResults ? <p className="season-leaders-empty">Player statistics appear after you finish a match and Continue to record the matchday.</p> : visibleRows.length ? <>
         <PerformanceTable rows={visibleRows} mode={mode} onSelectPlayer={selectPlayer} selectedPlayerId={selected?.key} showClub managedClubId={season.managedClubId} busy={busy} label="League player statistics" />
-        <PerformanceLegend mode={mode} />
+        <PerformanceLegend mode={mode} note="Records keep the club each player played for. Only recorded matchdays of the chosen season count." />
       </> : <div className="season-leaders-empty">
         <p>{matchingRows.length && qualifiedOnly ? 'No players meet the qualification threshold with these filters.' : 'No players match these filters.'}</p>
         {matchingRows.length > 0 && qualifiedOnly && <button className="text-button" onClick={() => setQualifiedOnly(false)} disabled={busy}>Include unqualified players</button>}
       </div>}
-      <p className="season-table-note">Records retain the club represented in each match. Only committed matchdays in the selected season are included.</p>
     </section>
     {selected && <PlayerPerformanceReport key={selected.key} season={season} record={selected} onClose={closeReport} onReviewFixture={onReviewFixture ? fixtureId => { if (!busy) onReviewFixture(fixtureId) } : undefined} />}
   </>

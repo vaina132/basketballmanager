@@ -12,6 +12,8 @@ import { computeEconomySeasons, createEconomySeasons, growEconomy, type EconomyF
 import { appointFromUnemployment, appointManager, createCareer, enableCareerMoves, lastManagedClub, leaveClub, matchClubFor, restartBoard, transferManager, currentMovePhase } from './career';
 import { jobOfferRefusal, jobRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, unemployedSeasonEndVacancies, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
 import { allowsUnemployment, CAREER_RULES, coachProtected, isUnemployed, NO_CLUB, startingConfidence, usesCareerRules } from './career-rules';
+import { nationalPausedWeeks } from './national-calendar';
+import { advanceNationalWeek, createNational, nationalDutyDays, rolloverNational, usesNationalTeams } from './national';
 import { addCalendarDays, domesticRoundDates, roundRobinGames, roundRobinRoundCount, calendarDaysBetween } from './competition-calendar';
 import { derivePostseason, POSTSEASON_FORMATS, POSTSEASON_SLOT_OFFSETS, postseasonOutcome } from './postseason';
 import { divisionChanges, openingDivisions, seasonLeagues } from './divisions';
@@ -30,18 +32,23 @@ import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, Seaso
 import { nextEuropeanPlaces, openingEurope } from './european-places';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import { archiveFinancialHistory } from './finance-archives';
-import type { InjuryMode, MatchState, Side, Team } from '../domain/types';
+import type { InjuryMode, MatchState, Position, Side, Team } from '../domain/types';
 import type { ManagerProfile } from '../domain/manager';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-league';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import type { CareerWorld } from '../domain/world';
 import { fullWorldClubs, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
-import { createFixtureMatch, preTipoffLineup, simulateToEnd } from '../engine/match';
+import { createFixtureMatch, isPlayerEligible, preTipoffLineup, simulateToEnd } from '../engine/match';
+import { isCourtPosition } from '../engine/positions';
+import { INJURY_MODEL_2 } from '../domain/injuries';
 import { clubRecoveryPercent, injuriesFromMatch, injuryRiskMap, isRecovering, withMedicalRecurrence } from './health';
 import { createTraining, developClub, processTrainingWeek, withTrainingPoints } from './training';
 import { createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
+import { keepContractedStaff, payComputerStaffCompensation, processStaffWagesRound, settleStaffTerms, withComputerStaffTerms, withOpeningStaffTerms } from './staff-contracts';
+import { planComputerStaffRenewals } from './staff-levels';
 import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
+import { scheduleListingBids } from './listings';
 import { createInSeasonRecruitment, enableInSeasonRecruitment, enableInSeasonTransfers, resolveInSeasonRecruitment, scheduleInSeasonRecruitment } from './recruitment';
 import { createPayroll, enablePayroll, preparePayrollRound, processPayrollRound, startPayrollSeason } from './payroll';
 import { validateManagerProfile } from './manager';
@@ -63,9 +70,9 @@ import { createNegotiations, enableNegotiations } from './negotiations';
 import { createMarket, enableMarket } from './market';
 import { getMarketStartReason, getMarketWindow } from './market-policy';
 import { memoizePure } from './pure-cache';
-import { ASSISTANT_DIRECTORY } from '../data/staff-directory';
+import { ASSISTANT_DIRECTORY, staffMember } from '../data/staff-directory';
 import { usesFullClubRoster } from './club-roster-policy';
-import { canSelectMatchday, captureMatchdaySelection, reconcileMatchdayPlan, selectedTeam, teamForMatchday } from './matchday-selection';
+import { canSelectMatchday, captureMatchdaySelection, reconcileMatchdayPlan, selectedTeam, teamForMatchday, withPlanCircles } from './matchday-selection';
 import type { WorldContext } from '../domain/world';
 
 export const ROUND_INTERVAL_DAYS = 7;
@@ -118,7 +125,8 @@ export function dateForRound(round: number, seasonNumber = 1): string {
  * clubs gives 2 x (clubs - 1) matchdays; six clubs give the built-in league's ten, with unchanged fixtures.
  */
 /** The season-specific division memberships a schedule, table or postseason uses (step 3.4c). */
-type DivisionContext = WorldContext & { divisions?: DomesticDivisions | null; seed?: number; europe?: SeasonEurope };
+/** Format 80: `national` (a career with national teams) pauses each league with room on the FIBA window weekends. */
+type DivisionContext = WorldContext & { divisions?: DomesticDivisions | null; seed?: number; europe?: SeasonEurope; national?: unknown };
 
 /** Format 57: worlds with European games keep every game in calendar order (date, then id), so each club's games are in the order played. */
 const byCalendar = (a: Pick<SeasonFixture, 'date' | 'id'>, b: Pick<SeasonFixture, 'date' | 'id'>) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
@@ -134,7 +142,7 @@ export function domesticSchedule(clubs: readonly Team[] = DEVELOPMENT_CLUBS, sea
   const world = context.world;
   if (world?.domesticLeagues) {
     const start = seasonStartDate(seasonNumber), weeks = regularWorldRounds(world);
-    return seasonLeagues(world, context.divisions).flatMap(league => roundRobinGames({ competitionId: league.id, clubIds: league.clubIds, dates: domesticRoundDates(start, roundRobinRoundCount(league.clubIds.length), weeks), season: seasonNumber }).map(game => ({ id: game.id, round: calendarDaysBetween(start, game.date) / 7 + 1, date: game.date, homeClubId: game.homeClubId, awayClubId: game.awayClubId, result: null }))).sort((a, b) => a.round - b.round || a.id.localeCompare(b.id));
+    return seasonLeagues(world, context.divisions).flatMap(league => roundRobinGames({ competitionId: league.id, clubIds: league.clubIds, dates: domesticRoundDates(start, roundRobinRoundCount(league.clubIds.length), weeks, context.national ? nationalPausedWeeks(seasonNumber, roundRobinRoundCount(league.clubIds.length), weeks) : []), season: seasonNumber }).map(game => ({ id: game.id, round: calendarDaysBetween(start, game.date) / 7 + 1, date: game.date, homeClubId: game.homeClubId, awayClubId: game.awayClubId, result: null }))).sort((a, b) => a.round - b.round || a.id.localeCompare(b.id));
   }
   const count = clubs.length;
   if (count < MIN_WORLD_CLUBS || count > MAX_WORLD_CLUBS || count % 2 !== 0 || new Set(clubs.map(club => club.id)).size !== count) throw new Error('A league needs an even number of distinct clubs.');
@@ -287,7 +295,7 @@ export function managedSide(season: SeasonState): Side {
   throw new Error('The active fixture must include the managed club.');
 }
 
-function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background' | 'facilities' | 'board'>> & WorldContext, fixture: SeasonFixture): MatchState {
+function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'conditions' | 'managedClubId' | 'injuryMode' | 'injuries' | 'training'> & Partial<Pick<SeasonState, 'physio' | 'assistant' | 'seasonNumber' | 'lifecycle' | 'academy' | 'relationships' | 'fixtures' | 'background' | 'facilities' | 'board' | 'matchModel'>> & WorldContext, fixture: SeasonFixture): MatchState {
   const homeClub = season.clubs.find(club => club.id === fixture.homeClubId);
   const awayClub = season.clubs.find(club => club.id === fixture.awayClubId);
   // Step 3.5b: a European game's club outside the full world plays as a background side.
@@ -315,20 +323,28 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
     const planned = lineup(club, plan);
     return full && club.id !== season.managedClubId && isRegularFixture(fixture) ? objectiveStartingFive(season, { clubId: club.id, seasonNumber: season.seasonNumber ?? 1, players: developed.players, planned, unavailable }) : planned;
   };
+  const homeFive = startingFive(home, developedHome, homePlan, !!homeClub), awayFive = startingFive(away, developedAway, awayPlan, !!awayClub);
+  // Format 74: the manager's starters play the circles he chose on the court picture; everyone else, and computer
+  // clubs, play their listed positions.
+  const circles = (club: Team, plan: ClubPlan, five: readonly string[]) => { const chosen = club.id === season.managedClubId ? Object.fromEntries(five.flatMap(id => plan.slots?.[id] ? [[id, plan.slots[id]!]] : [])) : {}; return Object.keys(chosen).length ? chosen : undefined; };
+  const homeCircles = circles(home, homePlan, homeFive), awayCircles = circles(away, awayPlan, awayFive);
   let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), developedHome, developedAway, {
     ...(morale ? { morale } : {}),
-    lineups: { home: startingFive(home, developedHome, homePlan, !!homeClub), away: startingFive(away, developedAway, awayPlan, !!awayClub) },
+    lineups: { home: homeFive, away: awayFive },
+    ...(homeCircles || awayCircles ? { slots: { ...(homeCircles ? { home: homeCircles } : {}), ...(awayCircles ? { away: awayCircles } : {}) } } : {}),
     tactics: { home: homePlan.tactics, away: awayPlan.tactics },
     autoSubstitutions: { home: home.id === season.managedClubId ? homePlan.autoSubstitutions : true, away: away.id === season.managedClubId ? awayPlan.autoSubstitutions : true },
     conditions,
     injuryMode: season.injuryMode,
     preExistingInjuries,
     ...(Object.keys(injuryRisk).length ? { injuryRisk } : {}),
+    // Format 79: the richer play model; every side but the manager's has a computer coach.
+    ...(season.matchModel ? { playModel: season.matchModel, computerCoach: SIDES.filter(side => (side === 'home' ? fixture.homeClubId : fixture.awayClubId) !== season.managedClubId) } : {}),
   });
   if (season.assistant?.enabledSince) for (const side of SIDES) {
     if (match[side].id === season.managedClubId) continue;
     const contract = season.assistant.contracts.find(contract => contract.clubId === match[side].id && contract.seasonNumber === season.seasonNumber && contract.startedRound <= fixture.round && contract.releasedRound === null);
-    const coach = contract && ASSISTANT_DIRECTORY.find(coach => coach.id === contract.assistantId);
+    const coach = contract && staffMember(ASSISTANT_DIRECTORY, contract.assistantId);
     if (coach && match.status !== 'finished') match = applyAssistantTactics(match, side, coach);
   }
   return match;
@@ -343,9 +359,58 @@ export function setMatchdaySelection(state: SeasonState, playerIds: readonly str
   const plan = state.plans[club.id]!;
   // Keep pre-match tactics and lineup edits already made on the prepared match.
   if (!state.activeMatch) throw new Error('Select the matchday squad when your next fixture opens.');
-  const side = managedSide(state), edited = state.activeMatch;
-  const next = { ...state, plans: { ...state.plans, [club.id]: { ...plan, tactics: { ...edited.tactics[side] }, autoSubstitutions: edited.autoSubstitutions[side], lineup: [...edited.lineups[side]], matchday: ids } } };
+  const side = managedSide(state), edited = state.activeMatch, lineup = [...edited.lineups[side]];
+  // The circles chosen on the court picture stay with their players (format 74).
+  const next = { ...state, plans: { ...state.plans, [club.id]: withPlanCircles({ ...plan, tactics: { ...edited.tactics[side] }, autoSubstitutions: edited.autoSubstitutions[side], lineup, matchday: ids }, edited.slots?.[side]) } };
   return { ...next, activeMatch: prepareMatch(next, getActiveFixture(next)) };
+}
+
+/**
+ * Why the manager cannot plan the starting five for the next game now (Squad page, owner request 18 November 2026), or
+ * null: planning works while the season is active and no match is in play or waiting for Continue.
+ */
+export function startingFivePlanBlock(state: SeasonState): string | null {
+  if (state.status !== 'active') return 'The season is over. Plan your five when the next season starts.';
+  if (isUnemployed(state) || !state.clubs.some(club => club.id === state.managedClubId)) return 'You have no club to plan for.';
+  const match = state.activeMatch;
+  if (match && (match.status !== 'ready' || match.stepCount !== 0)) return match.status === 'finished' ? 'This game is over. Press Continue to plan the next game.' : 'A game is in play. Change your five in the Match center.';
+  return null;
+}
+
+/**
+ * The match the planned five is shown and edited on: today's prepared match before tip-off, otherwise the next game as
+ * the club's plan would prepare it (never saved, played or shown as a current match).
+ */
+export function startingFivePlanMatch(state: SeasonState): MatchState {
+  const block = startingFivePlanBlock(state);
+  if (block) throw new Error(block);
+  return state.activeMatch ?? careerPresentationMatch(state);
+}
+
+/**
+ * The court picture on the Squad page: the five who start the next game and the circles they play (format 74 plan
+ * slots). Before tip-off the prepared match is prepared again from the plan, keeping its tactics, as a matchday
+ * selection does; between games the plan is changed and the next game starts from it. The same guards as the match's:
+ * five different available players from the matchday squad, one different court position each.
+ */
+export function setPlannedFive(state: SeasonState, lineup: readonly string[], slots: Readonly<Record<string, Position>>, matchday?: readonly string[] | null): SeasonState {
+  const block = startingFivePlanBlock(state);
+  if (block) throw new Error(block);
+  const club = state.clubs.find(club => club.id === state.managedClubId)!;
+  // Squad page bench and reserves (owner feedback, 22 November 2026): the matchday squad changes with the five, in one step.
+  if (matchday !== undefined && !usesFullClubRoster(state)) throw new Error('This career has no reserves: every registered player is in the matchday squad.');
+  if (matchday) selectedTeam(club, matchday);
+  const day = matchday === undefined ? {} : { matchday: matchday === null ? null : club.players.filter(player => matchday.includes(player.id)).map(player => player.id) };
+  if (!Array.isArray(lineup) || lineup.length !== 5 || new Set(lineup).size !== 5 || lineup.some(id => !club.players.some(player => player.id === id))) throw new Error('Choose five different players from your squad.');
+  const circles = Object.entries(slots ?? {});
+  if (circles.some(([id, position]) => !lineup.includes(id) || !isCourtPosition(position)) || new Set(circles.map(([, position]) => position)).size !== circles.length) throw new Error('Give each starter a different position.');
+  const active = state.activeMatch, side = active ? managedSide(state) : null, plan = state.plans[club.id]!;
+  const kept = active && side ? { tactics: { ...active.tactics[side] }, autoSubstitutions: active.autoSubstitutions[side] } : {};
+  const next: SeasonState = { ...state, plans: { ...state.plans, [club.id]: withPlanCircles({ ...plan, ...kept, ...day, lineup: [...lineup] }, Object.fromEntries(circles)) } };
+  const prepared = active ? prepareMatch(next, getActiveFixture(next)) : careerPresentationMatch(next);
+  const preparedSide: Side = prepared.home.id === club.id ? 'home' : 'away', five = prepared.lineups[preparedSide];
+  if (five.length !== 5 || lineup.some(id => !five.includes(id) || !isPlayerEligible(prepared, id))) throw new Error('Choose five available players from the matchday squad.');
+  return active ? { ...next, activeMatch: prepared } : next;
 }
 
 /** Optional career systems, named. Omitted systems keep the positional defaults (training, coaching, finance and payroll on). */
@@ -363,6 +428,62 @@ export interface SeasonSystems {
    * culture objectives and the president's requests (board model 'board-2'; new careers only; requires board reviews).
    */
   presidents?: boolean;
+  /**
+   * Format 74: every club (the manager's and every computer club) starts with one person in each enabled staff role,
+   * rated to the club's level and paid within its staff budget; computer clubs fill empty roles the same way and a
+   * sacked person's fee no longer counts against the staff budget (`coaching-2`; requires coaching and finances).
+   */
+  staffing?: boolean;
+  /**
+   * Format 74 (owner request, 16 November 2026): six named levels for every facility from a starting level that fits the
+   * club, the arena as seats expanded by size, and the simple bank loan for anything (`facilities-3`, `bank-1`), with no
+   * upkeep plans, repairs, leases or board capital for projects. New careers only; requires club facilities.
+   */
+  simpleFacilities?: boolean;
+  /**
+   * Format 75 (owner feedback, 18 November 2026): two budgets. Player wages and staff fees share one pool, Wages left
+   * (`coaching-3`, `src/world/wage-pool.ts`); transfer fees, facilities and the arena use Spending left. New careers
+   * only; applies only with opening staff for every club.
+   */
+  wagePool?: boolean;
+  /**
+   * Format 76 (owner decision, 18 November 2026): staff work like players' contracts: 1-3 seasons, an annual salary paid
+   * weekly from Wages left (no up-front fee) and compensation when sacked (`coaching-4`, `src/world/staff-contracts.ts`).
+   * New careers only; requires the wage pool.
+   */
+  staffContracts?: boolean;
+  /**
+   * Format 77 (owner feedback, 22 November 2026): calmer playing time (`relationships-4`, `PLAYING_TIME_RULES`): minutes
+   * judged over a longer stretch, quiet role adjustments and one calm concern. New careers only; requires squad relationships.
+   */
+  calmPlayingTime?: boolean;
+  /**
+   * Owner feedback (22 November 2026): longer recoveries for players hurt in a match (`injuries-2`,
+   * `INJURY_DURATIONS_2` in `src/domain/injuries.ts`), so long injuries happen over a season. New careers only.
+   */
+  injuryLengths?: boolean;
+  /**
+   * Format 78 (owner feedback, 22 November 2026): the transfer and loan list (`recruitment-2`, `src/world/listings.ts`):
+   * computer clubs bid for the manager's players, more often when listed, and loans for the rest of a season. New careers
+   * only; requires in-season recruitment.
+   */
+  transferLists?: boolean;
+  /**
+   * Format 78 (owner feedback, 22 November 2026): the scouting network (`scouting-2`): players inside the scouts' range
+   * show an estimated rating whose accuracy grows with the scouts' total quality. New careers only; requires scouting.
+   */
+  scoutNetwork?: boolean;
+  /**
+   * Format 79 (owner feedback, 22 November 2026: "a more realistic simulator with more actions"): matches use the richer
+   * play model (`plays-2`, `src/engine/plays.ts`). New careers only; older careers keep the earlier possession actions.
+   */
+  matchPlays?: boolean;
+  /**
+   * Format 80 (owner feedback item 13, 22 November 2026): national teams, their qualifiers and summer tournaments, FIBA
+   * windows in the calendar and national jobs (`src/world/national.ts`). New real-club careers whose leagues include a
+   * national team's country; other worlds and older careers are unchanged.
+   */
+  nationalTeams?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -375,7 +496,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   training: true, coaching: true, finance: true, payroll: true, employment: true, scouting: true, negotiations: true, market: true,
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
-  media: true, presidents: true,
+  media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, nationalTeams: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -391,15 +512,49 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.media && !options.relationships) throw new Error('Press topics and media standing require squad relationships.');
   if (options.presidents !== undefined && typeof options.presidents !== 'boolean') throw new Error('Choose a valid president personalities setting.');
   if (options.presidents && !options.board) throw new Error('President personalities require board reviews.');
+  if (options.staffing !== undefined && typeof options.staffing !== 'boolean') throw new Error('Choose a valid opening staff setting.');
+  if (options.staffing && (options.coaching === false || !finance)) throw new Error('Opening staff for every club require coaching and club finances.');
+  if (options.simpleFacilities !== undefined && typeof options.simpleFacilities !== 'boolean') throw new Error('Choose a valid facilities setting.');
+  if (options.simpleFacilities && !options.facilities) throw new Error('Six-level facilities and the bank loan require club facilities.');
+  if (options.wagePool !== undefined && typeof options.wagePool !== 'boolean') throw new Error('Choose a valid wage budget setting.');
+  if (options.staffContracts !== undefined && typeof options.staffContracts !== 'boolean') throw new Error('Choose a valid staff contract setting.');
+  if (options.injuryLengths !== undefined && typeof options.injuryLengths !== 'boolean') throw new Error('Choose a valid injury setting.');
+  if (options.transferLists !== undefined && typeof options.transferLists !== 'boolean') throw new Error('Choose a valid transfer list setting.');
+  if (options.scoutNetwork !== undefined && typeof options.scoutNetwork !== 'boolean') throw new Error('Choose a valid scouting network setting.');
+  if (options.matchPlays !== undefined && typeof options.matchPlays !== 'boolean') throw new Error('Choose a valid match engine setting.');
+  if (options.nationalTeams !== undefined && typeof options.nationalTeams !== 'boolean') throw new Error('Choose a valid national teams setting.');
+  const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
+  if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
-  const created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false);
+  // Format 80: national teams are part of the opening (the domestic calendar pauses on the FIBA window weekends).
+  openingNational = !!options.nationalTeams && !!options.world && usesNationalTeams(options.world);
+  let created: SeasonState;
+  try { created = createSeasonFromFlags(options.seed, options.managedClubId, options.injuryMode, options.training ?? true, options.coaching ?? true, finance, options.payroll ?? finance, options.manager ?? null, options.employment ?? false, options.scouting ?? false, options.negotiations ?? false, options.market ?? false, options.scouts ?? false, options.fitness ?? false, options.physio ?? false, options.assistant ?? false, options.academy ?? false, options.youth ?? false, options.lifecycle ?? false, options.youthCompetition ?? false, options.facilities ?? false, options.relationships ?? false, options.board ?? false, options.commercial ?? false, options.boardFunding ?? false, options.boardConsequences ?? false, options.rivalries ?? false, options.facilityMaintenance ?? false, options.careerMoves ?? false, options.world ?? DEVELOPMENT_WORLD, options.namingRights ?? false, options.simpleFacilities ?? false, options.staffing ?? false, staffContracts); }
+  finally { openingNational = false; }
   const pressed = options.media ? enableMedia(created) : created;
   // Format 70: the board's president personalities and objectives apply from the opening; the opening match is unchanged.
-  return options.presidents ? enablePresidentBoard(pressed) : pressed;
+  const presided = options.presidents ? enablePresidentBoard(pressed) : pressed;
+  // Format 77: the calmer playing-time rules; nothing has been judged at the opening, so its frozen morale is unchanged.
+  const boarded = options.calmPlayingTime && options.relationships ? { ...presided, relationships: { ...presided.relationships, model: 'relationships-4' as const } } : presided;
+  // Format 75: player wages and staff fees share one pool from the opening; the opening staff and squads are unchanged.
+  // Format 76: staff contracts (`coaching-4`, set before the opening staff are paid) with each person's contract length.
+  const staffed = staffContracts ? withOpeningStaffTerms(boarded) : options.wagePool && options.staffing ? { ...boarded, coaching: { ...boarded.coaching, model: 'coaching-3' as const } } : boarded;
+  // Owner feedback (22 November 2026): longer recoveries for match injuries in new careers.
+  const healed = options.injuryLengths ? { ...staffed, injuryModel: INJURY_MODEL_2 } : staffed;
+  // Format 78: the transfer and loan list, and the scouting network; nothing at the opening depends on either.
+  const listed = options.transferLists && healed.recruitment.enabledSince ? { ...healed, recruitment: { ...healed.recruitment, model: 'recruitment-2' as const, listings: [] } } : healed;
+  const scouted = options.scoutNetwork && listed.scouting.enabledSince ? { ...listed, scouting: { ...listed.scouting, model: 'scouting-2' as const } } : listed;
+  // Format 79: the richer play model; the opening match is prepared again with it.
+  if (!options.matchPlays) return scouted;
+  const played: SeasonState = { ...scouted, matchModel: 'plays-2' };
+  return played.activeMatch && played.activeFixtureId ? { ...played, activeMatch: prepareMatch(played, getActiveFixture(played)) } : played;
 }
 
+/** Format 80: set by `createSeason` while the opening of a career with national teams is built. */
+let openingNational = false;
+
 // Systems added after the positional form was frozen (starting with sponsorship) are reachable only through named options.
-function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD, namingRightsEnabled = false): SeasonState {
+function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: InjuryMode = 'standard', trainingEnabled = true, coachingEnabled = true, financeEnabled = true, payrollEnabled = financeEnabled, manager: ManagerProfile | null = null, employmentEnabled = false, scoutingEnabled = false, negotiationsEnabled = false, marketEnabled = false, scoutsEnabled = false, fitnessEnabled = false, physioEnabled = false, assistantEnabled = false, academyEnabled = false, youthEnabled = false, lifecycleEnabled = false, youthCompetitionEnabled = false, facilitiesEnabled = false, relationshipsEnabled = false, boardEnabled = false, commercialEnabled = false, boardFundingEnabled = false, boardConsequencesEnabled = false, rivalriesEnabled = false, maintenanceEnabled = false, careerMovesEnabled = false, world: CareerWorld = DEVELOPMENT_WORLD, namingRightsEnabled = false, simpleFacilities = false, staffingEnabled = false, staffContractsEnabled = false): SeasonState {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new Error('Choose a whole-number season seed between zero and 4294967295.');
   validateWorld(world);
   managedClubId ??= fullWorldClubs(world)[0]!.id;
@@ -438,16 +593,18 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   // Step 3.5e: the season's opening games include those already due (the BCL's qualification and drawn groups).
   // Step 3.5f: worlds with European places record each season's entrants.
   const europe = world.europeanPlaces ? openingEurope(world) : undefined;
-  const fixtures = scheduledFixtures({ clubs, fixtures: [], world, divisions, seed, ...(europe ? { europe } : {}) }, 1);
+  // Format 80: national teams from the opening; their FIBA windows pause the domestic leagues that have room.
+  const national = openingNational ? createNational(seed, dateForRound(1)) : undefined;
+  const fixtures = scheduledFixtures({ clubs, fixtures: [], world, divisions, seed, ...(europe ? { europe } : {}), ...(national ? { national } : {}) }, 1);
   const first = fixtures.find(fixture => fixture.round === 1 && [fixture.homeClubId, fixture.awayClubId].includes(managedClubId));
   const preparation = {
-    ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled),
+    ...storedWorld(world), seed, clubs, managedClubId, injuryMode, injuries: [], training: createTraining(clubs, trainingEnabled), coaching: createCoaching(clubs, 1, 1, coachingEnabled, staffingEnabled ? { world, seed, ...(staffContractsEnabled ? { model: 'coaching-4' as const } : {}) } : undefined),
     plans: Object.fromEntries(clubs.map(club => [club.id, { ...defaultPlan(club, club.id !== managedClubId), ...(usesFullClubRoster({ world }) ? { matchday: null } : {}) }])),
     conditions: Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 100]))),
   };
   const state: SeasonState = {
-    schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId, { world }), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(youthCompetitionEnabled ? YOUTH_RECURRENCE_MODEL : 'youth-competition-1'), facilities: createFacilities(clubs, managedClubId, facilitiesEnabled ? 'facilities-2' : 'facilities-1', facilitiesEnabled ? 'loans-1' : undefined), relationships: createRelationships(), board: createBoard(), rivalries: rivalriesEnabled ? createGrownRivalries(world) : createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId, namingRightsEnabled ? 'commercial-2' : 'commercial-1'), negotiations: createNegotiations(), market: createMarket(),
-    ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), ...(europe ? { europe } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
+    schemaVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', dataPackId: world.id, seasonNumber: 1, history: [], manager: managerProfile, rosters: createRosterSnapshots(clubs, 1), finance: createFinance(clubs, managedClubId, { world }), payroll: createPayroll(clubs, managedClubId), employment: createEmployment(), recruitment: createInSeasonRecruitment(), scouting: createScouting(clubs, managedClubId), scouts: createScouts(), fitness: createFitness(), physio: createPhysio(), assistant: createAssistant(), academy: createAcademy(), youth: createYouth(), lifecycle: createLifecycle(), youthCompetition: createYouthCompetition(youthCompetitionEnabled ? YOUTH_RECURRENCE_MODEL : 'youth-competition-1'), facilities: createFacilities(clubs, managedClubId, facilitiesEnabled ? simpleFacilities ? 'facilities-3' : 'facilities-2' : 'facilities-1', facilitiesEnabled ? simpleFacilities ? 'bank-1' : 'loans-1' : undefined), relationships: createRelationships(), board: createBoard(), rivalries: rivalriesEnabled ? createGrownRivalries(world) : createRivalries(), career: createCareer(), commercial: createCommercial(clubs, managedClubId, namingRightsEnabled ? 'commercial-2' : 'commercial-1'), negotiations: createNegotiations(), market: createMarket(),
+    ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), ...(europe ? { europe } : {}), ...(national ? { national } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
     // Format 72: club money follows promotion and relegation in new careers of real-data worlds that start with finances.
     ...(world.economy && financeEnabled ? { economySeasons: createEconomySeasons() } : {}),
     activeFixtureId: first?.id ?? null, activeMatch: first ? prepareMatch({ ...preparation, dataPackId: world.id }, first) : null,
@@ -456,21 +613,24 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
   const paid = payrollEnabled ? preparePayrollRound(enablePayroll(funded)) : funded;
   const contracted = employmentEnabled ? enableEmployment(paid) : paid;
   const observed = scoutingEnabled ? enableScouting(contracted) : contracted;
-  const staffed = scoutsEnabled ? enableScouts(observed) : observed;
-  const fitnessReady = fitnessEnabled ? enableFitness(staffed) : staffed;
-  const medicalReady = physioEnabled ? enablePhysio(fitnessReady) : fitnessReady;
-  const assisted = assistantEnabled ? enableAssistant(medicalReady) : medicalReady;
+  // Format 74: with opening staff the manager's club is staffed in every role too, like every computer club.
+  const staffed = scoutsEnabled ? enableScouts(observed, staffingEnabled) : observed;
+  const fitnessReady = fitnessEnabled ? enableFitness(staffed, staffingEnabled) : staffed;
+  const medicalReady = physioEnabled ? enablePhysio(fitnessReady, staffingEnabled) : fitnessReady;
+  const assisted = assistantEnabled ? enableAssistant(medicalReady, staffingEnabled) : medicalReady;
   const negotiated = negotiationsEnabled ? enableNegotiations(assisted) : assisted;
   const marketReady = marketEnabled ? enableMarket(negotiated) : negotiated;
   const ready = employmentEnabled && negotiationsEnabled ? enableInSeasonTransfers(enableInSeasonRecruitment(marketReady)) : marketReady;
   const academyReady = academyEnabled ? enableAcademy(ready) : ready;
-  const academyStaffed = youthEnabled ? enableYouth(academyReady) : academyReady;
+  const academyStaffed = youthEnabled ? enableYouth(academyReady, staffingEnabled) : academyReady;
   const developed = lifecycleEnabled ? enableLifecycle(academyStaffed) : academyStaffed;
   const youthReady = youthCompetitionEnabled ? enableYouthCompetition(developed) : developed;
   const built = facilitiesEnabled ? enableFacilities(youthReady) : youthReady;
   const sponsored = commercialEnabled ? enableCommercial(built) : built;
-  // Format 66: new careers use squad-rank default roles and contract requests (`relationships-2`).
-  const related = relationshipsEnabled ? prepareRelationshipsRound(enableRelationships(sponsored, 'relationships-2')) : sponsored;
+  // Format 66: new careers use squad-rank default roles and contract requests (`relationships-2`); squad roles
+  // everywhere (`relationships-3`: five roles, the role as a contract term, requests for talks or to leave) follow.
+  // Format 77 (`relationships-4`, calmer playing time) is set by the named `calmPlayingTime` option after creation.
+  const related = relationshipsEnabled ? prepareRelationshipsRound(enableRelationships(sponsored, 'relationships-3')) : sponsored;
   const boarded = boardEnabled ? enableBoard(related, 'career') : related;
   const capitalised = boardFundingEnabled ? enableBoardFunding(boarded) : boarded;
   const judged = boardConsequencesEnabled ? enableBoardConsequences(capitalised) : capitalised;
@@ -523,7 +683,7 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
   }
   fixture.result = compactResult(match, rosterIds);
   if (usesFullClubRoster(season)) fixture.result.selection = captureMatchdaySelection(season.clubs, match.home, match.away, season.conditions);
-  for (const injury of injuriesFromMatch(season.seed, fixture, match, season.injuries, clubRecoveryPercent(season, fixture.date))) {
+  for (const injury of injuriesFromMatch(season.seed, fixture, match, season.injuries, clubRecoveryPercent(season, fixture.date), season.injuryModel)) {
     if (season.injuries.some(existing => existing.id === injury.id || existing.playerId === injury.playerId && isRecovering(existing, fixture.date, season.physio))) throw new Error('An unavailable player cannot receive a duplicate injury episode.');
     season.injuries.push(injury);
   }
@@ -534,7 +694,11 @@ function postMatch(season: SeasonState, fixture: SeasonFixture, match: MatchStat
     // buzzer (a closing or garbage-time five is not the next game's starters; browser play-through, 16 November 2026).
     // The manager's plan takes any change made before tip-off. Vacancies come from the roster's stable order.
     const lineup = [...new Set([...(club.id === season.managedClubId ? plannedFiveAfter(match, side, previous.lineup) : []), ...previous.lineup, ...club.players.map(player => player.id)])].slice(0, 5);
-    season.plans[club.id] = { ...previous, tactics: { ...match.tactics[side] }, lineup, autoSubstitutions: club.id === season.managedClubId ? match.autoSubstitutions[side] : true };
+    // Format 74: the manager's plan keeps the circles he chose before tip-off; computer clubs play listed positions.
+    // A planned starter who missed this game keeps the circle he had.
+    const started = new Set(preTipoffLineup(match, side).five);
+    const chosen = club.id === season.managedClubId ? { ...Object.fromEntries(Object.entries(previous.slots ?? {}).filter(([id]) => !started.has(id))), ...(match.stepCount === 0 ? match.slots?.[side] : match.startingSlots?.[side]) } : undefined;
+    season.plans[club.id] = withPlanCircles({ ...previous, tactics: { ...match.tactics[side] }, lineup, autoSubstitutions: club.id === season.managedClubId ? match.autoSubstitutions[side] : true }, chosen);
     for (const player of club.players) season.conditions[player.id] = match.stats[player.id]!.condition;
   }
 }
@@ -700,7 +864,7 @@ function commitMatchday(state: SeasonState): { next: SeasonState; weekDone: bool
   let next: SeasonState = {
     ...state,
     fixtures: state.fixtures.map(fixture => ({ ...fixture })),
-    plans: Object.fromEntries(Object.entries(state.plans).map(([id, plan]) => [id, { ...plan, tactics: { ...plan.tactics }, lineup: [...plan.lineup] }])),
+    plans: Object.fromEntries(Object.entries(state.plans).map(([id, plan]) => [id, { ...plan, tactics: { ...plan.tactics }, lineup: [...plan.lineup], ...(plan.slots ? { slots: { ...plan.slots } } : {}) }])),
     conditions: { ...state.conditions },
     injuries: state.injuries.map(injury => ({ ...injury })),
   };
@@ -721,6 +885,8 @@ function commitMatchday(state: SeasonState): { next: SeasonState; weekDone: bool
   }
   next = processYouthRound(next);
   next = processFinanceRound(next);
+  // Format 76: the week's staff salaries, before the player wages (the transfer payment run follows the wages).
+  next = processStaffWagesRound(next);
   next = processPayrollRound(next);
   next = processTransferPayments(next);
   next = processScoutingRound(next);
@@ -736,13 +902,16 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState, coachCh
   next = recruitAiPhysios(next);
   next = recruitAiAssistants(next);
   next = recruitAiYouthCoaches(next);
-  next = recruitAiCoaches(next);
+  next = withComputerStaffTerms(recruitAiCoaches(next));
   next.round += 1;
   next.date = dateForRound(next.round, next.seasonNumber);
   next = processFacilityProjects(next);
   next.physio = processRehabilitationWeek({ ...storedWorld(worldOf(next)), facilities: next.facilities, physio: next.physio, clubs: next.clubs, rosters: next.rosters, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: state.date, toDate: next.date });
+  // Format 80: the week's national games (FIBA windows) are played before training, which misses called-up players.
+  if (next.national) next = advanceNationalWeek(next, state.date, next.date);
+  const nationalDuty = nationalDutyDays(next.national, trainedFrom, next.date);
   if (next.training.enabledSince) {
-    const trained = processTrainingWeek({ ...storedWorld(worldOf(next)), dataPackId: next.dataPackId, seed: next.seed, facilities: next.facilities, training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, lifecycle: next.lifecycle, academy: next.academy, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: trainedFrom, toDate: next.date });
+    const trained = processTrainingWeek({ ...storedWorld(worldOf(next)), ...(nationalDuty ? { nationalDuty } : {}), dataPackId: next.dataPackId, seed: next.seed, facilities: next.facilities, training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, lifecycle: next.lifecycle, academy: next.academy, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: trainedFrom, toDate: next.date });
     next.training = trained.training; next.conditions = trained.conditions;
   } else {
     recoverConditions(next.conditions, calendarDaysBetween(trainedFrom, next.date));
@@ -758,7 +927,7 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState, coachCh
   next = processTransferPayments(next);
   if (next.rosters.length !== registeredBefore) next = refreshSquadKnowledge(next);
   next = prepareScoutingAssignments(next);
-  next = scheduleInSeasonRecruitment(next);
+  next = scheduleListingBids(scheduleInSeasonRecruitment(next));
   next = automateFacilities(next);
   next = processContractRequests(automateRelationships(prepareRelationshipsRound(next)));
   // Career-2: an in-season review's coach changes take effect before this week's games, like a resignation would.
@@ -946,25 +1115,31 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   next = startPayrollSeason(next);
   next = resolveInSeasonRecruitment(next);
   next = processTransferPayments(next);
-  next = renewSeasonCoaching(next, state.coaching);
+  // Format 74: computer clubs first decide which staff to keep at the new season's money level.
+  // Format 76: staff still under contract stay; computer clubs pay compensation to anyone they let go before the end.
+  const contracted = keepContractedStaff(next, state.coaching);
+  const renewals = planComputerStaffRenewals(contracted.state, contracted.coaching);
+  next = renewSeasonCoaching(payComputerStaffCompensation(renewals.state, renewals.coaching), renewals.coaching);
   next = renewSeasonScouts(next);
   next = renewSeasonFitness(next);
   next = renewSeasonPhysio(next);
   next = renewSeasonAssistant(next);
-  next = renewSeasonYouth(next);
+  next = settleStaffTerms(renewSeasonYouth(next), state.coaching);
   next = recruitAiScouts(next);
   next = recruitAiFitnessCoaches(next);
   next = recruitAiPhysios(next);
   next = recruitAiAssistants(next);
   next = recruitAiYouthCoaches(next);
-  next = recruitAiCoaches(next);
+  next = withComputerStaffTerms(recruitAiCoaches(next));
   next = preparePayrollRound(next);
   next = processTransferPayments(next);
   next = prepareScoutingAssignments(refreshSquadKnowledge(next));
-  next = scheduleInSeasonRecruitment(next);
+  next = scheduleListingBids(scheduleInSeasonRecruitment(next));
   next = automateFacilities(next);
   next = processContractRequests(automateRelationships(prepareRelationshipsRound(next)));
   next = prepareBoardSeason(next);
+  // Format 80: the summer tournament, the federations' judgement and next season's qualifiers.
+  if (state.national) next = { ...next, national: rolloverNational(state) };
   next.activeMatch = first ? prepareMatch(next, first) : null;
   return next;
 }

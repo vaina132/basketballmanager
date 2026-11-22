@@ -1,5 +1,5 @@
 import type { ClubPlan, FixtureResult, SeasonFixture, SeasonState } from '../domain/season';
-import type { Team } from '../domain/types';
+import type { Position, Team } from '../domain/types';
 import type { WorldContext } from '../domain/world';
 import { MAX_MATCHDAY_PLAYERS } from '../domain/roster';
 import { usesFullClubRoster } from './club-roster-policy';
@@ -30,11 +30,24 @@ export function teamForMatchday(context: MatchdayContext, club: Team, fixture: P
   return selectedTeam(club, club.players.filter(player => chosen.has(player.id)).map(player => player.id));
 }
 
+/**
+ * Format 74: a plan with the circles the manager chose for players of its five (one position each, the first named
+ * keeps it); without any, the plan carries no circles.
+ */
+export function withPlanCircles(plan: ClubPlan, chosen: Readonly<Record<string, Position>> | undefined): ClubPlan {
+  const rest = { ...plan }, used = new Set<Position>();
+  delete rest.slots;
+  const slots = Object.fromEntries(plan.lineup.flatMap(id => { const circle = chosen?.[id]; if (!circle || used.has(circle)) return []; used.add(circle); return [[id, circle]]; }));
+  return Object.keys(slots).length ? { ...rest, slots } : rest;
+}
+
 /** Transfers and rollover drop departed preferences; new arrivals are available without replacing a manual choice. */
 export function reconcileMatchdayPlan(plan: ClubPlan, club: Team): ClubPlan {
-  if (!Object.hasOwn(plan, 'matchday')) return plan;
-  const retained = plan.matchday?.filter(id => club.players.some(player => player.id === id)) ?? null;
-  return { ...plan, matchday: retained && retained.length >= 5 ? retained : null };
+  // The planned five's circles follow its lineup: retained starters keep theirs (format 74).
+  const circled = plan.slots ? withPlanCircles(plan, plan.slots) : plan;
+  if (!Object.hasOwn(circled, 'matchday')) return circled;
+  const retained = circled.matchday?.filter(id => club.players.some(player => player.id === id)) ?? null;
+  return { ...circled, matchday: retained && retained.length >= 5 ? retained : null };
 }
 
 export function canSelectMatchday(state: SeasonState): boolean {

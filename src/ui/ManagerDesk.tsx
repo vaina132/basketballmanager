@@ -6,7 +6,9 @@ import { facilityTypes, FACILITY_RULES_2, getFacilityCondition, hasFacilityCondi
 import { FACILITY_LABELS } from './FacilitiesPanel'
 import { governingDerby, RIVALRY_CROWD_PERCENT } from '../world/rivalries'
 import { rivalryNote } from './rivalry-text'
-import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets } from '../world/board-consequences'
+import { BOARD_VERDICT_EFFECTS, seasonVerdict, verdictBudgets, verdictSalaryPercent } from '../world/board-consequences'
+import { clubSalaryBudget } from '../world/club-roster-policy'
+import { usesWagePool } from '../world/wage-pool'
 import { getClubNamingRights, getClubSponsorship } from '../world/commercial'
 import { PRESIDENT_RULES } from '../world/presidents'
 import { requestText } from './PresidentBoard'
@@ -36,6 +38,7 @@ import { TeamInstructions } from './TeamInstructions'
 import './manager-desk.css'
 import { seasonRounds, worldOf } from '../world/career-world'
 import { formatEuros } from './money-format'
+import { ClubBadge } from './ClubLogo'
 
 interface ManagerDeskProps {
   match: MatchState
@@ -53,6 +56,8 @@ interface ManagerDeskProps {
   onOpenClub: () => void
   onOpenPayroll: () => void
   onOpenTransfers: () => void
+  /** Squad > Contracts: the own squad's renewals (owner, 16 November 2026: moved out of Transfers). */
+  onOpenContracts?: () => void
   onOpenScouting: () => void
   onOpenRelationships?: (playerId?: string) => void
   onOpenBoard?: () => void
@@ -63,7 +68,7 @@ const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.fl
 const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
 const money = (cents: number) => formatEuros(cents)
 
-export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenScouting, onOpenRelationships, onOpenBoard, onOpenInbox }: ManagerDeskProps) {
+export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, managedSide = 'home', fixtureLabel = 'EXHIBITION', apply, onOpenMatch, onOpenSquad, onOpenMedical, onSelectPlayer, onOpenCoaching, onOpenClub, onOpenPayroll, onOpenTransfers, onOpenContracts, onOpenScouting, onOpenRelationships, onOpenBoard, onOpenInbox }: ManagerDeskProps) {
   const team = match[managedSide]
   const market = season && isMarketActive(season) ? getMarketWindow(season) : null
   const marketOffers = market && season ? getMarketOffers(season, season.managedClubId, true) : []
@@ -106,9 +111,11 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     const verdict = season.board.consequencesSince && season.seasonNumber < MAX_SEASON_NUMBER ? seasonVerdict(season.board, season.managedClubId, season.seasonNumber, seasonRounds(season)) : null
     if (verdict) {
       const budgets = verdictBudgets(season, season.managedClubId, verdict.verdict, season.seasonNumber + 1)
-      notices.push({ key: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `Final confidence ${verdict.confidence}/100. ${seasonLabel(season.seasonNumber + 1)}: ${money(budgets.staff)} staff budget and ${money(budgets.capital)} owner capital for facility upgrades.`, urgent: verdict.verdict === 'concerned' || verdict.verdict === 'pressure', action: 'Review board', open: onOpenBoard })
-    } else if (board.latest) notices.push({ key: 'board', title: `Board review · ${board.confidenceLabel}`, detail: `${medicalDate(board.latest.date)}: confidence ${board.confidence}/100. ${board.latest.club.wins} ${board.latest.club.wins === 1 ? 'win' : 'wins'} in ${board.latest.club.played} counted games.${board.financeStatus === 'behind' ? ' Unpaid costs are above the agreed starting balance.' : ''}`, urgent: board.confidence < 40 || board.financeStatus === 'behind', action: 'Review board', open: onOpenBoard })
-    else if (board.objective && board.objective.games > 0) notices.push({ key: 'board', title: 'Board objectives set', detail: `Win ${board.objective.targetWins} of ${board.objective.games} counted games.${board.objective.startingUnpaid !== null ? ` Keep unpaid costs at or below ${money(board.objective.startingUnpaid)}.` : ''}`, action: 'View objectives', open: onOpenBoard })
+      // Two budgets (owner, 18 November 2026): careers with one wage pool hear about next season's Wages left.
+      const pool = usesWagePool(season) && season.employment.enabledSince ? budgets.staff + Math.round(clubSalaryBudget(season, season.managedClubId, season.seasonNumber + 1) * (100 + verdictSalaryPercent(worldOf(season), season.managedClubId, verdict.verdict)) / 100) : null
+      notices.push({ key: 'board', title: `Season verdict · ${BOARD_VERDICT_EFFECTS[verdict.verdict].label}`, detail: `Final confidence ${verdict.confidence}/100. ${seasonLabel(season.seasonNumber + 1)}: ${pool !== null ? `${money(pool)} for player wages and staff fees.` : `${money(budgets.staff)} staff budget and ${money(budgets.capital)} owner capital for facility upgrades.`}`, urgent: verdict.verdict === 'concerned' || verdict.verdict === 'pressure', action: 'Review board', open: onOpenBoard })
+    } else if (board.latest) notices.push({ key: 'board', title: `Board review · ${board.confidenceLabel}`, detail: `${medicalDate(board.latest.date)}: confidence ${board.confidence}/100. ${board.latest.club.wins} ${board.latest.club.wins === 1 ? 'win' : 'wins'} in ${board.latest.club.played} counted games.${board.financeStatus === 'behind' ? usesWagePool(season) ? ' Spending left ran out and some bills are unpaid.' : ' Unpaid costs are above the agreed starting balance.' : ''}`, urgent: board.confidence < 40 || board.financeStatus === 'behind', action: 'Review board', open: onOpenBoard })
+    else if (board.objective && board.objective.games > 0) notices.push({ key: 'board', title: 'Board objectives set', detail: `Win ${board.objective.targetWins} of ${board.objective.games} league games.${board.objective.startingUnpaid !== null ? usesWagePool(season) ? ' Keep Spending left above zero so every bill is paid.' : ` Keep unpaid costs at or below ${money(board.objective.startingUnpaid)}.` : ''}`, action: 'View objectives', open: onOpenBoard })
     // Format 70: an open request from the president stays visible until it is met or its deadline passes.
     const request = (season.board.requests ?? []).find(item => item.outcome === 'open' && item.clubId === season.managedClubId)
     if (request) notices.push({ key: 'president-request', title: "President's request", detail: `${requestText(season, request)} by the review after matchday ${request.deadlineRound}. Met: +${PRESIDENT_RULES.requests.met} confidence; ignored: ${PRESIDENT_RULES.requests.ignored}.`, urgent: true, action: 'Review board', open: onOpenBoard })
@@ -142,7 +149,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     const nextSquad = getClubContractSummary(season, season.managedClubId)
     const expiring = team.players.filter(player => (getPlayerRetirement(season, player.id).notice?.lastSeason ?? Infinity) > season.seasonNumber && !contractForSeason(season.employment, player.id, season.seasonNumber + 1)).length
     if (season.status === 'complete') notices.push({ key: 'offseason', title: 'Prepare next season’s squad', detail: `${nextSquad.rosterSize} players signed for next season. ${Math.max(0, MIN_ROSTER_SIZE - nextSquad.rosterSize)} more needed to reach the minimum squad.`, urgent: nextSquad.rosterSize < MIN_ROSTER_SIZE, action: 'Review offseason', open: onOpenTransfers })
-    else if (expiring) notices.push({ key: 'contracts', title: `${expiring} contracts awaiting renewal`, detail: 'Unrenewed players leave at the end of this season. Renewals take effect next season.', action: 'Review contracts', open: onOpenTransfers })
+    else if (expiring) notices.push({ key: 'contracts', title: `${expiring} contracts awaiting renewal`, detail: 'Unrenewed players leave at the end of this season. Renewals take effect next season.', action: 'Review contracts', open: onOpenContracts ?? onOpenTransfers })
   }
   if (season?.lifecycle.enabledSince) {
     const retirements = team.players.flatMap(player => { const retirement = getPlayerRetirement(season, player.id); return retirement.status === 'announced' && retirement.notice ? [{ player, notice: retirement.notice }] : [] })
@@ -169,9 +176,9 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   if (season?.negotiations.enabledSince) {
     const latest = new Map(season.negotiations.records.filter(record => record.clubId === season.managedClubId && record.startsSeason === season.seasonNumber + 1).map(record => [record.playerId, record]))
     const counters = market ? marketOffers.filter(offer => offer.status === 'countered' && (!offer.transfer || offer.transfer.clubStatus === 'accepted')).length : [...latest.values()].filter(record => record.outcome === 'countered' && !contractForSeason(season.employment, record.playerId, season.seasonNumber + 1)).length
-    if (counters) notices.push({ key: 'negotiations', title: `${counters} player ${counters === 1 ? 'counteroffer' : 'counteroffers'}`, detail: market ? 'Review the proposed salary and contract length. Your original offer still reserves salary budget and a squad place until its deadline.' : 'Review the proposed salary and contract length. These replies have not committed salaries or reserved players.', action: 'Review offers', open: onOpenTransfers })
+    if (counters) notices.push({ key: 'negotiations', title: `${counters} player ${counters === 1 ? 'counteroffer' : 'counteroffers'}`, detail: market ? 'Review the proposed salary and contract length. Your original offer still reserves wages budget and a squad place until its deadline.' : 'Review the proposed salary and contract length. These replies have not committed salaries or reserved players.', action: 'Review offers', open: onOpenTransfers })
     const lost = market ? getMarketOffers(season).filter(offer => offer.status === 'lost' && offer.closedOn === season.date).length : 0
-    if (lost) notices.push({ key: 'rival-offers', title: `${lost} ${lost === 1 ? 'player chose' : 'players chose'} another club`, detail: 'Your reserved salary budget and squad places have been released. Review the decisions and choose your next targets.', action: 'Review decisions', open: onOpenTransfers })
+    if (lost) notices.push({ key: 'rival-offers', title: `${lost} ${lost === 1 ? 'player chose' : 'players chose'} another club`, detail: 'Your reserved wages budget and squad places have been released. Review the decisions and choose your next targets.', action: 'Review decisions', open: onOpenTransfers })
     const clubCounters = marketOffers.filter(offer => offer.transfer?.clubStatus === 'countered').length
     if (clubCounters) notices.push({ key: 'club-counteroffers', title: `${clubCounters} club ${clubCounters === 1 ? 'counteroffer' : 'counteroffers'}`, detail: 'The selling club has asked for a higher transfer fee. Review its price or withdraw your offer.', action: 'Review fees', open: onOpenTransfers })
     const incoming = market ? getLiveMarketOffers(season).filter(offer => offer.transfer?.sellerClubId === season.managedClubId && offer.status === 'club-review').length : 0
@@ -193,7 +200,6 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   if (!complete && match.pendingSubstitutions[managedSide].length) notices.push({ key: 'queued', title: 'Substitutions queued', detail: match.pendingSubstitutions[managedSide].map(change => `${playerName(change.outId)} → ${playerName(change.inId)}`).join('; '), action: 'Review changes', open: onOpenCoaching })
   if (!complete && match.timeoutRequested[managedSide]) notices.push({ key: 'timeout', title: 'Timeout requested', detail: 'Waiting for the next permitted stoppage.', action: 'Review request', open: onOpenCoaching })
 
-  const activity = match.events.filter(event => event.type !== 'tipoff' && !(event.type === 'command' && event.scene?.kind === 'setup')).slice(-5).reverse()
   const displayName = complete ? 'Final lineup' : ready ? 'Starting five' : 'On the floor'
 
   return <div className="manager-desk">
@@ -201,10 +207,11 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     <section className="desk-fixture panel" aria-label="Current fixture">
       <div className="desk-fixture-label"><span>{complete ? 'Last match \u00b7 ' : ''}{fixtureLabel}</span><strong className={needsReplacement ? 'desk-status-urgent' : ''}>{status}</strong></div>
       <div className="desk-fixture-content">
-        <div className="desk-fixture-team"><span className="desk-club-code" style={{ color: match.home.color }}>{match.home.shortName}</span><div><strong>{match.home.name}</strong><span>{managedSide === 'home' ? 'Home · Your team' : 'Home'}</span></div></div>
+        <div className="desk-fixture-team"><ClubBadge club={match.home} className="desk-club-code" /><div><strong>{match.home.name}</strong><span>{managedSide === 'home' ? 'Home · Your team' : 'Home'}</span></div></div>
         <div className="desk-fixture-score"><strong aria-label={`Score: ${score.home} to ${score.away}`}>{score.home}<span>:</span>{score.away}</strong><span>{ready ? 'Awaiting tipoff' : complete ? match.result?.kind === 'default' ? 'Awarded by default' : `${period(match.period)} · Final` : `${period(match.period)} · ${clock(match.clockSeconds)}`}</span></div>
-        <div className="desk-fixture-team desk-fixture-away"><span className="desk-club-code" style={{ color: match.away.color }}>{match.away.shortName}</span><div><strong>{match.away.name}</strong><span>{managedSide === 'away' ? 'Away · Your team' : 'Away'}</span></div></div>
-        <button className="button primary desk-match-action" onClick={needsReplacement ? onOpenCoaching : onOpenMatch}>{complete ? 'View result' : needsReplacement ? 'Resolve replacement' : 'Go to match'}<Icon name="arrow" size={16} /></button>
+        <div className="desk-fixture-team desk-fixture-away"><ClubBadge club={match.away} className="desk-club-code" /><div><strong>{match.away.name}</strong><span>{managedSide === 'away' ? 'Away · Your team' : 'Away'}</span></div></div>
+        {/* The one Continue on the top bar opens the match (owner request, 16 November 2026: no separate "Go to match"). */}
+        {(complete || needsReplacement) && <button className="button primary desk-match-action" onClick={needsReplacement ? onOpenCoaching : onOpenMatch}>{complete ? 'View result' : 'Resolve replacement'}<Icon name="arrow" size={16} /></button>}
       </div>
     </section>
 
@@ -215,6 +222,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
       <div><dt>Substitutions</dt><dd className="desk-policy-value">{match.autoSubstitutions[managedSide] ? automaticChoiceLabels(assistant?.name).policy : 'Manual'}</dd></div>
     </dl>
 
+    {/* Owner decision (22 November 2026): no "Recent activity" play-by-play on the Desk; the match screen has it. */}
     <div className="desk-columns">
       <div className="desk-main-column">
         <section className="desk-lineup panel" aria-labelledby="desk-lineup-heading">
@@ -227,10 +235,6 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
           <div className="desk-reserves"><span>Available bench</span><div>{availableBench.map(player => <button key={player.id} onClick={() => onSelectPlayer(player.id)} title={`${player.name} · ${player.position} · ${Math.round(match.stats[player.id].condition)}% stamina`}>{player.name.split(' ').at(-1)}<small>{Math.round(match.stats[player.id].condition)}%</small></button>)}{!availableBench.length && <span>No eligible reserves</span>}</div></div>
         </section>
 
-        <section className="desk-activity panel" aria-labelledby="desk-activity-heading">
-          <div className="desk-panel-heading"><h2 id="desk-activity-heading"><Icon name="clock" size={16} />Recent activity</h2><span className="desk-section-note">Current match</span></div>
-          {activity.length ? <ol>{activity.map(event => <li key={event.id}><time>{period(event.period)}<span>{clock(event.clockSeconds)}</span></time><p>{event.text}</p><span className="desk-activity-score">{event.score.home}–{event.score.away}</span></li>)}</ol> : <p className="desk-empty">No match actions yet. Review your lineup and instructions before tipoff.</p>}
-        </section>
       </div>
 
       <div className="desk-side-column">

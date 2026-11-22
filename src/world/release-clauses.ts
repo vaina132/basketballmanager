@@ -17,8 +17,11 @@ export function releaseFeeReason(fee: number | undefined, context?: WorldContext
 }
 
 export function offerOptionsReason(state: Pick<SeasonState, 'negotiations'> & WorldContext, options: ContractOfferOptions, paid: boolean): string | null {
-  if (options.transferMode !== undefined && options.transferMode !== 'negotiated' && options.transferMode !== 'release-clause') return 'Choose a negotiated transfer or explicit release-clause activation.';
+  if (options.transferMode !== undefined && options.transferMode !== 'negotiated' && options.transferMode !== 'release-clause' && options.transferMode !== 'loan') return 'Choose a negotiated transfer or explicit release-clause activation.';
   if (!paid && options.transferMode === 'release-clause') return 'Release-clause activation requires a paid club transfer.';
+  // Format 78 (`recruitment-2`): a loan is a paid in-season move for the rest of the season.
+  if (!paid && options.transferMode === 'loan') return 'A loan needs an agreement with the player\'s club.';
+  if (options.transferMode === 'loan' && options.releaseFee !== undefined) return 'A loan carries no release clause.';
   if (options.releaseFee !== undefined && !state.negotiations.enabledSince) return 'Enable contract negotiations before agreeing a release clause.';
   return releaseFeeReason(options.releaseFee, state);
 }

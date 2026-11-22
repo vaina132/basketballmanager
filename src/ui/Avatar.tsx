@@ -1,6 +1,19 @@
+import { useState } from 'react'
 import type { Player } from '../domain/types'
+import { PLAYER_PHOTOS, type PlayerPhoto } from '../data/player-photos'
+import './player-photo.css'
+
+/**
+ * Real player photos from Wikimedia Commons (owner decision, 22 November 2026). Only real-pack players
+ * with a freely licensed photo have entries, so fictional worlds and generated players keep the drawn avatar.
+ */
+export const playerPhoto = (playerId: string | null | undefined): PlayerPhoto | null => playerId && Object.hasOwn(PLAYER_PHOTOS, playerId) ? PLAYER_PHOTOS[playerId]! : null
+export const playerPhotoUrl = (photo: PlayerPhoto): string => `/photos/players/${photo.file}`
 
 export function Avatar({ player, color, size = 42 }: { player: Player; color: string; size?: number }) {
+  const photo = playerPhoto(player.id)
+  const [failed, setFailed] = useState(false)
+  if (photo && !failed) return <img className="avatar avatar-photo" src={playerPhotoUrl(photo)} alt={player.name} width={size} height={size} loading="lazy" decoding="async" data-player-photo={player.id} onError={() => setFailed(true)} />
   return <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label={`${player.name}, number ${player.number}`} className="avatar">
     <rect width="64" height="64" rx="18" fill="var(--surface-3)" />
     <path d="M8 64v-8c0-12 11-19 24-19s24 7 24 19v8" fill={color} />

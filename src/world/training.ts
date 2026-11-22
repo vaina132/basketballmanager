@@ -1,7 +1,8 @@
+import { nationalGameCost } from './national';
 import { facilityPracticeBonusPercent } from './facilities-policy';
 import type { SeasonInjury, SeasonState } from '../domain/season';
 import type { SeasonTraining, TrainingFocus, TrainingIntensity, TrainingPlan, TrainingPoints, TrainingWeekReport } from '../domain/training';
-import type { Player, PlayerAttributes, Team } from '../domain/types';
+import type { Player, PlayerAttributes, SkillAttributes, Team } from '../domain/types';
 import { isRecovering } from './health';
 import type { SeasonCoaching } from '../domain/coaching';
 import type { RosterSnapshot } from '../domain/roster';
@@ -12,6 +13,7 @@ import { createRosterSnapshots, rosterForRound } from './rosters';
 import { fitnessAssignments } from './fitness-policy';
 import { ageTrainingRate, applyAgingAttributes, type LifecycleContext } from './lifecycle-policy';
 import { seasonRounds } from './career-world';
+import { EXTRA_MATCH, storedExtras } from './extra-attributes';
 import type { CareerWorld } from '../domain/world';
 import { potentialPointCap, trainingHeadroom, type PotentialContext } from './potential';
 
@@ -35,7 +37,7 @@ const copyPlan = (plan: TrainingPlan): TrainingPlan => ({ ...plan, individual: {
  * Training points one skill may hold: 100 per rating point of headroom, never above 20. New careers (`training-2`) use
  * each player's hidden potential (sprint 4, `src/world/potential.ts`); older careers keep the fixed two rating points.
  */
-export function trainingPointCap(context: PotentialContext & { training: Pick<SeasonTraining, 'model'> }, player: Pick<Player, 'id' | 'attributes'>, attribute: keyof PlayerAttributes): number {
+export function trainingPointCap(context: PotentialContext & { training: Pick<SeasonTraining, 'model'> }, player: Pick<Player, 'id' | 'attributes'>, attribute: keyof SkillAttributes): number {
   return potentialPointCap(trainingHeadroom(context, player.id), player.attributes[attribute]);
 }
 
@@ -59,6 +61,11 @@ export function withTrainingPoints(training: SeasonTraining, players: readonly P
   return missing.length ? { ...training, points: { ...training.points, ...Object.fromEntries(missing.map(player => [player.id, emptyPoints()])) } } : training;
 }
 
+/** Weekly practice points after Discipline (`EXTRA_MATCH.trainingPerPoint` percent per point above or below 10), rounded down. */
+export function disciplinedPractice(points: number, discipline: number): number {
+  return Math.max(0, Math.floor(points * (100 + (discipline - 10) * EXTRA_MATCH.trainingPerPoint) / 100));
+}
+
 /** Project training progress into a new match squad; authored identities stay immutable. */
 export function developClub(club: Team, training: SeasonTraining, context: PotentialContext & LifecycleContext): Team {
   return {
@@ -66,11 +73,11 @@ export function developClub(club: Team, training: SeasonTraining, context: Poten
     players: club.players.map(player => {
       const headroom = trainingHeadroom({ ...context, training }, player.id);
       return {
-        ...player, attributes: applyAgingAttributes(context, player.id, Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => {
+        ...player, attributes: applyAgingAttributes(context, player.id, { ...Object.fromEntries(TRAINING_ATTRIBUTES.map(attribute => {
           const points = training.points[player.id]?.[attribute];
           if (!Number.isInteger(points) || points < 0 || points > potentialPointCap(headroom, player.attributes[attribute])) throw new Error('Training progress is outside its supported development limits.');
           return [attribute, Math.min(20, player.attributes[attribute] + Math.floor(points / 100))];
-        })) as unknown as PlayerAttributes, context.date ?? ''),
+        })), ...storedExtras(player.attributes) } as PlayerAttributes, context.date ?? ''),
       };
     }),
   };
@@ -131,6 +138,11 @@ export interface TrainingWeekInput {
   /** The career's world, for player ages (built-in league when omitted). */
   world?: CareerWorld;
   dataPackId?: string;
+  /**
+   * Format 80: called-up players' days away on national duty (`nationalDutyDays`): no club practice; a national game
+   * day (whole minutes played) costs condition by `nationalGameCost`.
+   */
+  nationalDuty?: Readonly<Record<string, Readonly<Record<string, number | null>>>>;
 }
 
 /** One authoritative weekly pass updates every club; it consumes no match RNG. */
@@ -163,7 +175,9 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       const fitness = appliedFitness?.[club.id];
       let condition = conditionBefore, conditionWithoutCoach = conditionBefore, budget = 0, weightedBudget = 0, facilityUnits = 0, availableDays = 0;
       for (const date of dates) {
-        const available = !injuries.some(injury => injury.playerId === player.id && isRecovering(injury, date, input.physio));
+        const duty = input.nationalDuty?.[player.id]?.[date], away = duty !== undefined;
+        const gameCost = typeof duty === 'number' ? nationalGameCost(duty) : 0;
+        const available = !away && !injuries.some(injury => injury.playerId === player.id && isRecovering(injury, date, input.physio));
         if (available) {
           availableDays += 1;
           const practice = condition < 70 ? Math.floor(workload.points / 2) : workload.points;
@@ -174,12 +188,14 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
         }
         const recoveryBonus = available ? fitness?.recoveryPerDay ?? 0 : 0;
         const practiceCost = available ? workload.cost * (1 - (fitness?.practiceCostReductionPercent ?? 0) / 100) : 0;
-        condition = Math.max(35, Math.min(100, Math.round((condition + workload.recovery + recoveryBonus - practiceCost) * 1000) / 1000));
-        conditionWithoutCoach = Math.max(35, Math.min(100, Math.round((conditionWithoutCoach + workload.recovery - (available ? workload.cost : 0)) * 1000) / 1000));
+        condition = Math.max(35, Math.min(100, Math.round((condition + workload.recovery + recoveryBonus - practiceCost - gameCost) * 1000) / 1000));
+        conditionWithoutCoach = Math.max(35, Math.min(100, Math.round((conditionWithoutCoach + workload.recovery - (available ? workload.cost : 0) - gameCost) * 1000) / 1000));
       }
       const ordinaryPracticePoints = budget;
       if (agingActive) budget = Math.floor(weightedBudget / 10_000);
       const aging = agingActive ? { ordinaryPracticePoints, adjustedPracticePoints: budget, rateBasisPoints: ordinaryPracticePoints > 0 ? Math.floor(weightedBudget / ordinaryPracticePoints) : ageTrainingRate(input, player.id, toDate) } : undefined;
+      // Discipline (stored in careers started with the five abilities): 2% more practice per point above 10, less below.
+      if (player.attributes.discipline !== undefined) budget = disciplinedPractice(budget, player.attributes.discipline);
       const desired = emptyPoints(), gains = emptyPoints(), coachingGains = emptyPoints(), previous = training.points[player.id];
       if (focus === 'balanced') {
         for (const key of TRAINING_ATTRIBUTES) desired[key] = Math.floor(budget / TRAINING_ATTRIBUTES.length);
@@ -194,11 +210,13 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       const rotation = (afterRound - 1) % TRAINING_ATTRIBUTES.length;
       const priority = TRAINING_ATTRIBUTES.map((attribute, index) => ({ attribute, remainder: bonusUnits[index]! % 80, order: (index - rotation + TRAINING_ATTRIBUTES.length) % TRAINING_ATTRIBUTES.length })).sort((left, right) => right.remainder - left.remainder || left.order - right.order);
       for (let index = 0; index < extra; index += 1) bonusDesired[priority[index]!.attribute] += 1;
-      const facilityPoints = Math.floor(facilityUnits / 1_000_000);
+      // Format 74 (`facilities-3`): Very Poor and Poor facilities cost practice. Lost points are whole points, rounded
+      // towards zero like earned ones, spread like earned ones, and never take away progress already made.
+      const facilityMagnitude = Math.floor(Math.abs(facilityUnits) / 1_000_000), facilitySign = facilityUnits < 0 && facilityMagnitude > 0 ? -1 : 1, facilityPoints = facilitySign * facilityMagnitude;
       const facilityDesired = emptyPoints(), facilityGains = emptyPoints();
       if (focus === 'balanced') {
-        for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = Math.floor(facilityPoints / TRAINING_ATTRIBUTES.length);
-        for (let index = 0; index < facilityPoints % TRAINING_ATTRIBUTES.length; index += 1) facilityDesired[TRAINING_ATTRIBUTES[(afterRound - 1 + budget % TRAINING_ATTRIBUTES.length + index) % TRAINING_ATTRIBUTES.length]!] += 1;
+        for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = facilitySign * Math.floor(facilityMagnitude / TRAINING_ATTRIBUTES.length);
+        for (let index = 0; index < facilityMagnitude % TRAINING_ATTRIBUTES.length; index += 1) facilityDesired[TRAINING_ATTRIBUTES[(afterRound - 1 + budget % TRAINING_ATTRIBUTES.length + index) % TRAINING_ATTRIBUTES.length]!] += facilitySign;
       } else facilityDesired[focus] = facilityPoints;
       const progress = emptyPoints(), headroom = trainingHeadroom(input, player.id);
       for (const attribute of TRAINING_ATTRIBUTES) {
@@ -206,7 +224,7 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
         if (!Number.isInteger(points) || points < 0 || points > cap) throw new Error('Training progress is outside its supported development limits.');
         const baseProgress = Math.min(cap, points + desired[attribute]);
         const coached = Math.min(cap, baseProgress + bonusDesired[attribute]);
-        progress[attribute] = Math.min(cap, coached + facilityDesired[attribute]);
+        progress[attribute] = Math.max(points, Math.min(cap, coached + facilityDesired[attribute]));
         coachingGains[attribute] = coached - baseProgress;
         facilityGains[attribute] = progress[attribute] - coached;
         gains[attribute] = progress[attribute] - points;

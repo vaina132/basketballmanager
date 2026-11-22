@@ -12,16 +12,11 @@ import { careerMoveOutcome } from './career-text'
 import { Icon } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
 import './unemployed-desk.css'
+import { ClubBadge } from './ClubLogo'
 
 interface UnemployedDeskProps {
   season: SeasonState
   busy: boolean
-  /** During a season: play the rest of this week (every club is automatic). */
-  onContinue: () => void
-  /** In the offseason: the next recruitment day (other clubs keep signing players). */
-  onNextDay: () => void
-  /** In the offseason: start the next season. */
-  onStartSeason: () => void
   onAccept: (clubId: string) => void
   onOpenCompetitions: () => void
   onOpenCalendar: () => void
@@ -47,7 +42,7 @@ export function careerPeriods(season: Pick<SeasonState, 'managedClubId' | 'caree
  * Career-3 (format 69): the desk of a manager without a club. It shows only recorded game state: the date, the next
  * games in the world, the jobs open now with what each board looks for, the faded reputation and the career so far.
  */
-export function UnemployedDesk({ season, busy, onContinue, onNextDay, onStartSeason, onAccept, onOpenCompetitions, onOpenCalendar }: UnemployedDeskProps) {
+export function UnemployedDesk({ season, busy, onAccept, onOpenCompetitions, onOpenCalendar }: UnemployedDeskProps) {
   const world = worldOf(season)
   const market = jobMarket(season)
   const left = currentUnemployment(season)
@@ -60,7 +55,6 @@ export function UnemployedDesk({ season, busy, onContinue, onNextDay, onStartSea
   const rounds = seasonRounds(season)
   const day = currentGameDay(season)
   const upcoming = offseason ? [] : season.fixtures.filter(fixture => fixture.round === season.round && !fixture.result).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1)
-  const canNextDay = offseason && isMarketActive(season) && !!getNextMarketDate(season)
   const startReason = offseason && season.market.enabledSince ? getMarketStartReason(season) : null
   const reputation = market?.reputation
   const careerStart = season.career.enabledSince?.date ?? season.date
@@ -80,12 +74,8 @@ export function UnemployedDesk({ season, busy, onContinue, onNextDay, onStartSea
           <div><dt>{offseason ? 'Calendar' : 'Week'}</dt><dd>{offseason ? isMarketActive(season) ? 'Offseason recruitment' : 'Season complete' : `${season.round} of ${rounds}`}</dd></div>
           <div><dt>Reputation</dt><dd data-unemployed-reputation={reputation?.value}>{reputation?.value ?? '—'}<small>/100</small></dd></div>
         </dl>
-        <div className="unemployed-actions">
-          {!offseason && <button className="button primary" id="unemployed-continue" onClick={onContinue} disabled={busy}>{season.round === rounds ? 'Finish the season' : 'Continue to next week'}<Icon name="next" size={15} /></button>}
-          {canNextDay && <button className={startReason ? 'button primary' : 'button'} id="unemployed-next-day" onClick={onNextDay} disabled={busy}>Next recruitment day<Icon name="next" size={15} /></button>}
-          {offseason && !startReason && <button className="button primary" id="unemployed-start-season" onClick={onStartSeason} disabled={busy}>Start {seasonLabel(season.seasonNumber + 1)}<Icon name="next" size={15} /></button>}
-          {offseason && startReason && !canNextDay && <p className="unemployed-note" role="status">{startReason}</p>}
-        </div>
+        {/* The one Continue on the top bar plays each week, each recruitment day and starts the next season (16 November 2026). */}
+        <p className="unemployed-note" data-unemployed-next>{offseason ? startReason ?? `Recruitment is complete: Continue starts ${seasonLabel(season.seasonNumber + 1)}.` : season.round === rounds ? 'Continue plays the final week and finishes the season.' : 'Continue plays every club\'s games this week.'}</p>
       </div>
     </section>
 
@@ -95,7 +85,7 @@ export function UnemployedDesk({ season, busy, onContinue, onNextDay, onStartSea
         {market?.vacancies.length ? <ul className="unemployed-jobs" aria-label="Open jobs">{market.vacancies.map(vacancy => {
           const team = club(vacancy.clubId), refusal = jobRefusal(season, vacancy.clubId)
           return <li key={vacancy.clubId} data-job-club={vacancy.clubId} data-job-offered={vacancy.offered}>
-            <div className="unemployed-job-club"><span className="unemployed-club-code" style={{ color: team?.color }}>{team?.shortName ?? vacancy.clubId.slice(0, 3).toUpperCase()}</span><div><strong>{name(vacancy.clubId)}</strong><span>{leagueOf(vacancy.clubId)} · {placeText(vacancy)} · board confidence {vacancy.confidence}</span></div></div>
+            <div className="unemployed-job-club"><ClubBadge club={team} className="unemployed-club-code" fallback={team?.shortName ?? vacancy.clubId.slice(0, 3).toUpperCase()} /><div><strong>{name(vacancy.clubId)}</strong><span>{leagueOf(vacancy.clubId)} · {placeText(vacancy)} · board confidence {vacancy.confidence}</span></div></div>
             <p>{vacancy.opened === 'season' ? 'The board replaced its coach; an interim coach has the team.' : 'Its season ended Under pressure, so the board is replacing its coach.'} It looks for a reputation of {vacancy.requirement}. {vacancy.openUntil ? <>Open until <time dateTime={vacancy.openUntil}>{medicalDate(vacancy.openUntil)}</time>.</> : 'Open through this offseason.'}</p>
             <div className="unemployed-job-action"><span className="unemployed-job-status" data-state={vacancy.offered ? 'offered' : 'closed'}><Icon name={vacancy.offered ? 'check' : 'target'} size={14} />{status(vacancy)}</span>
               {vacancy.offered && <button className="button" data-accept-job={vacancy.clubId} onClick={() => onAccept(vacancy.clubId)} disabled={busy || !!refusal} aria-describedby={refusal ? `job-refusal-${vacancy.clubId}` : undefined}>Accept job</button>}

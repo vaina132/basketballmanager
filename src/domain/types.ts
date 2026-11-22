@@ -1,9 +1,16 @@
 import type { InjuryKind, InjuryRisk } from './injuries';
 export type Side = 'home' | 'away';
 export type EngineVersion = 'rules-2' | 'possession-3';
+/**
+ * Format 79 (owner feedback 16, 22 November 2026): the richer play model of the possession engine (`src/engine/plays.ts`):
+ * pick-and-rolls, post-ups, drives and kick-outs, fast breaks, putbacks and the other named actions. Matches without it
+ * replay with the earlier possession actions unchanged.
+ */
+export type PlayModel = 'plays-2';
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 
-export interface PlayerAttributes {
+/** The seven trained skills (1-20): every player record has them; training, potential and the overall rating use them. */
+export interface SkillAttributes {
   readonly twoPoint: number;
   readonly threePoint: number;
   readonly freeThrow: number;
@@ -12,6 +19,22 @@ export interface PlayerAttributes {
   readonly rebounding: number;
   readonly stamina: number;
 }
+
+/**
+ * Five further abilities (owner decision, 18 November 2026), 1-20 like the skills: Blocking, Stealing, Intelligence
+ * (decisions, fewer turnovers), Mental (close games, late in the game) and Discipline (faster training progress).
+ * New careers store them on every player (`src/world/extra-attributes.ts`); records without them (exhibition teams,
+ * the fictional development world, older careers) play, train and show as before.
+ */
+export interface ExtraAttributes {
+  readonly blocking: number;
+  readonly stealing: number;
+  readonly intelligence: number;
+  readonly mental: number;
+  readonly discipline: number;
+}
+
+export interface PlayerAttributes extends SkillAttributes, Partial<ExtraAttributes> {}
 
 export interface Player {
   readonly id: string;
@@ -120,6 +143,10 @@ export interface MatchState {
   schemaVersion: 2;
   engineVersion: EngineVersion;
   possessionPlay?: PossessionPlay | null;
+  /** Format 79: the richer play model (possession engine only); absent in older matches, which keep the earlier actions. */
+  playModel?: PlayModel;
+  /** Format 79, with the play model: the sides run by a computer coach, who call timeouts in a bad run. */
+  computerCoach?: Side[];
   /** Frozen when the career round is prepared; later conversations never rewrite a match. */
   morale?: { model: 'morale-1'; eventCount: number; values: Record<string, number> };
   seed: number;
@@ -153,6 +180,14 @@ export interface MatchState {
   courtSeconds: Record<Side, number>;
   result: MatchResult | null;
   lineups: Record<Side, string[]>;
+  /**
+   * The court picture's chosen circles (format 74): the position played by each player the manager put in a circle,
+   * for players on court and reserves queued for a circle. Everyone else plays his listed position (computer clubs,
+   * the automatic rotation's changes, a five the manager never arranged).
+   */
+  slots?: Partial<Record<Side, Record<string, Position>>>;
+  /** The chosen circles when the clock first ran, kept so that the next game starts from the circles set before tip-off. */
+  startingSlots?: Partial<Record<Side, Record<string, Position>>>;
   tactics: Record<Side, Tactics>;
   stats: Record<string, PlayerStats>;
   events: MatchEvent[];

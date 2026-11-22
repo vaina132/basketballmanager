@@ -1,7 +1,7 @@
 import type { SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import type { MatchState } from '../domain/types';
 import type { PlayerMedicalSummary, SeasonPhysio } from '../domain/physio';
-import { injuryType, isMatchInjuryKind, MATCH_INJURY_TYPES, type InjuryRisk, type MatchInjuryKind } from '../domain/injuries';
+import { injuryDurationRange, injuryType, isMatchInjuryKind, MATCH_INJURY_TYPES, type InjuryModel, type InjuryRisk, type MatchInjuryKind } from '../domain/injuries';
 import { effectiveReturnOn, latestRehabilitation, rehabilitationCreditCap } from './rehabilitation-policy';
 import { medicalRecoveryPercent, type FacilitiesContext } from './facilities-policy';
 
@@ -92,11 +92,12 @@ export function injuryRiskMap(injuries: readonly SeasonInjury[], playerIds: Iter
  * becomes 1.85 at 15%). Players of clubs without one, and every player in older careers, keep their factors.
  */
 export function withMedicalRecurrence(risks: Record<string, InjuryRisk>, clubs: readonly { playerIds: readonly string[]; percent: number }[]): Record<string, InjuryRisk> {
-  if (!clubs.some(club => club.percent > 0)) return risks;
+  // Format 74: a Very Poor or Poor medical centre (a negative percent) raises the extra risk instead.
+  if (!clubs.some(club => club.percent !== 0)) return risks;
   const result: Record<string, InjuryRisk> = {};
   for (const [playerId, risk] of Object.entries(risks)) {
     const percent = clubs.find(club => club.playerIds.includes(playerId))?.percent ?? 0;
-    result[playerId] = percent > 0 ? Object.fromEntries(Object.entries(risk).map(([kind, factor]) => [kind, 1 + (factor! - 1) * (100 - percent) / 100])) as InjuryRisk : risk;
+    result[playerId] = percent !== 0 ? Object.fromEntries(Object.entries(risk).map(([kind, factor]) => [kind, 1 + (factor! - 1) * (100 - percent) / 100])) as InjuryRisk : risk;
   }
   return result;
 }
@@ -119,8 +120,8 @@ function mix(value: number): number {
  * Recovery days for a new injury: log-normal around the type's median, clamped to its range, from a stable hash
  * (never match randomness). A recurrence lasts 1.3 times as long.
  */
-export function injuryDays(kind: MatchInjuryKind, hash: number, recurrence = false): number {
-  const type = injuryType(kind);
+export function injuryDays(kind: MatchInjuryKind, hash: number, recurrence = false, model?: InjuryModel): number {
+  const type = injuryDurationRange(kind, model);
   const first = (mix(hash) + 0.5) / 4_294_967_296, second = (mix(hash ^ 0x9e3779b9) + 0.5) / 4_294_967_296;
   const normal = Math.sqrt(-2 * Math.log(first)) * Math.cos(2 * Math.PI * second);
   const spread = Math.log(type.maxDays / type.medianDays) / DURATION_SPREAD_DEVIATIONS;
@@ -132,12 +133,14 @@ export function injuryDays(kind: MatchInjuryKind, hash: number, recurrence = fal
  * A diagnosed recovery episode. Realistic kinds (format 61) draw their duration with `injuryDays`, using the player's
  * earlier injuries for recurrence; the legacy kinds keep their provisional durations (ankle 7-28 days, muscle 7-21)
  * so older careers keep their diagnoses. The separate stable hash consumes no sporting RNG. `recoveryPercent` is the
- * club's medical centre (format 65, `medicalRecoveryPercent`): that much shorter, never below one day.
+ * club's medical centre (format 65, `medicalRecoveryPercent`): that much shorter, never below one day. `model` is the
+ * career's injury model (`injuries-2` for new careers, 22 November 2026; absent: the research durations).
  */
-export function createSeasonInjury(seed: number, fixture: Pick<SeasonFixture, 'id' | 'date'>, clubId: string, playerId: string, kind: SeasonInjury['kind'], earlier: readonly SeasonInjury[] = [], recoveryPercent = 0): SeasonInjury {
+export function createSeasonInjury(seed: number, fixture: Pick<SeasonFixture, 'id' | 'date'>, clubId: string, playerId: string, kind: SeasonInjury['kind'], earlier: readonly SeasonInjury[] = [], recoveryPercent = 0, model?: InjuryModel): SeasonInjury {
   const hash = stableHash(seed, `health:${fixture.id}:${playerId}:${kind}`);
-  const diagnosed = isMatchInjuryKind(kind) ? injuryDays(kind, hash, isRecurrence(earlier, playerId, kind, fixture.date)) : 7 + hash % (kind === 'ankle' ? 22 : 15);
-  const duration = recoveryPercent > 0 ? Math.max(1, Math.round(diagnosed * (100 - recoveryPercent) / 100)) : diagnosed;
+  const diagnosed = isMatchInjuryKind(kind) ? injuryDays(kind, hash, isRecurrence(earlier, playerId, kind, fixture.date), model) : 7 + hash % (kind === 'ankle' ? 22 : 15);
+  // Format 74: a Very Poor or Poor medical centre (a negative percent) makes recovery longer.
+  const duration = recoveryPercent !== 0 ? Math.max(1, Math.round(diagnosed * (100 - recoveryPercent) / 100)) : diagnosed;
   const returnOn = new Date(Date.parse(`${fixture.date}T00:00:00Z`) + duration * DAY_MS).toISOString().slice(0, 10);
   return { id: `${fixture.id}:${playerId}`, playerId, clubId, kind, fixtureId: fixture.id, occurredOn: fixture.date, returnOn };
 }
@@ -146,12 +149,12 @@ export function createSeasonInjury(seed: number, fixture: Pick<SeasonFixture, 'i
  * New incidents only. Carried absences do not restart their recovery clock. `earlier` holds the recorded history;
  * `recoveryPercent` gives each club's medical-centre shortening on the fixture date (format 65).
  */
-export function injuriesFromMatch(seed: number, fixture: Pick<SeasonFixture, 'id' | 'date'>, match: MatchState, earlier: readonly SeasonInjury[] = [], recoveryPercent: (clubId: string) => number = () => 0): SeasonInjury[] {
+export function injuriesFromMatch(seed: number, fixture: Pick<SeasonFixture, 'id' | 'date'>, match: MatchState, earlier: readonly SeasonInjury[] = [], recoveryPercent: (clubId: string) => number = () => 0, model?: InjuryModel): SeasonInjury[] {
   const carried = new Set(match.preExistingInjuries ?? []);
   return Object.entries(match.injuries).filter(([id]) => !carried.has(id)).map(([playerId, injury]) => {
     const club = [match.home, match.away].find(team => team.players.some(player => player.id === playerId));
     if (!club) throw new Error('A match injury refers to a player outside its squads.');
-    return createSeasonInjury(seed, fixture, club.id, playerId, injury.kind, earlier, recoveryPercent(club.id));
+    return createSeasonInjury(seed, fixture, club.id, playerId, injury.kind, earlier, recoveryPercent(club.id), model);
   });
 }
 
@@ -166,7 +169,7 @@ export function getSeasonInjuries(season: SeasonState): SeasonInjury[] {
   const fixture = season.fixtures.find(item => item.id === season.activeFixtureId);
   if (!fixture) throw new Error('The active season fixture is missing.');
   const injuries = new Map(season.injuries.map(injury => [injury.id, injury]));
-  for (const injury of injuriesFromMatch(season.seed, fixture, season.activeMatch, season.injuries, clubRecoveryPercent(season, fixture.date))) if (!injuries.has(injury.id)) injuries.set(injury.id, injury);
+  for (const injury of injuriesFromMatch(season.seed, fixture, season.activeMatch, season.injuries, clubRecoveryPercent(season, fixture.date), season.injuryModel)) if (!injuries.has(injury.id)) injuries.set(injury.id, injury);
   return [...injuries.values()];
 }
 

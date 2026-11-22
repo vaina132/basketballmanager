@@ -1,5 +1,5 @@
 import type { AssistantCoach } from '../domain/assistant';
-import type { MatchState, Player, PlayerAttributes, Position, Side, Tactics } from '../domain/types';
+import type { MatchState, Player, PlayerAttributes, SkillAttributes, Position, Side, Tactics } from '../domain/types';
 import { isPlayerEligible, setTactics, substitutePlayer } from '../engine/match';
 import { assistantEffects } from './assistant-policy';
 import { playerPIR } from './performance-rating';
@@ -25,7 +25,7 @@ const compareId = (left: string, right: string) => left < right ? -1 : left > ri
 const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
 const slider = (value: number) => Math.round(clamp(value, .2, .75) * 20) / 20;
 const positions: readonly Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
-const fitWeights: Record<Position, Partial<Record<keyof PlayerAttributes, number>>> = {
+const fitWeights: Record<Position, Partial<Record<keyof SkillAttributes, number>>> = {
   PG: { passing: .35, twoPoint: .15, threePoint: .2, defense: .2, stamina: .1 },
   SG: { threePoint: .35, twoPoint: .25, passing: .1, defense: .2, stamina: .1 },
   SF: { twoPoint: .25, threePoint: .25, defense: .2, rebounding: .2, stamina: .1 },
@@ -34,14 +34,14 @@ const fitWeights: Record<Position, Partial<Record<keyof PlayerAttributes, number
 };
 
 /** Assessment changes precision, never access to another club's private attributes. */
-function assessed(player: Player, attribute: keyof PlayerAttributes, coach: AssistantCoach): number {
+function assessed(player: Player, attribute: keyof SkillAttributes, coach: AssistantCoach): number {
   const step = assistantEffects(coach).skillStep;
   return clamp(Math.round(player.attributes[attribute] / step) * step, 1, 20);
 }
 
 function rotationValue(match: MatchState, player: Player, position: Position, coach: AssistantCoach): number {
   const stats = match.stats[player.id]!;
-  const fit = Object.entries(fitWeights[position]).reduce((total, [key, weight]) => total + assessed(player, key as keyof PlayerAttributes, coach) * weight!, 0);
+  const fit = Object.entries(fitWeights[position]).reduce((total, [key, weight]) => total + assessed(player, key as keyof SkillAttributes, coach) * weight!, 0);
   const positionalDistance = Math.abs(positions.indexOf(position) - positions.indexOf(player.position));
   const foulRisk = stats.fouls >= 4 ? 3 : stats.fouls === 3 && match.period < 4 ? 1.5 : 0;
   // Recorded form is bounded and only considered after five actual minutes.
@@ -57,7 +57,7 @@ export function getAssistantAdvice(match: MatchState, side: Side, coach: Assista
   const active = match.lineups[side].map(id => squad.find(player => player.id === id)!).filter(Boolean);
   const available = active.filter(player => isPlayerEligible(match, player.id));
   if (available.length) {
-    const skill = (key: keyof PlayerAttributes) => mean(available.map(player => assessed(player, key, coach)));
+    const skill = (key: keyof SkillAttributes) => mean(available.map(player => assessed(player, key, coach)));
     const condition = mean(available.map(player => match.stats[player.id]!.condition));
     const fouls = mean(available.map(player => match.stats[player.id]!.fouls));
     const passing = skill('passing'), shooting = skill('threePoint') - skill('twoPoint');

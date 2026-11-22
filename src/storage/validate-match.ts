@@ -1,6 +1,8 @@
-import type { CourtScene, MatchEvent, MatchState, Side } from '../domain/types';
+import type { CourtScene, MatchEvent, MatchState, Position, Side } from '../domain/types';
 import { INJURY_KINDS, MATCH_INJURY_KINDS } from '../domain/injuries';
 import { MAX_INJURY_RISK, MAX_MATCH_PERIODS } from '../engine/match';
+import { COURT_POSITIONS } from '../engine/positions';
+import { abilityShapeProblem } from '../world/extra-attributes';
 
 const SIDES = ['home', 'away'] as const;
 const ATTRIBUTE_KEYS = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
@@ -246,8 +248,14 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     'pendingSubstitutions', 'requiredSubstitutions', 'freeThrows', 'stoppage', 'substitutionLocks',
     'autoSubstitutions', 'injuryMode', 'injuries', 'courtSeconds', 'result',
     ...(modern ? ['possessionPlay'] : []),
-  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk'] : []);
+  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk', 'slots', 'startingSlots', 'playModel', 'computerCoach'] : []);
   if (state.schemaVersion !== 2 || !['rules-2', 'possession-3'].includes(state.engineVersion as string)) fail('state', 'uses an unsupported schema or engine version');
+  // Format 79: the richer play model, with the sides a computer coach runs.
+  if (Object.hasOwn(state, 'playModel') && state.playModel !== 'plays-2') fail('playModel', 'must be plays-2 when recorded');
+  if (Object.hasOwn(state, 'computerCoach')) {
+    const coached = state.computerCoach;
+    if (!Object.hasOwn(state, 'playModel') || !Array.isArray(coached) || coached.length > 2 || new Set(coached).size !== coached.length || coached.some(side => !SIDES.includes(side as Side))) fail('computerCoach', 'must name distinct teams of a match with the play model');
+  } else if (Object.hasOwn(state, 'playModel')) fail('computerCoach', 'must be recorded with the play model');
   number(state.seed, 'seed', 0, 0xffff_ffff);
   number(state.rngState, 'rngState', 1, 0xffff_ffff);
   const period = number(state.period, 'period', 1, MAX_MATCH_PERIODS);
@@ -319,8 +327,8 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
       number(player.weightKg, `${path}.weightKg`, 35, 250, false);
       color(player.skinTone, `${path}.skinTone`);
       color(player.hairColor, `${path}.hairColor`);
-      const attributes = record(player.attributes, `${path}.attributes`, ATTRIBUTE_KEYS);
-      for (const key of ATTRIBUTE_KEYS) number(attributes[key], `${path}.attributes.${key}`, 1, 20);
+      const problem = abilityShapeProblem(player.attributes, ATTRIBUTE_KEYS);
+      if (problem) fail(`${path}.attributes`, problem);
     }
   }
 
@@ -458,6 +466,26 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     if (state.status === 'finished' && (requests.length > 0 || timeoutRequested[side])) fail('pending commands', 'must be cleared when the match finishes');
   }
   if (state.status === 'finished' && required.length > 0) fail('requiredSubstitutions', 'must be cleared when the match finishes');
+  // Format 74: the court picture's chosen circles, for players on court (one different position each) and reserves
+  // queued for a circle; the chosen circles when the clock first ran are kept once play has started.
+  if (Object.hasOwn(state, 'slots')) {
+    const slots = record(state.slots, 'slots');
+    if (!Object.keys(slots).length || Object.keys(slots).some(side => !SIDES.includes(side as Side))) fail('slots', 'must name the teams that use the court picture');
+    for (const [side, value] of Object.entries(slots)) {
+      const circles = record(value, `slots.${side}`), onCourt = Object.keys(circles).filter(playerId => (lineups[side] as string[]).includes(playerId));
+      const queued = ((pending as Record<string, unknown>)[side] as { inId: string }[]).map(request => request.inId);
+      if (Object.keys(circles).some(playerId => !onCourt.includes(playerId) && !queued.includes(playerId)) || new Set(onCourt.map(playerId => circles[playerId])).size !== onCourt.length || Object.values(circles).some(position => !COURT_POSITIONS.includes(position as Position))) fail(`slots.${side}`, 'must give players on court a different court position each, or a queued reserve his circle');
+    }
+  }
+  if (Object.hasOwn(state, 'startingSlots')) {
+    const starting = record(state.startingSlots, 'startingSlots');
+    if (steps === 0 || !Object.hasOwn(state, 'slots')) fail('startingSlots', 'are kept only once play has started with the court picture');
+    for (const [side, value] of Object.entries(starting)) {
+      if (!SIDES.includes(side as Side) || !Object.hasOwn(state.slots as object, side)) fail('startingSlots', 'must name a team that uses the court picture');
+      const circles = record(value, `startingSlots.${side}`);
+      if (Object.keys(circles).length > 5 || Object.keys(circles).some(playerId => !playerIds[side as Side].has(playerId)) || new Set(Object.values(circles)).size !== Object.keys(circles).length || Object.values(circles).some(position => !COURT_POSITIONS.includes(position as Position))) fail(`startingSlots.${side}`, 'must give up to five players of the team different court positions');
+    }
+  }
   if (modern) possessionPlay(state.possessionPlay, state, lineups as Record<Side, string[]>);
 
   const locks = array(state.substitutionLocks, 'substitutionLocks', 0, allIds.size);

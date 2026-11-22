@@ -175,7 +175,9 @@ export function stripBackground(value: object): void {
 }
 
 /** createSeason options for a new career as created before the saved ideas level (formats 63-71). */
-export const BEFORE_SAVED_IDEAS = { media: false, namingRights: false, presidents: false } as const;
+/** Also without the opening staff of format 74 (`coaching-2`), which only newer formats accept. */
+/** Also without the format-79 play model (`plays-2`) and the format-80 national teams. */
+export const BEFORE_SAVED_IDEAS = { media: false, namingRights: false, presidents: false, simpleFacilities: false, staffing: false, transferLists: false, scoutNetwork: false, matchPlays: false, nationalTeams: false } as const;
 
 /**
  * An untouched new career on the rules saved before the saved ideas level: Level 7 career rules (`career-1`), the
@@ -185,7 +187,13 @@ export const BEFORE_SAVED_IDEAS = { media: false, namingRights: false, president
  * converted after play with `withFixedRivalries`.
  */
 export function beforeSavedIdeas(state: SeasonState): SeasonState {
-  return withLegacyYouthCompetition(withOpeningMoney(withLegacyRelationships(withLegacyFacilities(asCareer1(state)))));
+  return withoutListings(withLegacyYouthCompetition(withOpeningMoney(withLegacyRelationships(withLegacyFacilities(asCareer1(state))))));
+}
+
+/** Format 78: the transfer and loan list (`recruitment-2`) and the scouting network (`scouting-2`) are newer than any older file. */
+export function withoutListings<T extends Pick<SeasonState, 'recruitment' | 'scouting'>>(state: T): T {
+  const { listings: _listings, ...recruitment } = state.recruitment;
+  return { ...state, recruitment: { ...recruitment, model: 'recruitment-1' }, scouting: { ...state.scouting, model: 'scouting-1' } };
 }
 
 /** Youth injuries that never recur (`youth-competition-1`), as in every career created before youth recurrence (format 72). */
@@ -199,9 +207,9 @@ export function withOpeningMoney<T extends Partial<Pick<SeasonState, 'economySea
   return older as T;
 }
 
-/** An untouched new career's squad dynamics on the original rules (`relationships-1`, before format 66). */
+/** An untouched new career's squad dynamics on the original rules (`relationships-1`, before format 66; new careers use `relationships-3`). */
 export function withLegacyRelationships(state: SeasonState): SeasonState {
-  if (state.relationships.model !== 'relationships-2') return state;
+  if (state.relationships.model === 'relationships-1') return state;
   if (state.relationships.events.some(event => event.type !== 'prepare')) throw new Error('Convert only an untouched new career.');
   const { squadRanks: _ranks, ...relationships } = state.relationships;
   return { ...state, relationships: { ...relationships, model: 'relationships-1' } };

@@ -1,8 +1,13 @@
 import type { TransferInstallment, TransferPayment, TransferPaymentPlan } from './transfer-payments';
 
+import type { SquadRole } from './relationships';
+
 export interface ContractOfferOptions {
   releaseFee?: number;
-  transferMode?: 'negotiated' | 'release-clause';
+  /** `loan` (format 78, `recruitment-2`): the buyer takes the player for the rest of this season only. */
+  transferMode?: 'negotiated' | 'release-clause' | 'loan';
+  /** `relationships-3`: the squad role offered; omitted, the player's natural role at the offering club. */
+  role?: SquadRole;
 }
 
 /** Immutable employment terms. Seasonal payroll remains a separate payment schedule. */
@@ -18,6 +23,8 @@ export interface EmploymentContract {
   seasonWage: number;
   /** Optional fee agreed with this contract; absence preserves ordinary transfer negotiation. */
   releaseFee?: number;
+  /** `relationships-3`: the squad role agreed as a contract term; the player expects it while the contract runs. */
+  role?: SquadRole;
   signedSeason: number;
   signedRound: number;
   /** `joined`: an opening term for a player of a club joining the full world (format 55). */
@@ -36,7 +43,8 @@ export interface EmploymentTransfer {
   startsSeason: number;
   startsRound: number;
   fee: number;
-  mode?: 'release-clause';
+  /** `loan` (format 78): the released terms come back to the lending club from the next season. */
+  mode?: 'release-clause' | 'loan';
   releasedContractIds: string[];
   contractId: string;
   paymentPlan: TransferPaymentPlan;
@@ -111,6 +119,8 @@ export interface PlayerContractQuote {
   seasonWage: number;
   askingWage: number;
   releaseFee?: number;
+  /** `relationships-3`: the role on the offer (chosen or natural); `askingWage` includes its effect. */
+  role?: SquadRole;
   canOffer: boolean;
   reason: string | null;
 }

@@ -26,7 +26,7 @@ import { FacilityFinancing } from '../src/ui/FacilityFinancing';
 
 const club = 'rhine-falcons';
 const manager = { name: 'Loan Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' };
-const career = (managedClubId = club) => createSeason({ seed: 227, managedClubId, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS });
+const career = (managedClubId = club) => createSeason({ seed: 227, managedClubId, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS, matchPlays: false, simpleFacilities: false });
 const debtEntries = (state: SeasonState) => state.finance.ledger.filter(entry => entry.debt);
 /** Pure guard fixtures use an artificial operating expense, without claiming to be valid career exports. */
 function spend(state: SeasonState, clubId: string, amount: number): SeasonState {
@@ -44,7 +44,8 @@ describe('facility financing rules (format 71)', () => {
     expect(quoteFacilityLoan(legacy, 'arena').reason).toMatch(/facility financing/);
     expect(quoteFacilityLease(legacy, 'arena').reason).toMatch(/facility financing/);
     expect(() => takeFacilityLoan(legacy, 'arena')).toThrow(/facility financing/);
-    const older = beforeSavedIdeas(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS, ...BEFORE_SAVED_IDEAS }));
+    // Same opening staff as `career()`, so only the financing differs.
+    const older = beforeSavedIdeas(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', manager, ...NEW_CAREER_SYSTEMS, ...BEFORE_SAVED_IDEAS, staffing: true }));
     expect(older.facilities.financing).toBeUndefined();
     expect(getSpendableCash(older, club)).toBe(getSpendableCash(state, club));
   });
@@ -331,7 +332,7 @@ describe('automatic borrowing', () => {
 describe('arena work started at a season end', () => {
   it('leaves the gates of the final week\'s later playoff games as they were played', { timeout: 300_000 }, () => {
     // Two divisions with playoffs: the final week's later games fall after its Saturday, which stays the calendar date
-    // until the first offseason day, so arena work started then is dated before games already played. Seed 2: Adriatic
+    // until the first offseason day, so arena work started then is dated before games already played. Seed 1 (re-seeded for local staff names, 18 November 2026): Adriatic
     // Comets host one of those games.
     const base = testWorld(12), managed = 'w0-adriatic-comets';
     const playerContracts = Object.fromEntries(base.clubs.flatMap(item => item.players.map((player, index) => [player.id, 1 + (index % 3)])));
@@ -339,7 +340,7 @@ describe('arena work started at a season end', () => {
       { id: 'first', name: 'First division', country: 'Testland', tier: 1, clubIds: base.clubs.slice(0, 6).map(item => item.id), postseason: 'test-tier1-1' },
       { id: 'second', name: 'Second division', country: 'Testland', tier: 2, clubIds: base.clubs.slice(6).map(item => item.id), postseason: 'test-tier2-2' },
     ] };
-    let state = setEmploymentDelegation(createSeason({ seed: 2, world, managedClubId: managed, ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ seed: 1, world, managedClubId: managed, ...NEW_CAREER_SYSTEMS, matchPlays: false, injuryLengths: false, calmPlayingTime: false, simpleFacilities: false }), true);
     while (state.status === 'active') state = advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
     const fixture = state.fixtures.find(item => item.result && item.date > state.date && item.homeClubId === managed)!;
     expect(fixture).toBeDefined();

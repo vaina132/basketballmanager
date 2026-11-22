@@ -7,6 +7,7 @@ import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { StaminaMeter } from './StaminaMeter'
 import { PlayerRating, MatchRating } from './PlayerRating'
+import { CourtFive } from './CourtFive'
 import './match-lineup.css'
 
 type Apply = (action: (state: MatchState) => MatchState) => void
@@ -20,6 +21,8 @@ interface MatchLineupProps {
   apply: Apply
   onInteractionStart: () => void
   knowledgeForPlayer?: (id: string) => PlayerKnowledge
+  /** Career matches: the manager's side is shown on the court picture with PG, SG, SF, PF and C circles. */
+  courtPicture?: boolean
 }
 
 interface LineupPlayerProps {
@@ -54,7 +57,7 @@ function LineupPlayer({ player, match, side, active, pickLabel, pressed, selecte
 
   return <article className={`lineup-player${unavailable ? ' lineup-player-unavailable' : ''}${selected ? ' lineup-player-selected' : ''}${targetHint ? ' lineup-player-target' : ''}${dragOver ? ' lineup-player-drop' : ''}`} data-player-id={player.id} data-roster-status={unavailable ?? (active ? 'active' : 'bench')} tabIndex={-1} aria-label={`${player.name}, ${unavailable ?? (active ? 'on court' : 'bench')}`} draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
     {pickLabel ? <button className="lineup-player-heading lineup-player-pick" type="button" data-sub-in={!active ? player.id : undefined} data-sub-out={active ? player.id : undefined} data-lineup-target={targetHint ? player.id : undefined} aria-pressed={pressed} aria-label={pickLabel} onClick={event => onSelect(event.detail === 0)}>{identity}</button> : <div className="lineup-player-heading">{identity}</div>}
-    <div className="lineup-player-ratings"><div><span>Ability</span><PlayerRating attributes={player.attributes} position={player.position} knowledge={knowledge} compact label={`${player.name} ability`} /></div><div className="lineup-match-rating"><span>Match</span><MatchRating stats={stats} compact /></div></div>
+    <div className="lineup-player-ratings"><div><span>Ability</span><PlayerRating attributes={player.attributes} position={player.position} knowledge={knowledge} compact label={`${player.name} ability`} /></div><div className="lineup-match-rating"><span>Match</span><MatchRating stats={stats} live={match.stepCount > 0} compact label={player.name} /></div></div>
     <StaminaMeter value={stats.condition} label={`${player.name} stamina`} />
     {unavailable && <span className="lineup-unavailable-label">{unavailable}</span>}
     {pending && <span className="lineup-pending-label">{pending}</span>}
@@ -68,7 +71,7 @@ function LineupPlayer({ player, match, side, active, pickLabel, pressed, selecte
  * Pairs: a reserve and an on-court player make a substitution (it waits for a legal stoppage); two on-court players
  * swap places at once (owner feedback, 16 November 2026: nobody enters or leaves, so no stoppage is needed).
  */
-export function MatchLineup({ match, displayMatch = match, managedSide = 'home', disabled = false, apply, onInteractionStart, knowledgeForPlayer }: MatchLineupProps) {
+export function MatchLineup({ match, displayMatch = match, managedSide = 'home', disabled = false, apply, onInteractionStart, knowledgeForPlayer, courtPicture: useCourtPicture = false }: MatchLineupProps) {
   const [showOpponent, setShowOpponent] = useState(false)
   const [benchOpen, setBenchOpen] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -91,6 +94,8 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
   const selected = editable ? usableBench.find(player => player.id === selectedId) ?? null : null
   const selectedActive = editable && selectedId && onCourt.includes(selectedId) ? currentTeam.players.find(player => player.id === selectedId) ?? null : null
   const shownMatch = selected || selectedActive || draggedId ? match : displayMatch
+  // Format 74: the manager's side is arranged on the court picture (career matches).
+  const courtPicture = own && useCourtPicture && match.engineVersion === 'possession-3'
   const team = shownMatch[side]
   const active = shownMatch.lineups[side].flatMap(id => team.players.filter(player => player.id === id))
   const bench = team.players.filter(player => !shownMatch.lineups[side].includes(player.id))
@@ -201,7 +206,7 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
       return next
     })
     if (!applied) return
-    setAnnouncement(`Substitution for ${playerName(outId)} cancelled.`)
+    setAnnouncement(`Change cancelled: ${playerName(outId)} stays on.`)
     requestAnimationFrame(() => status.current?.focus({ preventScroll: true }))
   }
 
@@ -221,10 +226,11 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
 
   return <section ref={container} id="match-rotation" className="match-lineup" tabIndex={-1} aria-label="Players, ratings and substitutions" onKeyDown={event => { if (event.key === 'Escape' && selectedId) { event.preventDefault(); clearSelection() } }}>
     <div className="lineup-toolbar">
-      <div className="lineup-title"><span className="lineup-live-dot" /><h3>On the floor</h3><span>Ratings &amp; stamina</span></div>
+      <div className="lineup-title"><span className="lineup-live-dot" /><h3>{courtPicture && match.stepCount === 0 ? 'Starting five' : 'On the floor'}</h3><span>{courtPicture ? 'Positions & stamina' : 'Ratings & stamina'}</span></div>
       <div className="lineup-team-switch" role="group" aria-label="Lineup team">{(['home', 'away'] as const).map(value => <button key={value} type="button" onClick={() => { setShowOpponent(value !== managedSide); setSelectedId(null); setDraggedId(null); setDropId(null) }} aria-pressed={side === value} className={side === value ? 'selected' : ''}><span style={{ backgroundColor: match[value].color }} />{match[value].shortName}<small>{value === managedSide ? 'Your team' : 'Opponent'}</small></button>)}</div>
       <button className="lineup-bench-toggle" type="button" aria-expanded={benchOpen} aria-controls={benchId} onClick={() => setBenchOpen(value => !value)}>{benchOpen ? 'Hide bench' : 'Show bench'} <span>{bench.length}</span><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
     </div>
+    {courtPicture ? <CourtFive match={match} displayMatch={displayMatch} side={managedSide} disabled={disabled} benchOpen={benchOpen} benchId={benchId} apply={apply} onInteractionStart={onInteractionStart} knowledgeForPlayer={knowledgeForPlayer} /> : <>
     {own && <MatchRotationControls match={match} side={managedSide} selected={selected} selectedActive={selectedActive} helpId={helpId} statusRef={status} announcement={announcement} disabled={disabled} onClear={clearSelection} onCancel={cancelChange} />}
     <div className="lineup-grid" aria-label={`${team.name} on court`} aria-describedby={own ? helpId : undefined}>{active.map(player => {
       const pending = match.pendingSubstitutions[side].find(request => request.outId === player.id)
@@ -245,6 +251,7 @@ export function MatchLineup({ match, displayMatch = match, managedSide = 'home',
         return <LineupPlayer key={player.id} player={player} knowledge={knowledgeForPlayer?.(player.id)} match={shownMatch} side={side} active={false} pickLabel={pickLabel} pressed={selectable && !target ? selected?.id === player.id : undefined} selected={selected?.id === player.id} selectedHint="Selected · choose who comes off" targetHint={target ? 'Drop or select to bring on' : null} draggable={selectable} dragOver={dropId === player.id} pending={pending ? `Queued on · replacing ${match[side].players.find(member => member.id === pending.outId)!.name}` : null} onSelect={keyboard => { if (selectedActive) pair(selectedActive.id, player.id); else choose(player.id, keyboard) }} onDragStart={event => beginDrag(event, player.id)} {...(selectable ? dragHandlers(player.id) : {})} />
       })}</div> : <p className="lineup-empty">No reserves available.</p>}
     </div>
+    </>}
   </section>
 }
 
@@ -254,6 +261,6 @@ function MatchRotationControls({ match, side, selected, selectedActive, helpId, 
   return <div className="lineup-rotation-controls">
     <div className="lineup-rotation-help"><p id={helpId}>{finished ? 'Match finished · substitutions closed.' : selected ? `${selected.name} selected. Choose an on-court player to replace.` : selectedActive ? `${selectedActive.name} selected. Choose another on-court player to swap places, or a reserve to bring on.` : 'Drag a reserve onto an on-court player, or select both: substitutions wait for a legal stoppage. Drag or select two on-court players to swap their places at once.'}</p>{(selected || selectedActive) && <button type="button" className="text-button" onClick={onClear} disabled={disabled}><Icon name="close" size={13} />Clear selection</button>}</div>
     <p ref={statusRef} className={`lineup-rotation-status${announcement ? '' : ' visually-hidden'}`} tabIndex={-1} role="status" aria-live="polite">{announcement}</p>
-    {match.pendingSubstitutions[side].length > 0 && <ul className="lineup-queued-changes" aria-label="Pending substitutions">{match.pendingSubstitutions[side].map(request => <li key={request.outId}><span><strong>Queued</strong> {playerName(request.inId)} for {playerName(request.outId)}</span><button type="button" className="text-button" data-cancel-lineup-sub={request.outId} aria-label={`Cancel substitution of ${playerName(request.inId)} for ${playerName(request.outId)}`} onClick={() => onCancel(request.outId)} disabled={disabled || finished}>Cancel</button></li>)}</ul>}
+    {match.pendingSubstitutions[side].length > 0 && <ul className="lineup-queued-changes" aria-label="Pending substitutions">{match.pendingSubstitutions[side].map(request => <li key={request.outId}><span><strong>Waiting for a stoppage</strong> {playerName(request.inId)} on for {playerName(request.outId)}</span><button type="button" className="button small lineup-cancel-sub" data-cancel-lineup-sub={request.outId} aria-label={`Cancel substitution: ${playerName(request.outId)} stays on, ${playerName(request.inId)} stays on the bench`} onClick={() => onCancel(request.outId)} disabled={disabled || finished}><Icon name="close" size={13} />Cancel</button></li>)}</ul>}
   </div>
 }

@@ -66,13 +66,6 @@
 .desk-notice-urgent strong { color: var(--accent); }
 .desk-instructions > .team-instructions { padding: 12px; }
 .desk-section-note { font-size: 10px; color: var(--muted); }
-.desk-activity ol { list-style: none; margin: 0; padding: 0 12px; }
-.desk-activity li { display: grid; grid-template-columns: 80px minmax(0,1fr) 48px; gap: 12px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--border); }
-.desk-activity li:last-child { border-bottom: 0; }
-.desk-activity time { display: flex; gap: 8px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.desk-activity time > span { color: var(--text); }
-.desk-activity p { font-size: 12px; color: var(--muted); line-height: 1.5; }
-.desk-activity-score { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 11px; }
 .desk-empty { font-size: 12px; line-height: 1.5; color: var(--muted); padding: 10px 12px; }
 @media(max-width:1250px) {
   .desk-fixture-content { gap: 12px; grid-template-columns: minmax(0,1fr) 85px minmax(0,1fr) auto; }
@@ -93,7 +86,6 @@
   .desk-columns { grid-template-columns: 1fr; }
   .desk-main-column { display: contents; }
   .desk-side-column { order: 1; }
-  .desk-activity { order: 2; }
   .desk-squad-status { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px 18px; }
   .desk-squad-status > div + div { border: 0; padding-left: 0; }
   .desk-squad-status > div:nth-child(even) { border-left: 1px solid var(--border); padding-left: 18px; }
@@ -122,9 +114,6 @@
   .desk-player > .avatar { width: 27px; height: 27px; }
   .manager-desk .desk-lineup .stamina-meter-compact { width: 62px; }
   .desk-reserves { padding: 10px; flex-direction: column; gap: 5px; }
-  .desk-activity li { grid-template-columns: 62px minmax(0,1fr); gap: 8px; }
-  .desk-activity time { gap: 5px; }
-  .desk-activity-score { display: none; }
 }
 .desk-finance-values { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; padding: 12px; }
 .desk-finance-values dt { color: var(--muted); font-size: 11px; }

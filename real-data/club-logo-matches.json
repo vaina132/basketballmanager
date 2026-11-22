@@ -1,0 +1,1646 @@
+{
+ "source": "API-Sports team lists 2026-27, matched 22 November 2026",
+ "clubs": [
+  {
+   "clubId": "club-b5b3bb06-6c4c-4625-947f-66525fac1051",
+   "club": "Absheron Lions",
+   "apiSportsTeamId": 7523,
+   "apiSportsTeam": "Absheron Lions",
+   "logo": true
+  },
+  {
+   "clubId": "club-4ab5837a-f244-4234-b201-0c3dfaabfe7a",
+   "club": "ADA Blois",
+   "apiSportsTeamId": 95,
+   "apiSportsTeam": "Ada Blois",
+   "logo": true
+  },
+  {
+   "clubId": "club-15377311-2ea0-4049-9495-b856789e832d",
+   "club": "AEK Athens",
+   "apiSportsTeamId": 605,
+   "apiSportsTeam": "AEK Athens",
+   "logo": true
+  },
+  {
+   "clubId": "club-bb852913-f2a7-48f8-9ac7-e346e370d86a",
+   "club": "AEK Larnaca",
+   "apiSportsTeamId": 1389,
+   "apiSportsTeam": "AEK Larnaca",
+   "logo": true
+  },
+  {
+   "clubId": "club-58efb934-792c-4359-b3c3-84148fbb0125",
+   "club": "Aix Maurienne",
+   "apiSportsTeamId": 104,
+   "apiSportsTeam": "Aix Maurienne",
+   "logo": true
+  },
+  {
+   "clubId": "club-2aef6b40-7a09-423d-a301-dfa0ae61dc98",
+   "club": "Alba Berlin",
+   "apiSportsTeamId": 519,
+   "apiSportsTeam": "Alba Berlin",
+   "logo": true
+  },
+  {
+   "clubId": "club-f74df5e2-342b-4207-9d77-4af9ab5483db",
+   "club": "Albacete Basket",
+   "apiSportsTeamId": 1136,
+   "apiSportsTeam": "Albacete",
+   "logo": true
+  },
+  {
+   "clubId": "club-48a02989-5a22-4ef6-9cbc-b4595f2b16b5",
+   "club": "Aliağa Petkimspor",
+   "apiSportsTeamId": 2264,
+   "apiSportsTeam": "Petkim Spor",
+   "logo": true
+  },
+  {
+   "clubId": "club-9cb38492-dbc0-415c-89bd-854e3d3e4590",
+   "club": "ALM Évreux",
+   "apiSportsTeamId": 105,
+   "apiSportsTeam": "Evreux",
+   "logo": true
+  },
+  {
+   "clubId": "club-3635b3fa-d54c-49bc-82f7-f0466200a0a5",
+   "club": "Anadolu Efes",
+   "apiSportsTeamId": 1263,
+   "apiSportsTeam": "Anadolu Efes",
+   "logo": true
+  },
+  {
+   "clubId": "club-772308f5-5229-48da-bcd7-5d4a206ada80",
+   "club": "Antibes Sharks",
+   "apiSportsTeamId": 107,
+   "apiSportsTeam": "Antibes",
+   "logo": true
+  },
+  {
+   "clubId": "club-858326a2-90db-49a0-8e95-51df6207584b",
+   "club": "Antwerp Giants",
+   "apiSportsTeamId": 300,
+   "apiSportsTeam": "Antwerp Giants",
+   "logo": true
+  },
+  {
+   "clubId": "club-99da5e89-7c6d-4954-8744-d435ea7784ea",
+   "club": "APU Udine",
+   "apiSportsTeamId": 714,
+   "apiSportsTeam": "Udine",
+   "logo": true
+  },
+  {
+   "clubId": "club-9bc65d87-d5bf-460c-bd86-d5a56942e593",
+   "club": "Aquila Trento",
+   "apiSportsTeamId": 727,
+   "apiSportsTeam": "Trento",
+   "logo": true
+  },
+  {
+   "clubId": "club-32806760-6aa2-4110-b618-74d3b965d9ec",
+   "club": "Aris Thessaloniki",
+   "apiSportsTeamId": 606,
+   "apiSportsTeam": "Aris",
+   "logo": true
+  },
+  {
+   "clubId": "club-a096e522-e2f3-43d5-82bb-47e97469e14d",
+   "club": "AS Karditsa",
+   "apiSportsTeamId": 590,
+   "apiSportsTeam": "AS Karditsas",
+   "logo": true
+  },
+  {
+   "clubId": "club-251fee1f-dc65-42cd-baa3-cf1de1d609a1",
+   "club": "AS Monaco",
+   "apiSportsTeamId": 16,
+   "apiSportsTeam": "Monaco",
+   "logo": true
+  },
+  {
+   "clubId": "club-23fe4698-60ea-4be4-a5c6-f14f9055d91e",
+   "club": "ASA",
+   "apiSportsTeamId": 3067,
+   "apiSportsTeam": "ASA",
+   "logo": true
+  },
+  {
+   "clubId": "club-1c4d2515-1e36-4de4-971c-87e05cbfc340",
+   "club": "Avellino Basket",
+   "apiSportsTeamId": 6499,
+   "apiSportsTeam": "Avellino Basket",
+   "logo": false
+  },
+  {
+   "clubId": "club-047d4a96-e063-4ac5-bbe8-d510741cdc8c",
+   "club": "Bahçeşehir Koleji",
+   "apiSportsTeamId": 1264,
+   "apiSportsTeam": "Bahcesehir Kol.",
+   "logo": true
+  },
+  {
+   "clubId": "club-4d2ec5b7-d332-429f-a167-1f3b4ab66bb2",
+   "club": "Bakken Bears",
+   "apiSportsTeamId": 464,
+   "apiSportsTeam": "Bakken Bears",
+   "logo": true
+  },
+  {
+   "clubId": "club-281b9bee-2921-45c6-a3ec-0826cff2f410",
+   "club": "Balıkesir",
+   "apiSportsTeamId": 1295,
+   "apiSportsTeam": "Balikesir",
+   "logo": true
+  },
+  {
+   "clubId": "club-ac7de74d-c167-4b47-8816-d08b40aec808",
+   "club": "Balkan Botevgrad",
+   "apiSportsTeamId": 1369,
+   "apiSportsTeam": "Balkan",
+   "logo": true
+  },
+  {
+   "clubId": "club-1ea8f40f-457b-47be-a109-51b7322362b7",
+   "club": "Bamberg Baskets",
+   "apiSportsTeamId": 520,
+   "apiSportsTeam": "Bamberg",
+   "logo": true
+  },
+  {
+   "clubId": "club-31d37cad-cb36-49c0-a088-c35660e961d8",
+   "club": "Basket Torino",
+   "apiSportsTeamId": 691,
+   "apiSportsTeam": "Basket Torino",
+   "logo": true
+  },
+  {
+   "clubId": "club-5cbee358-3443-4210-89dc-16a1c8239995",
+   "club": "Basket Zaragoza",
+   "apiSportsTeamId": 2330,
+   "apiSportsTeam": "Basket Zaragoza",
+   "logo": true
+  },
+  {
+   "clubId": "club-b75b310d-3847-425d-89db-ba4992bf7321",
+   "club": "Basketball Löwen Braunschweig",
+   "apiSportsTeamId": 521,
+   "apiSportsTeam": "Basketball Braunschweig",
+   "logo": true
+  },
+  {
+   "clubId": "club-7b852414-f543-4e40-9575-57f2332a839a",
+   "club": "Baskonia",
+   "apiSportsTeamId": 2331,
+   "apiSportsTeam": "Baskonia",
+   "logo": true
+  },
+  {
+   "clubId": "club-874a9403-e79d-4eb4-b35e-e6d25d0f7f14",
+   "club": "Básquet Coruña",
+   "apiSportsTeamId": 1127,
+   "apiSportsTeam": "Leyma Coruna",
+   "logo": true
+  },
+  {
+   "clubId": "club-519a004d-8fee-4bbb-9caf-946a513b9ccb",
+   "club": "Bàsquet Girona",
+   "apiSportsTeamId": 1139,
+   "apiSportsTeam": "Basquet Girona",
+   "logo": true
+  },
+  {
+   "clubId": "club-85a34fb7-0dd9-41b6-bcb7-533a9db3800c",
+   "club": "Batumi",
+   "apiSportsTeamId": 5237,
+   "apiSportsTeam": "Batumi",
+   "logo": true
+  },
+  {
+   "clubId": "club-740c1c7b-1666-4115-b356-6c3ae715f832",
+   "club": "Bayern Munich",
+   "apiSportsTeamId": 522,
+   "apiSportsTeam": "Bayern",
+   "logo": true
+  },
+  {
+   "clubId": "club-bc5d1cb6-fab0-4c83-a167-0acd48505502",
+   "club": "BC Roma",
+   "apiSportsTeamId": 7903,
+   "apiSportsTeam": "BC Roma",
+   "logo": false
+  },
+  {
+   "clubId": "club-d2360276-722f-4e18-91bf-dac725d971a3",
+   "club": "BC Vienna",
+   "apiSportsTeamId": 2521,
+   "apiSportsTeam": "Vienna Basket",
+   "logo": true
+  },
+  {
+   "clubId": "club-81ef9e0d-32bf-4f28-b6cb-6aa095081980",
+   "club": "BCM Gravelines-Dunkerque",
+   "apiSportsTeamId": 17,
+   "apiSportsTeam": "Gravelines-Dunkerque",
+   "logo": true
+  },
+  {
+   "clubId": "club-5d3f55c0-c89a-4ed6-9373-a090c859989f",
+   "club": "Benfica",
+   "apiSportsTeamId": 933,
+   "apiSportsTeam": "Benfica",
+   "logo": true
+  },
+  {
+   "clubId": "club-debcd978-7114-4b21-a9e2-fe667f859029",
+   "club": "Beşiktaş",
+   "apiSportsTeamId": 1266,
+   "apiSportsTeam": "Besiktas",
+   "logo": true
+  },
+  {
+   "clubId": "club-fce34401-0b12-40fa-a22a-796062db0ce2",
+   "club": "Bilbao Basket",
+   "apiSportsTeamId": 1695,
+   "apiSportsTeam": "Bilbao",
+   "logo": true
+  },
+  {
+   "clubId": "club-86ac5479-bdbf-4963-8475-392788f38ea0",
+   "club": "Bnei Herzliya",
+   "apiSportsTeamId": 1566,
+   "apiSportsTeam": "Bnei Herzliya",
+   "logo": true
+  },
+  {
+   "clubId": "club-fe54fe95-7728-494f-a9d4-5374396e775c",
+   "club": "Bordo Bandırma",
+   "apiSportsTeamId": 7931,
+   "apiSportsTeam": "Bordo Bandirma",
+   "logo": false
+  },
+  {
+   "clubId": "club-3973c6d0-0e5c-423e-aa95-f59b7c6fadcc",
+   "club": "Boulazac",
+   "apiSportsTeamId": 22,
+   "apiSportsTeam": "Boulazac",
+   "logo": true
+  },
+  {
+   "clubId": "club-6847b959-a1fb-4380-95c9-2ab727f7f344",
+   "club": "Brindisi",
+   "apiSportsTeamId": 718,
+   "apiSportsTeam": "Brindisi",
+   "logo": true
+  },
+  {
+   "clubId": "club-0887490d-6639-44b3-b5bf-b728c2b60443",
+   "club": "Budućnost",
+   "apiSportsTeamId": 1615,
+   "apiSportsTeam": "Buducnost",
+   "logo": true
+  },
+  {
+   "clubId": "club-628dcc9c-868f-4264-bb90-d89fe3b71cdb",
+   "club": "Bursaspor",
+   "apiSportsTeamId": 1267,
+   "apiSportsTeam": "Bursaspor",
+   "logo": true
+  },
+  {
+   "clubId": "club-c774afb4-ddfe-4572-bab3-d035cd51335c",
+   "club": "Büyükçekmece",
+   "apiSportsTeamId": 1268,
+   "apiSportsTeam": "Buyukcekmece",
+   "logo": true
+  },
+  {
+   "clubId": "club-736eebb8-5be9-4d62-bf56-d2ff777ab9b4",
+   "club": "Caen Basket Calvados",
+   "apiSportsTeamId": 114,
+   "apiSportsTeam": "Caen",
+   "logo": true
+  },
+  {
+   "clubId": "club-34b85834-fabc-4f48-9049-3b5f2e936f35",
+   "club": "Caja 87",
+   "apiSportsTeamId": 6507,
+   "apiSportsTeam": "Caja 87",
+   "logo": false
+  },
+  {
+   "clubId": "club-897a0048-686d-439c-bcd3-3889da37a7f9",
+   "club": "Cantù",
+   "apiSportsTeamId": 719,
+   "apiSportsTeam": "Cantu",
+   "logo": true
+  },
+  {
+   "clubId": "club-7b1a088a-049d-44fc-92d2-372c7f01768c",
+   "club": "Çayırova Belediyesi",
+   "apiSportsTeamId": 5678,
+   "apiSportsTeam": "Cayirova",
+   "logo": false
+  },
+  {
+   "clubId": "club-1a0a6862-ebc7-4c2b-8455-eee9cab9a752",
+   "club": "Cedevita Olimpija",
+   "apiSportsTeamId": 1800,
+   "apiSportsTeam": "Cedevita Olimpija",
+   "logo": true
+  },
+  {
+   "clubId": "club-698b7a9b-e32c-46fc-9c63-17ab7aab5898",
+   "club": "Cento",
+   "apiSportsTeamId": 5981,
+   "apiSportsTeam": "Cento",
+   "logo": false
+  },
+  {
+   "clubId": "club-de08a937-a4ae-4252-a6e0-708630a7e309",
+   "club": "Champagne Basket",
+   "apiSportsTeamId": 12,
+   "apiSportsTeam": "Chalons-Reims",
+   "logo": true
+  },
+  {
+   "clubId": "club-d3ac6607-7857-4c8c-8f3b-191bc93615cf",
+   "club": "Cholet Basket",
+   "apiSportsTeamId": 18,
+   "apiSportsTeam": "Cholet",
+   "logo": true
+  },
+  {
+   "clubId": "club-46a5a775-d250-495f-96a0-273d540dc08e",
+   "club": "Chorale Roanne",
+   "apiSportsTeamId": 19,
+   "apiSportsTeam": "Roanne",
+   "logo": true
+  },
+  {
+   "clubId": "club-54895c7e-e24b-4c9e-8c4d-ff2cdab7e497",
+   "club": "Cibona",
+   "apiSportsTeamId": 410,
+   "apiSportsTeam": "Cibona",
+   "logo": true
+  },
+  {
+   "clubId": "club-4415c2e9-8c4b-47ae-82c2-6a56bc6cab8f",
+   "club": "Club Ourense Baloncesto",
+   "apiSportsTeamId": 1130,
+   "apiSportsTeam": "Ourense",
+   "logo": true
+  },
+  {
+   "clubId": "club-c1c97885-dbaf-40a1-ac33-dcf74e7f4e22",
+   "club": "CO Basket",
+   "apiSportsTeamId": 3191,
+   "apiSportsTeam": "CO Basket",
+   "logo": true
+  },
+  {
+   "clubId": "club-c0f36144-6f16-45e0-b524-87d3b01b78bc",
+   "club": "Córdoba",
+   "apiSportsTeamId": 6508,
+   "apiSportsTeam": "Cordoba",
+   "logo": false
+  },
+  {
+   "clubId": "club-f64c2890-8397-4258-9944-171481f5c77a",
+   "club": "Crvena zvezda",
+   "apiSportsTeamId": 1065,
+   "apiSportsTeam": "Crvena zvezda",
+   "logo": true
+  },
+  {
+   "clubId": "club-fa4a6114-4178-4416-a364-e13b22c4146a",
+   "club": "CSM Oradea",
+   "apiSportsTeamId": 975,
+   "apiSportsTeam": "CSM Oradea",
+   "logo": true
+  },
+  {
+   "clubId": "club-7f93c45c-ece0-4e90-8cd2-bc23bbeb6970",
+   "club": "Darüşşafaka",
+   "apiSportsTeamId": 1269,
+   "apiSportsTeam": "Darussafaka",
+   "logo": true
+  },
+  {
+   "clubId": "club-28ff4f6f-c734-4812-a8b0-3d1251fca689",
+   "club": "Denain Voltaire",
+   "apiSportsTeamId": 94,
+   "apiSportsTeam": "Denain-Voltaire",
+   "logo": true
+  },
+  {
+   "clubId": "club-d219e412-d164-4c75-8401-b87ae7dbd835",
+   "club": "Denizli Basket",
+   "apiSportsTeamId": 5505,
+   "apiSportsTeam": "Denizli Basket",
+   "logo": false
+  },
+  {
+   "clubId": "club-cd4873ec-7b21-4f7c-b34e-741e561cb790",
+   "club": "Derthona Tortona",
+   "apiSportsTeamId": 700,
+   "apiSportsTeam": "Tortona",
+   "logo": true
+  },
+  {
+   "clubId": "club-49d1b37d-8e86-4a74-b3b5-b794471e95bf",
+   "club": "Dinamo Sassari",
+   "apiSportsTeamId": 726,
+   "apiSportsTeam": "Sassari",
+   "logo": true
+  },
+  {
+   "clubId": "club-7833b326-9af9-4899-b909-ec5424454d35",
+   "club": "Dubai Basketball",
+   "apiSportsTeamId": 6496,
+   "apiSportsTeam": "Dubai",
+   "logo": true
+  },
+  {
+   "clubId": "club-5ec92f67-aa92-4e17-b2dc-8cc7b0c7d4b7",
+   "club": "Dziki Warszawa",
+   "apiSportsTeamId": 2272,
+   "apiSportsTeam": "Dziki Warszawa",
+   "logo": true
+  },
+  {
+   "clubId": "club-fc74aed3-f727-4a34-a030-94a7e47a35f5",
+   "club": "Élan Béarnais Pau-Orthez",
+   "apiSportsTeamId": 3007,
+   "apiSportsTeam": "Pau-Orthez",
+   "logo": true
+  },
+  {
+   "clubId": "club-701d51c6-d808-4aea-ba21-1bcc2a1599ca",
+   "club": "Élan Chalon",
+   "apiSportsTeamId": 20,
+   "apiSportsTeam": "Chalon/Saone",
+   "logo": true
+  },
+  {
+   "clubId": "club-fad24647-8bf5-4966-bcfd-f5b8df7873fc",
+   "club": "Esenler Erokspor",
+   "apiSportsTeamId": 5680,
+   "apiSportsTeam": "Esenler Erokspor",
+   "logo": false
+  },
+  {
+   "clubId": "club-da1244e3-cfa3-4ea8-acf5-12bd5542774d",
+   "club": "Estela",
+   "apiSportsTeamId": 1142,
+   "apiSportsTeam": "Estela",
+   "logo": true
+  },
+  {
+   "clubId": "club-235d0766-3e9c-449e-8eab-29ebb69a4bdc",
+   "club": "Estudiantes",
+   "apiSportsTeamId": 284,
+   "apiSportsTeam": "Estudiantes",
+   "logo": true
+  },
+  {
+   "clubId": "club-8819de8a-428b-45d0-ae8f-e91ccba6ac4c",
+   "club": "EWE Baskets Oldenburg",
+   "apiSportsTeamId": 532,
+   "apiSportsTeam": "Oldenburg",
+   "logo": true
+  },
+  {
+   "clubId": "club-72ad3d4d-7770-47b5-803b-8a2ae9be87f7",
+   "club": "Falco Szombathely",
+   "apiSportsTeamId": 631,
+   "apiSportsTeam": "Szombathely",
+   "logo": true
+  },
+  {
+   "clubId": "club-c1c0945c-d70d-4460-aa5c-bd3ab515ced4",
+   "club": "FC Barcelona",
+   "apiSportsTeamId": 2329,
+   "apiSportsTeam": "Barcelona",
+   "logo": true
+  },
+  {
+   "clubId": "club-b934fbb2-832e-4f45-86b4-1a0f0e8217c0",
+   "club": "FC Porto",
+   "apiSportsTeamId": 936,
+   "apiSportsTeam": "FC Porto",
+   "logo": true
+  },
+  {
+   "clubId": "club-67c8e93a-1f26-4a3e-89a1-c36ade7c2d98",
+   "club": "Fenerbahçe",
+   "apiSportsTeamId": 1270,
+   "apiSportsTeam": "Fenerbahce",
+   "logo": true
+  },
+  {
+   "clubId": "club-ab116758-0d8b-44b0-8d32-dc125a26d848",
+   "club": "Fenerbahçe II",
+   "apiSportsTeamId": 3194,
+   "apiSportsTeam": "Fenerbahce 2",
+   "logo": true
+  },
+  {
+   "clubId": "club-d2a50d29-7e8d-4a68-8c03-d9a0af26ef97",
+   "club": "Fibwi Palma",
+   "apiSportsTeamId": 1128,
+   "apiSportsTeam": "Fibwi Palma",
+   "logo": true
+  },
+  {
+   "clubId": "club-731cd9d4-b360-4de6-8721-9a7b8a2c2dab",
+   "club": "Final Spor",
+   "apiSportsTeamId": 1300,
+   "apiSportsTeam": "Final Spor",
+   "logo": true
+  },
+  {
+   "clubId": "club-cb68baf4-c6fd-44e5-8c33-4941bdc0a972",
+   "club": "Força Lleida",
+   "apiSportsTeamId": 1123,
+   "apiSportsTeam": "Forca Lleida",
+   "logo": true
+  },
+  {
+   "clubId": "club-0851eb9c-f2d7-4c60-8ef4-26407a0a8c64",
+   "club": "Forlì",
+   "apiSportsTeamId": 706,
+   "apiSportsTeam": "Forli",
+   "logo": true
+  },
+  {
+   "clubId": "club-29106510-3c81-42ce-9437-bc3ca03dcfc3",
+   "club": "Fortitudo Bologna",
+   "apiSportsTeamId": 721,
+   "apiSportsTeam": "Fortitudo Bologna",
+   "logo": true
+  },
+  {
+   "clubId": "club-4dabed4a-b17c-4008-bfad-e96a0ee44c1f",
+   "club": "Fos Provence",
+   "apiSportsTeamId": 110,
+   "apiSportsTeam": "Fos-sur-Mer",
+   "logo": true
+  },
+  {
+   "clubId": "club-05fa06c1-68e4-4dd1-9786-e7a3d5d3270f",
+   "club": "Fribourg Olympic",
+   "apiSportsTeamId": 1230,
+   "apiSportsTeam": "Fribourg Olympic",
+   "logo": true
+  },
+  {
+   "clubId": "club-7f6eea88-4ad5-4d57-92cd-db967d3400e3",
+   "club": "Fuenlabrada",
+   "apiSportsTeamId": 2332,
+   "apiSportsTeam": "Fuenlabrada",
+   "logo": true
+  },
+  {
+   "clubId": "club-2af77894-6476-4d57-a6b2-fc2f84879bbc",
+   "club": "Fundación CB Granada",
+   "apiSportsTeamId": 1125,
+   "apiSportsTeam": "Granada",
+   "logo": true
+  },
+  {
+   "clubId": "club-c616af46-5d50-4741-8181-04363afd8124",
+   "club": "Galatasaray",
+   "apiSportsTeamId": 1271,
+   "apiSportsTeam": "Galatasaray",
+   "logo": true
+  },
+  {
+   "clubId": "club-48e880e4-d019-4389-a9f8-7bee9e348d9d",
+   "club": "Gaziantep",
+   "apiSportsTeamId": 1272,
+   "apiSportsTeam": "Gaziantep",
+   "logo": true
+  },
+  {
+   "clubId": "club-deab7d9f-c8aa-4f35-b76e-4fcd31b6d1e9",
+   "club": "Geneva Lions",
+   "apiSportsTeamId": 1231,
+   "apiSportsTeam": "Geneva Lions",
+   "logo": true
+  },
+  {
+   "clubId": "club-860d8a5b-9172-48fd-8eec-6f796c7cd53b",
+   "club": "Gipuzkoa Basket",
+   "apiSportsTeamId": 1124,
+   "apiSportsTeam": "Gipuzkoa",
+   "logo": true
+  },
+  {
+   "clubId": "club-6cf5f50b-d1b9-47d6-a3d2-de6ceb9a453f",
+   "club": "Gladiators Trier",
+   "apiSportsTeamId": 563,
+   "apiSportsTeam": "Trier",
+   "logo": true
+  },
+  {
+   "clubId": "club-32e80adf-3817-4820-a482-844fd4c64443",
+   "club": "Göztepe",
+   "apiSportsTeamId": 6573,
+   "apiSportsTeam": "Goztepe",
+   "logo": false
+  },
+  {
+   "clubId": "club-6fa20670-7db5-46fd-96f9-e6e1d771b450",
+   "club": "Gran Canaria",
+   "apiSportsTeamId": 2333,
+   "apiSportsTeam": "Gran Canaria",
+   "logo": true
+  },
+  {
+   "clubId": "club-49812c8f-8e14-4ddc-ab62-383e1e794dd6",
+   "club": "Hapoel Holon",
+   "apiSportsTeamId": 680,
+   "apiSportsTeam": "Hapoel Holon",
+   "logo": true
+  },
+  {
+   "clubId": "club-4551983b-25e7-4e1a-9247-6f0c3fb635af",
+   "club": "Hapoel Jerusalem",
+   "apiSportsTeamId": 1792,
+   "apiSportsTeam": "Hapoel Jerusalem",
+   "logo": true
+  },
+  {
+   "clubId": "club-d20bde93-6fcb-47cb-81b0-6a5764282c06",
+   "club": "Hapoel Tel Aviv",
+   "apiSportsTeamId": 682,
+   "apiSportsTeam": "Hapoel Tel-Aviv",
+   "logo": true
+  },
+  {
+   "clubId": "club-dae08a11-73ad-406e-abcd-c62bf0fe5b3e",
+   "club": "Harem Spor",
+   "apiSportsTeamId": 2461,
+   "apiSportsTeam": "Harem Spor",
+   "logo": false
+  },
+  {
+   "clubId": "club-445e5ac1-01a1-42ff-809f-35a8f7105605",
+   "club": "Hermine Nantes",
+   "apiSportsTeamId": 97,
+   "apiSportsTeam": "Nantes",
+   "logo": true
+  },
+  {
+   "clubId": "club-3f788426-79bb-48e2-adce-524fc0865528",
+   "club": "Hestia Menorca",
+   "apiSportsTeamId": 6040,
+   "apiSportsTeam": "Hestia Menorca",
+   "logo": false
+  },
+  {
+   "clubId": "club-2f34fded-d6a3-447c-b8c9-708934b73462",
+   "club": "HLA Alicante",
+   "apiSportsTeamId": 1118,
+   "apiSportsTeam": "Alicante",
+   "logo": false
+  },
+  {
+   "clubId": "club-48f189f5-1c69-4c9a-893b-cdf5f7d06d26",
+   "club": "Hyères-Toulon",
+   "apiSportsTeamId": 1480,
+   "apiSportsTeam": "Hyeres-Toulon",
+   "logo": true
+  },
+  {
+   "clubId": "club-86bdc4b4-ea5a-4c91-aa79-ef1fdd25b137",
+   "club": "Igokea",
+   "apiSportsTeamId": 2556,
+   "apiSportsTeam": "Igokea",
+   "logo": true
+  },
+  {
+   "clubId": "club-1311b565-2edc-49a5-881d-3d5efe1e91b3",
+   "club": "iLab Basketbol",
+   "apiSportsTeamId": 1275,
+   "apiSportsTeam": "iLab Basketbol",
+   "logo": true
+  },
+  {
+   "clubId": "club-23ca7017-255a-4fca-b0af-c536a749c502",
+   "club": "Iraklis Thessaloniki",
+   "apiSportsTeamId": 609,
+   "apiSportsTeam": "Iraklis",
+   "logo": true
+  },
+  {
+   "clubId": "club-d75c496c-3185-4615-8907-fbaabbde62c8",
+   "club": "JA Vichy",
+   "apiSportsTeamId": 98,
+   "apiSportsTeam": "Vichy",
+   "logo": true
+  },
+  {
+   "clubId": "club-cde13b48-cdcd-4742-aedc-f8a76b06369d",
+   "club": "JDA Dijon",
+   "apiSportsTeamId": 10,
+   "apiSportsTeam": "Dijon",
+   "logo": true
+  },
+  {
+   "clubId": "club-088fe554-4d49-4ee4-bfbb-120b8bad4fcf",
+   "club": "JL Bourg",
+   "apiSportsTeamId": 24,
+   "apiSportsTeam": "JL Bourg",
+   "logo": true
+  },
+  {
+   "clubId": "club-29d85a61-535a-4363-b19c-747749826162",
+   "club": "Joventut Badalona",
+   "apiSportsTeamId": 2334,
+   "apiSportsTeam": "Joventut Badalona",
+   "logo": true
+  },
+  {
+   "clubId": "club-d2eb704c-3e5d-4960-88a3-aa17930fde3c",
+   "club": "Juvecaserta",
+   "apiSportsTeamId": 704,
+   "apiSportsTeam": "Caserta",
+   "logo": true
+  },
+  {
+   "clubId": "club-f67b4b26-a980-4323-8941-8fb9ec114139",
+   "club": "Juventus Utena",
+   "apiSportsTeamId": 789,
+   "apiSportsTeam": "Juventus",
+   "logo": true
+  },
+  {
+   "clubId": "club-3612fa6b-8a54-4713-ab68-34e0c09b0ee4",
+   "club": "JuVi Cremona",
+   "apiSportsTeamId": 5008,
+   "apiSportsTeam": "JuVi Cremona",
+   "logo": false
+  },
+  {
+   "clubId": "club-020505fd-8d01-46b8-9ea0-b74b9c2d5143",
+   "club": "Kahramanmaraş",
+   "apiSportsTeamId": 6574,
+   "apiSportsTeam": "Kahramanmaras",
+   "logo": false
+  },
+  {
+   "clubId": "club-9a9a9e38-7593-42ee-9f88-b7f36d24e7d8",
+   "club": "Karşıyaka",
+   "apiSportsTeamId": 1274,
+   "apiSportsTeam": "Karsiyaka",
+   "logo": true
+  },
+  {
+   "clubId": "club-1524f2d2-c6d9-4016-a87b-c000324571e9",
+   "club": "Keçiören Bağlum",
+   "apiSportsTeamId": 7516,
+   "apiSportsTeam": "Kecioren Baglum",
+   "logo": false
+  },
+  {
+   "clubId": "club-4ddbc6dc-3d0a-4f10-bc7b-c301a356880c",
+   "club": "KK Bosna",
+   "apiSportsTeamId": 2544,
+   "apiSportsTeam": "KK Bosna",
+   "logo": true
+  },
+  {
+   "clubId": "club-f10b8149-07fc-4482-8529-8c31ee1b0350",
+   "club": "Kolossos Rhodes",
+   "apiSportsTeamId": 610,
+   "apiSportsTeam": "Kolossos Rhodes",
+   "logo": true
+  },
+  {
+   "clubId": "club-5189e2f5-2fd0-4b98-824c-1593567e3325",
+   "club": "Konya BBSK",
+   "apiSportsTeamId": 5684,
+   "apiSportsTeam": "Konya BBSK",
+   "logo": false
+  },
+  {
+   "clubId": "club-6454c176-8fbe-4541-a825-bc909a1f87f1",
+   "club": "Körfez Basket",
+   "apiSportsTeamId": 7961,
+   "apiSportsTeam": "Korfez Basket",
+   "logo": false
+  },
+  {
+   "clubId": "club-181ed2c5-2175-4990-ba4d-bb65c6b86785",
+   "club": "La Laguna Tenerife",
+   "apiSportsTeamId": 2339,
+   "apiSportsTeam": "Tenerife",
+   "logo": true
+  },
+  {
+   "clubId": "club-efccd45e-401b-4eb9-8eb6-d5446f13f8d4",
+   "club": "Landstede Hammers Zwolle",
+   "apiSportsTeamId": 852,
+   "apiSportsTeam": "Zwolle",
+   "logo": true
+  },
+  {
+   "clubId": "club-7a77a615-bd2a-4223-acd9-84249bb53b1a",
+   "club": "LDLC ASVEL",
+   "apiSportsTeamId": 26,
+   "apiSportsTeam": "Lyon-Villeurbanne",
+   "logo": true
+  },
+  {
+   "clubId": "club-45717a4f-73b6-425d-a2b1-6d1dec79efb0",
+   "club": "Le Mans Sarthe",
+   "apiSportsTeamId": 23,
+   "apiSportsTeam": "Le Mans",
+   "logo": true
+  },
+  {
+   "clubId": "club-2319ac8a-c807-47ab-a85e-f7acbc7ccab6",
+   "club": "Lefkada",
+   "apiSportsTeamId": 1535,
+   "apiSportsTeam": "Lefkadas",
+   "logo": true
+  },
+  {
+   "clubId": "club-eafde9e8-71e6-4e0e-91ee-aba5b8972099",
+   "club": "Legia Warsaw",
+   "apiSportsTeamId": 910,
+   "apiSportsTeam": "Legia",
+   "logo": true
+  },
+  {
+   "clubId": "club-f8718ce8-0746-4e63-b098-f3f347566239",
+   "club": "Levallois",
+   "apiSportsTeamId": 14,
+   "apiSportsTeam": "Levallois",
+   "logo": true
+  },
+  {
+   "clubId": "club-8dba8b11-c5de-495c-b404-dced33ec805e",
+   "club": "Libertas Livorno",
+   "apiSportsTeamId": 6500,
+   "apiSportsTeam": "Libertas Livorno",
+   "logo": false
+  },
+  {
+   "clubId": "club-37be60f2-cda9-4b59-8122-00ece0a432a7",
+   "club": "Lietkabelis",
+   "apiSportsTeamId": 790,
+   "apiSportsTeam": "Lietkabelis",
+   "logo": true
+  },
+  {
+   "clubId": "club-3b20c776-04f2-46f1-bcdf-3e1c3bde631d",
+   "club": "Limoges CSP",
+   "apiSportsTeamId": 27,
+   "apiSportsTeam": "Limoges",
+   "logo": true
+  },
+  {
+   "clubId": "club-b063cc51-5eda-4a48-9c06-391a767fcd16",
+   "club": "London Lions",
+   "apiSportsTeamId": 1329,
+   "apiSportsTeam": "London Lions",
+   "logo": true
+  },
+  {
+   "clubId": "club-a0b0cd9f-062e-4678-8999-fa8a0e62ebbe",
+   "club": "Maccabi Tel Aviv",
+   "apiSportsTeamId": 687,
+   "apiSportsTeam": "Maccabi Tel Aviv",
+   "logo": true
+  },
+  {
+   "clubId": "club-e5666859-93a6-4a9b-82f1-4f75480d4225",
+   "club": "Manchester Basketball",
+   "apiSportsTeamId": 7491,
+   "apiSportsTeam": "Manchester Basketball",
+   "logo": true
+  },
+  {
+   "clubId": "club-5871cc45-1d6a-4700-9a6b-42c65f2891e0",
+   "club": "Manresa",
+   "apiSportsTeamId": 1698,
+   "apiSportsTeam": "Manresa",
+   "logo": true
+  },
+  {
+   "clubId": "club-858bd6ba-fcaf-482e-9951-ee1d2e6d5544",
+   "club": "Maroussi",
+   "apiSportsTeamId": 1529,
+   "apiSportsTeam": "Maroussi",
+   "logo": true
+  },
+  {
+   "clubId": "club-bd82d7f0-0a23-47f9-8367-481200162fc8",
+   "club": "Maxima Roma",
+   "apiSportsTeamId": 7904,
+   "apiSportsTeam": "Maxima Roma",
+   "logo": false
+  },
+  {
+   "clubId": "club-d6ece62e-6e47-4379-9183-bdcd9905949e",
+   "club": "Mersin SK",
+   "apiSportsTeamId": 1760,
+   "apiSportsTeam": "Mersin SK",
+   "logo": true
+  },
+  {
+   "clubId": "club-5a01c29a-7d10-4873-b04b-5f0c12952ec6",
+   "club": "Mestre",
+   "apiSportsTeamId": 7460,
+   "apiSportsTeam": "Mestre",
+   "logo": true
+  },
+  {
+   "clubId": "club-a6b31055-808b-4770-a9f4-4ab5650d4238",
+   "club": "MHP Riesen Ludwigsburg",
+   "apiSportsTeamId": 530,
+   "apiSportsTeam": "Ludwigsburg",
+   "logo": true
+  },
+  {
+   "clubId": "club-f6f85c92-adaf-47c2-9cb2-e248c4556059",
+   "club": "MKE Ankaragücü",
+   "apiSportsTeamId": 1764,
+   "apiSportsTeam": "MKE Ankaragucu",
+   "logo": true
+  },
+  {
+   "clubId": "club-d980c710-d76d-43c4-ad6a-64951a0b009f",
+   "club": "Montecatini",
+   "apiSportsTeamId": 7914,
+   "apiSportsTeam": "Montecatini",
+   "logo": false
+  },
+  {
+   "clubId": "club-d93f3980-c79e-4ce7-8329-69a955482c92",
+   "club": "MoraBanc Andorra",
+   "apiSportsTeamId": 2335,
+   "apiSportsTeam": "MoraBanc Andorra",
+   "logo": true
+  },
+  {
+   "clubId": "club-eb4c57be-f022-43fd-ab17-69066279f3d9",
+   "club": "Mykonos",
+   "apiSportsTeamId": 6176,
+   "apiSportsTeam": "Mykonos",
+   "logo": true
+  },
+  {
+   "clubId": "club-4ed1a39a-f2c9-4e59-b64c-44182c2e6ece",
+   "club": "Nanterre 92",
+   "apiSportsTeamId": 21,
+   "apiSportsTeam": "Nanterre",
+   "logo": true
+  },
+  {
+   "clubId": "club-36a0558e-c4d8-4df5-89a9-8a94cb566fc5",
+   "club": "Napoli Basket",
+   "apiSportsTeamId": 690,
+   "apiSportsTeam": "Basket Napoli",
+   "logo": true
+  },
+  {
+   "clubId": "club-73e046e6-f298-429a-979c-0d24aaa7ebdc",
+   "club": "Neptūnas Klaipėda",
+   "apiSportsTeamId": 791,
+   "apiSportsTeam": "Neptunas",
+   "logo": true
+  },
+  {
+   "clubId": "club-8c65aca6-e9ae-4ce6-b0d6-0ee5b17a1b0e",
+   "club": "Niners Chemnitz",
+   "apiSportsTeamId": 550,
+   "apiSportsTeam": "Chemnitz",
+   "logo": true
+  },
+  {
+   "clubId": "club-225f9c09-3ea3-41b6-b0ab-78fba724e015",
+   "club": "Obradoiro",
+   "apiSportsTeamId": 2337,
+   "apiSportsTeam": "Obradoiro CAB",
+   "logo": true
+  },
+  {
+   "clubId": "club-d19773cc-3999-4c16-b911-148636c41b2e",
+   "club": "OGM Ormanspor",
+   "apiSportsTeamId": 1273,
+   "apiSportsTeam": "OGM Ormanspor",
+   "logo": true
+  },
+  {
+   "clubId": "club-77f0c654-f152-4704-ad9f-1417d5508673",
+   "club": "Olimpia Milano",
+   "apiSportsTeamId": 722,
+   "apiSportsTeam": "Olimpia Milano",
+   "logo": true
+  },
+  {
+   "clubId": "club-cba20e7a-7b3e-4b15-a853-7cd15a47faa8",
+   "club": "Olympiacos",
+   "apiSportsTeamId": 1542,
+   "apiSportsTeam": "Olympiacos",
+   "logo": true
+  },
+  {
+   "clubId": "club-a0aadac5-3ca5-43c8-a7ec-61ddc6c04215",
+   "club": "Opava",
+   "apiSportsTeamId": 448,
+   "apiSportsTeam": "Opava",
+   "logo": true
+  },
+  {
+   "clubId": "club-9e93eb86-05ac-4e5a-9120-ac3ac3a808b9",
+   "club": "Orléans Loiret",
+   "apiSportsTeamId": 15,
+   "apiSportsTeam": "Orleans",
+   "logo": true
+  },
+  {
+   "clubId": "club-0ff196a0-6552-499c-82cf-0fb542ed6238",
+   "club": "Oviedo CB",
+   "apiSportsTeamId": 1131,
+   "apiSportsTeam": "Oviedo",
+   "logo": true
+  },
+  {
+   "clubId": "club-11a62869-df4f-407c-876a-4a32fe5a35a9",
+   "club": "Palencia Baloncesto",
+   "apiSportsTeamId": 1132,
+   "apiSportsTeam": "Palencia",
+   "logo": true
+  },
+  {
+   "clubId": "club-8ba23971-072b-40d2-91c3-862856359274",
+   "club": "Palmer Basket",
+   "apiSportsTeamId": 6074,
+   "apiSportsTeam": "Palmer Basket",
+   "logo": false
+  },
+  {
+   "clubId": "club-fd5cd8c8-3501-4f40-b4a2-fe4fcb5a4d8d",
+   "club": "Panathinaikos",
+   "apiSportsTeamId": 614,
+   "apiSportsTeam": "Panathinaikos",
+   "logo": true
+  },
+  {
+   "clubId": "club-6ffc951c-3aa8-4754-ae26-b4ce4c234675",
+   "club": "PAOK",
+   "apiSportsTeamId": 613,
+   "apiSportsTeam": "PAOK",
+   "logo": true
+  },
+  {
+   "clubId": "club-252342ec-feda-49db-961c-deb1776d5460",
+   "club": "Pardubice",
+   "apiSportsTeamId": 449,
+   "apiSportsTeam": "Pardubice",
+   "logo": true
+  },
+  {
+   "clubId": "club-7554a5c8-e5e6-47a7-880f-a2dcb3a2e873",
+   "club": "Paris Basketball",
+   "apiSportsTeamId": 108,
+   "apiSportsTeam": "Paris",
+   "logo": true
+  },
+  {
+   "clubId": "club-38a41b4e-388b-486a-b07b-bc9849cf61ac",
+   "club": "Partizan",
+   "apiSportsTeamId": 1068,
+   "apiSportsTeam": "Partizan",
+   "logo": true
+  },
+  {
+   "clubId": "club-53e50524-1686-48bb-918b-8a44ca810fd8",
+   "club": "Patrioti Levice",
+   "apiSportsTeamId": 1073,
+   "apiSportsTeam": "Levice",
+   "logo": true
+  },
+  {
+   "clubId": "club-6f305cb7-4aba-4201-b733-5f17993fa5c0",
+   "club": "Peristeri",
+   "apiSportsTeamId": 616,
+   "apiSportsTeam": "Peristeri",
+   "logo": true
+  },
+  {
+   "clubId": "club-735416ce-26e9-4496-a710-ea81786ef60e",
+   "club": "Phoenix Hagen",
+   "apiSportsTeamId": 560,
+   "apiSportsTeam": "Phoenix Hagen",
+   "logo": true
+  },
+  {
+   "clubId": "club-2d3fb968-51ee-4673-a3e1-b0c16da0866f",
+   "club": "Pistoia",
+   "apiSportsTeamId": 724,
+   "apiSportsTeam": "Pistoia",
+   "logo": true
+  },
+  {
+   "clubId": "club-1b23d44a-a669-46a1-a4dd-344865ecddab",
+   "club": "Poitiers Basket 86",
+   "apiSportsTeamId": 109,
+   "apiSportsTeam": "Poitiers",
+   "logo": true
+  },
+  {
+   "clubId": "club-44edd052-64f6-475f-9f63-fb64eae779e2",
+   "club": "Promitheas Patras",
+   "apiSportsTeamId": 617,
+   "apiSportsTeam": "Promitheas",
+   "logo": true
+  },
+  {
+   "clubId": "club-5079fe6a-1473-45af-9dfd-9c4e1a019f7f",
+   "club": "RASTA Vechta",
+   "apiSportsTeamId": 534,
+   "apiSportsTeam": "Vechta",
+   "logo": true
+  },
+  {
+   "clubId": "club-e68a4179-04ba-4274-bd49-6024083e8ba0",
+   "club": "ratiopharm Ulm",
+   "apiSportsTeamId": 533,
+   "apiSportsTeam": "Ulm",
+   "logo": true
+  },
+  {
+   "clubId": "club-00a2ded6-1a0e-42b5-8ec5-5832feba90ed",
+   "club": "Real Madrid",
+   "apiSportsTeamId": 2338,
+   "apiSportsTeam": "Real Madrid",
+   "logo": true
+  },
+  {
+   "clubId": "club-26913473-12f2-4b3c-895c-ca02c3bd695b",
+   "club": "Reggiana",
+   "apiSportsTeamId": 725,
+   "apiSportsTeam": "Reggiana",
+   "logo": true
+  },
+  {
+   "clubId": "club-5e0aabe8-3102-448a-b2f8-6a725895976e",
+   "club": "Reyer Venezia",
+   "apiSportsTeamId": 731,
+   "apiSportsTeam": "Venezia",
+   "logo": true
+  },
+  {
+   "clubId": "club-1f4a9cde-8801-4a1a-b8ab-19b4371f8801",
+   "club": "Rīgas Zeļļi",
+   "apiSportsTeamId": 6100,
+   "apiSportsTeam": "Rigas Zelli",
+   "logo": true
+  },
+  {
+   "clubId": "club-6dff2eed-a1f2-4958-9f47-e78d4b594353",
+   "club": "Rilski Sportist",
+   "apiSportsTeamId": 1374,
+   "apiSportsTeam": "Rilski Sportist",
+   "logo": true
+  },
+  {
+   "clubId": "club-43ef22b6-a6a4-4b1e-8375-26607f11c7a6",
+   "club": "Rimini",
+   "apiSportsTeamId": 5009,
+   "apiSportsTeam": "Rimini",
+   "logo": false
+  },
+  {
+   "clubId": "club-32291601-b0ef-40b8-bca9-012e94b28b93",
+   "club": "Río Breogán",
+   "apiSportsTeamId": 1120,
+   "apiSportsTeam": "Breogan",
+   "logo": true
+  },
+  {
+   "clubId": "club-ab7bfb00-38d8-47d5-af1f-4a8ebbcfed2d",
+   "club": "Rostock Seawolves",
+   "apiSportsTeamId": 561,
+   "apiSportsTeam": "Rostock",
+   "logo": true
+  },
+  {
+   "clubId": "club-bdbd60e7-dbc1-476a-87af-15e4528e2a64",
+   "club": "Rouen Métropole",
+   "apiSportsTeamId": 101,
+   "apiSportsTeam": "Rouen",
+   "logo": true
+  },
+  {
+   "clubId": "club-ae635dee-4593-4de0-8bd9-2a86c64ae781",
+   "club": "Ruvo di Puglia",
+   "apiSportsTeamId": 7461,
+   "apiSportsTeam": "Ruvo Di Puglia",
+   "logo": false
+  },
+  {
+   "clubId": "club-2c44fb88-c6cd-433d-9795-70424692dfc2",
+   "club": "Rytas Vilnius",
+   "apiSportsTeamId": 794,
+   "apiSportsTeam": "Rytas",
+   "logo": true
+  },
+  {
+   "clubId": "club-deae5d8d-5c61-4269-88f5-92fd7e8243fc",
+   "club": "Sabah Baku",
+   "apiSportsTeamId": 6262,
+   "apiSportsTeam": "Sabah Baku",
+   "logo": false
+  },
+  {
+   "clubId": "club-c68ffffd-74d1-46a6-9ff1-7ca25487eac1",
+   "club": "Saint-Chamond",
+   "apiSportsTeamId": 102,
+   "apiSportsTeam": "St. Chamond",
+   "logo": true
+  },
+  {
+   "clubId": "club-f1ca5058-469f-4e08-a691-33bc1d166fdd",
+   "club": "Saint-Quentin",
+   "apiSportsTeamId": 106,
+   "apiSportsTeam": "Saint Quentin",
+   "logo": true
+  },
+  {
+   "clubId": "club-a38c9f77-efcc-40b3-8c1c-e25e1c7156bf",
+   "club": "Salon Vilpas",
+   "apiSportsTeamId": 495,
+   "apiSportsTeam": "Salon Vilpas",
+   "logo": true
+  },
+  {
+   "clubId": "club-4c4a2c56-5790-4ea9-bedd-0c7453eca9fa",
+   "club": "San Pablo Burgos",
+   "apiSportsTeamId": 1699,
+   "apiSportsTeam": "San Pablo Burgos",
+   "logo": true
+  },
+  {
+   "clubId": "club-a60566aa-6d2f-4422-b2e1-b9a6d945e72d",
+   "club": "Scafati",
+   "apiSportsTeamId": 699,
+   "apiSportsTeam": "Scafati",
+   "logo": true
+  },
+  {
+   "clubId": "club-aad3aad4-c86f-4c2a-be12-406de8ecb25a",
+   "club": "Science City Jena",
+   "apiSportsTeamId": 553,
+   "apiSportsTeam": "Jena",
+   "logo": true
+  },
+  {
+   "clubId": "club-1036b43a-3e81-4d76-9a29-1becbf36730f",
+   "club": "Sebastiani Rieti",
+   "apiSportsTeamId": 6158,
+   "apiSportsTeam": "Sebastiani Rieti",
+   "logo": false
+  },
+  {
+   "clubId": "club-c4a87dbb-5bd3-41fb-8940-00af6257f538",
+   "club": "Šiauliai",
+   "apiSportsTeamId": 795,
+   "apiSportsTeam": "Siauliai",
+   "logo": true
+  },
+  {
+   "clubId": "club-80d4d281-42dd-41e4-b3a9-0fff232797e5",
+   "club": "SIG Strasbourg",
+   "apiSportsTeamId": 25,
+   "apiSportsTeam": "Strasbourg",
+   "logo": true
+  },
+  {
+   "clubId": "club-a1bdc283-f2e2-4295-ad91-574f081eba4c",
+   "club": "Skyliners Frankfurt",
+   "apiSportsTeamId": 526,
+   "apiSportsTeam": "Frankfurt",
+   "logo": true
+  },
+  {
+   "clubId": "club-7f37939a-0042-4c06-8dba-708dcb4fcaef",
+   "club": "Śląsk Wrocław",
+   "apiSportsTeamId": 914,
+   "apiSportsTeam": "Slask Wroclaw",
+   "logo": true
+  },
+  {
+   "clubId": "club-3b7f4ca4-5dab-466b-98eb-17db2378309c",
+   "club": "Slavia Prague",
+   "apiSportsTeamId": 7901,
+   "apiSportsTeam": "Slavia Prague ERA NBK",
+   "logo": false
+  },
+  {
+   "clubId": "club-ef1e10bb-1844-4aa9-8e63-0cda851a2e7b",
+   "club": "SLUC Nancy",
+   "apiSportsTeamId": 100,
+   "apiSportsTeam": "Nancy",
+   "logo": true
+  },
+  {
+   "clubId": "club-9fdd00ba-8cf6-4b64-b5a4-4eecb03e0b41",
+   "club": "Spartak Subotica",
+   "apiSportsTeamId": 1670,
+   "apiSportsTeam": "Spartak Subotica",
+   "logo": true
+  },
+  {
+   "clubId": "club-fec832bc-4fb5-4931-a703-70a90c6fa6e0",
+   "club": "Stade Rochelais",
+   "apiSportsTeamId": 2311,
+   "apiSportsTeam": "La Rochelle",
+   "logo": true
+  },
+  {
+   "clubId": "club-851a3896-ef86-4640-a1bd-1ddda297ea5c",
+   "club": "STB Le Havre",
+   "apiSportsTeamId": 1481,
+   "apiSportsTeam": "Le Havre",
+   "logo": true
+  },
+  {
+   "clubId": "club-9abbdaaf-b81b-4bd7-8341-2bda4838aac7",
+   "club": "Syntainics MBC",
+   "apiSportsTeamId": 2263,
+   "apiSportsTeam": "Syntainics MBC",
+   "logo": true
+  },
+  {
+   "clubId": "club-20bab3e1-8177-4956-aa51-5ddbb8bfd854",
+   "club": "TED Ankara Kolejliler",
+   "apiSportsTeamId": 1279,
+   "apiSportsTeam": "Ankara Kolejliler",
+   "logo": true
+  },
+  {
+   "clubId": "club-3d47e5c0-ac8d-4d2b-b8ec-2bcba4e2f528",
+   "club": "Telekom Baskets Bonn",
+   "apiSportsTeamId": 524,
+   "apiSportsTeam": "Bonn",
+   "logo": true
+  },
+  {
+   "clubId": "club-db148f77-bfb8-4759-8f46-327b60a14e5a",
+   "club": "Tizona Burgos",
+   "apiSportsTeamId": 1156,
+   "apiSportsTeam": "Tizona Burgos",
+   "logo": true
+  },
+  {
+   "clubId": "club-5332ca7f-dd01-4c2b-aa86-67e506268b9c",
+   "club": "Tofaş",
+   "apiSportsTeamId": 1276,
+   "apiSportsTeam": "Tofas",
+   "logo": true
+  },
+  {
+   "clubId": "club-2d6808ef-c648-4860-b153-ad46c33d48f9",
+   "club": "Trabzonspor",
+   "apiSportsTeamId": 1736,
+   "apiSportsTeam": "Trabzonspor",
+   "logo": true
+  },
+  {
+   "clubId": "club-b05ff436-ecfd-4c03-b83b-eb1fbd77acff",
+   "club": "Treviso",
+   "apiSportsTeamId": 728,
+   "apiSportsTeam": "Treviso",
+   "logo": true
+  },
+  {
+   "clubId": "club-ecb9511e-da55-4588-bfc5-9300eddf2bb4",
+   "club": "Trieste",
+   "apiSportsTeamId": 729,
+   "apiSportsTeam": "Trieste",
+   "logo": true
+  },
+  {
+   "clubId": "club-bffa32dc-32e5-47b2-9978-dc43e7b99a03",
+   "club": "Türk Telekom",
+   "apiSportsTeamId": 1277,
+   "apiSportsTeam": "Turk Telekom",
+   "logo": true
+  },
+  {
+   "clubId": "club-627c93d1-cee5-4a90-8fe7-781d6ab389eb",
+   "club": "U-BT Cluj-Napoca",
+   "apiSportsTeamId": 3419,
+   "apiSportsTeam": "Cluj-Napoca",
+   "logo": true
+  },
+  {
+   "clubId": "club-1e451608-939f-4c62-b5c6-472a98a198a6",
+   "club": "UCAM Murcia",
+   "apiSportsTeamId": 2336,
+   "apiSportsTeam": "Murcia",
+   "logo": true
+  },
+  {
+   "clubId": "club-c3d8cae2-e58a-4128-8a1f-c88fe51f3a04",
+   "club": "UEB Cividale",
+   "apiSportsTeamId": 5007,
+   "apiSportsTeam": "Cividale",
+   "logo": false
+  },
+  {
+   "clubId": "club-7cffb8c3-8317-4c5f-bfe8-b419c08c1953",
+   "club": "UJAP Quimper",
+   "apiSportsTeamId": 99,
+   "apiSportsTeam": "Quimper",
+   "logo": true
+  },
+  {
+   "clubId": "club-871af727-2142-4e32-81b5-164eccec0018",
+   "club": "Unicaja",
+   "apiSportsTeamId": 2340,
+   "apiSportsTeam": "Unicaja",
+   "logo": true
+  },
+  {
+   "clubId": "club-9fe4bc6c-3c2a-46a0-9ef3-647c68a3c7ee",
+   "club": "Urania Milano",
+   "apiSportsTeamId": 715,
+   "apiSportsTeam": "Urania Milano",
+   "logo": true
+  },
+  {
+   "clubId": "club-82564dc2-06e7-44fa-89d6-351a722bd9d7",
+   "club": "Valencia Basket",
+   "apiSportsTeamId": 2341,
+   "apiSportsTeam": "Valencia",
+   "logo": true
+  },
+  {
+   "clubId": "club-5a45b3d9-a337-4573-a179-79bfde57bb73",
+   "club": "Varese",
+   "apiSportsTeamId": 730,
+   "apiSportsTeam": "Varese",
+   "logo": true
+  },
+  {
+   "clubId": "club-ba177d1c-20c0-4679-9661-9e583494304f",
+   "club": "VEF Riga",
+   "apiSportsTeamId": 1663,
+   "apiSportsTeam": "VEF Riga",
+   "logo": true
+  },
+  {
+   "clubId": "club-3a326dca-2221-4fe7-b45d-1cd9e4f845a5",
+   "club": "Veolia Towers Hamburg",
+   "apiSportsTeamId": 529,
+   "apiSportsTeam": "Hamburg",
+   "logo": true
+  },
+  {
+   "clubId": "club-7d132e12-9e34-4882-8a85-8653a3b26f84",
+   "club": "Verona",
+   "apiSportsTeamId": 716,
+   "apiSportsTeam": "Verona",
+   "logo": true
+  },
+  {
+   "clubId": "club-23606130-2e69-47c8-9909-33526c4e332f",
+   "club": "Victoria Libertas Pesaro",
+   "apiSportsTeamId": 723,
+   "apiSportsTeam": "Pesaro",
+   "logo": true
+  },
+  {
+   "clubId": "club-83116580-8967-435f-b7a4-ca3c0d3bc21b",
+   "club": "Vigevano",
+   "apiSportsTeamId": 6044,
+   "apiSportsTeam": "Vigevano",
+   "logo": false
+  },
+  {
+   "clubId": "club-2301f37d-86c6-4023-b2b4-d15a6ed3d92f",
+   "club": "Vikos",
+   "apiSportsTeamId": 6179,
+   "apiSportsTeam": "Vikos",
+   "logo": true
+  },
+  {
+   "clubId": "club-0a749a8e-5fec-4963-a48e-8ecf505a995e",
+   "club": "Virtus Bologna",
+   "apiSportsTeamId": 732,
+   "apiSportsTeam": "Virtus Bologna",
+   "logo": true
+  },
+  {
+   "clubId": "club-d136ca94-18fe-4c9c-bd03-454901268627",
+   "club": "Würzburg Baskets",
+   "apiSportsTeamId": 5923,
+   "apiSportsTeam": "Wurzburg",
+   "logo": true
+  },
+  {
+   "clubId": "club-8b18fd15-ef98-42ca-ace8-7dab12743b22",
+   "club": "Žalgiris Kaunas",
+   "apiSportsTeamId": 796,
+   "apiSportsTeam": "Zalgiris Kaunas",
+   "logo": true
+  },
+  {
+   "clubId": "club-c23a6d5c-8c0a-4d3f-b5e0-50567dde500b",
+   "club": "Zamora",
+   "apiSportsTeamId": 1159,
+   "apiSportsTeam": "Zamora",
+   "logo": true
+  }
+ ],
+ "competitions": [
+  {
+   "competitionId": "competition-0b11c2f6-7622-433e-923b-ab57f4ce8192",
+   "competition": "EuroCup",
+   "apiSportsLeagueId": 194,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-3234c794-8cc6-431b-8681-8a6c1ab4da6d",
+   "competition": "LNB Élite",
+   "apiSportsLeagueId": 2,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-3bccebba-0d84-43a5-8f95-7f3f8b2dc563",
+   "competition": "Élite 2",
+   "apiSportsLeagueId": 8,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-3e155be6-d006-4b06-bc74-ba370b467a7d",
+   "competition": "Basketbol Süper Ligi",
+   "apiSportsLeagueId": 104,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-54e81659-e9d5-412c-98ab-bc1d7991149a",
+   "competition": "Liga ACB",
+   "apiSportsLeagueId": 117,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-6004e0fa-55cb-46c4-8f03-c1aaac3e6d3b",
+   "competition": "Greek Basket League",
+   "apiSportsLeagueId": 45,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-688073ba-ca47-4567-85cc-fc46f595df6a",
+   "competition": "EuroLeague",
+   "apiSportsLeagueId": 120,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-9bf9167d-ef72-4bbe-acbe-2a75bbfc65d3",
+   "competition": "Türkiye Basketbol Ligi",
+   "apiSportsLeagueId": 102,
+   "logo": false
+  },
+  {
+   "competitionId": "competition-9e17a8ab-06df-423e-9c86-9a0b66800ef5",
+   "competition": "Primera FEB",
+   "apiSportsLeagueId": 95,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-a0602a8e-b4d9-42de-baee-c6ddcdb5a5cb",
+   "competition": "Basketball Champions League",
+   "apiSportsLeagueId": 202,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-ac045499-adb7-4aad-8047-2e8e5e33831d",
+   "competition": "Basketball Bundesliga",
+   "apiSportsLeagueId": 40,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-fa524ce7-45c4-4a86-8b4e-505071f5fefa",
+   "competition": "Serie A2",
+   "apiSportsLeagueId": 242,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-ff4b0e63-3238-42be-83de-288a0119bae6",
+   "competition": "Lega Basket Serie A",
+   "apiSportsLeagueId": 52,
+   "logo": true
+  }
+ ]
+}

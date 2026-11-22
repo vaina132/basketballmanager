@@ -1,6 +1,7 @@
 import type { AcademyProspect, AcademyWeek, AcademyWeekFullPlayer } from '../domain/academy';
 import { isAcademyOutcome } from './academy-history';
 import type { SeasonState } from '../domain/season';
+import { storedExtras } from './extra-attributes';
 import type { Player, PlayerAttributes } from '../domain/types';
 import type { TrainingFocus, TrainingPoints } from '../domain/training';
 import type { InSeasonOffer, InSeasonOfferQuote } from '../domain/recruitment';
@@ -23,11 +24,11 @@ export function getAcademyProspect(state: Pick<SeasonState, 'academy' | 'seasonN
   return state.academy.prospects.find(prospect => prospect.player.id === playerId && roundKey(prospect.intakeSeason, prospect.intakeRound) <= at && !state.academy.graduates.some(graduate => graduate.prospectId === playerId && roundKey(graduate.availableSince.seasonNumber, graduate.availableSince.round) <= at)) ?? null;
 }
 export function developAcademyPlayer(prospect: AcademyProspect, points: TrainingPoints): Player {
-  return { ...prospect.player, attributes: Object.fromEntries(TRAINING_ATTRIBUTES.map(key => {
+  return { ...prospect.player, attributes: { ...Object.fromEntries(TRAINING_ATTRIBUTES.map(key => {
     const progress = points[key];
     if (!Number.isInteger(progress) || progress < 0 || progress > academyPointCap(prospect.player.attributes[key])) throw new Error('Academy development is outside its supported limits.');
     return [key, prospect.player.attributes[key] + Math.floor(progress / 100)];
-  })) as unknown as PlayerAttributes };
+  })), ...storedExtras(prospect.player.attributes) } as PlayerAttributes };
 }
 
 export interface AcademyPlayerView {

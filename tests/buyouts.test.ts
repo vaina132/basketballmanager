@@ -100,7 +100,7 @@ describe('offseason contract buyouts', () => {
     expect(quote).toMatchObject({ amount: 15_000_000, canBuyout: true, releasedContractIds: [contractForSeason(bought.employment, transferTarget, 2)!.id] });
     const other = effectiveContractsForSeason(bought.employment, 2).find(contract => contract.clubId === rival)!.playerId;
     const pending = submitTransferOffer(bought, other, getSeasonWage(other), 1, 12_000_000);
-    expect(quoteContractBuyout(pending, transferTarget)).toMatchObject({ canBuyout: false, reason: expect.stringMatching(/remaining budget/) });
+    expect(quoteContractBuyout(pending, transferTarget)).toMatchObject({ canBuyout: false, reason: expect.stringMatching(/Spending left/) });
     const released = buyoutPlayerContract(bought, transferTarget);
     expect(released.employment.transfers).toBe(bought.employment.transfers);
     expect(getTransferObligationReserve(released, managed)).toBe(reserve);
@@ -126,8 +126,8 @@ describe('offseason contract buyouts', () => {
     expect(getClubContractSummary(state, managed)).toMatchObject({ rosterSize: 8, seasonWages: 23_850_000 });
     expect(getSpendableCash(state, managed)).toBeGreaterThan(getSeasonWage(cheap));
     const previous = structuredClone(state);
-    expect(quoteContractBuyout(state, cheap)).toMatchObject({ canBuyout: false, reason: expect.stringMatching(/salary budget.*eight-player/) });
-    expect(() => buyoutPlayerContract(state, cheap)).toThrow(/salary budget/);
+    expect(quoteContractBuyout(state, cheap)).toMatchObject({ canBuyout: false, reason: expect.stringMatching(/wages budget.*eight-player/) });
+    expect(() => buyoutPlayerContract(state, cheap)).toThrow(/wages budget/);
     expect(state).toEqual(previous);
   });
 

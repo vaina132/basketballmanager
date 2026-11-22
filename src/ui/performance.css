@@ -32,6 +32,6 @@
 .performance-table-scroll .performance-table .performance-empty{height:auto;padding:14px;font-size:12px;line-height:1.5;color:var(--muted);text-align:left;white-space:normal}
 .performance-mode-control{flex-wrap:wrap;flex:none}
 .performance-mode-control>button{font-size:12px;min-height:28px}
-.performance-legend{display:flex;flex-direction:column;gap:4px;padding:9px 14px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;line-height:1.5}
+.performance-legend{border-top:1px solid var(--border);color:var(--muted);font-size:12px;line-height:1.5}
 .performance-legend p{margin:0;font-size:12px}
-@media(max-width:650px){.performance-legend{padding:9px 10px}.performance-mode-control>button{padding-inline:8px}}
+@media(max-width:650px){.performance-mode-control>button{padding-inline:8px}}

@@ -22,7 +22,7 @@ import { FacilitiesPanel } from '../src/ui/FacilitiesPanel';
 
 const club = 'rhine-falcons';
 const opening = dateForRound(1, 1);
-const career = (managedClubId = club) => createSeason({ seed: 227, managedClubId, injuryMode: 'off', manager: { name: 'Repair Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS });
+const career = (managedClubId = club) => createSeason({ seed: 227, managedClubId, injuryMode: 'off', manager: { name: 'Repair Manager', dateOfBirth: '1984-03-17', nationality: 'Germany' }, ...NEW_CAREER_SYSTEMS, simpleFacilities: false });
 
 /** A synthetic `facilities-2` history: one completed project per facility, at the given level, on the opening day. */
 function built(levels: Partial<Record<FacilityType, number>>, extra: Partial<SeasonFacilities> = {}): { facilities: SeasonFacilities } {
@@ -200,7 +200,7 @@ describe('facilities-2 automation and board capital', () => {
     const repair = quoteFacilityRepair(later, 'arena', generous);
     expect(repair.canStart).toBe(true);
     const poor = spend(later, generous, getSpendableCash(later, generous) - Math.floor(repair.cost / 2));
-    expect(quoteFacilityRepair(poor, 'arena', generous).reason).toMatch(/exceeds the remaining budget/);
+    expect(quoteFacilityRepair(poor, 'arena', generous).reason).toMatch(/exceeds your Spending left/);
     const quote = quoteBoardFunding(poor, 'arena', generous, 'manager', 'repair');
     expect(quote).toMatchObject({ project: 'repair', eligible: true, approved: true, cost: repair.cost });
     const funded = requestBoardFunding(poor, 'arena', 'repair');

@@ -1,0 +1,9 @@
+/* Format 78: the transfer and loan list on the player profile. */
+.player-listing{grid-column:1/-1;display:grid;gap:8px;margin-top:12px;padding:10px;border:1px solid var(--border);border-radius:6px;text-align:left}
+.player-listing-toggles{display:flex;flex-wrap:wrap;gap:8px}
+.player-listing-price{display:flex;align-items:center;gap:6px;font-size:13px}
+.player-listing-price input{width:120px}
+.player-listing small{color:var(--muted);font-size:12px;line-height:1.4}
+.player-listing-more{grid-column:1/-1;margin-top:10px;text-align:left}
+.player-listing-more>summary{padding:8px 0}
+.player-listing-more>.player-listing{margin-top:4px}

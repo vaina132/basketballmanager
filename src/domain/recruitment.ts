@@ -10,6 +10,8 @@ export interface InSeasonOffer {
   seasonWage: number;
   academyProspectId?: string;
   releaseFee?: number;
+  /** `relationships-3`: the squad role offered. */
+  role?: SquadRole;
   seasons: number;
   transfer: TransferProposal | null;
   remainingWages: number;
@@ -31,15 +33,31 @@ export interface InSeasonEventAnchor {
 }
 
 export type InSeasonEvent = InSeasonEventAnchor & (
-  | { type: 'offer'; id: string; clubId: string; playerId: string; seasonWage: number; seasons?: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan; releaseFee?: number; transferMode?: 'release-clause'; academyProspectId?: string }
+  | { type: 'offer'; id: string; clubId: string; playerId: string; seasonWage: number; seasons?: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan; releaseFee?: number; transferMode?: 'release-clause' | 'loan'; academyProspectId?: string; role?: SquadRole }
   | { type: 'enable-transfers' }
   | { type: 'club-decision'; offerId: string; response: 'accept' | 'reject' | 'counter' }
   | { type: 'withdraw'; offerId: string }
   | { type: 'resolve' }
 );
 
+/**
+ * Format 78 (`recruitment-2`, owner feedback 22 November 2026): the manager's transfer and loan list. A listing counts
+ * only while the player is still registered at the club; computer clubs bid for listed players more often.
+ */
+export interface PlayerListing {
+  clubId: string;
+  playerId: string;
+  transfer: boolean;
+  loan: boolean;
+  /** The asking price for a transfer, in euro cents. */
+  askingFee: number;
+  listedOn: string;
+}
+
 export interface SeasonRecruitment {
-  model: 'recruitment-1';
+  /** `recruitment-2` (format 78): transfer and loan lists, bids for the manager's players and loans. */
+  model: 'recruitment-1' | 'recruitment-2';
+  listings?: PlayerListing[];
   enabledSince: { seasonNumber: number; round: number; ledgerIndex: number; contractCount: number; negotiationCount: number } | null;
   transfersEnabledSince: { seasonNumber: number; round: number; ledgerIndex: number; contractCount: number; negotiationCount: number } | null;
   events: InSeasonEvent[];
@@ -72,6 +90,7 @@ export interface InSeasonBudget {
   spendableCash: number;
 }
 import type { TransferProposal } from './market';
+import type { SquadRole } from './relationships';
 import type { TransferInstallment, TransferPaymentPlan } from './transfer-payments';
 
 

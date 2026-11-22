@@ -54,7 +54,7 @@ export function getClubCashOutlook(state: SeasonState, clubId = state.managedClu
       'Wages follow existing agreements and installments, excluding charges already posted or prepaid and wages ended by a completed transfer. Optional future prepayments and other automatic or discretionary decisions are not predicted.',
       ...(state.facilities?.enabledSince ? ['Facility investment already paid is not counted again. Upkeep and venue capacity use completed facilities and current construction restrictions; future project completions and new upgrades are not predicted.'] : []),
       ...(!state.payroll.enabledSince ? ['Player payroll is disabled in this career, so player wages are not included.'] : []),
-      'Pending offers retain their existing cash reservations but do not become forecast expenses until agreed. Next-season salary allocations are separate from cash reservations.',
+      'Pending offers retain their existing cash reservations but do not become forecast expenses until agreed. Next-season wages budgets are separate from cash reservations.',
       'Scheduled transfer costs are shown in full when due, even if actual payment must wait for enough cash after protected wages. Staff fees and sponsorship already recorded in cash are not counted again.',
     ] : [],
   };

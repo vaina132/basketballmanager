@@ -1,4 +1,5 @@
 import { financeLedgerCount } from './finance-ledger';
+import { payStaffCompensation } from './staff-contracts';
 import { withCalculationCache } from './pure-cache';
 import type { ScoutContract, SeasonScouts } from '../domain/scouts';
 import type { SeasonState } from '../domain/season';
@@ -8,15 +9,22 @@ import { availableScouts, getClubScouts, quoteScoutHire, scoutEvidence } from '.
 import { prepareScoutingAssignments } from './scouting';
 import { seasonRounds } from './career-world';
 import { SCOUT_DIRECTORY } from '../data/staff-directory';
+import type { Scout } from '../domain/scouts';
+import { scoutRating } from './scout-policy';
+import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
+import { keepingHeldStaff, staffHireBudget } from './staff-policy';
+import { staffFee } from './economy';
 
 export function createScouts(): SeasonScouts { return { model: 'scouts-1', enabledSince: null, contracts: [] }; }
 
-export function enableScouts(state: SeasonState): SeasonState {
+/** `opening` (format 74 new careers): the manager's club is staffed too, like every computer club. */
+export function enableScouts(state: SeasonState, opening = false): SeasonState {
   if (state.scouts.enabledSince) return state;
   if (!state.finance.enabledSince || !state.scouting.enabledSince) throw new Error('Enable club finances and scouting before recruiting scouts.');
   if (state.status !== 'active') throw new Error('Start the next season before enabling scout recruitment.');
   const next = { ...state, scouts: { ...state.scouts, enabledSince: { seasonNumber: state.seasonNumber, round: state.round, ledgerIndex: financeLedgerCount(state.finance) } } };
-  return prepareScoutingAssignments(recruitAiScouts(next));
+  // The career's opening staff are held, not hired: Spending left does not decide them (format 76).
+  return keepingHeldStaff(() => prepareScoutingAssignments(recruitAiScouts(next, opening)), opening);
 }
 
 function hireForClub(state: SeasonState, scoutId: string, clubId: string): SeasonState {
@@ -38,10 +46,15 @@ function managedContract(state: SeasonState, contractId: string): ScoutContract 
 
 export function releaseScout(state: SeasonState, contractId: string): SeasonState {
   const contract = managedContract(state, contractId), club = state.scouting.clubs[state.managedClubId]!;
-  return { ...state,
+  return payStaffCompensation({ ...state,
     scouts: { ...state.scouts, contracts: state.scouts.contracts.map(item => item.id === contract.id ? { ...item, releasedRound: state.round, releasedLedgerIndex: financeLedgerCount(state.finance) } : item) },
     scouting: { ...state.scouting, clubs: { ...state.scouting.clubs, [state.managedClubId]: { ...club, assignments: club.assignments.filter(assignment => assignment.observer?.contractId !== contract.id) } } },
-  };
+  }, 'scouts', contractId);
+}
+
+/** One step: the scout leaves (the paid fee is not refunded) and the new scout is hired. */
+export function replaceScout(state: SeasonState, contractId: string, scoutId: string): SeasonState {
+  return hireScout(releaseScout(state, contractId), scoutId);
 }
 
 export function setScoutRenewal(state: SeasonState, contractId: string, renew: boolean): SeasonState {
@@ -51,19 +64,31 @@ export function setScoutRenewal(state: SeasonState, contractId: string, renew: b
 }
 
 /** One dedicated scout before optional additional coaches; no hidden budget or catalog knowledge. */
-export function recruitAiScouts(state: SeasonState): SeasonState {
+export function recruitAiScouts(state: SeasonState, includeManaged = false): SeasonState {
   if (!state.scouts.enabledSince || state.status !== 'active' || state.round === seasonRounds(state)) return state;
   let next = state;
-  for (const club of state.clubs.filter(club => club.id !== state.managedClubId)) {
+  const levelled = usesClubLevelStaff(state), clubs = state.clubs.filter(club => includeManaged || club.id !== state.managedClubId);
+  for (const club of levelled ? clubsByStaffLevel(state, clubs) : clubs) {
     if (getClubScouts(next, club.id).length) continue;
-    const scout = withCalculationCache(() => availableScouts(next).filter(scout => quoteScoutHire(next, scout.id, club.id).canHire)).sort((left, right) => scoutEvidence(right) / right.fee - scoutEvidence(left) / left.fee || left.id.localeCompare(right.id, 'en'))[0];
+    const scout = levelled ? fittingScout(next, club.id) : withCalculationCache(() => availableScouts(next).filter(scout => quoteScoutHire(next, scout.id, club.id).canHire)).sort((left, right) => scoutEvidence(right) / right.fee - scoutEvidence(left) / left.fee || left.id.localeCompare(right.id, 'en'))[0];
     if (scout) next = hireForClub(next, scout.id, club.id);
   }
   return next;
 }
 
+let range: readonly [number, number] | undefined;
+/** Format 74: the scout fitting a club's staff level and its share of the staff budget (`src/world/staff-levels.ts`). */
+function fittingScout(state: SeasonState, clubId: string): Scout | undefined {
+  const choice = withCalculationCache(() => fittingLocalStaffChoice(state, clubId, 'scouts', availableScouts(state), {
+    rating: scoutRating, fee: scout => staffFee(state, clubId, scout.fee), target: staffTargetRating(state, clubId, 'scouts', range ??= ratingRange(DEVELOPMENT_SCOUTS, scoutRating)), cap: staffShareCap(state, clubId, 'scouts'), budget: staffHireBudget(state, clubId),
+  }));
+  return choice && quoteScoutHire(state, choice.id, clubId).canHire ? choice : undefined;
+}
+
 /** Existing coaches renew first; remaining shared funds decide each scout renewal. */
-export function renewSeasonScouts(state: SeasonState): SeasonState {
+/** Renewals keep staff the club holds, so Spending left does not decide them (format 76; new hires need it). */
+export function renewSeasonScouts(state: SeasonState): SeasonState { return keepingHeldStaff(() => renewScouts(state)); }
+function renewScouts(state: SeasonState): SeasonState {
   if (state.status !== 'active' || state.round !== 1) throw new Error('Renew scouts on the new season opening day.');
   if (!state.scouts.enabledSince) return state;
   let next = state;

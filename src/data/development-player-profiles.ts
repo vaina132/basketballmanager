@@ -8,6 +8,8 @@ export interface DevelopmentPlayerProfile {
    */
   readonly source: 'fictional-development' | 'estimated-from-age' | 'generated-reserve' | 'official-profile' | 'generated';
   readonly positionSource?: 'estimated' | 'official' | 'provider' | 'unverified';
+  /** The data pack's nationality (owner feedback, 22 November 2026); absent when unknown and in careers created before it. */
+  readonly nationality?: string;
 }
 
 const birthDates: Readonly<Record<string, readonly string[]>> = {

@@ -5,9 +5,10 @@ import type { SeasonBoard } from './board';
 import type { SeasonCommercial } from './commercial';
 import type { SeasonRivalries } from './rivalries';
 import type { SeasonCareer } from './career';
+import type { SeasonNational } from './national';
 import type { SeasonRelationships } from './relationships';
-import type { InjuryKind } from './injuries';
-import type { InjuryMode, MatchResult, MatchState, PlayerStats, Side, Tactics, Team } from './types';
+import type { InjuryKind, InjuryModel } from './injuries';
+import type { InjuryMode, MatchResult, MatchState, PlayerStats, PlayModel, Position, Side, Tactics, Team } from './types';
 import type { SeasonTraining } from './training';
 import type { SeasonCoaching } from './coaching';
 import type { SeasonFinance } from './finance';
@@ -36,6 +37,11 @@ export interface ClubPlan {
   autoSubstitutions: boolean;
   /** Explicit preference for the next matchday; null delegates selection. Present only in full-roster careers. */
   matchday?: string[] | null;
+  /**
+   * Format 74: the circles the manager chose on the court picture for players of the planned five (the position each
+   * plays). Absent until the manager places a player; the other starters and computer clubs play listed positions.
+   */
+  slots?: Record<string, Position>;
 }
 
 /** Compact completed fixture: no duplicated animation history. */
@@ -140,7 +146,13 @@ export interface DomesticDivisions {
 /** Format 63 (saved ideas: career and board) adds the `career-2` rules for new careers: a protected first season, fresh board confidence for a new coach (`board.restarts`), mid-season dismissals and resignations (`CAREER_RULES`, `src/world/career-rules.ts`). Format 64 gives new careers sponsorship exit clauses and arena naming rights (`commercial.model` 'commercial-2', `commercial.naming`, ledger kinds 'naming-rights' and 'sponsor-exit'). Format 65: new careers use the `facilities-2` model: medical and scouting facilities, seasonal wear and repair projects (`FACILITY_RULES_2`, `src/world/facilities-policy.ts`). Format 66 gives new careers the `relationships-2` model: default roles by recorded squad rank (`relationships.squadRanks`) and players' contract requests with the club's replies. Format 67 adds richer press topics and the manager's media standing (`media`, `src/world/media.ts`). Format 68: new careers grow rivalries from results (`rivalries.model` 'rivalries-2', `src/world/rivalry-growth.ts`); older careers keep the world's fixed rivalries. Format 69: new careers use the `career-3` model: a manager may become unemployed (`managedClubId` empty), every club is then run automatically, and boards changing coach offer jobs by a slowly fading reputation (`CAREER_RULES`). Format 70: new careers use the board-2 model: president personalities, season verdicts on the player salary budget, youth and culture objectives and the president's requests (`PRESIDENT_RULES`, `src/world/presidents.ts`). Format 71: new careers can finance facility projects with bank loans and leases (`facilities.financing` 'loans-1', `facilities.debts`, ledger kinds 'loan', 'loan-repayment' and 'lease'; `FACILITY_FINANCING_RULES`, `src/world/facility-debt.ts`); older careers pay upfront.  Format 72 (club money follows promotion and relegation): new careers of real-data worlds record each season's club money figures (`economySeasons`, `src/world/economy.ts`); older careers keep their opening figures. */
 /** Format 73 (step 3.7) also moves careers of real-data worlds to the closed money gaps (season money for capital, staff budgets and offseason offers, scaled amounts, solvent weak clubs, realistic staff pay); older real-club careers are refused with a "start a new career" message (`OLDER_REAL_CAREER_MESSAGE`). Compact files (`compact-3`) pack the bulkiest records losslessly (`src/storage/save-packing.ts`). */
 /** Format 73 (step 3.7, save size): completed seasons are sealed at each rollover. Rival senior games of seasons before the latest completed one keep their results, diagnoses and each side's fouls (`fouls`) beside the season totals; rival youth games of completed seasons keep results and diagnoses (`detail: 'season'`); academy weeks of completed seasons keep each prospect's last report of the season. Strict checks replay the current season from these records (`src/world/sealed-history.ts`). */
-export const SEASON_SCHEMA_VERSION = 73;
+/** Format 74: six-level facilities with the bank loan (also accepted at format 73), opening staff for every club (`coaching-2`), squad roles (`relationships-3`) and court-picture slots. */
+/** Format 76: staff contracts of 1-3 seasons with weekly salaries and sacking compensation (`coaching-4`, `src/world/staff-contracts.ts`). */
+/** Format 77: calmer playing time for new careers (`relationships-4`, `PLAYING_TIME_RULES` in `src/world/relationship-rules.ts`): quiet role adjustments (`role-adjust` events) and one calm concern (`role-request` stage 'concern'). */
+/** Format 78: the transfer and loan list with bids for the manager's players and loans (`recruitment-2`), and the scouting network (`scouting-2`). */
+/** Format 79: the richer play model for new careers' matches (`matchModel` 'plays-2', `src/engine/plays.ts`); older careers replay with the earlier possession actions. */
+/** Format 80: national teams, their competitions, FIBA windows that pause the domestic leagues with room, and national jobs (`national`, `src/world/national.ts`). */
+export const SEASON_SCHEMA_VERSION = 80;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -167,6 +179,12 @@ export interface SeasonState {
   conditions: Record<string, number>;
   injuryMode: InjuryMode;
   injuries: SeasonInjury[];
+  /** Owner feedback (22 November 2026): new careers diagnose match injuries with the longer `injuries-2` durations. */
+  injuryModel?: InjuryModel;
+  /** Format 79 (owner feedback, 22 November 2026): new careers play their matches with the richer play model. */
+  matchModel?: PlayModel;
+  /** Format 80 (owner feedback item 13, 22 November 2026): national teams, competitions and the manager's national job. */
+  national?: SeasonNational;
   training: SeasonTraining;
   coaching: SeasonCoaching;
   finance: SeasonFinance;

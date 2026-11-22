@@ -1,3 +1,4 @@
+import { staffRoomForWages } from './wage-pool';
 import { leavingClubIds } from './background';
 import type { ClubContractSummary, ContractOfferOptions, EmploymentContract, PlayerContractQuote, SeasonEmployment } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
@@ -15,6 +16,7 @@ import { clubRosterLimitText, clubRosterLimit, clubSalaryCeiling } from './club-
 import { seasonSalaryBudget } from './board-consequences';
 import { benchWage, knownMoneySeason, moneyAt, REAL_ECONOMY_RULES, worldEconomy } from './economy';
 import { refusedContractMinimum, refusedContractPremium } from './contract-requests-policy';
+import { contractRoleReason, offeredContractRole, roleWage } from './contract-roles';
 
 export const EMPLOYMENT_BUDGET = 24_000_000;
 export const MIN_ROSTER_SIZE = 8;
@@ -70,7 +72,8 @@ function contractsAt(employment: SeasonEmployment, seasonNumber: number, round: 
   if (!byWeek) { byWeek = new Map(); contractsAtCache.set(employment, byWeek); }
   const key = `${seasonNumber}:${round}`, known = byWeek.get(key);
   if (known) return known;
-  const released = new Set([...(employment.transfers ?? []).filter(release => release.startsSeason < seasonNumber || release.startsSeason === seasonNumber && (release.startsRound ?? 1) <= round), ...(employment.buyouts ?? []).filter(release => release.startsSeason <= seasonNumber), ...(employment.departures ?? []).filter(release => release.startsSeason <= seasonNumber)].flatMap(release => release.releasedContractIds));
+  // Format 78: a loan releases the lending club's terms for its own season only; they apply again from the next one.
+  const released = new Set([...(employment.transfers ?? []).filter(release => (release.mode !== 'loan' || release.startsSeason === seasonNumber) && (release.startsSeason < seasonNumber || release.startsSeason === seasonNumber && (release.startsRound ?? 1) <= round)), ...(employment.buyouts ?? []).filter(release => release.startsSeason <= seasonNumber), ...(employment.departures ?? []).filter(release => release.startsSeason <= seasonNumber)].flatMap(release => release.releasedContractIds));
   const contracts = employment.contracts.filter(contract => contract.startsSeason <= seasonNumber && contract.endsSeason >= seasonNumber && (contract.startsSeason < seasonNumber || (contract.startsRound ?? 1) <= round) && !released.has(contract.id));
   byWeek.set(key, contracts);
   return contracts;
@@ -87,6 +90,20 @@ function clubContractsForSeason(employment: SeasonEmployment, clubId: string, se
     for (const contract of contracts) { const list = groups.get(contract.clubId); if (list) list.push(contract); else groups.set(contract.clubId, [contract]); }
     byClub = groups;
     contractsByClubCache.set(contracts, byClub);
+  }
+  return byClub.get(clubId) ?? NO_CONTRACTS;
+}
+
+const contractsByClubAtCache = new WeakMap<readonly EmploymentContract[], Map<string, readonly EmploymentContract[]>>();
+/** One club's contracts in force at a matchday, in journal order (shared: callers must not change it). */
+export function clubContractsForRound(employment: SeasonEmployment, seasonNumber: number, round: number, clubId: string): readonly EmploymentContract[] {
+  const contracts = contractsAt(employment, seasonNumber, round);
+  let byClub = contractsByClubAtCache.get(contracts);
+  if (!byClub) {
+    const groups = new Map<string, EmploymentContract[]>();
+    for (const contract of contracts) { const list = groups.get(contract.clubId); if (list) list.push(contract); else groups.set(contract.clubId, [contract]); }
+    byClub = groups;
+    contractsByClubAtCache.set(contracts, byClub);
   }
   return byClub.get(clubId) ?? NO_CONTRACTS;
 }
@@ -122,7 +139,8 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
   const reserved = [...getLiveMarketOffers(state).filter(offer => offer.clubId === clubId && offer.id !== excludeOfferId && offer.seasonNumber + 1 <= seasonNumber && offer.seasonNumber + offer.seasons >= seasonNumber), ...inSeasonReserved];
   const reservedWages = reserved.reduce((total, offer) => total + offer.seasonWage, 0), reservedRosterSize = reserved.length;
   // Format 70 (board-2): the season verdict changes the player salary budget (`seasonSalaryBudget`); otherwise the standard budget.
-  const budget = seasonSalaryBudget(state, clubId, seasonNumber), remainingBudget = budget - seasonWages - reservedWages;
+  // Format 75 (`coaching-3`): the wage pool adds the staff budget the employed staff leave unused.
+  const budget = seasonSalaryBudget(state, clubId, seasonNumber) + staffRoomForWages(state, clubId, seasonNumber), remainingBudget = budget - seasonWages - reservedWages;
   const reserveWage = minimumSquadWage(state, clubId, seasonNumber);
   // A rival can win any pending player. Keep enough to replace a cheap held slot
   // until that player actually signs, so losing a bid cannot strand the club.
@@ -181,7 +199,9 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
   return (playerId, seasonWage, seasons, resolvingOfferId, transferFee, transferPaymentPlan = 'upfront', options = {}) => {
     const player = playerInList(getCareerPlayers(state), playerId);
     const startsSeason = state.seasonNumber + 1, endsSeason = startsSeason + seasons - 1;
-    const askingWage = player ? getCareerWage(state, playerId) : 0;
+    // relationships-3: the role offered (the chosen one, or his natural role at this club) changes the asking wage.
+    const role = player ? offeredContractRole(state, clubId, playerId, options) : undefined;
+    const askingWage = player ? roleWage(getCareerWage(state, playerId), role, state) : 0;
     const current = contractForSeason(state.employment, playerId, state.seasonNumber);
     const openOffer = liveOffers.find(offer => offer.playerId === playerId && offer.clubId === clubId);
     const rivalOffer = liveOffers.find(offer => offer.playerId === playerId && offer.clubId !== clubId);
@@ -198,6 +218,9 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
     else if (retirementContractReason(state, playerId, endsSeason)) reason = retirementContractReason(state, playerId, endsSeason);
     else if (!Number.isInteger(seasonWage) || seasonWage < MIN_CONTRACT_WAGE || seasonWage > maxContractWage(state) || seasonWage % WAGE_STEP !== 0) reason = contractWageRuleText(state);
     else if (seasonWage < askingWage && !state.negotiations.enabledSince) reason = 'The player will not accept less than his asking wage.';
+    // relationships-3: a player refuses a role below his standing at this club (checked when the offer is made; a dated
+    // offseason reply keeps the role he was offered).
+    else if (!resolvingOfferId && contractRoleReason(state, clubId, playerId, options.role)) reason = contractRoleReason(state, clubId, playerId, options.role);
     // Format 66: a player whose contract request this club refused asks more to sign with it (relationships-2).
     else if (refusedContractPremium(state, clubId, playerId) && seasonWage < refusedContractMinimum(state, clubId, playerId, askingWage, WAGE_STEP)) reason = refusedContractText(refusedContractMinimum(state, clubId, playerId, askingWage, WAGE_STEP));
     else if ((state.employment.buyouts ?? []).some(buyout => buyout.playerId === playerId && buyout.clubId === clubId && buyout.seasonNumber === state.seasonNumber)) reason = 'A player you buy out cannot rejoin your club during the same offseason.';
@@ -220,7 +243,7 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
       const limit = size <= MIN_ROSTER_SIZE && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
       if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > limit) { reason = `This offer exceeds the season ${year} wage budget after protecting space for eight players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
     }
-    return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };
+    return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }), ...(role === undefined ? {} : { role }) };
   };
 }
 

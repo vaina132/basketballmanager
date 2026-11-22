@@ -1,6 +1,6 @@
 import type { PlayerKnowledge } from '../domain/scouting';
 import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/season';
-import type { MatchState, Player, PlayerAttributes, PlayerStats, Position, Team } from '../domain/types';
+import type { MatchState, Player, PlayerAttributes, SkillAttributes, PlayerStats, Position, Team } from '../domain/types';
 import { getFixtureTeams } from './rosters';
 import { overallRating, overallRatingStars } from './overall-rating';
 export { OVR_POSITION_WEIGHTS, OVR_SCALE, OVR_STAR_SCALE, overallRating, overallRatingStars } from './overall-rating';
@@ -19,7 +19,7 @@ export interface AbilityRating {
 export interface AbilityRatingOptions {
   /** Unknown positions use the average of the five position weightings. */
   position?: Position | null;
-  attribute?: keyof PlayerAttributes;
+  attribute?: keyof SkillAttributes;
 }
 export interface MatchMvp {
   playerId: string;
@@ -34,7 +34,7 @@ export interface MatchMvp {
 export const GAME_PIR_DESCRIPTION = 'Game PIR: points + rebounds + assists + steals + blocks − missed field goals − missed free throws − turnovers − personal fouls. Fouls drawn and shots blocked against are not recorded and are omitted.';
 export const MATCH_RATING_DESCRIPTION = 'Match rating: 6.0 + game PIR ÷ 10, limited to 1.0–10.0. Live ratings are provisional; players without an appearance are unrated.';
 export const ABILITY_RATING_DESCRIPTION = 'Overall rating (1-99): the seven skills weighted by what the player\'s position needs. Stars show it from 1 to 5 in half steps: 85 or more is 5 stars and every 6 points less is half a star less. Scouted ability remains an estimated range.';
-const ATTRIBUTE_KEYS: readonly (keyof PlayerAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
+const ATTRIBUTE_KEYS: readonly (keyof SkillAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
 const COUNTING_KEYS: readonly (keyof PlayerBoxStats)[] = [
   'secondsPlayed', 'points', 'fieldGoalsMade', 'fieldGoalsAttempted', 'threePointersMade', 'threePointersAttempted',
   'freeThrowsMade', 'freeThrowsAttempted', 'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls',

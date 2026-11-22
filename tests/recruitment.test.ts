@@ -126,7 +126,7 @@ describe('dated in-season free-agent recruitment', () => {
     expect(quoteInSeasonOffer(full, getInSeasonCandidates(opening)[4]!.id, wage).reason).toMatch(/twelve/i);
     let expensive = opening;
     for (const player of getInSeasonCandidates(opening)) {
-      if (!quoteInSeasonOffer(expensive, player.id, 5_000_000).canOffer) { expect(quoteInSeasonOffer(expensive, player.id, 5_000_000).reason).toMatch(/salary budget/i); break; }
+      if (!quoteInSeasonOffer(expensive, player.id, 5_000_000).canOffer) { expect(quoteInSeasonOffer(expensive, player.id, 5_000_000).reason).toMatch(/wages budget/i); break; }
       expensive = submitInSeasonOffer(expensive, player.id, 5_000_000);
     }
   });

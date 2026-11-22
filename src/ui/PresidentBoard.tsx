@@ -11,7 +11,7 @@ import { Icon, type IconName } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
 import { formatEuros } from './money-format'
 
-/** Format 70 (board-2 careers): the president's profile, youth and culture objectives and requests on Club > Board. */
+/** Format 70 (board-2 careers): the president's profile, youth and culture objectives and requests on the Board page. */
 const money = (cents: number) => formatEuros(cents, true)
 const signedPercent = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value)}%`
 const PATIENCE: Record<PresidentTraitLevel, string> = { 1: 'Impatient', 2: 'Demanding', 3: 'Measured', 4: 'Patient', 5: 'Very patient' }
@@ -39,7 +39,7 @@ export function PresidentProfile({ season }: { season: SeasonState }) {
       <div data-president-trait="ambition"><dt>Ambition · {AMBITION[traits.ambition]}</dt><dd>Results targets {ambition === 0 ? 'standard' : `${ambition > 0 ? '+' : '−'}${Math.abs(ambition)} points`}<small>Also shapes the youth and culture objectives</small></dd></div>
       <div data-president-trait="negotiation"><dt>Negotiation · {NEGOTIATION[traits.negotiation]}</dt><dd>Capital needs confidence {terms.requiredConfidence}<small>Asks again {terms.cooldown} {terms.cooldown === 1 ? 'matchday' : 'matchdays'} after a refusal</small></dd></div>
       <div data-president-trait="interference"><dt>Interference · {INTERFERENCE[traits.interference]}</dt><dd>{chance ? `${chance}% chance of a request each review week` : 'Makes no requests'}<small>One open request at a time, at most {PRESIDENT_RULES.requests.maxPerSeason} a season</small></dd></div>
-      <div data-president-trait="generosity"><dt>Generosity · {president.generosity} / 5</dt><dd>Salary budget after a verdict: {signedPercent(salary[0]!)} / 0% / {signedPercent(salary[1]!)} / {signedPercent(salary[2]!)}<small>Confident, Steady, Concerned, Under pressure</small></dd></div>
+      <div data-president-trait="generosity"><dt>Generosity · {president.generosity} / 5</dt><dd>Wages budget after a verdict: {signedPercent(salary[0]!)} / 0% / {signedPercent(salary[1]!)} / {signedPercent(salary[2]!)}<small>Confident, Steady, Concerned, Under pressure</small></dd></div>
     </dl>
   </div>
 }

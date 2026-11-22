@@ -45,8 +45,7 @@ export function SquadPerformance({ season, selectedPlayerId, onSelectPlayer, bus
           report?.focus({ preventScroll: true }); report?.scrollIntoView({ block: 'start' })
         }
       }} selectedPlayerId={selected?.key} busy={busy} label="Squad season statistics" />
-      <PerformanceLegend mode={mode} />
-      <p className="player-performance-note">Only committed matchdays count. Use the season selector to revisit retained player records after rollover.</p></>}
+      <PerformanceLegend mode={mode} note="Only recorded matchdays count. Pick an older season to see its records." /></>}
     </section>
     {selected && <PlayerPerformanceReport key={selected.key} season={season} record={selected} onClose={() => { clearSelection(); const target = trigger.current; if (target?.isConnected && target.closest('.squad-performance')) target.focus(); else container.current?.querySelector<HTMLElement>('#squad-performance-search')?.focus() }} />}
   </div>

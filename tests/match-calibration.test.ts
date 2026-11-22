@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Player, PlayerAttributes, Position, Team } from '../src/domain/types';
 import { createFixtureMatch, simulateToEnd } from '../src/engine/match';
 import { calibrationSummary, gameLine, type GameLine } from './helpers/match-calibration';
+import { withExtraAttributes } from '../src/world/extra-attributes';
 
 /**
  * Sprint 4 match calibration: a few hundred games between generated twelve-player squads whose attributes follow the
@@ -25,7 +26,9 @@ function generatedTeam(index: number, strength: number): Team {
   const players: Player[] = SQUAD.map((position, slot) => {
     const depth = slot < 5 ? 0 : slot < 9 ? -1 : -2;
     const attributes = Object.fromEntries(Object.entries(POSITION_MEANS[position]).map(([key, mean]) => [key, Math.max(1, Math.min(20, Math.round(mean + strength + depth + (random() - .5) * 4)))])) as unknown as PlayerAttributes;
-    return { id: `cal-${index}-${slot}`, name: `Player ${index}-${slot}`, number: slot + 4, position, heightCm: HEIGHTS[position], weightKg: 95, skinTone: '#9aa0a8', hairColor: '#3b3f45', attributes };
+    // The five further abilities follow from the skills as for real players (new careers store them on every player).
+    const id = `cal-${index}-${slot}`;
+    return { id, name: `Player ${index}-${slot}`, number: slot + 4, position, heightCm: HEIGHTS[position], weightKg: 95, skinTone: '#9aa0a8', hairColor: '#3b3f45', attributes: withExtraAttributes({ id, position, heightCm: HEIGHTS[position], attributes }) };
   });
   return { id: `cal-${index}`, name: `Calibration ${index}`, shortName: `CAL${index}`, color: '#6b7280', players };
 }

@@ -45,7 +45,7 @@ describe('European competition screens and the season calendar (step 3.5g)', () 
 
   it('lays out the whole season: weeks, competitions on each day, the manager\'s games and reserved knockout days', () => {
     const markup = renderToStaticMarkup(createElement(SeasonCalendar, { season: state }));
-    expect(markup).toContain('Season calendar');
+    expect(markup).toContain('id="calendar-title">Weeks<');
     expect(markup).toContain('Week 1');
     expect(markup).toContain('Week 38');
     expect(markup).toContain('Playoffs 1');

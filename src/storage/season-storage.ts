@@ -1,5 +1,8 @@
 import { clubRosterLimit, clubSalaryBudget, clubSalaryCeiling, usesFullClubRoster } from '../world/club-roster-policy';
-import { seasonSalaryCeiling } from '../world/board-consequences';
+import { seasonSalaryCeiling, staffAllocationCeiling } from '../world/board-consequences';
+import { usesWagePool } from '../world/wage-pool';
+import { usesClubLevelStaff } from '../world/staff-levels';
+import { staffWagesSourceId, staffWeekWages, usesStaffContracts } from '../world/staff-contracts';
 import { selectedTeam } from '../world/matchday-selection';
 import { createBoard } from '../world/board';
 import type { SeasonBoard } from '../domain/board';
@@ -25,8 +28,8 @@ import { openingEurope } from '../world/european-places';
 import { selectBackgroundMatchday } from '../world/background';
 import type { FacilityAnchor, FacilityEvent, FacilityType, SeasonFacilities } from '../domain/facilities';
 import { createFacilities, applyFacilityEvent, facilitiesAtEventCount } from '../world/facilities';
-import { ALL_FACILITY_TYPES, FACILITY_TYPES, getArenaCapacity, getFacilityUpkeepBreakdown, medicalRecoveryPercent } from '../world/facilities-policy';
-import { debtSchedule, debtSourceId, FACILITY_FINANCING_RULES } from '../world/facility-debt';
+import { FACILITY_RULES_3, facilityMaxLevel, facilityTypes, getArenaCapacity, getFacilityUpkeepBreakdown, medicalRecoveryPercent } from '../world/facilities-policy';
+import { BANK_LOAN_RULES, debtSchedule, debtSourceId, FACILITY_FINANCING_RULES } from '../world/facility-debt';
 import type { FinanceBalance, FinanceEntry } from '../domain/finance';
 import type { PayrollCharge, PayrollItem, PlayerWageAgreement, SeasonPayroll } from '../domain/payroll';
 import type { SeasonTraining, TrainingPlan, TrainingPoints, TrainingWeekReport } from '../domain/training';
@@ -57,10 +60,12 @@ import { clubsEverInFullWorld, fullWorldClubs, fullWorldClubsIn, isMemberList, i
 import type { CareerWorld, SeasonEconomy, WorldContext } from '../domain/world';
 import { getCareerPlayers, getCareerPlayer, getCareerWage, type CareerPlayerContext } from '../world/player-catalog';
 import { MAX_MATCH_PERIODS } from '../engine/match';
+import { isCourtPosition } from '../engine/positions';
 import { applyExchanges, domesticSchedule, europeanPlacesAfter, DAILY_RECOVERY, dateForRound, fixtureSeed, getPostseasons, seasonExchangesOf, getStandings, MAX_SEASON_NUMBER, recoverThroughGameDays, ROUND_INTERVAL_DAYS, scheduledFixtures, weekCloseCondition, weekLastGameDate } from '../world/season';
 import { divisionChanges, openingDivisions, seasonLeagues } from '../world/divisions';
 import { calendarDaysBetween } from '../world/competition-calendar';
 import { createSeasonInjury, isRecovering } from '../world/health';
+import { INJURY_MODEL_2 } from '../domain/injuries';
 import { createTraining, developClub, processTrainingWeek, TRAINING_ATTRIBUTES, TRAINING_FOCUSES, TRAINING_INTENSITIES } from '../world/training';
 import { potentialPointCap, trainingHeadroom } from '../world/potential';
 import { coachingAssignments, COACHING_BUDGET, createCoaching, MAX_COACHES } from '../world/coaching';
@@ -101,13 +106,14 @@ import { applyInSeasonEvent, createInSeasonRecruitment as createRecruitment } fr
 import { getTransferPaymentSchedule, processTransferPayments } from '../world/transfer-payments';
 import { addMarketDays, MARKET_MAX_EVENTS, MARKET_WINDOW_DAYS, isLiveMarketOffer } from '../world/market-policy';
 import { evaluateNegotiation } from '../world/negotiations-policy';
+import { contractRolesApply, isSquadRole, roleWage } from '../world/contract-roles';
 import { contractForSeason, contractForRound, effectiveContractsForSeason, effectiveContractsForRound, getContractedClubs, getContractedClubsForRound, registrationChangeRounds, quotePlayerContract, MIN_ROSTER_SIZE, MIN_CONTRACT_WAGE, maxContractWage, MAX_CONTRACT_SEASONS, WAGE_STEP, lowestMinimumSquadWage } from '../world/employment-policy';
 import { maxTransferFee } from '../world/transfers-policy';
 import { maxReleaseFee } from '../world/release-clauses';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
 import { MAX_SEASON_COLLECTION_ENTRIES, MAX_SEASON_SAVE_BYTES, MAX_SEASON_SAVE_VALUES } from './season-limits';
-import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
+import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
 import { COMPACT_JSON_3_ENCODING, COMPACT_JSON_ENCODING, LEGACY_COMPACT_JSON_ENCODING, compactJson3, expandJson, expandJson3 } from './compact-json';
 import { cachedCalculation, withCalculationCache } from '../world/pure-cache';
 import { ledgerBoundaryIndex } from './ledger-boundaries';
@@ -117,17 +123,26 @@ import { expandFinanceForValidation } from './finance-archive-validation';
 import { fixturePlayerEvidence, summarizeSeniorHistory } from '../world/senior-history';
 import { validateArchivedAppearances, validateSealedSeniorSummary, validateSeniorSummary } from './senior-history-validation';
 import { isSealedSeniorResult, sealCompletedHistory, SEALED_HISTORY_FORMAT, seniorSealedThrough } from '../world/sealed-history';
+import { abilityShapeProblem } from '../world/extra-attributes';
 import { ACADEMY_GRADUATION_AGE, academyPointCap, developAcademyPlayer, emptyAcademyPoints } from '../world/academy-policy';
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { staffFee } from '../world/economy';
 import { PACKED_SAVE_FORMAT, packSeasonForSave, unpackSavedSeason } from './save-packing';
+import { nationalDutyDays } from '../world/national';
+import { validateNationalShape } from './national-validation';
 
 export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
+/**
+ * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
+ * They went live while the schema was still 73, so format-73 careers started with them stay valid; format 74 adds the
+ * opening staff and squad roles on top.
+ */
+const SIX_LEVEL_FORMAT = Math.min(73, SEASON_SCHEMA_VERSION);
 const SIDES = ['home', 'away'] as const;
 const STAT_KEYS: readonly (keyof PlayerStats)[] = [
   'secondsPlayed', 'points', 'fieldGoalsMade', 'fieldGoalsAttempted', 'threePointersMade',
@@ -139,7 +154,7 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
 
 /** The canonical games of a season given its own results (regular calendar plus due postseason games, step 3.4b). */
-function canonicalFixtures(context: { clubs: readonly Team[]; fixtures: unknown; world: CareerWorld; divisions?: DomesticDivisions; seed: number; europe?: SeasonEurope }, seasonNumber: number, path: string): SeasonFixture[] {
+function canonicalFixtures(context: { clubs: readonly Team[]; fixtures: unknown; world: CareerWorld; divisions?: DomesticDivisions; seed: number; europe?: SeasonEurope; national?: unknown }, seasonNumber: number, path: string): SeasonFixture[] {
   if (!Array.isArray(context.fixtures)) fail(path, 'must be an array');
   try { return scheduledFixtures({ ...context, fixtures: context.fixtures as SeasonFixture[] }, seasonNumber); }
   catch { return fail(path, 'does not match the versioned schedule'); }
@@ -260,8 +275,20 @@ function validateOptionalReleaseFee(fields: Record<string, unknown>, path: strin
   const fee = number(fields.releaseFee, `${path}.releaseFee`, 100_000, maxReleaseFee(context));
   if (fee % 100_000) fail(`${path}.releaseFee`, 'must use whole thousand-euro steps');
 }
-function validateTransferMode(fields: Record<string, unknown>, path: string): void {
+/**
+ * relationships-3 (squad roles everywhere): contracts, offers and player replies record the squad role offered. The key
+ * is accepted only in careers whose contracts carry roles; replays then reproduce it exactly.
+ */
+function roleKeys(value: unknown, context: { relationships?: SeasonRelationships }): string[] {
+  return value !== null && typeof value === 'object' && Object.hasOwn(value, 'role') && contractRolesApply(context) ? ['role'] : [];
+}
+function validateOptionalRole(fields: Record<string, unknown>, path: string): void {
+  if (Object.hasOwn(fields, 'role') && !isSquadRole(fields.role)) fail(`${path}.role`, 'must identify a Star, Starter, Rotation, Reserve or Prospect role');
+}
+function validateTransferMode(fields: Record<string, unknown>, path: string, loans = false): void {
   if (!Object.hasOwn(fields, 'transferMode')) return;
+  // Format 78 (`recruitment-2`): a loan offer for the rest of the season, with its fee paid at once.
+  if (loans && fields.transferMode === 'loan' && Object.hasOwn(fields, 'transferFee') && fields.transferPaymentPlan === 'upfront' && fields.seasons === 1 && !Object.hasOwn(fields, 'releaseFee')) return;
   if (fields.transferMode !== 'release-clause' || !Object.hasOwn(fields, 'transferFee') || fields.transferPaymentPlan !== 'upfront') fail(`${path}.transferMode`, 'requires an explicit release-clause trigger and full upfront transfer fee');
 }
 function array(value: unknown, path: string, length: number): unknown[] {
@@ -460,10 +487,36 @@ function completedDevelopmentWeeks(anchor: { seasonNumber: number; round: number
   return anchor ? (seasonNumber - anchor.seasonNumber) * (rounds - 1) + Math.min(round - 1, rounds - 1) - (anchor.round - 1) : 0;
 }
 
+/**
+ * A bound on one season's coaching contracts. `coaching-1` careers are bounded by the catalog coaching limit; club-level
+ * careers by money only (hires, sackings and rehires), so they get a generous fixed bound.
+ */
+function maximumCoachingContracts(clubs: number, levelled: boolean): number {
+  return levelled ? Math.max(20_000, clubs * MAX_COACHES * 4) : clubs * Math.floor(COACHING_BUDGET / Math.min(...DEVELOPMENT_COACHES.map(coach => coach.fee)));
+}
+
 /** Current-year contracts retain released appointments so expenditure and past weeks reconcile. */
-function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: number, round: number, rounds: number): SeasonCoaching {
-  const fields = record(value, 'coaching', ['model', 'enabledSince', 'contracts']);
-  if (fields.model !== 'coaching-1') fail('coaching.model', 'is unsupported');
+function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: number, round: number, rounds: number, version: number): SeasonCoaching {
+  const contracted = value !== null && typeof value === 'object' && (value as { model?: unknown }).model === 'coaching-4';
+  const fields = record(value, 'coaching', ['model', 'enabledSince', 'contracts', ...(contracted ? ['terms'] : [])]);
+  // Format 74 ('coaching-2'): every club starts staffed and a sacked coach's fee stops counting against the limits.
+  // Format 75 ('coaching-3'): 'coaching-2' with one wage pool for player wages and staff fees.
+  // Format 76 ('coaching-4'): 'coaching-3' with staff contracts of 1-3 seasons (`terms`), weekly salaries and compensation.
+  if (fields.model !== 'coaching-1' && fields.model !== 'coaching-2' && fields.model !== 'coaching-3' && fields.model !== 'coaching-4') fail('coaching.model', 'is unsupported');
+  const levelled = fields.model === 'coaching-2' || fields.model === 'coaching-3' || fields.model === 'coaching-4';
+  if (contracted && version < 76) fail('coaching.model', 'requires format 76 or later');
+  if (contracted) {
+    if (fields.terms === null || typeof fields.terms !== 'object' || Array.isArray(fields.terms) || Object.keys(fields.terms).length > 20_000) fail('coaching.terms', 'must be a bounded record of staff contracts');
+    const clubIds = new Set(clubs.map(club => club.id));
+    for (const [personId, value] of Object.entries(fields.terms as Record<string, unknown>)) {
+      const path = `coaching.terms.${personId}`, term = record(value, path, ['clubId', 'fromSeason', 'untilSeason']);
+      if (typeof term.clubId !== 'string' || !clubIds.has(term.clubId)) fail(`${path}.clubId`, 'must identify a club of this season');
+      const from = number(term.fromSeason, `${path}.fromSeason`, 1, seasonNumber);
+      number(term.untilSeason, `${path}.untilSeason`, Math.max(from, seasonNumber), from + 2);
+    }
+  }
+  if (levelled && version < 74) fail('coaching.model', 'requires format 74 or later');
+  if (fields.model === 'coaching-3' && version < 75) fail('coaching.model', 'requires format 75 or later');
   let earliestRound = 1;
   if (fields.enabledSince !== null) {
     const anchor = record(fields.enabledSince, 'coaching.enabledSince', ['seasonNumber', 'round']);
@@ -471,7 +524,7 @@ function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: 
     const enabledRound = number(anchor.round, 'coaching.enabledSince.round', 1, year === seasonNumber ? round : rounds);
     if (year === seasonNumber) earliestRound = enabledRound;
   }
-  const maximumContracts = clubs.length * Math.floor(COACHING_BUDGET / Math.min(...DEVELOPMENT_COACHES.map(coach => coach.fee)));
+  const maximumContracts = maximumCoachingContracts(clubs.length, levelled);
   if (!Array.isArray(fields.contracts) || fields.contracts.length > maximumContracts) fail('coaching.contracts', 'must be a bounded contract history');
   if (fields.enabledSince === null && fields.contracts.length !== 0) fail('coaching.contracts', 'must be empty while coaching is disabled');
   const expenses = new Map(clubs.map(club => [club.id, 0]));
@@ -480,7 +533,7 @@ function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: 
     const path = `coaching.contracts[${index}]`;
     const contract = record(value, path, ['id', 'coachId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'focus', 'renew']);
     if (contract.id !== `coach-s${seasonNumber}-c${index + 1}` || contract.seasonNumber !== seasonNumber) fail(path, 'must use sequential identities in the current season');
-    const coach = COACH_DIRECTORY.find(coach => coach.id === contract.coachId);
+    const coach = staffMember(COACH_DIRECTORY, contract.coachId);
     if (!coach) fail(`${path}.coachId`, 'must identify a coach in the development catalog');
     if (typeof contract.clubId !== 'string' || !expenses.has(contract.clubId)) fail(`${path}.clubId`, 'must identify a club in this league');
     const startedRound = number(contract.startedRound, `${path}.startedRound`, earliestRound, round);
@@ -491,12 +544,17 @@ function validateCoaching(value: unknown, clubs: readonly Team[], seasonNumber: 
     if (typeof contract.renew !== 'boolean') fail(`${path}.renew`, 'must be boolean');
     expenses.set(contract.clubId, expenses.get(contract.clubId)! + coach.fee);
   }
-  for (const [clubId, expense] of expenses) if (expense > COACHING_BUDGET) fail(`coaching.contracts.${clubId}`, 'exceeds the annual coaching budget, including released contracts');
+  if (!levelled) for (const [clubId, expense] of expenses) if (expense > COACHING_BUDGET) fail(`coaching.contracts.${clubId}`, 'exceeds the annual coaching budget, including released contracts');
   const coaching = fields as unknown as SeasonCoaching;
   for (let interval = 1; interval <= round; interval += 1) {
     const appointments = coaching.contracts.filter(contract => contract.startedRound <= interval && (contract.releasedRound === null || contract.releasedRound > interval));
     if (new Set(appointments.map(contract => contract.coachId)).size !== appointments.length) fail('coaching.contracts', 'assigns one coach to simultaneous contracts');
-    for (const club of clubs) if (appointments.filter(contract => contract.clubId === club.id).length > MAX_COACHES) fail(`coaching.contracts.${club.id}`, 'exceeds the coaching staff limit');
+    for (const club of clubs) {
+      const employed = appointments.filter(contract => contract.clubId === club.id);
+      if (employed.length > MAX_COACHES) fail(`coaching.contracts.${club.id}`, 'exceeds the coaching staff limit');
+      // Club-level careers (format 74 and later) have no catalog coaching limit: their coaches' fees are checked against
+      // the club's own staff limit (Wages left) with every ledger payment.
+    }
   }
   return coaching;
 }
@@ -545,12 +603,12 @@ function validateScouts(value: unknown, state: SeasonState, coaching: SeasonCoac
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'scouts.enabledSince.ledgerIndex');
   const contracts: ScoutContract[] = [];
   let previousLedger = firstLedger - 1, previousBoundary = firstBoundary;
-  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0)]));
+  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(COACH_DIRECTORY, contract.coachId)!.fee), 0)]));
   for (const [index, value] of fields.contracts.entries()) {
     const path = `scouts.contracts[${index}]`;
     const entry = record(value, path, ['id', 'scoutId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'renew', 'hiredLedgerIndex', 'releasedLedgerIndex']);
     if (entry.id !== `scout-contract-${index + 1}`) fail(`${path}.id`, 'must retain career-wide sequential appointment identities');
-    const scout = SCOUT_DIRECTORY.find(scout => scout.id === entry.scoutId);
+    const scout = staffMember(SCOUT_DIRECTORY, entry.scoutId);
     if (!scout || typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(path, 'must identify a catalog scout and club');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? state.round : seasonRounds(state));
@@ -572,7 +630,8 @@ function validateScouts(value: unknown, state: SeasonState, coaching: SeasonCoac
     const active = contracts.filter(contract => contract.seasonNumber === year && (contract.releasedLedgerIndex === null || contract.releasedLedgerIndex > hired));
     if (active.some(contract => contract.scoutId === scout.id)) fail(path, 'cannot appoint a scout already employed at this ledger boundary');
     if (active.filter(contract => contract.clubId === entry.clubId).length >= MAX_SCOUTS) fail(path, 'exceeds the three-scout staff limit at this appointment');
-    if (year === state.seasonNumber) {
+    // Format 74 ('coaching-2'): the employed staff's fees are checked in ledger order with the finances instead.
+    if (year === state.seasonNumber && !usesClubLevelStaff({ coaching })) {
       const total = fees.get(entry.clubId)! + staffFee(state, entry.clubId, scout.fee);
       if (total > staffBudgetFor(state.board, entry.clubId, year, state)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       fees.set(entry.clubId, total);
@@ -601,12 +660,12 @@ function validateFitness(value: unknown, state: SeasonState, coaching: SeasonCoa
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'fitness.enabledSince.ledgerIndex');
   const contracts: FitnessContract[] = [];
   let previousLedger = firstLedger - 1, previousBoundary = firstBoundary;
-  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!.fee), 0)]));
+  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(COACH_DIRECTORY, contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(SCOUT_DIRECTORY, contract.scoutId)!.fee), 0)]));
   for (const [index, value] of fields.contracts.entries()) {
     const path = `fitness.contracts[${index}]`;
     const entry = record(value, path, ['id', 'coachId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'renew', 'hiredLedgerIndex', 'releasedLedgerIndex']);
     if (entry.id !== `fitness-contract-${index + 1}`) fail(`${path}.id`, 'must retain career-wide sequential appointment identities');
-    const coach = FITNESS_DIRECTORY.find(coach => coach.id === entry.coachId);
+    const coach = staffMember(FITNESS_DIRECTORY, entry.coachId);
     if (!coach || typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(path, 'must identify a catalog fitness coach and club');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? Math.min((seasonRounds(state) - 1), state.round) : (seasonRounds(state) - 1));
@@ -628,7 +687,8 @@ function validateFitness(value: unknown, state: SeasonState, coaching: SeasonCoa
     const active = contracts.filter(contract => contract.seasonNumber === year && (contract.releasedLedgerIndex === null || contract.releasedLedgerIndex > hired));
     if (active.some(contract => contract.coachId === coach.id)) fail(path, 'cannot appoint a fitness coach already employed at this ledger boundary');
     if (active.filter(contract => contract.clubId === entry.clubId).length >= 1) fail(path, 'exceeds the one-fitness-coach staff limit at this appointment');
-    if (year === state.seasonNumber) {
+    // Format 74 ('coaching-2'): the employed staff's fees are checked in ledger order with the finances instead.
+    if (year === state.seasonNumber && !usesClubLevelStaff({ coaching })) {
       const total = fees.get(entry.clubId)! + staffFee(state, entry.clubId, coach.fee);
       if (total > staffBudgetFor(state.board, entry.clubId, year, state)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       fees.set(entry.clubId, total);
@@ -657,12 +717,12 @@ function validatePhysio(value: unknown, state: SeasonState, coaching: SeasonCoac
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'physio.enabledSince.ledgerIndex');
   const contracts: PhysioContract[] = [];
   let previousLedger = firstLedger - 1, previousBoundary = firstBoundary;
-  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0)]));
+  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(COACH_DIRECTORY, contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(SCOUT_DIRECTORY, contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(FITNESS_DIRECTORY, contract.coachId)!.fee), 0)]));
   for (const [index, value] of fields.contracts.entries()) {
     const path = `physio.contracts[${index}]`;
     const entry = record(value, path, ['id', 'physioId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'renew', 'hiredLedgerIndex', 'releasedLedgerIndex']);
     if (entry.id !== `physio-contract-${index + 1}`) fail(`${path}.id`, 'must retain career-wide sequential appointment identities');
-    const coach = PHYSIO_DIRECTORY.find(coach => coach.id === entry.physioId);
+    const coach = staffMember(PHYSIO_DIRECTORY, entry.physioId);
     if (!coach || typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(path, 'must identify a catalog physiotherapist and club');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? Math.min((seasonRounds(state) - 1), state.round) : (seasonRounds(state) - 1));
@@ -684,7 +744,8 @@ function validatePhysio(value: unknown, state: SeasonState, coaching: SeasonCoac
     const active = contracts.filter(contract => contract.seasonNumber === year && (contract.releasedLedgerIndex === null || contract.releasedLedgerIndex > hired));
     if (active.some(contract => contract.physioId === coach.id)) fail(path, 'cannot appoint a physiotherapist already employed at this ledger boundary');
     if (active.filter(contract => contract.clubId === entry.clubId).length >= 1) fail(path, 'exceeds the one-physio staff limit at this appointment');
-    if (year === state.seasonNumber) {
+    // Format 74 ('coaching-2'): the employed staff's fees are checked in ledger order with the finances instead.
+    if (year === state.seasonNumber && !usesClubLevelStaff({ coaching })) {
       const total = fees.get(entry.clubId)! + staffFee(state, entry.clubId, coach.fee);
       if (total > staffBudgetFor(state.board, entry.clubId, year, state)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       fees.set(entry.clubId, total);
@@ -715,12 +776,12 @@ function validateAssistant(value: unknown, state: SeasonState, coaching: SeasonC
   if (firstRound === seasonRounds(state) && finalRoundCommitted(firstYear, firstLedger)) fail('assistant.enabledSince', 'must precede the final matchday financial commit');
   const contracts: AssistantContract[] = [];
   let previousLedger = firstLedger - 1, previousBoundary = firstBoundary;
-  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + physio.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, PHYSIO_DIRECTORY.find(staff => staff.id === contract.physioId)!.fee), 0)]));
+  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(COACH_DIRECTORY, contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(SCOUT_DIRECTORY, contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(FITNESS_DIRECTORY, contract.coachId)!.fee), 0) + physio.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(PHYSIO_DIRECTORY, contract.physioId)!.fee), 0)]));
   for (const [index, value] of fields.contracts.entries()) {
     const path = `assistant.contracts[${index}]`;
     const entry = record(value, path, ['id', 'assistantId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'renew', 'hiredLedgerIndex', 'releasedLedgerIndex']);
     if (entry.id !== `assistant-contract-${index + 1}`) fail(`${path}.id`, 'must retain career-wide sequential appointment identities');
-    const coach = ASSISTANT_DIRECTORY.find(coach => coach.id === entry.assistantId);
+    const coach = staffMember(ASSISTANT_DIRECTORY, entry.assistantId);
     if (!coach || typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(path, 'must identify a catalog assistant coach and club');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? state.round : seasonRounds(state));
@@ -743,7 +804,8 @@ function validateAssistant(value: unknown, state: SeasonState, coaching: SeasonC
     const active = contracts.filter(contract => contract.seasonNumber === year && (contract.releasedLedgerIndex === null || contract.releasedLedgerIndex > hired));
     if (active.some(contract => contract.assistantId === coach.id)) fail(path, 'cannot appoint an assistant coach already employed at this ledger boundary');
     if (active.filter(contract => contract.clubId === entry.clubId).length >= 1) fail(path, 'exceeds the one-assistant staff limit at this appointment');
-    if (year === state.seasonNumber) {
+    // Format 74 ('coaching-2'): the employed staff's fees are checked in ledger order with the finances instead.
+    if (year === state.seasonNumber && !usesClubLevelStaff({ coaching })) {
       const total = fees.get(entry.clubId)! + staffFee(state, entry.clubId, coach.fee);
       if (total > staffBudgetFor(state.board, entry.clubId, year, state)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       fees.set(entry.clubId, total);
@@ -773,12 +835,12 @@ function validateYouth(value: unknown, state: SeasonState, coaching: SeasonCoach
   validateLedgerBoundary(ledger, firstLedger, firstYear, firstRound, 'youth.enabledSince.ledgerIndex');
   const contracts: YouthCoachContract[] = [];
   let previousLedger = firstLedger - 1, previousBoundary = firstBoundary;
-  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee), 0) + physio.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, PHYSIO_DIRECTORY.find(staff => staff.id === contract.physioId)!.fee), 0) + assistant.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, ASSISTANT_DIRECTORY.find(staff => staff.id === contract.assistantId)!.fee), 0)]));
+  const fees = new Map(state.clubs.map(club => [club.id, coaching.contracts.filter(contract => contract.clubId === club.id).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(COACH_DIRECTORY, contract.coachId)!.fee), 0) + scouts.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(SCOUT_DIRECTORY, contract.scoutId)!.fee), 0) + fitness.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(FITNESS_DIRECTORY, contract.coachId)!.fee), 0) + physio.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(PHYSIO_DIRECTORY, contract.physioId)!.fee), 0) + assistant.contracts.filter(contract => contract.clubId === club.id && contract.seasonNumber === state.seasonNumber).reduce((sum, contract) => sum + staffFee(state, club.id, staffMember(ASSISTANT_DIRECTORY, contract.assistantId)!.fee), 0)]));
   for (const [index, value] of fields.contracts.entries()) {
     const path = `youth.contracts[${index}]`;
     const entry = record(value, path, ['id', 'coachId', 'clubId', 'seasonNumber', 'startedRound', 'releasedRound', 'renew', 'hiredLedgerIndex', 'releasedLedgerIndex']);
     if (entry.id !== `youth-contract-${index + 1}`) fail(`${path}.id`, 'must retain career-wide sequential appointment identities');
-    const coach = YOUTH_COACH_DIRECTORY.find(coach => coach.id === entry.coachId);
+    const coach = staffMember(YOUTH_COACH_DIRECTORY, entry.coachId);
     if (!coach || typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(path, 'must identify a catalog youth coach and club');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     const round = number(entry.startedRound, `${path}.startedRound`, year === firstYear ? firstRound : 1, year === state.seasonNumber ? Math.min(state.round, (seasonRounds(state) - 1)) : (seasonRounds(state) - 1));
@@ -800,7 +862,8 @@ function validateYouth(value: unknown, state: SeasonState, coaching: SeasonCoach
     const active = contracts.filter(contract => contract.seasonNumber === year && (contract.releasedLedgerIndex === null || contract.releasedLedgerIndex > hired));
     if (active.some(contract => contract.coachId === coach.id)) fail(path, 'cannot appoint an youth coach already employed at this ledger boundary');
     if (active.filter(contract => contract.clubId === entry.clubId).length >= 1) fail(path, 'exceeds the one-youth staff limit at this appointment');
-    if (year === state.seasonNumber) {
+    // Format 74 ('coaching-2'): the employed staff's fees are checked in ledger order with the finances instead.
+    if (year === state.seasonNumber && !usesClubLevelStaff({ coaching })) {
       const total = fees.get(entry.clubId)! + staffFee(state, entry.clubId, coach.fee);
       if (total > staffBudgetFor(state.board, entry.clubId, year, state)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       fees.set(entry.clubId, total);
@@ -833,7 +896,8 @@ function validateAcademyShape(value: unknown, state: SeasonState, version: numbe
     const player = record(prospect.player, `${path}.player`, ['id', 'name', 'number', 'position', 'heightCm', 'weightKg', 'skinTone', 'hairColor', 'attributes']);
     if (typeof player.id !== 'string' || identities.has(player.id) || worldPlayer(worldOf(state), player.id)) fail(`${path}.player.id`, 'must identify a unique prospect outside the original player catalog');
     identities.add(player.id);
-    record(player.attributes, `${path}.player.attributes`, TRAINING_ATTRIBUTES);
+    const abilityProblem = abilityShapeProblem(player.attributes, TRAINING_ATTRIBUTES);
+    if (abilityProblem) fail(`${path}.player.attributes`, abilityProblem);
   }
   for (const [index, item] of (fields.intakes as unknown[]).entries()) record(item, `academy.intakes[${index}]`, ['id', 'clubId', 'seasonNumber', 'round', 'date', 'initial', 'prospectIds', ...(version >= 27 && item !== null && typeof item === 'object' && Object.hasOwn(item, 'source') ? ['source'] : [])]);
   for (const [index, item] of (fields.weeks as unknown[]).entries()) {
@@ -1258,7 +1322,7 @@ function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employ
   for (const [index, value] of physio.rehabilitation.entries()) record(value, `physio.rehabilitation[${index}]`, ['id', 'injuryId', 'playerId', 'clubId', 'seasonNumber', 'afterRound', 'fromDate', 'toDate', 'rosterId', 'contractId', 'physioId', 'eligibleDays', 'creditBefore', 'creditEarned', 'creditAfter', 'returnBefore', 'returnAfter']);
   const schedules = new Map<string, SeasonFixture>(), years = new Map<string, number>();
   // Each season's canonical games, including the postseason games its own results made due (step 3.4b).
-  for (let year = 1; year <= state.seasonNumber; year += 1) for (const fixture of canonicalFixtures({ clubs: state.clubs, fixtures: year === state.seasonNumber ? state.fixtures : state.history[year - 1]?.fixtures, world: worldOf(state), divisions: year === state.seasonNumber ? state.divisions : state.history[year - 1]?.divisions, seed: state.seed, ...((year === state.seasonNumber ? state.europe : state.history[year - 1]?.europe) ? { europe: year === state.seasonNumber ? state.europe : state.history[year - 1]!.europe } : {}) }, year, 'injuries')) { schedules.set(fixture.id, fixture); years.set(fixture.id, year); }
+  for (let year = 1; year <= state.seasonNumber; year += 1) for (const fixture of canonicalFixtures({ clubs: state.clubs, fixtures: year === state.seasonNumber ? state.fixtures : state.history[year - 1]?.fixtures, world: worldOf(state), divisions: year === state.seasonNumber ? state.divisions : state.history[year - 1]?.divisions, seed: state.seed, ...(state.national ? { national: true } : {}), ...((year === state.seasonNumber ? state.europe : state.history[year - 1]?.europe) ? { europe: year === state.seasonNumber ? state.europe : state.history[year - 1]!.europe } : {}) }, year, 'injuries')) { schedules.set(fixture.id, fixture); years.set(fixture.id, year); }
   const players = new Set(getCareerPlayers(state).map(player => player.id));
   // Step 3.5b: a background side's player injured in a European game.
   const sides = backgroundSides(state);
@@ -1271,7 +1335,7 @@ function validateRehabilitation(physio: SeasonPhysio, state: SeasonState, employ
     if (index < injuryPlan.skip) continue;
     const fixture = schedules.get(injury.fixtureId as string);
     if (!fixture || !players.has(injury.playerId as string) && !backgroundPlayer(fixture, injury.clubId as string, injury.playerId as string) || ![fixture.homeClubId, fixture.awayClubId].includes(injury.clubId as string) || !isInjuryKind(injury.kind)) fail(path, 'must identify a supported diagnosis and originating fixture');
-    if (!sameData(injury, createSeasonInjury(state.seed, fixture, injury.clubId as string, injury.playerId as string, injury.kind as SeasonInjury['kind'], state.injuries, medicalRecoveryPercent(state, injury.clubId as string, fixture.date)))) fail(path, 'must retain the original diagnosis and recovery date');
+    if (!sameData(injury, createSeasonInjury(state.seed, fixture, injury.clubId as string, injury.playerId as string, injury.kind as SeasonInjury['kind'], state.injuries, medicalRecoveryPercent(state, injury.clubId as string, fixture.date), state.injuryModel))) fail(path, 'must retain the original diagnosis and recovery date');
   }
   let replayed: SeasonPhysio = { ...physio, rehabilitation: [] };
   // Incremental checkpoint checks (`trusted-prefix.ts`): the weeks before the trusted checkpoint's week read only treatment
@@ -1338,16 +1402,21 @@ const FACILITY_ANCHOR_KEYS = ['seasonNumber', 'round', 'date', 'ledgerIndex', 'c
 function validateFacilitiesShape(value: unknown, state: SeasonState, version: number): SeasonFacilities {
   const funding = version >= 32;
   const maintenance = version >= 36;
-  // Format 71: new careers can finance projects with loans and leases (`loans-1`).
+  // Format 71: careers can finance projects with loans and leases (`loans-1`); format 74: the simple bank loan (`bank-1`).
   const financed = value !== null && typeof value === 'object' && Object.hasOwn(value, 'financing');
   const fields = record(value, 'facilities', ['model', 'enabledSince', 'delegated', 'projects', 'events', ...(funding ? ['fundingSince'] : []), ...(maintenance ? ['maintenanceSince'] : []), ...(financed ? ['financing', 'debts'] : [])]);
-  if (financed && (fields.financing !== 'loans-1' || !Array.isArray(fields.debts) || fields.debts.length > 20_000)) fail('facilities.debts', 'must retain a bounded loan and lease history of the supported financing model');
-  if (fields.model !== 'facilities-1' && fields.model !== 'facilities-2') fail('facilities.model', 'is unsupported');
+  if (financed && (fields.financing !== 'loans-1' && fields.financing !== 'bank-1' || !Array.isArray(fields.debts) || fields.debts.length > 20_000)) fail('facilities.debts', 'must retain a bounded loan and lease history of the supported financing model');
+  if (fields.model !== 'facilities-1' && fields.model !== 'facilities-2' && fields.model !== 'facilities-3') fail('facilities.model', 'is unsupported');
   // Format 65: medical and scouting facilities, seasonal wear and repairs (`facilities-2`) belong to new careers only.
   if (fields.model === 'facilities-2' && version < 65) fail('facilities.model', 'requires format 65 or later');
   if (financed && version < 71) fail('facilities.financing', 'requires format 71 or later');
+  // Format 74 (owner request, 16 November 2026): six named levels, arena seats and the simple bank loan go together.
+  // The format guard names the format the six-level model shipped with.
+  const six = fields.model === 'facilities-3', bank = fields.financing === 'bank-1';
+  if (six && version < SIX_LEVEL_FORMAT) fail('facilities.model', `requires format ${SIX_LEVEL_FORMAT} or later`);
+  if (six !== bank) fail('facilities.financing', 'must pair six facility levels with the simple bank loan');
   const repairs = fields.model === 'facilities-2';
-  const { fundingSince: _fundingDefault, maintenanceSince: _maintenanceDefault, ...legacyDefaults } = createFacilities(clubsEverInFullWorld(state, state.seasonNumber), state.managedClubId, fields.model as SeasonFacilities['model'], financed ? 'loans-1' : undefined);
+  const { fundingSince: _fundingDefault, maintenanceSince: _maintenanceDefault, ...legacyDefaults } = createFacilities(clubsEverInFullWorld(state, state.seasonNumber), state.managedClubId, fields.model as SeasonFacilities['model'], financed ? fields.financing as SeasonFacilities['financing'] : undefined);
   const defaults = { ...legacyDefaults, ...(funding ? { fundingSince: null } : {}), ...(maintenance ? { maintenanceSince: null } : {}) };
   const policies = record(fields.delegated, 'facilities.delegated', clubsEverInFullWorld(state, state.seasonNumber).map(club => club.id));
   for (const [id, policy] of Object.entries(policies)) if (typeof policy !== 'boolean') fail(`facilities.delegated.${id}`, 'must be boolean');
@@ -1405,20 +1474,28 @@ function validateFacilitiesShape(value: unknown, state: SeasonState, version: nu
     if (index < eventPlan.skip) { const event = raw as FacilityEvent; previous = Object.fromEntries(FACILITY_ANCHOR_KEYS.map(key => [key, event[key]])) as unknown as FacilityAnchor; continue; }
     const path = `facilities.events[${index}]`, type = raw && typeof raw === 'object' ? raw.type : undefined;
     const fundsRepair = repairs && type === 'funding' && Object.hasOwn(raw, 'project');
-    const extra = type === 'start' || type === 'repair' && repairs ? ['projectId', 'clubId', 'facilityType'] : type === 'cancel' ? ['projectId'] : type === 'delegate' ? ['clubId', 'delegated'] : type === 'process' ? [] : type === 'maintenance' && maintenance ? ['clubId', 'plan'] : type === 'funding' && funding ? ['clubId', 'facilityType', 'amount', 'mode', 'approved', 'confidence', 'requiredConfidence', 'capitalRemaining', ...(fundsRepair ? ['project'] : [])]
+    // Format 74: an arena start names the seats it adds; there are no repairs, upkeep plans, board capital or leases.
+    const expansion = six && type === 'start' && raw.facilityType === 'arena';
+    const extra = type === 'start' ? ['projectId', 'clubId', 'facilityType', ...(expansion ? ['seats'] : [])] : type === 'repair' && repairs ? ['projectId', 'clubId', 'facilityType'] : type === 'cancel' ? ['projectId'] : type === 'delegate' ? ['clubId', 'delegated'] : type === 'process' ? [] : six ? type === 'borrow' ? ['debtId', 'clubId', 'principal', 'seasons', 'rateBasisPoints'] : type === 'repay' ? ['debtId'] : null
+      : type === 'maintenance' && maintenance ? ['clubId', 'plan'] : type === 'funding' && funding ? ['clubId', 'facilityType', 'amount', 'mode', 'approved', 'confidence', 'requiredConfidence', 'capitalRemaining', ...(fundsRepair ? ['project'] : [])]
       : !financed ? null : type === 'loan' ? ['debtId', 'clubId', 'facilityType', 'project', 'principal', 'seasons', 'rateBasisPoints'] : type === 'lease' ? ['debtId', 'projectId', 'clubId', 'facilityType', 'seasons'] : type === 'repay' || type === 'end-lease' ? ['debtId'] : null;
     if (!extra) fail(path, 'must identify a supported facilities decision');
     const event = record(raw, path, [...FACILITY_ANCHOR_KEYS, 'type', ...extra]);
     if (fundsRepair && event.project !== 'repair') fail(`${path}.project`, 'must name a repair');
-    if (Object.hasOwn(event, 'facilityType') && !(repairs ? ALL_FACILITY_TYPES : FACILITY_TYPES).includes(event.facilityType as FacilityType)) fail(`${path}.facilityType`, 'must name a facility of this career');
+    if (Object.hasOwn(event, 'facilityType') && !facilityTypes(fields as Pick<SeasonFacilities, 'model'>).includes(event.facilityType as FacilityType)) fail(`${path}.facilityType`, 'must name a facility of this career');
+    if (expansion && !FACILITY_RULES_3.expansionSeats.includes(event.seats as number)) fail(`${path}.seats`, 'must name a supported arena expansion size');
     const at = checkAnchor(Object.fromEntries(FACILITY_ANCHOR_KEYS.map(key => [key, event[key]])), path);
     if (at.date < previous.date || FACILITY_ANCHOR_KEYS.filter(key => !['seasonNumber', 'round', 'date'].includes(key)).some(key => at[key] < previous[key])) fail(path, 'must preserve chronological command and commitment prefixes');
     previous = at;
   }
   for (const [index, raw] of fields.projects.entries()) {
     const kind = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>).kind : undefined;
-    const lease = financed && kind === 'lease', repair = repairs && !lease && raw !== null && typeof raw === 'object' && Object.hasOwn(raw, 'kind');
-    const path = `facilities.projects[${index}]`, project = record(raw, path, ['id', 'clubId', 'type', 'fromLevel', 'toLevel', 'cost', 'startedOn', 'dueOn', 'completedOn', 'cancelledOn', 'startEventIndex', ...(repair ? ['kind', 'conditionBefore'] : []), ...(lease ? ['kind', ...(Object.hasOwn(raw, 'returnedOn') ? ['returnedOn'] : [])] : [])]);
+    const lease = financed && !six && kind === 'lease', repair = repairs && !lease && raw !== null && typeof raw === 'object' && Object.hasOwn(raw, 'kind');
+    // Format 74: an arena expansion keeps level 1 and records the seats it adds.
+    const expansion = six && raw !== null && typeof raw === 'object' && (raw as Record<string, unknown>).type === 'arena';
+    const path = `facilities.projects[${index}]`, project = record(raw, path, ['id', 'clubId', 'type', 'fromLevel', 'toLevel', 'cost', 'startedOn', 'dueOn', 'completedOn', 'cancelledOn', 'startEventIndex', ...(repair ? ['kind', 'conditionBefore'] : []), ...(lease ? ['kind', ...(Object.hasOwn(raw, 'returnedOn') ? ['returnedOn'] : [])] : []), ...(expansion ? ['kind', 'seats'] : [])]);
+    if (expansion && (project.kind !== 'expansion' || project.fromLevel !== 1 || project.toLevel !== 1 || !FACILITY_RULES_3.expansionSeats.includes(project.seats as number))) fail(path, 'must add a supported number of seats to the arena');
+    if (six && !expansion && (project.toLevel !== (project.fromLevel as number) + 1 || (project.toLevel as number) > facilityMaxLevel(fields as Pick<SeasonFacilities, 'model'>))) fail(path, 'must raise one facility by one level');
     if (lease && (project.toLevel !== (project.fromLevel as number) + 1 || project.cost !== 0 || project.dueOn !== project.startedOn || project.cancelledOn !== null || Object.hasOwn(project, 'returnedOn') && (typeof project.returnedOn !== 'string' || project.completedOn === null || project.returnedOn < (project.completedOn as string)))) fail(path, 'must install one leased level for nothing upfront, and hand it back only after it was installed');
     if (repair && (project.kind !== 'repair' || project.fromLevel !== project.toLevel)) fail(path, 'must restore condition at an unchanged level');
     if (repair) number(project.conditionBefore, `${path}.conditionBefore`, 0, 100);
@@ -1427,10 +1504,12 @@ function validateFacilitiesShape(value: unknown, state: SeasonState, version: nu
   }
   // Format 71: loan and lease terms; the command replay rebuilds each one exactly.
   if (financed) for (const [index, raw] of (fields.debts as unknown[]).entries()) {
-    const path = `facilities.debts[${index}]`, debt = record(raw, path, ['id', 'kind', 'clubId', 'projectId', 'facilityType', 'principal', 'rateBasisPoints', 'seasons', 'payment', 'total', 'seasonNumber', 'round', 'date', 'ledgerIndex', 'startEventIndex', 'settled']);
-    if (debt.id !== `facility-debt-${index + 1}` || (debt.kind !== 'loan' && debt.kind !== 'lease') || !FACILITY_FINANCING_RULES.termSeasons.includes(debt.seasons as number)) fail(path, 'must retain sequential loan and lease terms');
+    // Format 74: a bank loan is tied to no project or facility.
+    const path = `facilities.debts[${index}]`, debt = record(raw, path, ['id', 'kind', 'clubId', ...(bank ? [] : ['projectId', 'facilityType']), 'principal', 'rateBasisPoints', 'seasons', 'payment', 'total', 'seasonNumber', 'round', 'date', 'ledgerIndex', 'startEventIndex', 'settled']);
+    const terms = bank ? BANK_LOAN_RULES.termSeasons : FACILITY_FINANCING_RULES.termSeasons;
+    if (debt.id !== `facility-debt-${index + 1}` || (bank ? debt.kind !== 'bank' : debt.kind !== 'loan' && debt.kind !== 'lease') || !terms.includes(debt.seasons as number)) fail(path, 'must retain sequential loan and lease terms');
     for (const key of ['principal', 'payment', 'total', 'ledgerIndex', 'startEventIndex', 'rateBasisPoints'] as const) number(debt[key], `${path}.${key}`, 0, Number.MAX_SAFE_INTEGER);
-    if (debt.kind === 'loan' && (debt.rateBasisPoints as number) > FACILITY_FINANCING_RULES.maxRateBasisPoints || debt.kind === 'lease' && debt.rateBasisPoints !== 0) fail(`${path}.rateBasisPoints`, 'must be a supported rate');
+    if (debt.kind !== 'lease' && (debt.rateBasisPoints as number) > FACILITY_FINANCING_RULES.maxRateBasisPoints || debt.kind === 'lease' && debt.rateBasisPoints !== 0) fail(`${path}.rateBasisPoints`, 'must be a supported rate');
     if (debt.settled !== null) {
       const settled = record(debt.settled, `${path}.settled`, ['seasonNumber', 'round', 'date', 'ledgerIndex', 'amount']);
       number(settled.amount, `${path}.settled.amount`, 0, Number.MAX_SAFE_INTEGER);
@@ -1447,6 +1526,18 @@ interface MarketReplaySnapshot { eventCount: number; seasonNumber: number; marke
  */
 const facilityProjectOf = (entry: FinanceEntry, facilities: SeasonFacilities): string | null => entry.kind === 'facility' ? entry.sourceId : entry.kind === 'board-capital' ? entry.boardCapital?.projectId ?? null
   : (entry.kind === 'loan' || entry.kind === 'lease') && entry.debt?.payment === 'start' ? facilities.debts?.find(debt => debt.id === entry.debt!.debtId)?.projectId ?? null : null;
+
+/**
+ * The facilities command that booked a payment, as its event index: a project's start (its cost, board capital or the
+ * loan or lease for it), or a bank loan received (format 74, tied to no project). Null for any other entry.
+ */
+function facilityCommandOf(entry: FinanceEntry, facilities: SeasonFacilities): number | null {
+  const projectId = facilityProjectOf(entry, facilities);
+  if (projectId !== null) return facilities.projects.find(project => project.id === projectId)?.startEventIndex ?? null;
+  if (entry.kind !== 'loan' || entry.debt?.payment !== 'start') return null;
+  const debt = facilities.debts?.find(item => item.id === entry.debt!.debtId);
+  return debt?.kind === 'bank' ? debt.startEventIndex : null;
+}
 
 /** A command may share a date with later completion/cancellation; counters disambiguate that history. */
 function facilitiesAtPrefix(state: SeasonState, date: string, ledgerIndex: number, contractCount: number, negotiationCount: number, recruitmentEventCount: number, marketEventCount: number): SeasonFacilities {
@@ -1507,7 +1598,7 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
     let replay: SeasonState = { ...state, managedClubId: managedClubAtLedger(state, event.ledgerIndex), training, seasonNumber: year, round, date: event.date, status: round === seasonRounds(state) && ledger.some(entry => entry.seasonNumber === year && entry.round === seasonRounds(state) && entry.kind === 'operations') ? 'complete' : 'active', clubs, academy, lifecycle, employment, facilities, finance, payroll, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, event.negotiationCount) }, recruitment: { ...state.recruitment, events: state.recruitment.events.slice(0, event.recruitmentEventCount), offers: live }, market };
     if (event.ledgerIndex < previousLedger) fail(path, 'cannot rewind cash after a funded approval');
     for (const [i, command] of state.recruitment.events.entries()) {
-      const nextLedger = event.ledgerIndex + Number(['start', 'repair', 'loan', 'lease', 'repay', 'end-lease'].includes(event.type));
+      const nextLedger = event.ledgerIndex + Number(['start', 'repair', 'loan', 'lease', 'repay', 'end-lease', 'borrow'].includes(event.type));
       if (i < event.recruitmentEventCount ? command.ledgerIndexBefore > event.ledgerIndex : command.ledgerIndexBefore < nextLedger) fail(path, 'must preserve the cash ordering of the recorded recruitment prefix and project payment');
     }
     if (event.type === 'process' && event.date === dateForRound(round, year)) {
@@ -1537,7 +1628,9 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
   }
 }
 
-function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 30, context: CareerPlayerContext & Partial<Pick<SeasonState, 'seed' | 'career' | 'board'>> = {}): SeasonEmployment {
+function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 30, context: CareerPlayerContext & Partial<Pick<SeasonState, 'seed' | 'career' | 'board' | 'relationships'>> & { wagePool?: boolean } = {}): SeasonEmployment {
+  // Format 75 ('coaching-3'): player wages may also use the unused staff budget; a basic bound (development mode).
+  const pooledStaffRoom = (clubId: string, year: number): number => context.wagePool ? staffAllocationCeiling(context, clubId, year) : 0;
   const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market', ...(version >= 15 ? ['transfers'] : []), ...(version >= 17 ? ['buyouts'] : []), ...(version >= 55 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'departures') ? ['departures'] : [])]);
   const rawTransfers = version >= 15 ? fields.transfers : [];
   if (!Array.isArray(rawTransfers) || rawTransfers.length > 20_000) fail('employment.transfers', 'must retain at most 20000 completed transfers');
@@ -1586,7 +1679,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     if (typeof transfer.offerId !== 'string' || typeof transfer.contractId !== 'string' || !Array.isArray(transfer.releasedContractIds) || !transfer.releasedContractIds.length || transfer.releasedContractIds.some(id => typeof id !== 'string') || new Set(transfer.releasedContractIds).size !== transfer.releasedContractIds.length) fail(path, 'must identify its offer, new contract and distinct released terms');
     const fee = number(transfer.fee, `${path}.fee`, 100_000, maxTransferFee(context));
     if (fee % 100_000 !== 0) fail(`${path}.fee`, 'must use whole thousand-euro steps');
-    if (Object.hasOwn(transfer, 'mode') && transfer.mode !== 'release-clause') fail(`${path}.mode`, 'must identify an explicit release-clause transfer');
+    if (Object.hasOwn(transfer, 'mode') && transfer.mode !== 'release-clause' && !(transfer.mode === 'loan' && version >= 78 && midseason && transfer.paymentPlan === 'upfront')) fail(`${path}.mode`, 'must identify an explicit release-clause transfer');
     if (transfer.mode === 'release-clause' && transfer.paymentPlan !== 'upfront') fail(`${path}.paymentPlan`, 'must settle an activated release clause fully upfront');
     if (version >= 16) {
       if (!['upfront', 'two-payments', 'three-payments'].includes(transfer.paymentPlan as string)) fail(`${path}.paymentPlan`, 'must identify a supported payment schedule');
@@ -1677,7 +1770,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
   for (const [index, value] of fields.contracts.entries()) {
     if (index < contractPlan.skip) { const trusted = value as EmploymentContract; previousBoundary = roundKey(trusted.signedSeason, trusted.signedRound); validated.push(trusted); continue; }
     const path = `employment.contracts[${index}]`;
-    const raw = record(value, path, ['id', 'playerId', 'clubId', 'startsSeason', 'endsSeason', 'seasonWage', 'signedSeason', 'signedRound', 'kind', ...(version >= 18 ? ['startsRound'] : []), ...optionalClauseKeys(value, version, ['releaseFee'])]);
+    const raw = record(value, path, ['id', 'playerId', 'clubId', 'startsSeason', 'endsSeason', 'seasonWage', 'signedSeason', 'signedRound', 'kind', ...(version >= 18 ? ['startsRound'] : []), ...optionalClauseKeys(value, version, ['releaseFee']), ...roleKeys(value, context)]);
     const entry = version < 18 ? { ...raw, startsRound: 1 } : raw;
     if (entry.id !== `employment-contract-${index + 1}`) fail(`${path}.id`, 'must use sequential contract identities');
     const player = catalogById.get(entry.playerId as string)?.player;
@@ -1693,11 +1786,13 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     const startsRound = number(entry.startsRound, `${path}.startsRound`, 1, seasonRounds(context));
     const midseason = entry.kind === 'midseason' || entry.kind === 'midseason-transfer';
     if (!midseason && startsRound !== 1) fail(`${path}.startsRound`, 'must preserve opening-day registration for ordinary contracts');
-    const seasonWage = number(entry.seasonWage, `${path}.seasonWage`, getCareerWage(context, player.id), maxContractWage(context));
+    validateOptionalRole(entry, path);
+    // relationships-3: a smaller role offered lowers the player's demand (`SQUAD_ROLE_RULES.contracts`).
+    const seasonWage = number(entry.seasonWage, `${path}.seasonWage`, roleWage(getCareerWage(context, player.id), entry.role as EmploymentContract['role'], context), maxContractWage(context));
     if (seasonWage % WAGE_STEP !== 0) fail(`${path}.seasonWage`, 'must use supported wage increments');
     validateOptionalReleaseFee(entry, path, context);
     if (index < catalog.length) {
-      if (Object.hasOwn(entry, 'releaseFee')) fail(`${path}.releaseFee`, 'cannot add an unnegotiated clause to the opening contract');
+      if (Object.hasOwn(entry, 'releaseFee') || Object.hasOwn(entry, 'role')) fail(`${path}.releaseFee`, 'cannot add an unnegotiated clause or role to the opening contract');
       const expected = catalog[index]!;
       if (entry.kind !== 'initial' || entry.playerId !== expected.player.id || entry.clubId !== expected.clubId || startsSeason !== firstYear || endsSeason !== firstYear + (worldOf(context).playerContracts?.[player.id] ?? 1) - 1 || signedSeason !== firstYear || signedRound !== firstRound || seasonWage !== wages[player.id]) fail(path, 'must preserve the opening squad and initial terms at activation');
     } else {
@@ -1741,7 +1836,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
       const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
       // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow.
-      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)) + pooledStaffRoom(entry.clubId as string, year)) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
   }
   const employment = normalized;
@@ -1756,7 +1851,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     for (let at = 1; at <= (year === seasonNumber ? round : seasonRounds(context)); at += 1) {
       if (roundKey(year, at) < checkedBefore) continue;
       const registrations = effectiveContractsForRound(employment, year, at).filter(contract => contract.clubId === clubId);
-      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > Math.max(ceiling, seasonSalaryCeiling(context, clubId, year))) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
+      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > Math.max(ceiling, seasonSalaryCeiling(context, clubId, year)) + pooledStaffRoom(clubId, year)) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
     }
   }
   // Clubs leaving the full world sit out the window; joining clubs' squads sign at the rollover (step 3.4d-2).
@@ -1838,7 +1933,7 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
     // window's fees must not finance earlier proposals while replaying history.
     const beforePaymentIds = new Set(beforeTransfers.flatMap(transfer => transfer.payments.filter(payment => payment.paidOn <= openedOn).map(payment => payment.id)));
     const previousMarketEvents = windows.reduce((sum, item) => sum + item.events.length, 0);
-    const beforeLedger = state.finance.ledger.filter(entry => (entry.seasonNumber < year || entry.seasonNumber === year && (entry.kind !== 'buyout' && (entry.kind !== 'transfer' || beforePaymentIds.has(entry.sourceId)))) && (facilityProjectOf(entry, state.facilities) === null || state.facilities.events[state.facilities.projects.find(project => project.id === facilityProjectOf(entry, state.facilities))!.startEventIndex]!.marketEventCount <= previousMarketEvents));
+    const beforeLedger = state.finance.ledger.filter(entry => (entry.seasonNumber < year || entry.seasonNumber === year && (entry.kind !== 'buyout' && (entry.kind !== 'transfer' || beforePaymentIds.has(entry.sourceId)))) && (facilityCommandOf(entry, state.facilities) === null || state.facilities.events[facilityCommandOf(entry, state.facilities)!]!.marketEventCount <= previousMarketEvents));
     if (!sameData(beforeLedger, financeLedgerSlice(state.finance, 0, beforeLedger.length))) fail(path, 'must open after a contiguous financial history, before the transfer fees for this window');
     const employment = { ...state.employment, contracts: state.employment.contracts.slice(0, expectedContractCount), transfers: beforeTransfers.map(transfer => ({ ...transfer, payments: transfer.payments.filter(payment => beforePaymentIds.has(payment.id)) })), buyouts: beforeBuyouts, market: { seasonNumber: year + 1 } };
     const initialWindow: MarketWindow = { seasonNumber: year, openedOn, closesOn, date: openedOn, contractCountBefore: expectedContractCount, negotiationCountBefore: expectedNegotiationCount, closed: false, competitionFromEvent, events: [], offers: [] };
@@ -1855,10 +1950,11 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
       // may enter the next offer quote; later construction cannot finance or cancel an earlier bid.
       while (true) {
         const entry = financeLedgerEntry(state.finance, financeLedgerCount(replay.finance));
-        // Board capital precedes the upgrade it funds and follows the same project boundary.
-        if (!entry || facilityProjectOf(entry, state.facilities) === null) break;
-        const project = state.facilities.projects.find(project => project.id === facilityProjectOf(entry, state.facilities));
-        const event = project && state.facilities.events[project.startEventIndex];
+        // Board capital precedes the upgrade it funds and follows the same project boundary; a bank loan (format 74)
+        // follows its own command.
+        const command = entry ? facilityCommandOf(entry, state.facilities) : null;
+        if (!entry || command === null) break;
+        const event = state.facilities.events[command];
         if (!event || event.seasonNumber !== year || event.marketEventCount > count || event.date > date || event.contractCount > replay.employment.contracts.length || event.negotiationCount > replay.negotiations.records.length) break;
         const { id, ...charge } = entry;
         const finance = appendFinanceLedgerEntry(replay.finance, charge);
@@ -1874,13 +1970,14 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
       const eventPath = `${path}.events[${eventIndex}]`;
       if (!rawEvent || typeof rawEvent !== 'object' || Array.isArray(rawEvent)) fail(eventPath, 'must be a supported market command');
       const type = (rawEvent as Record<string, unknown>).type;
-      const event = record(rawEvent, eventPath, type === 'offer' ? ['type', 'id', 'date', 'clubId', 'playerId', 'seasonWage', 'seasons', ...(version >= 15 && Object.hasOwn(rawEvent, 'transferFee') ? ['transferFee'] : []), ...(version >= 16 && Object.hasOwn(rawEvent, 'transferPaymentPlan') ? ['transferPaymentPlan'] : []), ...optionalClauseKeys(rawEvent, version, ['releaseFee', 'transferMode'])] : type === 'withdraw' ? ['type', 'date', 'offerId'] : type === 'advance' ? ['type', 'date'] : version >= 15 && type === 'club-decision' ? ['type', 'date', 'offerId', 'response'] : version >= 17 && type === 'buyout' ? ['type', 'id', 'date', 'clubId', 'playerId'] : []);
+      const event = record(rawEvent, eventPath, type === 'offer' ? ['type', 'id', 'date', 'clubId', 'playerId', 'seasonWage', 'seasons', ...(version >= 15 && Object.hasOwn(rawEvent, 'transferFee') ? ['transferFee'] : []), ...(version >= 16 && Object.hasOwn(rawEvent, 'transferPaymentPlan') ? ['transferPaymentPlan'] : []), ...optionalClauseKeys(rawEvent, version, ['releaseFee', 'transferMode']), ...roleKeys(rawEvent, state)] : type === 'withdraw' ? ['type', 'date', 'offerId'] : type === 'advance' ? ['type', 'date'] : version >= 15 && type === 'club-decision' ? ['type', 'date', 'offerId', 'response'] : version >= 17 && type === 'buyout' ? ['type', 'id', 'date', 'clubId', 'playerId'] : []);
       if (!validDate(event.date, openedOn, closesOn)) fail(`${eventPath}.date`, 'must be a real date inside the recruitment window');
       if (type === 'offer') {
         if (typeof event.id !== 'string' || typeof event.clubId !== 'string' || typeof event.playerId !== 'string') fail(eventPath, 'must identify an offer, player and club');
         number(event.seasonWage, `${eventPath}.seasonWage`, MIN_CONTRACT_WAGE, maxContractWage(state));
         number(event.seasons, `${eventPath}.seasons`, 1, MAX_CONTRACT_SEASONS);
         validateOptionalReleaseFee(event, eventPath, state);
+        validateOptionalRole(event, eventPath);
         validateTransferMode(event, eventPath);
         if (Object.hasOwn(event, 'transferFee')) { const fee = number(event.transferFee, `${eventPath}.transferFee`, 100_000, maxTransferFee(state)); if (fee % 100_000) fail(`${eventPath}.transferFee`, 'must use thousand-euro steps'); }
         if (Object.hasOwn(event, 'transferPaymentPlan') && (!Object.hasOwn(event, 'transferFee') || !['upfront', 'two-payments', 'three-payments'].includes(event.transferPaymentPlan as string))) fail(`${eventPath}.transferPaymentPlan`, 'must identify a supported plan on a paid transfer offer');
@@ -1929,13 +2026,32 @@ function migrateRecruitmentTransfers(recruitment: SeasonRecruitment): SeasonRecr
   return { ...recruitment, transfersEnabledSince: null, offers: recruitment.offers.map(offer => ({ ...offer, seasons: 1, transfer: null })) };
 }
 
+/** Format 78: the manager's transfer and loan list (basic shape check; listings change no agreement). */
+function validateListings(value: unknown, state: SeasonState): void {
+  if (!Array.isArray(value) || value.length > 500) fail('recruitment.listings', 'must hold a bounded list');
+  const clubIds = new Set(state.clubs.map(club => club.id)), seen = new Set<string>();
+  for (const [index, raw] of value.entries()) {
+    const path = `recruitment.listings[${index}]`, listing = record(raw, path, ['clubId', 'playerId', 'transfer', 'loan', 'askingFee', 'listedOn']);
+    if (typeof listing.clubId !== 'string' || !clubIds.has(listing.clubId) || typeof listing.playerId !== 'string' || seen.has(`${listing.clubId}:${listing.playerId}`)) fail(path, 'must identify one player of a club once');
+    seen.add(`${listing.clubId}:${listing.playerId}`);
+    if (typeof listing.transfer !== 'boolean' || typeof listing.loan !== 'boolean' || !listing.transfer && !listing.loan) fail(path, 'must list the player for a transfer, a loan or both');
+    const fee = number(listing.askingFee, `${path}.askingFee`, 100_000, maxTransferFee(state));
+    if (fee % 100_000) fail(`${path}.askingFee`, 'must use whole thousand-euro steps');
+    if (typeof listing.listedOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(listing.listedOn) || listing.listedOn > state.date || !Number.isFinite(Date.parse(`${listing.listedOn}T00:00:00Z`))) fail(`${path}.listedOn`, 'must be a real date up to today');
+  }
+}
+
 /** Commands are replayed against the exact cash and ownership prefix available when issued. */
 function validateRecruitment(value: unknown, state: SeasonState, version: number): RecruitmentHolds[] {
-  const original = record(value, 'recruitment', ['model', 'enabledSince', 'events', 'offers', ...(version >= 19 ? ['transfersEnabledSince'] : [])]);
+  // Format 78 (`recruitment-2`): the transfer and loan list, bids for the manager's players and loans.
+  const listed = value !== null && typeof value === 'object' && (value as Record<string, unknown>).model === 'recruitment-2';
+  if (listed && version < 78) fail('recruitment.model', 'requires format 78 or later');
+  const original = record(value, 'recruitment', ['model', 'enabledSince', 'events', 'offers', ...(version >= 19 ? ['transfersEnabledSince'] : []), ...(listed ? ['listings'] : [])]);
   const fields = version >= 19 ? original : { ...original, transfersEnabledSince: null, offers: Array.isArray(original.offers) ? original.offers.map(offer => ({ ...offer, seasons: 1, transfer: null })) : original.offers };
-  if (fields.model !== 'recruitment-1' || !Array.isArray(fields.events) || fields.events.length > 20_000 || !Array.isArray(fields.offers) || fields.offers.length > fields.events.length) fail('recruitment', 'must retain a supported bounded command journal');
+  if (listed) validateListings(original.listings, state);
+  if (fields.model !== 'recruitment-1' && !listed || !Array.isArray(fields.events) || fields.events.length > 20_000 || !Array.isArray(fields.offers) || fields.offers.length > fields.events.length) fail('recruitment', 'must retain a supported bounded command journal');
   if (fields.enabledSince === null) {
-    if (!sameData(fields, createRecruitment()) || state.employment.contracts.some(contract => contract.kind === 'midseason' || contract.kind === 'midseason-transfer')) fail('recruitment', 'must retain no in-season commands or agreements while disabled');
+    if (!sameData(listed ? { ...fields, model: 'recruitment-1', listings: undefined } : fields, { ...createRecruitment(), ...(listed ? { listings: undefined } : {}) }) || state.employment.contracts.some(contract => contract.kind === 'midseason' || contract.kind === 'midseason-transfer')) fail('recruitment', 'must retain no in-season commands or agreements while disabled');
     return [];
   }
   const anchor = record(fields.enabledSince, 'recruitment.enabledSince', ['seasonNumber', 'round', 'ledgerIndex', 'contractCount', 'negotiationCount']);
@@ -1962,11 +2078,12 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
   };
   verifyPrefix(firstYear, firstRound, anchorLedger, anchorContracts, anchorNegotiations, 'recruitment.enabledSince');
   for (const [index, raw] of (original.offers as unknown[]).entries()) {
-    const offer = record(raw, `recruitment.offers[${index}]`, ['id', 'clubId', 'playerId', 'seasonNumber', 'offeredRound', 'responseRound', 'offeredOn', 'responseOn', 'seasonWage', 'remainingWages', 'status', 'respondedOn', 'closedOn', 'negotiationId', 'chosenOfferId', 'reason', ...(version >= 19 ? ['seasons', 'transfer'] : []), ...optionalClauseKeys(raw, version, ['releaseFee']), ...(version >= 25 && Object.hasOwn(raw as object, 'academyProspectId') ? ['academyProspectId'] : [])]);
+    const offer = record(raw, `recruitment.offers[${index}]`, ['id', 'clubId', 'playerId', 'seasonNumber', 'offeredRound', 'responseRound', 'offeredOn', 'responseOn', 'seasonWage', 'remainingWages', 'status', 'respondedOn', 'closedOn', 'negotiationId', 'chosenOfferId', 'reason', ...(version >= 19 ? ['seasons', 'transfer'] : []), ...optionalClauseKeys(raw, version, ['releaseFee']), ...roleKeys(raw, state), ...(version >= 25 && Object.hasOwn(raw as object, 'academyProspectId') ? ['academyProspectId'] : [])]);
+    validateOptionalRole(offer, `recruitment.offers[${index}]`);
     if (version >= 19 && offer.transfer !== null) record(offer.transfer, `recruitment.offers[${index}].transfer`, ['sellerClubId', 'contractId', 'fee', 'paymentPlan', 'requiredFee', 'clubStatus', 'clubResponseOn', 'clubRespondedOn', 'clubReason', 'counterFee', ...optionalClauseKeys(offer.transfer, version, ['mode'])]);
   }
   if (fields.transfersEnabledSince !== null) record(fields.transfersEnabledSince, 'recruitment.transfersEnabledSince', ['seasonNumber', 'round', 'ledgerIndex', 'contractCount', 'negotiationCount']);
-  let recruitment: SeasonRecruitment = { model: 'recruitment-1', enabledSince: { seasonNumber: firstYear, round: firstRound, ledgerIndex: anchorLedger, contractCount: anchorContracts, negotiationCount: anchorNegotiations }, transfersEnabledSince: null, events: [], offers: [] };
+  let recruitment: SeasonRecruitment = { model: listed ? 'recruitment-2' : 'recruitment-1', ...(listed ? { listings: original.listings as SeasonRecruitment['listings'] } : {}), enabledSince: { seasonNumber: firstYear, round: firstRound, ledgerIndex: anchorLedger, contractCount: anchorContracts, negotiationCount: anchorNegotiations }, transfersEnabledSince: null, events: [], offers: [] };
   let boundary = firstBoundary, previousLedger = anchorLedger, previousContracts = anchorContracts, previousNegotiations = anchorNegotiations;
   let holds: RecruitmentHolds[] = [];
   const generatedContracts = new Set<string>(), generatedResponses = new Set<string>(), generatedTransfers = new Set<string>();
@@ -1988,9 +2105,9 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     if (index === plan.record) rememberReplay();
     const path = `recruitment.events[${index}]`;
     const type = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).type : undefined;
-    const event = record(raw, path, ['type', 'seasonNumber', 'round', 'date', 'ledgerIndexBefore', 'contractCountBefore', 'negotiationCountBefore', ...(type === 'offer' ? ['id', 'clubId', 'playerId', 'seasonWage', ...(version >= 19 ? ['seasons', 'transferFee', 'transferPaymentPlan'].filter(key => Object.hasOwn(raw as object, key)) : []), ...optionalClauseKeys(raw, version, ['releaseFee', 'transferMode']), ...(version >= 25 && Object.hasOwn(raw as object, 'academyProspectId') ? ['academyProspectId'] : [])] : type === 'withdraw' ? ['offerId'] : version >= 19 && type === 'club-decision' ? ['offerId', 'response'] : [])]);
+    const event = record(raw, path, ['type', 'seasonNumber', 'round', 'date', 'ledgerIndexBefore', 'contractCountBefore', 'negotiationCountBefore', ...(type === 'offer' ? ['id', 'clubId', 'playerId', 'seasonWage', ...(version >= 19 ? ['seasons', 'transferFee', 'transferPaymentPlan'].filter(key => Object.hasOwn(raw as object, key)) : []), ...optionalClauseKeys(raw, version, ['releaseFee', 'transferMode']), ...roleKeys(raw, state), ...(version >= 25 && Object.hasOwn(raw as object, 'academyProspectId') ? ['academyProspectId'] : [])] : type === 'withdraw' ? ['offerId'] : version >= 19 && type === 'club-decision' ? ['offerId', 'response'] : [])]);
     if (!['offer', 'withdraw', 'resolve', ...(version >= 19 ? ['enable-transfers', 'club-decision'] : [])].includes(type as string)) fail(`${path}.type`, 'must identify a supported in-season command');
-    if (type === 'offer') { validateOptionalReleaseFee(event, path, state); validateTransferMode(event, path); }
+    if (type === 'offer') { validateOptionalReleaseFee(event, path, state); validateOptionalRole(event, path); validateTransferMode(event, path, listed); }
     const year = number(event.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber), round = number(event.round, `${path}.round`, 1, year === state.seasonNumber ? state.round : seasonRounds(state));
     const eventBoundary = roundOrdinal(year, round, seasonRounds(state));
     if (eventBoundary !== boundary + (type === 'resolve' ? 1 : 0) || event.date !== dateForRound(round, year)) fail(path, 'must process each successive matchday before new commands at that boundary');
@@ -2061,7 +2178,7 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
   }
   let prefix = contracts.slice(0, contractCount);
   const entries: SeasonNegotiations['records'] = [];
-  const conversations = new Map<string, { offeredWage: number; offeredSeasons: number; releaseFee?: number; boundary: number; date: string }>();
+  const conversations = new Map<string, { offeredWage: number; offeredSeasons: number; releaseFee?: number; role?: unknown; boundary: number; date: string }>();
   let previousBoundary = roundKey(firstYear, firstRound) * 2;
   let previousDate = dateForRound(firstRound, firstYear);
   // Incremental checkpoint checks (`trusted-prefix.ts`): offers made before the trusted checkpoint's week are unchanged and
@@ -2079,7 +2196,7 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
       continue;
     }
     const path = `negotiations.records[${index}]`;
-    const entry = record(value, path, ['id', 'clubId', 'playerId', 'seasonNumber', 'round', 'date', 'status', 'startsSeason', 'offeredWage', 'offeredSeasons', 'outcome', 'reason', 'requiredWage', 'counterOffer', 'alternativeOffer', 'contractId', 'contractCountBefore', ...optionalClauseKeys(value, version, ['releaseFee'])]);
+    const entry = record(value, path, ['id', 'clubId', 'playerId', 'seasonNumber', 'round', 'date', 'status', 'startsSeason', 'offeredWage', 'offeredSeasons', 'outcome', 'reason', 'requiredWage', 'counterOffer', 'alternativeOffer', 'contractId', 'contractCountBefore', ...optionalClauseKeys(value, version, ['releaseFee']), ...roleKeys(value, state)]);
     if (entry.id !== `negotiation-${index + 1}`) fail(`${path}.id`, 'must use sequential negotiation identities');
     if (typeof entry.clubId !== 'string' || !inFullWorld(state, entry.clubId, entry.seasonNumber)) fail(`${path}.clubId`, 'must identify a club in this league');
     if (typeof entry.playerId !== 'string') fail(`${path}.playerId`, 'must identify an existing career player');
@@ -2104,8 +2221,10 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
     const offeredSeasons = number(entry.offeredSeasons, `${path}.offeredSeasons`, 1, inSeasonOffer ? Math.min(MAX_CONTRACT_SEASONS, MAX_SEASON_NUMBER - year + 1) : Math.min(MAX_CONTRACT_SEASONS, MAX_SEASON_NUMBER - year));
     validateOptionalReleaseFee(entry, path, state);
     const releaseFee = entry.releaseFee as number | undefined;
+    validateOptionalRole(entry, path);
+    const role = entry.role as EmploymentContract['role'];
     const conversation = `${entry.clubId}/${entry.playerId}/${entry.startsSeason}`, previous = conversations.get(conversation);
-    if (previous?.offeredWage === offeredWage && previous.offeredSeasons === offeredSeasons && previous.releaseFee === releaseFee && previous.boundary === boundary && previous.date === entry.date) fail(path, 'duplicates the unchanged latest offer in this negotiation at this boundary');
+    if (previous?.offeredWage === offeredWage && previous.offeredSeasons === offeredSeasons && previous.releaseFee === releaseFee && previous.role === role && previous.boundary === boundary && previous.date === entry.date) fail(path, 'duplicates the unchanged latest offer in this negotiation at this boundary');
     if (entry.contractCountBefore !== prefix.length) fail(`${path}.contractCountBefore`, 'must identify the complete employment history when this offer was submitted');
     const replay: SeasonState = {
       ...state, managedClubId: entry.status === 'complete' ? managedClubFor(state, year, true) : managedClubAtRound(state, year, round), academy: academyAtBoundary(state.academy, year, round, prefix.length), lifecycle: lifecycleAtBoundary(state.lifecycle, year, round, prefix.length, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, index), seasonNumber: year, round, date: entry.date as string, status: entry.status,
@@ -2115,17 +2234,19 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
       recruitment: { ...createRecruitment(), offers: recruitmentHolds.filter(hold => hold.negotiationCount <= index && (hold.seasonNumber < year || hold.seasonNumber === year && hold.round <= round)).at(-1)?.offers ?? [] },
     };
     replay.clubs = getContractedClubsForRound(replay, year, round);
-    const quote = quotePlayerContract(replay, entry.playerId, offeredWage, offeredSeasons, entry.clubId, undefined, undefined, 'upfront', releaseFee === undefined ? {} : { releaseFee });
+    // A dated offseason reply keeps the role checked when the offer was made (the market replay checks it there).
+    const quote = quotePlayerContract(replay, entry.playerId, offeredWage, offeredSeasons, entry.clubId, undefined, undefined, 'upfront', { ...(releaseFee === undefined ? {} : { releaseFee }), ...(role === undefined || linkedOffer ? {} : { role }) });
     if (!inSeasonOffer && !linkedOffer?.transfer && !quote.canOffer) fail(path, 'must satisfy ownership, signing-window, overlap, roster and budget rules when submitted');
-    const expected = evaluateNegotiation(entry.playerId, offeredWage, offeredSeasons, releaseFee, replay);
+    if (contractRolesApply(state) && role === undefined) fail(`${path}.role`, 'must record the squad role offered with these terms');
+    const expected = evaluateNegotiation(entry.playerId, offeredWage, offeredSeasons, releaseFee, replay, role);
     const decision = { outcome: entry.outcome, reason: entry.reason, requiredWage: entry.requiredWage, counterOffer: entry.counterOffer, alternativeOffer: entry.alternativeOffer };
     if (!sameData(decision, expected)) fail(path, 'must preserve the canonical player response and offered alternatives');
     if (entry.outcome === 'accepted') {
       const contract = contracts[prefix.length];
-      if (!contract || entry.contractId !== contract.id || contract.playerId !== entry.playerId || contract.clubId !== entry.clubId || contract.signedSeason !== year || contract.signedRound !== round || contract.startsSeason !== entry.startsSeason || contract.endsSeason !== (entry.startsSeason as number) + offeredSeasons - 1 || contract.seasonWage !== offeredWage || contract.releaseFee !== releaseFee) fail(`${path}.contractId`, 'must identify the next employment agreement with exactly the accepted terms');
+      if (!contract || entry.contractId !== contract.id || contract.playerId !== entry.playerId || contract.clubId !== entry.clubId || contract.signedSeason !== year || contract.signedRound !== round || contract.startsSeason !== entry.startsSeason || contract.endsSeason !== (entry.startsSeason as number) + offeredSeasons - 1 || contract.seasonWage !== offeredWage || contract.releaseFee !== releaseFee || contract.role !== role) fail(`${path}.contractId`, 'must identify the next employment agreement with exactly the accepted terms');
       prefix = [...prefix, contract];
     } else if (entry.contractId !== null) fail(`${path}.contractId`, 'cannot attach an employment agreement to an unaccepted offer');
-    conversations.set(conversation, { offeredWage, offeredSeasons, releaseFee, boundary, date: entry.date });
+    conversations.set(conversation, { offeredWage, offeredSeasons, releaseFee, role, boundary, date: entry.date });
     entries.push(entry as unknown as SeasonNegotiations['records'][number]);
   }
   while (contracts[prefix.length]?.kind === 'joined') prefix = [...prefix, contracts[prefix.length]!];
@@ -2136,9 +2257,11 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
 /** Reports preserve what was observed at a committed fixture, never current hidden ratings. */
 function validateScouting(value: unknown, state: SeasonState, version: number): SeasonScouting {
   const fields = record(value, 'scouting', ['model', 'enabledSince', 'clubs']);
-  if (fields.model !== 'scouting-1') fail('scouting.model', 'is unsupported');
+  // Format 78: the scouting network (`scouting-2`) keeps the scouting-1 records; only the manager's estimates differ.
+  if (fields.model === 'scouting-2' && version < 78) fail('scouting.model', 'requires format 78 or later');
+  if (fields.model !== 'scouting-1' && fields.model !== 'scouting-2') fail('scouting.model', 'is unsupported');
   if (fields.enabledSince === null) {
-    if (!sameData(fields, createScouting(state.clubs, state.managedClubId))) fail('scouting', 'must retain empty default scouting offices while disabled');
+    if (fields.model !== 'scouting-1' || !sameData(fields, createScouting(state.clubs, state.managedClubId))) fail('scouting', 'must retain empty default scouting offices while disabled');
     return fields as unknown as SeasonScouting;
   }
   const anchor = record(fields.enabledSince, 'scouting.enabledSince', ['seasonNumber', 'round']);
@@ -2169,7 +2292,7 @@ function validateScouting(value: unknown, state: SeasonState, version: number): 
     if (sealedReport) {
       const source = record(entry.observer, `${path}.observer`, ['contractId', 'scoutId', 'evidence']);
       if (source.contractId === null) { if (source.scoutId !== null || source.evidence !== 100) fail(`${path}.observer`, 'must preserve the baseline observation source and evidence'); return null; }
-      const contract = state.scouts.contracts.find(contract => contract.id === source.contractId), scout = SCOUT_DIRECTORY.find(scout => scout.id === source.scoutId);
+      const contract = state.scouts.contracts.find(contract => contract.id === source.contractId), scout = staffMember(SCOUT_DIRECTORY, source.scoutId);
       if (!contract || !scout || contract.scoutId !== scout.id || contract.clubId !== clubId || contract.seasonNumber !== year || contract.startedRound > round || source.evidence !== scoutEvidence(scout)) fail(`${path}.observer`, 'must preserve the appointed scout and catalog evidence');
       const mission = `${year}/${round}/${scout.id}`;
       if (scoutMissions.has(mission)) fail(`${path}.observer`, 'cannot assign one named scout to multiple players on the same matchday');
@@ -2186,7 +2309,7 @@ function validateScouting(value: unknown, state: SeasonState, version: number): 
       return null;
     }
     const contract = state.scouts.contracts.find(contract => contract.id === source.contractId);
-    const scout = SCOUT_DIRECTORY.find(scout => scout.id === source.scoutId);
+    const scout = staffMember(SCOUT_DIRECTORY, source.scoutId);
     if (!contract || !scout || contract.scoutId !== scout.id || contract.clubId !== clubId || contract.seasonNumber !== year || contract.startedRound > round || contract.hiredLedgerIndex >= assigned || source.evidence !== scoutEvidence(scout)) fail(`${path}.observer`, 'must preserve the appointed scout and catalog evidence at the actual assignment boundary');
     if (contract.releasedRound !== null && (contract.releasedRound < round || !completed || assigned >= contract.releasedLedgerIndex! || !commit || contract.releasedLedgerIndex! <= commit.last)) fail(`${path}.observer`, 'cannot retain work cancelled before the observation was completed');
     const mission = `${year}/${round}/${scout.id}`;
@@ -2488,8 +2611,9 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   // Format 71: each loan received (or lease agreed at no cost), every scheduled payment already due while the debt ran
   // and the club was in the full world, and any early settlement (the command replay checks its amount).
   for (const debt of version >= 71 ? facilities.debts ?? [] : []) {
-    const paymentKind = debt.kind === 'loan' ? 'loan-repayment' as const : 'lease' as const;
-    add({ clubId: debt.clubId, seasonNumber: debt.seasonNumber, round: debt.round, kind: debt.kind, sourceId: debtSourceId(debt.id, 'start'), amount: debt.kind === 'loan' ? debt.principal : 0, debt: { debtId: debt.id, payment: 'start' } });
+    // Format 74: a bank loan books like a facility loan.
+    const paymentKind = debt.kind === 'lease' ? 'lease' as const : 'loan-repayment' as const;
+    add({ clubId: debt.clubId, seasonNumber: debt.seasonNumber, round: debt.round, kind: debt.kind === 'lease' ? 'lease' : 'loan', sourceId: debtSourceId(debt.id, 'start'), amount: debt.kind === 'lease' ? 0 : debt.principal, debt: { debtId: debt.id, payment: 'start' } });
     for (const payment of debtSchedule(debt, seasonLength)) {
       if (roundKey(payment.seasonNumber, payment.round) > roundKey(seasonNumber, committedRound) || debt.settled && roundKey(payment.seasonNumber, payment.round) >= roundKey(debt.settled.seasonNumber, debt.settled.round) || !clubsIn(payment.seasonNumber).some(club => club.id === debt.clubId)) continue;
       add({ clubId: debt.clubId, seasonNumber: payment.seasonNumber, round: payment.round, kind: paymentKind, sourceId: debtSourceId(debt.id, payment.number), amount: -payment.amount, debt: { debtId: debt.id, payment: payment.number } });
@@ -2516,16 +2640,24 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   }
   const buyoutRecords = new Map((employment?.buyouts ?? []).map(buyout => [buyout.id, buyout]));
   for (const buyout of buyoutRecords.values()) add({ clubId: buyout.clubId, seasonNumber: buyout.seasonNumber, round: seasonLength, kind: 'buyout', sourceId: buyout.id, amount: -buyout.amount });
+  // Format 76 ('coaching-4'): appointments pay nothing up front (their entries keep amount 0); salaries are weekly.
+  const staffContracts = usesStaffContracts({ coaching });
+  const upfront = (year: number, clubId: string, fee: number) => staffContracts ? 0 : -staffFee(yearContext(year), clubId, fee);
+  const staffAppointments = new Map<string, number>(staffContracts ? [
+    ...scouts.contracts.map(contract => [`scouts/${contract.id}`, contract.hiredLedgerIndex] as const), ...fitness.contracts.map(contract => [`fitness/${contract.id}`, contract.hiredLedgerIndex] as const),
+    ...physio.contracts.map(contract => [`physio/${contract.id}`, contract.hiredLedgerIndex] as const), ...assistant.contracts.map(contract => [`assistant/${contract.id}`, contract.hiredLedgerIndex] as const),
+    ...youth.contracts.map(contract => [`youth/${contract.id}`, contract.hiredLedgerIndex] as const),
+  ] : []);
   const scoutContracts = new Map(scouts.contracts.map(contract => [contract.id, contract]));
-  for (const contract of scouts.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'scouting', sourceId: `scouting-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, SCOUT_DIRECTORY.find(scout => scout.id === contract.scoutId)!.fee) });
+  for (const contract of scouts.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'scouting', sourceId: `scouting-${contract.id}`, amount: upfront(contract.seasonNumber, contract.clubId, staffMember(SCOUT_DIRECTORY, contract.scoutId)!.fee) });
   const fitnessContracts = new Map(fitness.contracts.map(contract => [contract.id, contract]));
-  for (const contract of fitness.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'fitness', sourceId: `fitness-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, FITNESS_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee) });
+  for (const contract of fitness.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'fitness', sourceId: `fitness-${contract.id}`, amount: upfront(contract.seasonNumber, contract.clubId, staffMember(FITNESS_DIRECTORY, contract.coachId)!.fee) });
   const physioContracts = new Map(physio.contracts.map(contract => [contract.id, contract]));
-  for (const contract of physio.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'physio', sourceId: `physio-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, PHYSIO_DIRECTORY.find(coach => coach.id === contract.physioId)!.fee) });
+  for (const contract of physio.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'physio', sourceId: `physio-${contract.id}`, amount: upfront(contract.seasonNumber, contract.clubId, staffMember(PHYSIO_DIRECTORY, contract.physioId)!.fee) });
   const assistantContracts = new Map(assistant.contracts.map(contract => [contract.id, contract]));
-  for (const contract of assistant.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'assistant', sourceId: `assistant-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, ASSISTANT_DIRECTORY.find(coach => coach.id === contract.assistantId)!.fee) });
+  for (const contract of assistant.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'assistant', sourceId: `assistant-${contract.id}`, amount: upfront(contract.seasonNumber, contract.clubId, staffMember(ASSISTANT_DIRECTORY, contract.assistantId)!.fee) });
   const youthContracts = new Map(youth.contracts.map(contract => [contract.id, contract]));
-  for (const contract of youth.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'youth', sourceId: `youth-${contract.id}`, amount: -staffFee(yearContext(contract.seasonNumber), contract.clubId, YOUTH_COACH_DIRECTORY.find(coach => coach.id === contract.coachId)!.fee) });
+  for (const contract of youth.contracts) add({ clubId: contract.clubId, seasonNumber: contract.seasonNumber, round: contract.startedRound, kind: 'youth', sourceId: `youth-${contract.id}`, amount: upfront(contract.seasonNumber, contract.clubId, staffMember(YOUTH_COACH_DIRECTORY, contract.coachId)!.fee) });
 
   const wageGroups = new Map<string, PlayerWageAgreement[]>(), remainingWages = new Map<string, number>(), prepaid = new Set<string>();
   const wageGroup = (year: number, clubId: string) => `${year}/${clubId}`;
@@ -2555,12 +2687,43 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   }
 
   const seen = new Set<string>(), coachOrigins = new Set<string>(), feeTotals = new Map<string, number>(), financialCommitRounds = new Set<number>();
+  // Format 74 ('coaching-2'): a sacked person's fee stops counting against the staff budget from the release. Roles that
+  // keep a release boundary leave the totals at it; this season's coaches leave from their release round; coaches of
+  // completed seasons keep no release record, so their fees are checked one by one (a basic check, development mode).
+  const levelledStaff = usesClubLevelStaff({ coaching });
+  // Format 75 ('coaching-3'): staff fees may also use unused player salary budget; a basic bound (development mode).
+  const pooledSalaryRoom = (clubId: string, year: number): number => usesWagePool({ coaching }) ? seasonSalaryCeiling({ ...(worldContext as WorldContext), ...(board !== null && typeof board === 'object' ? { board: board as SeasonBoard } : {}) }, clubId, year) : 0;
+  const staffReleases = levelledStaff ? ([
+    ...scouts.contracts.map(contract => [contract, staffMember(SCOUT_DIRECTORY, contract.scoutId)?.fee] as const),
+    ...fitness.contracts.map(contract => [contract, staffMember(FITNESS_DIRECTORY, contract.coachId)?.fee] as const),
+    ...physio.contracts.map(contract => [contract, staffMember(PHYSIO_DIRECTORY, contract.physioId)?.fee] as const),
+    ...assistant.contracts.map(contract => [contract, staffMember(ASSISTANT_DIRECTORY, contract.assistantId)?.fee] as const),
+    ...youth.contracts.map(contract => [contract, staffMember(YOUTH_COACH_DIRECTORY, contract.coachId)?.fee] as const),
+  ] as const).flatMap(([contract, fee]) => contract.releasedLedgerIndex === null || fee === undefined ? [] : [{ at: contract.releasedLedgerIndex, key: `${contract.seasonNumber}/${contract.clubId}`, fee: staffFee(yearContext(contract.seasonNumber), contract.clubId, fee) }]).sort((left, right) => left.at - right.at) : [];
+  const releasedCoaches = levelledStaff ? coaching.contracts.filter(contract => contract.releasedRound !== null) : [];
+  const coachEntries = new Map<string, number>(), creditedCoaches = new Set<string>();
+  let releaseCursor = 0;
+  /** The staff fees counted against a club's season budget just before ledger entry `index`. */
+  const countedStaffFees = (feeKey: string, index: number, year: number, entryRound: number): number => {
+    if (!levelledStaff) return feeTotals.get(feeKey) ?? 0;
+    for (; releaseCursor < staffReleases.length && staffReleases[releaseCursor]!.at <= index; releaseCursor += 1) {
+      const release = staffReleases[releaseCursor]!;
+      feeTotals.set(release.key, (feeTotals.get(release.key) ?? 0) - release.fee);
+    }
+    if (year === seasonNumber) for (const contract of releasedCoaches) {
+      if (creditedCoaches.has(contract.id) || contract.releasedRound! > entryRound || (coachEntries.get(contract.id) ?? index) >= index) continue;
+      creditedCoaches.add(contract.id);
+      const key = `${year}/${contract.clubId}`;
+      feeTotals.set(key, (feeTotals.get(key) ?? 0) - staffFee(yearContext(year), contract.clubId, staffMember(COACH_DIRECTORY, contract.coachId)!.fee));
+    }
+    return feeTotals.get(feeKey) ?? 0;
+  };
   const paidTransferTotals = new Map<string, number>();
   const paidTransferCounts = new Map<string, number>();
   const currentContracts = new Map(coaching.contracts.map(contract => [contract.id, contract]));
   // Clubs that were in the full world at some point keep their ledgers (step 3.4d-2).
   const balances = new Map<string, FinanceBalance>((world ? [...fullWorldClubs(world), ...world.clubs.filter(club => (background?.exchanges ?? []).some(exchange => exchange.joining.includes(club.id)))] : clubs).map(club => [club.id, { cash: 0, unpaid: 0 }]));
-  const maximumContracts = clubs.length * Math.floor(COACHING_BUDGET / Math.min(...DEVELOPMENT_COACHES.map(coach => coach.fee)));
+  const maximumContracts = maximumCoachingContracts(clubs.length, usesClubLevelStaff({ coaching }));
   let previousDate = roundKey(firstYear, firstRound), entryYear = firstYear, yearIndex = 0;
   const operatingClubs = new Set<string>();
   let payrollStarted = false;
@@ -2583,7 +2746,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     }
     if (calendar !== previousDate) { operatingClubs.clear(); payrollStarted = false; }
     previousDate = calendar;
-    if (!['opening', 'sponsor', 'operations', 'tickets', 'coaching', ...(version >= 21 ? ['scouting'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['youth'] : []), ...(version >= 28 ? ['facility', 'facility-upkeep'] : []), ...(version >= 32 ? ['board-capital'] : []), ...(version >= 64 ? ['naming-rights', 'sponsor-exit'] : []), ...(version >= 71 ? ['loan', 'loan-repayment', 'lease'] : []), ...(payroll ? ['payroll'] : []), ...(employment?.transfers ? ['transfer'] : []), ...(employment?.buyouts ? ['buyout'] : [])].includes(entry.kind as string)) fail(`${path}.kind`, 'is unsupported');
+    if (!['opening', 'sponsor', 'operations', 'tickets', 'coaching', ...(version >= 21 ? ['scouting'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['youth'] : []), ...(version >= 28 ? ['facility', 'facility-upkeep'] : []), ...(version >= 32 ? ['board-capital'] : []), ...(version >= 64 ? ['naming-rights', 'sponsor-exit'] : []), ...(version >= 71 ? ['loan', 'loan-repayment', 'lease'] : []), ...(staffContracts ? ['staff-wages', 'staff-compensation'] : []), ...(payroll ? ['payroll'] : []), ...(employment?.transfers ? ['transfer'] : []), ...(employment?.buyouts ? ['buyout'] : [])].includes(entry.kind as string)) fail(`${path}.kind`, 'is unsupported');
     const kind = entry.kind as FinanceEntry['kind'];
     if (kind !== 'scouting' && Object.hasOwn(entry, 'scout')) fail(`${path}.scout`, 'must be absent from other financial events');
     if (kind !== 'fitness' && Object.hasOwn(entry, 'fitness')) fail(`${path}.fitness`, 'must be absent from other financial events');
@@ -2619,7 +2782,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     if (kind === 'tickets' || kind === 'operations') financialCommitRounds.add(calendar);
     if (payroll && kind !== 'payroll' && entry.payroll !== null) fail(`${path}.payroll`, 'must be empty for non-payroll events');
     if (kind === 'facility-upkeep' && index < ledgerPlan.skip && calendar < upkeepCheckedBefore) {
-      record(entry.facilityUpkeep, `${path}.facilityUpkeep`, ['arena', 'training', 'youth', ...(facilities.model === 'facilities-2' ? ['medical', 'scouting'] : [])]);
+      record(entry.facilityUpkeep, `${path}.facilityUpkeep`, ['arena', 'training', 'youth', ...(facilities.model !== 'facilities-1' ? ['medical', 'scouting'] : [])]);
     } else if (kind === 'facility' || kind === 'facility-upkeep') {
       if (entry.ticket !== null || entry.coach !== null) fail(path, 'must not mix facilities and unrelated payment details');
       const expected = required.get(key);
@@ -2629,7 +2792,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
         const project = facilities.projects.find(project => project.id === details.projectId);
         if (!project || project.type !== details.type || project.id !== entry.sourceId || facilities.events[project.startEventIndex]?.ledgerIndex !== index) fail(path, 'must charge the exact project at its approval boundary');
       } else {
-        const details = record(entry.facilityUpkeep, `${path}.facilityUpkeep`, ['arena', 'training', 'youth', ...(facilities.model === 'facilities-2' ? ['medical', 'scouting'] : [])]);
+        const details = record(entry.facilityUpkeep, `${path}.facilityUpkeep`, ['arena', 'training', 'youth', ...(facilities.model !== 'facilities-1' ? ['medical', 'scouting'] : [])]);
         if (index >= ledgerPlan.skip) {
           const { total: _total, ...breakdown } = getFacilityUpkeepBreakdown({ facilities, ...yearContext(year) }, entry.clubId, dateForRound(entryRound, year));
           if (!sameData(details, breakdown)) fail(path, 'must charge the completed facility levels on this matchday');
@@ -2707,76 +2870,76 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const details = record(entry.fitness, `${path}.fitness`, ['contractId', 'coachId']);
       const contract = fitnessContracts.get(details.contractId as string), expected = required.get(key);
       if (!contract || !expected || expected.kind !== 'fitness' || contract.hiredLedgerIndex !== index || contract.coachId !== details.coachId || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must record exactly the hired fitness coach fee at its original ledger boundary');
-      const feeKey = `${year}/${entry.clubId}`, total = (feeTotals.get(feeKey) ?? 0) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
       const transferReserve = transfers.reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       const overdue = transfers.some(transfer => transfer.installments.filter(item => item.dueOn <= dateForRound(entryRound, year)).reduce((sum, item) => sum + item.amount, 0) > paidTransferTotals.get(transfer.id)!);
-      if (overdue || balance.unpaid > 0 || balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the fitness fee after protecting wages and transfer holds and settling arrears');
+      if (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the fitness fee after protecting wages and transfer holds and settling arrears');
       required.delete(key);
     } else if (kind === 'physio') {
       if (entry.ticket !== null || entry.coach !== null) fail(path, 'must record the physio fee without unrelated details');
       const details = record(entry.physio, `${path}.physio`, ['contractId', 'physioId']);
       const contract = physioContracts.get(details.contractId as string), expected = required.get(key);
       if (!contract || !expected || expected.kind !== 'physio' || contract.hiredLedgerIndex !== index || contract.physioId !== details.physioId || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must record exactly the hired physiotherapist fee at its original ledger boundary');
-      const feeKey = `${year}/${entry.clubId}`, total = (feeTotals.get(feeKey) ?? 0) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
       const transferReserve = transfers.reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       const overdue = transfers.some(transfer => transfer.installments.filter(item => item.dueOn <= dateForRound(entryRound, year)).reduce((sum, item) => sum + item.amount, 0) > paidTransferTotals.get(transfer.id)!);
-      if (overdue || balance.unpaid > 0 || balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the physio fee after protecting wages and transfer holds and settling arrears');
+      if (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the physio fee after protecting wages and transfer holds and settling arrears');
       required.delete(key);
     } else if (kind === 'assistant') {
       if (entry.ticket !== null || entry.coach !== null) fail(path, 'must record the assistant fee without unrelated details');
       const details = record(entry.assistant, `${path}.assistant`, ['contractId', 'assistantId']);
       const contract = assistantContracts.get(details.contractId as string), expected = required.get(key);
       if (!contract || !expected || expected.kind !== 'assistant' || contract.hiredLedgerIndex !== index || contract.assistantId !== details.assistantId || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must record exactly the hired assistant coach fee at its original ledger boundary');
-      const feeKey = `${year}/${entry.clubId}`, total = (feeTotals.get(feeKey) ?? 0) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
       const transferReserve = transfers.reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       const overdue = transfers.some(transfer => transfer.installments.filter(item => item.dueOn <= dateForRound(entryRound, year)).reduce((sum, item) => sum + item.amount, 0) > paidTransferTotals.get(transfer.id)!);
-      if (overdue || balance.unpaid > 0 || balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the assistant fee after protecting wages and transfer holds and settling arrears');
+      if (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the assistant fee after protecting wages and transfer holds and settling arrears');
       required.delete(key);
     } else if (kind === 'youth') {
       if (entry.ticket !== null || entry.coach !== null) fail(path, 'must record the youth fee without unrelated details');
       const details = record(entry.youth, `${path}.youth`, ['contractId', 'coachId']);
       const contract = youthContracts.get(details.contractId as string), expected = required.get(key);
       if (!contract || !expected || expected.kind !== 'youth' || contract.hiredLedgerIndex !== index || contract.coachId !== details.coachId || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must record exactly the hired youth coach fee at its original ledger boundary');
-      const feeKey = `${year}/${entry.clubId}`, total = (feeTotals.get(feeKey) ?? 0) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
       const transferReserve = transfers.reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       const overdue = transfers.some(transfer => transfer.installments.filter(item => item.dueOn <= dateForRound(entryRound, year)).reduce((sum, item) => sum + item.amount, 0) > paidTransferTotals.get(transfer.id)!);
-      if (overdue || balance.unpaid > 0 || balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the youth fee after protecting wages and transfer holds and settling arrears');
+      if (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the youth fee after protecting wages and transfer holds and settling arrears');
       required.delete(key);
     } else if (kind === 'scouting') {
       if (entry.ticket !== null || entry.coach !== null) fail(path, 'must record the scout fee without unrelated details');
       const details = record(entry.scout, `${path}.scout`, ['contractId', 'scoutId']);
       const contract = scoutContracts.get(details.contractId as string), expected = required.get(key);
       if (!contract || !expected || expected.kind !== 'scouting' || contract.hiredLedgerIndex !== index || contract.scoutId !== details.scoutId || expected.seasonNumber !== year || expected.round !== entryRound || expected.amount !== amount) fail(path, 'must record exactly the hired scout fee at its original ledger boundary');
-      const feeKey = `${year}/${entry.clubId}`, total = (feeTotals.get(feeKey) ?? 0) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
       feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transfers = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id));
       const transferReserve = transfers.reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       const overdue = transfers.some(transfer => transfer.installments.filter(item => item.dueOn <= dateForRound(entryRound, year)).reduce((sum, item) => sum + item.amount, 0) > paidTransferTotals.get(transfer.id)!);
-      if (overdue || balance.unpaid > 0 || balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the scout fee after protecting wages and transfer holds and settling arrears');
+      if (overdue || balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'must fund the scout fee after protecting wages and transfer holds and settling arrears');
       required.delete(key);
     } else if (kind === 'coaching') {
       if (entry.ticket !== null) fail(`${path}.ticket`, 'must be empty for a coaching fee');
       const details = record(entry.coach, `${path}.coach`, ['contractId', 'coachId']);
-      const coach = COACH_DIRECTORY.find(coach => coach.id === details.coachId);
-      if (!coach || amount !== -staffFee(yearContext(year), entry.clubId, coach.fee)) fail(path, 'must record the full catalog coaching fee');
+      const coach = staffMember(COACH_DIRECTORY, details.coachId);
+      if (!coach || amount !== upfront(year, entry.clubId, coach.fee)) fail(path, 'must record the full catalog coaching fee');
       const contractMatch = typeof details.contractId === 'string' ? /^coach-s([1-9]\d*)-c([1-9]\d*)$/.exec(details.contractId) : null;
       if (!contractMatch || Number(contractMatch[1]) !== year || Number(contractMatch[2]) > maximumContracts || entry.sourceId !== `coaching-${details.contractId}`) fail(`${path}.coach.contractId`, 'must identify a supported contract in this season');
       if (coachOrigins.has(details.contractId as string)) fail(`${path}.coach.contractId`, 'duplicates a paid contract');
@@ -2788,12 +2951,21 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
         if (!contract || contract.clubId !== entry.clubId || contract.coachId !== details.coachId || entryRound !== bookedRound) fail(path, 'must match its current-season coaching contract and booking round');
       }
       // Historical contracts are not archived. Their catalog fees and annual limits remain verifiable.
-      const feeKey = `${year}/${entry.clubId}`, total = (feeTotals.get(feeKey) ?? 0) - amount;
-      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID })) fail(path, 'exceeds the shared annual staff allocation including released appointments');
-      feeTotals.set(feeKey, total);
+      const feeKey = `${year}/${entry.clubId}`, total = countedStaffFees(feeKey, index, year, entryRound) - amount;
+      if (total > staffBudgetFor(board, entry.clubId, year, { ...worldContext, dataPackId: (worldContext as WorldContext).world?.id ?? DEVELOPMENT_DATA_PACK_ID }) + pooledSalaryRoom(entry.clubId, year)) fail(path, 'exceeds the shared annual staff allocation including released appointments');
+      if (levelledStaff && year === seasonNumber) coachEntries.set(details.contractId as string, index);
+      if (!levelledStaff || year === seasonNumber) feeTotals.set(feeKey, total);
       const balance = balances.get(entry.clubId)!;
       const transferReserve = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id)).reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
-      if (balance.unpaid > 0 || balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'cannot hire or renew a coach without sufficient cash, settled obligations, reserved player wages and agreed transfer installments');
+      if (balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index)) fail(path, 'cannot hire or renew a coach without sufficient cash, settled obligations, reserved player wages and agreed transfer installments');
+    } else if (kind === 'staff-wages' || kind === 'staff-compensation') {
+      // Format 76: weekly staff salaries (checked against the contracts of the current season) and sacking compensation.
+      if (entry.ticket !== null || entry.coach !== null || amount >= 0) fail(path, 'must be a staff salary or compensation payment');
+      if (kind === 'staff-wages') {
+        if (entry.sourceId !== staffWagesSourceId(year, entryRound)) fail(`${path}.sourceId`, 'must identify the week of the staff salaries');
+        const hiredBefore = (contract: { role: string; contractId: string }) => contract.role === 'coaches' ? coachEntries.has(contract.contractId) : (staffAppointments.get(`${contract.role}/${contract.contractId}`) ?? Infinity) < index;
+        if (year === seasonNumber && -amount !== staffWeekWages({ ...yearContext(year), coaching, scouts, fitness, physio, assistant, youth, seasonNumber: year }, entry.clubId, entryRound, seasonLength, hiredBefore)) fail(path, 'must pay the salaries of the staff employed that week');
+      } else if (!/^staff-compensation-(coaches|scouts|fitness|physio|assistant|youth)-/.test(entry.sourceId)) fail(`${path}.sourceId`, 'must identify the contract ended early');
     } else {
       if (entry.coach !== null) fail(`${path}.coach`, 'must be empty for a non-coaching event');
       const expected = required.get(key);
@@ -2932,7 +3104,7 @@ function migrateTrainingCoaching(training: SeasonTraining): SeasonTraining {
 }
 
 /** Reconcile the retained week; older development remains bounded state, not invented history. */
-function validateTraining(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], injuries: SeasonInjury[], seasonNumber: number, round: number, coaching?: SeasonCoaching, rosters?: readonly RosterSnapshot[], fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), version = 30, context: CareerPlayerContext & LifecycleContext & Partial<Pick<SeasonState, 'seed'>> & { facilities?: SeasonFacilities; restWeeks?: SeasonState['restWeeks'] } = {}): { training: SeasonTraining; conditionsAfter: Record<string, number> | null } {
+function validateTraining(value: unknown, clubs: readonly Team[], fixtures: SeasonFixture[], injuries: SeasonInjury[], seasonNumber: number, round: number, coaching?: SeasonCoaching, rosters?: readonly RosterSnapshot[], fitness: SeasonFitness = createFitness(), physio: SeasonPhysio = createPhysio(), version = 30, context: CareerPlayerContext & LifecycleContext & Partial<Pick<SeasonState, 'seed'>> & { facilities?: SeasonFacilities; restWeeks?: SeasonState['restWeeks']; national?: SeasonState['national'] } = {}): { training: SeasonTraining; conditionsAfter: Record<string, number> | null } {
   // Sprint 4: each player's hidden potential, derived from the career seed, limits his training points.
   const seed = context.seed ?? fail('seed', 'is required to check training against player potential');
   const fields = record(value, 'training', ['model', 'enabledSince', 'plans', 'points', 'lastWeek']);
@@ -2989,7 +3161,7 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
       const path = `training.lastWeek.players.${player.id}`;
       const value = players[player.id];
       const entry = record(value, path, ['focus', 'intensity', 'availableDays', 'conditionBefore', 'conditionAfter', 'gains', ...(coaching ? ['coachingGains'] : []), ...(version >= 22 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'fitness') ? ['fitness'] : []), ...(version >= 26 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'aging') ? ['aging'] : []), ...(version >= 28 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'facility') ? ['facility'] : [])]);
-      if (Object.hasOwn(entry, 'facility')) { const bonus = record(entry.facility, `${path}.facility`, ['earnedPoints', 'gains']); number(bonus.earnedPoints, `${path}.facility.earnedPoints`, 0, 4); record(bonus.gains, `${path}.facility.gains`, TRAINING_ATTRIBUTES); }
+      if (Object.hasOwn(entry, 'facility')) { const bonus = record(entry.facility, `${path}.facility`, ['earnedPoints', 'gains']); number(bonus.earnedPoints, `${path}.facility.earnedPoints`, -4, 4); record(bonus.gains, `${path}.facility.gains`, TRAINING_ATTRIBUTES); }
       if (Object.hasOwn(entry, 'aging')) record(entry.aging, `${path}.aging`, ['ordinaryPracticePoints', 'adjustedPracticePoints', 'rateBasisPoints']);
       if (!TRAINING_FOCUSES.includes(entry.focus as TrainingPlan['focus']) || !TRAINING_INTENSITIES.includes(entry.intensity as TrainingPlan['intensity'])) fail(path, 'has unsupported training instructions');
       number(entry.availableDays, `${path}.availableDays`, 0, 7);
@@ -3017,6 +3189,8 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
     // Final-round injuries happen after the last training day and must not be replayed into it.
     injuries: injuries.filter(injury => injury.occurredOn <= (report.fromDate as string)),
     seasonNumber, afterRound, fromDate: report.fromDate as string, toDate: report.toDate as string, coaching: appliedCoaching, rosters, fitness, physio, lifecycle: context.lifecycle, academy: context.academy, facilities: context.facilities,
+    // Format 80: called-up players' national duty, from the stored national squads and minutes.
+    ...(context.national ? { nationalDuty: nationalDutyDays(context.national, report.fromDate as string, report.toDate as string) } : {}),
   });
   const replayedReport = rosters ? replayed.training.lastWeek : withoutRosterReport(replayed.training.lastWeek);
   if (!sameData(coaching ? replayedReport : withoutCoachingReport(replayedReport), training.lastWeek) || !sameData(replayed.training.points, training.points)) fail('training.lastWeek', 'does not reconcile with training plans, coaching, fitness staffing, availability, recovery and development');
@@ -3055,7 +3229,7 @@ function validateState(value: unknown, version: SeasonFormatVersion): void {
 function validateStateUncached(value: unknown, version: SeasonFormatVersion): void {
   const legacy = version === 1, career = version >= 3;
   checkStateTree(value);
-  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 53 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'background') ? ['background'] : []), ...(version >= 60 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'europe') ? ['europe'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'media') ? ['media'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'economySeasons') ? ['economySeasons'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
+  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 53 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'background') ? ['background'] : []), ...(version >= 60 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'europe') ? ['europe'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'media') ? ['media'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'economySeasons') ? ['economySeasons'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'injuryModel') ? ['injuryModel'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'matchModel') ? ['matchModel'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'national') ? ['national'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
   if (state.schemaVersion !== version || state.engineVersion !== 'possession-3') fail('state', 'uses an unsupported schema or engine');
   // Format 39: careers outside the built-in league carry their world, which must be complete and named by dataPackId.
   if (Object.hasOwn(state, 'world')) {
@@ -3107,6 +3281,9 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const seasonNumber = career ? number(state.seasonNumber, 'seasonNumber', 1, MAX_SEASON_NUMBER) : 1;
   const injuryMode = legacy ? 'off' : state.injuryMode;
   if (!['standard', 'reduced', 'off'].includes(injuryMode as string)) fail('injuryMode', 'must be standard, reduced or off');
+  // Owner feedback (22 November 2026): new careers diagnose match injuries with the longer `injuries-2` durations.
+  if (Object.hasOwn(state, 'injuryModel') && state.injuryModel !== INJURY_MODEL_2) fail('injuryModel', 'must be injuries-2 when recorded');
+  const injuryModel = Object.hasOwn(state, 'injuryModel') ? INJURY_MODEL_2 : undefined;
   // The bound scales with the games recorded (step 3.7): realistic injuries in a 70-club world with Europe pass 600 a season.
   const recordedGames = (Array.isArray(state.fixtures) ? state.fixtures.length : 0) + (Array.isArray(state.history) ? state.history.reduce((count: number, archive: unknown) => count + (archive && typeof archive === 'object' && Array.isArray((archive as { fixtures?: unknown }).fixtures) ? (archive as { fixtures: unknown[] }).fixtures.length : 0), 0) : 0);
   if (!legacy && (!Array.isArray(state.injuries) || state.injuries.length > 600 * seasonNumber + 3 * recordedGames)) fail('injuries', 'must be a bounded injury history');
@@ -3129,7 +3306,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version >= 37) validateCareer(state.career, state as unknown as SeasonState, version);
   if (Object.hasOwn(state, 'background')) validateBackground(state.background, { ...(state as unknown as SeasonState), divisions: seasonDivisions }, version);
   // Format 70: board-2 season verdicts change player salary budgets, so the salary checks read the board.
-  const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId, marketEnabled, version, (board as SeasonBoard | undefined)?.model === 'board-2' ? { ...careerContext, board } : careerContext) : undefined;
+  const employmentContext = { ...careerContext, ...((board as SeasonBoard | undefined)?.model === 'board-2' ? { board } : {}), ...(contractRolesApply({ relationships }) ? { relationships } : {}), ...(version >= 75 && usesWagePool({ coaching: state.coaching as { model: string } | undefined }) ? { wagePool: true } : {}) };
+  const employment = version >= 10 ? validateEmployment(state.employment, seasonNumber, round, state.status, state.managedClubId, marketEnabled, version, employmentContext) : undefined;
   if (!sameData(state.clubs, clubsForEmploymentYear(employment, seasonNumber, round, careerContext))) fail('clubs', 'must match the versioned player catalog and effective employment registrations');
   if (version >= 55 && Object.hasOwn(state, 'background')) validateBackgroundHistory(state as unknown as SeasonState, employment, careerContext);
   const clubs = state.clubs as readonly Team[], clubIds = clubs.map(club => club.id);
@@ -3142,16 +3320,22 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const registeredPlayers = new Set(clubs.flatMap(club => club.players.map(player => player.id)));
   for (const playerId of playerIds) if (!registeredPlayers.has(playerId) && conditions[playerId] !== 100) fail(`conditions.${playerId}`, 'must retain offseason recovery while the player remains unregistered');
   for (const club of clubs) {
-    const plan = record(plans[club.id], `plans.${club.id}`, ['tactics', 'lineup', 'autoSubstitutions', ...(fullRoster ? ['matchday'] : [])]);
+    const planValue = plans[club.id], circled = planValue !== null && typeof planValue === 'object' && Object.hasOwn(planValue, 'slots');
+    const plan = record(planValue, `plans.${club.id}`, ['tactics', 'lineup', 'autoSubstitutions', ...(fullRoster ? ['matchday'] : []), ...(circled ? ['slots'] : [])]);
     if (fullRoster && plan.matchday !== null) { try { selectedTeam(club, plan.matchday as string[]); } catch { fail(`plans.${club.id}.matchday`, 'must select five to twelve distinct registered players'); } }
     const tactics = record(plan.tactics, `plans.${club.id}.tactics`, ['tempo', 'outsideShare', 'pressure']);
     for (const key of ['tempo', 'outsideShare', 'pressure']) number(tactics[key], `plans.${club.id}.tactics.${key}`, 0, 1, false);
     const lineup = array(plan.lineup, `plans.${club.id}.lineup`, 5);
     if (new Set(lineup).size !== 5 || lineup.some(id => !club.players.some(player => player.id === id))) fail(`plans.${club.id}.lineup`, 'must select five distinct players from its club');
+    // Format 74: the circles the manager chose for planned starters, one different position each.
+    if (circled) {
+      const circles = (plan.slots !== null && typeof plan.slots === 'object' && !Array.isArray(plan.slots) ? plan.slots : fail(`plans.${club.id}.slots`, 'must be an object')) as Record<string, unknown>, chosen = Object.keys(circles);
+      if (!chosen.length || chosen.some(id => !lineup.includes(id)) || new Set(Object.values(circles)).size !== chosen.length || Object.values(circles).some(value => !isCourtPosition(value))) fail(`plans.${club.id}.slots`, 'must give planned starters a different court position each');
+    }
     if (typeof plan.autoSubstitutions !== 'boolean' || club.id !== state.managedClubId && !plan.autoSubstitutions) fail(`plans.${club.id}.autoSubstitutions`, 'must be boolean and enabled for opponent clubs');
     for (const player of club.players) number(conditions[player.id], `conditions.${player.id}`, 0, 100, false);
   }
-  const coaching = version >= 5 ? validateCoaching(state.coaching, clubs, seasonNumber, round, worldRounds(world)) : undefined;
+  const coaching = version >= 5 ? validateCoaching(state.coaching, clubs, seasonNumber, round, worldRounds(world), version) : undefined;
   const scouts = version >= 21 ? validateScouts(state.scouts, state as unknown as SeasonState, coaching!) : createScouts();
   const fitness = version >= 22 ? validateFitness(state.fitness, state as unknown as SeasonState, coaching!, scouts) : createFitness();
   const physio = version >= 23 ? validatePhysio(state.physio, state as unknown as SeasonState, coaching!, scouts, fitness) : createPhysio();
@@ -3179,7 +3363,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       if (evidence && evidence.secondsPlayed === 0) fail(`${path}.result.injuries.${id}`, 'requires exposure in its originating fixture');
       const club = home.players.some(player => player.id === id) ? home : away;
       // Recurrences last longer: the player's earlier diagnoses are already in the chronological history.
-      const injury = createSeasonInjury(seed, expected, club.id, id, kind, history, medicalRecoveryPercent({ world, facilities }, club.id, expected.date));
+      const injury = createSeasonInjury(seed, expected, club.id, id, kind, history, medicalRecoveryPercent({ world, facilities }, club.id, expected.date), injuryModel);
       history.push(injury);
       latestInjuries.set(id, injury);
     }
@@ -3221,7 +3405,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
       const archiveClubs = clubsForEmploymentYear(employment, archiveIndex + 1, worldRounds(world), careerContext);
       const archivedRosters = version >= 9 ? validateRosters(archive.rosters, `${path}.rosters`, archiveClubs, archiveIndex + 1, employment, worldRounds(world), careerContext) : undefined;
       const archiveEurope = usesEurope ? validateEuropeShape(archive.europe, world, `${path}.europe`) : undefined;
-      const schedule = canonicalFixtures({ clubs: archiveClubs, fixtures: archive.fixtures, world, divisions: archiveDivisions, seed, ...(archiveEurope ? { europe: archiveEurope } : {}) }, archiveIndex + 1, `${path}.fixtures`);
+      const schedule = canonicalFixtures({ clubs: archiveClubs, fixtures: archive.fixtures, world, divisions: archiveDivisions, seed, ...(archiveEurope ? { europe: archiveEurope } : {}), ...(Object.hasOwn(state, 'national') ? { national: true } : {}) }, archiveIndex + 1, `${path}.fixtures`);
       const fixtures = array(archive.fixtures, `${path}.fixtures`, schedule.length);
       let hasPlayerStats: boolean | undefined;
       for (const [index, value] of fixtures.entries()) {
@@ -3259,7 +3443,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     }
     remember('history', 'injuries', { history: history.slice(), latest: [...latestInjuries] });
   }
-  const schedule = canonicalFixtures({ clubs, fixtures: state.fixtures, world, divisions: seasonDivisions, seed, ...(seasonEurope ? { europe: seasonEurope } : {}) }, seasonNumber, 'fixtures'), fixtures = array(state.fixtures, 'fixtures', schedule.length);
+  const schedule = canonicalFixtures({ clubs, fixtures: state.fixtures, world, divisions: seasonDivisions, seed, ...(seasonEurope ? { europe: seasonEurope } : {}), ...(Object.hasOwn(state, 'national') ? { national: true } : {}) }, seasonNumber, 'fixtures'), fixtures = array(state.fixtures, 'fixtures', schedule.length);
   const committedRound = state.status === 'complete' ? round : round - 1;
   // Step 3.4a: the current week's game day is its earliest date with an unplayed game; earlier game days are committed.
   let pendingDay: string | null = null;
@@ -3326,7 +3510,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const normalizedState = { ...state, scouts, fitness, physio, assistant, academy, youth, lifecycle, youthCompetition, facilities, relationships, board, commercial, ...(employment ? { employment } : {}), recruitment: version >= 19 ? state.recruitment : version === 18 ? migrateRecruitmentTransfers(state.recruitment as unknown as SeasonRecruitment) : createRecruitment() } as unknown as SeasonState;
   const recruitmentHolds = version >= 18 ? validateRecruitment(state.recruitment, normalizedState, version) : [];
   if (version >= 6) validateFinance(state.finance, clubs, fixtures as SeasonFixture[], state.history as SeasonArchive[], coaching!, seasonNumber, round, state.status, state.managedClubId, payroll, employment, recruitmentHolds, scouts, fitness, physio, assistant, youth, version, facilities, commercial, state.board, rivalries, world, state.divisions as DomesticDivisions | undefined, state.background as SeasonBackground | undefined, Object.hasOwn(state, 'media') ? { media: state.media as SeasonMedia, relationships: state.relationships as SeasonRelationships } : undefined, economySeasons);
-  const development = version >= 4 ? validateTraining(state.training, clubs, fixtures as SeasonFixture[], history, seasonNumber, round, coaching, rosters, fitness, physio, version, { ...careerContext, facilities, restWeeks }) : null;
+  const development = version >= 4 ? validateTraining(state.training, clubs, fixtures as SeasonFixture[], history, seasonNumber, round, coaching, rosters, fitness, physio, version, { ...careerContext, facilities, restWeeks, ...(Object.hasOwn(state, 'national') ? { national: state.national as SeasonState['national'] } : {}) }) : null;
   if (version >= 11) validateScouting(state.scouting, normalizedState, version);
   const marketSnapshots: MarketReplaySnapshot[] = [];
   if (version >= 13) validateMarket(state.market, normalizedState, version, marketSnapshots);
@@ -3368,6 +3552,10 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (!sameData(match.home, developed(home, homeBackground)) || !sameData(match.away, developed(away, awayBackground))) fail('activeMatch', 'must use the fixture home and away squads with their current development');
   const opposition: Side = active.homeClubId === matchClub ? 'away' : 'home';
   if (!match.autoSubstitutions[opposition]) fail('activeMatch.autoSubstitutions', 'must enable opponent substitutions');
+  // Format 79: the match uses the career's play model, and the opponent has a computer coach.
+  if ((match.playModel ?? null) !== (state.matchModel ?? null) || match.playModel && !match.computerCoach?.includes(opposition)) fail('activeMatch.playModel', 'must use the career\'s play model with a computer coach for the opponent');
+  // Format 74: only the manager chooses circles on the court picture; computer clubs play listed positions.
+  if (match.slots?.[opposition] || match.startingSlots?.[opposition]) fail('activeMatch.slots', 'must leave the opponent in its listed positions');
   if (match.injuryMode !== injuryMode) fail('activeMatch.injuryMode', 'must match the season-wide injury setting');
   if (legacy) {
     if (Object.keys(match.injuries).length !== 0 || Object.hasOwn(match, 'preExistingInjuries')) fail('activeMatch', 'must use the legacy season-wide injury-off setting');
@@ -3413,6 +3601,10 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   }
   // Format 70 guard: careers created with president personalities (board-2) need format 70 or later.
   if ((state.board as SeasonBoard | undefined)?.model === 'board-2' && version < 70) fail('board.model', 'requires format 70 or later');
+  // Format 80 guard: national teams (`national-1`) need format 80 or later and a real-club world with a national team's country.
+  if (Object.hasOwn(state, 'national')) validateNationalShape(state.national, state as unknown as SeasonState, version);
+  // Format 79 guard: careers created with the richer play model (`plays-2`) need format 79 or later.
+  if (Object.hasOwn(state, 'matchModel') && (state.matchModel !== 'plays-2' || version < 79)) fail('matchModel', 'must be plays-2 and requires format 79 or later');
 }
 
 /** Validate every reference and committed round before replacing any live season. */

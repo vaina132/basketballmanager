@@ -14,7 +14,8 @@ import { dateForRound } from './season';
 import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES } from './training';
 import { youthCoachAssignments } from './youth-policy';
 import { getYouthPlayerStatus } from './youth-competition';
-import { roundKey, seasonRounds } from './career-world';
+import { roundKey, seasonRounds, worldOf } from './career-world';
+import { prospectsWithExtras } from './extra-attributes';
 import type { CareerWorld } from '../domain/world';
 import { cachedCalculation } from './pure-cache';
 
@@ -26,7 +27,7 @@ function intake(state: SeasonState, initial: boolean): SeasonState {
     if (academy.intakes.some(record => record.clubId === club.id && record.seasonNumber === state.seasonNumber && !record.source)) continue;
     const active = academy.prospects.filter(prospect => prospect.clubId === club.id && !academy.graduates.some(graduate => graduate.prospectId === prospect.player.id)).length;
     const count = initial ? 3 : Math.min(2, Math.max(0, getAcademyCapacity(state) - active));
-    const prospects = generateAcademyProspects(state.seed, club.id, state.seasonNumber, state.round, initial, count);
+    const prospects = prospectsWithExtras(worldOf(state), generateAcademyProspects(state.seed, club.id, state.seasonNumber, state.round, initial, count), state.date);
     academy = { ...academy, prospects: [...academy.prospects, ...prospects], intakes: [...academy.intakes, { id: `academy-intake-${academy.intakes.length + 1}`, clubId: club.id, seasonNumber: state.seasonNumber, round: state.round, date: state.date, initial, prospectIds: prospects.map(prospect => prospect.player.id) }], focus: { ...academy.focus, ...Object.fromEntries(prospects.map(prospect => [prospect.player.id, 'balanced' as const])) }, points: { ...academy.points, ...Object.fromEntries(prospects.map(prospect => [prospect.player.id, emptyAcademyPoints()])) } };
   }
   return academy === state.academy ? state : { ...state, academy };
@@ -132,15 +133,18 @@ export function buildAcademyWeek(input: AcademyWeekCalculation): AcademyWeek {
     };
     allocate(ordinaryPoints, base, 0); allocate(bonusTotal, bonus, ordinaryPoints % TRAINING_ATTRIBUTES.length);
     const facilitiesActive = !!input.facilities?.enabledSince && input.facilities.enabledSince.date <= fromDate;
-    const facilityPoints = facilitiesActive ? Math.floor(eligibleDates.reduce((sum, date) => sum + 4 * facilityPracticeBonusPercent(input, 'youth', prospect.clubId, date), 0) / 100) : 0;
+    // Format 74 (`facilities-3`): Very Poor and Poor infrastructure costs practice, rounded towards zero like a gain.
+    const facilityUnits = facilitiesActive ? eligibleDates.reduce((sum, date) => sum + 4 * facilityPracticeBonusPercent(input, 'youth', prospect.clubId, date), 0) : 0;
+    const facilityMagnitude = Math.floor(Math.abs(facilityUnits) / 100), facilitySign = facilityUnits < 0 && facilityMagnitude > 0 ? -1 : 1, facilityPoints = facilitySign * facilityMagnitude;
     const facilityDesired = emptyAcademyPoints(), facilityGains = emptyAcademyPoints();
-    allocate(facilityPoints, facilityDesired, ordinaryPoints % TRAINING_ATTRIBUTES.length);
+    allocate(Math.abs(facilityPoints), facilityDesired, ordinaryPoints % TRAINING_ATTRIBUTES.length);
+    if (facilitySign < 0) for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = -facilityDesired[key];
     for (const key of TRAINING_ATTRIBUTES) {
       const cap = academyPointCap(prospect.player.attributes[key]);
       if (!Number.isInteger(before[key]) || before[key] < 0 || before[key] > cap) throw new Error('Academy development exceeds its supported limits.');
       const withoutCoach = Math.min(cap, before[key] + base[key]);
       const coached = Math.min(cap, withoutCoach + bonus[key]);
-      after[key] = Math.min(cap, coached + facilityDesired[key]);
+      after[key] = Math.max(before[key], Math.min(cap, coached + facilityDesired[key]));
       gains[key] = after[key] - before[key]; coachingGains[key] = coached - withoutCoach;
       facilityGains[key] = after[key] - coached;
     }

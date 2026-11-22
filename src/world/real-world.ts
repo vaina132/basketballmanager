@@ -8,6 +8,8 @@ import { standingsRuleFor } from '../domain/competition';
 import { FULL_ROSTER_MODEL, MAX_CLUB_ROSTER_SIZE } from '../domain/roster';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import { derivePresidentTraits } from './presidents';
+import { presidentName } from '../data/people-names';
+import { realClubPerson } from '../data/real-club-people';
 import { sponsorMarket } from '../data/development-sponsors';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import { MIN_WORLD_CLUBS, validateWorld } from './career-world';
@@ -75,8 +77,6 @@ export function openingContractYears(age: number, stable: number, level: Contrac
   const slot = (stable % 20) * 5;
   return slot < shares[0] ? 1 : slot < shares[0] + shares[1] ? 2 : 3;
 }
-const PRESIDENT_FIRST = ['Anna', 'Bernd', 'Clara', 'Dieter', 'Elena', 'Frank', 'Greta', 'Holger', 'Ines', 'Jürgen', 'Karin', 'Lukas', 'Monika', 'Norbert', 'Olga', 'Peter', 'Rita', 'Stefan', 'Tanja', 'Uwe'];
-const PRESIDENT_LAST = ['Albrecht', 'Brandt', 'Conrad', 'Dorn', 'Engel', 'Falk', 'Gerber', 'Hahn', 'Imhof', 'Jansen', 'Kessler', 'Lorenz', 'Mertens', 'Nagel', 'Ostrow', 'Pohl', 'Quandt', 'Rieger', 'Seidel', 'Thiel'];
 
 function hash(text: string): number { let value = 2166136261; for (const character of text) value = Math.imul(value ^ character.charCodeAt(0), 16777619) >>> 0; return value; }
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
@@ -125,9 +125,12 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   const market = sponsorMarket(teams.length);
   const { arena } = REAL_WORLD_RULES;
   const capitals = DEVELOPMENT_WORLD.presidents.map(president => president.seasonCapital);
+  // Owner feedback (18 November 2026): the club's real president where Wikipedia lists one, else a name mostly from the club's country.
+  const leagueCountry = new Map(competitions.flatMap(item => item.clubIds.map(clubId => [clubId, item.country ?? null] as const)));
+  const presidentNames = new Set(teams.flatMap(team => realClubPerson(team.id, 'president')?.name ?? []));
   const presidents: DevelopmentPresident[] = teams.map((team, index) => {
     const h = hash(team.id);
-    return { clubId: team.id, name: `${PRESIDENT_FIRST[h % PRESIDENT_FIRST.length]} ${PRESIDENT_LAST[Math.floor(h / PRESIDENT_FIRST.length) % PRESIDENT_LAST.length]}`, generosity: (1 + (h >>> 8) % 5) as DevelopmentPresident['generosity'], seasonCapital: capitals[index % capitals.length]!, traits: derivePresidentTraits(team.id) };
+    return { clubId: team.id, name: realClubPerson(team.id, 'president')?.name ?? presidentName(team.id, leagueCountry.get(team.id) ?? null, presidentNames), generosity: (1 + (h >>> 8) % 5) as DevelopmentPresident['generosity'], seasonCapital: capitals[index % capitals.length]!, traits: derivePresidentTraits(team.id) };
   });
   // Step 3.4b: each league's real postseason, when every chosen league's size fits its format (all or none).
   const formats = competitions.map(item => [item.id, postseasonFormatFor(item.country ?? 'Other', item.tier)] as const);
@@ -143,7 +146,8 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   const levelOf = (clubId: string): ContractLevel => euroleagueClubs.has(clubId) ? 'euroleague' : (tierOf.get(clubId) ?? 1) >= 2 ? 'second' : 'top';
   const playerContracts = Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, openingContractYears(ageOf(player.id), hash(player.id), levelOf(team.id), byId.get(player.id)?.nationality)])));
   const profileOf = (playerId: string): DevelopmentPlayerProfile => ({ dateOfBirth: byId.get(playerId)?.birthDate ?? `${2026 - (byId.get(playerId)?.age ?? REAL_WORLD_RULES.defaultAge)}-01-01`, source: byId.get(playerId)?.birthDate ? 'official-profile' as const : 'estimated-from-age' as const,
-    positionSource: byId.get(playerId)?.profileEvidence?.positionSource ?? (byId.get(playerId)?.estimated.includes('game_position') ? 'estimated' as const : 'unverified' as const) });
+    positionSource: byId.get(playerId)?.profileEvidence?.positionSource ?? (byId.get(playerId)?.estimated.includes('game_position') ? 'estimated' as const : 'unverified' as const),
+    ...(byId.get(playerId)?.nationality ? { nationality: byId.get(playerId)!.nationality! } : {}) });
   const domesticWorld: CareerWorld = {
     id: realWorldId(pack, competitions.length === 1 ? competition.id : `leagues-${hash(competitions.map(item => item.id).sort().join('|')).toString(16)}`), name: competitions.length === 1 ? `${competition.name} ${competition.season}` : `European domestic leagues ${competition.season}`, source: 'real-data-pack', rosterModel: FULL_ROSTER_MODEL, startDate: DEVELOPMENT_WORLD.startDate,
     domesticLeagues: competitions.map(item => ({ id: item.id, name: item.name, country: item.country ?? 'Other', tier: item.tier, clubIds: [...item.clubIds], standingsRule: standingsRuleFor(item.country ?? 'Other', item.tier), ...(postseasons ? { postseason: postseasons.get(item.id)! } : {}) })),
@@ -239,8 +243,6 @@ export function europeanKind(name: string): EuropeanCompetitionKind | null {
 
 /** The average position-weighted overall rating of a squad's best eight (as in career setup). */
 const bestEightStrength = (players: readonly Team['players'][number][]) => { const best = players.map(player => overallRating(player.attributes, player.position)).sort((a, b) => b - a).slice(0, 8); return best.reduce((sum, value) => sum + value, 0) / best.length; };
-const FIRST = ['Aldo', 'Berta', 'Ciro', 'Dora', 'Emil', 'Flora', 'Gino', 'Hanna', 'Ivan', 'Jana', 'Karl', 'Lena', 'Mario', 'Nora', 'Oscar', 'Petra'];
-const LAST = ['Arnold', 'Bianchi', 'Costa', 'Dumas', 'Eriksen', 'Fischer', 'Garcia', 'Horvat', 'Ivanov', 'Jansen', 'Kovac', 'Lindqvist', 'Moreau', 'Novak', 'Olsen', 'Petrov'];
 
 /** A world with its European competitions; European-only entrants are added outside the full world. */
 /** With `places` (format 60), the world records European places and the unchosen top divisions, whose clubs are among `entrants`. */
@@ -253,13 +255,15 @@ export function withEuropeanCompetitions(world: CareerWorld, competitions: reado
   const { arena } = REAL_WORLD_RULES;
   const capital = Math.min(...world.presidents.map(president => president.seasonCapital));
   const finances: ClubFinanceDefinition[] = [], presidents: DevelopmentPresident[] = [];
+  const presidentNames = new Set(world.presidents.map(president => president.name));
+  const entrantCountry = (clubId: string) => competitions.find(item => item.countries && Object.hasOwn(item.countries, clubId))?.countries?.[clubId] ?? null;
   const profiles: Record<string, DevelopmentPlayerProfile> = {}, wages: Record<string, number> = {}, contracts: Record<string, number> = {};
   const euroleague = new Set(competitions.filter(item => item.kind === 'euroleague').flatMap(item => item.clubIds));
   for (const { team, profiles: own, venue } of added) {
     const t = strongest > weakest ? Math.max(0, Math.min(1, (bestEightStrength(team.players) - weakest) / (strongest - weakest))) : 0.5;
     const capacity = Math.round((arena.smallest + t * (arena.largest - arena.smallest)) / arena.step) * arena.step, h = hash(team.id);
     finances.push({ clubId: team.id, venue: venue ?? `${team.name} Arena`, sponsor: world.sponsors[h % world.sponsors.length]!.name, capacity, referenceDemand: Math.round(capacity * (arena.fillFrom + arena.fillRange * t) / arena.step) * arena.step });
-    presidents.push({ clubId: team.id, name: `${FIRST[(h >>> 4) % FIRST.length]} ${LAST[(h >>> 12) % LAST.length]}`, generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital, traits: derivePresidentTraits(team.id) });
+    presidents.push({ clubId: team.id, name: presidentName(team.id, entrantCountry(team.id), presidentNames), generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital, traits: derivePresidentTraits(team.id) });
     for (const player of team.players) {
       profiles[player.id] = own[player.id]!;
       wages[player.id] = realWorldWage(overallRating(player.attributes, player.position));

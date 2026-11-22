@@ -5,7 +5,7 @@ import type { MarketEvent, MarketOffer, MarketWindow, SeasonMarket } from '../do
 import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
-import { getActiveCareerPlayers, getCareerPlayers, getCareerWage } from './player-catalog';
+import { getActiveCareerPlayers, getCareerPlayers } from './player-catalog';
 import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE, playerContractQuoter, quotePlayerContract } from './employment-policy';
 import { commitPlayerOffer } from './employment';
 import { commitContractBuyout } from './buyouts';
@@ -17,6 +17,7 @@ import { getTransferCandidates, MIN_TRANSFER_FEE, quoteTransferOffer, requiredTr
 import { DAILY_RECOVERY, dateForRound, MAX_SEASON_NUMBER } from './season';
 import { addMarketDays, compareMarketOffers, getLiveMarketOffers, getMarketStartReason, getMarketWindow, getNextMarketDate, isCompetitiveMarket, isLiveMarketOffer, isMarketActive, MARKET_MAX_EVENTS, MARKET_OFFER_DAYS, MARKET_RESPONSE_DAYS, MARKET_WINDOW_DAYS } from './market-policy';
 import { playerInList, seasonRounds } from './career-world';
+import { contractAskingWage, offeredContractRole } from './contract-roles';
 
 export function createMarket(): SeasonMarket { return { model: 'market-1', enabledSince: null, windows: [] }; }
 
@@ -72,8 +73,8 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
     const previous = window.offers.find(offer => offer.clubId === event.clubId && offer.playerId === event.playerId && isLiveMarketOffer(offer));
     const paymentPlan = event.transferPaymentPlan ?? 'upfront';
     if (event.transferPaymentPlan !== undefined && event.transferFee === undefined) throw new Error('Payment plans require a club transfer fee.');
-    if (previous?.seasonWage === event.seasonWage && previous.seasons === event.seasons && previous.releaseFee === event.releaseFee && (previous.transfer?.mode ?? undefined) === event.transferMode && (previous.transfer?.fee ?? undefined) === event.transferFee && (previous.transfer?.paymentPlan ?? 'upfront') === paymentPlan) throw new Error('The same offer is already open.');
-    const options: ContractOfferOptions = { ...(event.releaseFee === undefined ? {} : { releaseFee: event.releaseFee }), ...(event.transferMode ? { transferMode: event.transferMode } : {}) };
+    if (previous?.seasonWage === event.seasonWage && previous.seasons === event.seasons && previous.releaseFee === event.releaseFee && previous.role === event.role && (previous.transfer?.mode ?? undefined) === event.transferMode && (previous.transfer?.fee ?? undefined) === event.transferFee && (previous.transfer?.paymentPlan ?? 'upfront') === paymentPlan) throw new Error('The same offer is already open.');
+    const options: ContractOfferOptions = { ...(event.releaseFee === undefined ? {} : { releaseFee: event.releaseFee }), ...(event.transferMode ? { transferMode: event.transferMode } : {}), ...(event.role === undefined ? {} : { role: event.role }) };
     const quote = quotePlayerContract(state, event.playerId, event.seasonWage, event.seasons, event.clubId, undefined, event.transferFee, paymentPlan, options);
     if (!quote.canOffer) throw new Error(quote.reason!);
     const responseOn = addMarketDays(event.date, MARKET_RESPONSE_DAYS);
@@ -83,6 +84,7 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
       offeredOn: event.date, responseOn, expiresOn: [addMarketDays(event.date, MARKET_OFFER_DAYS), window.closesOn].sort()[0]!,
       seasonWage: event.seasonWage, seasons: event.seasons, status: 'pending', respondedOn: null, closedOn: null, negotiationId: null, chosenOfferId: null,
       ...(event.releaseFee === undefined ? {} : { releaseFee: event.releaseFee }),
+      ...(event.role === undefined ? {} : { role: event.role }),
       transfer: event.transferFee === undefined ? null : {
         sellerClubId: contractForSeason(state.employment, event.playerId, state.seasonNumber + 1)!.clubId,
         contractId: contractForSeason(state.employment, event.playerId, state.seasonNumber + 1)!.id,
@@ -146,7 +148,7 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
   if (!competitive) for (const offer of scheduled) answer(offer);
   else for (const playerId of [...new Set(scheduled.map(offer => offer.playerId))].sort()) {
     const proposals = scheduled.filter(offer => offer.playerId === playerId).sort((left, right) => compareMarketOffers(next, left, right));
-    const winner = proposals.find(offer => evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, state).outcome === 'accepted');
+    const winner = proposals.find(offer => evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, state, offer.role).outcome === 'accepted');
     if (!winner) { for (const offer of proposals) answer(offer); continue; }
     answer(winner);
     const chosen = getMarketWindow(next)!;
@@ -165,8 +167,10 @@ export function submitMarketOffer(state: SeasonState, playerId: string, seasonWa
   state = activateCompetition(state);
   const window = requireWindow(state);
   const existing = window.offers.find(offer => offer.clubId === clubId && offer.playerId === playerId && isLiveMarketOffer(offer));
-  if (existing?.seasonWage === seasonWage && existing.seasons === seasons && existing.releaseFee === options.releaseFee && (existing.transfer?.mode ?? 'negotiated') === (options.transferMode ?? 'negotiated') && (existing.transfer?.fee ?? undefined) === transferFee && (existing.transfer?.paymentPlan ?? 'upfront') === transferPaymentPlan) return state;
-  return applyMarketEvent(state, { type: 'offer', id: `market-${state.seasonNumber}-${window.offers.length + 1}`, date: state.date, clubId, playerId, seasonWage, seasons, ...(transferFee === undefined ? {} : { transferFee }), ...(transferPaymentPlan === 'upfront' && options.transferMode !== 'release-clause' ? {} : { transferPaymentPlan }), ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }), ...(options.transferMode === 'release-clause' ? { transferMode: 'release-clause' } : {}) });
+  // relationships-3: the role offered is recorded with the offer (the chosen one, or his natural role at this club).
+  const role = offeredContractRole(state, clubId, playerId, options);
+  if (existing?.seasonWage === seasonWage && existing.seasons === seasons && existing.releaseFee === options.releaseFee && existing.role === role && (existing.transfer?.mode ?? 'negotiated') === (options.transferMode ?? 'negotiated') && (existing.transfer?.fee ?? undefined) === transferFee && (existing.transfer?.paymentPlan ?? 'upfront') === transferPaymentPlan) return state;
+  return applyMarketEvent(state, { type: 'offer', id: `market-${state.seasonNumber}-${window.offers.length + 1}`, date: state.date, clubId, playerId, seasonWage, seasons, ...(transferFee === undefined ? {} : { transferFee }), ...(transferPaymentPlan === 'upfront' && options.transferMode !== 'release-clause' ? {} : { transferPaymentPlan }), ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }), ...(options.transferMode === 'release-clause' ? { transferMode: 'release-clause' } : {}), ...(role === undefined ? {} : { role }) });
 }
 
 export function submitTransferOffer(state: SeasonState, playerId: string, seasonWage: number, seasons: number, fee: number, clubId = state.managedClubId, paymentPlan: TransferPaymentPlan = 'upfront', options: ContractOfferOptions = {}): SeasonState {
@@ -206,7 +210,7 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
     const fee = offer.transfer.counterFee!;
     const quote = quoteTransferOffer(next, offer.playerId, offer.seasonWage, offer.seasons, fee, offer.clubId, offer.transfer.paymentPlan);
     next = quote.canOffer && fee <= offer.transfer.requiredFee
-      ? submitTransferOffer(next, offer.playerId, offer.seasonWage, offer.seasons, fee, offer.clubId, offer.transfer.paymentPlan, { ...(offer.releaseFee === undefined ? {} : { releaseFee: offer.releaseFee }) })
+      ? submitTransferOffer(next, offer.playerId, offer.seasonWage, offer.seasons, fee, offer.clubId, offer.transfer.paymentPlan, { ...(offer.releaseFee === undefined ? {} : { releaseFee: offer.releaseFee }), ...(offer.role === undefined ? {} : { role: offer.role }) })
       : withdrawMarketOffer(next, offer.id, offer.clubId);
   }
   const finalProposalDay = isCompetitiveMarket(next) && addMarketDays(next.date, MARKET_RESPONSE_DAYS) === getMarketWindow(next)!.closesOn;
@@ -217,8 +221,8 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
   if (finalProposalDay) for (const club of state.clubs) {
     if (club.id === state.managedClubId && !state.employment.delegated || leaving.has(club.id) || getClubContractSummary(next, club.id).rosterSize >= MIN_ROSTER_SIZE) continue;
     for (const offer of getLiveMarketOffers(next).filter(item => item.clubId === club.id)) {
-      const acceptable = offer.status === 'pending' && (!offer.transfer || offer.transfer.clubStatus === 'accepted') && evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, next).outcome === 'accepted';
-      const better = getLiveMarketOffers(next).some(rival => rival.playerId === offer.playerId && rival.clubId !== club.id && rival.status === 'pending' && evaluateNegotiation(rival.playerId, rival.seasonWage, rival.seasons, rival.releaseFee, next).outcome === 'accepted' && compareMarketOffers(next, rival, offer) < 0);
+      const acceptable = offer.status === 'pending' && (!offer.transfer || offer.transfer.clubStatus === 'accepted') && evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, next, offer.role).outcome === 'accepted';
+      const better = getLiveMarketOffers(next).some(rival => rival.playerId === offer.playerId && rival.clubId !== club.id && rival.status === 'pending' && evaluateNegotiation(rival.playerId, rival.seasonWage, rival.seasons, rival.releaseFee, next, rival.role).outcome === 'accepted' && compareMarketOffers(next, rival, offer) < 0);
       if (!acceptable || better) next = withdrawMarketOffer(next, offer.id, club.id);
     }
   }
@@ -248,7 +252,9 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
         return retained || (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || rating(right.id) - rating(left.id) || left.id.localeCompare(right.id, 'en');
       });
       const quote = playerContractQuoter(next, club.id);
-      const player = ranked.find(player => quote(player.id, getCareerWage(next, player.id), 1).canOffer);
+      // relationships-3: computer clubs offer each player his natural role at the asking wage for it.
+      const wage = (id: string) => contractAskingWage(next, club.id, id);
+      const player = ranked.find(player => quote(player.id, wage(player.id), 1).canOffer);
       // A club that has sold a player can buy a stronger, known replacement.
       // Retain/free recruitment remains the default, with identical fee guards.
       const sold = next.employment.transfers.some(transfer => transfer.seasonNumber === next.seasonNumber && transfer.fromClubId === club.id);
@@ -257,17 +263,17 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
         const assessed = (id: string) => next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, id) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, id) : playerInList(getCareerPlayers(next), id)!.attributes).reduce((sum, value) => sum + value, 0);
         const approach = (id: string): { fee: number; options: ContractOfferOptions } => {
           const asking = requiredTransferFee(next, id), clause = getApplicableReleaseClause(next, id);
-          return clause.canTrigger && clause.fee! <= asking && quoteTransferOffer(next, id, getCareerWage(next, id), 1, clause.fee!, club.id, 'upfront', { transferMode: 'release-clause' }).canOffer ? { fee: clause.fee!, options: { transferMode: 'release-clause' } } : { fee: asking, options: {} };
+          return clause.canTrigger && clause.fee! <= asking && quoteTransferOffer(next, id, wage(id), 1, clause.fee!, club.id, 'upfront', { transferMode: 'release-clause' }).canOffer ? { fee: clause.fee!, options: { transferMode: 'release-clause' } } : { fee: asking, options: {} };
         };
-        const paid = [...getTransferCandidates(next, club.id)].filter(candidate => !getMarketWindow(next)!.offers.some(offer => offer.clubId === club.id && offer.playerId === candidate.id && offer.transfer)).sort((a, b) => assessed(b.id) - assessed(a.id) || a.id.localeCompare(b.id, 'en')).find(candidate => { const terms = approach(candidate.id); return (!player || assessed(candidate.id) > assessed(player.id)) && quoteTransferOffer(next, candidate.id, getCareerWage(next, candidate.id), 1, terms.fee, club.id, 'upfront', terms.options).canOffer; });
+        const paid = [...getTransferCandidates(next, club.id)].filter(candidate => !getMarketWindow(next)!.offers.some(offer => offer.clubId === club.id && offer.playerId === candidate.id && offer.transfer)).sort((a, b) => assessed(b.id) - assessed(a.id) || a.id.localeCompare(b.id, 'en')).find(candidate => { const terms = approach(candidate.id); return (!player || assessed(candidate.id) > assessed(player.id)) && quoteTransferOffer(next, candidate.id, wage(candidate.id), 1, terms.fee, club.id, 'upfront', terms.options).canOffer; });
         if (paid) {
           const terms = approach(paid.id);
           const openingFee = terms.options.transferMode === 'release-clause' ? terms.fee : Math.max(MIN_TRANSFER_FEE, Math.floor(terms.fee * .9 / TRANSFER_FEE_STEP) * TRANSFER_FEE_STEP);
-          next = submitTransferOffer(next, paid.id, getCareerWage(next, paid.id), 1, openingFee, club.id, 'upfront', terms.options); continue;
+          next = submitTransferOffer(next, paid.id, wage(paid.id), 1, openingFee, club.id, 'upfront', terms.options); continue;
         }
       }
       if (!player) break;
-      next = submitMarketOffer(next, player.id, getCareerWage(next, player.id), 1, club.id);
+      next = submitMarketOffer(next, player.id, wage(player.id), 1, club.id);
     }
   }
   return next;

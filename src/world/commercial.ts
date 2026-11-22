@@ -415,7 +415,7 @@ function terminationQuote(state: SeasonState, agreement: ClauseAgreement): Spons
   else if (state.status !== 'active') reason = 'End an agreement during the season, so new sponsors can still make offers.';
   else if (terms.cancelledSeasons < 1) reason = 'This agreement already ends with this season.';
   else if (getFinanceBalance(state.finance, agreement.clubId).unpaid > 0) reason = 'Settle unpaid costs before paying a termination fee.';
-  else if (getSpendableCash(state, agreement.clubId) < terms.fee) reason = 'The termination fee is more than your remaining budget.';
+  else if (getSpendableCash(state, agreement.clubId) < terms.fee) reason = 'The termination fee is more than your Spending left.';
   return { agreement, canTerminate: reason === null, reason, ...terms };
 }
 

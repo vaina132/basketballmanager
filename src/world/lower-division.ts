@@ -1,13 +1,15 @@
 import type { BackgroundClub, LowerDivisionIdentities, LowerDivisionMembers } from '../domain/background';
-import type { Player, PlayerAttributes, Position, Team } from '../domain/types';
+import type { Player, PlayerAttributes, SkillAttributes, Position, Team } from '../domain/types';
 import type { CareerWorld } from '../domain/world';
 import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import { derivePresidentTraits } from './presidents';
+import { presidentName } from '../data/people-names';
 import type { DevelopmentPlayerProfile } from '../data/development-player-profiles';
 import { NO_LOWER_DIVISION_COUNTRIES, validateWorld } from './career-world';
 import type { DomesticLeague } from './divisions';
 import { overallRating } from './overall-rating';
+import { withExtraAttributes } from './extra-attributes';
 import { REAL_WORLD_RULES, realWorldWage } from './real-world';
 
 /**
@@ -96,9 +98,9 @@ export function lowerDivisionExchanges(input: {
 
 const FIRST = ['Aren', 'Bero', 'Calin', 'Dario', 'Edin', 'Faro', 'Goran', 'Hale', 'Ilan', 'Jaro', 'Kian', 'Loren', 'Matei', 'Nevin', 'Oren', 'Pavo', 'Rion', 'Stavo', 'Tarin', 'Valen'];
 const LAST = ['Adrel', 'Brenik', 'Casol', 'Delmar', 'Ervan', 'Fennor', 'Galit', 'Harlen', 'Istov', 'Jorvik', 'Kestel', 'Lunar', 'Morvin', 'Nardel', 'Ostrin', 'Pellar', 'Quorin', 'Restan', 'Solvar', 'Tevrin'];
-const ATTRIBUTES: readonly (keyof PlayerAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
+const ATTRIBUTES: readonly (keyof SkillAttributes)[] = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'];
 /** Position emphasis on the 1-20 scale, matching the authored squads' shape. */
-const EMPHASIS: Readonly<Record<Position, Partial<Record<keyof PlayerAttributes, number>>>> = {
+const EMPHASIS: Readonly<Record<Position, Partial<Record<keyof SkillAttributes, number>>>> = {
   PG: { passing: 2, threePoint: 1, rebounding: -2 }, SG: { threePoint: 2, passing: 1, rebounding: -1 }, SF: { twoPoint: 1, defense: 1 },
   PF: { rebounding: 2, twoPoint: 1, threePoint: -1 }, C: { rebounding: 3, defense: 1, threePoint: -2, passing: -1 },
 };
@@ -108,7 +110,7 @@ function attributesFor(target: number, position: Position, variation: (key: stri
   const uniform = (level: number) => overallRating(Object.fromEntries(ATTRIBUTES.map(key => [key, level])) as unknown as PlayerAttributes, position);
   let level = 1;
   while (level < 20 && uniform(level + 1) <= target) level += 1;
-  const skills = Object.fromEntries(ATTRIBUTES.map(key => [key, Math.max(1, Math.min(20, level + (EMPHASIS[position][key] ?? 0) + variation(key)))])) as unknown as Record<keyof PlayerAttributes, number>;
+  const skills = Object.fromEntries(ATTRIBUTES.map(key => [key, Math.max(1, Math.min(20, level + (EMPHASIS[position][key] ?? 0) + variation(key)))])) as unknown as Record<keyof SkillAttributes, number>;
   // Nudge one ability at a time towards the target, rotating through the abilities; bounded and deterministic.
   for (let step = 0; step < 140; step += 1) {
     const current = overallRating(skills, position);
@@ -146,10 +148,13 @@ export function generateLowerDivisionSquad(seed: number, clubId: string, seasonN
     const id = `${clubId}-generated-s${seasonNumber}-${slot + 1}`.slice(0, 80);
     const value = (key: string, count: number) => hash(seed, `${id}:${key}`) % count;
     const target = Math.round(targetStrength) + LOWER_DIVISION_RULES.playerOffsets[slot]!;
-    const attributes = attributesFor(target, position, key => value(key, 3) - 1);
+    const skills = attributesFor(target, position, key => value(key, 3) - 1);
     const positionIndex = ['PG', 'SG', 'SF', 'PF', 'C'].indexOf(position);
     const age = youngest + value('age', oldest - youngest + 1);
-    squad.players.push({ id, name: `${FIRST[value('first', FIRST.length)]} ${LAST[value('last', LAST.length)]}`, number: 4 + slot, position, heightCm: 182 + positionIndex * 6 + value('height', 9), weightKg: 78 + positionIndex * 7 + value('weight', 10),
+    const heightCm = 182 + positionIndex * 6 + value('height', 9);
+    // The five further abilities follow the same rules as real players', with the generated age and no recorded minutes.
+    const attributes = withExtraAttributes({ id, position, heightCm, attributes: skills, age, minutes: 0 });
+    squad.players.push({ id, name: `${FIRST[value('first', FIRST.length)]} ${LAST[value('last', LAST.length)]}`, number: 4 + slot, position, heightCm, weightKg: 78 + positionIndex * 7 + value('weight', 10),
       skinTone: ['#e8b58e', '#c98c62', '#a96f49', '#774d35', '#edc5a1'][value('skin', 5)]!, hairColor: ['#29201b', '#553b29', '#191919', '#8b6744'][value('hair', 4)]!, attributes });
     // Exactly `age` on the season's first day: born that many years earlier, a year more if the birthday is still to come.
     const birthday = `${String(1 + value('month', 12)).padStart(2, '0')}-${String(1 + value('day', 28)).padStart(2, '0')}`;
@@ -173,6 +178,7 @@ export function withLowerDivisions(world: CareerWorld, lists: readonly LowerDivi
   const capital = Math.min(...world.presidents.map(president => president.seasonCapital));
   const { arena } = REAL_WORLD_RULES;
   const clubs: Team[] = [], finances: ClubFinanceDefinition[] = [], presidents: DevelopmentPresident[] = [];
+  const presidentNames = new Set(world.presidents.map(president => president.name));
   const profiles: Record<string, DevelopmentPlayerProfile> = {}, wages: Record<string, number> = {}, contracts: Record<string, number> = {};
   const lowerDivisions = lists.map(list => {
     const own = world.domesticLeagues?.filter(league => league.country === list.country) ?? [];
@@ -185,7 +191,7 @@ export function withLowerDivisions(world: CareerWorld, lists: readonly LowerDivi
       Object.assign(profiles, squad.profiles); Object.assign(wages, squad.wages); Object.assign(contracts, squad.contracts);
       const capacity = arena.smallest, h = hash(seed, `club:${identity.id}`);
       finances.push({ clubId: identity.id, venue: `${identity.name} Arena`, sponsor: world.sponsors[h % world.sponsors.length]!.name, capacity, referenceDemand: Math.round(capacity * arena.fillFrom / arena.step) * arena.step });
-      presidents.push({ clubId: identity.id, name: `${FIRST[(h >>> 4) % FIRST.length]} ${LAST[(h >>> 12) % LAST.length]}`, generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital, traits: derivePresidentTraits(identity.id) });
+      presidents.push({ clubId: identity.id, name: presidentName(identity.id, list.country, presidentNames), generosity: (1 + (h >>> 20) % 5) as DevelopmentPresident['generosity'], seasonCapital: capital, traits: derivePresidentTraits(identity.id) });
     }
     return { country: list.country, tier: list.tier, name: list.name, clubIds: list.clubs.map(club => club.id) };
   });

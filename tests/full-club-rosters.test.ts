@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { offeredContractRole } from '../src/world/contract-roles';
 import { createSeason, advanceSeason, rolloverSeason, NEW_CAREER_SYSTEMS, managedSide, setMatchdaySelection } from '../src/world/season';
 import { simulateToEnd, setAutoSubstitutions, stepMatch } from '../src/engine/match';
 import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { clubSalaryBudget } from '../src/world/club-roster-policy';
+import { staffRoomForWages } from '../src/world/wage-pool';
 import { getClubContractSummary } from '../src/world/employment-policy';
 import { setEmploymentDelegation } from '../src/world/employment';
 import { getFixtureTeams } from '../src/world/rosters';
@@ -21,7 +23,8 @@ import { getPlayerPayroll } from '../src/world/payroll';
 import { getPlayerRelationship } from '../src/world/relationships';
 
 const world = fullRosterWorld();
-const opening = () => createSeason({ seed: 8083, world, managedClubId: world.clubs[2]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
+// relationships-3 rules: a healthy player left outside the twelve counts a zero-minute game. The calmer format-77 rules exempt such games (tests/calm-playing-time.test.tsx).
+const opening = () => createSeason({ seed: 8083, world, managedClubId: world.clubs[2]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, calmPlayingTime: false });
 const completeRound = (state: SeasonState) => advanceSeason({ ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch!, managedSide(state), true)) });
 
 describe('full club rosters and separate matchday selection', () => {
@@ -32,7 +35,8 @@ describe('full club rosters and separate matchday selection', () => {
     expect(Object.keys(state.training.points)).toHaveLength(65);
     for (const club of state.clubs) {
       expect(getClubContractSummary(state, club.id, 1).seasonWages).toBe(club.players.length * 1_200_000);
-      expect(getClubContractSummary(state, club.id, 1).budget).toBe(clubSalaryBudget(state, club.id));
+      // Format 75: the wage pool adds the staff budget the club's staff leave unused.
+      expect(getClubContractSummary(state, club.id, 1).budget).toBe(clubSalaryBudget(state, club.id) + staffRoomForWages(state, club.id, 1));
     }
     expect(state.activeMatch![managedSide(state)].players).toHaveLength(12);
     expect(parseSeason(serializeSeasonCompact(state))).toEqual(state);
@@ -90,7 +94,7 @@ describe('full club rosters and separate matchday selection', () => {
     const selected = state.activeMatch![managedSide(state)].players.map(player => player.id);
     state = setMatchdaySelection(state, selected);
     const seller = state.clubs[1]!, target = seller.players[0]!.id;
-    const wage = requiredNegotiationWage(target, 1, undefined, state), fee = requiredInSeasonTransferFee(state, target);
+    const wage = requiredNegotiationWage(target, 1, undefined, state, offeredContractRole(state, state.managedClubId, target)), fee = requiredInSeasonTransferFee(state, target);
     const pending = submitInSeasonTransferOffer(state, target, wage, 1, fee);
     const next = completeRound(pending);
     expect(contractForRound(next.employment, target, 1, 2)?.clubId).toBe(state.managedClubId);

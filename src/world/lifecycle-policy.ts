@@ -1,6 +1,7 @@
 import type { PlayerAging, RetirementNotice } from '../domain/lifecycle';
 import type { SeasonState } from '../domain/season';
-import type { PlayerAttributes } from '../domain/types';
+import type { ExtraAttributes, PlayerAttributes, SkillAttributes } from '../domain/types';
+import { EXTRA_AGING, EXTRA_ATTRIBUTES, hasExtraAttributes } from './extra-attributes';
 import type { TrainingPoints } from '../domain/training';
 import type { WorldContext } from '../domain/world';
 import { playerAgeOnDate } from '../data/development-player-profiles';
@@ -14,7 +15,7 @@ const ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense',
 const DAY_MS = 86_400_000;
 export const MIN_LIFECYCLE_POPULATION = 60;
 export const MAX_PENDING_CLUB_RETIREMENTS = 2;
-export const AGING_RATES: Readonly<Record<keyof PlayerAttributes, { fromAge: number; annualPoints: number }>> = {
+export const AGING_RATES: Readonly<Record<keyof SkillAttributes, { fromAge: number; annualPoints: number }>> = {
   twoPoint: { fromAge: 35, annualPoints: 10 }, threePoint: { fromAge: 35, annualPoints: 10 },
   freeThrow: { fromAge: 35, annualPoints: 10 }, passing: { fromAge: 35, annualPoints: 10 },
   defense: { fromAge: 32, annualPoints: 20 }, rebounding: { fromAge: 32, annualPoints: 20 },
@@ -109,5 +110,25 @@ export function getPlayerAging(context: LifecycleContext, playerId: string, onDa
 export function applyAgingAttributes(context: LifecycleContext, playerId: string, attributes: PlayerAttributes, onDate: string): PlayerAttributes {
   if (!context.lifecycle?.enabledSince || onDate < context.lifecycle.enabledSince.date) return { ...attributes };
   const aging = getPlayerAging(context, playerId, onDate);
-  return Object.fromEntries(ATTRIBUTES.map(key => [key, Math.max(1, Math.min(20, attributes[key] - aging.skillLoss[key]))])) as unknown as PlayerAttributes;
+  const skills = Object.fromEntries(ATTRIBUTES.map(key => [key, Math.max(1, Math.min(20, attributes[key] - aging.skillLoss[key]))])) as unknown as PlayerAttributes;
+  return hasExtraAttributes(attributes) ? { ...skills, ...agedExtras(context, playerId, attributes, onDate) } : skills;
+}
+
+/**
+ * The five further abilities (stored in new careers) change with age from the same dated start as the skills:
+ * Intelligence and Mental grow until 30, Blocking and Stealing fade from 32 and 31, Intelligence a little from 35
+ * (`EXTRA_AGING`). Whole points only, from integer hundredths over a 365.25-day year, like the skills.
+ */
+function agedExtras(context: LifecycleContext, playerId: string, attributes: ExtraAttributes, onDate: string): ExtraAttributes {
+  const dateOfBirth = lifecycleDateOfBirth(context, playerId), startedOn = agingStart(context, playerId, onDate);
+  if (!dateOfBirth || !startedOn) return Object.fromEntries(EXTRA_ATTRIBUTES.map(key => [key, attributes[key]])) as unknown as ExtraAttributes;
+  const retirement = getPlayerRetirement(context, playerId, onDate);
+  const until = dateNumber(retirement.status === 'retired' ? retirement.notice!.retiredOn : onDate), start = dateNumber(startedOn);
+  const daysBetween = (from: number, to: number) => Math.max(0, Math.round((Math.min(to, until) - Math.max(from, start)) / DAY_MS));
+  return Object.fromEntries(EXTRA_ATTRIBUTES.map(key => {
+    const rule = EXTRA_AGING[key];
+    const growth = rule.growPoints ? Math.floor(daysBetween(-Infinity, dateNumber(birthday(dateOfBirth, rule.growUntilAge))) * rule.growPoints * 4 / 1461 / 100) : 0;
+    const loss = rule.annualPoints ? Math.floor(daysBetween(dateNumber(birthday(dateOfBirth, rule.fromAge)), Infinity) * rule.annualPoints * 4 / 1461 / 100) : 0;
+    return [key, Math.max(1, Math.min(20, attributes[key] + growth - loss))];
+  })) as unknown as ExtraAttributes;
 }

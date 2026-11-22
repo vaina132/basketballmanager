@@ -474,9 +474,44 @@ Chosen as recommended defaults under the owner's instruction to finish the level
 
 The owner allowed this session to use Supabase to publish corrected player positions ("you do it with supabase permission") and chose free official sources first for exact positions ("let's first try official free sources if possible ... any website that gives info on player positions should have this data somewhere"), before any paid provider. All player data comes from API-Sports; it gives only Guard/Forward/Center (sometimes wrong) or nothing, and the pack guesses exact positions from statistics. A backup of the published pack is kept before any replacement.
 
+Phase 1 result (16 November 2026): `2026.11-world-4-online` is live. Official exact positions win; an official Guard/Forward/Center role keeps the estimate inside that group (statistics rule); Center is exact. Matches are made within a club only (exact name, unique initial and surname, contained name words, or unique surname with the same shirt number); ambiguous names are left alone. Official heights, weights, birth dates, shirt numbers and full names are applied; nationalities only where the pack had none.
+
+Phase 2 result (17 November 2026): `2026.11-world-5-online` is live with exact positions from official league sites (ACB, Primera FEB, BBL, ESAKE, Lega Basket A and A2, BCL); a domestic league's exact label wins over a EuroLeague or BCL broad role. **Open for the owner:** ACB, FEB, BBL and FIBA (BCL) reserve their content in their terms (personal or press use, or no copying without permission); positions are plain facts and each carries its source link, and any source's rows can be removed and the pack republished. France (lnb.fr data needs a login token; not worked around) and Turkey (tbf.org.tr refuses automated access) are not covered.
+
 ## Simplification before the play test (owner decision, 16 November 2026)
 
 "Please implement now the full starting staff for every club, the court picture starting 5, squad roles in the squad list and contract ops, 6 facility levels and arena seat expansion, a simple bank loan process ... when I get a loan, it's added to my budget directly ... Board as its own menu item, a day-by-day continue button, and transfers as a player search ... I would prefer to play test when these things are implemented." The play test now follows these items. Their defaults are recorded here as each lands.
+
+Landed 17 November 2026 (reversible defaults):
+- **Transfers search** lists every player the manager could sign or approach; players outside the scouting range show no rating until scouted. Own contracts and renewals are on Squad > Contracts; Board is a menu item.
+- **Facilities (`facilities-3`, new careers):** six levels, Very Poor to Excellent, for training, youth, medical and scouting; Average equals the old base and Excellent the old top level; one level per upgrade, paid from Remaining budget, 3-8 weeks, upkeep only above the starting level; starting levels follow the club's money band; no wear, repairs, leases or board capital. Tables in `FACILITY_RULES_3` (`src/world/facilities-policy.ts`).
+- **Arena:** expansions of +500, +1,000, +2,500 or +5,000 seats (EUR 90,000 to 750,000 at the development scale, 4 to 16 weeks), at most half the current seats per project, 22,000 seats at most, EUR 0.40 a week per added seat.
+- **Bank loan (`bank-1`, `BANK_LOAN_RULES` in `src/world/facility-debt.ts`):** up to 20% of the season budget; 1 to 4 seasons; added to Remaining budget at once; two payments a season from the next season; 4% to 7% a year; early repayment costs 2%. Computer clubs and "Let the board handle facilities" borrow only for a shortfall, one loan at a time, with debt at most half the limit.
+
+- **Day-by-day Continue:** one Continue in the top bar runs day by day and stops at the manager's match, blocking decisions, new action items, replies to his offers, offers for his players, president requests, a club change, the season end, start-ready and the season start; press questions do not stop a run; with a short, non-delegated squad the offseason moves one recruitment day per press; Space presses Continue.
+- **Court picture (match center):** five circles PG, SG, SF, PF, C, filled by drag, tap-then-tap or keyboard; Best five. Out of position, only for players the manager places himself: one step −5%, two steps −12%, three or four −25% on two-point, three-point, passing, defence and rebounding (not free throws or stamina). Automatic choices and computer clubs keep listed positions. The next game starts from the circles chosen before tip-off.
+
+- **Opening staff (`coaching-2`, career option `staffing`):** every club starts with one training coach, scout, fitness coach, physio, assistant and youth coach, rated to its level (rank by season budget, or squad strength without money data; up to 15% spread); each role uses at most its share of the staff budget (training 30%, others 15%, youth 10%). A sacked person's paid fee is not refunded but stops counting against the season's staff budget from the day they leave. Computer clubs renew one training coach and refill roles at their new level each season; the manager's empty roles stay vacant with a Find button. Replacing someone for a filled role shows "This replaces X as <role>. X leaves the club; their fee is not refunded."
+- **Squad roles (`relationships-3`):** Star 24-34 minutes, Starter 20-30, Rotation 12-20, Reserve 0-8, Prospect 0-15; defaults by squad rank (1-2 Star, 3-5 Starter, 6-9 Rotation, 10+ Reserve; 20 or younger outside the top 8 Prospect). Wage effect of the role offered: Star +15%, Starter +5%, Rotation 0, Reserve -10%, Prospect -15%. A player in his club's top 2 by wage refuses below Starter, top 5 refuses Reserve and Prospect; only under-23s accept Prospect. The agreed role is a contract term. Below his role for 6 games he asks for talks; still so 4 matchdays later with no promise running, he asks to leave (-10 morale until resolved). Computer clubs offer each player his natural role.
+
+## Play-test round 1 decisions (owner, 18 November 2026)
+
+- **Two budgets:** Wages left (players and staff, one pool) and Spending left (transfers, facilities, arena; bank loans add here). Format 75, `coaching-3`. Budget bar on Desk, Transfers, Squad > Contracts, Staff and Club only. Wages paid automatically.
+- **Inbox:** one list, All and Unread filters.
+- **People:** one person per job; staff names about 75% from the club's country, generated presidents about 90%; real presidents and first assistant coaches from Wikipedia where listed (`src/data/real-club-people.ts`).
+- **Five attributes** (names chosen by the owner): Blocking, Stealing, Intelligence, Mental, Discipline; 1-20, estimated for real players; engine effects centred on 12 (blocks near the rim, steals on passes and drives, fewer turnovers, late close-game shooting, +2% training per Discipline point above 10). Calibration stays in range (points 85.9, turnovers 13.5, steals 6.9, blocks 2.7).
+
+## Keep positions from league sites with strict terms (owner decision, 21 November 2026)
+
+"Yes of course." Positions taken from ACB, FEB, BBL and BCL sites stay in the game (plain facts, each with its source link) while the game is free and in testing; ask a lawyer or the leagues before selling.
+
+## Staff under contract stay at a new season (owner decision, 18 November 2026)
+
+Staff hires need Spending left to cover the rest of the season's salary (replacements count compensation once). Staff already under contract simply stay at a new season, like players' contracts, even if that takes Spending left below zero; the club fixes it with a bank loan or sales ("A").
+
+## No visible estimate markings (owner decision, 18 November 2026)
+
+"Dont mark est. Remove the markings." Positions show no "est." anywhere; the hover text still says whether a position is official, reported or estimated (`PositionLabel`, `estimateMark` brings the marking back if a screen needs it).
 
 ## Two safety items alongside the play test (owner decision, 16 November 2026)
 
@@ -530,3 +565,20 @@ These are research and validation tasks. They should not be turned into question
 Reuse deterministic academy/board calculations across strict checks only by exact complete calculation inputs, with bounded private memory and independent returned values. Validation verdicts, raw input object identity across calls and imported seals are not reusable authority. All original chronological/accounting comparisons still run. Use the existing compact codec and shared structural key blocks to bound duplicated cache content. Cold checks, eviction, changed dependencies and unavailable local fingerprints retain strict fallback. No financial rule, match RNG, data pack or provider data changes are part of this work.
 
 Close the single-league 3.2 implementation after verification; retain the combined three-league/Europe performance acceptance explicitly for 3.7. Do not claim constant lifetime file size, unlimited retained history or combined-world performance from a single-league benchmark. The next implementation is full-club/competition/matchday roster separation and provider freshness, then the shared calendar.
+
+## Play-test round 2, Wave 1 defaults (22 November 2026)
+
+- Playing time (`PLAYING_TIME_RULES`, `relationships-4`, format 77, new careers): minutes judged over a player's last 8 games in his role once 6 count; games missed through injury, illness, fouling out or not being in the matchday squad do not count; short only below two thirds of the role's minimum. Default, earlier-adjusted and below-Starter contract roles adjust quietly to the minutes (note on Squad dynamics, no Inbox message). Others send one calm "would like more minutes" message; a new concern only 8 matchdays after the last settled. Only Stars and Starters by contract under half their minimum without a promise ask for talks after 8 matchdays and to leave 8 later. Reserves and Prospects never complain.
+- Injury lengths (`injuries-2`, `injuryLengths`, new careers): same injury rates, longer recoveries (for example fracture 28-120 days, meniscus 28-150, hamstring and calf 5-63, ankle sprain 2-63; ACL and Achilles 8-13 months). A seeded league season gives about 1.4-2.1 absences of 3 weeks or more per club, against 0.67 before.
+
+## Real logos and player photos (owner decision, 22 November 2026)
+
+The owner wants the original club and competition logos, not generated badges. Source: API-Sports team and league logos (every club of the 13 competitions has one). Player photos: Wikimedia Commons where a free licence allows, with photographer credits on a Credits page; a paid source only on a later owner decision. This replaces the earlier rule that photos and logos stay out until rights are cleared; the owner accepts that a club may ask for its logo to be removed, and then it is removed.
+
+## Richer match engine (Wave 3, 22 November 2026)
+
+New careers use `matchPlays` (format 79): more distinct actions with the sprint-4 calibration kept (possessions 74.4, 113.2 points per 100, 3PA share 41.1%, turnovers 13.1, steals 7.4, blocks 2.6 per team per game over 528 seeded games). Older careers, fixtures and youth matches keep the old engine so saved matches replay exactly.
+
+## National teams defaults (Wave 4, 22 November 2026)
+
+Season one uses the real 2027 World Cup European Qualifiers second round (24 teams, groups I-L) and its two remaining windows; the draw inside groups and a zero start table are the game's own. The summer tournament for the 12 qualifiers is simulated at the season change (groups of three, semi-finals, final). National job offers need reputation 70, 55 or 42 by team strength (10 less for the manager's own country); federations sack below 30 (the manager below 25) and renew from 50. Players whose club has a game in the window week are not called up.

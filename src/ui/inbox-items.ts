@@ -1,3 +1,4 @@
+import { nationalInboxItems } from './national-inbox'
 import type { SeasonState } from '../domain/season'
 import { getDevelopmentSponsor } from '../data/development-sponsors'
 import { getBoardSummary } from '../world/board'
@@ -9,7 +10,7 @@ import { getCareerPlayer } from '../world/player-catalog'
 import { getPressQuestion, PRESS_ANSWER_TEXT, pressAnswerLabel, pressQuote } from '../world/press-policy'
 import { PRESS_TOPIC_TITLES } from '../world/media'
 import { awaitsContractReply, getClubContractRequests, getSquadRelationships } from '../world/relationships'
-import { CONTRACT_REQUEST_TEXT as TEXT } from '../world/relationship-rules'
+import { CONTRACT_REQUEST_TEXT as TEXT, PLAYING_TIME_RULES, SQUAD_ROLE_RULES } from '../world/relationship-rules'
 import { seasonLabel } from '../world/season'
 import { governingDerby } from '../world/rivalries'
 import { rivalClubName, rivalryInboxItems } from './rivalry-text'
@@ -25,7 +26,9 @@ import { formatEuros } from './money-format'
 
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
 /** `jobs` (format 69): the job market on the unemployed desk. */
-export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract' | 'jobs'
+/** `bid` (format 78): a club's offer for one of your players, answered in the reading pane. */
+/** `national` (format 80): the national team page (or Competitions > National teams without a national job). */
+export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract' | 'jobs' | 'bid' | 'national'
 export interface InboxItem {
   id: string
   date: string
@@ -36,6 +39,10 @@ export interface InboxItem {
   needsAction: boolean
   target: InboxTarget
   playerId?: string
+  /** `bid` items: the offer and whether it belongs to the season's or the offseason's market. */
+  offerId?: string
+  market?: 'season' | 'offseason'
+  /** `national` job offers (format 80): the offer answered in the reading pane uses `offerId`. */
 }
 
 const money = (cents: number) => formatEuros(cents)
@@ -90,9 +97,25 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     }
   }
 
-  if (season.relationships.enabledSince) for (const row of getSquadRelationships(season)) {
-    if (row.concern) items.push({ id: `concern-${row.player.id}`, date: season.date, category: 'players', title: `${row.player.name}: playing-time concern`, detail: `${row.concern}. Averaging ${row.averageMinutes} minutes against an agreed minimum of ${row.minMinutes}.`, needsAction: row.canTalk, target: 'dynamics', playerId: row.player.id })
+  const squadRows = season.relationships.enabledSince ? getSquadRelationships(season) : []
+  // relationships-4 (format 77): playing time speaks only through the recorded calm concern below, once per concern.
+  const calm = season.relationships.model === 'relationships-4'
+  for (const row of squadRows) {
+    if (row.concern && !calm) items.push({ id: `concern-${row.player.id}`, date: season.date, category: 'players', title: `${row.player.name}: playing-time concern`, detail: `${row.concern}. Averaging ${row.averageMinutes} minutes against an agreed minimum of ${row.minMinutes}.`, needsAction: row.canTalk, target: 'dynamics', playerId: row.player.id })
     for (const promise of row.promises) if (promise.outcomeDate && (promise.status === 'kept' || promise.status === 'broken')) items.push({ id: `${promise.id}-outcome`, date: promise.outcomeDate, category: 'players', title: `Promise ${promise.status} · ${row.player.name}`, detail: `${promise.averageMinutes} minutes per eligible game against ${promise.targetMinutes} promised.`, needsAction: false, target: 'dynamics', playerId: row.player.id })
+  }
+  // relationships-3: an unmet role's requests for talks or to leave, from the recorded journal.
+  const openRoleRequests = new Map(squadRows.flatMap(row => row.roleRequest ? [[row.player.id, row.roleRequest] as const] : []))
+  for (const event of season.relationships.events) {
+    if (event.type !== 'role-request' || event.clubId !== clubId) continue
+    const name = getCareerPlayer(season, event.playerId).name, open = openRoleRequests.get(event.playerId)
+    const current = !!open && (event.stage === 'talks' ? open.id === event.id && open.stage === 'talks' : event.stage === 'concern' ? open.id === event.id && open.stage === 'concern' : event.stage === 'leave' && open.stage === 'leave' && open.leaveOn === event.date)
+    if (event.stage === 'concern') items.push({ id: event.id, date: event.date, category: 'players', title: `${name} would like more minutes`, detail: 'He hopes to play more than he has lately. Open Squad dynamics to promise him minutes, explain his role, or give him a smaller role.', needsAction: current && !open!.answered, target: 'dynamics', playerId: event.playerId })
+    else if (calm && event.stage === 'talks') items.push({ id: event.id, date: event.date, category: 'players', title: `${name} asks for talks about his role`, detail: `His contract role has gone clearly unmet for a long time. Promise minutes, explain his role or agree a different role; if nothing changes within ${PLAYING_TIME_RULES.escalation.leaveAfterRounds} club games he asks to leave.`, needsAction: current && !open!.answered, target: 'dynamics', playerId: event.playerId })
+    else if (calm && event.stage === 'settled') continue
+    else if (event.stage === 'talks') items.push({ id: event.id, date: event.date, category: 'players', title: `${name} asks for talks about his role`, detail: `His playing time has stayed below his role for ${SQUAD_ROLE_RULES.escalation.talksAfterGames} eligible games. Promise minutes, explain the competition or agree a different role; if nothing changes within ${SQUAD_ROLE_RULES.escalation.leaveAfterRounds} club games he asks to leave.`, needsAction: current && !open!.answered, target: 'dynamics', playerId: event.playerId })
+    else if (event.stage === 'leave') items.push({ id: event.id, date: event.date, category: 'players', title: `${name} asks to leave`, detail: `Still below his role, he wants a move. His morale is ${SQUAD_ROLE_RULES.escalation.leaveMorale} lower until his minutes meet his role again or he is sold.`, needsAction: current, target: 'dynamics', playerId: event.playerId })
+    else items.push({ id: event.id, date: event.date, category: 'players', title: `Role request settled · ${name}`, detail: 'His playing time meets his role again.', needsAction: false, target: 'dynamics', playerId: event.playerId })
   }
   // Format 66: contract requests at the managed club and what became of them.
   for (const request of getClubContractRequests(season, clubId)) {
@@ -134,9 +157,41 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
     if (outlook?.offers.length && !outlook.dismissed) items.push({ id: `offers-declined-${year}`, date: outlook.verdict.date, category: 'board', title: outlook.offers.length === 1 ? 'Job offer declined' : 'Job offers declined', detail: `You stayed at ${season.clubs.find(club => club.id === outlook.clubId)!.name} after ${seasonLabel(year)}; ${outlook.offers.map(offer => season.clubs.find(club => club.id === offer.clubId)!.name).join(' and ')} had offered you ${outlook.offers.length === 1 ? 'its job' : 'their jobs'}.`, needsAction: false, target: 'board' })
   }
   items.push(...careerMoveItems(season))
+  items.push(...bidInboxItems(season))
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })
 
+  items.push(...nationalInboxItems(season))
   return items.sort((a, b) => Number(b.needsAction) - Number(a.needsAction) || compare(b.date, a.date) || compare(a.id, b.id))
+}
+
+/**
+ * Owner feedback (22 November 2026): every club's offer for one of your players, listed or not, waits in the Inbox with
+ * Accept and Decline. Declined and expired offers leave the Inbox; an accepted fee stays until the player decides.
+ */
+export function bidInboxItems(season: SeasonState): InboxItem[] {
+  const clubId = season.managedClubId, items: InboxItem[] = []
+  const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? 'A club'
+  const text = (playerId: string, buyerId: string, fee: number, loan: boolean, accepted: boolean, deadline: string) => {
+    const player = getCareerPlayer(season, playerId).name
+    return {
+      title: accepted ? `${loan ? 'Loan' : 'Sale'} agreed · ${player}` : loan ? `Loan offer for ${player}` : `Offer for ${player}`,
+      detail: accepted ? `You accepted ${name(buyerId)}'s ${loan ? 'loan' : 'transfer'} offer of ${money(fee)}. ${player} decides by ${medicalDate(deadline)}.`
+        : `${name(buyerId)} offers ${money(fee)} ${loan ? `to take ${player} on loan for the rest of this season. He comes back to you next season` : `for ${player}`}. Answer by ${medicalDate(deadline)}, or the offer expires.`,
+    }
+  }
+  if (season.status === 'active') for (const offer of season.recruitment?.offers ?? []) {
+    if (!offer.transfer || offer.transfer.sellerClubId !== clubId || offer.seasonNumber !== season.seasonNumber || offer.transfer.mode === 'release-clause') continue
+    const review = offer.status === 'club-review' && offer.offeredRound === season.round, accepted = offer.status === 'pending' && offer.transfer.clubStatus === 'accepted'
+    if (!review && !accepted) continue
+    items.push({ id: `bid-${offer.id}`, date: offer.offeredOn, category: 'players', ...text(offer.playerId, offer.clubId, offer.transfer.fee, offer.transfer.mode === 'loan', accepted, offer.responseOn), needsAction: review, target: 'bid', playerId: offer.playerId, offerId: offer.id, market: 'season' })
+  }
+  else for (const window of season.market?.windows ?? []) if (window.seasonNumber === season.seasonNumber && !window.closed) for (const offer of window.offers) {
+    if (!offer.transfer || offer.transfer.sellerClubId !== clubId || offer.transfer.mode === 'release-clause') continue
+    const review = offer.status === 'club-review', accepted = offer.status === 'pending' && offer.transfer.clubStatus === 'accepted'
+    if (!review && !accepted) continue
+    items.push({ id: `bid-${offer.id}`, date: offer.offeredOn, category: 'players', ...text(offer.playerId, offer.clubId, offer.transfer.fee, false, accepted, review ? offer.responseOn : offer.expiresOn), needsAction: review, target: 'bid', playerId: offer.playerId, offerId: offer.id, market: 'offseason' })
+  }
+  return items
 }
 
 /** One message for each recorded club change, unemployment and appointment (career-2 seasons can hold several moves). */
@@ -151,7 +206,7 @@ function careerMoveItems(season: SeasonState): InboxItem[] {
 /** Career-3 (format 69): the inbox of a manager without a club: the career's moves and every job open now. */
 function unemployedInboxItems(season: SeasonState): InboxItem[] {
   const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? id
-  const items = careerMoveItems(season), market = jobMarket(season)
+  const items = [...careerMoveItems(season), ...nationalInboxItems(season)], market = jobMarket(season)
   for (const vacancy of market?.vacancies ?? []) {
     const opened = vacancy.opened === 'season' ? `${name(vacancy.clubId)}'s board replaced its coach after matchday ${vacancy.round}; an interim coach has the team.` : `${name(vacancy.clubId)}'s season ended Under pressure, so its board is replacing its coach.`
     const until = vacancy.openUntil ? `The job stays open until ${medicalDate(vacancy.openUntil)}.` : 'The job stays open through this offseason.'

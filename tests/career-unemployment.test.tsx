@@ -26,10 +26,10 @@ const noop = () => {};
 const finish = (state: SeasonState) => state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state;
 const step = (state: SeasonState) => advanceSeason(finish(state));
 // Career rules only: president personalities (format 70) would move each club's Under pressure line; tests/presidents.test.tsx covers them.
-const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, presidents: false }), true), true);
+const start = (seed: number, club = 'rhine-falcons') => setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: club, injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchPlays: false, injuryLengths: false, presidents: false, calmPlayingTime: false }), true), true);
 const throughMarket = (state: SeasonState) => { let next = state; for (let day = 0; day < 80 && getMarketStartReason(next); day += 1) next = advanceMarket(next); return next; };
 const roundTrip = (state: SeasonState) => expect(parseSeason(serializeSeason(state))).toEqual(state);
-const desk = (season: SeasonState) => renderToStaticMarkup(<UnemployedDesk season={season} busy={false} onContinue={noop} onNextDay={noop} onStartSeason={noop} onAccept={noop} onOpenCompetitions={noop} onOpenCalendar={noop} />);
+const desk = (season: SeasonState) => renderToStaticMarkup(<UnemployedDesk season={season} busy={false} onAccept={noop} onOpenCompetitions={noop} onOpenCalendar={noop} />);
 /** A new career whose manager resigns without a new job before the games of week `week`. */
 const resignedAt = (seed: number, week: number) => { let state = start(seed); while (state.round < week) state = step(state); return resignManager(state, NO_CLUB); };
 
@@ -38,9 +38,11 @@ const resignedAt = (seed: number, week: number) => { let state = start(seed); wh
 // recurring youth injuries, format 72): Danube Lynx's board dismisses the manager after week 9 (7) of season 2 (as in
 // tests/career-board-rules.test.tsx), and no club is replacing its coach then, so there is no offer. After resigning in
 // week 3 of season 1: seed 39 (5) ends Danube Lynx's season Under pressure (a job open in that offseason); seed 27 sees
-// Danube Lynx's board replace its coach after week 6 (7), so the job is open before the games of weeks 7-9.
-const DISMISSAL_SEED = 35, DISMISSAL_CLUB = 'danube-lynx', DISMISSAL_WEEK = 9;
-const RESIGN_WEEK = 3, SEASON_END_SEED = 39, SEASON_END_JOB = 'danube-lynx', MID_SEASON_SEED = 27, MID_SEASON_JOB = 'danube-lynx', JOB_WEEK = 7;
+// Danube Lynx's board replace its coach after week 6 (7), so the job is open before the games of weeks 7-9. With opening
+// staff for every club and squad roles (format 74): seed 7 (35) dismisses after week 7 (9) of season 2, and seed 20 (39)
+// ends Danube Lynx's season Under pressure; seed 27 is unchanged.
+const DISMISSAL_SEED = 7, DISMISSAL_CLUB = 'danube-lynx', DISMISSAL_WEEK = 7;
+const RESIGN_WEEK = 3, SEASON_END_SEED = 20, SEASON_END_JOB = 'danube-lynx', MID_SEASON_SEED = 27, MID_SEASON_JOB = 'danube-lynx', JOB_WEEK = 7;
 let beforeDismissal: SeasonState, unemployed: SeasonState, seasonEnd: SeasonState, offseason: SeasonState;
 
 beforeAll(() => {
@@ -87,7 +89,8 @@ describe('declining every offer', () => {
     expect(html).toContain(`Dismissed (matchday ${DISMISSAL_WEEK + 1}) · no new club`);
     expect(html).toContain('data-career-period="unemployed"');
     expect(html).toContain('No club is looking for a coach right now.');
-    expect(html).toContain('id="unemployed-continue"');
+    // The one Continue on the top bar plays the week (owner request, 16 November 2026).
+    expect(html).toMatch(/data-unemployed-next="true">Continue plays (every club&#x27;s games this week|the final week and finishes the season)\./);
     expect(getInboxItems(unemployed).find(item => item.id === 'career-move-2')).toMatchObject({ title: 'Dismissed by Danube Lynx · without a club', target: 'jobs' });
     expect(careerNotices(unemployed).map(notice => notice.key)).toEqual(['career', 'career-unemployed']);
   });
@@ -145,7 +148,7 @@ describe('seasons without a club', () => {
 
   it('runs the offseason market for every club and rolls over into a new season without a club', () => {
     expect(getMarketStartReason(offseason)).toBeNull();
-    expect(desk(offseason)).toContain('id="unemployed-start-season"');
+    expect(desk(offseason)).toMatch(/data-unemployed-next="true">Recruitment is complete: Continue starts \d{4}\/\d{2}\./);
     roundTrip(offseason);
     const next = rolloverSeason(offseason);
     expect([next.seasonNumber, next.managedClubId, next.activeMatch]).toEqual([3, NO_CLUB, null]);
@@ -230,7 +233,7 @@ describe('taking a job', () => {
 
   it('keeps careers without a club running in a world with divisions, playoffs and Europe', () => {
     const world = placesWorld();
-    let state = setEmploymentDelegation(createSeason({ world, managedClubId: world.domesticLeagues[0].clubIds[0], ...NEW_CAREER_SYSTEMS, presidents: false, injuryMode: 'off' }), true);
+    let state = setEmploymentDelegation(createSeason({ world, managedClubId: world.domesticLeagues[0].clubIds[0], ...NEW_CAREER_SYSTEMS, matchPlays: false, presidents: false, injuryMode: 'off' }), true);
     while (state.round < 3) state = step(state);
     state = resignManager(state, NO_CLUB);
     while (state.status === 'active') state = advanceSeason(state);
@@ -241,14 +244,14 @@ describe('taking a job', () => {
 
 describe('older careers', () => {
   it('keep a guaranteed offer and refuse to leave without a club', () => {
-    const career2 = asCareer2(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }));
+    const career2 = asCareer2(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchPlays: false }));
     expect(career2.career.model).toBe('career-2');
     const outlook = resignationOutlook(career2)!;
     expect(outlook.offers.length).toBeGreaterThan(0);
     expect(outlook.unemployment).toBeUndefined();
     expect(() => resignManager(career2, NO_CLUB)).toThrow(/offered you its job/);
     expect(() => advanceSeason(finish(career2), { moveTo: NO_CLUB })).toThrow();
-    expect(resignationOutlook(asCareer1(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS })))).toBeNull();
+    expect(resignationOutlook(asCareer1(createSeason({ seed: 5, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchPlays: false })))).toBeNull();
     roundTrip(career2);
   });
 

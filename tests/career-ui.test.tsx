@@ -16,7 +16,7 @@ const noop = () => {};
 const board = (season: SeasonState) => renderToStaticMarkup(<BoardPanel season={season} onEnable={noop} onEnableFunding={noop} onEnableConsequences={noop} onEnableRivalries={noop} onEnableCareerMoves={noop} />);
 const choice = (season: SeasonState, outlook: SeasonEndOutlook) => renderToStaticMarkup(<SeasonEndChoice season={season} outlook={outlook} onChoose={noop} onClose={noop} />);
 // The Level 7 rules that careers created before format 63 keep (`career-1`); tests/career-board-rules.test.ts covers new careers.
-const career = (seed: number, careerMoves = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, careerMoves, presidents: false }), true), true));
+const career = (seed: number, careerMoves = true) => asCareer1(setEmploymentDelegation(setFacilityDelegation(createSeason({ seed, managedClubId: 'rhine-falcons', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, matchPlays: false, injuryLengths: false, careerMoves, presidents: false, calmPlayingTime: false }), true), true));
 function finalMatchday(seed: number): SeasonState {
   let state = career(seed);
   while (state.round < 10) state = advanceMatchday(state);
@@ -26,10 +26,10 @@ let sackedDay: SeasonState, offeredDay: SeasonState;
 
 beforeAll(() => {
   // Seeds chosen after the match calibration of sprint 4 (they were 67 and 20), for the offer the relationships-2 rules of
-  // format 66 (it was 102), and on 16 November 2026 for the manager's planned starting five (they were 154 and 2); shared
-  // with tests/career-dismissal.test.ts.
-  sackedDay = finalMatchday(30); // Rhine Falcons dismissed; Aegean Waves offer their job.
-  offeredDay = finalMatchday(33); // Rhine Falcons safe; Aegean Waves offer their job.
+  // format 66 (it was 102), on 16 November 2026 for the manager's planned starting five (they were 154 and 2) and for
+  // opening staff and squad roles (format 74; they were 30 and 33); shared with tests/career-dismissal.test.ts.
+  sackedDay = finalMatchday(63); // Rhine Falcons dismissed; Atlantic Pilots offer their job.
+  offeredDay = finalMatchday(88); // Rhine Falcons safe; Aegean Waves offer their job.
 }, 240_000);
 
 describe('season-end choice', () => {
@@ -37,8 +37,8 @@ describe('season-end choice', () => {
     const html = choice(sackedDay, previewSeasonEnd(sackedDay)!);
     expect(html).toContain('data-dismissed="true"');
     expect(html).toContain('Dismissed by Rhine Falcons');
-    expect(html).toContain('data-reputation="27"');
-    expect(html).toMatch(/data-join-club="aegean-waves"[^>]*>Join Aegean Waves/);
+    expect(html).toContain('data-reputation="20"');
+    expect(html).toMatch(/data-join-club="atlantic-pilots"[^>]*>Join Atlantic Pilots/);
     expect(html).toContain('it offers you the job anyway after your dismissal');
     expect(html).not.toContain('id="season-end-stay"');
     expect(html).toContain('id="season-end-later"');
@@ -66,9 +66,9 @@ describe('your job on the Board page', () => {
     const sacked = advanceSeason(sackedDay);
     const html = board(sacked);
     expect(html).toContain('data-career-status="decided"');
-    expect(html).toContain('You joined Aegean Waves at the end of this season.');
-    expect(html).toContain('data-career-reputation="27"');
-    expect(html).toMatch(/data-career-season="1"><td>[^<]+<\/td><td>Rhine Falcons<\/td><td>27 · Under pressure<\/td><td>Dismissed · joined Aegean Waves/);
+    expect(html).toContain('You joined Atlantic Pilots at the end of this season.');
+    expect(html).toContain('data-career-reputation="20"');
+    expect(html).toMatch(/data-career-season="1"><td>[^<]+<\/td><td>Rhine Falcons<\/td><td>20 · Under pressure<\/td><td>Dismissed · joined Atlantic Pilots/);
   });
 
   it('lists a declined offer in the Inbox', () => {

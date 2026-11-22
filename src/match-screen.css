@@ -114,3 +114,40 @@
   .match-screen .text-match-view { min-height: 320px; }
   .match-screen .boxscore .stamina-cell { min-width: 90px; }
 }
+/* Live court: compact score bug over the empty far corner, one-line play text, no layout jumps. */
+.court-presentation { position: relative; }
+.score-bug { position: absolute; top: 8px; left: 10px; z-index: 1; min-width: 150px; padding: 4px 0 0; border: 1px solid var(--border); border-radius: 2px; background: rgba(20, 26, 24, .88); color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; pointer-events: none; }
+.score-bug .bug-row { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto auto; align-items: center; gap: 6px; padding: 2px 8px 2px 6px; }
+.score-bug .bug-row i { width: 4px; height: 14px; border-radius: 1px; }
+.score-bug .bug-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.score-bug .bug-score { min-width: 26px; text-align: right; font-size: 15px; font-weight: 800; }
+.score-bug .bug-meta { min-width: 64px; text-align: right; font-size: 10px; color: var(--muted); }
+.score-bug .bug-clock { display: flex; justify-content: space-between; margin-top: 3px; padding: 2px 8px; border-top: 1px solid var(--border); font-size: 11px; font-weight: 700; color: var(--accent); }
+.match-screen .court-caption.play-line { height: 34px; min-height: 34px; overflow: hidden; }
+.match-screen .court-caption.play-line p { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.court-mark { pointer-events: none; }
+@media (max-width: 650px) {
+  /* On a phone the bug sits in one row above the court, so it never covers a basket. */
+  .score-bug { position: static; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; min-width: 0; margin: 6px 8px 0; padding: 3px 0; font-size: 11px; }
+  .score-bug .bug-row { grid-template-columns: 4px minmax(0, 1fr) auto; gap: 5px; padding: 0 6px; }
+  .score-bug .bug-row[data-side="away"] { order: 2; }
+  .score-bug .bug-clock { order: 1; flex-direction: column; align-items: center; gap: 0; margin: 0; padding: 0 8px; border-top: 0; border-inline: 1px solid var(--border); font-size: 10px; line-height: 1.25; }
+  .score-bug .bug-score { min-width: 20px; font-size: 14px; }
+  .score-bug .bug-meta { grid-column: 2 / 4; min-width: 0; margin-top: -2px; text-align: left; font-size: 9px; }
+  .match-screen .court-caption.play-line p { font-size: 12px; }
+}
+/* Supporters behind the court: one still layer for the stands, a few small layers that rise and fade when fans cheer. */
+.court-stage { position: relative; }
+.court-stage > .court-svg { position: relative; }
+.crowd { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.crowd-layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+.crowd-stands { transform: translateZ(0); }
+.crowd-cheer, .crowd-flash { opacity: 0; will-change: transform, opacity; animation: crowd-cheer 1.1s ease-out 1 both; }
+.crowd-cheer[data-strength="big"] { animation-iteration-count: 2; }
+.crowd-flash { animation: crowd-flash .8s ease-out 1 both; }
+@keyframes crowd-cheer { 0% { opacity: 0; transform: translateY(0); } 18% { opacity: 1; transform: translateY(-1.4%); } 42% { transform: translateY(0); } 62% { opacity: 1; transform: translateY(-.9%); } 100% { opacity: 0; transform: translateY(0); } }
+@keyframes crowd-flash { 0% { opacity: 0; } 25% { opacity: .16; } 100% { opacity: 0; } }
+.score-bug .bug-crowd { padding: 2px 8px 3px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted); white-space: nowrap; }
+@media (max-width: 650px) {
+  .score-bug .bug-crowd { order: 3; grid-column: 1 / -1; margin-top: 2px; padding: 2px 6px 0; text-align: center; font-size: 9px; }
+}

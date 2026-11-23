@@ -17,8 +17,9 @@
  */
 import type { CourtBallPoint, CourtPoint, CourtPosition, MatchEvent, MatchState, Player, PossessionPlay, Side } from '../domain/types';
 import { EXTRA_MATCH } from '../world/extra-attributes';
-import { DEFENDER_ROLES, HOME_COURT_MAKE_BONUS, LATE_GAME, REBOUNDS, SCORE_EFFECT, TEAM_REBOUND_OFFENSIVE_SHARE, TEAM_REBOUND_SHARE } from './calibration';
+import { calibrationFor, DEFENDER_ROLES, LATE_GAME, TEAM_REBOUND_OFFENSIVE_SHARE, type Calibration, type RiskKind, type ShotKind } from './calibration';
 import { actionScene } from './court-events';
+import { inPenalty, isNba, rulesOf, type Ruleset } from './rulesets';
 import { basketPoint, clutchAdjustment, courtDistance, createPossessionPlay, matchedDefender, moveForAction, offenseDirection, positionOf, primaryHandler } from './possession';
 
 /** The reducer's steps the play model uses (src/engine/match.ts lends them, so both engines share one set of rules). */
@@ -46,92 +47,10 @@ export interface PlayKit {
   moraleTurnover(state: MatchState, playerId: string): number;
 }
 
-type ShotKind = 'rim' | 'dunk' | 'floater' | 'mid' | 'post' | 'catchThree' | 'pullThree' | 'putback' | 'tip' | 'heave';
-type RiskKind = 'advance' | 'pass' | 'drive' | 'post' | 'screen' | 'fastBreak';
 type Action = 'advance' | 'fastBreak' | 'heave' | 'rush' | 'putback' | 'hold' | 'late' | 'foul' | 'pnr' | 'drive' | 'post' | 'motion' | 'early';
 
-/**
- * Calibration of the play model (reversible defaults, 22 November 2026), measured on the sprint-4 calibration squads
- * against the 2025-26 European regular-season averages in src/engine/calibration.ts (per team per game: about 75
- * possessions, 85 points, 3PA 42% of FGA, FTA/FGA 0.34, 13.2 turnovers, 7.0 steals, 2.6 blocks, 22 fouls).
- */
-export const PLAYS = {
-  /** Game-clock seconds per action before tempo (seconds per tempo step below the middle) and a spread of two seconds. */
-  seconds: { advance: 7.2, inbound: 4.5, fastBreak: 4.3, putback: 1.4, pnr: 9.2, drive: 8.2, post: 9.7, motion: 9.2, early: 5, late: 2.5, tempo: 1.6 },
-  /** Half-court play choice weights (pick-and-roll, isolation drive, post-up, ball movement, early-offense three). */
-  choice: { pnr: .34, drive: .28, post: .09, motion: .25, early: .06 },
-  /** Fast-break chance after a steal, a defensive rebound and a recovered block; tempo adds up to `tempo`. */
-  fastBreak: { steal: .62, rebound: .13, tempo: .12 },
-  /** An offensive rebounder within `range` metres of the rim goes straight back up with this chance. */
-  putback: { chance: .55, range: 2.8, tipHeight: 203, tipShare: .35 },
-  /** Make chance at skill 12 against defense 12 with about 1.3 m of space, by shot kind. */
-  shots: { rim: .52, dunk: .83, floater: .39, mid: .375, post: .44, catchThree: .347, pullThree: .307, putback: .51, tip: .46, heave: .03 } satisfies Record<ShotKind, number>,
-  skill2: .017, skill3: .015, defense: .011, rushed: .06,
-  /** Shooting-foul chance by kind before the defense's pressure; a made shot when fouled counts with `andOne` of its chance. */
-  fouls: { rim: .175, dunk: .14, floater: .085, mid: .038, post: .15, catchThree: .012, pullThree: .017, putback: .14, tip: .085, heave: .004 } satisfies Record<ShotKind, number>,
-  foulPressure: .03, andOne: .55,
-  /** Block chance by kind (Blocking above 12 adds near the rim as before; height and space adjust). */
-  blocks: { rim: .07, dunk: .02, floater: .05, mid: .021, post: .058, catchThree: .006, pullThree: .009, putback: .07, tip: .026, heave: 0 } satisfies Record<ShotKind, number>,
-  /** A blocked ball goes out of bounds (the attack keeps it) with blockOut; otherwise the attack's rebound chance gains blockOffense. */
-  blockOut: .3, blockOffense: .05,
-  /** Block chance per Blocking point above 12 near the rim (half further out and on jump shots). */
-  blocking: .006,
-  /** Steal share of a pass or drive turnover per Stealing point above 12, and Stealing's share of the defender's skill there. */
-  stealing: .03, stealSkill: .5,
-  /** Turnover chance per risky action, plus the defense's pressure, the defender's skill over the actor's passing and fatigue. */
-  turnovers: { advance: .018, pass: .08, drive: .112, post: .095, screen: .002, fastBreak: .1, pressure: .02, skillGap: .003, fatigue: .014, max: .14 } satisfies Record<RiskKind | 'pressure' | 'skillGap' | 'fatigue' | 'max', number>,
-  /** Share of those turnovers that are steals (Stealing adjusts it on passes and drives). */
-  stealShare: { advance: .5, pass: .7, drive: .58, post: .46, screen: 0, fastBreak: .58 } satisfies Record<RiskKind, number>,
-  /** Offensive fouls (charges, illegal screens, post push-offs) per action. */
-  offensiveFouls: { advance: 0, pass: 0, drive: .016, post: .012, screen: .012, fastBreak: .012 } satisfies Record<RiskKind, number>,
-  /** Non-shooting defensive fouls per action, plus the defense's pressure. */
-  defensiveFouls: { advance: .036, pass: .03, drive: .062, post: .08, screen: .045, fastBreak: .06, pressure: .036 } satisfies Record<RiskKind | 'pressure', number>,
-  heldBall: .003,
-  /** Technical foul on a defender whose foul gives free throws: base plus per Discipline point below 12. */
-  technical: { base: .007, discipline: .0015 },
-  /** A late-clock possession (four seconds or fewer) fails to get a shot off with this chance. */
-  shotClockViolation: .2,
-  /** Reads: weight times e^(sharpness x (expected points - best)); Intelligence above 12 sharpens. resetValue is the expected value of resetting. */
-  reads: { sharpness: 2, intelligence: .25, resetValue: .9 },
-  /** The computer coach calls a timeout after an unanswered run of this many points (keeping two for the end of the second half). */
-  timeoutRun: 8,
-  /** Fourth quarter and overtime: a defense trailing by up to `lead` fouls on purpose with `seconds` or fewer left. */
-  intentional: [{ lead: 3, seconds: 24 }, { lead: 5, seconds: 35 }, { lead: 7, seconds: 50 }],
-  /** End of a period: heave from the backcourt with this many seconds or fewer; push for a quick shot with `rush` or fewer. */
-  heaveSeconds: 3, rushSeconds: 7,
-} as const;
-
-/**
- * Format 81 (`plays-3`, owner feedback 22 November 2026 evening: "the ball going out, backcourt violations ... hundreds
- * of possibilities"): the dead balls of a real game, at the rates of European top-flight games (per game, both teams:
- * about 15 balls knocked out of bounds by the defense, 1.5 kicked balls, 1.5 held balls, 0.1-0.3 each of 8-second,
- * 5-second and double-dribble violations, 0.3 goaltending calls, 0.4 unsportsmanlike fouls, 5-7 timeouts). Reversible
- * defaults, 22 November 2026; `plays-2` matches never read them.
- */
-export const FLOW = {
-  /** The defense knocks the ball out of bounds and the attack keeps it (throw-in, shot clock running on), per risky action. */
-  outOfBounds: { advance: .012, pass: .05, drive: .056, post: .036, screen: .006, fastBreak: .035 } satisfies Record<RiskKind, number>,
-  /** Kicked ball by the defense (the attack keeps it; shot clock 24 in the backcourt, at least 14 in the frontcourt). */
-  kicked: { advance: .002, pass: .0065, drive: .0045, post: .002, screen: 0, fastBreak: .003 } satisfies Record<RiskKind, number>,
-  heldBall: .0055,
-  /** Share of blocked attempts near the rim called goaltending (the basket counts), and of missed tips and putbacks called basket interference. */
-  goaltending: .065, interference: .035,
-  /** Unsportsmanlike foul share of non-shooting fouls: on a fast break, and elsewhere. */
-  unsportsmanlike: { fastBreak: .14, other: .004 },
-  /** Game-clock seconds of a frontcourt throw-in (the clock starts when the ball is touched on court). */
-  inbound: 2.2,
-  /** Computer coaches: timeout after an unanswered run of this many points; late in the fourth when behind by up to `lateBehind`. */
-  timeoutRun: 6, lateSeconds: 120, lateBehind: 6,
-  /** End of a period with no more than a shot clock left: hold the ball for the last shot, attacking with `shootAt` seconds left. */
-  holdFrom: 24, shootAt: 6,
-  /** Late in the fourth with the lead, the attack runs the clock: extra seconds per half-court action. */
-  milk: { seconds: 120, extra: 3 },
-  shotClockViolation: .15,
-  /** Non-shooting fouls per risky action relative to `plays-2` (its quicker actions take more of them per game). */
-  foulScale: .88, turnoverScale: .95,
-  /** Game-clock seconds per action (quicker than `plays-2`: the throw-ins, holds and dead balls above take their own time). */
-  seconds: { advance: 6.6, pnr: 8.5, drive: 7.5, post: 9, motion: 8.5, early: 4.6 },
-} as const;
+/** The play model's calibration (PLAYS, FLOW) lives in src/engine/calibration.ts with the other match calibration. */
+export { FLOW, PLAYS } from './calibration';
 
 const other = (side: Side): Side => side === 'home' ? 'away' : 'home';
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
@@ -140,7 +59,7 @@ const isBig = (p: Player) => p.position === 'PF' || p.position === 'C';
 const ballAt = (point: CourtPoint, height = 1.25): CourtBallPoint => ({ x: point.x, y: point.y, height });
 const nameOf = (p: Player) => p.name;
 
-interface Ctx { state: MatchState; kit: PlayKit; play: PossessionPlay; offense: Side; defense: Side; hoop: CourtPoint; dir: 1 | -1; flow: boolean; restarted: boolean }
+interface Ctx { state: MatchState; kit: PlayKit; play: PossessionPlay; offense: Side; defense: Side; hoop: CourtPoint; dir: 1 | -1; flow: boolean; restarted: boolean; cal: Calibration; rules: Ruleset; nba: boolean }
 interface ShotPlan { shooter: Player; kind: ShotKind; value: 2 | 3; contest: Player; assist?: Player; rushed?: boolean; offDribble?: boolean; alleyOop?: boolean }
 interface Read { key: string; weight: number; value: number }
 
@@ -214,36 +133,39 @@ function space(ctx: Ctx, creator: number, defender: Player, base: number, spread
 }
 function makeChance(ctx: Ctx, shooter: Player, defender: Player, kind: ShotKind, value: 2 | 3, separation: number, distance: number): number {
   const state = ctx.state;
-  if (kind === 'heave') return clamp(PLAYS.shots.heave - Math.max(0, distance - 16) * .003, .01, .05);
+  if (kind === 'heave') return clamp(ctx.cal.PLAYS.shots.heave - Math.max(0, distance - 16) * .003, .01, .05);
   const skill = value === 3 ? shooter.attributes.threePoint : shooter.attributes.twoPoint;
-  const base = PLAYS.shots[kind] + (skill - 12) * (value === 3 ? PLAYS.skill3 : PLAYS.skill2) * (kind === 'dunk' ? .35 : 1);
-  const defense = (defender.attributes.defense - 12) * PLAYS.defense;
+  const base = ctx.cal.PLAYS.shots[kind] + (skill - 12) * (value === 3 ? ctx.cal.PLAYS.skill3 : ctx.cal.PLAYS.skill2) * (kind === 'dunk' ? .35 : 1);
+  const defense = (defender.attributes.defense - 12) * ctx.cal.PLAYS.defense;
   const room = clamp((separation - 1.3) * .045, -.06, .08);
   const height = value === 2 ? clamp((defender.heightCm - shooter.heightCm) / 1000, -.025, .025) : 0;
-  const range = value === 3 ? Math.max(0, distance - 7.4) * .025 : 0;
+  // The NBA's longer line moves the long-range penalty out with it.
+  const range = value === 3 ? ctx.nba ? Math.max(0, distance - 7.4 - (ctx.rules.threePointM - 6.75)) * .025 : Math.max(0, distance - 7.4) * .025 : 0;
   const fatigue = (100 - state.stats[shooter.id]!.condition) / 100 * .07;
   // Format 85: no home-court advantage at one venue.
-  const home = state.neutralVenue ? 0 : ctx.offense === 'home' ? HOME_COURT_MAKE_BONUS : -HOME_COURT_MAKE_BONUS;
-  const lead = clamp(state.score[ctx.offense] - state.score[ctx.defense], -SCORE_EFFECT.cap, SCORE_EFFECT.cap);
-  const scoreEffect = lead * SCORE_EFFECT.perPoint * (state.period >= 4 ? SCORE_EFFECT.fourthQuarter : 1);
+  const home = state.neutralVenue ? 0 : ctx.offense === 'home' ? ctx.cal.HOME_COURT_MAKE_BONUS : -ctx.cal.HOME_COURT_MAKE_BONUS;
+  const lead = clamp(state.score[ctx.offense] - state.score[ctx.defense], -ctx.cal.SCORE_EFFECT.cap, ctx.cal.SCORE_EFFECT.cap);
+  const scoreEffect = lead * ctx.cal.SCORE_EFFECT.perPoint * (state.period >= 4 ? ctx.cal.SCORE_EFFECT.fourthQuarter : 1);
   return clamp(base - defense + room - height - range - fatigue + home - scoreEffect + clutchAdjustment(state, shooter), .05, value === 3 ? .65 : .93);
 }
 /** Expected points of a look, for reads (no random draw). */
 function lookValue(ctx: Ctx, shooter: Player, defender: Player, kind: ShotKind, value: 2 | 3, separation: number, distance: number): number {
-  return makeChance(ctx, shooter, defender, kind, value, separation, distance) * value * (1 - PLAYS.blocks[kind]) + PLAYS.fouls[kind] * 1.5;
+  const look = makeChance(ctx, shooter, defender, kind, value, separation, distance) * value * (1 - ctx.cal.PLAYS.blocks[kind]) + ctx.cal.PLAYS.fouls[kind] * 1.5;
+  // The NBA set weighs threes a little lower in reads (FIBA: 1, the expected points as they are).
+  return value === 3 && ctx.nba ? look * ctx.cal.PLAYS.reads.threeValue : look;
 }
 /** Picks a read: better expected points are chosen more often, more so by an intelligent decision maker. */
 function pickRead(ctx: Ctx, decider: Player, reads: Read[]): string {
   const usable = reads.filter(read => read.weight > 0);
   if (!usable.length) return 'reset';
   const best = Math.max(...usable.map(read => read.value));
-  const sharp = PLAYS.reads.sharpness + ((decider.attributes.intelligence ?? EXTRA_MATCH.centre) - EXTRA_MATCH.centre) * PLAYS.reads.intelligence;
+  const sharp = ctx.cal.PLAYS.reads.sharpness + ((decider.attributes.intelligence ?? EXTRA_MATCH.centre) - EXTRA_MATCH.centre) * ctx.cal.PLAYS.reads.intelligence;
   const weights = usable.map(read => read.weight * Math.exp(sharp * (read.value - best)));
   let target = ctx.kit.draw(ctx.state) * weights.reduce((sum, value) => sum + value, 0);
   for (let index = 0; index < usable.length; index += 1) { target -= weights[index]!; if (target < 0) return usable[index]!.key; }
   return usable.at(-1)!.key;
 }
-function resetValue(ctx: Ctx): number { return PLAYS.reads.resetValue * clamp((ctx.state.shotClockSeconds - 7) / 10, 0, 1); }
+function resetValue(ctx: Ctx): number { return ctx.cal.PLAYS.reads.resetValue * clamp((ctx.state.shotClockSeconds - 7) / 10, 0, 1); }
 
 /** The best spot-up shooter among `pool`, weighted by three-point skill and the team's outside intent. */
 function shooterFrom(ctx: Ctx, pool: Player[]): Player | undefined {
@@ -256,21 +178,30 @@ function rimProtector(ctx: Ctx, matched: Player): Player {
   const weight = (p: Player) => DEFENDER_ROLES.block[p.position] * (p.id === matched.id ? DEFENDER_ROLES.matchedBlock : 1) * (p.attributes.blocking === undefined ? 1 : Math.max(.2, 1 + (p.attributes.blocking - EXTRA_MATCH.centre) * EXTRA_MATCH.blockerChoice));
   return ctx.kit.choose(ctx.state, defenders(ctx), weight);
 }
-const threeSpot = (ctx: Ctx, p: Player) => spot(ctx, 7.05, clamp(angleOf(ctx, pos(ctx, p.id)), -1.2, 1.2) || .9);
+/**
+ * A three-point spot `metres` from the basket on the FIBA floor; with the NBA rules the same spot behind the NBA arc
+ * (7.24 m, 6.71 m in the corners), so a three keeps its distance beyond the line.
+ */
+function threeAt(ctx: Ctx, metres: number, angle: number): CourtPoint {
+  if (!ctx.nba) return spot(ctx, metres, angle);
+  const line = Math.min(ctx.rules.threePointM, ctx.rules.cornerThreeM / Math.max(.01, Math.abs(Math.sin(angle))));
+  return spot(ctx, metres + line - 6.75, angle);
+}
+const threeSpot = (ctx: Ctx, p: Player) => threeAt(ctx, 7.05, clamp(angleOf(ctx, pos(ctx, p.id)), -1.2, 1.2) || .9);
 
 /** Turnovers, offensive fouls, defensive fouls and held balls for one risky action; true when the play ends. */
 function risk(ctx: Ctx, actor: Player, kind: RiskKind, interceptor?: Player): boolean {
   const { state, kit } = ctx, defender = interceptor ?? defenderOf(ctx, actor), pressure = state.tactics[ctx.defense].pressure;
   const stealing = defender.attributes.stealing, intelligence = actor.attributes.intelligence;
-  const defending = stealing !== undefined && (kind === 'pass' || kind === 'drive') ? defender.attributes.defense * (1 - PLAYS.stealSkill) + stealing * PLAYS.stealSkill : defender.attributes.defense;
+  const defending = stealing !== undefined && (kind === 'pass' || kind === 'drive') ? defender.attributes.defense * (1 - ctx.cal.PLAYS.stealSkill) + stealing * ctx.cal.PLAYS.stealSkill : defender.attributes.defense;
   const decisions = intelligence === undefined ? 0 : (intelligence - EXTRA_MATCH.turnoverCentre) * EXTRA_MATCH.turnover;
   const fatigue = (100 - state.stats[actor.id]!.condition) / 100;
-  const T = PLAYS.turnovers;
-  const turnover = (kind === 'screen' ? T.screen : clamp(T[kind] + pressure * T.pressure + (defending - actor.attributes.passing) * T.skillGap - decisions + fatigue * T.fatigue + kit.moraleTurnover(state, actor.id), .004, T.max)) * (ctx.flow ? FLOW.turnoverScale : 1);
-  const offensive = PLAYS.offensiveFouls[kind], foul = (PLAYS.defensiveFouls[kind] + pressure * PLAYS.defensiveFouls.pressure) * (ctx.flow ? FLOW.foulScale : 1), held = kind === 'advance' ? 0 : ctx.flow ? FLOW.heldBall : PLAYS.heldBall;
+  const T = ctx.cal.PLAYS.turnovers;
+  const turnover = (kind === 'screen' ? T.screen : clamp(T[kind] + pressure * T.pressure + (defending - actor.attributes.passing) * T.skillGap - decisions + fatigue * T.fatigue + kit.moraleTurnover(state, actor.id), .004, T.max)) * (ctx.flow ? ctx.cal.FLOW.turnoverScale : 1);
+  const offensive = ctx.cal.PLAYS.offensiveFouls[kind], foul = (ctx.cal.PLAYS.defensiveFouls[kind] + pressure * ctx.cal.PLAYS.defensiveFouls.pressure) * (ctx.flow ? ctx.cal.FLOW.foulScale : 1), held = kind === 'advance' ? 0 : ctx.flow ? ctx.cal.FLOW.heldBall : ctx.cal.PLAYS.heldBall;
   // Format 81: balls knocked out of bounds and kicked by the defense (the attack keeps the ball).
   // A deflection out of bounds needs time to inbound and still play (the shot clock runs on): not in the last seconds.
-  const out = ctx.flow && state.shotClockSeconds >= 5 ? FLOW.outOfBounds[kind] : 0, kick = ctx.flow ? FLOW.kicked[kind] : 0;
+  const out = ctx.flow && state.shotClockSeconds >= 5 ? ctx.cal.FLOW.outOfBounds[kind] : 0, kick = ctx.flow ? ctx.cal.FLOW.kicked[kind] : 0;
   const roll = kit.draw(state);
   if (roll < turnover) { loseBall(ctx, actor, kind, defender); return true; }
   if (roll < turnover + offensive) { offensiveFoul(ctx, actor, kind, defender); return true; }
@@ -306,7 +237,7 @@ function kickedBall(ctx: Ctx, actor: Player, defender: Player): void {
 function loseBall(ctx: Ctx, actor: Player, kind: RiskKind | 'shot-clock', defender: Player): void {
   const { state, kit, play } = ctx;
   const stealing = defender.attributes.stealing;
-  const share = kind === 'shot-clock' ? 0 : stealing !== undefined && (kind === 'pass' || kind === 'drive') ? clamp(PLAYS.stealShare[kind] + (stealing - EXTRA_MATCH.centre) * PLAYS.stealing, .3, .92) : PLAYS.stealShare[kind];
+  const share = kind === 'shot-clock' ? 0 : stealing !== undefined && (kind === 'pass' || kind === 'drive') ? clamp(ctx.cal.PLAYS.stealShare[kind] + (stealing - EXTRA_MATCH.centre) * ctx.cal.PLAYS.stealing, .3, .92) : ctx.cal.PLAYS.stealShare[kind];
   const stolen = kind !== 'shot-clock' && kit.draw(state) < share;
   state.stats[actor.id]!.turnovers += 1;
   if (stolen) state.stats[defender.id]!.steals += 1;
@@ -357,22 +288,22 @@ function defensiveFoul(ctx: Ctx, actor: Player, kind: RiskKind): void {
   const fouler = kit.choose(state, defenders(ctx), p => DEFENDER_ROLES.foul[p.position] * (p.id === matched.id ? DEFENDER_ROLES.matchedFoul : 1) * kit.foulCaution(state, p));
   const how = kind === 'screen' ? `fouls ${nameOf(actor)} fighting through the screen` : kind === 'post' ? `fouls ${nameOf(actor)} in the post` : kind === 'drive' || kind === 'fastBreak' ? `reaches in on ${nameOf(actor)}` : kind === 'advance' ? `fouls ${nameOf(actor)} in the backcourt` : `holds ${nameOf(actor)} off the ball`;
   // Format 81: an unsportsmanlike foul (mostly stopping a fast break): two free throws and the ball (FIBA 37).
-  if (ctx.flow && kit.draw(state) < (kind === 'fastBreak' ? FLOW.unsportsmanlike.fastBreak : FLOW.unsportsmanlike.other)) {
+  if (ctx.flow && kit.draw(state) < (kind === 'fastBreak' ? ctx.cal.FLOW.unsportsmanlike.fastBreak : ctx.cal.FLOW.unsportsmanlike.other)) {
     kit.personalFoul(state, ctx.defense, fouler, `${nameOf(fouler)} ${kind === 'fastBreak' ? `pulls down ${nameOf(actor)} on the break` : `grabs ${nameOf(actor)} away from the ball`}: unsportsmanlike foul, two free throws and the ball.`);
     kit.startFreeThrows(state, ctx.offense, actor, 2);
     return;
   }
   kit.personalFoul(state, ctx.defense, fouler, `${nameOf(fouler)} ${how}: a non-shooting foul.`);
-  if (state.teamFouls[ctx.defense] >= 5) awardFreeThrows(ctx, actor, fouler, 2);
+  if (inPenalty(state, ctx.defense)) awardFreeThrows(ctx, actor, fouler, 2);
   else { state.shotClockSeconds = state.frontcourt ? Math.max(14, state.shotClockSeconds) : 24; kit.whistle(state); }
 }
 /** Free throws, with the rare technical foul on a fouler who disputes the call (one more free throw, at most three). */
 function awardFreeThrows(ctx: Ctx, shooter: Player, fouler: Player, total: 1 | 2 | 3): void {
   const { state, kit } = ctx;
   let count = total;
-  if (count < 3 && state.stats[fouler.id]!.fouls < 5) {
+  if (count < 3 && state.stats[fouler.id]!.fouls < ctx.rules.foulOut) {
     const discipline = fouler.attributes.discipline ?? EXTRA_MATCH.centre;
-    if (kit.draw(state) < Math.max(.001, PLAYS.technical.base + (EXTRA_MATCH.centre - discipline) * PLAYS.technical.discipline)) {
+    if (kit.draw(state) < Math.max(.001, ctx.cal.PLAYS.technical.base + (EXTRA_MATCH.centre - discipline) * ctx.cal.PLAYS.technical.discipline)) {
       kit.personalFoul(state, ctx.defense, fouler, `${nameOf(fouler)} disputes the call and is given a technical foul: one more free throw.`);
       count += 1;
     }
@@ -396,22 +327,22 @@ function shoot(ctx: Ctx, plan: ShotPlan): void {
   const { state, kit, play, offense, defense, hoop } = ctx, { shooter, kind, value, contest } = plan, stats = state.stats[shooter.id]!;
   const origin = pos(ctx, shooter.id), distance = distanceToRim(ctx, origin), separation = courtDistance(origin, pos(ctx, contest.id));
   const label = separation <= .85 ? 'contested' : separation <= 1.75 ? 'pressured' : 'open';
-  const chance = makeChance(ctx, shooter, contest, kind, value, separation, distance) - (plan.rushed ? PLAYS.rushed : 0);
+  const chance = makeChance(ctx, shooter, contest, kind, value, separation, distance) - (plan.rushed ? ctx.cal.PLAYS.rushed : 0);
   const pressure = state.tactics[defense].pressure;
-  const fouled = kit.draw(state) < clamp(PLAYS.fouls[kind] + pressure * PLAYS.foulPressure - Math.max(0, separation - 1.6) * .02, .002, .3);
+  const fouled = kit.draw(state) < clamp(ctx.cal.PLAYS.fouls[kind] + pressure * ctx.cal.PLAYS.foulPressure - Math.max(0, separation - 1.6) * .02, .002, .3);
   const inside = value === 2 && kind !== 'mid';
   // Near the basket help defenders (mostly bigs) foul and block as well as the shooter's own man.
   const fouler = fouled && inside ? kit.choose(state, defenders(ctx), p => DEFENDER_ROLES.foul[p.position] * (p.id === contest.id ? DEFENDER_ROLES.matchedFoul : 1) * kit.foulCaution(state, p)) : contest;
   const blocker = !fouled && inside ? rimProtector(ctx, contest) : contest;
-  const blocking = blocker.attributes.blocking === undefined ? 0 : (blocker.attributes.blocking - EXTRA_MATCH.centre) * PLAYS.blocking * (inside && distance <= EXTRA_MATCH.rimDistance ? 1 : .5);
-  const blockChance = PLAYS.blocks[kind] === 0 ? 0 : clamp(PLAYS.blocks[kind] + blocking + Math.max(0, blocker.heightCm - shooter.heightCm) * .0015 + (blocker.attributes.defense - 12) * .002 - Math.max(0, separation - .9) * .02, .002, .2);
+  const blocking = blocker.attributes.blocking === undefined ? 0 : (blocker.attributes.blocking - EXTRA_MATCH.centre) * ctx.cal.PLAYS.blocking * (inside && distance <= EXTRA_MATCH.rimDistance ? 1 : .5);
+  const blockChance = ctx.cal.PLAYS.blocks[kind] === 0 ? 0 : clamp(ctx.cal.PLAYS.blocks[kind] + blocking + Math.max(0, blocker.heightCm - shooter.heightCm) * .0015 + (blocker.attributes.defense - 12) * .002 - Math.max(0, separation - .9) * .02, .002, .2);
   let blocked = !fouled && kit.draw(state) < blockChance;
   // Format 81: a block on the ball's way down near the rim is goaltending (the basket counts).
-  const goaltending = ctx.flow && blocked && inside && kind !== 'dunk' && kit.draw(state) < FLOW.goaltending;
+  const goaltending = ctx.flow && blocked && inside && kind !== 'dunk' && kit.draw(state) < ctx.cal.FLOW.goaltending;
   if (goaltending) blocked = false;
-  const made = goaltending || !blocked && kit.draw(state) < chance * (fouled ? PLAYS.andOne : 1);
+  const made = goaltending || !blocked && kit.draw(state) < chance * (fouled ? ctx.cal.PLAYS.andOne : 1);
   // Format 81: a missed tip or putback touched in the cylinder is basket interference: no attempt, the defense's ball.
-  if (ctx.flow && !made && !blocked && !fouled && (kind === 'tip' || kind === 'putback') && kit.draw(state) < FLOW.interference) {
+  if (ctx.flow && !made && !blocked && !fouled && (kind === 'tip' || kind === 'putback') && kit.draw(state) < ctx.cal.FLOW.interference) {
     stats.turnovers += 1;
     kit.resetPossession(state, defense); kit.whistle(state);
     kit.emit(state, { type: 'turnover', side: offense, playerId: shooter.id, text: `Basket interference on ${nameOf(shooter)}: he touches the ball in the cylinder. No basket, ${state[defense].name} ball.` });
@@ -446,13 +377,13 @@ function rebound(ctx: Ctx, landing: CourtPoint, rimContact: boolean, blocked: bo
   const att = attackers(ctx), def = defenders(ctx);
   const proximity = (p: Player) => 1 / (1 + courtDistance(pos(ctx, p.id), landing) * .2);
   const strength = (players: Player[]) => players.reduce((total, p) => total + p.attributes.rebounding * proximity(p), 0) / Math.max(1, players.length);
-  if (kit.draw(state) < (blocked ? PLAYS.blockOut : TEAM_REBOUND_SHARE)) {
+  if (kit.draw(state) < (blocked ? ctx.cal.PLAYS.blockOut : ctx.cal.TEAM_REBOUND_SHARE)) {
     const offensive = blocked || kit.draw(state) < TEAM_REBOUND_OFFENSIVE_SHARE, side = offensive ? offense : defense;
     kit.resetPossession(state, side, offensive ? rimContact ? 14 : Math.max(14, state.shotClockSeconds) : 24); state.frontcourt = offensive; kit.whistle(state);
     kit.emit(state, { type: 'command', side, text: blocked ? `The ball goes out of bounds after the block: team rebound, ${state[side].name} keep possession.` : `The rebound goes out of bounds off ${offensive ? 'a defender' : 'an attacker'}: team rebound, ${state[side].name} ${offensive ? 'keep' : 'take'} possession.` });
     return;
   }
-  const offensive = kit.draw(state) < clamp(REBOUNDS.offensiveBase + (strength(att) - strength(def)) * REBOUNDS.strength + (att.length - def.length) * REBOUNDS.numbers + (blocked ? PLAYS.blockOffense : 0), REBOUNDS.min, REBOUNDS.max);
+  const offensive = kit.draw(state) < clamp(ctx.cal.REBOUNDS.offensiveBase + (strength(att) - strength(def)) * ctx.cal.REBOUNDS.strength + (att.length - def.length) * ctx.cal.REBOUNDS.numbers + (blocked ? ctx.cal.PLAYS.blockOffense : 0), ctx.cal.REBOUNDS.min, ctx.cal.REBOUNDS.max);
   const side = offensive ? offense : defense;
   const rebounder = kit.choose(state, offensive ? att : def, p => p.attributes.rebounding * proximity(p));
   const positions = play.positions.map(point => point.playerId === rebounder.id ? { ...point, ...landing } : { ...point });
@@ -477,9 +408,9 @@ function coachTimeout(ctx: Ctx): void {
   }
   const run = state.score[scoring] - low, behind = state.score[scoring] - own;
   // Format 81: coaches stop shorter runs and draw up plays over the last two minutes (about three timeouts a team a game).
-  const late = ctx.flow ? state.period >= 4 && state.clockSeconds <= FLOW.lateSeconds && behind >= 1 && behind <= FLOW.lateBehind : state.period >= 4 && state.clockSeconds <= 40 && behind >= 1 && behind <= 3;
+  const late = ctx.flow ? state.period >= 4 && state.clockSeconds <= ctx.cal.FLOW.lateSeconds && behind >= 1 && behind <= ctx.cal.FLOW.lateBehind : state.period >= 4 && state.clockSeconds <= 40 && behind >= 1 && behind <= 3;
   // Format 86: a head coach's Tactics moves how long a run he lets go (a good tactician stops it a point sooner).
-  if (remaining < (late ? 1 : keep) || !late && run < (ctx.flow ? FLOW.timeoutRun : PLAYS.timeoutRun) + (state.coachRotation?.[side]?.timeoutRun ?? 0)) return;
+  if (remaining < (late ? 1 : keep) || !late && run < (ctx.flow ? ctx.cal.FLOW.timeoutRun : ctx.cal.PLAYS.timeoutRun) + (state.coachRotation?.[side]?.timeoutRun ?? 0)) return;
   kit.emit(state, { type: 'command', side, text: late ? `${state[side].name} call time to set up the next play.` : `${state[side].name} call time to stop the ${run}-0 run.` });
   state.timeoutRequested[side] = true;
 }
@@ -494,7 +425,7 @@ function lastControl(ctx: Ctx): 'steal' | 'rebound' | 'offensive' | null {
 }
 
 function choosePlay(ctx: Ctx, handler: Player): Action {
-  const { state } = ctx, tactics = state.tactics[ctx.offense], C = PLAYS.choice;
+  const { state } = ctx, tactics = state.tactics[ctx.offense], C = ctx.cal.PLAYS.choice;
   const team = attackers(ctx), bigs = team.filter(isBig), post = [...(bigs.length ? bigs : team)].sort((a, b) => (b.attributes.twoPoint - defenderOf(ctx, b).attributes.defense) - (a.attributes.twoPoint - defenderOf(ctx, a).attributes.defense) || a.id.localeCompare(b.id))[0]!;
   const edge = post.attributes.twoPoint - defenderOf(ctx, post).attributes.defense;
   const weights: [Action, number][] = [
@@ -515,37 +446,38 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   const play = state.possessionPlay ?? createPossessionPlay(state); state.possessionPlay = play;
   const offense = play.offense, defense = other(offense);
   const flow = state.playModel === 'plays-3';
-  const ctx: Ctx = { state, kit, play, offense, defense, hoop: basketPoint(state, offense), dir: offenseDirection(state, offense), flow, restarted };
+  const rules = rulesOf(state);
+  const ctx: Ctx = { state, kit, play, offense, defense, hoop: basketPoint(state, offense), dir: offenseDirection(state, offense), flow, restarted, cal: calibrationFor(rules), rules, nba: isNba(rules) };
   const handler = kit.player(state, offense, play.handlerId), tactics = state.tactics[offense];
   const lead = state.score[offense] - state.score[defense];
   const lastShot = state.period >= 4 && state.frontcourt && !restarted && state.clockSeconds <= state.shotClockSeconds + LATE_GAME.shotClockGrace && lead <= 0 && lead >= -LATE_GAME.maxDeficit;
   const threeNeeded = lastShot && lead === -3, holdFor = Math.min(state.clockSeconds, state.shotClockSeconds);
-  const stopClock = state.period >= 4 && lead >= 1 && PLAYS.intentional.some(rule => lead <= rule.lead && state.clockSeconds <= rule.seconds);
+  const stopClock = state.period >= 4 && lead >= 1 && ctx.cal.PLAYS.intentional.some(rule => lead <= rule.lead && state.clockSeconds <= rule.seconds);
   const control = restarted ? null : lastControl(ctx);
   // Format 81: with a shot clock or less left in a period, the attack holds the ball for the last shot (in the fourth
   // and overtime only with the lead; the existing late-game rules handle a tie or a deficit).
-  const endHold = flow && state.frontcourt && !restarted && !lastShot && !stopClock && state.clockSeconds <= Math.min(FLOW.holdFrom, state.shotClockSeconds + 1) && state.clockSeconds > FLOW.shootAt + 1 && (state.period < 4 || lead > 0) && control !== 'offensive';
+  const endHold = flow && state.frontcourt && !restarted && !lastShot && !stopClock && state.clockSeconds <= Math.min(ctx.cal.FLOW.holdFrom, state.shotClockSeconds + 1) && state.clockSeconds > ctx.cal.FLOW.shootAt + 1 && (state.period < 4 || lead > 0) && control !== 'offensive';
   let action: Action;
   if (stopClock) action = 'foul';
   else if (endHold) action = 'hold';
   else if (restarted || !state.frontcourt) {
-    if (state.clockSeconds <= PLAYS.heaveSeconds && state.clockSeconds <= state.shotClockSeconds) action = 'heave';
-    else if (state.clockSeconds <= PLAYS.rushSeconds && state.clockSeconds <= state.shotClockSeconds) action = 'rush';
-    else if ((control === 'steal' || control === 'rebound') && kit.draw(state) < (control === 'steal' ? PLAYS.fastBreak.steal : PLAYS.fastBreak.rebound) + tactics.tempo * PLAYS.fastBreak.tempo) action = 'fastBreak';
+    if (state.clockSeconds <= ctx.cal.PLAYS.heaveSeconds && state.clockSeconds <= state.shotClockSeconds) action = 'heave';
+    else if (state.clockSeconds <= ctx.cal.PLAYS.rushSeconds && state.clockSeconds <= state.shotClockSeconds) action = 'rush';
+    else if ((control === 'steal' || control === 'rebound') && kit.draw(state) < (control === 'steal' ? ctx.cal.PLAYS.fastBreak.steal : ctx.cal.PLAYS.fastBreak.rebound) + tactics.tempo * ctx.cal.PLAYS.fastBreak.tempo) action = 'fastBreak';
     else action = 'advance';
-  } else if (control === 'offensive' && distanceToRim(ctx, pos(ctx, handler.id)) <= PLAYS.putback.range && kit.draw(state) < PLAYS.putback.chance) action = 'putback';
+  } else if (control === 'offensive' && distanceToRim(ctx, pos(ctx, handler.id)) <= ctx.cal.PLAYS.putback.range && kit.draw(state) < ctx.cal.PLAYS.putback.chance) action = 'putback';
   else if (lastShot) action = holdFor > LATE_GAME.shootAt ? 'hold' : 'late';
   else if (state.shotClockSeconds <= 5 || state.clockSeconds <= 5 && state.clockSeconds <= state.shotClockSeconds || play.actions >= 3) action = 'late';
   else action = choosePlay(ctx, handler);
-  const base = action === 'advance' && state.frontcourt ? flow ? FLOW.inbound : PLAYS.seconds.inbound : action === 'heave' || action === 'rush' || action === 'hold' || action === 'foul' ? 0 : flow && Object.hasOwn(FLOW.seconds, action) ? FLOW.seconds[action as keyof typeof FLOW.seconds] : PLAYS.seconds[action];
-  let proposed = clamp(Math.round(base + (.5 - tactics.tempo) * PLAYS.seconds.tempo + (kit.draw(state) - .5) * 3), 1, 13);
+  const base = action === 'advance' && state.frontcourt ? flow ? ctx.cal.FLOW.inbound : ctx.cal.PLAYS.seconds.inbound : action === 'heave' || action === 'rush' || action === 'hold' || action === 'foul' ? 0 : flow && Object.hasOwn(ctx.cal.FLOW.seconds, action) ? ctx.cal.FLOW.seconds[action as keyof typeof ctx.cal.FLOW.seconds] : ctx.cal.PLAYS.seconds[action];
+  let proposed = clamp(Math.round(base + (.5 - tactics.tempo) * ctx.cal.PLAYS.seconds.tempo + (kit.draw(state) - .5) * 3), 1, 13);
   // Format 81: a frontcourt throw-in with little left on the shot clock is a quick catch.
   if (flow && action === 'advance' && state.frontcourt && state.shotClockSeconds <= 8) proposed = 1;
   // Format 81: late in the fourth with the lead, the attack runs the clock.
-  if (flow && state.period >= 4 && state.clockSeconds <= FLOW.milk.seconds && lead > 0 && (action === 'pnr' || action === 'drive' || action === 'post' || action === 'motion')) proposed += FLOW.milk.extra;
+  if (flow && state.period >= 4 && state.clockSeconds <= ctx.cal.FLOW.milk.seconds && lead > 0 && (action === 'pnr' || action === 'drive' || action === 'post' || action === 'motion')) proposed += ctx.cal.FLOW.milk.extra;
   if (action === 'putback') proposed = Math.min(proposed, 2);
   if (action === 'heave' || action === 'rush') proposed = state.clockSeconds;
-  if (action === 'hold') proposed = endHold ? clamp(state.clockSeconds - FLOW.shootAt, 1, 18) : clamp(holdFor - LATE_GAME.shootAt, 1, 7);
+  if (action === 'hold') proposed = endHold ? clamp(state.clockSeconds - ctx.cal.FLOW.shootAt, 1, 18) : clamp(holdFor - LATE_GAME.shootAt, 1, 7);
   if (action === 'late' && lastShot) proposed = Math.max(1, holdFor - 1);
   if (action === 'foul') proposed = Math.min(proposed, LATE_GAME.foulDelay);
   const shooting = action !== 'advance' && action !== 'hold' && action !== 'foul';
@@ -554,7 +486,7 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   // Late in the shot clock the attack hurries; with four seconds or fewer it may fail to get a shot off.
   let violation = false;
   if (proposed >= state.shotClockSeconds && state.shotClockSeconds < state.clockSeconds) {
-    if (state.shotClockSeconds > 1 && !(shooting && state.shotClockSeconds <= 4 && kit.draw(state) < (flow ? FLOW.shotClockViolation : PLAYS.shotClockViolation))) proposed = state.shotClockSeconds - 1;
+    if (state.shotClockSeconds > 1 && !(shooting && state.shotClockSeconds <= 4 && kit.draw(state) < (flow ? ctx.cal.FLOW.shotClockViolation : ctx.cal.PLAYS.shotClockViolation))) proposed = state.shotClockSeconds - 1;
     else { proposed = state.shotClockSeconds; violation = true; }
   }
   const seconds = Math.min(state.clockSeconds, state.shotClockSeconds, proposed);
@@ -567,9 +499,12 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   } else if (action === 'foul') {
     const fouler = defenderOf(ctx, handler);
     kit.personalFoul(state, defense, fouler, `${nameOf(fouler)} fouls ${nameOf(handler)} intentionally to stop the clock.`);
-    if (state.teamFouls[defense] >= 5) kit.startFreeThrows(state, offense, handler, 2);
+    if (inPenalty(state, defense)) kit.startFreeThrows(state, offense, handler, 2);
     else { state.shotClockSeconds = state.frontcourt ? Math.max(14, state.shotClockSeconds) : 24; kit.whistle(state); }
-  } else if (action === 'advance') advance(ctx, restarted);
+  }
+  // NBA only (no random draw in FIBA matches): defensive three seconds during a half-court play.
+  else if (ctx.nba && state.clockSeconds > 0 && (action === 'pnr' || action === 'drive' || action === 'post' || action === 'motion' || action === 'early') && kit.draw(state) < rules.defensiveThreeSeconds) defensiveThreeSeconds(ctx);
+  else if (action === 'advance') advance(ctx, restarted);
   else if (action === 'fastBreak') fastBreak(ctx, handler);
   else if (action === 'heave') heave(ctx, handler);
   else if (action === 'rush') rush(ctx, handler);
@@ -584,6 +519,16 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   // One action per live step, however many events it recorded (the saved count never exceeds the steps played).
   if (state.possessionPlay === play) play.actions += 1;
   kit.sampleInjuries(state, seconds); kit.finishPeriod(state); kit.resolveEligibility(state);
+}
+
+/** Text of the NBA's defensive three-second call; the free throw's end (src/engine/match.ts) gives the attack the ball back. */
+export const DEFENSIVE_THREE_SECONDS = 'Defensive three seconds';
+/** NBA: a defender stays in the lane: a technical foul on the team, one free throw by the attack's best shooter on court, attack's ball. */
+function defensiveThreeSeconds(ctx: Ctx): void {
+  const { state, kit } = ctx;
+  const shooter = [...attackers(ctx)].sort((a, b) => b.attributes.freeThrow - a.attributes.freeThrow || a.id.localeCompare(b.id))[0]!;
+  kit.emit(state, { type: 'command', side: ctx.defense, text: `${DEFENSIVE_THREE_SECONDS} on ${state[ctx.defense].name}: technical foul. ${nameOf(shooter)} shoots one free throw and ${state[ctx.offense].name} keep the ball.` });
+  kit.startFreeThrows(state, ctx.offense, shooter, 1);
 }
 
 function advance(ctx: Ctx, restarted: boolean): void {
@@ -621,7 +566,7 @@ function fastBreak(ctx: Ctx, handler: Player): void {
     { key: 'finish', weight: 1, value: lookValue(ctx, leader, back, 'rim', 2, open - .4, 1) },
     { key: 'runner', weight: runner ? .8 : 0, value: runner ? lookValue(ctx, runner, back, leader.heightCm >= 198 ? 'dunk' : 'rim', 2, open, .8) : 0 },
     { key: 'trailer', weight: trailer ? .45 : 0, value: trailer ? lookValue(ctx, trailer, defenderOf(ctx, trailer), 'catchThree', 3, 2, 7.1) : 0 },
-    { key: 'settle', weight: .55, value: PLAYS.reads.resetValue },
+    { key: 'settle', weight: .55, value: ctx.cal.PLAYS.reads.resetValue },
   ];
   const choice = pickRead(ctx, leader, reads);
   const lane = spot(ctx, 1.1, angleOf(ctx, pos(ctx, leader.id)) * .3);
@@ -654,12 +599,12 @@ function heave(ctx: Ctx, handler: Player): void {
 }
 function rush(ctx: Ctx, handler: Player): void {
   const man = defenderOf(ctx, handler), three = handler.attributes.threePoint >= 12 || ctx.state.score[ctx.offense] < ctx.state.score[ctx.defense] - 2;
-  drive(ctx, handler, three ? spot(ctx, 7.6, angleOf(ctx, pos(ctx, handler.id)) * .4) : spot(ctx, 1.2, 0), `${nameOf(handler)} pushes for a quick shot before the horn.`, { defender: man, separation: space(ctx, handler.attributes.twoPoint, man, .9, 1) });
+  drive(ctx, handler, three ? threeAt(ctx, 7.6, angleOf(ctx, pos(ctx, handler.id)) * .4) : spot(ctx, 1.2, 0), `${nameOf(handler)} pushes for a quick shot before the horn.`, { defender: man, separation: space(ctx, handler.attributes.twoPoint, man, .9, 1) });
   shoot(ctx, { shooter: handler, kind: three ? 'pullThree' : 'rim', value: three ? 3 : 2, contest: man, rushed: true, offDribble: true });
 }
 function putback(ctx: Ctx, handler: Player): void {
   const near = [...defenders(ctx)].sort((a, b) => courtDistance(pos(ctx, a.id), pos(ctx, handler.id)) - courtDistance(pos(ctx, b.id), pos(ctx, handler.id)) || a.id.localeCompare(b.id))[0]!;
-  const tip = handler.heightCm >= PLAYS.putback.tipHeight && ctx.kit.draw(ctx.state) < PLAYS.putback.tipShare;
+  const tip = handler.heightCm >= ctx.cal.PLAYS.putback.tipHeight && ctx.kit.draw(ctx.state) < ctx.cal.PLAYS.putback.tipShare;
   ctx.play.passerId = null;
   shoot(ctx, { shooter: handler, kind: tip ? 'tip' : 'putback', value: 2, contest: near });
 }
@@ -685,7 +630,7 @@ function late(ctx: Ctx, handler: Player, threeNeeded: boolean, rushed: boolean):
   const { state, kit } = ctx, man = defenderOf(ctx, handler);
   const three = threeNeeded || handler.attributes.threePoint >= 11 && kit.draw(state) < .25 + state.tactics[ctx.offense].outsideShare * .5 + (handler.attributes.threePoint - handler.attributes.twoPoint) * .03;
   const angle = angleOf(ctx, pos(ctx, handler.id));
-  const to = three ? spot(ctx, 7.3, clamp(angle, -1.1, 1.1)) : spot(ctx, handler.attributes.twoPoint >= 14 ? 1.6 : 4.5, angle * .6);
+  const to = three ? threeAt(ctx, 7.3, clamp(angle, -1.1, 1.1)) : spot(ctx, handler.attributes.twoPoint >= 14 ? 1.6 : 4.5, angle * .6);
   drive(ctx, handler, to, threeNeeded ? `${nameOf(handler)} looks for the tying three.` : `${nameOf(handler)} isolates as the clock runs down.`, { defender: man, separation: space(ctx, three ? handler.attributes.threePoint : handler.attributes.twoPoint, man, .75, 1) });
   shoot(ctx, { shooter: handler, kind: three ? 'pullThree' : distanceToRim(ctx, to) < 2.5 ? 'rim' : 'mid', value: three ? 3 : 2, contest: man, rushed, offDribble: true });
 }
@@ -714,7 +659,7 @@ function pickAndRoll(ctx: Ctx, handler: Player): void {
   const choice = pickRead(ctx, handler, reads);
   const angle = angleOf(ctx, handlerAt);
   if (choice === 'pull') {
-    drive(ctx, handler, pullThree ? spot(ctx, 7.3, clamp(angle * .8, -1.1, 1.1)) : spot(ctx, 4.6, angle * .7), `${nameOf(handler)} comes off the screen for a pull-up.`, { defender: man, separation: space(ctx, pullThree ? handler.attributes.threePoint : handler.attributes.twoPoint, man, 1.35, 1.6) }, screener);
+    drive(ctx, handler, pullThree ? threeAt(ctx, 7.3, clamp(angle * .8, -1.1, 1.1)) : spot(ctx, 4.6, angle * .7), `${nameOf(handler)} comes off the screen for a pull-up.`, { defender: man, separation: space(ctx, pullThree ? handler.attributes.threePoint : handler.attributes.twoPoint, man, 1.35, 1.6) }, screener);
     return shoot(ctx, { shooter: handler, kind: pullThree ? 'pullThree' : 'mid', value: pullThree ? 3 : 2, contest: man, offDribble: true });
   }
   if (choice === 'drive') {
@@ -731,7 +676,7 @@ function pickAndRoll(ctx: Ctx, handler: Player): void {
   }
   if (choice === 'pop') {
     if (risk(ctx, handler, 'pass', help)) return;
-    pass(ctx, handler, screener, spot(ctx, 7.1, clamp(angle * 1.2 + (angle >= 0 ? .4 : -.4), -1.2, 1.2)), `${nameOf(handler)} finds ${nameOf(screener)} popping out for three.`, { defender: help, separation: space(ctx, handler.attributes.passing, help, 1.7, 1.6) });
+    pass(ctx, handler, screener, threeAt(ctx, 7.1, clamp(angle * 1.2 + (angle >= 0 ? .4 : -.4), -1.2, 1.2)), `${nameOf(handler)} finds ${nameOf(screener)} popping out for three.`, { defender: help, separation: space(ctx, handler.attributes.passing, help, 1.7, 1.6) });
     return shoot(ctx, { shooter: screener, kind: 'catchThree', value: 3, contest: help, assist: handler });
   }
   if (choice === 'kick' && shooter) {
@@ -779,7 +724,7 @@ function isolation(ctx: Ctx, handler: Player): void {
   const man = defenderOf(ctx, handler), angle = angleOf(ctx, pos(ctx, handler.id));
   const pull = handler.attributes.threePoint >= 13 && ctx.kit.draw(ctx.state) < .35 + ctx.state.tactics[ctx.offense].outsideShare * .2;
   if (pull) {
-    drive(ctx, handler, spot(ctx, 7.4, clamp(angle, -1.1, 1.1)), `${nameOf(handler)} sizes up ${nameOf(man)} and steps back.`, { defender: man, separation: space(ctx, handler.attributes.threePoint, man, 1.1, 1.6) });
+    drive(ctx, handler, threeAt(ctx, 7.4, clamp(angle, -1.1, 1.1)), `${nameOf(handler)} sizes up ${nameOf(man)} and steps back.`, { defender: man, separation: space(ctx, handler.attributes.threePoint, man, 1.1, 1.6) });
     return shoot(ctx, { shooter: handler, kind: 'pullThree', value: 3, contest: man, offDribble: true });
   }
   drive(ctx, handler, spot(ctx, 3, angle * .6), `${nameOf(handler)} attacks ${nameOf(man)} off the dribble.`);
@@ -873,7 +818,7 @@ function early(ctx: Ctx, handler: Player): void {
   const shooter = shooterFrom(ctx, attackers(ctx))!;
   const guard = defenderOf(ctx, shooter);
   if (shooter.id === handler.id) {
-    drive(ctx, handler, spot(ctx, 7.6, clamp(angleOf(ctx, pos(ctx, handler.id)), -1, 1)), `${nameOf(handler)} pulls up early in the possession.`, { defender: guard, separation: space(ctx, handler.attributes.threePoint, guard, 1.4, 1.6) });
+    drive(ctx, handler, threeAt(ctx, 7.6, clamp(angleOf(ctx, pos(ctx, handler.id)), -1, 1)), `${nameOf(handler)} pulls up early in the possession.`, { defender: guard, separation: space(ctx, handler.attributes.threePoint, guard, 1.4, 1.6) });
     return shoot(ctx, { shooter, kind: 'pullThree', value: 3, contest: guard, offDribble: true });
   }
   if (risk(ctx, handler, 'pass', guard)) return;

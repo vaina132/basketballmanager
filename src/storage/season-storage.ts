@@ -60,7 +60,7 @@ import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
-import { clubsEverInFullWorld, fullWorldClubs, fullWorldClubsIn, isMemberList, isWorldClub, playsAtNeutralVenue, roundKey, roundOrdinal, seasonRounds, validateWorld, worldOf, worldPlayer, worldRounds } from '../world/career-world';
+import { clubsEverInFullWorld, fixtureRuleset, fullWorldClubs, fullWorldClubsIn, isMemberList, isWorldClub, playsAtNeutralVenue, roundKey, roundOrdinal, seasonRounds, validateWorld, worldOf, worldPlayer, worldRounds } from '../world/career-world';
 import type { CareerWorld, SeasonEconomy, WorldContext } from '../domain/world';
 import { getCareerPlayers, getCareerPlayer, getCareerWage, type CareerPlayerContext } from '../world/player-catalog';
 import { MAX_MATCH_PERIODS } from '../engine/match';
@@ -117,6 +117,7 @@ import { maxTransferFee } from '../world/transfers-policy';
 import { maxReleaseFee } from '../world/release-clauses';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
+import { FIBA_2024, gameSeconds, type Ruleset } from '../engine/rulesets';
 import { MAX_SEASON_COLLECTION_ENTRIES, MAX_SEASON_SAVE_BYTES, MAX_SEASON_SAVE_VALUES } from './season-limits';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
 import { COMPACT_JSON_3_ENCODING, COMPACT_JSON_ENCODING, LEGACY_COMPACT_JSON_ENCODING, compactJson3, expandJson, expandJson3 } from './compact-json';
@@ -416,11 +417,12 @@ function validateResultSummary(fields: Record<string, unknown>, path: string, ho
 }
 
 /** Completed matches retain accounting, not a second copy of their event history. */
-function validateResult(value: unknown, path: string, home: Team, away: Team, legacy: boolean, rosterAware = false, selection = false): FixtureResult {
+/** `rules`: the competition's rules (NBA step 3); every league plays FIBA until a league records the NBA rules. */
+function validateResult(value: unknown, path: string, home: Team, away: Team, legacy: boolean, rosterAware = false, selection = false, rules: Ruleset = FIBA_2024): FixtureResult {
   const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'stats', ...(legacy ? [] : ['injuries']), ...(rosterAware ? ['rosterIds'] : []), ...(selection ? ['selection'] : [])]);
   const injuries = legacy ? {} : validateInjuryMap(fields.injuries, `${path}.injuries`, [...home.players, ...away.players].map(player => player.id));
   const { periods, earned, loser } = validateResultSummary(fields, path, home, away);
-  const elapsedLimit = periods <= 4 ? periods * 600 : 2400 + (periods - 4) * 300;
+  const elapsedLimit = gameSeconds(rules, periods);
   const players = [...home.players, ...away.players];
   const stats = record(fields.stats, `${path}.stats`, players.map(player => player.id));
   const totals = { home: { points: 0, seconds: 0, eligible: 0, made: 0, assists: 0, steals: 0, blocks: 0, turnovers: 0, misses: 0 }, away: { points: 0, seconds: 0, eligible: 0, made: 0, assists: 0, steals: 0, blocks: 0, turnovers: 0, misses: 0 } };
@@ -429,13 +431,13 @@ function validateResult(value: unknown, path: string, home: Team, away: Team, le
     for (const player of team.players) {
       const location = `${path}.stats.${player.id}`;
       const entry = record(stats[player.id], location, STAT_KEYS);
-      for (const key of STAT_KEYS) number(entry[key], `${location}.${key}`, key === 'condition' ? 35 : 0, key === 'secondsPlayed' ? elapsedLimit : key === 'fouls' ? 5 : key === 'condition' ? 100 : 1_000_000, key !== 'condition');
+      for (const key of STAT_KEYS) number(entry[key], `${location}.${key}`, key === 'condition' ? 35 : 0, key === 'secondsPlayed' ? elapsedLimit : key === 'fouls' ? rules.foulOut : key === 'condition' ? 100 : 1_000_000, key !== 'condition');
       const stat = entry as unknown as PlayerStats;
       if (stat.fieldGoalsMade > stat.fieldGoalsAttempted || stat.threePointersMade > stat.threePointersAttempted || stat.freeThrowsMade > stat.freeThrowsAttempted) fail(location, 'has more makes than attempts');
       if (stat.threePointersMade > stat.fieldGoalsMade || stat.threePointersAttempted > stat.fieldGoalsAttempted || stat.fieldGoalsMade - stat.threePointersMade > stat.fieldGoalsAttempted - stat.threePointersAttempted) fail(location, 'has inconsistent two-point and three-point totals');
       if (stat.points !== 2 * stat.fieldGoalsMade + stat.threePointersMade + stat.freeThrowsMade) fail(location, 'has points inconsistent with shooting');
       const total = totals[side];
-      total.points += stat.points; total.seconds += stat.secondsPlayed; total.eligible += stat.fouls < 5 && !Object.hasOwn(injuries, player.id) ? 1 : 0;
+      total.points += stat.points; total.seconds += stat.secondsPlayed; total.eligible += stat.fouls < rules.foulOut && !Object.hasOwn(injuries, player.id) ? 1 : 0;
       total.made += stat.fieldGoalsMade; total.assists += stat.assists; total.steals += stat.steals;
       total.blocks += stat.blocks; total.turnovers += stat.turnovers; total.misses += stat.fieldGoalsAttempted - stat.fieldGoalsMade;
     }
@@ -3892,6 +3894,9 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   const opposition: Side = active.homeClubId === matchClub ? 'away' : 'home';
   if (!match.autoSubstitutions[opposition]) fail('activeMatch.autoSubstitutions', 'must enable opponent substitutions');
   // Format 79: the match uses the career's play model, and the opponent has a computer coach.
+  // NBA step 3 (provisional format 90): a match with competition rules needs format 90 and the rules of its league.
+  if (Object.hasOwn(match, 'ruleset') && version < 90) fail('activeMatch.ruleset', 'needs save format 90 or later');
+  if ((match.ruleset ?? null) !== (fixtureRuleset({ world }, active as SeasonFixture) ?? null)) fail('activeMatch.ruleset', 'must follow the rules of the fixture\'s league');
   if ((match.playModel ?? null) !== (state.matchModel ?? null) || match.playModel && !match.computerCoach?.includes(opposition)) fail('activeMatch.playModel', 'must use the career\'s play model with a computer coach for the opponent');
   // Format 85: a game at one venue is played without home advantage in careers with that rule, and only then.
   if (!!match.neutralVenue !== playsAtNeutralVenue({ world }, active as SeasonFixture)) fail('activeMatch.neutralVenue', 'must mark exactly the games at one venue in careers with neutral venues');

@@ -1,4 +1,5 @@
 import { abilityShapeProblem } from './extra-attributes';
+import type { RulesetId } from '../engine/rulesets';
 import type { ClubFinanceDefinition } from '../data/development-finances';
 import type { DevelopmentPresident } from '../data/development-presidents';
 import type { Rivalry } from '../domain/rivalries';
@@ -171,6 +172,13 @@ export function clubCountry(world: CareerWorld, clubId: string): string | null {
   }
   for (const competition of world.europeanCompetitions ?? []) if (competition.countries && Object.hasOwn(competition.countries, clubId)) return competition.countries[clubId]!;
   return null;
+}
+/**
+ * NBA step 3: the competition rules a fixture is played under (src/engine/rulesets.ts); undefined means FIBA. Every
+ * league plays FIBA until the NBA league is added to the world (NBA step 4), so no match records a ruleset yet.
+ */
+export function fixtureRuleset(_context: WorldContext, _fixture: { homeClubId: string; awayClubId: string }): RulesetId | undefined {
+  return undefined;
 }
 /** Format 85 (`neutralVenues`, new careers): a game marked at one venue is played without home advantage or gate. */
 export function playsAtNeutralVenue(context: WorldContext, fixture: { neutral?: boolean }): boolean {

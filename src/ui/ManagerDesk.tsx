@@ -1,4 +1,5 @@
 import { getPlayerRetirement } from '../world/lifecycle-policy'
+import { rulesOf } from '../engine/rulesets'
 import { awaitsContractReply, getClubContractRequests, getSquadRelationships } from '../world/relationships'
 import { getBoardSummary } from '../world/board'
 import { getPressQuestion } from '../world/press-policy'
@@ -239,7 +240,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
         <section className="desk-lineup panel" aria-labelledby="desk-lineup-heading">
           <div className="desk-panel-heading"><h2 id="desk-lineup-heading"><Icon name="people" size={16} />{displayName}</h2><button className="text-button" onClick={onOpenSquad}>Full squad<Icon name="chevron" size={15} /></button></div>
           <div className="desk-table-scroll"><table className="desk-lineup-table"><thead><tr><th>Player</th><th>Position</th><th>Stamina</th><th>Fouls</th></tr></thead><tbody>{active.map(player => {
-            const unavailable = match.injuries[player.id] ? 'Injured' : match.stats[player.id].fouls >= 5 ? 'Fouled out' : null
+            const unavailable = match.injuries[player.id] ? 'Injured' : match.stats[player.id].fouls >= rulesOf(match).foulOut ? 'Fouled out' : null
             return <tr key={player.id} data-player-id={player.id}><td><button className="desk-player" onClick={() => onSelectPlayer(player.id)} aria-label={`View ${player.name}`}><Avatar player={player} color={team.color} size={31} /><span><strong>{player.name}</strong><small>#{player.number}{unavailable && <em>{unavailable}</em>}</small></span></button></td><td>{player.position}</td><td><StaminaMeter value={match.stats[player.id].condition} label={`${player.name} stamina`} compact /></td><td className={match.stats[player.id].fouls >= 4 ? 'desk-warning-value' : ''}>{match.stats[player.id].fouls}</td></tr>
           })}</tbody></table></div>
           {!active.length && <p className="desk-empty">No players on court.</p>}

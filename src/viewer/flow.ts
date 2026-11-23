@@ -1,4 +1,5 @@
 import type { CourtBallPoint, CourtPoint, MatchEvent, Position, Side } from '../domain/types'
+import { FIBA_2024, NBA_2026, type Ruleset } from '../engine/rulesets'
 import { buildAnimation, hoopFor, pathAt, turnoverLabel } from './choreography'
 import type { Animation, BallSegment, Mark, PlayKind, PlayerTrack, Pose, Role, Roster } from './choreography'
 
@@ -222,16 +223,27 @@ function throwInPoint(spot: P, line?: 'baseline' | 'sideline'): { point: P; line
   return { line: 'sideline', point: { x: clamp(spot.x, .07, .93), y: spot.y < .5 ? -.035 : 1.035 } }
 }
 
-/** The team foul count of `side` in the event's period (or overtime group) up to and including `index`. */
-function teamFoulsAt(events: readonly MatchEvent[], index: number, side: Side): number {
-  const period = events[index]!.period
+/** The rules a match's events were played under: the tip-off clock shows the quarter length (12:00 for the NBA). */
+function rulesOfEvents(events: readonly MatchEvent[]): Ruleset {
+  return events[0]?.period === 1 && events[0].clockSeconds === NBA_2026.quarterSeconds ? NBA_2026 : FIBA_2024
+}
+/** The team foul count of `side` in the event's period (FIBA: overtime with the fourth quarter) up to and including `index`. */
+function teamFoulsAt(events: readonly MatchEvent[], index: number, side: Side, rules: Ruleset = FIBA_2024, lateOnly = false): number {
+  const period = events[index]!.period, own = rules.penalty.overtimeFouls !== null
   let count = 0
   for (let i = index; i >= 0; i -= 1) {
     const event = events[i]!
-    if (period <= 4 ? event.period !== period : event.period < 4) break
+    if (period <= 4 || own ? event.period !== period : event.period < 4) break
+    if (lateOnly && event.clockSeconds > rules.penalty.lateSeconds) break
     if (event.type === 'foul' && event.side === side) count += 1
   }
   return count
+}
+/** Whether a foul gives the penalty (free throws): FIBA from the fifth team foul; the NBA as src/engine/rulesets.ts `inPenalty`. */
+function bonusAt(events: readonly MatchEvent[], index: number, side: Side): boolean {
+  const rules = rulesOfEvents(events), event = events[index]!
+  if (teamFoulsAt(events, index, side, rules) >= (event.period > 4 ? rules.penalty.overtimeFouls ?? rules.penalty.fouls : rules.penalty.fouls)) return true
+  return rules.penalty.lateFouls !== null && event.clockSeconds <= rules.penalty.lateSeconds && teamFoulsAt(events, index, side, rules, true) >= rules.penalty.lateFouls
 }
 
 /** Classifies an event for the broadcast. */
@@ -293,7 +305,7 @@ function startsStep(events: readonly MatchEvent[], index: number): boolean {
 function initialLive(events: readonly MatchEvent[]): Live {
   const tip = events[0]
   const pos = new Map((tip?.scene?.start ?? []).map(point => [point.playerId, { x: point.x, y: point.y }]))
-  return { pos, ball: { x: .5, y: .5, height: 1.25 }, period: 1, clock: 600, shot: 24, offense: tip?.side ?? 'home', frontcourt: false, score: { home: 0, away: 0 }, started: false, dead: false }
+  return { pos, ball: { x: .5, y: .5, height: 1.25 }, period: 1, clock: rulesOfEvents(events).quarterSeconds, shot: 24, offense: tip?.side ?? 'home', frontcourt: false, score: { home: 0, away: 0 }, started: false, dead: false }
 }
 function cloneLive(live: Live): Live {
   return { ...live, pos: new Map([...live.pos].map(([id, at]) => [id, { ...at }])), ball: { ...live.ball }, score: { ...live.score }, ...(live.refs ? { refs: live.refs.map(point => ({ ...point })) } : {}) }
@@ -899,7 +911,7 @@ function foulLabel(events: readonly MatchEvent[], index: number): string {
   if (/offensive foul|pushes off/.test(text)) return 'OFFENSIVE FOUL'
   if (/on the shot|three-point attempt|and one/.test(text)) return 'SHOOTING FOUL'
   if (/intentionally/.test(text)) return 'FOUL · CLOCK STOPS'
-  return event.side && teamFoulsAt(events, index, event.side) >= 5 ? 'FOUL · BONUS' : 'FOUL'
+  return event.side && bonusAt(events, index, event.side) ? 'FOUL · BONUS' : 'FOUL'
 }
 
 /** A whistle: play stops; the player called raises his hand (or the ball handler stops); the call shows above him. */

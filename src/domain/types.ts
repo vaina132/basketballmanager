@@ -179,6 +179,8 @@ export interface MatchState {
   neutralVenue?: true;
   /** Format 86: how a computer side's head coach runs its automatic rotation (absent: the usual rotation). */
   coachRotation?: Partial<Record<Side, CoachRotation>>;
+  /** NBA step 3 (provisional format 90): the competition's rules; absent means FIBA-2024 (src/engine/rulesets.ts). */
+  ruleset?: import('../engine/rulesets').RulesetId;
   /** Frozen when the career round is prepared; later conversations never rewrite a match. */
   morale?: { model: 'morale-1'; eventCount: number; values: Record<string, number> };
   seed: number;

@@ -2,6 +2,7 @@ import type { CourtPoint, CourtPosition, MatchState, Player, Position, Possessio
 import { EXTRA_MATCH } from '../world/extra-attributes';
 import { HOME_COURT_MAKE_BONUS, SCORE_EFFECT, SHOT_MAKING } from './calibration';
 import { matchPlayer } from './positions';
+import { rulesOf } from './rulesets';
 
 const other = (side: Side): Side => side === 'home' ? 'away' : 'home';
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
@@ -131,7 +132,7 @@ export function shotContext(state: MatchState, play: PossessionPlay): { defender
   const origin = positionOf(play, shooter.id), basket = basketPoint(state, play.offense);
   const distance = courtDistance(origin, basket), separationM = courtDistance(origin, positionOf(play, defender.id));
   // This increment uses the arc; its authored perimeter positions avoid corners.
-  const value: 2 | 3 = distance >= 6.75 ? 3 : 2;
+  const value: 2 | 3 = distance >= rulesOf(state).threePointM ? 3 : 2;
   const contest = separationM <= .85 ? 'contested' : separationM <= 1.75 ? 'pressured' : 'open';
   const skill = value === 3 ? shooter.attributes.threePoint : shooter.attributes.twoPoint;
   const fatigue = (100 - state.stats[shooter.id]!.condition) / 100;

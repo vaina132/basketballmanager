@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { rulesOf } from '../engine/rulesets'
 import type { DragEvent, RefObject } from 'react'
 import type { MatchState, Player, Side } from '../domain/types'
 import type { PlayerKnowledge } from '../domain/scouting'
@@ -54,7 +55,7 @@ interface LineupPlayerProps {
 
 function LineupPlayer({ player, match, side, active, pickLabel, pressed, selected, selectedHint, targetHint, draggable, dragOver, pending, onSelect, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, knowledge }: LineupPlayerProps) {
   const stats = match.stats[player.id]
-  const unavailable = match.injuries[player.id] ? 'Injured' : stats.fouls >= 5 ? 'Fouled out' : null
+  const unavailable = match.injuries[player.id] ? 'Injured' : stats.fouls >= rulesOf(match).foulOut ? 'Fouled out' : null
   const identity = <><span aria-hidden="true"><Avatar player={player} color={match[side].color} size={34} /></span><span className="lineup-player-identity"><strong>{player.name}</strong><span>#{player.number} <i /> {player.position}<span className={stats.fouls >= 4 ? 'lineup-foul-trouble' : ''}> {stats.fouls} {stats.fouls === 1 ? 'foul' : 'fouls'}</span></span></span></>
 
   return <article className={`lineup-player${unavailable ? ' lineup-player-unavailable' : ''}${selected ? ' lineup-player-selected' : ''}${targetHint ? ' lineup-player-target' : ''}${dragOver ? ' lineup-player-drop' : ''}`} data-player-id={player.id} data-roster-status={unavailable ?? (active ? 'active' : 'bench')} tabIndex={-1} aria-label={`${player.name}, ${unavailable ?? (active ? 'on court' : 'bench')}`} draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>

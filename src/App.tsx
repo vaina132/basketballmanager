@@ -31,6 +31,7 @@ import type { ManagerProfile } from './domain/manager'
 import { managerAge, setManagerProfile } from './world/manager'
 import type { CareerSetup } from './ui/CareerStart'
 import { createFixtureMatch, createMatch, isPlayerEligible, remainingTimeouts, simulateToEnd, simulateToQuarterEnd, stepMatch } from './engine/match'
+import { inPenalty } from './engine/rulesets'
 import type { DataPack } from './world/data-pack'
 import { loadLocalMatch, MAX_SAVE_BYTES, parseMatch, saveLocalMatch, serializeMatch } from './storage/match-storage'
 import { Avatar } from './ui/Avatar'
@@ -348,7 +349,7 @@ export default function App() {
   } : resolvedStats
   const matchRoster = useMemo(() => rosterOf(match), [match.home.players, match.away.players]) // eslint-disable-line react-hooks/exhaustive-deps
   const bugEvent = playback.busy ? presentedEvent : undefined
-  const bugTeam = (side: Side) => ({ name: match[side].shortName, color: match[side].color, score: displayScore[side], fouls: resolvedStats.teamFouls?.[side] ?? 0, timeouts: resolvedStats.timeoutUsage ? remainingTimeouts(resolvedStats, side) : 0 })
+  const bugTeam = (side: Side) => ({ name: match[side].shortName, color: match[side].color, score: displayScore[side], fouls: resolvedStats.teamFouls?.[side] ?? 0, timeouts: resolvedStats.timeoutUsage ? remainingTimeouts(resolvedStats, side) : 0, ...(resolvedStats.teamFouls && resolvedStats.events ? { bonus: inPenalty(resolvedStats, side) } : {}) })
   const scoreBug: ScoreBug = { home: bugTeam('home'), away: bugTeam('away'), period: periodLabel(bugEvent?.period ?? match.period), clock: clock(bugEvent?.clockSeconds ?? match.clockSeconds) }
   const captionIndex = captionEvent ? match.events.findIndex(event => event.id === captionEvent.id) : -1
   // The line under the court follows the beat on screen (at rest: the last beat shown, not a later command).

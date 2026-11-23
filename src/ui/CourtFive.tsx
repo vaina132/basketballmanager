@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { rulesOf } from '../engine/rulesets'
 import type { DragEvent } from 'react'
 import type { MatchState, Player, Position, Side } from '../domain/types'
 import type { PlayerKnowledge } from '../domain/scouting'
@@ -289,7 +290,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
   /** One player row of the bench or the reserves: tap or drag him, or drop a picked player on him to swap. */
   const playerRow = (player: Player, target: Pick & { playerId: string }) => {
     const key = pickKey(target), stats = target.kind === 'bench' ? shown.stats[player.id] : undefined
-    const unavailable = target.kind === 'reserve' ? squad?.unavailable(player.id) ? 'Injured' : null : match.injuries[player.id] ? 'Injured' : stats && stats.fouls >= 5 ? 'Fouled out' : null
+    const unavailable = target.kind === 'reserve' ? squad?.unavailable(player.id) ? 'Injured' : null : match.injuries[player.id] ? 'Injured' : stats && stats.fouls >= rulesOf(match).foulOut ? 'Fouled out' : null
     const queued = target.kind === 'bench' ? pending.find(request => request.inId === player.id) : undefined
     const isSelected = !!active && pickKey(active) === key
     const resolved = active && !isSelected ? resolve(active, target) : null
@@ -359,7 +360,7 @@ export function CourtFive({ match, displayMatch, side, disabled, benchOpen, benc
           const placed = !!player && shownChosen[player.id] === position
           const warning = player && placed ? outOfPositionWarning(player.position, position) : null
           const listedNote = player && !placed && player.position !== position ? `Plays ${player.position}` : null
-          const unavailable = player && stats ? match.injuries[player.id] ? 'Injured' : stats.fouls >= 5 ? 'Fouled out' : null : null
+          const unavailable = player && stats ? match.injuries[player.id] ? 'Injured' : stats.fouls >= rulesOf(match).foulOut ? 'Fouled out' : null : null
           const queued = player ? pending.find(request => request.outId === player.id) : undefined
           const isSelected = active?.kind === 'circle' && active.position === position
           const resolved = active && !isSelected ? resolve(active, target) : null

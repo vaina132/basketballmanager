@@ -41,7 +41,7 @@ import type { ManagerProfile } from '../domain/manager';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-league';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import type { CareerWorld } from '../domain/world';
-import { fullWorldClubs, isMemberList, playsAtNeutralVenue, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
+import { fixtureRuleset, fullWorldClubs, isMemberList, playsAtNeutralVenue, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
 import { createFixtureMatch, isPlayerEligible, preTipoffLineup, simulateToEnd } from '../engine/match';
 import { isCourtPosition } from '../engine/positions';
 import { INJURY_MODEL_2 } from '../domain/injuries';
@@ -356,6 +356,7 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
   // Format 86: computer sides' automatic rotation follows their head coach.
   const game = { seasonNumber: season.seasonNumber ?? 1, round: fixture.round, date: fixture.date };
   const homeRotation = computerCoachRotation(season, developedHome, game), awayRotation = computerCoachRotation(season, developedAway, game);
+  const ruleset = fixtureRuleset(season, fixture);
   let match = createFixtureMatch(fixtureSeed(season.seed, fixture.id), developedHome, developedAway, {
     ...(morale ? { morale } : {}),
     lineups: { home: homeFive, away: awayFive },
@@ -370,6 +371,8 @@ function prepareMatch(season: Pick<SeasonState, 'seed' | 'clubs' | 'plans' | 'co
     ...(season.matchModel ? { playModel: season.matchModel, computerCoach: SIDES.filter(side => (side === 'home' ? fixture.homeClubId : fixture.awayClubId) !== season.managedClubId) } : {}),
     // Format 85: a game at one venue (Primera FEB's final stage, Final Fours, BCL qualification) has no home advantage.
     ...(playsAtNeutralVenue(season, fixture) ? { neutralVenue: true as const } : {}),
+    // NBA step 3: the league's competition rules when they are not FIBA's (none yet: the NBA arrives with step 4).
+    ...(ruleset ? { ruleset } : {}),
     ...(homeRotation || awayRotation ? { coachRotation: { ...(homeRotation ? { home: homeRotation } : {}), ...(awayRotation ? { away: awayRotation } : {}) } } : {}),
   });
   if (season.assistant?.enabledSince) for (const side of SIDES) {

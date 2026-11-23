@@ -1,4 +1,5 @@
 import { memo, useMemo, useSyncExternalStore } from 'react'
+import { isNba, rulesOf } from '../engine/rulesets'
 import type { MatchEvent, MatchState, Player, Side } from '../domain/types'
 import { attackingDirection } from '../engine/match'
 import { frameAt, pathAt, rosterOf } from './choreography'
@@ -14,7 +15,7 @@ import { COURT_VIEW_BOX, project, rgb } from './projection'
 /** Pixels per metre of height (the rim, at 3.05 m, is drawn 36 px above the floor). */
 const LIFT = 12
 
-export interface ScoreBugTeam { name: string; color: string; score: number; fouls: number; timeouts: number }
+export interface ScoreBugTeam { name: string; color: string; score: number; fouls: number; timeouts: number; /** The team's fouls give free throws (absent: from the fifth, FIBA). */ bonus?: boolean }
 export interface ScoreBug { home: ScoreBugTeam; away: ScoreBugTeam; period: string; clock: string }
 
 export interface Jersey { fill: string; text: string; trim: string }
@@ -81,7 +82,7 @@ function Referee({ x, y, signal, index }: { x: number; y: number; signal: boolea
 }
 
 /** The floor never changes, so it is drawn once and skipped on every animation frame. */
-const CourtFloor = memo(function CourtFloor() {
+const CourtFloor = memo(function CourtFloor({ nba = false }: { nba?: boolean }) {
   return <>
     <defs>
       <linearGradient id="court-floor" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#dfcbaa" /><stop offset="1" stopColor="#bba683" /></linearGradient>
@@ -95,12 +96,21 @@ const CourtFloor = memo(function CourtFloor() {
       <rect width="1" height="1" fill="url(#wood-grain)" />
       <g fill="none" stroke="#f8f1dc" strokeWidth=".0035">
         <rect width="1" height="1" /><path d="M.5 0v1" /><ellipse cx=".5" cy=".5" rx=".0643" ry=".12" />
-        <path d="M0 .337h.207v.326H0m1-.326H.793v.326H1" />
-        <ellipse cx=".207" cy=".5" rx=".0643" ry=".12" /><ellipse cx=".793" cy=".5" rx=".0643" ry=".12" />
-        <path d="M0 .06h.107a.24 .448 0 0 1 0 .88H0m1-.88H.893a.24 .448 0 0 0 0 .88H1" />
-        <path d="M.035 .44v.12m.93-.12v.12" />
+        {nba ? <>
+          {/* NBA floor (28.65 x 15.24 m): 4.9 m lane to 5.79 m, 1.8 m circles, 7.24 m arc with 6.71 m corners. */}
+          <path d="M0 .34h.202v.32H0m1-.32H.798v.32H1" />
+          <ellipse cx=".202" cy=".5" rx=".0628" ry=".118" /><ellipse cx=".798" cy=".5" rx=".0628" ry=".118" />
+          <path d="M0 .06h.149a.2527 .475 0 0 1 0 .88H0m1-.88H.851a.2527 .475 0 0 0 0 .88H1" />
+          <path d="M.0349 .44v.12m.9302-.12v.12" />
+        </> : <>
+          <path d="M0 .337h.207v.326H0m1-.326H.793v.326H1" />
+          <ellipse cx=".207" cy=".5" rx=".0643" ry=".12" /><ellipse cx=".793" cy=".5" rx=".0643" ry=".12" />
+          <path d="M0 .06h.107a.24 .448 0 0 1 0 .88H0m1-.88H.893a.24 .448 0 0 0 0 .88H1" />
+          <path d="M.035 .44v.12m.93-.12v.12" />
+        </>}
       </g>
-      <rect x=".001" y=".339" width=".204" height=".322" fill="#657568" opacity=".35" /><rect x=".795" y=".339" width=".204" height=".322" fill="#657568" opacity=".35" />
+      {nba ? <><rect x=".001" y=".342" width=".199" height=".316" fill="#657568" opacity=".35" /><rect x=".8" y=".342" width=".199" height=".316" fill="#657568" opacity=".35" /></>
+        : <><rect x=".001" y=".339" width=".204" height=".322" fill="#657568" opacity=".35" /><rect x=".795" y=".339" width=".204" height=".322" fill="#657568" opacity=".35" /></>}
       {/* The scorer's table and the team benches beside the near sideline (FIBA: home bench left of the table). */}
       <rect x=".44" y="-.072" width=".12" height=".03" fill="#2c3833" stroke="#7d8a80" strokeWidth=".002" />
       <rect x=".2" y="-.105" width=".2" height=".022" fill="#3b4a43" opacity=".9" /><rect x=".6" y="-.105" width=".2" height=".022" fill="#3b4a43" opacity=".9" />
@@ -145,7 +155,7 @@ const count = new Intl.NumberFormat('en-GB')
 function ScoreBugView({ bug, kits, gate, shot }: { bug: ScoreBug; kits: Record<Side, Jersey>; gate?: Gate | null; shot?: string | null }) {
   const row = (team: ScoreBugTeam, side: Side) => <div className="bug-row" data-side={side}>
     <i style={{ background: kits[side].fill, boxShadow: `inset 0 0 0 1px ${kits[side].trim}` }} aria-hidden="true" /><b>{team.name}</b><span className="bug-score">{team.score}</span>
-    <span className="bug-meta" title={`${team.fouls} team fouls this quarter, ${team.timeouts} timeouts left`}>F{team.fouls}{team.fouls >= 5 ? '+' : ''} · TO{team.timeouts}</span>
+    <span className="bug-meta" title={`${team.fouls} team fouls this quarter, ${team.timeouts} timeouts left`}>F{team.fouls}{team.bonus ?? team.fouls >= 5 ? '+' : ''} · TO{team.timeouts}</span>
   </div>
   const attendance = gate ? `Attendance ${count.format(gate.attendance)} / ${count.format(gate.capacity)}` : null
   return <div className="score-bug" aria-label={`${bug.home.name} ${bug.home.score}, ${bug.away.name} ${bug.away.score}, ${bug.period} ${bug.clock}${attendance ? `. ${attendance}` : ''}`}>
@@ -225,7 +235,7 @@ export function Court({ match, event, progress = 1, clock, reducedMotion = false
     <div className="court-stage">
     <CrowdLayers crowd={crowd} cheer={cheer} reducedMotion={reducedMotion} />
     <svg viewBox={COURT_VIEW_BOX} className="court-svg" role="img" aria-label={`Diagonal basketball court. ${description}`}>
-      <CourtFloor />
+      <CourtFloor nba={isNba(rulesOf(match))} />
       {arcPath && <path d={arcPath} fill="none" stroke={flight!.kind === 'shot' ? '#b5541f' : '#4f5d55'} strokeWidth="1.8" strokeDasharray="4 5" opacity=".7" />}
       {[...ordered.map(pose => ({ depth: project(pose.x, pose.y).y, pose })), ...HOOP_X.map(x => ({ depth: hoopDepth(x) + .5, hoop: x })), ...referees.map((point, index) => ({ depth: project(point.x, point.y).y, referee: index }))].sort((a, b) => a.depth - b.depth).map(item => {
         if ('hoop' in item) return <Hoop key={`hoop-${item.hoop}`} x={item.hoop!} swish={swish} />

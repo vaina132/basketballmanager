@@ -1,15 +1,16 @@
-﻿/** Deterministic FIBA-2024 rules subset. Probability and fatigue parameters remain uncalibrated; injury rates follow research (sprint 4). */
+﻿/** Deterministic basketball rules: FIBA-2024 by default, the NBA's when a match records `ruleset` (src/engine/rulesets.ts). Probability and fatigue parameters remain uncalibrated; injury rates follow research (sprint 4). */
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../data/fictional-teams';
 import type { CoachRotation, CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, PlayModel, Position, PossessionPlay, Side, SkillAttributes, Tactics, Team } from '../domain/types';
 import { nextRandom, normalizeSeed } from './random';
 import { injuryPhrase, injuryRiskTotal, isInjuryKind, isMatchInjuryKind, pickInjuryKind, type InjuryKind, type InjuryRisk } from '../domain/injuries';
 import { actionScene, freeThrowPosition, passScene, reboundScene, setupScene, shotScene, turnoverScene } from './court-events';
 import { basketPoint, clutchAdjustment, courtDistance, createPossessionPlay, matchedDefender, moveForAction, positionOf, possessionFormation, primaryHandler, shotContext } from './possession';
-import { ACTION_SECONDS, BLOCKS, DEFENDER_ROLES, DEFENSIVE_FOULS, LATE_GAME, REBOUNDS, ROTATION, SHOOTING_FOULS, SHOT_MAKING, SHOT_SELECTION, TEAM_REBOUND_OFFENSIVE_SHARE, TEAM_REBOUND_SHARE, TURNOVERS } from './calibration';
+import { ACTION_SECONDS, BLOCKS, calibrationFor, DEFENDER_ROLES, DEFENSIVE_FOULS, LATE_GAME, REBOUNDS, ROTATION, SHOOTING_FOULS, SHOT_MAKING, SHOT_SELECTION, TEAM_REBOUND_OFFENSIVE_SHARE, TEAM_REBOUND_SHARE, TURNOVERS } from './calibration';
 import { overallRating } from '../world/overall-rating';
 import { EXTRA_MATCH } from '../world/extra-attributes';
 import { asPlayedIn, courtCircles, COURT_POSITIONS, isCourtPosition } from './positions';
-import { resolvePlaysAction, type PlayKit } from './plays';
+import { DEFENSIVE_THREE_SECONDS, resolvePlaysAction, type PlayKit } from './plays';
+import { elapsedSeconds, foulTroubleLimit, inPenalty, isNba, isRulesetId, periodSeconds, regulationSeconds, resetsTeamFouls, rulesOf, type RulesetId } from './rulesets';
 export const MAX_MATCH_PERIODS = 24;
 const MAX_SIMULATION_STEPS = 20_000;
 const SIDES: readonly Side[] = ['home', 'away'];
@@ -25,7 +26,7 @@ export const REDUCED_INJURY_FACTOR = 0.3;
 export const MAX_INJURY_RISK = 20;
 const other = (side: Side): Side => side === 'home' ? 'away' : 'home';
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
-const elapsed = (state: MatchState): number => state.period <= 4 ? state.period * 600 - state.clockSeconds : 2400 + (state.period - 4) * 300 - state.clockSeconds;
+const elapsed = (state: MatchState): number => elapsedSeconds(rulesOf(state), state.period, state.clockSeconds);
 const lateGame = (state: MatchState): boolean => state.period >= 4 && state.clockSeconds <= 120;
 /** Focus changes decision errors only, capped at half a percentage point; no extra random draw. */
 export function moraleTurnoverAdjustment(state: Pick<MatchState, 'morale'>, playerId: string): number {
@@ -82,7 +83,7 @@ function assertBoundary(state: MatchState): void {
     if (ids.length < 2 || ids.length > 5 || new Set(ids).size !== ids.length || ids.some(id => !available.has(id) || !state.stats[id])) throw new Error(`${side} must have two to five unique players from its own roster.`);
   }
   if (state.lineups.home.some(id => state.lineups.away.includes(id))) throw new Error('A player cannot appear for both teams.');
-  if (!Number.isInteger(state.clockSeconds) || state.clockSeconds < 0 || state.clockSeconds > (state.period <= 4 ? 600 : 300)) throw new Error('The game clock is outside the current period.');
+  if (!Number.isInteger(state.clockSeconds) || state.clockSeconds < 0 || state.clockSeconds > periodSeconds(rulesOf(state), state.period)) throw new Error('The game clock is outside the current period.');
   if (!Number.isInteger(state.shotClockSeconds) || state.shotClockSeconds < 0 || state.shotClockSeconds > 24) throw new Error('The shot clock is outside its legal range.');
 }
 function player(state: MatchState, side: Side, id: string): Player { const result = state[side].players.find(p => p.id === id); if (!result) throw new Error('A player is missing from the roster.'); return circlePlayer(state, side, result); }
@@ -94,11 +95,19 @@ function choose(state: MatchState, players: readonly Player[], weight: (player: 
   for (let index = 0; index < players.length; index += 1) { target -= weights[index]!; if (target < 0) return players[index]!; }
   return players[players.length - 1]!;
 }
-export function isPlayerEligible(state: MatchState, id: string): boolean { return Boolean(state.stats[id]) && state.stats[id]!.fouls < 5 && !state.injuries[id]; }
+export function isPlayerEligible(state: MatchState, id: string): boolean { return Boolean(state.stats[id]) && state.stats[id]!.fouls < rulesOf(state).foulOut && !state.injuries[id]; }
 export function attackingDirection(state: Pick<MatchState, 'period'>, side: Side): 1 | -1 { return (side === 'home') === (state.period <= 2) ? 1 : -1; }
 export function defensiveFoulShotClock(remaining: number, frontcourt: boolean): number { return frontcourt ? Math.max(14, remaining) : 24; }
 export function remainingTimeouts(state: MatchState, side: Side): number {
-  assertSide(side); const used = state.timeoutUsage[side];
+  assertSide(side); const used = state.timeoutUsage[side], rules = rulesOf(state).timeouts;
+  // NBA: seven a game (quarters 1-3 counted as firstHalf, the fourth as secondHalf), at most four in the fourth and two
+  // in its last three minutes (lateFourth), two per overtime.
+  if (rules.model === 'nba') {
+    if (state.period > 4) return Math.max(0, rules.overtime - used.overtime);
+    const left = rules.game - used.firstHalf - used.secondHalf;
+    if (state.period < 4) return Math.max(0, left);
+    return Math.max(0, Math.min(left, rules.secondHalf - used.secondHalf, state.clockSeconds <= rules.lateSeconds ? rules.late - used.lateFourth : left));
+  }
   if (state.period <= 2) return Math.max(0, 2 - used.firstHalf);
   if (state.period > 4) return Math.max(0, 1 - used.overtime);
   const remaining = 3 - used.secondHalf;
@@ -178,7 +187,7 @@ function startingFive(state: MatchState, side: Side): Set<string> {
   let starters = tip?.type === 'tipoff' && tip.scene ? tip.scene.start.map(point => point.playerId).filter(id => roster.has(id)) : state[side].players.slice(0, 5).map(p => p.id);
   for (let index = 1; index < state.events.length; index += 1) {
     const event = state.events[index]!;
-    if (event.period !== 1 || event.clockSeconds !== 600) break;
+    if (event.period !== 1 || event.clockSeconds !== rulesOf(state).quarterSeconds) break;
     if (event.type === 'substitution' && event.side === side && event.outgoingPlayerId && event.playerId) starters = starters.map(id => id === event.outgoingPlayerId ? event.playerId! : id);
   }
   return new Set(starters);
@@ -200,7 +209,7 @@ export function preTipoffLineup(state: MatchState, side: Side): { five: string[]
  * blowouts. Reads state only: no random draws.
  */
 function rotationNeeds(state: MatchState, side: Side): Map<string, number> {
-  const starters = startingFive(state, side), unavailable = new Set(state.preExistingInjuries ?? []);
+  const starters = startingFive(state, side), unavailable = new Set(state.preExistingInjuries ?? []), rules = rulesOf(state), ROTATION = calibrationFor(rules).ROTATION;
   // Format 86: a computer side's head coach shapes the rotation (`CoachRotation`); without one the usual values apply.
   const coach = state.coachRotation?.[side], young = new Set(coach?.young ?? []), trust = (id: string) => young.has(id) ? coach!.youthBonus : 0;
   const ranked = state[side].players.filter(p => !unavailable.has(p.id)).map(player => ({ player, quality: overallRating(player.attributes, player.position) + (starters.has(player.id) ? ROTATION.starterBonus : 0) + trust(player.id), base: overallRating(player.attributes, player.position) + trust(player.id) }))
@@ -211,13 +220,14 @@ function rotationNeeds(state: MatchState, side: Side): Map<string, number> {
   const garbage = state.period === 4 && state.clockSeconds <= ROTATION.garbageSeconds && margin >= ROTATION.garbageMargin;
   const closing = !garbage && state.period >= 4 && state.clockSeconds <= (coach?.closingSeconds ?? ROTATION.closingSeconds) && margin <= ROTATION.closingMargin;
   const closers = new Set(ranked.filter(entry => isPlayerEligible(state, entry.player.id)).slice(0, 5).map(entry => entry.player.id));
-  const foulLimit = state.period === 1 ? 2 : state.period === 2 ? 3 : 4;
+  const foulLimit = foulTroubleLimit(rules, state.period);
   const rest = coach?.restCondition ?? ROTATION.restCondition, foulTrouble = coach?.foulTrouble ?? ROTATION.foulTrouble;
   const rotationSize = ROTATION.rotationSize + (coach ? Math.sign(coach.depth) * Number(Math.abs(coach.depth) >= 2) : 0);
   const needs = new Map<string, number>(state[side].players.map(p => [p.id, -100]));
   ranked.forEach((entry, rank) => {
     const stats = state.stats[entry.player.id]!;
-    const deficit = (minutes[rank]! / total * 12_000 * played / 2400 - stats.secondsPlayed) / 60;
+    // Each rank's share of the team's court seconds (five players for the whole regulation) so far.
+    const deficit = (minutes[rank]! / total * (5 * regulationSeconds(rules)) * played / regulationSeconds(rules) - stats.secondsPlayed) / 60;
     const fatigue = Math.max(0, rest - stats.condition) * ROTATION.fatigueWeight * (closing ? .5 : 1);
     const fouls = stats.fouls >= foulLimit && !closing ? foulTrouble : 0;
     const role = closing ? (closers.has(entry.player.id) ? ROTATION.closingBonus : 0) : garbage ? (rank >= ROTATION.garbageRank ? ROTATION.garbageBonus : rank < 5 ? -ROTATION.garbageBonus : 0) : rank >= rotationSize ? -ROTATION.depthPenalty : 0;
@@ -273,7 +283,7 @@ function resolveEligibility(state: MatchState): void {
   for (const side of SIDES) {
     for (const outId of [...state.lineups[side]]) {
       if (isPlayerEligible(state, outId)) continue;
-      const reason = state.stats[outId]!.fouls >= 5 ? 'fouled-out' : 'injured', incoming = bestReplacement(state, side, player(state, side, outId));
+      const reason = state.stats[outId]!.fouls >= rulesOf(state).foulOut ? 'fouled-out' : 'injured', incoming = bestReplacement(state, side, player(state, side, outId));
       if (incoming && state.autoSubstitutions[side]) applySubstitution(state, side, outId, incoming.id, true);
       else if (incoming) state.requiredSubstitutions.push({ side, playerId: outId, reason });
       else {
@@ -287,8 +297,11 @@ function resolveEligibility(state: MatchState): void {
   if (state.requiredSubstitutions.length && state.phase !== 'period-end') whistle(state, state.freeThrows ? 'free-throws' : 'whistle');
 }
 function grantTimeout(state: MatchState, side: Side): void {
-  const used = state.timeoutUsage[side];
-  if (state.period <= 2) used.firstHalf += 1; else if (state.period > 4) used.overtime += 1;
+  const used = state.timeoutUsage[side], rules = rulesOf(state).timeouts;
+  if (rules.model === 'nba') {
+    if (state.period > 4) used.overtime += 1; else if (state.period < 4) used.firstHalf += 1;
+    else { used.secondHalf += 1; if (state.clockSeconds <= rules.lateSeconds) used.lateFourth += 1; }
+  } else if (state.period <= 2) used.firstHalf += 1; else if (state.period > 4) used.overtime += 1;
   else { used.secondHalf += 1; if (state.period === 4 && state.clockSeconds <= 120) used.lateFourth += 1; }
   state.timeoutRequested[side] = false; recovery(state, 1.5); whistle(state, 'timeout');
   emit(state, { type: 'timeout', side, text: `${state[side].name} take a timeout. ${remainingTimeouts(state, side)} remaining in this allowance.` });
@@ -340,7 +353,7 @@ function serviceStoppage(state: MatchState): void {
 /** The legacy exhibition engine's condition-first rotation, unchanged: one change per stoppage. */
 function legacyRotation(state: MatchState, side: Side, rotated: Set<Side>): boolean {
   if (rotated.has(side) || !state.autoSubstitutions[side] || !canSubstituteNow(state, side)) return false;
-  const foulLimit = state.period === 1 ? 2 : state.period === 2 ? 3 : 4;
+  const foulLimit = foulTroubleLimit(rulesOf(state), state.period);
   const priority = (p: Player) => state.stats[p.id]!.condition - (state.stats[p.id]!.fouls >= foulLimit ? 35 : 0);
   const tired = activePlayers(state, side).filter(p => !state.substitutionLocks.includes(p.id) && state.freeThrows?.shooterId !== p.id).sort((a, b) => priority(a) - priority(b))[0];
   if (!tired) return false; const incoming = bestReplacement(state, side, tired);
@@ -358,7 +371,8 @@ function foulCaution(state: MatchState, p: Player): number { const fouls = state
 function personalFoul(state: MatchState, side: Side, offender: Player, text: string): void {
   state.stats[offender.id]!.fouls += 1; state.teamFouls[side] += 1;
   emit(state, { type: 'foul', side, playerId: offender.id, text });
-  if (state.stats[offender.id]!.fouls === 5) emit(state, { type: 'foul-out', side, playerId: offender.id, text: `${offender.name} is excluded after five personal fouls.` });
+  const limit = rulesOf(state).foulOut;
+  if (state.stats[offender.id]!.fouls === limit) emit(state, { type: 'foul-out', side, playerId: offender.id, text: `${offender.name} is excluded after ${limit === 5 ? 'five' : 'six'} personal fouls.` });
 }
 /** A player's injury hazard relative to the base rate: late-game minutes and his earlier injuries (recurrence). */
 function injuryExposure(state: MatchState, id: string): number {
@@ -462,7 +476,7 @@ function resolveAction(state: MatchState): void {
     } else if (roll < turnoverChance + 0.065 + pressure * 0.045) {
       const defender = choose(state, defenders, p => p.attributes.defense);
       personalFoul(state, defense, defender, `${defender.name} commits a non-shooting defensive foul on ${shooter.name}.`);
-      if (state.teamFouls[defense] >= 5) startFreeThrows(state, offense, shooter, 2);
+      if (inPenalty(state, defense)) startFreeThrows(state, offense, shooter, 2);
       else { state.shotClockSeconds = defensiveFoulShotClock(state.shotClockSeconds, state.frontcourt); whistle(state); }
     } else if (roll < turnoverChance + 0.075 + pressure * 0.045) {
       const receiving = state.possessionArrow; state.possessionArrow = other(state.possessionArrow);
@@ -612,7 +626,7 @@ function resolvePossessionAction(state: MatchState): void {
   // Late in a close game a defense that trails fouls at once to stop the clock.
   const stopClock = state.period >= 4 && state.clockSeconds <= LATE_GAME.foulSeconds && lead >= 1 && lead <= LATE_GAME.foulMaxLead;
   if (restarted || !state.frontcourt) action = 'advance';
-  else if (lastShot) action = holdFor > LATE_GAME.shootAt || threeNeeded && distance < 6.75 && holdFor > 1 ? 'pass' : 'shot';
+  else if (lastShot) action = holdFor > LATE_GAME.shootAt || threeNeeded && distance < rulesOf(state).threePointM && holdFor > 1 ? 'pass' : 'shot';
   // Leave room to release after the longer creation windows. A new pass or
   // drive with only a few seconds left should not routinely strand the ball.
   else if (state.shotClockSeconds <= 8 || play.actions >= 4) action = 'shot';
@@ -662,7 +676,7 @@ function resolvePossessionAction(state: MatchState): void {
       // Off the ball, screens and boxing out spread these fouls over the defense, mostly to its bigs.
       const fouler = stopClock ? defender : choose(state, activePlayers(state, defense), p => DEFENDER_ROLES.foul[p.position] * (p.id === defender.id ? DEFENDER_ROLES.matchedFoul : 1) * foulCaution(state, p));
       personalFoul(state, defense, fouler, stopClock ? `${fouler.name} fouls ${handler.name} to stop the clock.` : `${fouler.name} commits a non-shooting defensive foul on ${handler.name}.`);
-      if (state.teamFouls[defense] >= 5) startFreeThrows(state, offense, handler, 2);
+      if (inPenalty(state, defense)) startFreeThrows(state, offense, handler, 2);
       else { state.shotClockSeconds = defensiveFoulShotClock(state.shotClockSeconds, state.frontcourt); whistle(state); }
     } else if (roll < turnoverChance + offensiveFoul + foulChance + heldBall) {
       const receiving = state.possessionArrow; state.possessionArrow = other(receiving);
@@ -706,7 +720,8 @@ function resolvePossessionFreeThrow(state: MatchState): void {
   const play = { ...createPossessionPlay({ ...state, possession: sequence.side }, shooter.id), positions };
   emit(state, { type: 'command', side: sequence.side, playerId: shooter.id, text: `${shooter.name} sets at the free-throw line.`,
     scene: actionScene('setup', sequence.side, visualStart(state, positions), positions, visualBallStart(state, location), ballAt(location)) });
-  const made = draw(state) < clamp(.45 + shooter.attributes.freeThrow * .025 - (100 - stats.condition) / 100 * .021 + clutchAdjustment(state, shooter), .4, .95);
+  const FT = calibrationFor(rulesOf(state)).FREE_THROWS;
+  const made = draw(state) < clamp(FT.base + shooter.attributes.freeThrow * FT.skill - (100 - stats.condition) / 100 * FT.fatigue + clutchAdjustment(state, shooter), FT.min, FT.max);
   stats.freeThrowsAttempted += 1; if (made) { stats.freeThrowsMade += 1; creditPoints(state, sequence.side, shooter, 1); }
   const hoop = basketPoint(state, sequence.side), landing = made ? hoop : { x: hoop.x - attackingDirection(state, sequence.side) / 28, y: .46 + draw(state) * .08 };
   const index = sequence.total - sequence.remaining + 1;
@@ -716,6 +731,12 @@ function resolvePossessionFreeThrow(state: MatchState): void {
   if (sequence.remaining > 0) return;
   state.freeThrows = null;
   if (state.clockSeconds === 0) { finishPeriod(state); return; }
+  // NBA: after the technical free throw for defensive three seconds the attack keeps the ball (frontcourt throw-in).
+  if (state.ruleset !== undefined && isNba(rulesOf(state)) && freeThrowCause(state) === 'three-seconds') {
+    resetPossession(state, sequence.side, Math.max(14, state.shotClockSeconds)); state.frontcourt = true; whistle(state);
+    emit(state, { type: 'command', side: sequence.side, text: `${state[sequence.side].name} keep the ball after the technical free throw: throw-in in the frontcourt, shot clock ${state.shotClockSeconds}.` });
+    return;
+  }
   // Format 81: after an unsportsmanlike foul's free throws the fouled team keeps the ball: a throw-in at the frontcourt
   // throw-in line with 14 on the shot clock (FIBA 37.2, 29.2.3). Read from the foul that gave these free throws.
   if (state.playModel === 'plays-3' && /unsportsmanlike foul/.test(lastFoulText(state))) {
@@ -725,14 +746,24 @@ function resolvePossessionFreeThrow(state: MatchState): void {
   }
   if (made) { resetPossession(state, other(sequence.side)); whistle(state); } else possessionRebound(state, play, landing);
 }
+/** NBA: what gave the current free throws, the latest foul or a defensive three-second call. */
+function freeThrowCause(state: MatchState): 'foul' | 'three-seconds' {
+  for (let index = state.events.length - 1; index >= 0; index -= 1) {
+    const event = state.events[index]!;
+    if (event.type === 'foul') return 'foul';
+    if (event.type === 'command' && event.text.startsWith(DEFENSIVE_THREE_SECONDS)) return 'three-seconds';
+  }
+  return 'foul';
+}
 function lastFoulText(state: MatchState): string {
   for (let index = state.events.length - 1; index >= 0; index -= 1) if (state.events[index]!.type === 'foul') return state.events[index]!.text;
   return '';
 }
 function beginPeriod(state: MatchState): void {
   if (state.period >= MAX_MATCH_PERIODS) throw new Error('Simulation stopped after 20 overtimes; no winner was fabricated.');
-  state.period += 1; state.clockSeconds = state.period <= 4 ? 600 : 300;
-  if (state.period <= 4) state.teamFouls = { home: 0, away: 0 };
+  const rules = rulesOf(state);
+  state.period += 1; state.clockSeconds = periodSeconds(rules, state.period);
+  if (resetsTeamFouls(rules, state.period)) state.teamFouls = { home: 0, away: 0 };
   if (state.period > 4) for (const side of SIDES) state.timeoutUsage[side].overtime = 0;
   resetPossession(state, state.possessionArrow); state.possessionArrow = other(state.possessionArrow);
   state.phase = 'dead-ball'; state.stoppage = { reason: 'whistle', substitutionSides: ['home', 'away'], timeoutSides: [] };
@@ -768,6 +799,11 @@ export interface FixtureMatchOptions {
   neutralVenue?: true;
   /** Format 86 (new careers): the automatic rotation of a computer side as its head coach runs it. Omit for the usual rotation. */
   coachRotation?: Partial<Record<Side, CoachRotation>>;
+  /**
+   * NBA step 3 (provisional format 90): the competition's rules (src/engine/rulesets.ts), recorded on the match when
+   * given. Omit for FIBA, which every earlier match plays. The NBA rules need the play model.
+   */
+  ruleset?: RulesetId;
 }
 
 function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team, away: Team, options: FixtureMatchOptions = {}): MatchState {
@@ -775,7 +811,7 @@ function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team,
   const state: MatchState = {
     ...(options.morale ? { morale: { ...options.morale, values: { ...options.morale.values } } } : {}),
     schemaVersion: 2, engineVersion, seed, rngState: normalizeSeed(seed), home, away, score: { home: 0, away: 0 },
-    period: 1, clockSeconds: 600, status: 'ready', phase: 'dead-ball', possession: 'home', possessionArrow: 'away', shotClockSeconds: 24, frontcourt: false, teamFouls: { home: 0, away: 0 },
+    period: 1, clockSeconds: periodSeconds(rulesOf(options), 1), status: 'ready', phase: 'dead-ball', possession: 'home', possessionArrow: 'away', shotClockSeconds: 24, frontcourt: false, teamFouls: { home: 0, away: 0 },
     timeoutUsage: { home: { firstHalf: 0, secondHalf: 0, overtime: 0, lateFourth: 0 }, away: { firstHalf: 0, secondHalf: 0, overtime: 0, lateFourth: 0 } },
     timeoutRequested: { home: false, away: false }, pendingSubstitutions: { home: [], away: [] }, requiredSubstitutions: [], freeThrows: null,
     stoppage: { reason: 'pre-game', substitutionSides: ['home', 'away'], timeoutSides: [] }, substitutionLocks: [], autoSubstitutions: { home: false, away: true, ...options.autoSubstitutions }, injuryMode: options.injuryMode ?? 'standard', injuries: {}, courtSeconds: { home: 0, away: 0 }, result: null,
@@ -799,6 +835,7 @@ function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team,
   if (risks.length) state.injuryRisk = Object.fromEntries(risks.map(([id, risk]) => [id, { ...risk }]));
   if (options.playModel) { state.playModel = options.playModel; state.computerCoach = SIDES.filter(side => options.computerCoach?.includes(side)); }
   if (options.neutralVenue) state.neutralVenue = true;
+  if (options.ruleset !== undefined) state.ruleset = options.ruleset;
   if (options.coachRotation && SIDES.some(side => options.coachRotation![side])) state.coachRotation = Object.fromEntries(SIDES.flatMap(side => options.coachRotation![side] ? [[side, { ...options.coachRotation![side]!, young: [...options.coachRotation![side]!.young] }]] : []));
   state.possession = draw(state) < 0.5 ? 'home' : 'away'; state.possessionArrow = other(state.possession);
   // The development league retains the existing two-player default threshold.
@@ -807,7 +844,7 @@ function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team,
   if (shortSide) { finishDefault(state, shortSide); return state; }
   if (engineVersion === 'possession-3') state.possessionPlay = createPossessionPlay(state);
   const scene = state.possessionPlay ? settledScene(state.possessionPlay) : setupScene(state, state.possession, state.lineups[state.possession][0]!);
-  emit(state, { type: 'tipoff', side: state.possession, text: `${state[state.possession].name} win the opening tip. FIBA-2024 exhibition rules subset.`, scene }); return state;
+  emit(state, { type: 'tipoff', side: state.possession, text: `${state[state.possession].name} win the opening tip. ${isNba(rulesOf(state)) ? 'NBA rules.' : 'FIBA-2024 exhibition rules subset.'}`, scene }); return state;
 }
 
 /** Existing exhibition construction remains stable for both supported engines. */
@@ -860,6 +897,8 @@ export function createFixtureMatch(seed: number, home: Team, away: Team, options
     for (const side of SIDES) { const rotation = rotations[side]; if (rotation !== undefined && !validCoachRotation(rotation, side === 'home' ? home : away)) throw new Error('A head coach\'s rotation must stay within the supported values for players of its own team.'); }
   }
   if (options.playModel !== undefined && options.playModel !== 'plays-2' && options.playModel !== 'plays-3') throw new Error('Choose a supported play model.');
+  if (options.ruleset !== undefined && !isRulesetId(options.ruleset)) throw new Error('Choose supported competition rules.');
+  if (options.ruleset !== undefined && isNba(rulesOf(options)) && !options.playModel) throw new Error('The NBA rules are played with the play model.');
   if (options.computerCoach !== undefined && (!options.playModel || !Array.isArray(options.computerCoach) || options.computerCoach.some(side => side !== 'home' && side !== 'away'))) throw new Error('Computer coaches need the play model and must name teams.');
   if (options.slots !== undefined) {
     if (options.slots === null || typeof options.slots !== 'object' || Array.isArray(options.slots) || Object.keys(options.slots).some(side => side !== 'home' && side !== 'away')) throw new Error('Fixture circles must name a team.');

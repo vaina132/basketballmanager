@@ -2,6 +2,7 @@ import type { CourtScene, MatchEvent, MatchState, Position, Side, Team } from '.
 import { INJURY_KINDS, MATCH_INJURY_KINDS } from '../domain/injuries';
 import { MAX_INJURY_RISK, MAX_MATCH_PERIODS, validCoachRotation } from '../engine/match';
 import { COURT_POSITIONS } from '../engine/positions';
+import { elapsedSeconds, FIBA_2024, isRulesetId, periodSeconds, rulesetById, type Ruleset } from '../engine/rulesets';
 import { abilityShapeProblem } from '../world/extra-attributes';
 
 const SIDES = ['home', 'away'] as const;
@@ -76,8 +77,10 @@ function score(value: unknown, path: string): { home: number; away: number } {
   return { home: number(fields.home, `${path}.home`, 0, 1_000_000), away: number(fields.away, `${path}.away`, 0, 1_000_000) };
 }
 
+/** The ruleset of the match being checked (FIBA when none is recorded); set at the start of each validation. */
+let rules: Ruleset = FIBA_2024;
 function elapsed(period: number, clock: number): number {
-  return period <= 4 ? period * 600 - clock : 2400 + (period - 4) * 300 - clock;
+  return elapsedSeconds(rules, period, clock);
 }
 
 /** Live possession geometry is simulation state, never reconstructed from animation. */
@@ -248,7 +251,11 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     'pendingSubstitutions', 'requiredSubstitutions', 'freeThrows', 'stoppage', 'substitutionLocks',
     'autoSubstitutions', 'injuryMode', 'injuries', 'courtSeconds', 'result',
     ...(modern ? ['possessionPlay'] : []),
-  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk', 'slots', 'startingSlots', 'playModel', 'computerCoach', 'neutralVenue', 'coachRotation'] : []);
+  ], modern ? ['preExistingInjuries', 'morale', 'injuryRisk', 'slots', 'startingSlots', 'playModel', 'computerCoach', 'neutralVenue', 'coachRotation', 'ruleset'] : []);
+  // NBA step 3 (provisional format 90): the competition's rules; absent means FIBA. The NBA rules need the play model.
+  if (Object.hasOwn(state, 'ruleset') && !isRulesetId(state.ruleset)) fail('ruleset', 'must name supported competition rules when recorded');
+  rules = rulesetById(state.ruleset as Ruleset['id'] | undefined);
+  if (rules.id === 'nba-2026' && !Object.hasOwn(state, 'playModel')) fail('ruleset', 'must be played with the play model for the NBA rules');
   if (state.schemaVersion !== 2 || !['rules-2', 'possession-3'].includes(state.engineVersion as string)) fail('state', 'uses an unsupported schema or engine version');
   // Format 79: the richer play model, with the sides a computer coach runs.
   // Format 81: the richer play model with the dead balls of a real game (`plays-3`).
@@ -271,7 +278,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
   number(state.seed, 'seed', 0, 0xffff_ffff);
   number(state.rngState, 'rngState', 1, 0xffff_ffff);
   const period = number(state.period, 'period', 1, MAX_MATCH_PERIODS);
-  const clock = number(state.clockSeconds, 'clockSeconds', 0, period <= 4 ? 600 : 300);
+  const clock = number(state.clockSeconds, 'clockSeconds', 0, periodSeconds(rules, period));
   const played = elapsed(period, clock);
   const steps = number(state.stepCount, 'stepCount', 0, 100_000);
   if (steps > played) fail('stepCount', 'exceeds the elapsed seconds');
@@ -284,7 +291,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
   boolean(state.frontcourt, 'frontcourt');
   choice(state.injuryMode, ['standard', 'reduced', 'off'], 'injuryMode');
   const currentScore = score(state.score, 'score');
-  if (state.status === 'ready' && (period !== 1 || clock !== 600 || steps !== 0)) fail('ready match', 'must be at its initial clock');
+  if (state.status === 'ready' && (period !== 1 || clock !== rules.quarterSeconds || steps !== 0)) fail('ready match', 'must be at its initial clock');
   if (state.status === 'ready' && (currentScore.home !== 0 || currentScore.away !== 0)) fail('ready match', 'must begin with a zero score');
   const preMatchDefault = modern && Object.hasOwn(state, 'preExistingInjuries') && state.status === 'finished' && steps === 0 && played === 0;
   if (!preMatchDefault && state.status !== 'ready' && steps === 0) fail('stepCount', 'must advance when a match has started');
@@ -399,14 +406,23 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     const availableAtStart = [...playerIds[side]].filter(playerId => !preExisting.has(playerId)).length;
     if (state.status === 'ready' && lineup.length !== Math.min(5, availableAtStart)) fail(`lineups.${side}`, 'must start with five players unless carried injuries leave fewer available');
     number(courtSeconds[side], `courtSeconds.${side}`, 0, played * 5);
-    number(teamFouls[side], `teamFouls.${side}`, 0, playerIds[side].size * 5);
+    number(teamFouls[side], `teamFouls.${side}`, 0, playerIds[side].size * rules.foulOut);
     boolean(timeoutRequested[side], `timeoutRequested.${side}`);
     boolean(autoSubstitutions[side], `autoSubstitutions.${side}`);
     const usage = record(timeoutUsage[side], `timeoutUsage.${side}`, ['firstHalf', 'secondHalf', 'overtime', 'lateFourth']);
-    number(usage.firstHalf, `timeoutUsage.${side}.firstHalf`, 0, 2);
-    const secondHalf = number(usage.secondHalf, `timeoutUsage.${side}.secondHalf`, 0, period < 3 ? 0 : 3);
-    number(usage.overtime, `timeoutUsage.${side}.overtime`, 0, period <= 4 ? 0 : 1);
-    number(usage.lateFourth, `timeoutUsage.${side}.lateFourth`, 0, period < 4 ? 0 : Math.min(2, secondHalf));
+    const allowance = rules.timeouts;
+    if (allowance.model === 'nba') {
+      // NBA: firstHalf counts quarters 1-3 and secondHalf the fourth, seven in all; lateFourth the fourth's last 3:00.
+      const early = number(usage.firstHalf, `timeoutUsage.${side}.firstHalf`, 0, allowance.game);
+      const fourth = number(usage.secondHalf, `timeoutUsage.${side}.secondHalf`, 0, period < 4 ? 0 : Math.min(allowance.secondHalf, allowance.game - early));
+      number(usage.overtime, `timeoutUsage.${side}.overtime`, 0, period <= 4 ? 0 : allowance.overtime);
+      number(usage.lateFourth, `timeoutUsage.${side}.lateFourth`, 0, period < 4 ? 0 : Math.min(allowance.late, fourth));
+    } else {
+      number(usage.firstHalf, `timeoutUsage.${side}.firstHalf`, 0, 2);
+      const secondHalf = number(usage.secondHalf, `timeoutUsage.${side}.secondHalf`, 0, period < 3 ? 0 : 3);
+      number(usage.overtime, `timeoutUsage.${side}.overtime`, 0, period <= 4 ? 0 : 1);
+      number(usage.lateFourth, `timeoutUsage.${side}.lateFourth`, 0, period < 4 ? 0 : Math.min(2, secondHalf));
+    }
     const instructions = record(tactics[side], `tactics.${side}`, ['tempo', 'outsideShare', 'pressure']);
     for (const key of ['tempo', 'outsideShare', 'pressure']) number(instructions[key], `tactics.${side}.${key}`, 0, 1, false);
     let teamPoints = 0;
@@ -416,7 +432,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
       const entry = record(stats[playerId], path, STAT_KEYS);
       for (const key of STAT_KEYS) {
         if (key === 'condition') number(entry[key], `${path}.${key}`, 0, 100, false);
-        else number(entry[key], `${path}.${key}`, 0, key === 'secondsPlayed' ? played : key === 'fouls' ? 5 : 1_000_000);
+        else number(entry[key], `${path}.${key}`, 0, key === 'secondsPlayed' ? played : key === 'fouls' ? rules.foulOut : 1_000_000);
       }
       const stat = entry as unknown as MatchState['stats'][string];
       if ((state.status === 'ready' || preMatchDefault || preExisting.has(playerId)) && STAT_KEYS.some((key) => key !== 'condition' && entry[key] !== 0)) fail(path, 'must have zero statistics before play or while unavailable before tipoff');
@@ -425,14 +441,14 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
       if (stat.points !== 2 * stat.fieldGoalsMade + stat.threePointersMade + stat.freeThrowsMade) fail(path, 'has points inconsistent with shooting totals');
       teamPoints += stat.points;
       teamSeconds += stat.secondsPlayed;
-      if (stat.fouls < 5 && !Object.hasOwn(injuries, playerId)) eligibleCounts[side] += 1;
+      if (stat.fouls < rules.foulOut && !Object.hasOwn(injuries, playerId)) eligibleCounts[side] += 1;
     }
     if (teamPoints !== currentScore[side]) fail(`score.${side}`, 'does not match player points');
     if (teamSeconds !== courtSeconds[side]) fail(`stats.${side}`, 'does not reconcile with integrated court exposure');
     if (eligibleCounts[side] >= 5 && teamSeconds !== played * 5) fail(`stats.${side}`, 'does not reconcile with five available players and elapsed time');
   }
 
-  const isEligible = (playerId: string) => (stats[playerId] as MatchState['stats'][string]).fouls < 5 && !Object.hasOwn(injuries, playerId);
+  const isEligible = (playerId: string) => (stats[playerId] as MatchState['stats'][string]).fouls < rules.foulOut && !Object.hasOwn(injuries, playerId);
   const required = array(state.requiredSubstitutions, 'requiredSubstitutions', 0, 10);
   const requiredIds = new Set<string>();
   for (const [index, entry] of required.entries()) {
@@ -445,7 +461,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     if (!playerIds[side].has(playerId) || !(lineups[side] as unknown[]).includes(playerId)) fail(path, 'must identify an active player from its team');
     if (requiredIds.has(playerId)) fail(path, 'duplicates a pending replacement');
     requiredIds.add(playerId);
-    if (decision.reason === 'fouled-out' && (stats[playerId] as MatchState['stats'][string]).fouls !== 5) fail(path, 'requires five personal fouls');
+    if (decision.reason === 'fouled-out' && (stats[playerId] as MatchState['stats'][string]).fouls !== rules.foulOut) fail(path, 'requires the foul limit of personal fouls');
     if (decision.reason === 'injured' && !Object.hasOwn(injuries, playerId)) fail(path, 'requires a recorded injury');
     if (state.phase === 'live-ball') fail(path, 'cannot await a replacement during live play');
   }
@@ -554,13 +570,13 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     const event = record(value, path, ['id', 'period', 'clockSeconds', 'type', 'text', 'score'], ['side', 'playerId', 'outgoingPlayerId', 'receiverId', 'shot', 'scene', ...(modern ? ['assistPlayerId'] : [])]);
     if (event.id !== index + 1) fail(`${path}.id`, 'must follow the event sequence');
     const eventPeriod = number(event.period, `${path}.period`, 1, period);
-    const eventClock = number(event.clockSeconds, `${path}.clockSeconds`, 0, eventPeriod <= 4 ? 600 : 300);
+    const eventClock = number(event.clockSeconds, `${path}.clockSeconds`, 0, periodSeconds(rules, eventPeriod));
     const eventElapsed = elapsed(eventPeriod, eventClock);
     if (eventElapsed < priorElapsed || eventElapsed > played) fail(path, 'is outside the ordered match timeline');
     priorElapsed = eventElapsed;
     choice(event.type, EVENT_TYPES, `${path}.type`);
     if (!modern && event.type === 'drive') fail(`${path}.type`, 'is not supported by the saved engine');
-    if (index === 0 && (event.type !== (preMatchDefault ? 'final' : 'tipoff') || eventPeriod !== 1 || eventClock !== 600)) fail('first event', 'must describe the initial tipoff or a pre-match default');
+    if (index === 0 && (event.type !== (preMatchDefault ? 'final' : 'tipoff') || eventPeriod !== 1 || eventClock !== rules.quarterSeconds)) fail('first event', 'must describe the initial tipoff or a pre-match default');
     if (event.type === 'final' && (state.status !== 'finished' || index !== events.length - 1)) fail(path, 'has a final event before the match ends');
     string(event.text, `${path}.text`, 1000);
     const eventScore = score(event.score, `${path}.score`);
@@ -593,10 +609,11 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
       const playerId = event.playerId as string;
       const side = event.side as 'home' | 'away';
       countedFouls[playerId] += 1;
-      if (countedFouls[playerId] > 5) fail(path, 'records a foul after five-foul exclusion');
-      if (eventPeriod === period || (period > 4 && eventPeriod >= 4)) countedTeamFouls[side] += 1;
+      if (countedFouls[playerId] > rules.foulOut) fail(path, 'records a foul after the foul-limit exclusion');
+      // FIBA counts overtime team fouls with the fourth quarter; the NBA counts each period on its own.
+      if (eventPeriod === period || (period > 4 && eventPeriod >= 4 && rules.penalty.overtimeFouls === null)) countedTeamFouls[side] += 1;
     }
-    if (event.type === 'foul-out' && countedFouls[event.playerId as string] !== 5) fail(path, 'must follow the player’s fifth personal foul');
+    if (event.type === 'foul-out' && countedFouls[event.playerId as string] !== rules.foulOut) fail(path, 'must follow the player’s last allowed personal foul');
     if (event.type === 'injury') {
       const playerId = event.playerId as string;
       const injury = injuries[playerId] as { occurredAtSeconds: number } | undefined;
@@ -605,10 +622,17 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
     }
     if (event.type === 'timeout') {
       const usage = countedTimeouts[event.side as 'home' | 'away'];
-      if (eventPeriod <= 2) usage.firstHalf += 1;
-      else if (eventPeriod <= 4) usage.secondHalf += 1;
-      else if (eventPeriod === period) usage.overtime += 1;
-      if (eventPeriod === 4 && eventClock <= 120) usage.lateFourth += 1;
+      if (rules.timeouts.model === 'nba') {
+        if (eventPeriod <= 3) usage.firstHalf += 1;
+        else if (eventPeriod === 4) usage.secondHalf += 1;
+        else if (eventPeriod === period) usage.overtime += 1;
+        if (eventPeriod === 4 && eventClock <= rules.timeouts.lateSeconds) usage.lateFourth += 1;
+      } else {
+        if (eventPeriod <= 2) usage.firstHalf += 1;
+        else if (eventPeriod <= 4) usage.secondHalf += 1;
+        else if (eventPeriod === period) usage.overtime += 1;
+        if (eventPeriod === 4 && eventClock <= 120) usage.lateFourth += 1;
+      }
     }
     if (Object.hasOwn(event, 'shot')) {
       if (event.type !== 'shot') fail(`${path}.shot`, 'must belong to a shot event');

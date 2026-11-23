@@ -1,5 +1,6 @@
 import type { ArchivedAppearance, ArchivedFixture, SeasonArchive } from '../domain/season';
 import type { Team } from '../domain/types';
+import { FIBA_2024, gameSeconds, type Ruleset } from '../engine/rulesets';
 import { archivedSidePlayerIds, compareSeniorTotals, emptySeniorTotals, SENIOR_TOTAL_KEYS, seniorTotalKey } from '../world/senior-history';
 
 function fail(path: string, reason: string): never { throw new Error(`Invalid season save: ${path} ${reason}.`); }
@@ -15,17 +16,17 @@ function integer(value: unknown, path: string, max: number): number {
 }
 
 /** The result's score, identity, roster references and diagnoses have their ordinary checks as well. */
-export function validateArchivedAppearances(result: ArchivedFixture['result'], path: string, home: Team, away: Team): void {
+export function validateArchivedAppearances(result: ArchivedFixture['result'], path: string, home: Team, away: Team, rules: Ruleset = FIBA_2024): void {
   if (result.stats !== null) fail(path, 'cannot contain both full statistics and summarized appearances');
   const fields = record(result.appearances, `${path}.appearances`, [...home.players, ...away.players].map(player => player.id));
-  const elapsed = result.periods <= 4 ? result.periods * 600 : 2400 + (result.periods - 4) * 300;
+  const elapsed = gameSeconds(rules, result.periods);
   for (const team of [home, away]) {
     let seconds = 0, eligible = 0;
     for (const player of team.players) {
       const location = `${path}.appearances.${player.id}`, entry = record(fields[player.id], location, ['secondsPlayed', 'fouls', 'appeared']);
-      const time = integer(entry.secondsPlayed, `${location}.secondsPlayed`, elapsed), fouls = integer(entry.fouls, `${location}.fouls`, 5);
+      const time = integer(entry.secondsPlayed, `${location}.secondsPlayed`, elapsed), fouls = integer(entry.fouls, `${location}.fouls`, rules.foulOut);
       if (typeof entry.appeared !== 'boolean' || !entry.appeared && (time !== 0 || fouls !== 0)) fail(location, 'must preserve actual participation');
-      seconds += time; eligible += Number(fouls < 5 && !Object.hasOwn(result.injuries, player.id));
+      seconds += time; eligible += Number(fouls < rules.foulOut && !Object.hasOwn(result.injuries, player.id));
     }
     if (seconds > elapsed * 5 || result.kind === 'normal' && (seconds < elapsed * 2 || eligible >= 5 && seconds !== elapsed * 5)) fail(path, 'has inconsistent court time');
     if (result.kind === 'default' && result.winnerClubId !== team.id && eligible >= 2) fail(path, 'cannot award a default while two players remain eligible');

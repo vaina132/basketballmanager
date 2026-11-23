@@ -26,7 +26,7 @@ import { scoutingDate } from './ScoutingKnowledge'
 import './academy-workspace.css'
 import { seasonRounds } from '../world/career-world'
 import { YOUTH_COACH_DIRECTORY } from '../data/staff-directory'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 
 export interface AcademyWorkspaceProps {
   season: SeasonState
@@ -40,7 +40,7 @@ export interface AcademyWorkspaceProps {
   onOpenPlayer: (playerId: string) => void
 }
 
-const money = (amount: number) => formatEuros(amount)
+const money = (amount: number) => formatMoney(amount)
 const total = (points: PlayerAttributes) => TRAINING_ATTRIBUTES.reduce((sum, key) => sum + points[key], 0)
 const gains = (row: AcademyPlayerView) => TRAINING_ATTRIBUTES.reduce((sum, key) => sum + Math.floor(row.points[key] / 100), 0)
 const coachName = (id: string) => YOUTH_COACH_DIRECTORY.find(coach => coach.id === id)?.name ?? 'Youth coach'

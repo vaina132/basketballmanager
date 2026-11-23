@@ -3,8 +3,10 @@ import { clubEconomy, knownMoneySeason, moneyAt, playerBillOf } from './economy'
 import { ECONOMY_BALANCE_RULES, usesEconomyBalance } from './economy-balance';
 import { remainingSeasonShortfall } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
-import { getClubContractSummary, MIN_ROSTER_SIZE } from './employment-policy';
+import { getClubContractSummary } from './employment-policy';
 import { lastSeasonResult, SPENDING_BALANCE_RULES, usesSpendingBalance } from './spending-balance';
+import { isCapClub, minRosterSize } from './club-roster-policy';
+import { nbaOwnerCeiling } from './nba-owner';
 
 /**
  * Format 87 (`ECONOMY_BALANCE_RULES.wageCap`): a club's projected cash at the end of the current season as a share of
@@ -62,7 +64,8 @@ export function automaticWageCap(state: SeasonState, clubId: string, seasonNumbe
   if (share >= target) return null;
   const money = clubEconomy(moneyAt(state, Math.min(seasonNumber, knownMoneySeason(state, seasonNumber))), clubId);
   if (!money) return null;
-  const bill = (money as { playerBill?: number }).playerBill ?? playerBillOf(money);
+  // Format 92: an NBA club's wage bill is its owner's payroll ceiling.
+  const bill = isCapClub(state, clubId) ? nbaOwnerCeiling(state.world!, clubId) : (money as { playerBill?: number }).playerBill ?? playerBillOf(money);
   const cap = Math.max(bill * rules.floorShare, bill * rules.fullShare - rules.recovery * (target - share) * money.budget);
   return Math.floor(cap / 50_000) * 50_000;
 }
@@ -86,7 +89,7 @@ export function automaticWageCheck(state: SeasonState, clubId: string): (seasonW
     let room: number | null = null;
     if (cap !== null) {
       const summary = getClubContractSummary(state, clubId, year);
-      room = summary.rosterSize + summary.reservedRosterSize < MIN_ROSTER_SIZE ? null : cap - summary.seasonWages - summary.reservedWages;
+      room = summary.rosterSize + summary.reservedRosterSize < minRosterSize(state, clubId) ? null : cap - summary.seasonWages - summary.reservedWages;
     }
     rooms.set(year, room);
     return room;

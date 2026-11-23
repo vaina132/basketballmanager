@@ -1,3 +1,4 @@
+import { minRosterSize } from '../world/club-roster-policy'
 import { getPlayerRetirement } from '../world/lifecycle-policy'
 import { PlayerCareerStatus } from './PlayerLifecycle'
 import { getCareerWage } from '../world/player-catalog'
@@ -7,7 +8,7 @@ import type { NegotiationRecord, NegotiationTerms } from '../domain/negotiations
 import type { SeasonState } from '../domain/season'
 import type { Player } from '../domain/types'
 import type { TransferPaymentPlan } from '../domain/transfer-payments'
-import { contractForSeason, MAX_CONTRACT_SEASONS, maxContractWage, MIN_CONTRACT_WAGE, MIN_ROSTER_SIZE, quotePlayerContract, WAGE_STEP } from '../world/employment-policy'
+import { contractForSeason, MAX_CONTRACT_SEASONS, maxContractWage, MIN_CONTRACT_WAGE, quotePlayerContract, WAGE_STEP } from '../world/employment-policy'
 import { getLatestNegotiation } from '../world/negotiations'
 import { maxTransferFee, MIN_TRANSFER_FEE, TRANSFER_FEE_STEP, quoteTransferOffer, requiredTransferFee } from '../world/transfers-policy'
 import { getMarketOffers, getRivalMarketOffers, isCompetitiveMarket, isLiveMarketOffer, quoteMarketDates } from '../world/market-policy'
@@ -22,7 +23,7 @@ import { TransferPaymentTerms, transferMoney } from './TransferPaymentTerms'
 import { TransferPaymentRecord } from './TransferPaymentsPanel'
 import { getApplicableReleaseClause, releaseFeeReason } from '../world/release-clauses'
 import { ReleaseClauseFields, ReleaseClauseValue, TransferApproach, transferEntryQuote } from './ReleaseClause'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { ContractRoleChoice, initialContractRole } from './ContractRoleChoice'
 import { roleWage } from '../world/contract-roles'
 import { SQUAD_ROLE_RULES } from '../world/relationship-rules'
@@ -42,7 +43,7 @@ interface PlayerContractOfferProps {
 }
 
 const formatter = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 const seasonLabel = (number: number) => number > MAX_SEASON_NUMBER ? 'Calendar limit' : supportedSeasonLabel(number)
 export const negotiationOutcome = (record: NegotiationRecord) => record.outcome === 'accepted' ? 'Accepted' : record.outcome === 'countered' ? 'Counteroffer' : 'Rejected'
 const termsText = (wage: number, years: number) => `${money(wage)} per season · ${years} ${years === 1 ? 'season' : 'seasons'}`
@@ -204,7 +205,7 @@ export function PlayerContractOffer({ season, player, disabled, historyOnly, onC
         <dl className="contract-offer-facts"><div><dt>{negotiations ? `Opening demand · ${years} ${years === 1 ? 'season' : 'seasons'}` : 'Requested annual wage'}</dt><dd data-contract-demand={openingDemand}>{money(openingDemand)} / season</dd></div><div><dt>Contract begins</dt><dd>{seasonLabel(quote.startsSeason)}</dd></div></dl>
         {proposalDates && <div className="contract-offer-dates"><span>{liveOffer ? 'New terms' : 'This offer'}</span><Icon name="calendar" size={16} /><span>{transferTarget ? 'Earliest player reply' : 'Reply'} <strong><time dateTime={proposalDates.responseOn}>{scoutingDate(proposalDates.responseOn)}</time></strong></span><span>Expires <strong><time dateTime={proposalDates.expiresOn}>{scoutingDate(proposalDates.expiresOn)}</time></strong></span></div>}
         {negotiations && <div className="contract-demand-options" aria-label="Opening wage demands by contract length">{getNegotiationDemands(player.id, demandReleaseFee, season, role).terms.map(terms => <div key={terms.seasons}><span>{terms.seasons} {terms.seasons === 1 ? 'season' : 'seasons'}</span><strong>{money(terms.seasonWage)} / year</strong></div>)}</div>}
-        <div className="contract-offer-field"><label htmlFor="contract-offer-wage">Your annual wage offer · EUR</label><input ref={wageInput} id="contract-offer-wage" type="number" min={MIN_CONTRACT_WAGE / 100} max={maxContractWage(season) / 100} step={WAGE_STEP / 100} value={wage} onChange={event => setWage(event.target.value)} disabled={disabled} required aria-describedby="contract-wage-help" /><input type="range" aria-label="Adjust annual wage" min={MIN_CONTRACT_WAGE / 100} max={maxContractWage(season) / 100} step={WAGE_STEP / 100} value={Math.max(MIN_CONTRACT_WAGE / 100, Math.min(maxContractWage(season) / 100, Number(wage) || MIN_CONTRACT_WAGE / 100))} aria-valuetext={`${money(seasonWage)} per season`} onChange={event => setWage(event.target.value)} disabled={disabled} /><small id="contract-wage-help">{negotiations ? 'You can offer below the opening demand. The player may accept, counter or reject.' : 'Offers must meet the requested wage.'} Leave enough allocation for a squad of {MIN_ROSTER_SIZE}.</small></div>
+        <div className="contract-offer-field"><label htmlFor="contract-offer-wage">Your annual wage offer · EUR</label><input ref={wageInput} id="contract-offer-wage" type="number" min={MIN_CONTRACT_WAGE / 100} max={maxContractWage(season) / 100} step={WAGE_STEP / 100} value={wage} onChange={event => setWage(event.target.value)} disabled={disabled} required aria-describedby="contract-wage-help" /><input type="range" aria-label="Adjust annual wage" min={MIN_CONTRACT_WAGE / 100} max={maxContractWage(season) / 100} step={WAGE_STEP / 100} value={Math.max(MIN_CONTRACT_WAGE / 100, Math.min(maxContractWage(season) / 100, Number(wage) || MIN_CONTRACT_WAGE / 100))} aria-valuetext={`${money(seasonWage)} per season`} onChange={event => setWage(event.target.value)} disabled={disabled} /><small id="contract-wage-help">{negotiations ? 'You can offer below the opening demand. The player may accept, counter or reject.' : 'Offers must meet the requested wage.'} Leave enough allocation for a squad of {minRosterSize(season, season.managedClubId)}.</small></div>
         <div className="contract-offer-field"><label htmlFor="contract-offer-years">Contract length</label><select id="contract-offer-years" value={years} onChange={event => setYears(Number(event.target.value))} disabled={disabled}>{Array.from({ length: MAX_CONTRACT_SEASONS }, (_, index) => index + 1).map(length => <option key={length} value={length}>{length} {length === 1 ? 'season' : 'seasons'}</option>)}</select><input type="range" aria-label="Adjust contract length" min={1} max={MAX_CONTRACT_SEASONS} step={1} value={years} aria-valuetext={`${years} ${years === 1 ? 'season' : 'seasons'}`} onChange={event => setYears(Number(event.target.value))} disabled={disabled} /></div>
         {negotiations && <ReleaseClauseFields id="contract-release" value={releaseFee} onChange={setReleaseFee} disabled={disabled} years={years} context={season} />}
         <dl className="contract-offer-facts contract-offer-total"><div><dt>Contract through</dt><dd>{seasonLabel(quote.endsSeason)}</dd></div><div><dt>Total wages promised if accepted</dt><dd>{Number.isFinite(seasonWage) ? money(seasonWage * years) : 'Enter a wage'}</dd></div></dl>

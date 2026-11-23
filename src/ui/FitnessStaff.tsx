@@ -12,7 +12,7 @@ import { StaffStars } from './StaffRating'
 import { Icon } from './Icon'
 import { seasonRounds } from '../world/career-world'
 import { FITNESS_DIRECTORY } from '../data/staff-directory'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { staffFee } from '../world/economy'
 import { StaffNationality } from './Nationality'
 
@@ -26,7 +26,7 @@ export interface FitnessStaffProps extends StaffCandidateControls {
   onOpenTraining: () => void
 }
 
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 const coachById = (id: string) => FITNESS_DIRECTORY.find(coach => coach.id === id)!
 function FitnessSkills({ coach }: { coach: FitnessCoach }) {
   return <dl className="staff-skill-list compact">{(['recovery', 'workload'] as const).map(skill => <div key={skill}><dt>{skill === 'recovery' ? 'Recovery' : 'Workload management'}</dt><dd><span className="staff-skill-bar" aria-hidden="true"><span style={{ width: `${coach.skills[skill] * 10}%` }} /></span><span className="staff-skill-value" aria-label={`${coach.skills[skill] / 2} out of 5 stars`}>{(coach.skills[skill] / 2).toFixed(1)}</span></dd></div>)}</dl>

@@ -36,6 +36,8 @@ import type { DataPack } from './world/data-pack'
 import { loadLocalMatch, MAX_SAVE_BYTES, parseMatch, saveLocalMatch, serializeMatch } from './storage/match-storage'
 import { Avatar } from './ui/Avatar'
 import { CreditsDialog } from './ui/CreditsDialog'
+import { CurrencySetting } from './ui/CurrencySetting'
+import { useDisplayCurrency } from './ui/use-currency'
 import { Icon } from './ui/Icon'
 import { CLUB_VIEWS, competitionsViews, europeLinkView, MainNavigation, mainNavigation, NATIONAL_TEAMS_LINK, PAGE_NAMES as pageNames, PageViewTabs, resolveNavigation, shownCompetitionsView, showsBudgetBar, SQUAD_VIEWS, TRAINING_VIEWS, unemployedNavigation, type ClubView, type CompetitionsView, type Page, type PageView, type SquadView, type TrainingView } from './ui/navigation'
 import { Court } from './viewer/Court'
@@ -239,6 +241,8 @@ export default function App() {
   const [checkpointIssue, setCheckpointIssue] = useState<string | null>(null)
   const [saveHistoryOpen, setSaveHistoryOpen] = useState(false)
   const [creditsOpen, setCreditsOpen] = useState(false)
+  // NBA step 6: every screen shows money again when the viewer switches the currency (euros or US dollars).
+  useDisplayCurrency()
   const [saveHistory, setSaveHistory] = useState<CareerSaveList | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
@@ -965,7 +969,7 @@ export default function App() {
             {view === 'season' && shownCompetitions === 'leagues' && <EuropeanLeaguesWorkspace season={season} leagueId={europeanLeague} onLeagueChange={setEuropeanLeague} onNewCareer={() => { void openEntry('new-career') }} onOpenMatch={() => navigate('home')} onLoad={loadSeason} busy={advancing || saving} />}
             {view === 'season' && shownCompetitions === 'national' && season.national && <NationalWorkspace season={season} />}
           </Suspense></PageErrorBoundary>
-          <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />Save &amp; open exhibition</button><button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button><button id="open-credits" className="text-button" onClick={() => setCreditsOpen(true)}>Credits</button></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
+          <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />Save &amp; open exhibition</button><button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button><button id="open-credits" className="text-button" onClick={() => setCreditsOpen(true)}>Credits</button><CurrencySetting /></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
         </main>
       </div>
       {overlays}
@@ -1051,7 +1055,7 @@ export default function App() {
         </>}
         </Suspense></PageErrorBoundary>
 
-        <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />{season ? 'Save & open exhibition' : 'New exhibition'}</button>{season && <button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button>}<button id="open-credits" className="text-button" onClick={() => setCreditsOpen(true)}>Credits</button><details ref={setupRef} className="simulation-options" hidden={!!season}><summary>Match setup</summary><div className="seed-controls"><label htmlFor="match-seed">Replay code</label><input id="match-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-label="Exhibition replay code" /><p>Same code and choices repeat the same match. This does not change difficulty.</p><button id="open-real-friendly" className="text-button real-friendly-open" onClick={() => setFriendlyOpen(true)} disabled={saving || advancing}>Real-club friendly…</button></div></details></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
+        <footer className="workspace-footer"><div className="game-session-actions"><button className="text-button" onClick={restart} disabled={saving || advancing}><Icon name="restart" size={14} />{season ? 'Save & open exhibition' : 'New exhibition'}</button>{season && <button className="text-button" onClick={openManagerProfile} disabled={saving || advancing}>Manager profile</button>}<button id="open-credits" className="text-button" onClick={() => setCreditsOpen(true)}>Credits</button><CurrencySetting /><details ref={setupRef} className="simulation-options" hidden={!!season}><summary>Match setup</summary><div className="seed-controls"><label htmlFor="match-seed">Replay code</label><input id="match-seed" inputMode="numeric" value={seedInput} onChange={event => setSeedInput(event.target.value)} aria-label="Exhibition replay code" /><p>Same code and choices repeat the same match. This does not change difficulty.</p><button id="open-real-friendly" className="text-button real-friendly-open" onClick={() => setFriendlyOpen(true)} disabled={saving || advancing}>Real-club friendly…</button></div></details></div><div className="save-tools"><button className="text-button" onClick={openSaveHistory}>Save history</button><button className="text-button" onClick={load}>Load saved</button><button className="text-button" onClick={exportSave}><Icon name="download" size={14} />Export</button><button className="text-button" onClick={() => importRef.current?.click()}><Icon name="upload" size={14} />Import</button></div></footer>
       </main>
     </div>
     {overlays}

@@ -17,7 +17,7 @@ import { ManagerFlags } from './Nationality'
 import { GameSpeed } from './GameSpeed'
 import { SquadStrength } from './SquadStrength'
 import { Icon } from './Icon'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import type { IconName } from './Icon'
 import { NATIONALITY_SUGGESTIONS } from './nationality-suggestions'
 import { NOT_PLAYED_LEAGUE } from './career-text'
@@ -75,8 +75,8 @@ function ManagerCoaching({ coaching }: { coaching: NonNullable<CareerSummary['co
 /** The Manager profile's career earnings (owner, 22 November 2026): national salary paid monthly; no club money. */
 function CareerEarnings({ earnings }: { earnings: NonNullable<CareerSummary['earnings']> }) {
   return <section className="panel" aria-labelledby="career-earnings-title" data-career-earnings={earnings.total}>
-    <header className="career-start-panel-heading"><h2 id="career-earnings-title">Career earnings</h2><strong>{formatEuros(earnings.total)}</strong></header>
-    {earnings.payments.length ? <dl className="career-start-details">{earnings.payments.slice(0, 6).map(payment => <Fragment key={payment.date}><dt><time dateTime={payment.date}>{formatDate(payment.date)}</time></dt><dd>{formatEuros(payment.amount)} · {payment.source}</dd></Fragment>)}</dl> : <p className="career-start-empty">Nothing paid yet.</p>}
+    <header className="career-start-panel-heading"><h2 id="career-earnings-title">Career earnings</h2><strong>{formatMoney(earnings.total)}</strong></header>
+    {earnings.payments.length ? <dl className="career-start-details">{earnings.payments.slice(0, 6).map(payment => <Fragment key={payment.date}><dt><time dateTime={payment.date}>{formatDate(payment.date)}</time></dt><dd>{formatMoney(payment.amount)} · {payment.source}</dd></Fragment>)}</dl> : <p className="career-start-empty">Nothing paid yet.</p>}
     <p className="career-start-subnote">A national team pays its head coach monthly. Club jobs carry no personal salary in the game. Your earnings never enter club money.</p>
   </section>
 }

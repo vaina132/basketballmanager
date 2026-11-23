@@ -55,7 +55,7 @@ import { appointMissingCoaches, createCoaching, recruitAiCoaches, renewSeasonCoa
 import { keepContractedStaff, payComputerStaffCompensation, processStaffWagesRound, settleStaffTerms, withComputerStaffTerms, withOpeningStaffTerms } from './staff-contracts';
 import { planComputerStaffRenewals } from './staff-levels';
 import { staffUpgradeCheck } from './staff-upgrades';
-import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
+import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, processLuxuryTax, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
 import { scheduleListingBids } from './listings';
 import { createInSeasonRecruitment, enableInSeasonRecruitment, enableInSeasonTransfers, resolveInSeasonRecruitment, scheduleInSeasonRecruitment } from './recruitment';
@@ -1109,6 +1109,8 @@ function commitMatchday(state: SeasonState): { next: SeasonState; weekDone: bool
   next = processStaffWagesRound(next);
   next = processPayrollRound(next);
   next = processTransferPayments(next);
+  // Format 92: the NBA's luxury tax and its shares, in the last regular-season week.
+  next = processLuxuryTax(next);
   next = processScoutingRound(next);
   return { next: processBoardRound(next), weekDone: true };
 }

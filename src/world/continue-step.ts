@@ -1,3 +1,4 @@
+import { minRosterSize } from './club-roster-policy';
 import type { SeasonEndDecision } from '../domain/career';
 import type { SeasonState } from '../domain/season';
 import { careerMovesGovern } from './career';
@@ -5,7 +6,7 @@ import type { SeasonEndOutlook } from './career-policy';
 import { isUnemployed } from './career-rules';
 import { seasonRounds } from './career-world';
 import { clubRosterLimit } from './club-roster-policy';
-import { getClubContractSummary, MIN_ROSTER_SIZE } from './employment-policy';
+import { getClubContractSummary } from './employment-policy';
 import { advanceMarket } from './market';
 import { getMarketStartReason, getNextMarketDate } from './market-policy';
 import { commitNationalMatch, dueManagerNationalGame, offseasonNationalDay, startNationalMatch } from './national';
@@ -57,8 +58,8 @@ function offseasonAction(state: SeasonState): ContinueAction {
   }
   // Contracts without the dated market (older careers): next season's squad must fit the roster limits first.
   if (state.employment?.enabledSince && !isUnemployed(state)) {
-    const size = getClubContractSummary(state, state.managedClubId, state.seasonNumber + 1).rosterSize, limit = clubRosterLimit(state);
-    if (size < MIN_ROSTER_SIZE) return { kind: 'blocked', reason: `Sign ${MIN_ROSTER_SIZE - size} more ${MIN_ROSTER_SIZE - size === 1 ? 'player' : 'players'} for next season.` };
+    const size = getClubContractSummary(state, state.managedClubId, state.seasonNumber + 1).rosterSize, limit = clubRosterLimit(state, state.managedClubId);
+    if (size < minRosterSize(state, state.managedClubId)) return { kind: 'blocked', reason: `Sign ${minRosterSize(state, state.managedClubId) - size} more ${minRosterSize(state, state.managedClubId) - size === 1 ? 'player' : 'players'} for next season.` };
     if (size > limit) return { kind: 'blocked', reason: `The squad must contain no more than ${limit} players.` };
   }
   return { kind: 'rollover' };

@@ -195,3 +195,6 @@
 .profile-nationality { margin: 4px 0 0; font-size: 13px; color: var(--text); }
 /* Format 78: the scouting network note on Staff > Scouts. */
 .scout-network-note { display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 14px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border); }
+/* NBA step 6: the currency setting in the workspace footer. */
+.currency-setting { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.currency-setting .segmented > button[aria-pressed='true'] { background: var(--surface-3); color: var(--text); }

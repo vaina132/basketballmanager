@@ -6,7 +6,7 @@ import { clubPlace, EUROPEAN_ENTRY_RULES, licenceFailure, usesEuropeanEntry, wil
 import { placesDayInput } from '../world/european-entry-day'
 import { europeanPlacesAfter, MAX_SEASON_NUMBER, seasonLabel } from '../world/season'
 import { isUnemployed } from '../world/career-rules'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { clubEconomy } from '../world/economy'
 
 /**
@@ -124,7 +124,7 @@ export function yourClubCard(season: SeasonState): YourClubCard | null {
   const top = season.status === 'complete' ? facts.topNext : facts.topNow
   const checks = [
     { label: season.status === 'complete' ? 'Top division next season' : 'Top division', ok: top, value: top ? 'Yes' : 'No' },
-    { label: 'Unpaid costs', ok: licenceFailure({ ...facts, topNext: true }) === null, value: `${formatEuros(facts.unpaid ?? 0)}${limit !== null ? ` / ${formatEuros(limit)} limit` : ''}` },
+    { label: 'Unpaid costs', ok: licenceFailure({ ...facts, topNext: true }) === null, value: `${formatMoney(facts.unpaid ?? 0)}${limit !== null ? ` / ${formatMoney(limit)} limit` : ''}` },
     { label: 'Arena seats for a wild card', ok: facts.seats >= seatsNeeded, value: `${facts.seats.toLocaleString('en-GB')} / ${seatsNeeded.toLocaleString('en-GB')}` },
   ]
   const fixes: string[] = []
@@ -180,7 +180,7 @@ export function europeanInboxItems(season: SeasonState): InboxItem[] {
   const budget = clubEconomy(season, clubId)?.budget ?? null
   if (season.status === 'active' && review && unpaid !== null && budget !== null && unpaid > budget * EUROPEAN_ENTRY_RULES.warnShare) items.push({ id: `europe-unpaid-s${season.seasonNumber}`, date: review.date, category: 'club', target: 'club', needsAction: false,
     title: 'European places at risk: unpaid costs',
-    detail: `Unpaid costs are ${formatEuros(unpaid)}, above ${EUROPEAN_ENTRY_RULES.warnShare * 100}% of the ${formatEuros(budget)} budget. Above ${EUROPEAN_ENTRY_RULES.unpaidShare * 100}% at the season end, the club cannot take a European place.` })
+    detail: `Unpaid costs are ${formatMoney(unpaid)}, above ${EUROPEAN_ENTRY_RULES.warnShare * 100}% of the ${formatMoney(budget)} budget. Above ${EUROPEAN_ENTRY_RULES.unpaidShare * 100}% at the season end, the club cannot take a European place.` })
   return items
 }
 

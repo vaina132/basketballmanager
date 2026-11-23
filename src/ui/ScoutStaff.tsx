@@ -15,7 +15,7 @@ import { ScoutPortrait } from './ScoutPortrait'
 import { StaffStars } from './StaffRating'
 import { Icon } from './Icon'
 import { SCOUT_DIRECTORY } from '../data/staff-directory'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { staffFee } from '../world/economy'
 import { StaffNationality } from './Nationality'
 
@@ -29,7 +29,7 @@ export interface ScoutStaffProps extends StaffCandidateControls {
   onOpenScouting: () => void
 }
 
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 const scoutById = (id: string) => SCOUT_DIRECTORY.find(scout => scout.id === id)!
 const skillLabels = { evaluation: 'Player assessment', reporting: 'Report clarity' }
 

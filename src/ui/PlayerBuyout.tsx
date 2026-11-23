@@ -1,9 +1,10 @@
+import { minRosterSize } from '../world/club-roster-policy'
 import { getCareerPlayer } from '../world/player-catalog'
 import { useEffect, useRef } from 'react'
 import type { SeasonState } from '../domain/season'
 import type { Player } from '../domain/types'
 import { quoteContractBuyout } from '../world/buyouts'
-import { MIN_ROSTER_SIZE } from '../world/employment-policy'
+
 import { getSpendableCash } from '../world/payroll'
 import { dateForRound, seasonLabel } from '../world/season'
 import { getTransferInstallmentRemaining, getTransferInstallments } from '../world/transfer-payments'
@@ -58,7 +59,7 @@ export function PlayerBuyout({ season, player, disabled, onClose, onBuyout, onFi
       <div className="buyout-compensation"><span><Icon name="wallet" size={19} />{completed ? 'Compensation paid' : 'Compensation due now'}</span><strong data-buyout-amount={amount}>{money(amount)}</strong>{completed && <time dateTime={completed.completedOn}>{scoutingDate(completed.completedOn)}</time>}</div>
       <dl className="contract-offer-facts buyout-facts"><div><dt>{completed ? 'Spending left' : 'Spending left after payment'}</dt><dd data-buyout-remaining={remainingBudget}>{money(remainingBudget)}</dd></div><div><dt>Wages budget freed · {seasonLabel(startsSeason)}</dt><dd data-buyout-salary-freed={salaryFreed}>{money(salaryFreed)} / year</dd></div>{!completed && <div><dt>Next season's squad after release</dt><dd data-buyout-roster-after={quote.rosterSizeAfter}>{quote.rosterSizeAfter} players</dd></div>}</dl>
       <div className="buyout-result" role={completed ? 'status' : undefined}><Icon name={completed ? 'check' : 'calendar'} size={18} /><p>{completed ? <>Released from your {seasonLabel(startsSeason)} squad. Other clubs can now offer a contract.</> : <>Release takes effect on <time dateTime={opening}>{scoutingDate(opening)}</time>. The compensation is paid immediately.</>}</p></div>
-      {!completed && quote.rosterSizeAfter < MIN_ROSTER_SIZE && <p className="buyout-replacement"><Icon name="people" size={17} />{MIN_ROSTER_SIZE - quote.rosterSizeAfter} more {MIN_ROSTER_SIZE - quote.rosterSizeAfter === 1 ? 'player needed' : 'players needed'} before next season can start.</p>}
+      {!completed && quote.rosterSizeAfter < minRosterSize(season, quote.clubId) && <p className="buyout-replacement"><Icon name="people" size={17} />{minRosterSize(season, quote.clubId) - quote.rosterSizeAfter} more {minRosterSize(season, quote.clubId) - quote.rosterSizeAfter === 1 ? 'player needed' : 'players needed'} before next season can start.</p>}
       {transferDebt > 0 && <p className="buyout-existing-fees"><Icon name="wallet" size={17} />{money(transferDebt)} in existing transfer payments remains due separately.</p>}
       {!completed && quote.reason && <p id="buyout-unavailable-reason" className="contract-offer-reason">{quote.reason}</p>}
       <details className="game-disclosure buyout-terms"><summary><Icon name="calendar" size={15} />What the payment covers</summary><div><p>The full remaining salary in these contracts. Previous match records and completed-season registrations stay intact. This club cannot re-sign the player during this offseason.</p><dl>{terms.map(contract => {

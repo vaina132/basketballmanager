@@ -10,7 +10,7 @@ import { focusWhenReady } from './focus-when-ready'
 import { Icon, type IconName } from './Icon'
 import { scoutingDate } from './ScoutingKnowledge'
 import './facilities-panel.css'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 
 export interface FacilitiesActions {
   onEnableFacilities: () => void
@@ -34,7 +34,7 @@ export const conditionLabel = (condition: number) => condition >= 80 ? 'Good' : 
 
 export const FACILITY_LABELS: Record<FacilityType, string> = { arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure', medical: 'Medical centre', scouting: 'Scouting office' }
 const icons: Record<FacilityType, IconName> = { arena: 'building', training: 'training', youth: 'people', medical: 'medical', scouting: 'search' }
-const money = (amount: number) => formatEuros(amount)
+const money = (amount: number) => formatMoney(amount)
 const seats = (amount: number) => `${amount.toLocaleString('en-GB')} seats`
 const weekdays = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' })
 /** Completion days carry the weekday ("Sat 26 Sept 2026"): during a season they are always a week's Saturday. */

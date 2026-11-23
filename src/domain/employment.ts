@@ -1,6 +1,7 @@
 import type { TransferInstallment, TransferPayment, TransferPaymentPlan } from './transfer-payments';
 
 import type { SquadRole } from './relationships';
+import type { NbaCapRoute } from '../world/nba-cap';
 
 export interface ContractOfferOptions {
   releaseFee?: number;
@@ -25,6 +26,8 @@ export interface EmploymentContract {
   releaseFee?: number;
   /** `relationships-3`: the squad role agreed as a contract term; the player expects it while the contract runs. */
   role?: SquadRole;
+  /** Format 92 (NBA clubs of worlds with `world.nba.cap`): how the signing fitted the salary cap (`nba-cap.ts`). */
+  capRoute?: NbaCapRoute;
   signedSeason: number;
   signedRound: number;
   /** `joined`: an opening term for a player of a club joining the full world (format 55). */
@@ -121,6 +124,8 @@ export interface PlayerContractQuote {
   releaseFee?: number;
   /** `relationships-3`: the role on the offer (chosen or natural); `askingWage` includes its effect. */
   role?: SquadRole;
+  /** Format 92: an NBA club's cap route for this signing (`nba-cap.ts`). */
+  capRoute?: NbaCapRoute;
   canOffer: boolean;
   reason: string | null;
 }

@@ -8,7 +8,7 @@ import { dateForRound, seasonLabel } from '../world/season'
 import { focusWhenReady } from './focus-when-ready'
 import { Icon } from './Icon'
 import { scoutingDate } from './ScoutingKnowledge'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { TerminationControl, type SponsorshipActions } from './SponsorshipPanel'
 import { clauseSummary, exitExplanation } from './sponsor-exit-text'
 import './facilities-panel.css'
@@ -16,7 +16,7 @@ import './sponsorship-panel.css'
 
 type NamingActions = Pick<SponsorshipActions, 'onAcceptNaming' | 'onDeclineNaming' | 'onRequestNaming' | 'onNamingDelegation' | 'onTerminateSponsorship'>
 
-const money = (amount: number) => formatEuros(amount)
+const money = (amount: number) => formatMoney(amount)
 const seasons = (from: number, count: number) => count === 1 ? seasonLabel(from) : `${seasonLabel(from)} – ${seasonLabel(from + count - 1)}`
 const sponsorName = (sponsorId: string) => getDevelopmentSponsor(sponsorId).name
 const paymentStatus: Record<SponsorshipPaymentRow['status'], string> = { received: 'Received', scheduled: 'Scheduled', conditional: 'Conditional', 'not-earned': 'Not earned' }

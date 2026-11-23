@@ -1,7 +1,8 @@
 import { leavingClubIds } from './background';
 import type { MarketOffer, MarketWindow } from '../domain/market';
 import type { SeasonState } from '../domain/season';
-import { contractForSeason, effectiveContractsForSeason, MIN_ROSTER_SIZE } from './employment-policy';
+import { contractForSeason, effectiveContractsForSeason } from './employment-policy';
+import { minRosterSize, minRosterText } from './club-roster-policy';
 
 export const MARKET_WINDOW_DAYS = 28;
 export const MARKET_RESPONSE_DAYS = 1;
@@ -95,9 +96,9 @@ export function getMarketStartReason(state: SeasonState): string | null {
   const year = state.seasonNumber + 1;
   const effective = effectiveContractsForSeason(state.employment, year);
   const leaving = leavingClubIds(state);
-  const incomplete = state.clubs.filter(club => !leaving.has(club.id) && effective.filter(contract => contract.clubId === club.id).length < MIN_ROSTER_SIZE);
+  const incomplete = state.clubs.filter(club => !leaving.has(club.id) && effective.filter(contract => contract.clubId === club.id).length < minRosterSize(state, club.id));
   if (!incomplete.length) return null;
-  return incomplete.some(club => club.id === state.managedClubId) ? 'Your squad needs at least eight signed players for next season. Make offers to players, then continue the offseason to get their replies.' : 'Other clubs still need at least eight signed players for next season. Continue the offseason to let them sign players.';
+  return incomplete.some(club => club.id === state.managedClubId) ? `Your squad needs at least ${minRosterText(state, state.managedClubId)} signed players for next season. Make offers to players, then continue the offseason to get their replies.` : 'Other clubs still need at least eight signed players for next season. Continue the offseason to let them sign players.';
 }
 
 /** Whether continuing the offseason is the way to the next season now: the start is blocked and a decision date remains. */

@@ -22,7 +22,7 @@ import { PlayerRating } from './PlayerRating'
 import { knowledgeLabel, scoutingDate, ScoutingKnowledge } from './ScoutingKnowledge'
 import './scouting-workspace.css'
 import { SCOUT_DIRECTORY } from '../data/staff-directory'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { Nationality, playerNationality } from './Nationality'
 
 interface ScoutingWorkspaceProps {
@@ -42,7 +42,7 @@ interface ScoutingWorkspaceProps {
 }
 
 type ScoutingView = 'shortlist' | 'discover' | 'reports'
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 const positions: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
 
 const observerName = (observer?: ScoutingObserver) => observer?.scoutId ? SCOUT_DIRECTORY.find(scout => scout.id === observer.scoutId)?.name ?? 'Scout' : 'Club observation'

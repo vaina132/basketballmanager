@@ -7,10 +7,10 @@ import { FACILITY_LABELS } from './FacilitiesPanel'
 import { leaseRulesText, loanRulesText, ratePercent } from './FacilityFinancing'
 import { Icon } from './Icon'
 import { scoutingDate } from './ScoutingKnowledge'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import './facility-financing.css'
 
-const money = (amount: number) => formatEuros(amount)
+const money = (amount: number) => formatMoney(amount)
 
 /** Format 71: the club's loans and leases on Club: what is owed, the next payments, missed payments and early settlement. */
 export function DebtsPanel({ season, busy = false, onRepayLoan, onEndLease }: { season: SeasonState; busy?: boolean; onRepayLoan?: (debtId: string) => void; onEndLease?: (debtId: string) => void }) {

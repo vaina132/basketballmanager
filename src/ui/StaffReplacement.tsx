@@ -4,7 +4,7 @@ import { quoteStaffReplacement, replacementWarning, roleStaff, STAFF_ROLE_LABELS
 import { staffHireSpending, type StaffSpendingCheck } from '../world/staff-policy'
 import { Icon } from './Icon'
 import { contractUntil, usesStaffContracts } from '../world/staff-contracts'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 
 /** Candidate lists open only when the player asks; a replacement names the person who leaves (format 74 staff page). */
 export interface StaffCandidateControls {
@@ -59,7 +59,7 @@ export function replacementTarget(season: SeasonState, role: StaffRole, position
 /** Format 76: Spending left after a hire (or a replacement), from the same check the hire uses. */
 function SpendingAfter({ check, label }: { check: StaffSpendingCheck | null; label: string }) {
   if (!check) return null
-  return <div className="staff-after-hire"><span>{check.after >= 0 ? `Spending left after ${label}` : 'Spending left shortfall'}</span><strong data-spending-after={check.after}>{formatEuros(Math.abs(check.after))}</strong></div>
+  return <div className="staff-after-hire"><span>{check.after >= 0 ? `Spending left after ${label}` : 'Spending left shortfall'}</span><strong data-spending-after={check.after}>{formatMoney(Math.abs(check.after))}</strong></div>
 }
 export function SpendingAfterHire({ season, fee }: { season: SeasonState; fee: number }) {
   return <SpendingAfter check={staffHireSpending(season, season.managedClubId, fee)} label="hire" />
@@ -77,8 +77,8 @@ export function StaffReplacementOffer({ season, role, personId, personName, fee,
   return <div className="staff-replacement-offer" role="group" aria-label={`Replace ${outgoing.name}`} data-replacement-for={outgoing.contractId}>
     {target.outgoing.length > 1 && <label className="staff-replacement-choice">Replace<select value={outgoing.contractId} onChange={event => setContractId(event.target.value)} disabled={busy}>{target.outgoing.map(member => <option key={member.contractId} value={member.contractId}>{member.name}</option>)}</select></label>}
     <p className="staff-replacement-warning" id={`replacement-warning-${role}`}><Icon name="swap" size={15} /><span>{replacementWarning(outgoing, season)}</span></p>
-    <p className="staff-replacement-fee">{personName} becomes your {STAFF_ROLE_LABELS[role].toLowerCase()}; {usesStaffContracts(season) ? <>{formatEuros(fee)} a season, paid weekly from Wages left.</> : <>the {formatEuros(fee)} season fee is paid now.</>}</p>
-    {quote.remainingAfter !== null && <div className="staff-after-replacement"><span>Wages left after the change</span><strong data-replacement-budget-after={quote.remainingAfter}>{formatEuros(quote.remainingAfter)}</strong></div>}
+    <p className="staff-replacement-fee">{personName} becomes your {STAFF_ROLE_LABELS[role].toLowerCase()}; {usesStaffContracts(season) ? <>{formatMoney(fee)} a season, paid weekly from Wages left.</> : <>the {formatMoney(fee)} season fee is paid now.</>}</p>
+    {quote.remainingAfter !== null && <div className="staff-after-replacement"><span>Wages left after the change</span><strong data-replacement-budget-after={quote.remainingAfter}>{formatMoney(quote.remainingAfter)}</strong></div>}
     <SpendingAfter check={staffReplacementSpending(season, role, outgoing.contractId, personId)} label="the change" />
     {quote.reason && <p className="staff-hire-reason" id={`replacement-reason-${role}`}>{quote.reason}</p>}
     <button className="button primary" data-accept-replacement={role} onClick={() => onReplaceStaff?.(role, outgoing.contractId, personId)} disabled={busy || !quote.canReplace || !onReplaceStaff} aria-describedby={`replacement-warning-${role}${quote.reason ? ` replacement-reason-${role}` : ''}`}><Icon name="swap" size={16} />Accept replacement</button>

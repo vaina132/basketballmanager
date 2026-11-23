@@ -24,7 +24,12 @@ export interface BoardClubMandate {
   culture?: BoardCultureObjective | null;
   /** Format 83 (careers with European entry rules): the European aim, or null when this board sets none. */
   europe?: BoardEuropeanAim | null;
+  /** Format 92 (NBA clubs of worlds with `world.nba.cap`): the playoff aim, or null when this owner sets none. */
+  playoffs?: BoardPlayoffAim | null;
 }
+
+/** Format 92: an NBA owner's aim for the postseason: reach the playoffs (first round), or at least the play-in (top ten of the conference). */
+export interface BoardPlayoffAim { kind: 'nba-playoffs' | 'nba-play-in' }
 
 /**
  * Format 83 (owner decision, 22 November 2026: a European aim counts in the season verdict): a stage to reach in the
@@ -118,6 +123,9 @@ export interface BoardClubReview {
   /** Format 83, with a European aim: whether it is met, missed or still open, and its assessment points. */
   europeProgress?: 'open' | 'met' | 'missed';
   europeImpact?: number;
+  /** Format 92, with an NBA playoff aim: whether it is met, missed or still open, and its assessment points. */
+  playoffsProgress?: 'open' | 'met' | 'missed';
+  playoffsImpact?: number;
   assessment: number;
   previousConfidence: number;
   confidence: number;

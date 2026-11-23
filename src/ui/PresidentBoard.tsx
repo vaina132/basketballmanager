@@ -9,10 +9,10 @@ import { getCareerPlayer } from '../world/player-catalog'
 import { dateForRound, seasonLabel } from '../world/season'
 import { Icon, type IconName } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 
 /** Format 70 (board-2 careers): the president's profile, youth and culture objectives and requests on the Board page. */
-const money = (cents: number) => formatEuros(cents, true)
+const money = (cents: number) => formatMoney(cents, true)
 const signedPercent = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value)}%`
 const PATIENCE: Record<PresidentTraitLevel, string> = { 1: 'Impatient', 2: 'Demanding', 3: 'Measured', 4: 'Patient', 5: 'Very patient' }
 const AMBITION: Record<PresidentTraitLevel, string> = { 1: 'Modest', 2: 'Realistic', 3: 'Steady', 4: 'Ambitious', 5: 'Very ambitious' }

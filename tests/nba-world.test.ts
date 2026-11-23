@@ -1,11 +1,13 @@
+import { nbaPayrollTarget } from '../src/world/nba-economy';
+import { nbaOwnerCeiling } from '../src/world/nba-owner';
+import { NBA_LOWEST_MINIMUM } from '../src/world/nba-cap';
 import { describe, expect, it } from 'vitest';
 import { nbaCompetition, nbaPack, NBA_CLUB_IDS } from './helpers/nba-pack';
 import { economyPack } from './helpers/economy-pack';
 import { parseDataPack, type DataPack } from '../src/world/data-pack';
 import { careerCompetitions, worldFromPack } from '../src/world/real-world';
 import { clubHasAcademy, fixtureRuleset, isNbaClub, NO_LOWER_DIVISION_COUNTRIES, presidentTitle, validateWorld, worldOf } from '../src/world/career-world';
-import { NBA_ECONOMY, NBA_MAXIMUM_WAGE, NBA_MINIMUM_WAGE } from '../src/world/nba-economy';
-import { playerBillOf } from '../src/world/economy';
+import { NBA_ECONOMY, NBA_MAXIMUM_WAGE } from '../src/world/nba-economy';
 import { maxContractWage } from '../src/world/employment-policy';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { startingFacilityLevel } from '../src/world/facilities-policy';
@@ -51,7 +53,7 @@ describe('NBA world builder', () => {
   const world = worldFromPack(nbaPack(), 'nba');
 
   it('builds the NBA league with its conferences, divisions, ruleset, standings rule and postseason', () => {
-    expect(world.nba).toEqual({ model: 'nba-1', leagueId: 'nba', conferences: expect.any(Array), ruleset: 'nba-2026' });
+    expect(world.nba).toEqual({ model: 'nba-1', leagueId: 'nba', conferences: expect.any(Array), ruleset: 'nba-2026', cap: 'nba-cap-1' });
     expect(world.nba!.conferences.map(conference => [conference.name, conference.divisions.map(division => division.name)])).toEqual([
       ['Eastern Conference', ['Atlantic', 'Central', 'Southeast']], ['Western Conference', ['Northwest', 'Pacific', 'Southwest']]]);
     expect(world.domesticLeagues).toEqual([{ id: 'nba', name: 'NBA', country: 'USA', tier: 1, clubIds: NBA_CLUB_IDS, standingsRule: 'nba-2026', postseason: 'nba-2026-1' }]);
@@ -62,7 +64,8 @@ describe('NBA world builder', () => {
     expect(NBA_CLUB_IDS.every(id => isNbaClub(world, id) && !clubHasAcademy(world, id) && presidentTitle(world, id) === 'Owner')).toBe(true);
   });
 
-  it('pays NBA money: payrolls of about $145-205M, the minimum and maximum salaries, revenue that covers them', () => {
+  // NBA step 6 (format 92): each payroll is shaped on the club's published one; money plans on the owner's ceiling.
+  it('pays NBA money: payrolls of about $145-215M, the minimum and maximum salaries, revenue that covers them', () => {
     for (const finance of world.finances) {
       const economy = finance.economy!;
       expect(economy.band).toBe('nba');
@@ -70,13 +73,13 @@ describe('NBA world builder', () => {
       const payroll = club.players.reduce((sum, player) => sum + world.wages[player.id]!, 0);
       expect(usd(payroll)).toBeGreaterThan(140e6);
       expect(usd(payroll)).toBeLessThan(215e6);
-      expect(Math.abs(payroll - playerBillOf(economy))).toBeLessThan(playerBillOf(economy) * 0.02);
+      expect(Math.abs(payroll - nbaPayrollTarget(club.name))).toBeLessThan(nbaPayrollTarget(club.name) * 0.01);
       expect(usd(economy.budget)).toBeGreaterThanOrEqual(295e6);
       expect(usd(economy.budget)).toBeLessThanOrEqual(755e6);
-      expect(economy.budget).toBeGreaterThan(payroll + economy.operatingCost);
+      expect(economy.budget).toBeGreaterThan(nbaOwnerCeiling(world, finance.clubId) + economy.operatingCost);
       expect(economy.openingCash).toBeGreaterThan(0);
       const wages = club.players.map(player => world.wages[player.id]!);
-      expect(Math.min(...wages)).toBeGreaterThanOrEqual(NBA_MINIMUM_WAGE);
+      expect(Math.min(...wages)).toBeGreaterThanOrEqual(NBA_LOWEST_MINIMUM);
       expect(Math.max(...wages)).toBeLessThanOrEqual(NBA_MAXIMUM_WAGE);
       expect(usd(Math.max(...wages))).toBeGreaterThan(30e6);
       expect(startingFacilityLevel({ world }, finance.clubId, 'training')).toBeGreaterThanOrEqual(5);

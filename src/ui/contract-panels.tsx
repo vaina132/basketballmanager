@@ -1,7 +1,7 @@
 import type { SeasonState } from '../domain/season'
 import { getClubContractSummary, MAX_CONTRACT_SEASONS } from '../world/employment-policy'
 import { Icon } from './Icon'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 
 /** Shared by Transfers and Squad > Contracts (owner, 16 November 2026: own contracts moved out of Transfers). */
 export function ContractsEnablePanel({ season, disabled, onEnable }: { season: SeasonState; disabled: boolean; onEnable: () => void }) {
@@ -17,5 +17,5 @@ export function ContractDelegation({ season, disabled, onDelegation }: { season:
 /** Next season's salary budget behind a disclosure: signed, held by offers, the total and what is left. */
 export function ContractBudgetSummary({ season, note }: { season: SeasonState; note: string }) {
   const summary = getClubContractSummary(season, season.managedClubId, season.seasonNumber + 1)
-  return <details className="game-disclosure"><summary><Icon name="calendar" size={15} />Contract rules & budget</summary><p className="transfers-note">{note} Contracts last 1–{MAX_CONTRACT_SEASONS} seasons.</p><dl className="transfers-summary"><div><dt>Signed salaries / year</dt><dd data-contract-committed={summary.seasonWages}>{formatEuros(summary.seasonWages)}</dd></div><div><dt>Pending offers / year</dt><dd data-contract-reserved={summary.reservedWages}>{formatEuros(summary.reservedWages)}</dd></div><div><dt>Total wages budget / year</dt><dd>{formatEuros(summary.budget)}</dd></div><div><dt>Available after squad reserve</dt><dd data-contract-spendable={summary.spendableBudget}>{formatEuros(summary.spendableBudget)}</dd></div></dl></details>
+  return <details className="game-disclosure"><summary><Icon name="calendar" size={15} />Contract rules & budget</summary><p className="transfers-note">{note} Contracts last 1–{MAX_CONTRACT_SEASONS} seasons.</p><dl className="transfers-summary"><div><dt>Signed salaries / year</dt><dd data-contract-committed={summary.seasonWages}>{formatMoney(summary.seasonWages)}</dd></div><div><dt>Pending offers / year</dt><dd data-contract-reserved={summary.reservedWages}>{formatMoney(summary.reservedWages)}</dd></div><div><dt>Total wages budget / year</dt><dd>{formatMoney(summary.budget)}</dd></div><div><dt>Available after squad reserve</dt><dd data-contract-spendable={summary.spendableBudget}>{formatMoney(summary.spendableBudget)}</dd></div></dl></details>
 }

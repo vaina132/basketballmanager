@@ -6,7 +6,7 @@ import { getPressQuestion, PRESS_ANSWER_TEXT, PRESS_EFFECTS, PRESS_HALF_LIFE_DAY
 import { isPressStyle, MEDIA_RULES, mediaLabel, mediaMoraleFactor, PRESS_TOPIC_TITLES, pressStyleEffect } from '../world/media'
 import { getInboxItems, type InboxCategory, type InboxItem, type InboxTarget } from './inbox-items'
 import { quoteInSeasonSale } from '../world/recruitment-policy'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { awaitsContractReply, getClubContractRequests } from '../world/relationships'
 import { ContractRequestCard } from './ContractRequestCard'
 import { Icon, type IconName } from './Icon'
@@ -125,11 +125,11 @@ function BidDecision({ season, item, busy, onDecision }: { season: SeasonState; 
   if (market === 'season') { const quote = quoteInSeasonSale(season, offerId); canAccept = quote.canAccept; reason = quote.acceptReason; canCounter = quote.canCounter }
   const buyer = season.clubs.find(club => club.id === offer.clubId)?.name ?? 'The club'
   return <div className="inbox-bid" data-inbox-bid={offerId} data-bid-kind={loan ? 'loan' : 'transfer'}>
-    <dl><div><dt>{loan ? 'Loan fee' : 'Transfer fee'}</dt><dd>{formatEuros(transfer.fee)}</dd></div><div><dt>From</dt><dd>{buyer}</dd></div>{!loan && <div><dt>Asking fee</dt><dd>{formatEuros(transfer.requiredFee)}</dd></div>}</dl>
+    <dl><div><dt>{loan ? 'Loan fee' : 'Transfer fee'}</dt><dd>{formatMoney(transfer.fee)}</dd></div><div><dt>From</dt><dd>{buyer}</dd></div>{!loan && <div><dt>Asking fee</dt><dd>{formatMoney(transfer.requiredFee)}</dd></div>}</dl>
     <p className="inbox-bid-note">{loan ? 'He plays for them until the season ends and they pay his wages. His contract with you continues next season.' : 'The fee goes to Spending left and his wages leave your Wages left once he signs.'}</p>
     <div className="inbox-bid-actions">
       <button className="button primary small" data-bid-accept={offerId} onClick={() => onDecision(offerId, market, 'accept')} disabled={busy || !canAccept}>Accept<Icon name="check" size={14} /></button>
-      {canCounter && <button className="button small" data-bid-counter={offerId} onClick={() => onDecision(offerId, market, 'counter')} disabled={busy}>Ask {formatEuros(transfer.requiredFee)}</button>}
+      {canCounter && <button className="button small" data-bid-counter={offerId} onClick={() => onDecision(offerId, market, 'counter')} disabled={busy}>Ask {formatMoney(transfer.requiredFee)}</button>}
       <button className="button small" data-bid-decline={offerId} onClick={() => onDecision(offerId, market, 'reject')} disabled={busy}>Decline</button>
     </div>
     {!canAccept && reason && <p className="inbox-bid-note">{reason}</p>}

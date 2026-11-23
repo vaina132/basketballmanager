@@ -1,3 +1,4 @@
+import { nbaRegularSeasonEndRound, nbaTaxBills, usesNbaCap } from './nba-cap-policy';
 import { staffLimit } from './wage-pool';
 import { requireCalendarWeek } from './calendar-boundary';
 import type { CoachingContract } from '../domain/coaching';
@@ -407,6 +408,20 @@ export function processFinanceRound(state: SeasonState): SeasonState {
   }
   // Format 71: scheduled loan and lease payments are mandatory; whatever cash cannot cover becomes unpaid costs.
   for (const { debt, payment } of dueDebtPayments(state)) next = recordDebtEntry(next, { clubId: debt.clubId, kind: debt.kind === 'lease' ? 'lease' : 'loan-repayment', amount: -payment.amount, debt: { debtId: debt.id, payment: payment.number } });
+  return next;
+}
+
+/**
+ * Format 92 (worlds with `world.nba.cap`): in the NBA's last regular-season week, after the week's wages, every NBA club
+ * with a payroll above the tax line pays the luxury tax (`nba-cap.ts`) and each NBA club that paid none receives an
+ * equal share of the total. A tax the club's cash cannot cover becomes unpaid costs, like any other mandatory cost.
+ */
+export function processLuxuryTax(state: SeasonState): SeasonState {
+  if (!state.finance.enabledSince || !usesNbaCap(state) || state.round !== nbaRegularSeasonEndRound(state)) return state;
+  const { bills, share, receivers } = nbaTaxBills(state, state.round);
+  let next = state;
+  for (const bill of bills) if (bill.tax > 0) next = book(next, bill.clubId, 'luxury-tax', -bill.tax, `luxury-tax-s${state.seasonNumber}`);
+  if (share > 0) for (const clubId of receivers) next = book(next, clubId, 'tax-share', share, `tax-share-s${state.seasonNumber}`);
   return next;
 }
 

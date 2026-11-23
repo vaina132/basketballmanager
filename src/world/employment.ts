@@ -84,6 +84,8 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
     kind: scheduled?.transfer ? 'transfer' : current?.clubId === clubId && current.endsSeason === state.seasonNumber ? 'renewal' : 'free-agent',
     ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }),
     ...(role === undefined ? {} : { role }),
+    // Format 92: an NBA club's cap route (the offer's, kept from the day it was made).
+    ...(quote.capRoute ? { capRoute: quote.capRoute } : {}),
   };
   let next = { ...state, employment: { ...state.employment, contracts: [...state.employment.contracts, contract] } };
   if (scheduled?.transfer) {

@@ -7,7 +7,8 @@ import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import { getActiveCareerPlayers } from './player-catalog';
-import { contractForSeason, effectiveContractsForSeason, getClubContractSummary, MIN_ROSTER_SIZE, quotePlayerContract } from './employment-policy';
+import { contractForSeason, effectiveContractsForSeason, getClubContractSummary, quotePlayerContract } from './employment-policy';
+import { minRosterSize } from './club-roster-policy';
 import { getFinanceBalance } from './finance';
 import { addMarketDays, getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { getSpendableCash } from './payroll-policy';
@@ -95,9 +96,9 @@ export function sellerReplacementReason(state: SeasonState, offer: Pick<MarketOf
     const remainingWages = summary.seasonWages - removed.reduce((sum, contract) => sum + contract.seasonWage, 0);
     const live = getLiveMarketOffers(state).filter(item => item.clubId === transfer.sellerClubId && item.seasonNumber + 1 <= year && item.seasonNumber + item.seasons >= year);
     const shortfalls = live.reduce((sum, item) => sum + Math.max(0, summary.reserveWage - item.seasonWage), 0);
-    const minimum = Math.max(0, MIN_ROSTER_SIZE - remainingSize - summary.reservedRosterSize) * summary.reserveWage + shortfalls;
+    const minimum = Math.max(0, minRosterSize(state, transfer.sellerClubId) - remainingSize - summary.reservedRosterSize) * summary.reserveWage + shortfalls;
     if (remainingWages + summary.reservedWages + minimum > summary.budget) return 'The selling club needs wages budget to replace its departing players.';
-    if (year === state.seasonNumber + 1 && remainingSize < MIN_ROSTER_SIZE) {
+    if (year === state.seasonNumber + 1 && remainingSize < minRosterSize(state, transfer.sellerClubId)) {
       const playerReplyOn = transfer.clubStatus === 'accepted' ? offer.responseOn : addMarketDays(state.date, 1);
       if (playerReplyOn >= window.closesOn) return 'The selling club needs a day to sign a replacement before recruitment closes.';
     }

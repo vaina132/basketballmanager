@@ -1,10 +1,11 @@
+import { minRosterSize } from '../world/club-roster-policy'
 import type { SeasonEndDecision } from '../domain/career'
 import type { SeasonState } from '../domain/season'
 import type { SeasonEndOutlook } from '../world/career-policy'
 import { isUnemployed } from '../world/career-rules'
 import { regularWorldRounds, seasonRounds, worldOf } from '../world/career-world'
 import { continueAction, runContinueStep } from '../world/continue-step'
-import { getClubContractSummary, MIN_ROSTER_SIZE } from '../world/employment-policy'
+import { getClubContractSummary } from '../world/employment-policy'
 import { getMarketWindow, isLiveMarketOffer, isMarketActive } from '../world/market-policy'
 import { currentGameDay, seasonLabel } from '../world/season'
 import { dueManagerNationalGame, nationalStepDay } from '../world/national'
@@ -102,7 +103,7 @@ export function continueStop(before: SeasonState, after: SeasonState): ContinueS
   if (after.status === 'complete') {
     // A squad short of next season's minimum needs the manager's offers: each Continue then moves one recruitment day.
     const short = !unemployed && before.status === 'complete' && isMarketActive(after) && !after.employment.delegated
-      ? MIN_ROSTER_SIZE - getClubContractSummary(after, after.managedClubId).rosterSize : 0
+      ? minRosterSize(after, after.managedClubId) - getClubContractSummary(after, after.managedClubId).rosterSize : 0
     if (short > 0) return { kind: 'decision', message: `Your squad needs ${plural(short, 'more signed player', 'more signed players')} for next season. Make offers in Transfers; each Continue moves one recruitment day while the squad is short.`, page: 'transfers' }
     // Format 80: the summer tournament the manager's national team played ends the offseason.
     if (ready && continueAction(before).kind === 'national') return { kind: 'start-ready', message: `The ${after.national?.competitions.find(item => item.seasonNumber === after.seasonNumber && item.kind === 'tournament')?.name ?? 'summer tournament'} is over. ${seasonLabel(after.seasonNumber + 1)} can start. Continue starts it.`, page: 'home' }

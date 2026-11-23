@@ -228,13 +228,13 @@ export function scheduleInSeasonRecruitment(state: SeasonState): SeasonState {
   const knownMedical = state.physio ? { ...state.physio, rehabilitation: state.physio.rehabilitation.filter(record => record.toDate <= state.date) } : undefined;
   for (const club of state.clubs) {
     if (club.id === state.managedClubId && !state.employment.delegated) continue;
-    for (let count = 0; count < clubRosterLimit(state); count += 1) {
+    for (let count = 0; count < clubRosterLimit(state, club.id); count += 1) {
       const registered = effectiveContractsForRound(next.employment, next.seasonNumber, next.round).filter(contract => contract.clubId === club.id);
       const pending = getInSeasonOffers(next, club.id, true);
       const departing = new Set(getInSeasonOffers(next, undefined, true).filter(offer => offer.transfer?.sellerClubId === club.id && offer.transfer.clubStatus === 'accepted').map(offer => offer.playerId));
       const healthy = registered.filter(contract => !departing.has(contract.playerId) && !next.injuries.some(injury => injury.playerId === contract.playerId && isRecovering(injury, responseOn, knownMedical))).length;
       const needed = club.id === state.managedClubId ? clubRosterTarget(state, club.id) - registered.length + departing.size - pending.length : 8 - healthy - pending.length;
-      if (needed <= 0 || registered.length + pending.length >= clubRosterLimit(state)) break;
+      if (needed <= 0 || registered.length + pending.length >= clubRosterLimit(state, club.id)) break;
       const positions = new Map<string, number>();
       for (const playerId of [...registered.map(contract => contract.playerId), ...pending.map(offer => offer.playerId)]) {
         const position = getCareerPlayer(next, playerId).position;

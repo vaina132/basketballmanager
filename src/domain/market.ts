@@ -1,4 +1,5 @@
 import type { SquadRole } from './relationships';
+import type { NbaCapRoute } from '../world/nba-cap';
 import type { TransferPaymentPlan } from './transfer-payments';
 
 export interface TransferProposal {
@@ -30,6 +31,8 @@ export interface MarketOffer {
   /** `relationships-3`: the squad role offered. */
   role?: SquadRole;
   seasons: number;
+  /** Format 92: an NBA club's cap route, decided when the offer is made (the mid-level exception it holds stays held). */
+  capRoute?: NbaCapRoute;
   status: 'pending' | 'countered' | 'accepted' | 'rejected' | 'withdrawn' | 'expired' | 'replaced' | 'lost' | 'club-review';
   respondedOn: string | null;
   closedOn: string | null;

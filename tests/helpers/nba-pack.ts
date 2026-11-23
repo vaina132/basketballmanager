@@ -18,12 +18,12 @@ const positions = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
 
 export const NBA_CLUB_IDS: readonly string[] = DIVISIONS.flatMap(([, , , clubs]) => clubs.map(([id]) => `nba-${id}`));
 
-/** Fifteen players a club; `level` (15-18) sets its best player's abilities, the others step down from it. */
+/** Fifteen players a club; `level` (16-19) sets its best player's abilities, each next player one lower (at least 7). */
 function nbaSquad(clubId: string, level: number): DataPackPlayer[] {
   return Array.from({ length: 15 }, (_, index) => {
-    const value = Math.max(8, Math.min(20, level + 2 - Math.floor((index + 1) / 2)));
+    const value = Math.max(7, Math.min(20, level - index));
     return {
-      id: `${clubId}-p${index}`, name: `${clubId.toUpperCase()} Player ${index}`, clubId, number: index, position: positions[index % 5]!, nationality: index % 4 ? 'USA' : 'Canada', age: 20 + (index % 14), heightCm: 193 + (index % 5) * 5, weightKg: 98,
+      id: `${clubId}-p${index}`, name: `${clubId.toUpperCase()} Player ${index}`, clubId, number: index, position: positions[index % 5]!, nationality: index % 5 === 2 ? 'Serbia' : index % 4 ? 'USA' : 'Canada', age: 20 + (index % 14), heightCm: 193 + (index % 5) * 5, weightKg: 98,
       attributes: { twoPoint: value, threePoint: value, freeThrow: value, passing: value, defense: value, rebounding: value, stamina: 16 }, estimated: [],
     };
   });
@@ -44,7 +44,7 @@ export function nbaCompetition(): DataPackCompetition {
 export function nbaPack(european: readonly EconomyPackLeague[] = []): DataPack {
   const base = european.length ? economyPack(european) : null;
   const clubs = DIVISIONS.flatMap(([, , , list]) => list).map(([id, name, short, arena, seats], index) => {
-    const clubId = `nba-${id}`, players = nbaSquad(clubId, 15 + (index * 7) % 4);
+    const clubId = `nba-${id}`, players = nbaSquad(clubId, 16 + (index * 7) % 4);
     return { club: { id: clubId, name, shortName: short, country: 'USA', city: null, arena, color: '#1d428a', secondaryColor: null, identitySource: null, playerIds: players.map(player => player.id), capacity: seats }, players };
   });
   return {

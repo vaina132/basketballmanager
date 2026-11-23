@@ -37,7 +37,7 @@ import { Icon } from './Icon'
 import { StaminaMeter } from './StaminaMeter'
 import { TeamInstructions } from './TeamInstructions'
 import './manager-desk.css'
-import { seasonRounds, worldOf } from '../world/career-world'
+import { presidentTitle, seasonRounds, worldOf } from '../world/career-world'
 import { formatEuros } from './money-format'
 import { ClubBadge } from './ClubLogo'
 import { clubHeadCoach, MANAGER_COACH } from '../world/head-coaches'
@@ -130,7 +130,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
     else if (board.objective && board.objective.games > 0) notices.push({ key: 'board', title: 'Board objectives set', detail: `Win ${board.objective.targetWins} of ${board.objective.games} league games.${board.objective.startingUnpaid !== null ? usesWagePool(season) ? ' Keep Spending left above zero so every bill is paid.' : ` Keep unpaid costs at or below ${money(board.objective.startingUnpaid)}.` : ''}`, action: 'View objectives', open: onOpenBoard })
     // Format 70: an open request from the president stays visible until it is met or its deadline passes.
     const request = (season.board.requests ?? []).find(item => item.outcome === 'open' && item.clubId === season.managedClubId)
-    if (request) notices.push({ key: 'president-request', title: "President's request", detail: `${requestText(season, request)} by the review after matchday ${request.deadlineRound}. Met: +${PRESIDENT_RULES.requests.met} confidence; ignored: ${PRESIDENT_RULES.requests.ignored}.`, urgent: true, action: 'Review board', open: onOpenBoard })
+    if (request) notices.push({ key: 'president-request', title: `${presidentTitle(worldOf(season), season.managedClubId)}'s request`, detail: `${requestText(season, request)} by the review after matchday ${request.deadlineRound}. Met: +${PRESIDENT_RULES.requests.met} confidence; ignored: ${PRESIDENT_RULES.requests.ignored}.`, urgent: true, action: 'Review board', open: onOpenBoard })
   }
 
   if (season?.commercial.enabledSince) {

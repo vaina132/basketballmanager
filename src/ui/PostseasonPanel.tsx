@@ -5,6 +5,7 @@ import { worldOf } from '../world/career-world'
 import './postseason-panel.css'
 
 const STAGES: Record<PostseasonSeriesState['stage'], string> = { qualifying: 'Qualifying', 'play-in': 'Play-in', 'round-of-16': 'Round of 16', 'quarter-final': 'Quarter-finals', 'semi-final': 'Semi-finals', 'third-place': 'Third place', final: 'Final', 'play-out': 'Play-outs' }
+const NBA_STAGES: Partial<Record<PostseasonSeriesState['stage'], string>> = { 'play-in': 'Play-in', 'round-of-16': 'First round', 'quarter-final': 'Conference semi-finals', 'semi-final': 'Conference finals', final: 'NBA Finals' }
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 
@@ -17,8 +18,12 @@ export function PostseasonPanel({ season, seasonNumber, leagueId, managedId }: {
   if (!entry) return null
   const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? worldOf(season).clubs.find(club => club.id === id)?.name ?? id
   const stages = [...new Set(entry.series.map(series => series.stage))]
+  // NBA step 5: the NBA names its rounds and each series' conference.
+  const nba = worldOf(season).nba?.leagueId === leagueId
+  const stageName = (stage: PostseasonSeriesState['stage']) => nba ? NBA_STAGES[stage] ?? STAGES[stage] : STAGES[stage]
+  const conferenceOf = (series: PostseasonSeriesState) => !nba ? null : series.id.startsWith('east-') ? 'East' : series.id.startsWith('west-') ? 'West' : null
   const nextGame = (series: PostseasonSeriesState) => fixtures.find(fixture => series.fixtureIds.includes(fixture.id) && !fixture.result)
-  const start = postseasonSlotDay(worldOf(season), seasonNumber, 1).date
+  const start = postseasonSlotDay(worldOf(season), seasonNumber, 1, leagueId).date
   const { champion, promoted, relegated } = entry.outcome
   const decided = (ids: (string | null)[]) => ids.filter((id): id is string => !!id)
   // A division with another division of the game below sends its relegated clubs there. Without one, its relegated clubs
@@ -39,11 +44,12 @@ export function PostseasonPanel({ season, seasonNumber, leagueId, managedId }: {
         {exchange && <li><strong>Joining</strong>{exchange.joining.map(id => `${name(id)} (${returning(id) ? 'returning' : 'generated squad'})`).join(', ')}<small className="postseason-note"> · from {nextDivision?.name ?? 'the division below'}</small></li>}
       </ul> : null}
       {stages.map(stage => <div key={stage} className="postseason-stage">
-        <h3>{STAGES[stage]}</h3>
+        <h3>{stageName(stage)}</h3>
         <ul>{entry.series.filter(series => series.stage === stage).map(series => {
           const upcoming = nextGame(series)
           const sides = series.higher && series.lower ? [series.higher, series.lower] : null
           return <li key={series.id} className={sides?.some(side => side.clubId === managedId) ? 'postseason-series postseason-managed' : 'postseason-series'} data-series-id={series.id}>
+            {conferenceOf(series) && <small className="postseason-conference">{conferenceOf(series)}</small>}
             {sides ? <span className="postseason-teams">{sides.map(side => <span key={side.clubId} className={series.winner === side.clubId ? 'postseason-winner' : series.loser === side.clubId ? 'postseason-loser' : undefined}><small>{side.rank}</small>{name(side.clubId)}<b>{series.wins[side.clubId] ?? 0}</b></span>)}</span> : <span className="postseason-waiting">To be decided</span>}
             <span className="postseason-status">{series.bestOf === 1 ? 'Single game' : `Best of ${series.bestOf}`}{series.neutral ? ' · one venue' : ''}{series.winner ? ` · ${name(series.winner)} advance` : upcoming ? ` · next ${formatDate(upcoming.date)}` : ''}</span>
           </li>

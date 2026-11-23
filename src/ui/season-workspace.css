@@ -142,3 +142,7 @@
   .league-option{flex:none;width:172px;min-height:40px}
   .simulated-table tbody th{white-space:normal}
 }
+/* NBA step 5: conference tables and seed marks (words, not colour only). */
+.nba-standings caption{caption-side:top;text-align:left;font-weight:700;padding:8px 0 4px}
+.nba-seed-mark{color:var(--accent,#f2a93b);font-size:.78rem;font-weight:600}
+tr[data-nba-seed='Play-in'] .nba-seed-mark{color:var(--muted)}

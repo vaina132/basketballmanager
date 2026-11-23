@@ -22,6 +22,11 @@ export const NBA_ECONOMY = Object.freeze({
   gate: Object.freeze({ seats: 18_500, fill: 0.95, price: 110 }),
   /** [S] 41 home games in the regular season. */
   homeGames: 41,
+  /**
+   * [S] Wage weights of a club's twelve best players: NBA stars take a far larger share than in Europe (a maximum
+   * contract is 25-35% of the cap); the best paid still takes at most a quarter of the payroll.
+   */
+  wageRanks: Object.freeze([36, 22, 14, 10, 8, 6.5, 5.5, 4.5, 4, 3.5, 3, 2.5] as const),
   /** [E] Revenue mix, % of revenue: national media and league money count as central money. */
   revenueMix: Object.freeze({ tickets: 22, sponsorship: 14, central: 44, public: 0, owner: 5, other: 15 }),
 });

@@ -207,6 +207,8 @@ export const isNbaClub = (world: CareerWorld, clubId: string): boolean => nbaClu
  * through the draft and college); every other club does as before.
  */
 export const clubHasAcademy = (world: CareerWorld, clubId: string): boolean => !isNbaClub(world, clubId);
+/** NBA step 4: what a club's president is called on screen: an NBA club's is its owner. */
+export const presidentTitle = (world: CareerWorld, clubId: string): 'President' | 'Owner' => isNbaClub(world, clubId) ? 'Owner' : 'President';
 /**
  * NBA step 3: the competition rules a fixture is played under (src/engine/rulesets.ts); undefined means FIBA. Since NBA
  * step 4 the NBA's games (both clubs of the world's NBA league, never a European game) play its ruleset.

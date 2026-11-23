@@ -364,11 +364,11 @@ export const knownClubBudget = (name: string): number | null => { const budget =
  * Each player's season wage (club cost, cents, in €500 steps) sharing `bill` by rank in the squad (see `wageRanks`),
  * never below `floor` per player, the best paid at most `wageTopShare` of the bill. `generated` names generated players.
  */
-export function shareWageBill(players: readonly Team['players'][number][], bill: number, floor: number, generated: ReadonlySet<string> = new Set(), limit = REAL_ECONOMY_RULES.limits.maxContractWage * CENTS): Record<string, number> {
+export function shareWageBill(players: readonly Team['players'][number][], bill: number, floor: number, generated: ReadonlySet<string> = new Set(), limit = REAL_ECONOMY_RULES.limits.maxContractWage * CENTS, ranks: readonly number[] = REAL_ECONOMY_RULES.wageRanks): Record<string, number> {
   const rules = REAL_ECONOMY_RULES;
   const ratings = players.map(player => overallRating(player.attributes, player.position));
   const order = players.map((_, index) => index).sort((a, b) => ratings[b]! - ratings[a]!);
-  const rankWeight = (rank: number) => rank < rules.wageRanks.length ? rules.wageRanks[rank]! : rank < 14 ? rules.wageExtra : rules.wageFringe;
+  const rankWeight = (rank: number) => rank < ranks.length ? ranks[rank]! : rank < 14 ? rules.wageExtra : rules.wageFringe;
   // Equal ratings share the weights of the places they hold together.
   const place = new Array<number>(players.length);
   for (let start = 0; start < order.length;) {
@@ -379,7 +379,7 @@ export function shareWageBill(players: readonly Team['players'][number][], bill:
     for (let rank = start; rank <= end; rank += 1) place[order[rank]!] = total / (end - start + 1);
     start = end + 1;
   }
-  const regulars = order.slice(0, rules.wageRanks.length).map(index => ratings[index]!);
+  const regulars = order.slice(0, ranks.length).map(index => ratings[index]!);
   const average = regulars.reduce((sum, value) => sum + value, 0) / regulars.length;
   const [lowest, highest] = rules.wageRatingLimits;
   const weights = players.map((player, index) => place[index]! * clamp(Math.exp((ratings[index]! - average) / rules.wageRating), lowest, highest) * (generated.has(player.id) ? rules.wageGenerated : 1));
@@ -554,7 +554,7 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
     const gate = gateFor(item, own, layout.gateT.get(clubId)!);
     const { economy, playerBill } = clubFigures(own, item, layout.competition.get(clubId), budget, gate);
     const floor = rules.benchFloor[own] * bandFor(rules.costPerNet, item.country) * CENTS;
-    Object.assign(wages, shareWageBill(club.players, playerBill, floor, new Set(club.players.filter(player => world.playerProfiles[player.id]?.source === 'generated').map(player => player.id)), own === 'nba' ? NBA_MAXIMUM_WAGE : undefined));
+    Object.assign(wages, shareWageBill(club.players, playerBill, floor, new Set(club.players.filter(player => world.playerProfiles[player.id]?.source === 'generated').map(player => player.id)), own === 'nba' ? NBA_MAXIMUM_WAGE : undefined, own === 'nba' ? NBA_ECONOMY.wageRanks : undefined));
     // NBA step 4: an arena's known seats (from the pack) stay, with the usual crowd at the NBA's fill.
     const seats = own === 'nba' ? knownCapacity?.(clubId) ?? null : null;
     if (seats !== null) return { ...definition, capacity: seats, referenceDemand: Math.round(seats * NBA_ECONOMY.gate.fill / 100) * 100, economy };

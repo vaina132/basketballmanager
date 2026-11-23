@@ -219,7 +219,8 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
     const countries = size !== undefined && format!.staged ? { countries: Object.fromEntries(entrantIds.map(clubId => [clubId, world.domesticLeagues!.find(league => league.clubIds.includes(clubId))?.country ?? pack.clubs.find(club => club.id === clubId)?.country ?? `unknown-${clubId}`])) } : {};
     return entrantIds.length >= 2 ? [{ id: item.id, name: item.name, kind, season: item.season, clubIds: entrantIds, ...(size !== undefined ? { format: format!.id } : {}), ...countries }] : [];
   });
-  if (!european.length) return priced(world);
+  // NBA: a world of the NBA alone has no European competitions (they belong to the European countries' clubs).
+  if (!european.length || world.domesticLeagues!.every(league => league.country === 'USA')) return priced(world);
   // Step 3.5f (format 60): when a competition is played, the unchosen countries' top divisions join the world for their
   // estimated tables, every played competition gives its entrants' countries and the EuroLeague its one-year places.
   const played = european.some(item => item.format);

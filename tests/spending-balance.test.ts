@@ -104,11 +104,16 @@ describe('the spending balance option (format 89)', () => {
     // A gain is not counted, and older careers read the season-end projection only.
     const winning = book(book(base, clubId, 0.5, 'opening'), clubId, 0.2);
     expect(wageCapCashShare(winning, clubId)).toBe(projectedCashShare(winning, clubId));
-    // The limit starts at 15% after a losing season only: after a gain, and in a career's first season, it keeps 10%.
-    expect(wageCapTarget(losing, clubId)).toBe(SPENDING_BALANCE_RULES.wageCapTargetShare);
-    expect(wageCapTarget(winning, clubId)).toBe(ECONOMY_BALANCE_RULES.wageCap.targetCashShare);
-    expect(wageCapTarget(career(world, 3), clubId)).toBe(ECONOMY_BALANCE_RULES.wageCap.targetCashShare);
-    expect(automaticWageCap(winning, clubId, 2, 0.12)).toBeNull();
+    // The look-ahead (from 15%) is for the wages of a later season than the one being played: every offseason signing
+    // and the later years of an in-season contract; the current season's wages keep the projection and 10%.
+    const opening = career(world, 3);
+    expect(wageCapTarget(losing, 2)).toBe(SPENDING_BALANCE_RULES.wageCapTargetShare);
+    expect(wageCapTarget(opening, 1)).toBe(ECONOMY_BALANCE_RULES.wageCap.targetCashShare);
+    expect(wageCapTarget(opening, 2)).toBe(SPENDING_BALANCE_RULES.wageCapTargetShare);
+    expect(wageCapTarget(older, 2)).toBe(ECONOMY_BALANCE_RULES.wageCap.targetCashShare);
+    expect(wageCapCashShare(opening, clubId, 1)).toBe(projectedCashShare(opening, clubId));
+    expect(automaticWageCap(opening, clubId, 1, 0.12)).toBeNull();
+    expect(automaticWageCap(opening, clubId, 2, 0.12)).not.toBeNull();
     const olderLosing = olderLosingState();
     expect(wageCapCashShare(olderLosing, clubId)).toBe(projectedCashShare(olderLosing, clubId));
     expect(automaticWageCap(olderLosing, clubId, 2)).toBeNull();

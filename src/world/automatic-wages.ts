@@ -18,30 +18,33 @@ export function projectedCashShare(state: SeasonState, clubId: string): number |
   return (getSpendablePosition(state, clubId) - remainingSeasonShortfall(state, clubId)) / economy.budget;
 }
 
+/** Format 89: whether the low-cash wage limit for `seasonNumber`'s wages looks ahead (a season after the one being played). */
+function looksAhead(state: SeasonState, seasonNumber: number): boolean {
+  return usesSpendingBalance(state) && (state.status === 'complete' || seasonNumber > state.seasonNumber);
+}
+
 /**
- * The cash share the low-cash wage limit reads (`automaticWageCap`): the projected season-end share
- * (`projectedCashShare`); with the format-89 spending balance it looks one season ahead, lowered by the club's loss in
- * the latest completed season (a gain is not counted), as the next season may go as that one did. Null without
- * researched club money.
+ * The cash share the low-cash wage limit reads for `seasonNumber`'s wages (`automaticWageCap`): the projected season-end
+ * share (`projectedCashShare`). With the format-89 spending balance, wages of a later season than the one being played
+ * (every signing in the offseason, and the later years of an in-season contract) look one season ahead: the share is
+ * lowered by the club's loss in the latest completed season (a gain is not counted), as the next season may go as that
+ * one did. Null without researched club money.
  */
-export function wageCapCashShare(state: SeasonState, clubId: string): number | null {
+export function wageCapCashShare(state: SeasonState, clubId: string, seasonNumber = state.seasonNumber + 1): number | null {
   const share = projectedCashShare(state, clubId);
-  if (share === null || !usesSpendingBalance(state)) return share;
+  if (share === null || !looksAhead(state, seasonNumber)) return share;
   const result = lastSeasonResult(state, clubId);
   return result === null || result >= 0 ? share : share + result / clubEconomy(state, clubId)!.budget;
 }
 
 /**
- * The share of the budget below which the low-cash wage limit acts: `targetCashShare` (10%); with the format-89 spending
- * balance, `SPENDING_BALANCE_RULES.wageCapTargetShare` (15%) for a club that lost money in the latest completed season,
- * so a club on the way down slows its wages before a bad season (clubs that broke even, and every club in a career's
- * first season, keep 10%: a 15% start for every club held back in-season bids for listed players).
+ * The share of the budget below which the low-cash wage limit acts for `seasonNumber`'s wages: `targetCashShare` (10%);
+ * with the format-89 spending balance, `SPENDING_BALANCE_RULES.wageCapTargetShare` (15%) for the wages of a later season
+ * than the one being played (the look-ahead), so a club slows its wages before a bad season. The current season's wages
+ * keep 10% (its cash projection is exact; a 15% start held back computer clubs' in-season bids for listed players).
  */
-export function wageCapTarget(state: SeasonState, clubId: string): number {
-  const usual = ECONOMY_BALANCE_RULES.wageCap.targetCashShare;
-  if (!usesSpendingBalance(state)) return usual;
-  const result = lastSeasonResult(state, clubId);
-  return result !== null && result < 0 ? SPENDING_BALANCE_RULES.wageCapTargetShare : usual;
+export function wageCapTarget(state: SeasonState, seasonNumber = state.seasonNumber + 1): number {
+  return looksAhead(state, seasonNumber) ? SPENDING_BALANCE_RULES.wageCapTargetShare : ECONOMY_BALANCE_RULES.wageCap.targetCashShare;
 }
 
 /**
@@ -51,11 +54,11 @@ export function wageCapTarget(state: SeasonState, clubId: string): number {
  * never below `floorShare` of that bill (cents, in EUR 500 steps). Null when no cap applies: careers without the economy
  * balance, clubs without researched money, and clubs whose projected cash reaches the target.
  */
-export function automaticWageCap(state: SeasonState, clubId: string, seasonNumber: number, share = wageCapCashShare(state, clubId)): number | null {
+export function automaticWageCap(state: SeasonState, clubId: string, seasonNumber: number, share = wageCapCashShare(state, clubId, seasonNumber)): number | null {
   if (!usesEconomyBalance(state) || share === null) return null;
   const rules = ECONOMY_BALANCE_RULES.wageCap;
-  // Format 89: the look-ahead limit acts from a higher share after a losing season (`wageCapTarget`).
-  const target = wageCapTarget(state, clubId);
+  // Format 89: the look-ahead limit for a later season acts from a higher share (`wageCapTarget`).
+  const target = wageCapTarget(state, seasonNumber);
   if (share >= target) return null;
   const money = clubEconomy(moneyAt(state, Math.min(seasonNumber, knownMoneySeason(state, seasonNumber))), clubId);
   if (!money) return null;
@@ -72,12 +75,14 @@ export function automaticWageCap(state: SeasonState, clubId: string, seasonNumbe
  */
 export function automaticWageCheck(state: SeasonState, clubId: string): (seasonWage: number, seasons: number, startsSeason: number) => boolean {
   if (!usesEconomyBalance(state)) return () => true;
-  let share: number | null | undefined;
+  const shares = new Map<boolean, number | null>();
   const rooms = new Map<number, number | null>();
   const roomFor = (year: number): number | null => {
     if (rooms.has(year)) return rooms.get(year)!;
-    share ??= wageCapCashShare(state, clubId);
-    const cap = automaticWageCap(state, clubId, year, share);
+    // One reading for the current season and one for the seasons after it (format 89 looks ahead for those).
+    const ahead = looksAhead(state, year);
+    if (!shares.has(ahead)) shares.set(ahead, wageCapCashShare(state, clubId, year));
+    const cap = automaticWageCap(state, clubId, year, shares.get(ahead)!);
     let room: number | null = null;
     if (cap !== null) {
       const summary = getClubContractSummary(state, clubId, year);

@@ -16,9 +16,10 @@ import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
  * 1. **Look-ahead wage limit:** for the low-cash wage limit of clubs run automatically, the projected season-end cash is
  *    lowered by the loss of the latest completed season (its net result from season end to season end; gains are not
  *    counted): a club that lost money last season expects to lose it again next season, and keeps its new wages lower
- *    in time. The limit acts once that look-ahead is below `wageCapTargetShare` of the budget (instead of 10%), so a
- *    club close to breaking even slows down before a bad season. The eight-player minimum squad is still never held
- *    back.
+ *    in time. After a losing season the limit acts once that look-ahead is below `wageCapTargetShare` of the budget
+ *    (instead of 10%), so a club on the way down slows down before a bad season; a club that broke even keeps 10% (a 15%
+ *    start for every club held back in-season bids for listed players). The eight-player minimum squad is still never
+ *    held back.
  * 2. **Careful clubs spend a little:** every club's spending appetite is at least `minAppetite`.
  * 3. **Spending follows success:** a club that fell short of its board's results target in the latest completed season
  *    (regular-season wins against the target pace at the season's last board review) spends more of its surplus on the
@@ -36,7 +37,7 @@ import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
 export const SPENDING_BALANCE_RULES = Object.freeze({
   /** The lowest spending appetite of any club (format 88 careful clubs had 0). */
   minAppetite: 0.25,
-  /** The look-ahead cash share, of the budget, below which the low-cash wage limit acts (format 87: 10% of the projection). */
+  /** The look-ahead cash share, of the budget, below which the low-cash wage limit acts after a losing season (else 10%). */
   wageCapTargetShare: 0.15,
   /** The most a missed results target adds to a club's squad appetite. */
   successBoost: 0.4,

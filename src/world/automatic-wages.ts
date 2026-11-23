@@ -32,6 +32,19 @@ export function wageCapCashShare(state: SeasonState, clubId: string): number | n
 }
 
 /**
+ * The share of the budget below which the low-cash wage limit acts: `targetCashShare` (10%); with the format-89 spending
+ * balance, `SPENDING_BALANCE_RULES.wageCapTargetShare` (15%) for a club that lost money in the latest completed season,
+ * so a club on the way down slows its wages before a bad season (clubs that broke even, and every club in a career's
+ * first season, keep 10%: a 15% start for every club held back in-season bids for listed players).
+ */
+export function wageCapTarget(state: SeasonState, clubId: string): number {
+  const usual = ECONOMY_BALANCE_RULES.wageCap.targetCashShare;
+  if (!usesSpendingBalance(state)) return usual;
+  const result = lastSeasonResult(state, clubId);
+  return result !== null && result < 0 ? SPENDING_BALANCE_RULES.wageCapTargetShare : usual;
+}
+
+/**
  * Format 87: the most a club run automatically (a computer club, or the manager's club with delegated recruitment)
  * agrees in player wages for `seasonNumber` while its cash is low: `fullShare` of the wage bill that season's known
  * figures fund, less `recovery` of the shortfall of its projected season-end cash below `targetCashShare` of its budget,
@@ -41,8 +54,8 @@ export function wageCapCashShare(state: SeasonState, clubId: string): number | n
 export function automaticWageCap(state: SeasonState, clubId: string, seasonNumber: number, share = wageCapCashShare(state, clubId)): number | null {
   if (!usesEconomyBalance(state) || share === null) return null;
   const rules = ECONOMY_BALANCE_RULES.wageCap;
-  // Format 89: the look-ahead limit acts from a higher share (`SPENDING_BALANCE_RULES.wageCapTargetShare`).
-  const target = usesSpendingBalance(state) ? SPENDING_BALANCE_RULES.wageCapTargetShare : rules.targetCashShare;
+  // Format 89: the look-ahead limit acts from a higher share after a losing season (`wageCapTarget`).
+  const target = wageCapTarget(state, clubId);
   if (share >= target) return null;
   const money = clubEconomy(moneyAt(state, Math.min(seasonNumber, knownMoneySeason(state, seasonNumber))), clubId);
   if (!money) return null;

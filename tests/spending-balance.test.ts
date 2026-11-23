@@ -17,7 +17,7 @@ import { financeLedgerEntries } from '../src/world/finance-ledger';
 import { fullWorldClubsIn, requireWorldContexts } from '../src/world/career-world';
 import { withLowerDivisions } from '../src/world/lower-division';
 import { getClubContractSummary, MIN_ROSTER_SIZE } from '../src/world/employment-policy';
-import { automaticWageCap, automaticWageCheck, projectedCashShare, wageCapCashShare } from '../src/world/automatic-wages';
+import { automaticWageCap, automaticWageCheck, projectedCashShare, wageCapCashShare, wageCapTarget } from '../src/world/automatic-wages';
 import { clubAppetite, clubSurplus, plannedSurplusSpend, spendingAppetite, staffReach, SURPLUS_SPENDING_RULES } from '../src/world/surplus-spending';
 import { lastSeasonResult, seasonEndNets, SPENDING_BALANCE_RULES, successNeed, usesSpendingBalance } from '../src/world/spending-balance';
 import { ECONOMY_BALANCE_RULES } from '../src/world/economy-balance';
@@ -104,6 +104,11 @@ describe('the spending balance option (format 89)', () => {
     // A gain is not counted, and older careers read the season-end projection only.
     const winning = book(book(base, clubId, 0.5, 'opening'), clubId, 0.2);
     expect(wageCapCashShare(winning, clubId)).toBe(projectedCashShare(winning, clubId));
+    // The limit starts at 15% after a losing season only: after a gain, and in a career's first season, it keeps 10%.
+    expect(wageCapTarget(losing, clubId)).toBe(SPENDING_BALANCE_RULES.wageCapTargetShare);
+    expect(wageCapTarget(winning, clubId)).toBe(ECONOMY_BALANCE_RULES.wageCap.targetCashShare);
+    expect(wageCapTarget(career(world, 3), clubId)).toBe(ECONOMY_BALANCE_RULES.wageCap.targetCashShare);
+    expect(automaticWageCap(winning, clubId, 2, 0.12)).toBeNull();
     const olderLosing = olderLosingState();
     expect(wageCapCashShare(olderLosing, clubId)).toBe(projectedCashShare(olderLosing, clubId));
     expect(automaticWageCap(olderLosing, clubId, 2)).toBeNull();

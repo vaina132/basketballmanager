@@ -55,8 +55,9 @@ describe('an NBA career, start to finish', () => {
     for (const club of NBA_CLUB_IDS) expect(regular.filter(fixture => (fixture.homeClubId === club || fixture.awayClubId === club) && fixture.result)).toHaveLength(82);
     // NBA games last 48 minutes: each side's players share 5 x 2,880 seconds in regulation.
     const game = regular.find(fixture => fixture.result?.stats && fixture.result.periods === 4)!;
-    const home = complete.clubs.find(club => club.id === game.homeClubId)!;
-    expect(home.players.reduce((sum, player) => sum + (game.result!.stats![player.id]?.secondsPlayed ?? 0), 0)).toBe(5 * 2880);
+    // The game's own home players (computer trades may since have moved some of them to other clubs).
+    const homeIds = game.result!.selection?.home ?? complete.clubs.find(club => club.id === game.homeClubId)!.players.map(player => player.id);
+    expect(homeIds.reduce((sum, id) => sum + (game.result!.stats![id]?.secondsPlayed ?? 0), 0)).toBe(5 * 2880);
     const standings = getStandings(complete);
     expect(standings).toHaveLength(30);
     expect(standings.every(row => row.played === 82)).toBe(true);

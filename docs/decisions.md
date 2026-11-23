@@ -635,3 +635,15 @@ Measured over five automatic seasons (real Turkey seeds 7 and 11, Spain seeds 5 
 ## The NBA (owner decisions, 23 November 2026)
 
 Playable; offered like any other league in the career setup (alone or with European countries); real names (NBPA rights before sale); API-Sports data published to the Supabase pack; euros shown by default with a game setting to show US dollars (display only, fixed rate 1.16, reversible); one shared 1-20 rating scale anchored on Europe (European ratings unchanged, NBA stars may reach 20); estimated salaries that reflect that the NBA pays far more than Europe, shaped on each team's published payroll. Rules and reversible defaults: [nba.md](nba.md); technical plan: [nba-plan.md](nba-plan.md).
+
+## Spending balance (format 89, 23 November 2026, reversible)
+
+Owner decisions (23 November): add the look-ahead fix; careful clubs "can spend a little but also care about the success". New careers with surplus spending only (`world.spendingBalance`; `SPENDING_BALANCE_RULES` in `src/world/spending-balance.ts`):
+
+- Wages of a later season: expected season-end cash is lowered by last season's loss (gains not counted) and the low-cash wage limit acts below 15% of the budget. The current season's wages keep 10% (15% held back in-season bids for listed players).
+- Every club's appetite is at least 0.25.
+- A missed results target (wins against the target pace at last season's final board review) adds up to 0.4 to the squad appetite only, in full at a miss of 15% of the games.
+- Training coaches only: clubs with staff reach aim towards the elite coaches (9-10), consider foreign candidates and weigh an extra coach's fee less (the other roles already held people rated 10 at top clubs; real assistant coaches stay).
+- A computer club that agreed to sell a player withdraws its pending offers that no longer fit its wage budget, as a recorded step.
+- Measured over five automatic seasons (real Turkey seeds 7, 11; Spain 5, 11; synthetic): no unpaid costs; lowest season-end cash about 10% (was 0-1%); Efes 113% -> 85%; Breogán still 128-143% (open).
+

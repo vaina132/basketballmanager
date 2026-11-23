@@ -32,7 +32,7 @@ describe('an NBA career, start to finish', () => {
     let state = opening;
     const started = performance.now();
     while (state.status === 'active') {
-      if (state.activeMatch?.ruleset === 'nba-2026') nbaMatch = true;
+      if (state.activeMatch?.ruleset === 'nba-2026b') nbaMatch = true;
       state = play(state);
       if (state.round === 5 && !week5) { week5 = state; sizes.week5 = roundTrip(state).bytes; }
       if (!afterPlayIn && state.fixtures.some(fixture => fixture.stage === 'round-of-16')) { afterPlayIn = state; sizes.afterPlayIn = roundTrip(state).bytes; }

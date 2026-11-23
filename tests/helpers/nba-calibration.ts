@@ -22,14 +22,14 @@ export function nbaTeam(index: number, strength: number): Team {
 }
 export const NBA_STRENGTHS = [-0.25, 0, 0.25, 0.5, 0.75, 1, 1.25, -0.15, 0.15, 0.65, 0.85, 1.15];
 
-/** Every pair of NBA squads home and away (`rounds` times), with the play model and match flow, as NBA careers play. */
-export function nbaGames(rounds = 1, firstSeed = 12_000): { games: GameLine[]; ends: MatchState[]; summary: ReturnType<typeof calibrationSummary> } {
-  const teams = NBA_STRENGTHS.map((strength, index) => nbaTeam(index, strength));
+/** Every pair of NBA squads home and away (`rounds` times), with the play model and match flow, as NBA careers play (format 96 careers: `nba-2026b`). */
+export function nbaGames(rounds = 1, firstSeed = 12_000, ruleset: 'nba-2026' | 'nba-2026b' = 'nba-2026', strengths: readonly number[] = NBA_STRENGTHS): { games: GameLine[]; ends: MatchState[]; summary: ReturnType<typeof calibrationSummary> } {
+  const teams = strengths.map((strength, index) => nbaTeam(index, strength));
   const games: GameLine[] = [], ends: MatchState[] = [];
   let seed = firstSeed;
   for (let round = 0; round < rounds; round += 1) for (const home of teams) for (const away of teams) {
     if (home === away) continue;
-    const match = createFixtureMatch(seed++, home, away, { autoSubstitutions: { home: true, away: true }, injuryMode: 'off', playModel: 'plays-3', computerCoach: ['home', 'away'], ruleset: 'nba-2026' });
+    const match = createFixtureMatch(seed++, home, away, { autoSubstitutions: { home: true, away: true }, injuryMode: 'off', playModel: 'plays-3', computerCoach: ['home', 'away'], ruleset });
     const end = simulateToEnd(match);
     if (ends.length < 40) ends.push(end);
     games.push(gameLine(end, { home: match.lineups.home, away: match.lineups.away }));

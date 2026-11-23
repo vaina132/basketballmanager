@@ -17,7 +17,7 @@
  */
 import type { CourtBallPoint, CourtPoint, CourtPosition, MatchEvent, MatchState, Player, PossessionPlay, Side } from '../domain/types';
 import { EXTRA_MATCH } from '../world/extra-attributes';
-import { calibrationFor, DEFENDER_ROLES, LATE_GAME, TEAM_REBOUND_OFFENSIVE_SHARE, type Calibration, type RiskKind, type ShotKind } from './calibration';
+import { calibrationFor, DEFENDER_ROLES, TEAM_REBOUND_OFFENSIVE_SHARE, type Calibration, type RiskKind, type ShotKind } from './calibration';
 import { actionScene } from './court-events';
 import { inPenalty, isNba, rulesOf, type Ruleset } from './rulesets';
 import { basketPoint, clutchAdjustment, courtDistance, createPossessionPlay, matchedDefender, moveForAction, offenseDirection, positionOf, primaryHandler } from './possession';
@@ -450,7 +450,7 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   const ctx: Ctx = { state, kit, play, offense, defense, hoop: basketPoint(state, offense), dir: offenseDirection(state, offense), flow, restarted, cal: calibrationFor(rules), rules, nba: isNba(rules) };
   const handler = kit.player(state, offense, play.handlerId), tactics = state.tactics[offense];
   const lead = state.score[offense] - state.score[defense];
-  const lastShot = state.period >= 4 && state.frontcourt && !restarted && state.clockSeconds <= state.shotClockSeconds + LATE_GAME.shotClockGrace && lead <= 0 && lead >= -LATE_GAME.maxDeficit;
+  const lastShot = state.period >= 4 && state.frontcourt && !restarted && state.clockSeconds <= state.shotClockSeconds + ctx.cal.LATE_GAME.shotClockGrace && lead <= 0 && lead >= -ctx.cal.LATE_GAME.maxDeficit;
   const threeNeeded = lastShot && lead === -3, holdFor = Math.min(state.clockSeconds, state.shotClockSeconds);
   const stopClock = state.period >= 4 && lead >= 1 && ctx.cal.PLAYS.intentional.some(rule => lead <= rule.lead && state.clockSeconds <= rule.seconds);
   const control = restarted ? null : lastControl(ctx);
@@ -466,7 +466,7 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
     else if ((control === 'steal' || control === 'rebound') && kit.draw(state) < (control === 'steal' ? ctx.cal.PLAYS.fastBreak.steal : ctx.cal.PLAYS.fastBreak.rebound) + tactics.tempo * ctx.cal.PLAYS.fastBreak.tempo) action = 'fastBreak';
     else action = 'advance';
   } else if (control === 'offensive' && distanceToRim(ctx, pos(ctx, handler.id)) <= ctx.cal.PLAYS.putback.range && kit.draw(state) < ctx.cal.PLAYS.putback.chance) action = 'putback';
-  else if (lastShot) action = holdFor > LATE_GAME.shootAt ? 'hold' : 'late';
+  else if (lastShot) action = holdFor > ctx.cal.LATE_GAME.shootAt ? 'hold' : 'late';
   else if (state.shotClockSeconds <= 5 || state.clockSeconds <= 5 && state.clockSeconds <= state.shotClockSeconds || play.actions >= 3) action = 'late';
   else action = choosePlay(ctx, handler);
   const base = action === 'advance' && state.frontcourt ? flow ? ctx.cal.FLOW.inbound : ctx.cal.PLAYS.seconds.inbound : action === 'heave' || action === 'rush' || action === 'hold' || action === 'foul' ? 0 : flow && Object.hasOwn(ctx.cal.FLOW.seconds, action) ? ctx.cal.FLOW.seconds[action as keyof typeof ctx.cal.FLOW.seconds] : ctx.cal.PLAYS.seconds[action];
@@ -477,9 +477,9 @@ export function resolvePlaysAction(state: MatchState, kit: PlayKit): void {
   if (flow && state.period >= 4 && state.clockSeconds <= ctx.cal.FLOW.milk.seconds && lead > 0 && (action === 'pnr' || action === 'drive' || action === 'post' || action === 'motion')) proposed += ctx.cal.FLOW.milk.extra;
   if (action === 'putback') proposed = Math.min(proposed, 2);
   if (action === 'heave' || action === 'rush') proposed = state.clockSeconds;
-  if (action === 'hold') proposed = endHold ? clamp(state.clockSeconds - ctx.cal.FLOW.shootAt, 1, 18) : clamp(holdFor - LATE_GAME.shootAt, 1, 7);
+  if (action === 'hold') proposed = endHold ? clamp(state.clockSeconds - ctx.cal.FLOW.shootAt, 1, 18) : clamp(holdFor - ctx.cal.LATE_GAME.shootAt, 1, 7);
   if (action === 'late' && lastShot) proposed = Math.max(1, holdFor - 1);
-  if (action === 'foul') proposed = Math.min(proposed, LATE_GAME.foulDelay);
+  if (action === 'foul') proposed = Math.min(proposed, ctx.cal.LATE_GAME.foulDelay);
   const shooting = action !== 'advance' && action !== 'hold' && action !== 'foul';
   // A play that would outlast the period becomes a shot released before the horn.
   if (shooting && proposed >= state.clockSeconds && state.clockSeconds <= state.shotClockSeconds) proposed = state.clockSeconds;

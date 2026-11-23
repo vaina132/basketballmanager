@@ -237,7 +237,8 @@ export interface DomesticDivisions {
 /** Format 93 (NBA step 7, provisional): free agency and NBA-Europe moves in new NBA worlds (`world.nba.moves`, `src/world/nba-moves.ts`): offers chosen by NBA level, European wages for NBA players, the buyout allowance, the minimum team salary (`salary-floor` ledger entries) and NBA-only worlds' kept population (players without a contract leave when the season opens). */
 /** Format 94 (NBA step 9): trades between NBA clubs in new NBA worlds (`world.nbaTrades`): the `trades-1` journal of the manager's offers (`state.trades`), completed trades (`employment.trades`) and `trade` contracts that carry each traded player's terms on unchanged. */
 /** Format 95 (NBA step 8, provisional number): the NBA draft in new NBA worlds (`world.nba.draft`, `state.draft`): generated prospects, the lottery, two rounds of picks on draft day with rookie contracts (`kind` 'drafted'). */
-export const SEASON_SCHEMA_VERSION = 95;
+/** Format 96 (NBA step 12, provisional number): the measured NBA balance in new NBA worlds (`world.nba.balance`, ruleset `nba-2026b`). */
+export const SEASON_SCHEMA_VERSION = 96;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

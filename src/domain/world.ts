@@ -27,7 +27,9 @@ export interface NbaConference { id: string; name: string; divisions: { id: stri
  * standings and postseason follow `src/world/nba-schedule.ts`, `nba-ranking.ts` and the `nba-2026-1` postseason.
  */
 export interface NbaWorld {
-  model: 'nba-1'; leagueId: string; conferences: NbaConference[]; ruleset: 'nba-2026';
+  model: 'nba-1'; leagueId: string; conferences: NbaConference[];
+  /** `nba-2026b` exactly with `balance` (format 96); `nba-2026` before. */
+  ruleset: 'nba-2026' | 'nba-2026b';
   /**
    * NBA step 6 (format 92, new NBA worlds): the NBA's money rules (`src/world/nba-cap.ts`, `nba-cap-policy.ts`): the salary
    * cap and its exceptions, rosters of 13-15, the luxury tax shared among non-payers and the owner's payroll ceiling.
@@ -45,6 +47,12 @@ export interface NbaWorld {
    * `nba-draft-policy.ts`): generated prospects, the lottery, two rounds of picks with rookie contracts (`state.draft`).
    */
   draft?: 'nba-draft-1';
+  /**
+   * NBA step 12 (format 96, provisional; new NBA worlds with the draft): the balance measured on five automatic seasons
+   * of the live pack: matches play the `nba-2026b` calibration (more overtime, stars' minutes 32-36) and Europeans get
+   * NBA offers from a lower level (`src/world/nba-moves.ts`). Worlds without it keep formats 90-95 exactly.
+   */
+  balance?: 'nba-balance-1';
 }
 /** Format 62 (sprint 4): money of real-club worlds follows researched 2025-27 club budgets (`src/world/economy.ts`). */
 export type WorldEconomyId = 'real-2026-1';

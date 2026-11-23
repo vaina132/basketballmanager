@@ -9,8 +9,13 @@
  */
 import type { MatchState, Side } from '../domain/types';
 
-export type RulesetId = 'fiba-2024' | 'nba-2026';
-export const RULESET_IDS: readonly RulesetId[] = ['fiba-2024', 'nba-2026'];
+/**
+ * `nba-2026b` (NBA step 12, format 96, new NBA worlds with `world.nba.balance`): the same NBA rules with the retuned
+ * calibration of src/engine/calibration.ts (more overtime, stars' minutes 32-36). Matches recorded with `nba-2026` keep
+ * the step-3 calibration, so earlier NBA careers replay exactly.
+ */
+export type RulesetId = 'fiba-2024' | 'nba-2026' | 'nba-2026b';
+export const RULESET_IDS: readonly RulesetId[] = ['fiba-2024', 'nba-2026', 'nba-2026b'];
 
 export interface Ruleset {
   id: RulesetId;
@@ -57,12 +62,15 @@ export const NBA_2026: Ruleset = Object.freeze({
   defensiveThreeSeconds: .0045,
 }) as Ruleset;
 
-const BY_ID: Readonly<Record<RulesetId, Ruleset>> = { 'fiba-2024': FIBA_2024, 'nba-2026': NBA_2026 };
-export const isRulesetId = (value: unknown): value is RulesetId => value === 'fiba-2024' || value === 'nba-2026';
+/** NBA step 12 (format 96): the NBA rules again, naming the retuned calibration. */
+export const NBA_2026B: Ruleset = Object.freeze({ ...NBA_2026, id: 'nba-2026b' }) as Ruleset;
+
+const BY_ID: Readonly<Record<RulesetId, Ruleset>> = { 'fiba-2024': FIBA_2024, 'nba-2026': NBA_2026, 'nba-2026b': NBA_2026B };
+export const isRulesetId = (value: unknown): value is RulesetId => value === 'fiba-2024' || value === 'nba-2026' || value === 'nba-2026b';
 export function rulesetById(id: RulesetId | undefined): Ruleset { return id === undefined ? FIBA_2024 : BY_ID[id]; }
 /** The rules a match plays: FIBA when no ruleset is recorded. */
 export function rulesOf(state: Pick<MatchState, 'ruleset'> | { ruleset?: RulesetId }): Ruleset { return state.ruleset === undefined ? FIBA_2024 : BY_ID[state.ruleset]; }
-export const isNba = (rules: Ruleset): boolean => rules.id === 'nba-2026';
+export const isNba = (rules: Ruleset): boolean => rules.id === 'nba-2026' || rules.id === 'nba-2026b';
 
 /** Seconds on the clock at the start of `period` (1-4 quarters, then overtimes). */
 export function periodSeconds(rules: Ruleset, period: number): number { return period <= 4 ? rules.quarterSeconds : rules.overtimeSeconds; }

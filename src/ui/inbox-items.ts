@@ -32,7 +32,8 @@ export type InboxCategory = 'press' | 'board' | 'club' | 'players'
 /** `bid` (format 78): a club's offer for one of your players, answered in the reading pane. */
 /** `national` (format 80): the national team page (or Competitions > National teams without a national job). */
 /** `europe` (format 83): European places, answered in the reading pane (`offerId` is the competition's id). */
-export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract' | 'jobs' | 'bid' | 'national' | 'europe'
+/** `trades` (format 94): Transfers > Trades, where the manager's trade offers and their answers are listed. */
+export type InboxTarget = 'press' | 'board' | 'club' | 'dynamics' | 'squad' | 'contract' | 'jobs' | 'bid' | 'national' | 'europe' | 'trades'
 export interface InboxItem {
   id: string
   date: string
@@ -169,6 +170,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
 
   items.push(...nationalInboxItems(season))
   items.push(...europeanInboxItems(season))
+  items.push(...tradeInboxItems(season))
   return items.sort((a, b) => Number(b.needsAction) - Number(a.needsAction) || compare(b.date, a.date) || compare(a.id, b.id))
 }
 
@@ -177,7 +179,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
  * Accept and Decline. Declined and expired offers leave the Inbox; an accepted fee stays until the player decides.
  */
 /**
- * Format 94 (NBA step 8, owner 23 November 2026): a player of the manager's European club drafted by an NBA club. He
+ * Format 95 (NBA step 8, owner 23 November 2026): a player of the manager's European club drafted by an NBA club. He
  * stays while under contract; the club's offer to bring him over, with its fee, comes as an ordinary offer for him.
  */
 export function draftInboxItems(season: SeasonState): InboxItem[] {
@@ -241,4 +243,23 @@ function unemployedInboxItems(season: SeasonState): InboxItem[] {
 /** The Saturday of a week's review (the date it was recorded). */
 function dateForWeek(season: SeasonState, seasonNumber: number, round: number): string {
   return season.board.reviews.find(review => review.seasonNumber === seasonNumber && review.round === round)?.date ?? season.date
+}
+
+/** Format 94 (NBA step 9): the manager's trade offers and the other club's answers, from the trade journal. */
+function tradeInboxItems(season: SeasonState): InboxItem[] {
+  const name = (clubId: string) => season.clubs.find(club => club.id === clubId)?.name ?? clubId
+  const players = (ids: readonly string[]) => ids.map(id => getCareerPlayer(season, id).name).join(', ')
+  return (season.trades?.proposals ?? []).filter(proposal => proposal.fromClubId === season.managedClubId).map(proposal => {
+    const terms = `${players(proposal.sends)} for ${players(proposal.receives)}`
+    const title = proposal.status === 'pending' ? `Trade offer sent · ${name(proposal.toClubId)}`
+      : proposal.status === 'completed' ? `Trade completed · ${name(proposal.toClubId)}`
+        : proposal.status === 'agreed' ? `Trade agreed · ${name(proposal.toClubId)}`
+          : proposal.status === 'withdrawn' ? `Trade offer withdrawn · ${name(proposal.toClubId)}`
+            : proposal.status === 'called-off' ? `Trade called off · ${name(proposal.toClubId)}` : `Trade declined · ${name(proposal.toClubId)}`
+    const detail = proposal.status === 'pending' ? `${terms}. ${name(proposal.toClubId)} answers on ${proposal.answerOn}.`
+      : proposal.status === 'completed' ? `${terms}. The players' contracts carry on unchanged at their new clubs.`
+        : proposal.status === 'agreed' ? `${terms}. The trade takes effect when the new season starts.`
+          : `${terms}.${proposal.reason ? ` ${proposal.reason}` : ''}`
+    return { id: proposal.id, date: proposal.settledOn ?? proposal.proposedOn, category: 'players' as const, title, detail, needsAction: false, target: 'trades' as const }
+  })
 }

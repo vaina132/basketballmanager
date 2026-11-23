@@ -25,7 +25,7 @@ interface NbaDraftProps {
 interface BoardRow { id: string; name: string; position: Position; age: number | null; nationality: string | null; club: string | null; generated: boolean; ability: ReturnType<typeof getPlayerKnowledge>; potential: ReturnType<typeof getPlayerKnowledge> }
 
 /**
- * NBA step 8 (format 94): Transfers > Draft. From February the season's prospects with the manager's scouting
+ * NBA step 8 (format 95): Transfers > Draft. From February the season's prospects with the manager's scouting
  * estimates; once the play-in has decided the field, the lottery and the order; on draft day the picks, with "Make
  * pick" while his club is on the clock. An NBA club's draft rights for players left at European clubs, with "Bring
  * over" in the offseason. Every value comes from the career's draft rules and journal.

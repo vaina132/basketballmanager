@@ -20,7 +20,7 @@ import { playerAgeOnDate } from '../data/development-player-profiles';
 import { withTrainingPoints } from './training';
 
 /**
- * NBA step 8 (format 94, provisional): the draft in a career. Draft day comes in the offseason market (`nbaDraftDay`):
+ * NBA step 8 (format 95, provisional): the draft in a career. Draft day comes in the offseason market (`nbaDraftDay`):
  * the market's advance to it records the class (lottery, order, prospects) and the class joins the player catalog; then
  * recorded `draft` market events make the picks, computer clubs by value and the manager with "Make pick" (or his
  * assistant when he leaves it). Each pick signs its rookie contract (`kind` 'drafted') when the club's squad has room

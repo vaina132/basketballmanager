@@ -59,6 +59,8 @@ import { staffUpgradeCheck } from './staff-upgrades';
 import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, processLuxuryTax, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
 import { scheduleListingBids } from './listings';
+import { applyOffseasonTrades, createTrades, processTradeBoundary } from './trades';
+import { usesTrades } from './trades-policy';
 import { createInSeasonRecruitment, enableInSeasonRecruitment, enableInSeasonTransfers, resolveInSeasonRecruitment, scheduleInSeasonRecruitment } from './recruitment';
 import { createPayroll, enablePayroll, preparePayrollRound, processPayrollRound, startPayrollSeason } from './payroll';
 import { validateManagerProfile } from './manager';
@@ -643,6 +645,8 @@ export interface SeasonSystems {
    * NBA job asks for a reputation of about 60-70. Worlds without the NBA are unchanged by it.
    */
   nbaJobs?: boolean;
+  /** Format 94 (NBA step 9): trades between NBA clubs in a world with the NBA's money rules (`world.nbaTrades`, `src/world/trades.ts`). */
+  nbaTrades?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -656,7 +660,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -695,6 +699,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.spendingBalance !== undefined && typeof options.spendingBalance !== 'boolean') throw new Error('Choose a valid spending balance setting.');
   if (options.nba !== undefined && typeof options.nba !== 'boolean') throw new Error('Choose a valid NBA setting.');
   if (options.nbaJobs !== undefined && typeof options.nbaJobs !== 'boolean') throw new Error('Choose a valid NBA careers setting.');
+  if (options.nbaTrades !== undefined && typeof options.nbaTrades !== 'boolean') throw new Error('Choose a valid NBA trades setting.');
   if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
@@ -728,9 +733,12 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   // Format 82: real head coaches in real-club careers with job changes (every coach change is a board change); the
   // national teams start with their real coaches.
   const coached = options.realCoaches && options.world && headCoachWorld(options.world) && played.career.enabledSince ? withRealCoaches(played, !!options.coachSteering) : played;
-  if (!options.matchPlays && coached === played) return played;
-  return coached.activeMatch && coached.activeFixtureId ? { ...coached, activeMatch: prepareMatch(coached, getActiveFixture(coached)) } : coached;
+  if (!options.matchPlays && coached === played) return withTrades(played);
+  return withTrades(coached.activeMatch && coached.activeFixtureId ? { ...coached, activeMatch: prepareMatch(coached, getActiveFixture(coached)) } : coached);
 }
+
+/** Format 94 (NBA step 9): careers in a world with NBA trades keep the manager's trade offers (`trades-1`). */
+const withTrades = (state: SeasonState): SeasonState => usesTrades(state) && state.employment.enabledSince ? { ...state, trades: createTrades() } : state;
 
 /**
  * Format 85: the career's world with the rule markers of its options: neutral venues in a world with games at one venue
@@ -750,7 +758,9 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   const spendingBalance = !!options.spendingBalance && !world.spendingBalance && (spending || !!world.surplusSpending);
   // Format 91: NBA careers, in worlds with the NBA only.
   const nbaJobs = !!options.nbaJobs && !world.nbaJobs && !!world.nba;
-  return neutral || countries || balanced || spending || spendingBalance || nbaJobs ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}) } : world;
+  // Format 94: NBA trades, in worlds with the NBA's money rules only.
+  const nbaTrades = !!options.nbaTrades && !world.nbaTrades && world.nba?.cap === 'nba-cap-1';
+  return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}) } : world;
 }
 
 /** Format 82: the career's coaches (the manager's starting attributes) and the national teams' real coaches. */
@@ -828,7 +838,7 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
     ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), ...(europe ? { europe } : {}), ...(national ? { national } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
     // Format 72: club money follows promotion and relegation in new careers of real-data worlds that start with finances.
     ...(world.economy && financeEnabled ? { economySeasons: createEconomySeasons() } : {}),
-    // Format 94 (NBA step 8): the NBA draft's journal in worlds with the draft.
+    // Format 95 (NBA step 8): the NBA draft's journal in worlds with the draft.
     ...(usesNbaDraft({ world }) ? { draft: createDraft() } : {}),
     activeFixtureId: first?.id ?? null, activeMatch: first ? prepareMatch({ ...preparation, dataPackId: world.id }, first) : null,
   };
@@ -1149,6 +1159,8 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState, coachCh
   next.academy = summarizeAcademyHistory(next).academy;
   const registeredBefore = next.rosters.length;
   next = resolveInSeasonRecruitment(next);
+  // Format 94: the manager's trade offer answered and the computer clubs' trades, registered with this week's arrivals.
+  next = processTradeBoundary(next);
   next = prepareFinanceRound(next);
   next = processCommercialRound(next);
   next = preparePayrollRound(next);
@@ -1286,7 +1298,8 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   }
   // Finish recruitment before publishing the new roster, payroll and match together.
   // The archive above still refers to the completed season's registrations.
-  const recruited = finalizeEmploymentMarket(exchanged);
+  // Format 94: agreed offseason trades complete once recruitment has closed.
+  const recruited = applyOffseasonTrades(finalizeEmploymentMarket(exchanged));
   const background = exchanges.length ? {
     ...state.background!,
     clubs: [

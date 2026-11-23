@@ -59,15 +59,17 @@ export const draftDateOfBirth = (context: DraftContext, playerId: string): strin
 export const NBA_DRAFT_DAYS_AFTER_FINALS = 7;
 /** Draft day leaves at least this many days of free agency before recruitment closes. */
 export const NBA_DRAFT_DAYS_BEFORE_CLOSE = 7;
+/** Draft day comes at the latest this many days after the market opens: before offseason trades open (`TRADE_RULES.offseasonOpensAfterDays`, 14), so traded players' terms include the rookie contracts. */
+export const NBA_DRAFT_LATEST_DAY = 13;
 
 /**
  * A season's draft day inside its offseason market (opened on `openedOn`, closing on `closesOn`): a week after the last
  * possible Finals game, at the earliest the day after the market opens (worlds whose European season ends later) and at
- * the latest a week before it closes. Depends only on the calendar, so the market and its replay know it in advance.
+ * the latest before offseason trades open (and a week before it closes). Depends only on the calendar, so the market and its replay know it in advance.
  */
 export function nbaDraftDay(seasonNumber: number, openedOn: string, closesOn: string): string {
   const afterFinals = addCalendarDays(nbaPostseasonSlotDay(seasonNumber, NBA_POSTSEASON_SLOTS).date, NBA_DRAFT_DAYS_AFTER_FINALS);
-  const earliest = addCalendarDays(openedOn, 1), latest = addCalendarDays(closesOn, -NBA_DRAFT_DAYS_BEFORE_CLOSE);
+  const earliest = addCalendarDays(openedOn, 1), byClose = addCalendarDays(closesOn, -NBA_DRAFT_DAYS_BEFORE_CLOSE), beforeTrades = addCalendarDays(openedOn, NBA_DRAFT_LATEST_DAY), latest = byClose < beforeTrades ? byClose : beforeTrades;
   return afterFinals < earliest ? earliest : afterFinals > latest ? latest : afterFinals;
 }
 

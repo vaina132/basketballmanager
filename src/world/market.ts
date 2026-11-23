@@ -28,6 +28,7 @@ import { overallRating } from './overall-rating';
 import { rookieContract } from './nba-draft';
 import { usesNbaDraft } from './nba-draft-policy';
 import { applyDraftPicks, automaticPicks, draftRoomFor, managerOnTheClock, openDraft, pendingDraftDay } from './nba-draft-policy';
+import { answerOffseasonTrades } from './trades';
 
 export function createMarket(): SeasonMarket { return { model: 'market-1', enabledSince: null, windows: [] }; }
 
@@ -118,7 +119,7 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
     return replaceWindow(state, { ...window, events: [...window.events, { ...event }], offers: window.offers.map(item => item.id === offer.id ? { ...item, status: 'withdrawn', closedOn: state.date } : item) });
   }
   if (event.type === 'draft') {
-    // Format 94 (NBA step 8): picks of this season's draft, on draft day.
+    // Format 95 (NBA step 8): picks of this season's draft, on draft day.
     const next = applyDraftPicks(state, event.picks, event.playerId), picked = getMarketWindow(next)!;
     return replaceWindow(next, { ...picked, events: [...picked.events, { ...event }] });
   }
@@ -144,7 +145,7 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
   }
   const date = getNextMarketDate(state);
   if (!date || event.date !== date) throw new Error('Continue to the next scheduled recruitment decision.');
-  // Format 94: the draft finishes on draft day (the manager's open picks are made first, by him or his assistant).
+  // Format 95: the draft finishes on draft day (the manager's open picks are made first, by him or his assistant).
   const drafting = draftClassOf(state, state.seasonNumber);
   if (drafting && !isDraftComplete(drafting)) throw new Error('Finish the NBA draft before the offseason continues.');
   const draftDay = pendingDraftDay(state);
@@ -179,7 +180,7 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
   const incomplete = next.clubs.filter(club => !leaving.has(club.id) && getClubContractSummary(next, club.id).rosterSize < minRosterSize(next, club.id));
   if (date === window.closesOn && incomplete.length) throw new Error(`Recruitment cannot close: ${incomplete.map(club => club.name).join(', ')} need ${incomplete.some(club => isCapClub(next, club.id)) ? 'their minimum of' : 'eight'} signed players. The date and offers are unchanged. Improve or withdraw competing offers, or delegate recruitment before continuing.`);
   const paid = processTransferPayments(next);
-  // Format 94 (NBA step 8): draft day records the lottery, the order and the class of prospects.
+  // Format 95 (NBA step 8): draft day records the lottery, the order and the class of prospects.
   return draftDay === date ? openDraft(paid) : paid;
 }
 
@@ -256,11 +257,11 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
       if (!acceptable || better) next = withdrawMarketOffer(next, offer.id, club.id);
     }
   }
-  // Format 94 (draft-and-stash): rights holders run automatically bring their stashed players over when it pays.
+  // Format 95 (draft-and-stash): rights holders run automatically bring their stashed players over when it pays.
   next = bringOverStashedPlayers(next);
   for (const club of state.clubs) {
     if (club.id === state.managedClubId && !state.employment.delegated || leaving.has(club.id)) continue;
-    // Format 94: an NBA club keeps room for its first-round picks until the draft is over.
+    // Format 95: an NBA club keeps room for its first-round picks until the draft is over.
     const target = clubRosterTarget(state, club.id, club.id === state.managedClubId ? 10 : MIN_ROSTER_SIZE) - draftRoomFor(next, club.id);
     for (let count = 0; count < target; count += 1) {
       const summary = getClubContractSummary(next, club.id);
@@ -344,20 +345,21 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
 
 export function advanceMarket(state: SeasonState): SeasonState {
   requireWindow(state);
-  // Format 94 (NBA step 8): continuing on draft day leaves the manager's open picks to his assistant.
+  // Format 95 (NBA step 8): continuing on draft day leaves the manager's open picks to his assistant.
   const drafting = draftClassOf(state, state.seasonNumber);
   if (drafting && !isDraftComplete(drafting)) state = delegateDraft(state);
   // Delegation can be switched on at any decision point, including the last proposal day.
   const prepared = scheduleMarketRecruitment(state);
   const date = getNextMarketDate(prepared);
   if (!date) throw new Error('Recruitment has closed. Review the squad and start next season.');
-  // Format 94: on draft day the computer clubs pick until the manager's club is on the clock (all picks when he
+  // Format 95: on draft day the computer clubs pick until the manager's club is on the clock (all picks when he
   // delegates recruitment or has no club), before the clubs make their offers of the day.
   const advanced = scheduleMarketRecruitment(runDraftClock(activateCompetition(applyMarketEvent(prepared, { type: 'advance', date }))));
-  return automateFacilities(processFacilityProjects(advanced));
+  // Format 94: trade offers due on the new day are answered.
+  return answerOffseasonTrades(automateFacilities(processFacilityProjects(advanced)));
 }
 
-/** Format 94: the computer's picks until the manager's club is on the clock (every pick left when he delegates or has no club). */
+/** Format 95: the computer's picks until the manager's club is on the clock (every pick left when he delegates or has no club). */
 function runDraftClock(state: SeasonState): SeasonState {
   const entry = draftClassOf(state, state.seasonNumber);
   if (!entry || isDraftComplete(entry) || entry.date !== state.date) return state;
@@ -365,14 +367,14 @@ function runDraftClock(state: SeasonState): SeasonState {
   return picks > 0 ? applyMarketEvent(state, { type: 'draft', date: state.date, picks, playerId: null }) : state;
 }
 
-/** Format 94 (NBA step 8): the manager's draft pick ("Make pick"); the computer clubs then pick until his club is next on the clock. */
+/** Format 95 (NBA step 8): the manager's draft pick ("Make pick"); the computer clubs then pick until his club is next on the clock. */
 export function makeDraftPick(state: SeasonState, playerId: string): SeasonState {
   requireWindow(state);
   if (!managerOnTheClock(state)) throw new Error('Your club is not on the clock in the NBA draft.');
   return applyMarketEvent(state, { type: 'draft', date: state.date, picks: 1 + automaticPicks(state, false, 1), playerId });
 }
 
-/** Format 94: the assistant makes every pick left in this season's draft, the manager's club's too. */
+/** Format 95: the assistant makes every pick left in this season's draft, the manager's club's too. */
 export function delegateDraft(state: SeasonState): SeasonState {
   requireWindow(state);
   const entry = draftClassOf(state, state.seasonNumber);
@@ -387,7 +389,7 @@ export function finishMarketWindow(state: SeasonState): SeasonState {
   return replaceWindow(state, { ...window, closed: true });
 }
 
-/** Format 94: the terms to bring a stashed player over: his asking wage at the club, for his pick's rookie term. */
+/** Format 95: the terms to bring a stashed player over: his asking wage at the club, for his pick's rookie term. */
 function bringOverTerms(state: SeasonState, clubId: string, playerId: string): { seasonWage: number; seasons: number; fee: number | null } {
   const right = heldDraftRights(state).find(item => item.playerId === playerId && item.clubId === clubId)!;
   const european = contractForSeason(state.employment, playerId, state.seasonNumber + 1);
@@ -395,7 +397,7 @@ function bringOverTerms(state: SeasonState, clubId: string, playerId: string): {
 }
 
 /**
- * Format 94 (draft-and-stash, owner 23 November 2026): the rights holder brings a stashed player over in the offseason:
+ * Format 95 (draft-and-stash, owner 23 November 2026): the rights holder brings a stashed player over in the offseason:
  * an ordinary transfer offer paying his European club its asking fee (the buyout, received as transfer income), or a
  * contract offer when he has no contract for next season. The player and his club answer as for any offer.
  */

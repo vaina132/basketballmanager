@@ -15,6 +15,7 @@ import { centsToUsd, NBA_LOWEST_MINIMUM, NBA_SALARY_CAP } from '../src/world/nba
 import { effectiveContractsForSeason } from '../src/world/employment-policy';
 import { getCareerPlayer } from '../src/world/player-catalog';
 import { setEmploymentDelegation } from '../src/world/employment';
+import { offseasonTradeWindow } from '../src/world/trades-policy';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { NbaDraft } from '../src/ui/NbaDraft';
@@ -22,7 +23,7 @@ import { draftVisible } from '../src/world/nba-draft-policy';
 import { economyPack } from './helpers/economy-pack';
 import { worldOf } from '../src/world/career-world';
 
-/** NBA step 8 (format 94, provisional): the draft's lottery, order, prospects, picks and rookie contracts. */
+/** NBA step 8 (format 95, provisional): the draft's lottery, order, prospects, picks and rookie contracts. */
 const play = (state: SeasonState) => advanceSeason(state.activeMatch && state.activeMatch.status !== 'finished' ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
 const CLUBS = Array.from({ length: 14 }, (_, index) => `club-${index + 1}`);
 
@@ -125,6 +126,8 @@ describe('a draft in an NBA career', () => {
     expect(entry.lottery.clubs).toHaveLength(14);
     expect(entry.order.slice(30)).toEqual(standings.worstFirst);
     expect(entry.date > atDraft.market.windows[0]!.openedOn && entry.date < atDraft.market.windows[0]!.closesOn).toBe(true);
+    // Before offseason trades open (format 94), so a traded player's terms include his club's rookie contracts.
+    expect(entry.date < offseasonTradeWindow(atDraft, 1).opens).toBe(true);
     expect(seasonLottery(atDraft)!.order).toEqual(entry.order);
     expect(seasonProspects(atDraft)).toEqual(entry.prospects);
   });
@@ -186,15 +189,15 @@ describe('a draft in an NBA career', () => {
 
 describe('the format guard and careers without the NBA draft', () => {
   const world = worldFromPack(nbaPack(), 'nba');
-  it('gives new NBA careers the draft journal and refuses the draft marker before format 94', () => {
+  it('gives new NBA careers the draft journal and refuses the draft marker before format 95', () => {
     const state = createSeason({ seed: 5, world, managedClubId: 'nba-bos', ...NEW_CAREER_SYSTEMS });
     expect(worldOf(state).nba!.draft).toBe('nba-draft-1');
     expect(state.draft).toEqual({ model: 'draft-1', classes: [] });
     const text = serializeSeason(state);
     expect(parseSeason(text).draft).toEqual(state.draft);
     const envelope = JSON.parse(text);
-    envelope.formatVersion = 93; envelope.state.schemaVersion = 93; delete envelope.state.draft;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/format 94 or later|draft/);
+    envelope.formatVersion = 94; envelope.state.schemaVersion = 94; delete envelope.state.draft;
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/format 95 or later|draft/);
   });
 
   it('leaves European careers exactly as they were: no draft journal, no draft marker', () => {

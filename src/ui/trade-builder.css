@@ -1,0 +1,25 @@
+/* NBA step 9: Transfers > Trades. */
+.trade-builder { padding: 14px 16px; display: grid; gap: 12px; }
+.trade-sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.trade-side h3 { margin: 0 0 6px; font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.trade-side select { font: inherit; }
+.trade-squad-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.trade-squad-table th, .trade-squad-table td { padding: 4px 6px; border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.08)); text-align: left; }
+.trade-squad-table th { color: var(--muted); font-size: 12px; font-weight: 500; }
+.trade-squad-table tr.selected td { background: var(--surface-3); }
+.trade-squad-table label { cursor: pointer; }
+.trade-summary { display: grid; gap: 8px; }
+.trade-match-row { display: grid; gap: 4px; }
+.trade-match-row > div:first-child { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.trade-match-row > div:first-child span, .trade-match-note { color: var(--muted); font-size: 12px; }
+.trade-match-bar { position: relative; height: 10px; background: var(--surface-3); border-radius: 2px; overflow: hidden; }
+.trade-match-bar span { position: absolute; inset: 0 auto 0 0; background: var(--accent, #f0a020); }
+.trade-match-bar.over span { background: var(--danger, #e05252); }
+.trade-reason { margin: 0; color: var(--warning, #f0a020); }
+.trade-summary .button { justify-self: start; }
+.trade-proposals { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.trade-proposals li { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: 6px 8px; background: var(--surface-2); border-radius: 2px; }
+.trade-proposals li span:nth-child(2) { color: var(--muted); font-size: 12px; }
+.trade-recent summary { cursor: pointer; color: var(--muted); }
+.trade-recent ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
+.trade-builder .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

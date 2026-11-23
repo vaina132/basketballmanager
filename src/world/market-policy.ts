@@ -71,13 +71,13 @@ export function getLiveMarketOffers(state: { market?: SeasonState['market']; sea
   return [...known.live];
 }
 
-/** NBA step 8 (format 94): draft day, while this season's class is not recorded (the market stops on it). */
+/** NBA step 8 (format 95): draft day, while this season's class is not recorded (the market stops on it). */
 function draftDayDue(state: SeasonState, window: MarketWindow): string[] {
   if (state.world?.nba?.draft !== 'nba-draft-1' || !state.draft || draftClassOf(state, state.seasonNumber)) return [];
   return [nbaDraftDay(state.seasonNumber, window.openedOn, window.closesOn)];
 }
 
-/** NBA step 8 (format 94): why the draft keeps the offseason going (draft day still to come, or picks still to make). */
+/** NBA step 8 (format 95): why the draft keeps the offseason going (draft day still to come, or picks still to make). */
 function draftReason(state: SeasonState): string | null {
   const window = getMarketWindow(state);
   if (state.world?.nba?.draft !== 'nba-draft-1' || !state.draft || !window) return null;

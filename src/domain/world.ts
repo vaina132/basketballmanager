@@ -41,7 +41,7 @@ export interface NbaWorld {
    */
   moves?: 'nba-moves-1';
   /**
-   * NBA step 8 (format 94, provisional; new NBA worlds with the cap): the NBA draft (`src/world/nba-draft.ts`,
+   * NBA step 8 (format 95, provisional; new NBA worlds with the cap): the NBA draft (`src/world/nba-draft.ts`,
    * `nba-draft-policy.ts`): generated prospects, the lottery, two rounds of picks with rookie contracts (`state.draft`).
    */
   draft?: 'nba-draft-1';
@@ -189,6 +189,8 @@ export interface CareerWorld {
    * for a reputation of about 60-70 (`src/world/nba-jobs.ts`). Only worlds with the NBA carry it.
    */
   nbaJobs?: true;
+  /** NBA step 9 (format 94, new careers with the NBA's money rules and the option `nbaTrades`): player-for-player trades between NBA clubs (`src/world/trades.ts`). */
+  nbaTrades?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

@@ -1,7 +1,7 @@
 import type { Player } from './types';
 
 /**
- * NBA step 8 (format 94, provisional): the NBA draft of worlds with `world.nba.draft` (`src/world/nba-draft.ts`,
+ * NBA step 8 (format 95, provisional): the NBA draft of worlds with `world.nba.draft` (`src/world/nba-draft.ts`,
  * `nba-draft-policy.ts`). One class a season: about 90 generated prospects (labelled "Generated"), the lottery of the
  * 14 clubs outside the playoffs, then two rounds of 30 picks on draft day, about a week after the Finals inside the
  * offseason market. The journal keeps what the draft decided; the strict save check derives it again.

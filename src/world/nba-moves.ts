@@ -163,7 +163,7 @@ export function nbaTransferReason(context: WorldContext, sellerClubId: string, b
   if (seller) return 'NBA players under contract are not sold to European clubs; they move when their contract ends.';
   if (!buyer) return null;
   if (inSeason) return 'During the season an NBA club signs free agents only, on minimum contracts.';
-  // Format 94 (draft-and-stash): the club holding his draft rights buys him out of his European contract in the offseason.
+  // Format 95 (draft-and-stash): the club holding his draft rights buys him out of his European contract in the offseason.
   if (draftRights) return null;
   if (!releaseClause) return 'A European player under contract joins an NBA club only through his release clause; otherwise he waits for his contract to end.';
   return null;
@@ -178,7 +178,7 @@ export function nbaEligibilityReason(context: CareerPlayerContext & { employment
   if (!usesNbaMoves(context)) return null;
   const world = worldOf(context);
   if (!isNbaClub(world, clubId) || isNbaPaidPlayer(world, playerId) || context.employment?.contracts.some(contract => contract.playerId === playerId && isNbaClub(world, contract.clubId))) return null;
-  // Format 94 (NBA step 8): only the club holding a player's draft rights may sign him; a generated draft prospect went
+  // Format 95 (NBA step 8): only the club holding a player's draft rights may sign him; a generated draft prospect went
   // through the draft (undrafted, he may sign with any NBA club, as American players do).
   const holder = context.employment ? draftRightsHolder(context as Parameters<typeof draftRightsHolder>[0], playerId) : null;
   if (holder) return holder === clubId ? null : 'Another NBA club holds this player\'s draft rights.';

@@ -9,7 +9,7 @@ import { NBA_SALARY_CAP, NBA_LOWEST_MINIMUM } from './nba-cap';
 import { memoizePure } from './pure-cache';
 
 /**
- * NBA step 8 (format 94, provisional): the NBA draft's pure rules: the generated prospects of a class, the lottery and
+ * NBA step 8 (format 95, provisional): the NBA draft's pure rules: the generated prospects of a class, the lottery and
  * the draft order, the computer clubs' choice and the rookie contracts. The career-dependent parts (standings, draft
  * day in the market, the manager's picks, the journal) live in `nba-draft-policy.ts`.
  *

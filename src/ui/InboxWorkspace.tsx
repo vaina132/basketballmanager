@@ -30,7 +30,7 @@ export interface InboxActions {
 type Filter = 'all' | 'unread'
 const FILTERS: { id: Filter; label: string }[] = [{ id: 'all', label: 'All' }, { id: 'unread', label: 'Unread' }]
 const ICONS: Record<InboxCategory, IconName> = { press: 'mail', board: 'shield', club: 'building', players: 'people' }
-const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad', contract: 'Open contract offer', jobs: 'Open job market', bid: 'Open transfers', europe: 'Open European places', national: 'Open national team' }
+const OPEN_LABELS: Record<Exclude<InboxTarget, 'press'>, string> = { board: 'Open board', club: 'Open club', dynamics: 'Open squad dynamics', squad: 'Open squad', contract: 'Open contract offer', jobs: 'Open job market', bid: 'Open transfers', europe: 'Open European places', national: 'Open national team', trades: 'Open trades' }
 const signed = (value: number) => `${value > 0 ? '+' : '−'}${Math.abs(value)}`
 
 export function pressEffectText(answer: PressAnswer, topic?: PressTopic, subject?: string): string {

@@ -20,9 +20,14 @@ export function projectedCashShare(state: SeasonState, clubId: string): number |
   return (getSpendablePosition(state, clubId) - remainingSeasonShortfall(state, clubId)) / economy.budget;
 }
 
-/** Format 89: whether the low-cash wage limit for `seasonNumber`'s wages looks ahead (a season after the one being played). */
-function looksAhead(state: SeasonState, seasonNumber: number): boolean {
-  return usesSpendingBalance(state) && (state.status === 'complete' || seasonNumber > state.seasonNumber);
+/**
+ * Format 89: whether the low-cash wage limit for `seasonNumber`'s wages looks ahead (a season after the one being played).
+ * Format 94 NBA worlds (marked by `world.nbaTrades`, so format 92-93 careers replay unchanged): never for an NBA club (`clubId`): its owner's payroll ceiling sets how far it spends, and its loss of a
+ * season is mostly the luxury tax its owner chose to pay; looking ahead on it pushed every taxpayer under the tax line
+ * the next season (measured, synthetic NBA seed 21: 7 taxpayers, then 2). The current-season limit (10%) still applies.
+ */
+function looksAhead(state: SeasonState, seasonNumber: number, clubId?: string): boolean {
+  return usesSpendingBalance(state) && (state.status === 'complete' || seasonNumber > state.seasonNumber) && !(clubId !== undefined && !!state.world?.nbaTrades && isCapClub(state, clubId));
 }
 
 /**
@@ -34,7 +39,7 @@ function looksAhead(state: SeasonState, seasonNumber: number): boolean {
  */
 export function wageCapCashShare(state: SeasonState, clubId: string, seasonNumber = state.seasonNumber + 1): number | null {
   const share = projectedCashShare(state, clubId);
-  if (share === null || !looksAhead(state, seasonNumber)) return share;
+  if (share === null || !looksAhead(state, seasonNumber, clubId)) return share;
   const result = lastSeasonResult(state, clubId);
   return result === null || result >= 0 ? share : share + result / clubEconomy(state, clubId)!.budget;
 }
@@ -45,8 +50,8 @@ export function wageCapCashShare(state: SeasonState, clubId: string, seasonNumbe
  * than the one being played (the look-ahead), so a club slows its wages before a bad season. The current season's wages
  * keep 10% (its cash projection is exact; a 15% start held back computer clubs' in-season bids for listed players).
  */
-export function wageCapTarget(state: SeasonState, seasonNumber = state.seasonNumber + 1): number {
-  return looksAhead(state, seasonNumber) ? SPENDING_BALANCE_RULES.wageCapTargetShare : ECONOMY_BALANCE_RULES.wageCap.targetCashShare;
+export function wageCapTarget(state: SeasonState, seasonNumber = state.seasonNumber + 1, clubId?: string): number {
+  return looksAhead(state, seasonNumber, clubId) ? SPENDING_BALANCE_RULES.wageCapTargetShare : ECONOMY_BALANCE_RULES.wageCap.targetCashShare;
 }
 
 /**
@@ -60,7 +65,7 @@ export function automaticWageCap(state: SeasonState, clubId: string, seasonNumbe
   if (!usesEconomyBalance(state) || share === null) return null;
   const rules = ECONOMY_BALANCE_RULES.wageCap;
   // Format 89: the look-ahead limit for a later season acts from a higher share (`wageCapTarget`).
-  const target = wageCapTarget(state, seasonNumber);
+  const target = wageCapTarget(state, seasonNumber, clubId);
   if (share >= target) return null;
   const money = clubEconomy(moneyAt(state, Math.min(seasonNumber, knownMoneySeason(state, seasonNumber))), clubId);
   if (!money) return null;
@@ -83,7 +88,7 @@ export function automaticWageCheck(state: SeasonState, clubId: string): (seasonW
   const roomFor = (year: number): number | null => {
     if (rooms.has(year)) return rooms.get(year)!;
     // One reading for the current season and one for the seasons after it (format 89 looks ahead for those).
-    const ahead = looksAhead(state, year);
+    const ahead = looksAhead(state, year, clubId);
     if (!shares.has(ahead)) shares.set(ahead, wageCapCashShare(state, clubId, year));
     const cap = automaticWageCap(state, clubId, year, shares.get(ahead)!);
     let room: number | null = null;

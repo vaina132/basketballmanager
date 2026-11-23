@@ -3,6 +3,7 @@ import type { MarketOffer, MarketWindow } from '../domain/market';
 import type { SeasonState } from '../domain/season';
 import { contractForSeason, effectiveContractsForSeason } from './employment-policy';
 import { minRosterSize, minRosterText } from './club-roster-policy';
+import { nbaOfferOrder } from './nba-moves';
 import { draftClassOf, isDraftComplete, nbaDraftDay } from './draft-index';
 
 export const MARKET_WINDOW_DAYS = 28;
@@ -43,7 +44,8 @@ function clubPreference(playerId: string, clubId: string): number {
 
 export function compareMarketOffers(state: SeasonState, left: MarketOffer, right: MarketOffer): number {
   const current = contractForSeason(state.employment, left.playerId, state.seasonNumber)?.clubId;
-  return right.seasonWage - left.seasonWage || right.seasons - left.seasons
+  // Format 93: a player at the NBA level takes NBA offers first, a player below it European offers first (`nba-moves.ts`).
+  return nbaOfferOrder(state, left.playerId, left.clubId, right.clubId) || right.seasonWage - left.seasonWage || right.seasons - left.seasons
     || Number(right.clubId === current) - Number(left.clubId === current)
     || clubPreference(left.playerId, left.clubId) - clubPreference(right.playerId, right.clubId)
     || left.clubId.localeCompare(right.clubId, 'en');

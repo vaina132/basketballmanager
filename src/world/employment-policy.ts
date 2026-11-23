@@ -1,4 +1,3 @@
-import { draftRightsHolder } from './draft-index';
 import { NBA_MAXIMUM_WAGE } from './nba-economy';
 import { staffRoomForWages } from './wage-pool';
 import { leavingClubIds } from './background';
@@ -16,6 +15,7 @@ import { retirementContractReason } from './lifecycle-policy';
 import type { WorldContext } from '../domain/world';
 import { clubRosterLimitText, clubRosterLimit, clubSalaryCeiling, isCapClub, minRosterSize, minRosterText } from './club-roster-policy';
 import { nbaDeadMoney, nbaSigningCheck } from './nba-cap-policy';
+import { nbaEligibilityReason } from './nba-moves';
 import type { NbaCapRoute } from './nba-cap';
 import { seasonSalaryBudget } from './board-consequences';
 import { benchWage, knownMoneySeason, moneyAt, REAL_ECONOMY_RULES, worldEconomy } from './economy';
@@ -241,15 +241,15 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
     else if (state.status === 'complete' && state.market?.enabledSince && (!isMarketActive(state) || !window)) reason = 'Open the offseason decision calendar before sending offers.';
     else if (state.status === 'complete' && state.market?.enabledSince && window && state.date >= window.closesOn && !resolving) reason = 'The recruitment period has closed.';
     else if (rivalOffer && !competitive()) reason = `This player is considering an offer from ${state.clubs.find(club => club.id === rivalOffer.clubId)?.name ?? 'another club'}.`;
-    // Format 94 (NBA step 8): while an NBA club holds his draft rights, no other NBA club may sign him.
-    else if (capClub() && (draftRightsHolder(state, playerId) ?? clubId) !== clubId) reason = 'Another NBA club holds this player\'s draft rights.';
     // Format 92: an NBA club's signing must fit the salary cap (`nba-cap-policy.ts`); a scheduled reply keeps the route its offer took.
     let capRoute: NbaCapRoute | undefined;
     if (reason === null && capClub()) {
       if (resolving && openOffer?.capRoute) capRoute = openOffer.capRoute;
       else {
         const summary = summaryFor(startsSeason, openOffer?.clubId === clubId ? openOffer.id : undefined);
-        const check = nbaSigningCheck(state, { clubId, playerId, seasonWage, seasonNumber: startsSeason, payrollBefore: summary.seasonWages + summary.reservedWages + nbaDeadMoney(state.employment, clubId, startsSeason), ...(openOffer ? { excludeOfferId: openOffer.id } : {}), inSeason: state.status === 'active' && current?.clubId !== clubId });
+        // Format 93: Europeans join NBA clubs from 23 and at the level of an NBA rotation player (`nba-moves.ts`).
+        const eligibility = nbaEligibilityReason(state, clubId, playerId);
+        const check = eligibility ? { route: null, reason: eligibility } : nbaSigningCheck(state, { clubId, playerId, seasonWage, seasonNumber: startsSeason, payrollBefore: summary.seasonWages + summary.reservedWages + nbaDeadMoney(state.employment, clubId, startsSeason), ...(openOffer ? { excludeOfferId: openOffer.id } : {}), inSeason: state.status === 'active' && current?.clubId !== clubId });
         if (check.route) capRoute = check.route; else reason = check.reason;
       }
     }

@@ -7,6 +7,7 @@ import { SQUAD_ROLE_RULES } from './relationship-rules';
 import { isCapClub } from './club-roster-policy';
 import { nbaMinimumWage } from './nba-cap';
 import { nbaLateFreeAgentMinimum } from './nba-cap-policy';
+import { nbaEuropeanDemand } from './nba-moves';
 
 /**
  * Squad roles in contracts (`relationships-3`, new careers from format 74). The role offered is part of every contract
@@ -69,6 +70,9 @@ export function contractAskingWage(context: ContractRoleContext, clubId: string,
   const usual = roleWage(getCareerWage(context, playerId), offeredContractRole(context, clubId, playerId, role ? { role } : {}), context);
   // Format 92: late in the NBA's free agency an unsigned player accepts his minimum salary; an NBA club pays at least it.
   const late = nbaLateFreeAgentMinimum(context, playerId), wage = late !== null && late < usual ? late : usual;
+  // Format 93: a player paid on the NBA's scale asks a European club a European wage (`nba-moves.ts`).
+  const european = nbaEuropeanDemand(context, playerId, clubId, wage);
+  if (european !== null) return european;
   return isCapClub(context, clubId) ? Math.max(wage, nbaMinimumWage(context.date ? getCareerPlayerAge(context, playerId, context.date) : null)) : wage;
 }
 

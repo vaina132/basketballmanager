@@ -69,7 +69,7 @@ export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: 
   const quote = quotePlayerContract(state, playerId, seasonWage, seasons, clubId, resolvingOfferId, scheduled?.transfer?.fee, scheduled?.transfer?.paymentPlan ?? 'upfront', options);
   if (!quote.canOffer) throw new Error(quote.reason!);
   if (duplicate) return state;
-  const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons, options.releaseFee, state, role) : null;
+  const decision = enabled ? evaluateNegotiation(playerId, seasonWage, seasons, options.releaseFee, state, role, clubId) : null;
   const contractCountBefore = state.employment.contracts.length;
   if (decision && decision.outcome !== 'accepted') return appendNegotiationResponse(state, clubId, playerId, seasonWage, seasons, decision, null, contractCountBefore, quote.startsSeason, options.releaseFee, role);
   if (scheduled?.transfer) {

@@ -1,5 +1,6 @@
 import { clubRosterLimitText, clubRosterLimit, minRosterSize, minRosterText } from './club-roster-policy';
 import { nbaInSeasonReason } from './nba-cap-policy';
+import { nbaTransferReason } from './nba-moves';
 import type { InSeasonSaleQuote, InSeasonTransferQuote } from '../domain/recruitment';
 import type { ContractOfferOptions } from '../domain/employment';
 import { contractRoleReason } from './contract-roles';
@@ -104,6 +105,8 @@ export function quoteInSeasonTransferOffer(state: SeasonState, playerId: string,
   else if (state.round >= rounds && !resolving) reason = 'There is no later matchday available to register a transfer this season.';
   else if (!state.clubs.some(club => club.id === clubId) || !current || current.clubId === clubId) reason = 'Choose a player currently registered at another club.';
   else if (offerOptionsReason(state, options, true)) reason = offerOptionsReason(state, options, true);
+  // Format 93: no in-season transfers to, from or between NBA clubs (they sign free agents only, `nba-moves.ts`).
+  else if (nbaTransferReason(state, current.clubId, clubId, true)) reason = nbaTransferReason(state, current.clubId, clubId, true);
   else if (state.employment.transfers.some(transfer => transfer.playerId === playerId && transfer.startsSeason === state.seasonNumber && transfer.startsRound > 1)) reason = 'This player has already moved in a paid transfer during this season.';
   else if (!wageValid) reason = worldEconomy(state) ? `Choose an annual salary from EUR 5,000 to EUR ${(maxContractWage(state) / 100).toLocaleString('en-GB')} in EUR 500 steps.` : 'Choose an annual salary from EUR 5,000 to EUR 50,000 in EUR 500 steps.';
   else if (!termsValid) reason = 'Choose the rest of this season, optionally with one or two further seasons.';

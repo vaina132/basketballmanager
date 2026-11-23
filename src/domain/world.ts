@@ -35,6 +35,12 @@ export interface NbaWorld {
    */
   cap?: 'nba-cap-1';
   /**
+   * NBA step 7 (format 93, new NBA worlds, only with `cap`): free agency and moves between the NBA and Europe
+   * (`src/world/nba-moves.ts`): offers chosen by NBA level, European wages for NBA players, the buyout allowance, the
+   * minimum team salary, and NBA-only worlds' population kept for full rosters.
+   */
+  moves?: 'nba-moves-1';
+  /**
    * NBA step 8 (format 94, provisional; new NBA worlds with the cap): the NBA draft (`src/world/nba-draft.ts`,
    * `nba-draft-policy.ts`): generated prospects, the lottery, two rounds of picks with rookie contracts (`state.draft`).
    */

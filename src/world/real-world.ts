@@ -187,7 +187,7 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
     presidents,
     sponsors: [...market],
     rivalries: [],
-    ...(nbaLeague ? { nba: { model: 'nba-1' as const, leagueId: nbaLeague.id, conferences: nbaConferences(nbaLeague)!, ruleset: 'nba-2026' as const, cap: 'nba-cap-1' as const, draft: 'nba-draft-1' as const } } : {}),
+    ...(nbaLeague ? { nba: { model: 'nba-1' as const, leagueId: nbaLeague.id, conferences: nbaConferences(nbaLeague)!, ruleset: 'nba-2026' as const, cap: 'nba-cap-1' as const, moves: 'nba-moves-1' as const, draft: 'nba-draft-1' as const } } : {}),
   };
   validateWorld(domesticWorld);
   // Step 3.4d-4: each chosen country's real next division (researched names, generated squads), never Italy or France.

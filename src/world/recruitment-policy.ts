@@ -1,6 +1,7 @@
 import { staffRoomForWages } from './wage-pool';
 import { clubRosterLimitText, clubRosterLimit } from './club-roster-policy';
 import { nbaInSeasonReason } from './nba-cap-policy';
+import { nbaEligibilityReason } from './nba-moves';
 import { seasonSalaryBudget } from './board-consequences';
 import { surplusWageRoom } from './surplus-spending';
 import type { InSeasonBudget, InSeasonOffer, InSeasonOfferQuote } from '../domain/recruitment';
@@ -83,6 +84,8 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before offering another salary.';
   else if (budget.rosterSize + budget.reservedRosterSize + 1 > clubRosterLimit(state, clubId)) reason = `The squad already has ${clubRosterLimitText(state, clubId)} registered players or reserved places.`;
   // Format 92: an NBA club signs in season only with room under the cap or on a minimum contract.
+  // Format 93: Europeans join NBA clubs from 23 and at the level of an NBA rotation player.
+  else if (!prospect && nbaEligibilityReason(state, clubId, playerId)) reason = nbaEligibilityReason(state, clubId, playerId);
   else if (!prospect && nbaInSeasonReason(state, clubId, playerId, seasonWage, budget.reservedWages)) reason = nbaInSeasonReason(state, clubId, playerId, seasonWage, budget.reservedWages);
   else if (budget.seasonWages + budget.reservedWages + seasonWage > budget.budget) reason = 'This offer exceeds the current season player wages budget.';
   else if (budget.spendableCash < remainingWages) reason = 'The remaining salary exceeds the available budget after existing commitments.';

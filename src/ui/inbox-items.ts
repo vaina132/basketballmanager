@@ -25,6 +25,7 @@ import { isUnemployed } from '../world/career-rules'
 import { medicalDate } from './SeasonMedicalReport'
 import { seasonRounds, worldOf } from '../world/career-world'
 import { formatMoney } from './money-format'
+import { nbaDeparturesFrom } from '../world/nba-moves'
 
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
 /** `jobs` (format 69): the job market on the unemployed desk. */
@@ -161,6 +162,8 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   }
   items.push(...careerMoveItems(season))
   items.push(...bidInboxItems(season))
+  // Format 93: one of your players signs an NBA contract.
+  for (const departure of nbaDeparturesFrom(season, clubId)) items.push({ id: `nba-${departure.contractId}`, date: departure.date, category: 'players', title: `${getCareerPlayer(season, departure.playerId).name} signs in the NBA`, detail: `He joins ${season.clubs.find(club => club.id === departure.toClubId)?.name ?? worldOf(season).clubs.find(club => club.id === departure.toClubId)?.name ?? 'an NBA club'}${departure.fee !== null ? `; his release clause brings the club ${money(departure.fee)}` : ' as a free agent'}.`, needsAction: false, target: 'squad', playerId: departure.playerId })
   items.push(...draftInboxItems(season))
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })
 

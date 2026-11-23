@@ -17,6 +17,14 @@
 // `ratingMinutes`; the game ignores the field. scripts/real-data-rating-balance.mjs applies the same calculation
 // offline to a pack built without the balance, for a preview.
 //
+// v8 (NBA, 23 November 2026, docs/nba-plan.md step 2): a competition's `groups` (the NBA's conferences, then its
+// divisions with `parentId`) and a club's `capacity` (arena seats) go into the pack when the database has them; the
+// NBA's players are club `added_players` rated offline from their box scores (rating-4, with `ratingMinutes` and
+// `ratingGames`); and the USA is position-balanced on its own (balanceBySeparateCountry), so every European player,
+// club and competition comes out exactly as in v7. The game offers leagues of 4-20 clubs (careerCompetitions) and,
+// from 23 November 2026, only such leagues become unchosen top divisions of a European world; older game builds would
+// add the 30-club NBA to European worlds that way, so a pack with the NBA is published only once that build is live.
+//
 // It acts only on an authorised request: a pending, unexpired `publish-pack` row in `data_change_requests` (written
 // only by the service role or the owner's dashboard), which names the new version. `preview` returns the built pack
 // for checking with the game's own parser; `publish` uploads it only if its checksum equals the request's
@@ -24,7 +32,7 @@
 //
 //   POST /functions/v1/publish-starter-pack   body: { "request": <id>, "mode": "preview" | "publish" }
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { balanceRatings } from './rating-balance.ts';
+import { balanceBySeparateCountry } from './rating-balance.ts';
 
 const VERSION = '2026.11-world-1', SEASON = '2026-27', OBJECT = 'real-pack.json';
 const ABILITIES = ['two_point', 'three_point', 'free_throw', 'passing', 'defense', 'rebounding', 'stamina'];
@@ -77,12 +85,12 @@ Deno.serve(async request => {
   try {
     const [versionRow] = await all('dataset_versions', '*', query => query.eq('id', VERSION));
     if (!versionRow) return json({ status: 'failed', error: `No dataset version ${VERSION}` }, 500);
-    const seasons = await all('seasons', 'id,competition_id,competitions(id,name,country,tier,kind)', query => query.eq('label', SEASON));
+    const seasons = await all('seasons', 'id,competition_id,competitions(id,name,country,tier,kind,groups)', query => query.eq('label', SEASON));
     const seasonIds = seasons.map(row => row.id);
     const participations = await all('participations', 'season_id,club_id', query => query.in('season_id', seasonIds));
     const competitions = seasons.map(row => ({ ...row.competitions, clubIds: participations.filter(item => item.season_id === row.id).map(item => item.club_id) }));
     const memberships = await all('roster_memberships', 'player_id,club_id,shirt_number,first_seen_on,last_seen_on', query => query.in('season_id', seasonIds));
-    const clubs = await all('clubs', 'id,name,short_name,country,city,venue,color_primary,color_secondary,identity_source');
+    const clubs = await all('clubs', 'id,name,short_name,country,city,venue,color_primary,color_secondary,identity_source,capacity');
     const players = await all('players', 'id,full_name,nationality,position,age_observed,merged_into');
     const ratings = await all('player_ratings', '*', query => query.eq('dataset_version_id', VERSION));
     const overrideRows = await all('manual_overrides', 'entity_id,field,value', query => query.eq('entity_type', 'player').order('id'));
@@ -153,7 +161,10 @@ Deno.serve(async request => {
       };
     }), ...(useOverrides ? clubRows.filter(row => clubById.has(row.entity_id)).flatMap(row => row.value.value.map((added: any) => ({
       id: added.id, name: decode(added.name), clubId: `club-${row.entity_id}`, number: added.number ?? null, position: added.position, nationality: added.nationality ?? null, age: added.age ?? null,
-      heightCm: added.heightCm, weightKg: added.weightKg, attributes: added.attributes, estimated: added.estimated, ...(added.birthDate ? { birthDate: added.birthDate } : {}),
+      heightCm: added.heightCm, weightKg: added.weightKg, attributes: added.attributes,
+      // NBA players (v8): rated from their box scores offline (rating-4), so they carry the minutes and games behind the ratings.
+      ...(Number.isFinite(added.ratingMinutes) ? { ratingMinutes: added.ratingMinutes } : {}), ...(Number.isFinite(added.ratingGames) ? { ratingGames: added.ratingGames } : {}),
+      estimated: added.estimated, ...(added.birthDate ? { birthDate: added.birthDate } : {}),
       profileEvidence: { observedAt: String(row.value.observedOn), positionSource: added.positionSource, membership: 'official-registration-observed', sources: row.value.sources },
     }))) : [])].sort((a, b) => a.clubId.localeCompare(b.clubId) || a.name.localeCompare(b.name));
     const assemble = (packPlayers: any[]) => {
@@ -163,8 +174,14 @@ Deno.serve(async request => {
       const packClubs = clubIds.map(id => clubById.get(id)).filter(Boolean).map(club => ({
         id: `club-${club.id}`, name: club.name, shortName: club.short_name ?? club.name.slice(0, 3).toUpperCase(), country: club.country ?? null, city: club.city ?? null, arena: club.venue ?? null,
         color: club.color_primary ?? null, secondaryColor: club.color_secondary ?? null, identitySource: club.identity_source ?? null, playerIds: squads.get(`club-${club.id}`) ?? [],
+        // v8: the arena's seats where known (NBA clubs); absent otherwise, so European clubs are unchanged.
+        ...(Number.isInteger(club.capacity) ? { capacity: club.capacity } : {}),
       })).sort((a, b) => a.name.localeCompare(b.name));
-      const packCompetitions = competitions.map(competition => ({ id: `competition-${competition.id}`, name: competition.name, country: competition.country ?? null, tier: competition.tier, kind: competition.kind, season: SEASON, clubIds: competition.clubIds.map((id: string) => `club-${id}`).sort() }));
+      const packCompetitions = competitions.map(competition => ({
+        id: `competition-${competition.id}`, name: competition.name, country: competition.country ?? null, tier: competition.tier, kind: competition.kind, season: SEASON, clubIds: competition.clubIds.map((id: string) => `club-${id}`).sort(),
+        // v8: conferences, then divisions with `parentId` (the NBA); absent for every other competition.
+        ...(Array.isArray(competition.groups) && competition.groups.length ? { groups: competition.groups.map((group: any) => ({ id: group.id, name: group.name, ...(group.parentId ? { parentId: group.parentId } : {}), clubIds: group.clubIds.map((id: string) => `club-${id}`).sort() })) } : {}),
+      }));
       return { packCompetitions, packClubs };
     };
     // The same contents as the recorded pack, for checking that the database still rebuilds it exactly.
@@ -172,12 +189,13 @@ Deno.serve(async request => {
     const recorded = await sha256(JSON.stringify({ format: 'basketball-manager-data-pack', formatVersion: 1, version: VERSION, season: SEASON, source, notice: 'Private evaluation data from API-SPORTS. Rights for publication or distribution are not cleared; do not upload or share.', competitions: plainParts.packCompetitions, clubs: plainParts.packClubs, players: plain }));
     const correctedPlayers = buildPlayers(true), { packCompetitions, packClubs } = assemble(correctedPlayers);
     // Rating balance by position and minutes, on the finished squads and positions (squads do not depend on abilities).
-    const { players: packPlayers, summary: ratingBalance } = balanceRatings(correctedPlayers as any[], packCompetitions as any[]);
+    // v8: the USA (the NBA) is balanced on its own, so every European player gets exactly the ratings he had before.
+    const { players: packPlayers, summary: ratingBalance, usa: ratingBalanceUsa } = balanceBySeparateCountry(correctedPlayers as any[], packCompetitions as any[], 'USA');
     const corrected = packPlayers.filter(player => player.profileEvidence);
     const profileCorrections = { model: 'profile-overrides-1', players: corrected.length, currentSquads: { moved: overrideRows.filter(row => row.field === 'club_id').length, left: overrideRows.filter(row => row.field === 'squad_status').length, added: clubRows.reduce((sum, row) => sum + row.value.value.length, 0) }, exactPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'official').length, reportedPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'provider').length, estimatedPositions: packPlayers.filter(player => player.estimated.includes('game_position')).length, note: 'Official EuroLeague/EuroCup registrations and official league and club roster pages; Wikipedia rosters and player articles (CC BY-SA 4.0) where no official page gives an exact position, shown as reported; a broad role (Guard, Forward) keeps the exact position an estimate.' };
-    const pack = { format: 'basketball-manager-data-pack', formatVersion: 1, version: ask.version, season: SEASON, source: { ...source, profileCorrections, ratingBalance }, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026). Player positions, heights, birth dates and names corrected from official competition and club sources where available (16 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
+    const pack = { format: 'basketball-manager-data-pack', formatVersion: 1, version: ask.version, season: SEASON, source: { ...source, profileCorrections, ratingBalance, ...(ratingBalanceUsa ? { ratingBalanceUsa, nbaRatings: 'rating-4: NBA box scores (API-SPORTS league 12, 2025-26 and 2026-27) on the European scale of rating-3, the NBA level fitted with the European levels fixed (scripts/real-data-nba-ratings.mjs); NBA facts from Wikipedia (CC BY-SA 4.0) and Wikidata.' } : {}) }, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026). Player positions, heights, birth dates and names corrected from official competition and club sources where available (16 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
     const checksum = await sha256(JSON.stringify(pack));
-    const summary = { version: pack.version, checksum, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, profileCorrections, ratingBalance: { model: ratingBalance.model, changedPlayers: ratingBalance.changedPlayers, playersWithGames: ratingBalance.role.playersWithGames, clubsWithStarters: ratingBalance.role.clubsWithStarters }, cut, matchesRecordedChecksum: recorded === versionRow.checksum, replaces: existingVersion };
+    const summary = { version: pack.version, checksum, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, profileCorrections, ratingBalance: { model: ratingBalance.model, changedPlayers: ratingBalance.changedPlayers, playersWithGames: ratingBalance.role.playersWithGames, clubsWithStarters: ratingBalance.role.clubsWithStarters }, ...(ratingBalanceUsa ? { ratingBalanceUsa: { poolPlayers: ratingBalanceUsa.poolPlayers, changedPlayers: ratingBalanceUsa.changedPlayers, playersWithGames: ratingBalanceUsa.role.playersWithGames, clubsWithStarters: ratingBalanceUsa.role.clubsWithStarters } } : {}), cut, matchesRecordedChecksum: recorded === versionRow.checksum, replaces: existingVersion };
     const text = JSON.stringify({ checksum, writtenAt: new Date().toISOString(), pack });
     if (mode === 'preview') return new Response(JSON.stringify({ status: 'preview', ...summary, envelope: JSON.parse(text) }), { headers: { 'Content-Type': 'application/json' } });
     if (checksum !== ask.expected_sha256) return json({ status: 'refused', error: 'The built pack does not match the requested checksum; preview and check it again.', ...summary }, 409);

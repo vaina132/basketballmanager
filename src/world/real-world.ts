@@ -199,7 +199,10 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   // estimated tables, every played competition gives its entrants' countries and the EuroLeague its one-year places.
   const played = european.some(item => item.format);
   const chosenCountries = new Set(competitions.map(item => item.country));
-  const backgroundLeagues: BackgroundLeague[] = played ? pack.competitions.filter(item => item.kind === 'domestic' && item.tier === 1 && item.season === competition.season && item.country && !chosenCountries.has(item.country)).flatMap(item => {
+  // Only leagues the game can play (careerCompetitions: 4-20 clubs) become unchosen top divisions: the NBA (30 clubs,
+  // docs/nba-plan.md) stays out of European worlds until the world builder supports it (step 4).
+  const playable = new Set(careerCompetitions(pack).map(item => item.id));
+  const backgroundLeagues: BackgroundLeague[] = played ? pack.competitions.filter(item => item.kind === 'domestic' && item.tier === 1 && playable.has(item.id) && item.season === competition.season && item.country && !chosenCountries.has(item.country)).flatMap(item => {
     const members = [...new Set(item.clubIds)].filter(clubId => !clubIds.includes(clubId) && (pack.clubs.find(club => club.id === clubId)?.playerIds.length ?? 0) >= 8);
     return members.length >= 2 ? [{ id: item.id, name: item.name, country: item.country!, tier: 1 as const, clubIds: members }] : [];
   }) : [];

@@ -26,7 +26,7 @@ const pack = raw.pack ?? raw
 const LEAGUES = {
   'Basketball Bundesliga': 40, EuroLeague: 120, 'Basketbol Süper Ligi': 104, 'Türkiye Basketbol Ligi': 102, 'Liga ACB': 117,
   'Primera FEB': 95, 'Lega Basket Serie A': 52, 'Serie A2': 242, 'LNB Élite': 2, 'Élite 2': 8, 'Greek Basket League': 45,
-  EuroCup: 194, 'Basketball Champions League': 202,
+  EuroCup: 194, 'Basketball Champions League': 202, NBA: 12,
 }
 // Reviewed by eye where names differ too much to match automatically (pack club name -> API-Sports team ID).
 // API-Sports serves the Süper Ligi logo for the TBL too; a wrong mark is worse than the plain one.

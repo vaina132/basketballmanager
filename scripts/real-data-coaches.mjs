@@ -112,7 +112,7 @@ const NATIONALITY = {
   cypriot: 'Cyprus', azerbaijani: 'Azerbaijan', mexican: 'Mexico', brazilian: 'Brazil', puerto: 'Puerto Rico', venezuelan: 'Venezuela', uruguayan: 'Uruguay', norwegian: 'Norway', irish: 'Ireland',
 };
 /** The nationality the infobox states (its first one), or null. */
-function statedNationality(params) {
+export function statedNationality(params) {
   const value = fold(plain(params.nationality ?? ''));
   // The first nationality named ("Lithuanian / Spanish" -> Lithuania); `fold` has removed the slash.
   let best = null;
@@ -123,7 +123,7 @@ function statedNationality(params) {
   return best?.country ?? null;
 }
 /** The country of the birthplace (a last resort: people born abroad keep another nationality). */
-function nationalityOf(params) {
+export function nationalityOf(params) {
   const parts = plain(params.birth_place ?? '').split(',').map(part => part.trim());
   const countries = new Set(Object.values(NATIONALITY));
   // Former states: the republic named in the birthplace (SR Croatia, PR Serbia, Lithuanian SSR, ...).
@@ -135,7 +135,7 @@ function nationalityOf(params) {
   }
   return null;
 }
-function birthDateOf(params) {
+export function birthDateOf(params) {
   const value = String(params.birth_date ?? '');
   const parts = /\{\{\s*birth[ _]date(?:[ _]and[ _]age)?\s*\|(?:\s*(?:mf|df)\s*=\s*\w+\s*\|)?\s*(\d{4})\s*\|\s*(\d{1,2})\s*\|\s*(\d{1,2})/i.exec(value);
   if (parts) return `${parts[1]}-${parts[2].padStart(2, '0')}-${parts[3].padStart(2, '0')}`;
@@ -151,7 +151,7 @@ const NATIONAL_TOURNAMENT = /\b(eurobasket|world cup|olympic|fiba world champion
  * or the definition-list (;As coach) form. A list without headings counts only when the person had no playing career
  * in the infobox (else it may be his playing record); coach-of-the-year awards always count.
  */
-function coachHighlights(params) {
+export function coachHighlights(params) {
   const value = String(params.highlights ?? '');
   const lines = value.split('\n').map(line => line.trim());
   const heading = line => /^(?:'{3}|;)\s*(?:\[\[[^\]|]*\|)?\s*as (?:an? )?(head coach|coach|manager|assistant|player)/i.exec(line)?.[1]?.toLowerCase() ?? null;
@@ -181,7 +181,7 @@ function coachHighlights(params) {
   }
   return { titles, items };
 }
-function coachingCareer(params) {
+export function coachingCareer(params) {
   const teams = [];
   for (let index = 1; index <= 40; index += 1) {
     const years = plain(params[`coach_years${index}`] ?? ''), team = plain(params[`coach_team${index}`] ?? '');

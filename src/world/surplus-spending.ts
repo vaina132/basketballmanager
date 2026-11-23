@@ -6,8 +6,7 @@ import { remainingSeasonShortfall } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
 import { seasonSalaryBudget } from './board-consequences';
 import { derivePresidentTraits } from './presidents';
-import { seasonRounds } from './career-world';
-import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
+import { seasonEndNets, successNeed, SPENDING_BALANCE_RULES, usesSpendingBalance } from './spending-balance';
 
 /**
  * Format 88 (owner decision, 23 November 2026: "Rich clubs can spend more on wages, more on signing new players and
@@ -23,7 +22,7 @@ import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
  * - **Surplus:** the club's projected season-end cash (spendable cash less what the rest of the season still needs, as
  *   the economy balance reads it) above a healthy reserve of `reserveShare` of its budget. Below it nothing changes.
  * - **Spending style:** each president's generosity and ambition (fictional game traits) give a club its appetite, from
- *   0 (careful: keeps piling up money) to 1. A club plans to spend `seasonSpendShare` x appetite of its surplus in a
+ *   0 (careful: keeps piling up money; at least a small appetite from format 89, `src/world/spending-balance.ts`) to 1. A club plans to spend `seasonSpendShare` x appetite of its surplus in a
  *   season, and pays its full pay scale and premium from `fullPayAppetite` (in proportion below), so spending is
  *   gradual: it falls as cash comes down towards the reserve and stops there.
  * - **Wages** (`wageShare` of the plan): computer clubs get extra room above their player salary budget in the shared
@@ -81,7 +80,7 @@ export const SURPLUS_SPENDING_RULES = Object.freeze({
   facilityUpkeepShare: 0.035,
 });
 
-type SpendingContext = WorldContext & Partial<Pick<SeasonState, 'finance' | 'payroll' | 'managedClubId' | 'employment' | 'status' | 'round'>>;
+type SpendingContext = WorldContext & Partial<Pick<SeasonState, 'finance' | 'payroll' | 'managedClubId' | 'employment' | 'status' | 'round' | 'board'>>;
 
 /** Format 88: whether the career's world carries surplus spending (new careers with the economy balance). */
 export function usesSurplusSpending(context: WorldContext | undefined): boolean {
@@ -104,6 +103,20 @@ export function spendingAppetite(world: CareerWorld, clubId: string): number {
   const value = Math.max(0, Math.min(1, (generosity + ambition - rules.appetiteFloor) / rules.appetiteRange));
   cache.set(clubId, value);
   return value;
+}
+
+/** What a club's appetite is read for: its squad (wages and transfers), its staff or its facilities. */
+export type AppetiteUse = 'squad' | 'staff' | 'facilities';
+/**
+ * A club's appetite for one kind of spending, 0 to 1: its president's spending style (`spendingAppetite`); with the
+ * format-89 spending balance at least `minAppetite`, and for the squad raised by `successBoost` x how far it fell short of
+ * its board's results target in the latest completed season (`successNeed`).
+ */
+export function clubAppetite(state: SpendingContext, clubId: string, use: AppetiteUse): number {
+  const base = spendingAppetite(state.world!, clubId);
+  if (!usesSpendingBalance(state)) return base;
+  const rules = SPENDING_BALANCE_RULES, floor = Math.max(rules.minAppetite, base);
+  return use === 'squad' ? Math.min(1, floor + rules.successBoost * successNeed(state as SpendingContext & { seasonNumber?: number }, clubId)) : floor;
 }
 
 /** Whether a club's signings are made automatically: a computer club, or the manager's club with delegated recruitment. */
@@ -137,32 +150,11 @@ export function clubSurplus(state: SpendingContext, clubId: string): number {
   return value;
 }
 
-/** Format 88: what a club run automatically plans to spend of its surplus this season (cents; 0 for a careful club). */
+/** Format 88: what a club run automatically plans to spend of its surplus this season (cents; 0 for a careful club before format 89), by its squad appetite (`clubAppetite`). */
 export function plannedSurplusSpend(state: SpendingContext, clubId: string): number {
   if (!usesSurplusSpending(state) || !state.world) return 0;
-  const appetite = spendingAppetite(state.world, clubId);
+  const appetite = clubAppetite(state, clubId, 'squad');
   return appetite > 0 ? Math.floor(clubSurplus(state, clubId) * appetite * SURPLUS_SPENDING_RULES.seasonSpendShare) : 0;
-}
-
-// The club's net (cash less unpaid costs) after its last weekly operating costs of a season, found once per career
-// ledger and season: completed seasons never change (the ledger only grows), so the value holds for every later state.
-const seasonEndCache = new WeakMap<object, Map<number, { through: number; nets: ReadonlyMap<string, number> }>>();
-function seasonEndNets(state: SpendingContext & { seasonNumber: number }, season: number): ReadonlyMap<string, number> {
-  const finance = state.finance!, key: object = finance.archives?.[0] ?? finance.ledger[0] ?? finance;
-  let bySeason = seasonEndCache.get(key);
-  if (!bySeason) { bySeason = new Map(); seasonEndCache.set(key, bySeason); }
-  const count = financeLedgerCount(finance), known = bySeason.get(season);
-  // A ledger holding the season's last week reads the stored values; a shorter one (an earlier prefix) works it out.
-  if (known && count > known.through) return known.nets;
-  const rounds = seasonRounds(state), running = new Map<string, number>(), nets = new Map<string, number>();
-  let index = 0, through = -1;
-  for (const entry of financeLedgerEntries(finance)) {
-    running.set(entry.clubId, (running.get(entry.clubId) ?? 0) + entry.amount);
-    if (entry.kind === 'operations' && entry.seasonNumber === season && entry.round === rounds) { nets.set(entry.clubId, running.get(entry.clubId)!); through = index; }
-    index += 1;
-  }
-  if (through >= 0 && (!known || through >= known.through)) bySeason.set(season, { through, nets });
-  return nets;
 }
 
 /**
@@ -175,7 +167,7 @@ export function anchoredSurplus(state: SpendingContext & { seasonNumber: number 
   if (!usesSurplusSpending(state) || !state.finance) return 0;
   const season = state.status === 'complete' ? state.seasonNumber : state.seasonNumber - 1;
   if (season < 1) return 0;
-  const net = seasonEndNets(state, season).get(clubId), economy = clubEconomy(state, clubId);
+  const net = seasonEndNets(state as Parameters<typeof seasonEndNets>[0], season).get(clubId), economy = clubEconomy(state, clubId);
   if (net === undefined || !economy || economy.budget <= 0) return 0;
   return Math.max(0, net - Math.round(economy.budget * SURPLUS_SPENDING_RULES.reserveShare));
 }
@@ -184,12 +176,12 @@ export function anchoredSurplus(state: SpendingContext & { seasonNumber: number 
  * Format 88: the extra player wage room a computer club has for contracts of `seasonNumber` (this season, or the next
  * one in the offseason): `wageShare` of what its appetite plans to spend of its anchored surplus (`anchoredSurplus`), at
  * most `maxWageRaise` of that season's player salary budget, in EUR 500 steps. The manager's club never has it, even
- * with recruitment delegated (whether he delegated is not kept for the save check), nor careful clubs, clubs at or below
+ * with recruitment delegated (whether he delegated is not kept for the save check), nor careful clubs (before format 89), clubs at or below
  * the reserve, later seasons and careers without surplus spending.
  */
 export function surplusWageRoom(state: SpendingContext & { seasonNumber: number }, clubId: string, seasonNumber: number): number {
   if (!usesSurplusSpending(state) || !state.world || clubId === state.managedClubId || seasonNumber > state.seasonNumber + 1 || seasonNumber < state.seasonNumber) return 0;
-  const appetite = spendingAppetite(state.world, clubId);
+  const appetite = clubAppetite(state, clubId, 'squad');
   if (appetite <= 0) return 0;
   const plan = anchoredSurplus(state, clubId) * appetite * SURPLUS_SPENDING_RULES.seasonSpendShare;
   if (plan <= 0) return 0;
@@ -209,13 +201,13 @@ export function surplusTransferBudget(state: SpendingContext, clubId: string): n
 }
 
 /** How far a club goes towards its full pay scale and premium: its appetite over `fullPayAppetite`, at most 1. */
-const payDrive = (world: CareerWorld, clubId: string): number => Math.min(1, spendingAppetite(world, clubId) / SURPLUS_SPENDING_RULES.fullPayAppetite);
+const payDrive = (state: SpendingContext, clubId: string): number => Math.min(1, clubAppetite(state, clubId, 'squad') / SURPLUS_SPENDING_RULES.fullPayAppetite);
 
 /** Format 88: the premium on the asking wage a club run automatically offers while it spends from a surplus (0 otherwise). */
 export function surplusWagePremium(state: SpendingContext, clubId: string): number {
   if (!spendsSurplus(state, clubId)) return 0;
   const rules = SURPLUS_SPENDING_RULES, budget = clubEconomy(state, clubId)!.budget;
-  return Math.round(rules.wagePremium * payDrive(state.world!, clubId) * Math.min(1, clubSurplus(state, clubId) / (rules.premiumFullShare * budget)) * 100) / 100;
+  return Math.round(rules.wagePremium * payDrive(state, clubId) * Math.min(1, clubSurplus(state, clubId) / (rules.premiumFullShare * budget)) * 100) / 100;
 }
 
 /**
@@ -234,7 +226,7 @@ export function surplusOfferWage(state: SpendingContext & { seasonNumber: number
   for (let place = 1; place <= Math.max(slots, rank); place += 1) total += weight(place);
   const target = seasonSalaryBudget(state, clubId, seasonNumber) + surplusWageRoom(state, clubId, seasonNumber);
   const scale = target * weight(rank) / total;
-  const wage = Math.max(asking * (1 + premium), asking + payDrive(state.world!, clubId) * Math.max(0, scale - asking));
+  const wage = Math.max(asking * (1 + premium), asking + payDrive(state, clubId) * Math.max(0, scale - asking));
   return Math.min(economy.limits.maxContractWage * 100, Math.ceil(wage / 50_000) * 50_000);
 }
 
@@ -255,7 +247,7 @@ export function saleReplacementBudget(state: SpendingContext, clubId: string): n
 /** Format 88: the paid signings a club may try in one offseason window: one after a sale (as before), up to two from a surplus. */
 export function paidSigningLimit(state: SpendingContext, clubId: string, sold: boolean): number {
   if (surplusTransferBudget(state, clubId) <= 0) return sold ? 1 : 0;
-  return spendingAppetite(state.world!, clubId) >= SURPLUS_SPENDING_RULES.secondSigningAppetite ? 2 : 1;
+  return clubAppetite(state, clubId, 'squad') >= SURPLUS_SPENDING_RULES.secondSigningAppetite ? 2 : 1;
 }
 
 /** Format 88: whether a club run automatically spends from a surplus now (ranks its own expiring players with free agents). */
@@ -270,7 +262,7 @@ export function spendsSurplus(state: SpendingContext, clubId: string): boolean {
  */
 export function staffReach(state: SpendingContext, clubId: string): number {
   if (!usesSurplusSpending(state) || !state.world || clubId === state.managedClubId || !state.finance || state.seasonNumber === undefined) return 0;
-  const appetite = spendingAppetite(state.world, clubId);
+  const appetite = clubAppetite(state, clubId, 'staff');
   return appetite > 0 && anchoredSurplus(state as SpendingContext & { seasonNumber: number }, clubId) > 0 ? appetite : 0;
 }
 
@@ -280,5 +272,5 @@ export function staffReach(state: SpendingContext, clubId: string): number {
  */
 export function surplusUpkeepShare(state: SpendingContext, clubId: string, usual: number): number | null {
   if (!usesSurplusSpending(state) || !state.world || plannedSurplusSpend(state, clubId) <= 0) return null;
-  return usual + (SURPLUS_SPENDING_RULES.facilityUpkeepShare - usual) * spendingAppetite(state.world, clubId);
+  return usual + (SURPLUS_SPENDING_RULES.facilityUpkeepShare - usual) * clubAppetite(state, clubId, 'facilities');
 }

@@ -19,6 +19,8 @@ import type { CareerWorld } from '../domain/world';
 import { staffFee } from './economy';
 import type { WorldContext } from '../domain/world';
 import { clubsByStaffLevel, fittingLocalStaffChoice, ratingRange, staffMarketWorld, staffShareCap, staffTargetRating, usesClubLevelStaff } from './staff-levels';
+import { staffReach } from './surplus-spending';
+import { usesSpendingBalance } from './spending-balance';
 
 export const COACHING_BUDGET = STAFF_BUDGET;
 export const MAX_COACHES = 3;
@@ -220,6 +222,10 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
       if (focus === 'balanced') for (const attribute of ATTRIBUTES) demand[attribute] += 1 / ATTRIBUTES.length;
       else demand[focus] += 1;
     }
+    // Format 89: a club spending from its surplus weighs an extra coach's fee less, by its reach (none at full reach), so
+    // it can afford better coaches than the cheapest per point of improvement (measured: EuroLeague clubs took extra
+    // coaches rated 6 while ones rated 9-10 were free and within their budget).
+    const feeWeight = levelled && usesSpendingBalance(state) ? 1 - staffReach(state, club.id) : 1;
     while (getClubCoaching(next.coaching, club.id).length < MAX_COACHES) {
       const assignments = coachingAssignments(next.coaching, state.clubs, state.seasonNumber, state.round)![club.id]!;
       // Club-level careers: like every computer appointment, an extra coach costs at most the role's share of the staff
@@ -229,7 +235,7 @@ export function recruitAiCoaches(state: SeasonState): SeasonState {
         const current = coachingRatingForAttribute(assignments, attribute);
         const next = coachingRatingForAttribute([{ contractId: '', coachId: coach.id, focus }], attribute);
         return sum + demand[attribute] * Math.max(0, next - current);
-      }, 0) / coach.fee })));
+      }, 0) / (feeWeight === 1 ? coach.fee : coach.fee ** feeWeight) })));
       candidates.sort((left, right) => right.utility - left.utility || compareText(left.coach.id, right.coach.id) || compareText(left.focus, right.focus));
       const selected = candidates[0];
       if (!selected || selected.utility <= 0) break;

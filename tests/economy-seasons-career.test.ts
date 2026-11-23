@@ -186,16 +186,16 @@ describe('contract offers are checked with the money known when they were made',
 });
 
 describe('a manager appointed by a club promoted from the next division', () => {
-  // 22 November 2026: with seed 84 (re-seeded 23 November 2026 for formats 86-88 on the full new-career rules; 58 with the
-  // economy balance but without steering head coaches, 36 before format 87's economy balance, 30 before format 84's full
-  // staffing) the manager is dismissed after season two and
+  // 22 November 2026: with seed 91 (re-seeded 23 November 2026 for format 89's spending balance on the full new-career
+  // rules; 84 for formats 86-88, 58 with the economy balance but without steering head coaches, 36 before format 87's
+  // economy balance, 30 before format 84's full staffing) the manager is dismissed after season two and
   // appointed by a club that joined the full world from the third division after season one; the strict check knew only
   // the world's opening clubs and refused it.
-  it('keeps the move and the next season (seed 84)', () => {
+  it('keeps the move and the next season (seed 91)', () => {
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      let state = setEmploymentDelegation(createSeason({ seed: 84, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+      let state = setEmploymentDelegation(createSeason({ seed: 91, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       const priced = getPostseasons(state, 1)[0]!.outcome.relegated.map(entry => entry.clubId).find((id): id is string => id !== null)!;

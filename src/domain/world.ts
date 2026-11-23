@@ -156,6 +156,12 @@ export interface CareerWorld {
    * (`src/world/surplus-spending.ts`).
    */
   surplusSpending?: true;
+  /**
+   * Format 89 (new careers with surplus spending, option `spendingBalance`): the low-cash wage limit looks one season
+   * ahead, careful clubs spend a little, and clubs that fell short of their results target spend more on the squad
+   * (`src/world/spending-balance.ts`).
+   */
+  spendingBalance?: true;
   /** NBA step 4 (format 90, new careers with the option `nba`): the NBA league of this world. */
   nba?: NbaWorld;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */

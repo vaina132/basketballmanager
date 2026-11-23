@@ -37,7 +37,9 @@ function moneyWorld(): CareerWorld {
 }
 const play = (state: SeasonState) => state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state;
 const roundTrip = (state: SeasonState) => parseSeason(serializeSeasonCompact(state));
-const career = (world: CareerWorld, seed: number, surplusSpending = true) => createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, surplusSpending });
+// Format-88 careers as they were: the format-89 spending balance (careful clubs spend a little, spending follows results,
+// the wage limit looks ahead) is covered in tests/spending-balance.test.ts.
+const career = (world: CareerWorld, seed: number, surplusSpending = true) => createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, surplusSpending, spendingBalance: false });
 /** Everything automatic: recruitment, facilities, wage prepayments and sponsorship of the manager's club too. */
 const delegate = (state: SeasonState) => state.clubs.some(club => club.id === state.managedClubId) ? setSponsorshipDelegation(setPayrollDelegation(setFacilityDelegation(setEmploymentDelegation(state, true), true), true), true) : state;
 /** `share` of a club's budget added to its cash from the career's start (a test lever: one entry more at the ledger's head). */

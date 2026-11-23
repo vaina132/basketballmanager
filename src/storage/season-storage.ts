@@ -3567,6 +3567,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 87 && Object.hasOwn(world, 'economyBalance')) fail('world.economyBalance', 'requires format 87 or later');
   // Format 88: rich clubs' surplus spending is a rule of new careers only.
   if (version < 88 && Object.hasOwn(world, 'surplusSpending')) fail('world.surplusSpending', 'requires format 88 or later');
+  // Format 89: the spending balance is a rule of new careers only.
+  if (version < 89 && Object.hasOwn(world, 'spendingBalance')) fail('world.spendingBalance', 'requires format 89 or later');
   // Format 90: the NBA (its league, standings rule and postseason) is a rule of new careers only.
   if (version < 90 && (Object.hasOwn(world, 'nba') || world.domesticLeagues?.some(league => league.postseason === 'nba-2026-1'))) fail('world.nba', 'requires format 90 or later');
   // Format 63: the career-2 rules (protected first season, fresh confidence, mid-season moves, resignations) need it.

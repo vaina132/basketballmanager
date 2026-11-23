@@ -8,6 +8,7 @@ import { overallRating } from './overall-rating';
 import { clubCountry, worldOf } from './career-world';
 import { staffAllocation } from './board-consequences';
 import { staffReach, SURPLUS_SPENDING_RULES } from './surplus-spending';
+import { usesSpendingBalance } from './spending-balance';
 
 /** The six staff areas every club fills (format 74). */
 export type StaffRole = 'coaches' | 'scouts' | 'fitness' | 'physio' | 'assistant' | 'youth';
@@ -86,7 +87,15 @@ export function fittingLocalStaffChoice<T extends { id: string }>(context: World
   if (country === null) return fittingStaffChoice(candidates, options);
   const local = unitHash(`${context.seed}|${clubId}|${role}|${context.seasonNumber ?? 1}|nationality`) < STAFF_NATIONALITY_RULES.localShare;
   const group = candidates.filter(member => staffNationality(member.id) !== null && (staffNationality(member.id) === country) === local && (role !== 'assistant' || !member.id.startsWith('assistant-real-')));
-  return fittingStaffChoice(group, options) ?? fittingStaffChoice(candidates.filter(member => !member.id.startsWith('assistant-real-')), options);
+  const everyone = () => fittingStaffChoice(candidates.filter(member => !member.id.startsWith('assistant-real-')), options);
+  const choice = fittingStaffChoice(group, options);
+  // Format 89: a club reaching for better staff also looks at the other group, and takes whoever is closer to its aim
+  // (measured: the top coaches, mostly from abroad, were never met by clubs drawing a local appointment).
+  if (choice && usesSpendingBalance(context) && staffReach(context, clubId) > 0) {
+    const wider = everyone();
+    if (wider && Math.abs(options.rating(wider) - options.target) < Math.abs(options.rating(choice) - options.target)) return wider;
+  }
+  return choice ?? everyone();
 }
 
 const strengths = new WeakMap<readonly Team['players'][number][], number>();
@@ -123,13 +132,24 @@ function unitHash(text: string): number {
   return hash / 0x1_0000_0000;
 }
 
+let coachTop: number | undefined;
+/** The best training coach rating on any market (the elite coaches; `coachRating` of the directory). */
+function coachMarketTop(): number {
+  return coachTop ??= Math.max(...COACH_DIRECTORY.map(coach => { const skills = Object.values(coach.skills); return Math.round(skills.reduce((sum, value) => sum + value, 0) / skills.length); }));
+}
+
 /** The rating a club aims at for a role: its level within the role's rating range, moved by its fixed spread. */
 export function staffTargetRating(context: LevelContext & { seed: number }, clubId: string, role: StaffRole, range: readonly [number, number]): number {
   // Format 88: a computer club spending from its surplus aims higher on the ladder, by its spending appetite.
-  const level = (clubStaffLevels(context).get(clubId) ?? 0) + SURPLUS_SPENDING_RULES.staffLevelBoost * staffReach(context, clubId);
+  const reach = staffReach(context, clubId);
+  const level = (clubStaffLevels(context).get(clubId) ?? 0) + SURPLUS_SPENDING_RULES.staffLevelBoost * reach;
   const spread = (unitHash(`${context.seed}|${clubId}|${role}|${context.seasonNumber ?? 1}`) * 2 - 1) * STAFF_LEVEL_RULES.spread;
   const placed = Math.max(0, Math.min(1, level + spread));
-  return range[0] + placed * (range[1] - range[0]);
+  // Format 89: for training coaches, whose market also offers elite coaches rated above the authored range, a club with
+  // reach places its aim on a ladder that rises towards the market's best by its reach (measured: EuroLeague clubs kept
+  // training coaches rated 8 while affordable ones rated 9-10 were free). Other roles' best people are in the range.
+  const top = role === 'coaches' && reach > 0 && usesSpendingBalance(context) ? range[1] + reach * Math.max(0, coachMarketTop() - range[1]) : range[1];
+  return range[0] + placed * (top - range[0]);
 }
 
 /** The most a starting or computer appointment in a role may cost: the role's share of the club's season staff budget. */

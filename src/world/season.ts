@@ -747,7 +747,9 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   const spending = !!options.surplusSpending && !world.surplusSpending && (balanced || !!world.economyBalance);
   // Format 89: the spending balance, with surplus spending only.
   const spendingBalance = !!options.spendingBalance && !world.spendingBalance && (spending || !!world.surplusSpending);
-  return neutral || countries || balanced || spending || spendingBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}) } : world;
+  // Format 91: NBA careers, in worlds with the NBA only.
+  const nbaJobs = !!options.nbaJobs && !world.nbaJobs && !!world.nba;
+  return neutral || countries || balanced || spending || spendingBalance || nbaJobs ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}) } : world;
 }
 
 /** Format 82: the career's coaches (the manager's starting attributes) and the national teams' real coaches. */

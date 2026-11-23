@@ -576,6 +576,13 @@ export interface SeasonSystems {
    * and by their president's spending style (`world.surplusSpending`, `src/world/surplus-spending.ts`). New careers only.
    */
   surplusSpending?: boolean;
+  /**
+   * Format 89 (owner decisions, 23 November 2026): with surplus spending, the low-cash wage limit of clubs run
+   * automatically looks one season ahead, careful clubs spend a little, and clubs that fell short of their board's
+   * results target spend more of their surplus on the squad (`world.spendingBalance`, `src/world/spending-balance.ts`).
+   * New careers only.
+   */
+  spendingBalance?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -589,7 +596,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -625,6 +632,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.coachSteering !== undefined && typeof options.coachSteering !== 'boolean') throw new Error('Choose a valid head coach steering setting.');
   if (options.economyBalance !== undefined && typeof options.economyBalance !== 'boolean') throw new Error('Choose a valid club money setting.');
   if (options.surplusSpending !== undefined && typeof options.surplusSpending !== 'boolean') throw new Error('Choose a valid club spending setting.');
+  if (options.spendingBalance !== undefined && typeof options.spendingBalance !== 'boolean') throw new Error('Choose a valid spending balance setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -675,7 +683,9 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   const balanced = !!options.economyBalance && !world.economyBalance && !!world.economy;
   // Format 88: rich clubs' surplus spending, with the economy balance only.
   const spending = !!options.surplusSpending && !world.surplusSpending && (balanced || !!world.economyBalance);
-  return neutral || countries || balanced || spending ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}) } : world;
+  // Format 89: the spending balance, with surplus spending only.
+  const spendingBalance = !!options.spendingBalance && !world.spendingBalance && (spending || !!world.surplusSpending);
+  return neutral || countries || balanced || spending || spendingBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}) } : world;
 }
 
 /** Format 82: the career's coaches (the manager's starting attributes) and the national teams' real coaches. */

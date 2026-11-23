@@ -2,6 +2,7 @@ import { leavingClubIds } from './background';
 import { worldOf } from './career-world';
 import { clubRosterLimitText, clubRosterLimit, clubRosterTarget } from './club-roster-policy';
 import type { ContractOfferOptions, EmploymentContract, EmploymentTransfer, SeasonEmployment } from '../domain/employment';
+import type { MarketOffer } from '../domain/market';
 import type { SeasonState } from '../domain/season';
 import type { Player } from '../domain/types';
 import { getCareerPlayer } from './player-catalog';
@@ -37,10 +38,24 @@ export function enableEmployment(state: SeasonState): SeasonState {
   return state.status === 'complete' ? prepareEmploymentMarket(next) : next;
 }
 
+/** The contract options a scheduled market offer carries (its release fee, transfer mode and squad role). */
+function scheduledOfferOptions(offer: Pick<MarketOffer, 'releaseFee' | 'transfer' | 'role'>): ContractOfferOptions {
+  return { ...(offer.releaseFee === undefined ? {} : { releaseFee: offer.releaseFee }), ...(offer.transfer?.mode ? { transferMode: offer.transfer.mode } : {}), ...(offer.role === undefined ? {} : { role: offer.role }) };
+}
+
+/**
+ * The shared contract guard for a scheduled market offer on its response day, exactly as `commitPlayerOffer` checks it
+ * (its own reservation excluded): the dated market resolver withdraws an offer the club can no longer afford instead of
+ * failing (a club's own sale accepted after its offer adds a replacement reserve to its wage budget).
+ */
+export function scheduledOfferQuote(state: SeasonState, offer: MarketOffer) {
+  return quotePlayerContract(state, offer.playerId, offer.seasonWage, offer.seasons, offer.clubId, offer.id, offer.transfer?.fee, offer.transfer?.paymentPlan ?? 'upfront', scheduledOfferOptions(offer));
+}
+
 /** Internal immediate response used by legacy/active renewals and the dated market resolver. */
 export function commitPlayerOffer(state: SeasonState, clubId: string, playerId: string, seasonWage: number, seasons: number, resolvingOfferId?: string, options: ContractOfferOptions = {}): SeasonState {
   const scheduled = getLiveMarketOffers(state).find(offer => offer.id === resolvingOfferId && offer.clubId === clubId && offer.playerId === playerId && offer.seasonWage === seasonWage && offer.seasons === seasons && offer.status === 'pending' && offer.responseOn === state.date);
-  if (scheduled) options = { ...(scheduled.releaseFee === undefined ? {} : { releaseFee: scheduled.releaseFee }), ...(scheduled.transfer?.mode ? { transferMode: scheduled.transfer.mode } : {}), ...(scheduled.role === undefined ? {} : { role: scheduled.role }) };
+  if (scheduled) options = scheduledOfferOptions(scheduled);
   if (state.market?.enabledSince && state.status === 'complete' && !scheduled) throw new Error('Send an offer and continue to its scheduled response before signing.');
   const enabled = state.negotiations.enabledSince !== null;
   // relationships-3: every offer carries a squad role, the chosen one or the player's natural role at this club.

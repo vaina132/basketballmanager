@@ -7,7 +7,7 @@ import type { SeasonState } from '../domain/season';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import { getActiveCareerPlayers, getCareerPlayers } from './player-catalog';
 import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE, playerContractQuoter, quotePlayerContract } from './employment-policy';
-import { commitPlayerOffer } from './employment';
+import { commitPlayerOffer, scheduledOfferQuote } from './employment';
 import { commitContractBuyout } from './buyouts';
 import { coachRecruitmentRating, scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
 import { clubStyleFit } from './head-coaches';
@@ -21,6 +21,7 @@ import { playerInList, seasonRounds } from './career-world';
 import { contractAskingWage, offeredContractRole } from './contract-roles';
 import { automaticWageCheck } from './automatic-wages';
 import { paidSigningLimit, saleReplacementBudget, spendsSurplus, surplusOfferWage, surplusTransferBudget } from './surplus-spending';
+import { usesSpendingBalance } from './spending-balance';
 
 export function createMarket(): SeasonMarket { return { model: 'market-1', enabledSince: null, windows: [] }; }
 
@@ -215,6 +216,15 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
     next = quote.canOffer && fee <= offer.transfer.requiredFee
       ? submitTransferOffer(next, offer.playerId, offer.seasonWage, offer.seasons, fee, offer.clubId, offer.transfer.paymentPlan, { ...(offer.releaseFee === undefined ? {} : { releaseFee: offer.releaseFee }), ...(offer.role === undefined ? {} : { role: offer.role }) })
       : withdrawMarketOffer(next, offer.id, offer.clubId);
+  }
+  // Format 89: a club run automatically that has agreed to sell one of its players reserves wages to replace him, which
+  // can leave one of its own pending offers beyond its wage budget before the player answers (the answer then stopped the
+  // window with an error, measured in a real Turkey world): it withdraws such an offer (a recorded command, so the save
+  // check replays it exactly).
+  if (usesSpendingBalance(next)) for (const offer of getLiveMarketOffers(next)) {
+    if (offer.status !== 'pending' || offer.clubId === state.managedClubId && !state.employment.delegated) continue;
+    if (!getLiveMarketOffers(next).some(item => item.transfer?.sellerClubId === offer.clubId && item.transfer.clubStatus === 'accepted')) continue;
+    if (!scheduledOfferQuote(next, offer).canOffer) next = withdrawMarketOffer(next, offer.id, offer.clubId);
   }
   const finalProposalDay = isCompetitiveMarket(next) && addMarketDays(next.date, MARKET_RESPONSE_DAYS) === getMarketWindow(next)!.closesOn;
   // On the last proposal day, an automatic club must be able to recover from a

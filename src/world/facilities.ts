@@ -5,6 +5,7 @@ import type { Team } from '../domain/types';
 import { clubFinanceDefinition, worldOf } from './career-world';
 import { seasonLeagues } from './divisions';
 import { worldEconomy } from './economy';
+import { plannedSurplusSpend } from './surplus-spending';
 import { arenaExpansionSizes, FACILITY_BANK_REASON, facilityAutomationBuffer, facilityLevelsByClub, upgradeAutomationCushion, upkeepAllowsAutomaticUpgrade, facilityTypes, FACILITY_RULES_2, getActiveFacilityProject, getFacilityCondition, getFacilityLevel, hasFacilityCondition, maintenancePlanOn, quoteArenaExpansion, quoteFacilityRepair, quoteFacilityUpgrade, usesFacilityRepairs, usesSixLevels } from './facilities-policy';
 import { getSpendableCash, getSpendablePosition } from './payroll-policy';
 import { getFinanceBalance, recordBoardCapital, recordDebtEntry, recordFacilityInvestment } from './finance';
@@ -438,11 +439,17 @@ function automateSixLevels(state: SeasonState): SeasonState {
       }
     }
     const quotes = types.map(type => quoteFacilityUpgrade(next, type, club.id)).filter(quote => quote.canStart && quote.remainingBudgetAfter >= cushion && upkeepAllowsAutomaticUpgrade(next, club.id, quote.totalUpkeepAfter));
-    const quote = quotes.sort((left, right) => left.cost - right.cost || types.indexOf(left.type) - types.indexOf(right.type))[0];
+    // Format 88: a club spending from its surplus upgrades its weakest facility first (training, medical, youth, scouting on ties).
+    const byNeed = plannedSurplusSpend(next, club.id) > 0;
+    const level = (type: FacilityType) => byNeed ? getFacilityLevel(next, type, club.id) : 0;
+    const quote = quotes.sort((left, right) => level(left.type) - level(right.type) || (byNeed ? NEED_ORDER.indexOf(left.type) - NEED_ORDER.indexOf(right.type) : 0) || left.cost - right.cost || types.indexOf(left.type) - types.indexOf(right.type))[0];
     if (quote) next = startFacilityUpgrade(next, quote.type, club.id);
   }
   return next;
 }
+
+/** Format 88: the order in which a club spending from its surplus upgrades facilities of the same level. */
+const NEED_ORDER: readonly FacilityType[] = ['training', 'medical', 'youth', 'scouting'];
 
 /**
  * Format 74: the prudent bank loan of automatic control: only the `shortfall` an expansion needs, rounded up to the

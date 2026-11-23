@@ -20,6 +20,7 @@ import { addMarketDays, compareMarketOffers, getLiveMarketOffers, getMarketStart
 import { playerInList, seasonRounds } from './career-world';
 import { contractAskingWage, offeredContractRole } from './contract-roles';
 import { automaticWageCheck } from './automatic-wages';
+import { paidSigningLimit, spendsSurplus, surplusOfferWage, surplusTransferBudget } from './surplus-spending';
 
 export function createMarket(): SeasonMarket { return { model: 'market-1', enabledSince: null, windows: [] }; }
 
@@ -251,31 +252,50 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
         ratings.set(id, value);
         return value;
       };
+      // Format 88: a club spending from its surplus ranks its own expiring players with free agents (by need, then rating)
+      // instead of renewing its own first, so its extra wage room buys better players.
+      const spending = spendsSurplus(next, club.id);
       const ranked = getActiveCareerPlayers(next, next.seasonNumber + 1, 1).filter(player => !contractForSeason(next.employment, player.id, next.seasonNumber + 1) && !live.some(item => item.playerId === player.id && (!isCompetitiveMarket(next) || finalProposalDay || item.clubId === club.id))).sort((left, right) => {
-        const retained = Number(own.has(right.id)) - Number(own.has(left.id));
-        return retained || (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || rating(right.id) - rating(left.id) || left.id.localeCompare(right.id, 'en');
+        const retained = spending ? 0 : Number(own.has(right.id)) - Number(own.has(left.id));
+        return retained || (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || rating(right.id) - rating(left.id) || Number(own.has(right.id)) - Number(own.has(left.id)) || left.id.localeCompare(right.id, 'en');
       });
       const quote = playerContractQuoter(next, club.id);
       // relationships-3: computer clubs offer each player his natural role at the asking wage for it.
-      const wage = (id: string) => contractAskingWage(next, club.id, id);
+      // Format 88: a club spending from its surplus offers more than the asking wage (a premium, or its own pay scale for
+      // the player's place in its squad, this season's players and those signed for the next), so it wins contested players
+      // and pays as a rich club does; when such an offer does not fit its guards, it offers the asking wage as before.
+      const asking = (id: string) => contractAskingWage(next, club.id, id);
+      const squad = spending ? [...new Set([...club.players.map(item => item.id), ...summary.contracts.map(item => item.playerId), ...live.filter(item => item.clubId === club.id).map(item => item.playerId)])] : [];
+      const offers = new Map<string, number>();
+      const offered = (id: string): number => {
+        let value = offers.get(id);
+        if (value === undefined) { value = surplusOfferWage(next, club.id, asking(id), 1 + squad.filter(other => other !== id && rating(other) > rating(id)).length, target, next.seasonNumber + 1); offers.set(id, value); }
+        return value;
+      };
       // Format 87: while its cash is low, a club keeps its new wages within what its money funds (`automaticWageCheck`).
       const affordable = automaticWageCheck(next, club.id), startsSeason = next.seasonNumber + 1;
+      const wage = spending ? (id: string) => offered(id) > asking(id) && quote(id, offered(id), 1).canOffer && affordable(offered(id), 1, startsSeason) ? offered(id) : asking(id) : asking;
       const player = ranked.find(player => quote(player.id, wage(player.id), 1).canOffer && affordable(wage(player.id), 1, startsSeason));
       // A club that has sold a player can buy a stronger, known replacement.
       // Retain/free recruitment remains the default, with identical fee guards.
       const sold = next.employment.transfers.some(transfer => transfer.seasonNumber === next.seasonNumber && transfer.fromClubId === club.id);
-      const triedPaidTarget = getMarketWindow(next)!.offers.some(offer => offer.clubId === club.id && offer.transfer);
-      if (sold && !triedPaidTarget && !finalProposalDay) {
+      // Format 88: a club with a transfer budget from its surplus also tries paid signings (one, or two with a bigger
+      // appetite), each fee within that budget; a club that sold keeps its one stronger replacement as before.
+      const paidTries = getMarketWindow(next)!.offers.filter(offer => offer.clubId === club.id && offer.transfer).length;
+      const transferBudget = sold ? Infinity : surplusTransferBudget(next, club.id);
+      if (paidTries < paidSigningLimit(next, club.id, sold) && !finalProposalDay) {
         const assessed = (id: string) => fitted ? rating(id) : next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, id) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, id) : playerInList(getCareerPlayers(next), id)!.attributes).reduce((sum, value) => sum + value, 0);
         const approach = (id: string): { fee: number; options: ContractOfferOptions } => {
-          const asking = requiredTransferFee(next, id), clause = getApplicableReleaseClause(next, id);
-          return clause.canTrigger && clause.fee! <= asking && quoteTransferOffer(next, id, wage(id), 1, clause.fee!, club.id, 'upfront', { transferMode: 'release-clause' }).canOffer ? { fee: clause.fee!, options: { transferMode: 'release-clause' } } : { fee: asking, options: {} };
+          const askingFee = requiredTransferFee(next, id), clause = getApplicableReleaseClause(next, id);
+          return clause.canTrigger && clause.fee! <= askingFee && quoteTransferOffer(next, id, asking(id), 1, clause.fee!, club.id, 'upfront', { transferMode: 'release-clause' }).canOffer ? { fee: clause.fee!, options: { transferMode: 'release-clause' } } : { fee: askingFee, options: {} };
         };
-        const paid = [...getTransferCandidates(next, club.id)].filter(candidate => !getMarketWindow(next)!.offers.some(offer => offer.clubId === club.id && offer.playerId === candidate.id && offer.transfer)).sort((a, b) => assessed(b.id) - assessed(a.id) || a.id.localeCompare(b.id, 'en')).find(candidate => { const terms = approach(candidate.id); return (!player || assessed(candidate.id) > assessed(player.id)) && affordable(wage(candidate.id), 1, startsSeason) && quoteTransferOffer(next, candidate.id, wage(candidate.id), 1, terms.fee, club.id, 'upfront', terms.options).canOffer; });
+        // Format 88: the wage of a paid signing, as for free agents (the transfer's own guard decides whether more fits).
+        const signingWage = (id: string, terms: { fee: number; options: ContractOfferOptions }) => spending && offered(id) > asking(id) && affordable(offered(id), 1, startsSeason) && quoteTransferOffer(next, id, offered(id), 1, terms.fee, club.id, 'upfront', terms.options).canOffer ? offered(id) : asking(id);
+        const paid = [...getTransferCandidates(next, club.id)].filter(candidate => (transferBudget === Infinity || requiredTransferFee(next, candidate.id) <= transferBudget) && !getMarketWindow(next)!.offers.some(offer => offer.clubId === club.id && offer.playerId === candidate.id && offer.transfer)).sort((a, b) => assessed(b.id) - assessed(a.id) || a.id.localeCompare(b.id, 'en')).find(candidate => { const terms = approach(candidate.id); return (!player || assessed(candidate.id) > assessed(player.id)) && terms.fee <= transferBudget && affordable(signingWage(candidate.id, terms), 1, startsSeason) && quoteTransferOffer(next, candidate.id, signingWage(candidate.id, terms), 1, terms.fee, club.id, 'upfront', terms.options).canOffer; });
         if (paid) {
           const terms = approach(paid.id);
           const openingFee = terms.options.transferMode === 'release-clause' ? terms.fee : Math.max(MIN_TRANSFER_FEE, Math.floor(terms.fee * .9 / TRANSFER_FEE_STEP) * TRANSFER_FEE_STEP);
-          next = submitTransferOffer(next, paid.id, wage(paid.id), 1, openingFee, club.id, 'upfront', terms.options); continue;
+          next = submitTransferOffer(next, paid.id, signingWage(paid.id, terms), 1, openingFee, club.id, 'upfront', terms.options); continue;
         }
       }
       if (!player) break;

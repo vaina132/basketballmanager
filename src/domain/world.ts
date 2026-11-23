@@ -141,6 +141,12 @@ export interface CareerWorld {
    * counts only the home games still to come, and automatic wage targets that follow the club's money when cash is low.
    */
   economyBalance?: true;
+  /**
+   * Format 88 (new careers with the economy balance, option `surplusSpending`): clubs run automatically spend part of
+   * their cash above a healthy reserve on wages, transfers, staff and facilities, by their president's spending style
+   * (`src/world/surplus-spending.ts`).
+   */
+  surplusSpending?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

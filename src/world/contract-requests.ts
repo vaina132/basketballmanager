@@ -8,6 +8,8 @@ import { RELATIONSHIP_RULES } from './relationship-rules';
 import { countsTowardsObjectives, PRESIDENT_RULES } from './presidents';
 import { offeredContractRole } from './contract-roles';
 import { automaticWageCheck } from './automatic-wages';
+import { surplusOfferWage } from './surplus-spending';
+import { clubRosterTarget } from './club-roster-policy';
 
 const RULES = RELATIONSHIP_RULES.contractRequests;
 
@@ -26,6 +28,9 @@ function answerAsAiClub(state: SeasonState, clubId: string, playerId: string, la
   for (const seasons of [...new Set([RULES.ai.renewalSeasons, 1])]) {
     let wage: number;
     try { wage = requiredNegotiationWage(playerId, seasons, undefined, state, role); } catch { break; } // No wage terms: let him go.
+    // Format 88: a club spending from its surplus keeps its player at its own pay scale for his place when that fits.
+    const offered = surplusOfferWage(state, clubId, wage, rank, clubRosterTarget(state, clubId), state.seasonNumber + 1);
+    if (offered > wage && quotePlayerContract(state, playerId, offered, seasons, clubId).canOffer && automaticWageCheck(state, clubId)(offered, seasons, state.seasonNumber + 1)) return commitPlayerOffer(replyToContractRequest(state, playerId, 'talks', clubId), clubId, playerId, offered, seasons);
     // Format 87: while its cash is low, the club keeps its new wages within what its money funds.
     if (quotePlayerContract(state, playerId, wage, seasons, clubId).canOffer && automaticWageCheck(state, clubId)(wage, seasons, state.seasonNumber + 1)) return commitPlayerOffer(replyToContractRequest(state, playerId, 'talks', clubId), clubId, playerId, wage, seasons);
   }

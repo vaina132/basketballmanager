@@ -17,6 +17,7 @@ import { validateRelationships } from './relationships-validation';
 import type { ArchivedFixture, ClubPlan, DomesticDivisions, FixtureResult, SeasonArchive, SeasonEurope, SeasonFixture, SeasonInjury, SeasonState } from '../domain/season';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
 import { usesEconomyBalance } from '../world/economy-balance';
+import { surplusWageCeiling, usesSurplusSpending } from '../world/surplus-spending';
 import { isInjuryKind, isMatchInjuryKind, type InjuryModel } from '../domain/injuries';
 import type { SeasonNational } from '../domain/national';
 import { STANDINGS_RULE_FORMAT } from '../domain/competition';
@@ -64,7 +65,7 @@ import type { CareerWorld, SeasonEconomy, WorldContext } from '../domain/world';
 import { getCareerPlayers, getCareerPlayer, getCareerWage, type CareerPlayerContext } from '../world/player-catalog';
 import { MAX_MATCH_PERIODS } from '../engine/match';
 import { isCourtPosition } from '../engine/positions';
-import { applyExchanges, domesticSchedule, europeanPlacesAfter, DAILY_RECOVERY, dateForRound, fixtureSeed, getPostseasons, seasonExchangesOf, getStandings, MAX_SEASON_NUMBER, recoverThroughGameDays, ROUND_INTERVAL_DAYS, scheduledFixtures, weekCloseCondition, weekLastGameDate } from '../world/season';
+import { applyExchanges, plansWithDefaults, domesticSchedule, europeanPlacesAfter, DAILY_RECOVERY, dateForRound, fixtureSeed, getPostseasons, seasonExchangesOf, getStandings, MAX_SEASON_NUMBER, recoverThroughGameDays, ROUND_INTERVAL_DAYS, scheduledFixtures, weekCloseCondition, weekLastGameDate } from '../world/season';
 import { divisionChanges, openingDivisions, seasonLeagues } from '../world/divisions';
 import { calendarDaysBetween } from '../world/competition-calendar';
 import { createSeasonInjury, isRecovering } from '../world/health';
@@ -142,7 +143,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -1868,6 +1869,9 @@ function validateFacilitiesHistory(state: SeasonState, holds: RecruitmentHolds[]
 function validateEmployment(value: unknown, seasonNumber: number, round: number, status: SeasonState['status'], managedClubId: string, datedMarket = false, version = 30, context: CareerPlayerContext & Partial<Pick<SeasonState, 'seed' | 'career' | 'board' | 'relationships'>> & { wagePool?: boolean } = {}): SeasonEmployment {
   // Format 75 ('coaching-3'): player wages may also use the unused staff budget; a basic bound (development mode).
   const pooledStaffRoom = (clubId: string, year: number): number => context.wagePool ? staffAllocationCeiling(context, clubId, year) : 0;
+  // Format 88: clubs run automatically may use extra wage room from cash above their reserve; a basic bound (development mode).
+  const spending = usesSurplusSpending(context);
+  const surplusRoom = (ceiling: number): number => spending ? surplusWageCeiling(ceiling) : 0;
   const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market', ...(version >= 15 ? ['transfers'] : []), ...(version >= 17 ? ['buyouts'] : []), ...(version >= 55 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'departures') ? ['departures'] : [])]);
   const rawTransfers = version >= 15 ? fields.transfers : [];
   if (!Array.isArray(rawTransfers) || rawTransfers.length > 20_000) fail('employment.transfers', 'must retain at most 20000 completed transfers');
@@ -2073,7 +2077,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
       const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
       // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow.
-      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)) + pooledStaffRoom(entry.clubId as string, year)) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)) + pooledStaffRoom(entry.clubId as string, year) + surplusRoom(Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
   }
   const employment = normalized;
@@ -2088,7 +2092,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     for (let at = 1; at <= (year === seasonNumber ? round : seasonRounds(context)); at += 1) {
       if (roundKey(year, at) < checkedBefore) continue;
       const registrations = effectiveContractsForRound(employment, year, at).filter(contract => contract.clubId === clubId);
-      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > Math.max(ceiling, seasonSalaryCeiling(context, clubId, year)) + pooledStaffRoom(clubId, year)) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
+      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > Math.max(ceiling, seasonSalaryCeiling(context, clubId, year)) + pooledStaffRoom(clubId, year) + surplusRoom(Math.max(ceiling, seasonSalaryCeiling(context, clubId, year)))) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
     }
   }
   // Clubs leaving the full world sit out the window; joining clubs' squads sign at the rollover (step 3.4d-2).
@@ -2233,7 +2237,11 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
     const noPaymentPlans = version < 16 ? { ...comparable, offers: comparable.offers.map(offer => ({ ...offer, transfer: offer.transfer ? (({ paymentPlan: _plan, ...oldTransfer }) => oldTransfer)(offer.transfer) : null })) } : comparable;
     const noTransfers = version < 15 ? { ...noPaymentPlans, offers: noPaymentPlans.offers.map(({ transfer: _transfer, ...oldOffer }) => oldOffer) } : noPaymentPlans;
     const legacyComparable = version < 14 ? (({ competitionFromEvent: _boundary, ...oldWindow }) => ({ ...oldWindow, offers: oldWindow.offers.map(({ chosenOfferId: _choice, ...oldOffer }) => oldOffer) }))(noTransfers) : noTransfers;
-    if (!sameData(legacyComparable, window)) fail(path, 'does not match its replayed dates, deadlines, statuses, player choices and offer reservations');
+    // Wage-pool careers (format 75): a selling club's wage budget includes the staff budget its staff left unused, and a
+    // past season's staff are not kept, so the replay cannot tell whether a refused sale was refused for want of wages
+    // budget. Such a refusal's recorded reason is accepted as it is (the decision, a refusal, is replayed exactly).
+    const comparableWindow = usesWagePool({ coaching: state.coaching as { model: string } | undefined }) ? withRecordedSellerReasons(legacyComparable as unknown as MarketWindow, window as unknown as MarketWindow) : legacyComparable;
+    if (!sameData(comparableWindow, window)) fail(path, 'does not match its replayed dates, deadlines, statuses, player choices and offer reservations');
     const windowRecords = records.filter((entry, recordIndex) => recordIndex >= expectedNegotiationCount && entry.seasonNumber === year && entry.status === 'complete');
     if (!sameData(replay.negotiations.records.slice(expectedNegotiationCount), windowRecords)) fail(`${path}.offers`, 'must explain each offseason response after the window opened');
     if (!sameData(replay.employment.contracts, state.employment.contracts.slice(0, replay.employment.contracts.length))) fail(`${path}.offers`, 'must preserve the exact contracts signed by scheduled responses');
@@ -2371,7 +2379,9 @@ function validateRecruitment(value: unknown, state: SeasonState, version: number
     const clubs = clubsForEmploymentYear(employment, year, round, catalogContext);
     const rosters = rostersForEmploymentYear(employment, year, round, catalogContext);
     const catalogIds = new Set(getCareerPlayers(catalogContext).map(player => player.id));
-    let replay: SeasonState = { ...state, ...knownAt(year, round, 'active'), managedClubId: managedClubAtRound(state, year, round), academy, lifecycle, youthCompetition, conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => catalogIds.has(id))), training: { ...state.training, points: Object.fromEntries(Object.entries(state.training.points).filter(([id]) => catalogIds.has(id))) }, seasonNumber: year, round, date: event.date as string, status: 'active', clubs, rosters, employment, recruitment, finance, payroll: { ...state.payroll, agreements: state.payroll.agreements.filter(agreement => agreement.seasonNumber < year || agreement.seasonNumber === year && agreement.startsRound <= round && contractForRound(employment, agreement.playerId, year, agreement.startsRound)?.clubId === agreement.clubId) }, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, negotiationCount) }, market: createMarket() };
+    // Clubs that have left the full world since that season have no plans now: the replay gives them a joining club's.
+    const filled = plansWithDefaults(state, clubs);
+    let replay: SeasonState = { ...state, ...knownAt(year, round, 'active'), managedClubId: managedClubAtRound(state, year, round), academy, lifecycle, youthCompetition, conditions: Object.fromEntries(Object.entries(state.conditions).filter(([id]) => catalogIds.has(id))), plans: filled.plans, training: { ...state.training, plans: filled.training, points: Object.fromEntries(Object.entries(state.training.points).filter(([id]) => catalogIds.has(id))) }, seasonNumber: year, round, date: event.date as string, status: 'active', clubs, rosters, employment, recruitment, finance, payroll: { ...state.payroll, agreements: state.payroll.agreements.filter(agreement => agreement.seasonNumber < year || agreement.seasonNumber === year && agreement.startsRound <= round && contractForRound(employment, agreement.playerId, year, agreement.startsRound)?.clubId === agreement.clubId) }, negotiations: { ...state.negotiations, records: state.negotiations.records.slice(0, negotiationCount) }, market: createMarket() };
     try { replay = applyInSeasonEvent(replay, event as unknown as InSeasonEvent); }
     catch (error) { fail(path, `does not follow recruitment rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     if (!sameData(replay.employment.contracts, state.employment.contracts.slice(0, replay.employment.contracts.length)) || !sameData(replay.negotiations.records, state.negotiations.records.slice(0, replay.negotiations.records.length))) fail(path, 'must preserve the exact agreements and player replies generated at this boundary');
@@ -2420,6 +2430,16 @@ function knownAtBoundaries(state: SeasonState): (year: number, round: number, st
     known.set(key, view);
     return view;
   };
+}
+
+const SELLER_WAGES_REASON = 'The selling club needs wages budget to replace its departing players.';
+/** The replayed window with each refused sale's recorded wages-budget reason, where the replay found another reason. */
+function withRecordedSellerReasons(replayed: MarketWindow, saved: MarketWindow): MarketWindow {
+  if (!Array.isArray(saved.offers)) return replayed;
+  return { ...replayed, offers: replayed.offers.map((offer, index) => {
+    const recorded = saved.offers[index]?.transfer;
+    return offer.transfer && recorded && saved.offers[index]!.id === offer.id && offer.transfer.clubStatus === 'rejected' && recorded.clubStatus === 'rejected' && recorded.clubReason === SELLER_WAGES_REASON && offer.transfer.clubReason !== SELLER_WAGES_REASON ? { ...offer, transfer: { ...offer.transfer, clubReason: SELLER_WAGES_REASON } } : offer;
+  }) };
 }
 
 /** Replay accepted replies against the contract prefix independently of present-day reservations. */
@@ -3533,6 +3553,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 86 && state.coaches !== null && typeof state.coaches === 'object' && (state.coaches as { model?: unknown }).model === COACH_STEERING_MODEL) fail('coaches.model', 'needs format 86 or later to steer clubs');
   // Format 87: the economy balance is a rule of new careers only.
   if (version < 87 && Object.hasOwn(world, 'economyBalance')) fail('world.economyBalance', 'requires format 87 or later');
+  // Format 88: rich clubs' surplus spending is a rule of new careers only.
+  if (version < 88 && Object.hasOwn(world, 'surplusSpending')) fail('world.surplusSpending', 'requires format 88 or later');
   // Format 63: the career-2 rules (protected first season, fresh confidence, mid-season moves, resignations) need it.
   const careerModel = state.career !== null && typeof state.career === 'object' ? (state.career as { model?: unknown }).model : undefined;
   if (version < 63 && (careerModel === 'career-2' || state.board !== null && typeof state.board === 'object' && Object.hasOwn(state.board, 'restarts'))) fail('career.model', 'requires format 63 or later');

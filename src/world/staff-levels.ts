@@ -7,6 +7,7 @@ import { clubEconomy, staffFee } from './economy';
 import { overallRating } from './overall-rating';
 import { clubCountry, worldOf } from './career-world';
 import { staffAllocation } from './board-consequences';
+import { staffReach, SURPLUS_SPENDING_RULES } from './surplus-spending';
 
 /** The six staff areas every club fills (format 74). */
 export type StaffRole = 'coaches' | 'scouts' | 'fitness' | 'physio' | 'assistant' | 'youth';
@@ -124,7 +125,8 @@ function unitHash(text: string): number {
 
 /** The rating a club aims at for a role: its level within the role's rating range, moved by its fixed spread. */
 export function staffTargetRating(context: LevelContext & { seed: number }, clubId: string, role: StaffRole, range: readonly [number, number]): number {
-  const level = clubStaffLevels(context).get(clubId) ?? 0;
+  // Format 88: a computer club spending from its surplus aims higher on the ladder, by its spending appetite.
+  const level = (clubStaffLevels(context).get(clubId) ?? 0) + SURPLUS_SPENDING_RULES.staffLevelBoost * staffReach(context, clubId);
   const spread = (unitHash(`${context.seed}|${clubId}|${role}|${context.seasonNumber ?? 1}`) * 2 - 1) * STAFF_LEVEL_RULES.spread;
   const placed = Math.max(0, Math.min(1, level + spread));
   return range[0] + placed * (range[1] - range[0]);
@@ -132,7 +134,10 @@ export function staffTargetRating(context: LevelContext & { seed: number }, club
 
 /** The most a starting or computer appointment in a role may cost: the role's share of the club's season staff budget. */
 export function staffShareCap(context: Parameters<typeof staffAllocation>[0], clubId: string, role: StaffRole): number {
-  return Math.floor(staffAllocation(context, clubId) * STAFF_LEVEL_RULES.shares[role] / 100);
+  // Format 88: a computer club spending from its surplus may use more of its staff budget for a role.
+  const reach = staffReach(context, clubId);
+  const share = reach > 0 ? STAFF_LEVEL_RULES.shares[role] * (1 + SURPLUS_SPENDING_RULES.staffCapBoost * reach) : STAFF_LEVEL_RULES.shares[role];
+  return Math.floor(staffAllocation(context, clubId) * share / 100);
 }
 
 /**
@@ -166,7 +171,7 @@ type RenewableContract = { clubId: string; seasonNumber: number; releasedRound: 
  * the role is filled again at the club's new level (after relegation or a poor board verdict, for example). Extra
  * training coaches can be hired again in the season once every role is filled. The manager's renewals are unchanged.
  */
-export function planComputerStaffRenewals(state: SeasonState, previous: SeasonCoaching): { state: SeasonState; coaching: SeasonCoaching } {
+export function planComputerStaffRenewals(state: SeasonState, previous: SeasonCoaching, upgrade: (clubId: string, role: StaffRole, personId: string) => boolean = () => false): { state: SeasonState; coaching: SeasonCoaching } {
   if (!usesClubLevelStaff(state)) return { state, coaching: previous };
   const year = state.seasonNumber - 1;
   const fits = (clubId: string, role: StaffRole, fee: number | undefined) => fee !== undefined && staffFee(state, clubId, fee) <= staffShareCap(state, clubId, role);
@@ -178,14 +183,15 @@ export function planComputerStaffRenewals(state: SeasonState, previous: SeasonCo
     kept.add(contract.clubId);
     // Format 76: an extra training coach still under contract stays while he fits (letting him go costs compensation).
     const contracted = (previous.terms?.[contract.coachId]?.clubId === contract.clubId && previous.terms[contract.coachId]!.untilSeason >= state.seasonNumber);
-    return (first || contracted) && fits(contract.clubId, 'coaches', staffMember(COACH_DIRECTORY, contract.coachId)?.fee) ? contract : { ...contract, renew: false };
+    // Format 88: a club spending from its surplus may let a person go at his contract's end to hire better (`upgrade`).
+    return (first || contracted) && fits(contract.clubId, 'coaches', staffMember(COACH_DIRECTORY, contract.coachId)?.fee) && !upgrade(contract.clubId, 'coaches', contract.coachId) ? contract : { ...contract, renew: false };
   }) };
-  const plan = <C extends RenewableContract>(contracts: C[], role: StaffRole, fee: (contract: C) => number | undefined): C[] => contracts.map(contract => contract.seasonNumber === year && renewing(contract) && !fits(contract.clubId, role, fee(contract)) ? { ...contract, renew: false } : contract);
+  const plan = <C extends RenewableContract>(contracts: C[], role: StaffRole, fee: (contract: C) => number | undefined, person: (contract: C) => string): C[] => contracts.map(contract => contract.seasonNumber === year && renewing(contract) && (!fits(contract.clubId, role, fee(contract)) || upgrade(contract.clubId, role, person(contract))) ? { ...contract, renew: false } : contract);
   return { coaching, state: { ...state,
-    scouts: { ...state.scouts, contracts: plan(state.scouts.contracts, 'scouts', contract => staffMember(SCOUT_DIRECTORY, contract.scoutId)?.fee) },
-    fitness: { ...state.fitness, contracts: plan(state.fitness.contracts, 'fitness', contract => staffMember(FITNESS_DIRECTORY, contract.coachId)?.fee) },
-    physio: { ...state.physio, contracts: plan(state.physio.contracts, 'physio', contract => staffMember(PHYSIO_DIRECTORY, contract.physioId)?.fee) },
-    assistant: { ...state.assistant, contracts: plan(state.assistant.contracts, 'assistant', contract => staffMember(ASSISTANT_DIRECTORY, contract.assistantId)?.fee) },
-    youth: { ...state.youth, contracts: plan(state.youth.contracts, 'youth', contract => staffMember(YOUTH_COACH_DIRECTORY, contract.coachId)?.fee) },
+    scouts: { ...state.scouts, contracts: plan(state.scouts.contracts, 'scouts', contract => staffMember(SCOUT_DIRECTORY, contract.scoutId)?.fee, contract => contract.scoutId) },
+    fitness: { ...state.fitness, contracts: plan(state.fitness.contracts, 'fitness', contract => staffMember(FITNESS_DIRECTORY, contract.coachId)?.fee, contract => contract.coachId) },
+    physio: { ...state.physio, contracts: plan(state.physio.contracts, 'physio', contract => staffMember(PHYSIO_DIRECTORY, contract.physioId)?.fee, contract => contract.physioId) },
+    assistant: { ...state.assistant, contracts: plan(state.assistant.contracts, 'assistant', contract => staffMember(ASSISTANT_DIRECTORY, contract.assistantId)?.fee, contract => contract.assistantId) },
+    youth: { ...state.youth, contracts: plan(state.youth.contracts, 'youth', contract => staffMember(YOUTH_COACH_DIRECTORY, contract.coachId)?.fee, contract => contract.coachId) },
   } };
 }

@@ -11,6 +11,7 @@ import { memoizePure } from './pure-cache';
 import { automationCushion, clubEconomy, REAL_ECONOMY_RULES, scaledMoney, worldEconomy } from './economy';
 import { remainingHomeShare, usesEconomyBalance } from './economy-balance';
 import { activeLease } from './facility-debt';
+import { surplusUpkeepShare } from './surplus-spending';
 
 /** The three facilities of `facilities-1` careers (formats 28-64). */
 export const FACILITY_TYPES: readonly FacilityType[] = ['arena', 'training', 'youth'];
@@ -64,8 +65,9 @@ export function remainingSeasonShortfall(context: FacilitiesContext & Partial<Pi
  * stay within `upkeepShare` of the club's budget over a season; always without an economy.
  */
 export function upkeepAllowsAutomaticUpgrade(context: WorldContext, clubId: string, upkeepPerMatchday: number): boolean {
-  const economy = clubEconomy(context, clubId);
-  return !economy || upkeepPerMatchday * seasonRounds(context) <= economy.budget * REAL_ECONOMY_RULES.automaticSpending.upkeepShare;
+  const economy = clubEconomy(context, clubId), usual = REAL_ECONOMY_RULES.automaticSpending.upkeepShare;
+  // Format 88: a club spending from its surplus may carry more upkeep, by its spending appetite.
+  return !economy || upkeepPerMatchday * seasonRounds(context) <= economy.budget * (surplusUpkeepShare(context, clubId, usual) ?? usual);
 }
 /** An upgrade's construction cost and a level's weekly upkeep at the club's money level (format 62; unchanged otherwise). */
 const facilityCost = (context: WorldContext, clubId: string, type: FacilityType, level: number): number => scaledMoney(context, clubId, COSTS[type][level - 1]!);

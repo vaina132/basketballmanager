@@ -8,6 +8,9 @@ import { automationCushion, clubEconomy } from './economy';
 import { getArenaFullCapacity } from './facilities-policy';
 import { getFinanceBalance, recordCommercialEntry, recordSponsorshipPayment } from './finance';
 import { getSpendableCash } from './payroll-policy';
+import { usesSurplusSpending } from './surplus-spending';
+import { projectedCashShare } from './automatic-wages';
+import { ECONOMY_BALANCE_RULES } from './economy-balance';
 import {
   agreementFor, agreementLastSeason, bestNamingOffer, bestNamingOfferAfterExit, bestOfferAfterExit, bestSponsorshipOffer, buildNamingOffers, buildSponsorshipOffers, clearlyBetterFee, commercialGovernsSeason, COMMERCIAL_CLAUSE_RULES, exitSourceId, namingAgreementFor, namingInstallment, namingPaymentsDue,
   namingSourceId, namingSponsorAvailable, needsNamingOffers, needsSponsorshipOffers, respondToSponsorshipRequest, sponsorAppeal, sponsorAvailable, sponsorClause, sponsorExitDecision, sponsorLeague,
@@ -435,7 +438,12 @@ function automateEarlyExits(state: SeasonState): SeasonState {
   const leaving = (next: SeasonState, agreement: ClauseAgreement | undefined): agreement is ClauseAgreement => {
     if (!agreement?.clause || agreement.exit) return false;
     const quote = terminationQuote(next, agreement);
-    return quote.canTerminate && getSpendableCash(next, agreement.clubId) - quote.fee >= automationCushion(next, agreement.clubId, COMMERCIAL_CLAUSE_RULES.automaticExitCushion) / 2;
+    if (!quote.canTerminate || getSpendableCash(next, agreement.clubId) - quote.fee < automationCushion(next, agreement.clubId, COMMERCIAL_CLAUSE_RULES.automaticExitCushion) / 2) return false;
+    // Format 88: the fee must also leave the season-end cash the economy balance aims for (measured: a promoted club's
+    // termination fee at matchday six took its cash to nothing by the season's end, with unpaid costs).
+    if (!usesSurplusSpending(next)) return true;
+    const share = projectedCashShare(next, agreement.clubId), budget = clubEconomy(next, agreement.clubId)?.budget ?? 0;
+    return share === null || share * budget - quote.fee >= ECONOMY_BALANCE_RULES.wageCap.targetCashShare * budget;
   };
   const end = (next: SeasonState, contract: CommercialContract, agreement: ClauseAgreement) => { const quote = terminationQuote(next, agreement); return applyExit(next, contract, agreement, 'club', 'club', quote.lastSeason, quote.fee); };
   let next = state;

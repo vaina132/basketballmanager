@@ -228,7 +228,8 @@ export interface DomesticDivisions {
 /** Format 85: new real-club careers play games at one venue without home advantage or gate (`world.neutralVenues`) and give next-division clubs their country (`world.nextDivisionCountries`). */
 /** Format 86: computer clubs' head coaches steer their training, automatic rotation and transfer targets, and every head coach's Development and Motivation (the manager's too) help his club a little (`coaches.model` 'coaches-2', option `coachSteering`, `src/world/coach-steering.ts`). */
 /** Format 87: weak clubs stay sustainable in new real-money careers (`world.economyBalance`, `src/world/economy-balance.ts`): league solidarity money, automatic facility spending by home games left, and automatic wage targets that follow the club's money when cash is low. */
-export const SEASON_SCHEMA_VERSION = 87;
+/** Format 88: rich clubs spend part of the cash above a healthy reserve in new real-money careers (`world.surplusSpending`, `src/world/surplus-spending.ts`): more wage room, a transfer budget, better staff and facilities, by each president's spending style. */
+export const SEASON_SCHEMA_VERSION = 88;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

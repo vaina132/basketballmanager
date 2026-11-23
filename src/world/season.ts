@@ -51,6 +51,7 @@ import { usesWagePool } from './wage-pool';
 import { appointMissingCoaches, createCoaching, recruitAiCoaches, renewSeasonCoaching } from './coaching';
 import { keepContractedStaff, payComputerStaffCompensation, processStaffWagesRound, settleStaffTerms, withComputerStaffTerms, withOpeningStaffTerms } from './staff-contracts';
 import { planComputerStaffRenewals } from './staff-levels';
+import { staffUpgradeCheck } from './staff-upgrades';
 import { createFinance, defaultTicketPriceFor, enableFinance, openClubFinances, prepareFinanceRound, processFinanceRound, startFinanceSeason } from './finance';
 import { processTransferPayments } from './transfer-payments';
 import { scheduleListingBids } from './listings';
@@ -91,6 +92,20 @@ const defaultPlan = (club: Team, automatic: boolean): ClubPlan => ({
   lineup: club.players.slice(0, 5).map(player => player.id),
   autoSubstitutions: automatic,
 });
+
+/**
+ * A club's matchday and training plans as a club joining the full world starts them (the default plan, every player on
+ * the team's training), for the clubs of `clubs` without plans in `state`: the save check's replay of an earlier season
+ * needs them for clubs that have since left the full world (their plans were dropped then). Other clubs keep theirs.
+ */
+export function plansWithDefaults(state: Pick<SeasonState, 'plans' | 'training'> & WorldContext, clubs: readonly Team[]): { plans: SeasonState['plans']; training: SeasonState['training']['plans'] } {
+  const missing = clubs.filter(club => !state.plans[club.id] || !state.training.plans[club.id]);
+  if (!missing.length) return { plans: state.plans, training: state.training.plans };
+  return {
+    plans: { ...Object.fromEntries(missing.map(club => [club.id, { ...defaultPlan(club, true), ...(usesFullClubRoster(state) ? { matchday: null } : {}) }])), ...state.plans },
+    training: { ...Object.fromEntries(missing.map(club => [club.id, { delegated: true, intensity: 'standard' as const, focus: 'balanced' as const, individual: Object.fromEntries(club.players.map(player => [player.id, 'team' as const])) }])), ...state.training.plans },
+  };
+}
 
 function seasonYear(seasonNumber: number): number {
   if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || seasonNumber > MAX_SEASON_NUMBER) throw new Error('Choose a supported career season number.');
@@ -554,6 +569,13 @@ export interface SeasonSystems {
    * cash is low. New careers only; older careers keep the earlier money rules.
    */
   economyBalance?: boolean;
+  /**
+   * Format 88 (owner decision, 23 November 2026: "Rich clubs can spend more on wages, more on signing new players and
+   * investing in club facilities, signing better staff"): with the economy balance, clubs run automatically (computer
+   * clubs, and the manager's club only where he delegates) spend part of their cash above a healthy reserve, gradually
+   * and by their president's spending style (`world.surplusSpending`, `src/world/surplus-spending.ts`). New careers only.
+   */
+  surplusSpending?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -567,7 +589,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -602,6 +624,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.clubCountries !== undefined && typeof options.clubCountries !== 'boolean') throw new Error('Choose a valid club country setting.');
   if (options.coachSteering !== undefined && typeof options.coachSteering !== 'boolean') throw new Error('Choose a valid head coach steering setting.');
   if (options.economyBalance !== undefined && typeof options.economyBalance !== 'boolean') throw new Error('Choose a valid club money setting.');
+  if (options.surplusSpending !== undefined && typeof options.surplusSpending !== 'boolean') throw new Error('Choose a valid club spending setting.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -650,7 +673,9 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   const neutral = !!options.neutralVenues && !world.neutralVenues && oneVenue, countries = !!options.clubCountries && !world.nextDivisionCountries && !!world.lowerDivisions?.some(isMemberList);
   // Format 87: the economy balance, in worlds with researched club money only.
   const balanced = !!options.economyBalance && !world.economyBalance && !!world.economy;
-  return neutral || countries || balanced ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}) } : world;
+  // Format 88: rich clubs' surplus spending, with the economy balance only.
+  const spending = !!options.surplusSpending && !world.surplusSpending && (balanced || !!world.economyBalance);
+  return neutral || countries || balanced || spending ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}) } : world;
 }
 
 /** Format 82: the career's coaches (the manager's starting attributes) and the national teams' real coaches. */
@@ -1246,7 +1271,8 @@ export function rolloverSeason(state: SeasonState): SeasonState {
   // Format 74: computer clubs first decide which staff to keep at the new season's money level.
   // Format 76: staff still under contract stay; computer clubs pay compensation to anyone they let go before the end.
   const contracted = keepContractedStaff(next, state.coaching);
-  const renewals = planComputerStaffRenewals(contracted.state, contracted.coaching);
+  // Format 88: computer clubs spending from a surplus may replace staff whose contracts end with better people.
+  const renewals = planComputerStaffRenewals(contracted.state, contracted.coaching, staffUpgradeCheck(contracted.state, contracted.coaching));
   next = renewSeasonCoaching(payComputerStaffCompensation(renewals.state, renewals.coaching), renewals.coaching);
   next = renewSeasonScouts(next);
   next = renewSeasonFitness(next);

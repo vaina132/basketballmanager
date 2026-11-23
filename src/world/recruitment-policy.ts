@@ -1,6 +1,7 @@
 import { staffRoomForWages } from './wage-pool';
 import { clubRosterLimitText, clubRosterLimit } from './club-roster-policy';
 import { seasonSalaryBudget } from './board-consequences';
+import { surplusWageRoom } from './surplus-spending';
 import type { InSeasonBudget, InSeasonOffer, InSeasonOfferQuote } from '../domain/recruitment';
 import type { ContractOfferOptions } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
@@ -45,7 +46,8 @@ export function getInSeasonBudget(state: SeasonState, clubId = state.managedClub
   const seasonWages = contracts.reduce((sum, contract) => sum + contract.seasonWage, 0);
   const reservedWages = offers.reduce((sum, offer) => sum + offer.seasonWage, 0);
   // Format 75 (`coaching-3`): the wage pool adds the staff budget the employed staff leave unused.
-  const allocation = seasonSalaryBudget(state, clubId, state.seasonNumber) + staffRoomForWages(state, clubId);
+  // Format 88: a club run automatically may also use extra wage room from its cash above a healthy reserve.
+  const allocation = seasonSalaryBudget(state, clubId, state.seasonNumber) + staffRoomForWages(state, clubId) + surplusWageRoom(state, clubId, state.seasonNumber);
   return { budget: allocation, seasonWages, reservedWages, remainingBudget: Math.max(0, allocation - seasonWages - reservedWages), rosterSize: contracts.length, reservedRosterSize: offers.length, remainingWagesReserved: offers.reduce((sum, offer) => sum + offer.remainingWages, 0), spendableCash: getSpendableCash(state, clubId, undefined, undefined, excludeOfferId) };
 }
 

@@ -17,6 +17,7 @@ import { seasonSalaryBudget } from './board-consequences';
 import { benchWage, knownMoneySeason, moneyAt, REAL_ECONOMY_RULES, worldEconomy } from './economy';
 import { refusedContractMinimum, refusedContractPremium } from './contract-requests-policy';
 import { contractRoleReason, offeredContractRole, roleWage } from './contract-roles';
+import { surplusWageRoom } from './surplus-spending';
 
 export const EMPLOYMENT_BUDGET = 24_000_000;
 export const MIN_ROSTER_SIZE = 8;
@@ -140,7 +141,8 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
   const reservedWages = reserved.reduce((total, offer) => total + offer.seasonWage, 0), reservedRosterSize = reserved.length;
   // Format 70 (board-2): the season verdict changes the player salary budget (`seasonSalaryBudget`); otherwise the standard budget.
   // Format 75 (`coaching-3`): the wage pool adds the staff budget the employed staff leave unused.
-  const budget = seasonSalaryBudget(state, clubId, seasonNumber) + staffRoomForWages(state, clubId, seasonNumber), remainingBudget = budget - seasonWages - reservedWages;
+  // Format 88: a club run automatically may also use extra wage room from its cash above a healthy reserve.
+  const budget = seasonSalaryBudget(state, clubId, seasonNumber) + staffRoomForWages(state, clubId, seasonNumber) + surplusWageRoom(state, clubId, seasonNumber), remainingBudget = budget - seasonWages - reservedWages;
   const reserveWage = minimumSquadWage(state, clubId, seasonNumber);
   // A rival can win any pending player. Keep enough to replace a cheap held slot
   // until that player actually signs, so losing a bid cannot strand the club.

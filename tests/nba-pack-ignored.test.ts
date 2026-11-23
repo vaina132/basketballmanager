@@ -28,9 +28,11 @@ function withNba(): DataPack {
 describe('a pack with the NBA', () => {
   afterAll(() => requireWorldContexts(false));
 
-  it('is not offered as a career league (30 clubs)', () => {
-    expect(careerCompetitions(withNba()).map(item => item.id)).toEqual(['acb', 'bbl']);
-    expect(() => worldFromPack(withNba(), 'nba')).toThrow(/supported domestic leagues/);
+  it('is offered as a career league like any other (NBA step 5), building a world of the NBA alone', () => {
+    expect(careerCompetitions(withNba()).map(item => item.id).sort()).toEqual(['acb', 'bbl', 'nba']);
+    const world = worldFromPack(withNba(), 'nba');
+    expect(world.nba?.leagueId).toBe('nba');
+    expect(world.clubs.every(club => club.id.startsWith('nba-'))).toBe(true);
   });
 
   it('leaves a European career exactly as without it: no NBA club joins as an unchosen top division', () => {

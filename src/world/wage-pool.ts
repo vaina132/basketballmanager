@@ -4,6 +4,8 @@ import { seasonSalaryBudget, staffAllocation } from './board-consequences';
 import { effectiveContractsForRound, getClubContractSummary } from './employment-policy';
 import { getInSeasonOffers } from './recruitment-policy';
 import { staffCommitted } from './staff-policy';
+import { isCapClub } from './club-roster-policy';
+import { usesNbaBalance } from './nba-balance';
 
 /**
  * One wage pool (owner feedback, 18 November 2026; format 75, stored as `coaching.model` 'coaching-3'): new careers have
@@ -27,6 +29,8 @@ type StaffState = Pick<SeasonState, 'coaching' | 'seasonNumber'> & Partial<Pick<
 /** Staff budget the employed staff leave unused, which a season's player wages may use (0 without the wage pool). */
 export function staffRoomForWages(state: Partial<StaffState> & Pick<SeasonState, 'seasonNumber'> & WorldContext, clubId: string, seasonNumber = state.seasonNumber): number {
   if (!state.coaching || !usesWagePool(state)) return 0;
+  // Format 96 (NBA step 12): an NBA club's player wages pool is its owner's payroll ceiling; unused staff budget adds nothing.
+  if (usesNbaBalance(state) && isCapClub(state, clubId)) return 0;
   return Math.max(0, staffAllocation(state, clubId, seasonNumber) - staffCommitted(state as StaffState, clubId));
 }
 

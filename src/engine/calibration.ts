@@ -262,5 +262,30 @@ const NBA_CALIBRATION: Calibration = Object.freeze({
   FLOW: { ...FLOW, seconds: { advance: 6.1, pnr: 7.9, drive: 7.1, post: 8.5, motion: 7.9, early: 4.4 } },
 });
 
-/** The match calibration a ruleset plays with: FIBA's frozen objects, or the NBA set. */
-export function calibrationFor(rules: { id: string }): Calibration { return rules.id === 'nba-2026' ? NBA_CALIBRATION : FIBA_CALIBRATION; }
+/**
+ * NBA step 12 (format 96, ruleset `nba-2026b`, new NBA worlds only; reversible defaults, 23 November 2026): the NBA set
+ * retuned on the live world-14 pack (real NBA squads against each other, then five automatic seasons): stars' minutes,
+ * NBA late-game fouling and comebacks for more close games and overtimes. Matches recorded with `nba-2026` keep the set
+ * above, so earlier NBA careers replay exactly.
+ */
+const NBA_CALIBRATION_B: Calibration = Object.freeze({
+  ...NBA_CALIBRATION,
+  // Home teams won 55-56% of real-roster games with the stronger score effect below; the target is 54-55%.
+  HOME_COURT_MAKE_BONUS: .005,
+  // NBA comebacks: a lead costs more make chance, most of all in the fourth quarter, so more games stay close late
+  // (overtime about 3.5% -> 5%, games within five points about 21% -> 34%).
+  SCORE_EFFECT: { ...SCORE_EFFECT, perPoint: .0022, fourthQuarter: 2.5 },
+  ROTATION: {
+    ...NBA_CALIBRATION.ROTATION,
+    // Stars played 36-38 minutes a game (the best rotation players gained a quarter of a minute per rating point above
+    // the rotation's average); NBA leaders play about 34-36. Less quality shift and slightly shorter starters' plans.
+    plannedMinutes: [34, 33, 32.5, 31.5, 30.5, 22.5, 19, 16.5, 12.5, 6, 0, 0],
+    qualityMinutes: .1,
+  },
+  // NBA teams foul on purpose only when down one or two in the last 24 seconds (down three they defend and look for the
+  // tying three); the European schedule (down up to 7 from 50 seconds) gave away free throws and widened late margins.
+  PLAYS: { ...NBA_CALIBRATION.PLAYS, intentional: [{ lead: 2, seconds: 24 }] },
+});
+
+/** The match calibration a ruleset plays with: FIBA's frozen objects, the NBA set, or its step-12 revision. */
+export function calibrationFor(rules: { id: string }): Calibration { return rules.id === 'nba-2026b' ? NBA_CALIBRATION_B : rules.id === 'nba-2026' ? NBA_CALIBRATION : FIBA_CALIBRATION; }

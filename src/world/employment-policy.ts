@@ -16,6 +16,7 @@ import type { WorldContext } from '../domain/world';
 import { clubRosterLimitText, clubRosterLimit, clubSalaryCeiling, isCapClub, minRosterSize, minRosterText } from './club-roster-policy';
 import { nbaDeadMoney, nbaSigningCheck } from './nba-cap-policy';
 import { nbaEligibilityReason } from './nba-moves';
+import { usesNbaBalance } from './nba-balance';
 import type { NbaCapRoute } from './nba-cap';
 import { seasonSalaryBudget } from './board-consequences';
 import { benchWage, knownMoneySeason, moneyAt, REAL_ECONOMY_RULES, worldEconomy } from './economy';
@@ -262,7 +263,7 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
     else if (state.status === 'complete' && state.market?.enabledSince && window && state.date >= window.closesOn && !resolving) reason = 'The recruitment period has closed.';
     else if (rivalOffer && !competitive()) reason = `This player is considering an offer from ${state.clubs.find(club => club.id === rivalOffer.clubId)?.name ?? 'another club'}.`;
     // Format 92: an NBA club's signing must fit the salary cap (`nba-cap-policy.ts`); a scheduled reply keeps the route its offer took.
-    let capRoute: NbaCapRoute | undefined;
+    let capRoute: NbaCapRoute | undefined, capMinimum: number | undefined;
     if (reason === null && capClub()) {
       if (resolving && openOffer?.capRoute) capRoute = openOffer.capRoute;
       else {
@@ -271,6 +272,7 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
         const eligibility = nbaEligibilityReason(state, clubId, playerId);
         const check = eligibility ? { route: null, reason: eligibility } : nbaSigningCheck(state, { clubId, playerId, seasonWage, seasonNumber: startsSeason, payrollBefore: summary.seasonWages + summary.reservedWages + nbaDeadMoney(state.employment, clubId, startsSeason), ...(openOffer ? { excludeOfferId: openOffer.id } : {}), inSeason: state.status === 'active' && current?.clubId !== clubId });
         if (check.route) capRoute = check.route; else reason = check.reason;
+        if ('minimum' in check) capMinimum = check.minimum;
       }
     }
     if (reason === null) for (let year = startsSeason; year <= endsSeason; year += 1) {
@@ -282,7 +284,14 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
       const reserve = Math.max(0, minimumRoster - size) * reserveWage + pendingShortfalls + proposalShortfall + outgoingFor(year);
       // A cheap signing still needed for the minimum squad may use the season's highest allocation (format 72, see the summary).
       // Format 92: an NBA club may always sign the minimum contracts it needs for its 13 players, whatever its owner's ceiling.
-      const limit = capClub() && capRoute === 'minimum' && size <= minimumRoster ? Infinity : size <= minimumRoster && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
+      // NBA step 12: an NBA club's scheduled reply keeps the wage check of its offer's day, as it keeps the cap route. Minimum
+      // contracts offered later may go past the owner's ceiling (above), and counted as reserved they failed the earlier
+      // offer's answer and stopped the offseason with an error (measured: the live pack, seed 11, fourth offseason). Only
+      // answers that failed before pass now, so every saved career replays as it did.
+      // Format 96 (NBA step 12): a signing at the player's minimum salary needed for the 13 is always allowed, under the cap
+      // as over it (with the owner's ceiling as the whole wages pool, a club short of players could otherwise afford no one).
+      const minimumNeeded = size <= minimumRoster && (capRoute === 'minimum' || usesNbaBalance(state) && capMinimum !== undefined && seasonWage <= capMinimum);
+      const limit = capClub() && (resolving || minimumNeeded) ? Infinity : size <= minimumRoster && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
       if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > limit) { reason = `This offer exceeds the season ${year} wage budget after protecting space for ${minRosterText(state, clubId)} players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
     }
     return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }), ...(role === undefined ? {} : { role }), ...(reason === null && capRoute ? { capRoute } : {}) };

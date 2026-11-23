@@ -86,7 +86,7 @@ export function ScoutingWorkspace({ season, disabled, selectedPlayerId, onSelect
   const quote = selected ? quoteScoutingAssignment(season, selected.id, club.id, observerContractId) : null
   const shortlisted = selected ? scouting.shortlist.includes(selected.id) : false
   const pending = selected ? scouting.assignments.some(assignment => assignment.playerId === selected.id) : false
-  const askingWage = selected ? season.negotiations.enabledSince ? getNegotiationDemands(selected.id, undefined, season, offeredContractRole(season, season.managedClubId, selected.id)).terms[0]!.seasonWage : getCareerWage(season, selected.id) : 0
+  const askingWage = selected ? season.negotiations.enabledSince ? getNegotiationDemands(selected.id, undefined, season, offeredContractRole(season, season.managedClubId, selected.id), season.managedClubId).terms[0]!.seasonWage : getCareerWage(season, selected.id) : 0
   const selectedContract = selected ? contractForSeason(season.employment, selected.id, season.seasonNumber) : null
   const futureContract = selected ? contractForSeason(season.employment, selected.id, season.seasonNumber + 1) : null
   const offseasonPaid = selected && season.status === 'complete' && futureContract && futureContract.clubId !== club.id

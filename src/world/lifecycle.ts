@@ -5,7 +5,9 @@ import { getCareerPlayerAge, getCareerPlayers } from './player-catalog';
 import { effectiveContractsForSeason } from './employment-policy';
 import { lifecycleDateOfBirth, MIN_LIFECYCLE_POPULATION, MAX_PENDING_CLUB_RETIREMENTS, retirementTargetAge } from './lifecycle-policy';
 import { seasonStartDate } from './season';
-import { roundKey } from './career-world';
+import { roundKey, worldOf } from './career-world';
+import { NBA_MOVES_RULES, nbaOnlyWorld, nbaValue, usesNbaMoves } from './nba-moves';
+
 
 export function createLifecycle(): SeasonLifecycle { return { model: 'lifecycle-1', enabledSince: null, reviews: [], notices: [] }; }
 
@@ -36,11 +38,25 @@ function review(state: SeasonState): SeasonState {
   let remainingPopulation = population.length;
   const pendingByClub = new Map(state.clubs.map(club => [club.id, notices.filter(notice => notice.retiredOn > state.date && club.players.some(player => player.id === notice.playerId)).length]));
   const newByClub = new Map(state.clubs.map(club => [club.id, 0]));
-  const candidates = population.map(player => ({ player, age: getCareerPlayerAge(state, player.id, state.date), targetAge: retirementTargetAge(state.seed, player.id) }))
+  // Format 93 (NBA-only worlds with `world.nba.moves`): keep enough players for every NBA club's roster, and let players
+  // still without a contract when the season opens leave the world (they go abroad) while that many remain.
+  const world = worldOf(state), keepNba = usesNbaMoves(state) && nbaOnlyWorld(world);
+  const floor = keepNba ? Math.max(MIN_LIFECYCLE_POPULATION, NBA_MOVES_RULES.populationPerClub * world.clubs.length) : MIN_LIFECYCLE_POPULATION;
+  if (keepNba && remainingPopulation > floor) {
+    const contracted = new Set(effectiveContractsForSeason(state.employment, state.seasonNumber).map(contract => contract.playerId));
+    const unsigned = population.filter(player => !contracted.has(player.id) && protectedThrough(state, player.id) === state.seasonNumber)
+      .map(player => ({ player, value: nbaValue(state, player.id) })).sort((left, right) => left.value - right.value || left.player.id.localeCompare(right.player.id, 'en'));
+    for (const { player } of unsigned) {
+      if (remainingPopulation <= floor) break;
+      const notice: RetirementNotice = { id: `retirement-${notices.length + 1}`, reviewId: id, playerId: player.id, clubId: null, announcedSeason: state.seasonNumber, announcedRound: state.round, announcedOn: state.date, targetAge: retirementTargetAge(state.seed, player.id), lastSeason: state.seasonNumber - 1, retirementSeason: state.seasonNumber, retiredOn: state.date };
+      notices.push(notice); review.noticeIds.push(notice.id); planned.add(player.id); remainingPopulation -= 1;
+    }
+  }
+  const candidates = population.filter(player => !planned.has(player.id)).map(player => ({ player, age: getCareerPlayerAge(state, player.id, state.date), targetAge: retirementTargetAge(state.seed, player.id) }))
     .filter(row => row.age !== null && row.age >= row.targetAge - 3)
     .sort((left, right) => lifecycleDateOfBirth(state, left.player.id)!.localeCompare(lifecycleDateOfBirth(state, right.player.id)!, 'en') || left.player.id.localeCompare(right.player.id, 'en'));
   for (const candidate of candidates) {
-    if (remainingPopulation <= MIN_LIFECYCLE_POPULATION) break;
+    if (remainingPopulation <= floor) break;
     const club = state.clubs.find(club => club.players.some(player => player.id === candidate.player.id));
     // Clubs running an eight-player squad still need ordinary turnover. Advance
     // notice gives their manager a full season to arrange affordable replacements.

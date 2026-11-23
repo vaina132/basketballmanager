@@ -34,6 +34,12 @@ export interface NbaWorld {
    * Format-90 NBA worlds without it keep the placeholder money of NBA step 4.
    */
   cap?: 'nba-cap-1';
+  /**
+   * NBA step 7 (format 93, new NBA worlds, only with `cap`): free agency and moves between the NBA and Europe
+   * (`src/world/nba-moves.ts`): offers chosen by NBA level, European wages for NBA players, the buyout allowance, the
+   * minimum team salary, and NBA-only worlds' population kept for full rosters.
+   */
+  moves?: 'nba-moves-1';
 }
 /** Format 62 (sprint 4): money of real-club worlds follows researched 2025-27 club budgets (`src/world/economy.ts`). */
 export type WorldEconomyId = 'real-2026-1';

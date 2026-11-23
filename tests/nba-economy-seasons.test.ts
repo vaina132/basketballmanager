@@ -10,7 +10,9 @@ import { getMarketStartReason } from '../src/world/market-policy';
 import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { getFinanceBalance } from '../src/world/finance';
 import { financeLedgerEntries } from '../src/world/finance-ledger';
-import { effectiveContractsForSeason } from '../src/world/employment-policy';
+import { contractForSeason, effectiveContractsForSeason } from '../src/world/employment-policy';
+import { getActiveCareerPlayers } from '../src/world/player-catalog';
+import { NBA_MOVES_RULES } from '../src/world/nba-moves';
 import { nbaPayroll } from '../src/world/nba-cap-policy';
 import { centsToUsd, NBA_SALARY_CAP, nbaLuxuryTax } from '../src/world/nba-cap';
 
@@ -23,10 +25,13 @@ const play = (state: SeasonState) => advanceSeason(state.activeMatch && state.ac
 const usd = (cents: number) => `$${(centsToUsd(cents) / 1e6).toFixed(1)}M`;
 
 interface SeasonReport { season: number; payers: string[]; taxTotal: number; shares: number; unpaid: string[]; rosters: number[]; payrolls: number[]; cash: number[]; strict: boolean }
+/** Format 93: who left the NBA-only world at a season's opening (no contract) and how many players stayed. */
+interface Opening { season: number; left: string[]; unsignedLeft: boolean; population: number }
 
 describe('three automatic NBA seasons under the salary cap', () => {
   const world = worldFromPack(nbaPack(), 'nba');
   const reports: SeasonReport[] = [];
+  const openings: Opening[] = [];
   let finalState: SeasonState;
   beforeAll(() => {
     let state = setEmploymentDelegation(createSeason({ seed: 21, world, managedClubId: 'nba-bos', ...NEW_CAREER_SYSTEMS }), true);
@@ -49,6 +54,8 @@ describe('three automatic NBA seasons under the salary cap', () => {
       for (let steps = 0; steps < 200 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       parseSeason(serializeSeasonCompact(state));
       state = rolloverSeason(state);
+      const left = state.lifecycle.notices.filter(notice => notice.announcedSeason === state.seasonNumber && notice.lastSeason === state.seasonNumber - 1);
+      openings.push({ season: state.seasonNumber, left: left.map(notice => notice.playerId), unsignedLeft: left.every(notice => !contractForSeason(state.employment, notice.playerId, state.seasonNumber)), population: getActiveCareerPlayers(state).length });
     }
     finalState = state;
   }, 7_200_000);
@@ -61,12 +68,22 @@ describe('three automatic NBA seasons under the salary cap', () => {
     }
   });
 
-  it('charges the luxury tax to three to eight clubs a season and shares it among the others', () => {
+  it('charges the luxury tax to two to eight clubs a season and shares it among the others', () => {
     for (const report of reports) {
-      expect(report.payers.length).toBeGreaterThanOrEqual(3);
+      // Format 93: NBA clubs no longer pay each other transfer fees (trades come with NBA step 9), so a season after
+      // the first market can have as few as two payers (two in season 2 of this seed).
+      expect(report.payers.length).toBeGreaterThanOrEqual(2);
       expect(report.payers.length).toBeLessThanOrEqual(8);
       expect(report.shares).toBeLessThanOrEqual(report.taxTotal);
       expect(report.taxTotal - report.shares).toBeLessThan(30);
+    }
+  });
+
+  it('lets players without a contract leave the NBA-only world at the season opening only while 15 players a club remain (format 93; the synthetic NBA has exactly 450, so nobody leaves yet)', () => {
+    console.log(`Openings: ${openings.map(item => `season ${item.season}: ${item.left.length} left, ${item.population} players`).join('; ')}`);
+    for (const opening of openings) {
+      expect(opening.unsignedLeft).toBe(true);
+      expect(opening.population).toBeGreaterThanOrEqual(NBA_MOVES_RULES.populationPerClub * 30);
     }
   });
 

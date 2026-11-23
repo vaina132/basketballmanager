@@ -1,4 +1,5 @@
 import { nbaRegularSeasonEndRound, nbaTaxBills, usesNbaCap } from './nba-cap-policy';
+import { nbaSalaryFloorShortfall, usesNbaMoves } from './nba-moves';
 import { staffLimit } from './wage-pool';
 import { requireCalendarWeek } from './calendar-boundary';
 import type { CoachingContract } from '../domain/coaching';
@@ -422,6 +423,8 @@ export function processLuxuryTax(state: SeasonState): SeasonState {
   let next = state;
   for (const bill of bills) if (bill.tax > 0) next = book(next, bill.clubId, 'luxury-tax', -bill.tax, `luxury-tax-s${state.seasonNumber}`);
   if (share > 0) for (const clubId of receivers) next = book(next, clubId, 'tax-share', share, `tax-share-s${state.seasonNumber}`);
+  // Format 93: a club below the minimum team salary pays the shortfall (in the CBA shared among its players).
+  if (usesNbaMoves(state)) for (const bill of bills) { const shortfall = nbaSalaryFloorShortfall(bill.payroll); if (shortfall > 0) next = book(next, bill.clubId, 'salary-floor', -shortfall, `salary-floor-s${state.seasonNumber}`); }
   return next;
 }
 

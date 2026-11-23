@@ -23,6 +23,7 @@ import { dateForRound } from './season';
 import { getTransferPaymentSchedule } from './transfer-payments';
 import { getApplicableReleaseClause, offerOptionsReason } from './release-clauses';
 import { seasonRounds } from './career-world';
+import { nbaOfferOrder } from './nba-moves';
 
 export function createInSeasonRecruitment(): SeasonRecruitment { return { model: 'recruitment-1', enabledSince: null, transfersEnabledSince: null, events: [], offers: [] }; }
 
@@ -135,7 +136,8 @@ export function applyInSeasonEvent(state: SeasonState, event: InSeasonEvent): Se
       if (quote.canOffer) valid.push(offer);
       else next = replaceOffers(next, next.recruitment.offers.map(item => item.id === offer.id ? { ...item, status: 'cancelled', respondedOn: next.date, closedOn: next.date, reason: quote.reason } : item));
     }
-    const chosen = valid.filter(offer => evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, next, offer.role).outcome === 'accepted').sort(compareOffers)[0];
+    // Format 93: by NBA level, NBA or European offers first (`nbaOfferOrder`), then the best terms.
+    const chosen = valid.filter(offer => evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, next, offer.role, offer.clubId).outcome === 'accepted').sort((left, right) => nbaOfferOrder(next, left.playerId, left.clubId, right.clubId) || compareOffers(left, right))[0];
     if (chosen) {
       const contractCountBefore = next.employment.contracts.length;
       const contract: EmploymentContract = { id: `employment-contract-${contractCountBefore + 1}`, playerId, clubId: chosen.clubId, startsSeason: next.seasonNumber, startsRound: next.round, endsSeason: next.seasonNumber + chosen.seasons - 1, seasonWage: chosen.seasonWage, signedSeason: next.seasonNumber, signedRound: next.round, kind: chosen.transfer ? 'midseason-transfer' : 'midseason', ...(chosen.releaseFee === undefined ? {} : { releaseFee: chosen.releaseFee }), ...(chosen.role === undefined ? {} : { role: chosen.role }) };
@@ -145,12 +147,12 @@ export function applyInSeasonEvent(state: SeasonState, event: InSeasonEvent): Se
       if (chosen.academyProspectId) next = graduateAcademyProspect(next, playerId, 'promotion', chosen.id, contract.id);
       next = addInSeasonWageAgreement(next, contract);
       if (transfer) next = recordTransferFee(next, transfer);
-      next = appendNegotiationResponse(next, chosen.clubId, playerId, chosen.seasonWage, chosen.seasons, evaluateNegotiation(playerId, chosen.seasonWage, chosen.seasons, chosen.releaseFee, next, chosen.role), contract.id, contractCountBefore, next.seasonNumber, chosen.releaseFee, chosen.role);
+      next = appendNegotiationResponse(next, chosen.clubId, playerId, chosen.seasonWage, chosen.seasons, evaluateNegotiation(playerId, chosen.seasonWage, chosen.seasons, chosen.releaseFee, next, chosen.role, chosen.clubId), contract.id, contractCountBefore, next.seasonNumber, chosen.releaseFee, chosen.role);
       const negotiationId = next.negotiations.records.at(-1)!.id;
       next = replaceOffers(next, next.recruitment.offers.map(offer => offer.id === chosen.id ? { ...offer, status: 'accepted', respondedOn: next.date, closedOn: next.date, negotiationId } : offer.playerId === playerId && offer.seasonNumber === next.seasonNumber && isLiveInSeasonOffer(offer) ? { ...offer, status: 'lost', respondedOn: next.date, closedOn: next.date, chosenOfferId: chosen.id, reason: 'The player accepted another club\'s offer.' } : offer));
       arrivals.push(contract);
     } else for (const offer of valid) {
-      const decision = evaluateNegotiation(playerId, offer.seasonWage, offer.seasons, offer.releaseFee, next, offer.role);
+      const decision = evaluateNegotiation(playerId, offer.seasonWage, offer.seasons, offer.releaseFee, next, offer.role, offer.clubId);
       next = appendNegotiationResponse(next, offer.clubId, playerId, offer.seasonWage, offer.seasons, decision, null, next.employment.contracts.length, next.seasonNumber, offer.releaseFee, offer.role);
       const negotiationId = next.negotiations.records.at(-1)!.id;
       next = replaceOffers(next, next.recruitment.offers.map(item => item.id === offer.id ? { ...item, status: decision.outcome === 'countered' ? 'countered' : 'rejected', respondedOn: next.date, closedOn: next.date, negotiationId, reason: negotiationReasonText(decision) } : item));

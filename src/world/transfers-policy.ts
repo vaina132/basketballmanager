@@ -14,6 +14,7 @@ import { addMarketDays, getLiveMarketOffers, getMarketWindow, isCompetitiveMarke
 import { getSpendableCash } from './payroll-policy';
 import { getTransferPaymentSummary, TRANSFER_PAYMENT_PLANS } from './transfer-payments';
 import { releaseClauseTriggerReason } from './release-clauses';
+import { nbaTransferReason } from './nba-moves';
 
 export const MIN_TRANSFER_FEE = 100_000;
 export const MAX_TRANSFER_FEE = 50_000_000;
@@ -47,6 +48,9 @@ export function transferOfferReason(state: SeasonState, playerId: string, fee: n
   const resolving = !!resolvingOfferId && own?.id === resolvingOfferId && own.status === 'pending' && own.responseOn === state.date;
   if (!isMarketActive(state) || !isCompetitiveMarket(state) || !window) return 'Club transfers are available during the competitive offseason.';
   if (!contract || contract.clubId === buyerId) return 'Choose a player under contract at another club for next season.';
+  // Format 93: NBA transfers follow the NBA's rules (trades between NBA clubs, Europeans only through release clauses).
+  const nbaReason = nbaTransferReason(state, contract.clubId, buyerId, false, options.transferMode === 'release-clause');
+  if (nbaReason) return nbaReason;
   if (leavingClubIds(state).has(contract.clubId) || leavingClubIds(state).has(buyerId)) return 'Clubs leaving the game\'s leagues take no part in transfers this offseason.';
   if ((state.employment.transfers ?? []).some(transfer => transfer.playerId === playerId && transfer.startsSeason === state.seasonNumber + 1)) return 'This player has already changed clubs this offseason.';
   if (!TRANSFER_PAYMENT_PLANS.includes(paymentPlan)) return 'Choose a supported transfer payment plan.';

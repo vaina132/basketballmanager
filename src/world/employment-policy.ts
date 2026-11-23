@@ -15,6 +15,7 @@ import { retirementContractReason } from './lifecycle-policy';
 import type { WorldContext } from '../domain/world';
 import { clubRosterLimitText, clubRosterLimit, clubSalaryCeiling, isCapClub, minRosterSize, minRosterText } from './club-roster-policy';
 import { nbaDeadMoney, nbaSigningCheck } from './nba-cap-policy';
+import { nbaEligibilityReason } from './nba-moves';
 import type { NbaCapRoute } from './nba-cap';
 import { seasonSalaryBudget } from './board-consequences';
 import { benchWage, knownMoneySeason, moneyAt, REAL_ECONOMY_RULES, worldEconomy } from './economy';
@@ -246,7 +247,9 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
       if (resolving && openOffer?.capRoute) capRoute = openOffer.capRoute;
       else {
         const summary = summaryFor(startsSeason, openOffer?.clubId === clubId ? openOffer.id : undefined);
-        const check = nbaSigningCheck(state, { clubId, playerId, seasonWage, seasonNumber: startsSeason, payrollBefore: summary.seasonWages + summary.reservedWages + nbaDeadMoney(state.employment, clubId, startsSeason), ...(openOffer ? { excludeOfferId: openOffer.id } : {}), inSeason: state.status === 'active' && current?.clubId !== clubId });
+        // Format 93: Europeans join NBA clubs from 23 and at the level of an NBA rotation player (`nba-moves.ts`).
+        const eligibility = nbaEligibilityReason(state, clubId, playerId);
+        const check = eligibility ? { route: null, reason: eligibility } : nbaSigningCheck(state, { clubId, playerId, seasonWage, seasonNumber: startsSeason, payrollBefore: summary.seasonWages + summary.reservedWages + nbaDeadMoney(state.employment, clubId, startsSeason), ...(openOffer ? { excludeOfferId: openOffer.id } : {}), inSeason: state.status === 'active' && current?.clubId !== clubId });
         if (check.route) capRoute = check.route; else reason = check.reason;
       }
     }

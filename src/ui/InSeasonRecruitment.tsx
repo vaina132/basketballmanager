@@ -134,7 +134,7 @@ export function InSeasonOfferDialog({ season, player, disabled, onClose, onOffer
   const endsSeason = transferQuote?.endsSeason ?? season.seasonNumber
   const firstPayment = transferQuote?.installments[0]?.amount ?? 0
   const validYears = Number.isInteger(years) && years >= 1 && years <= MAX_CONTRACT_SEASONS
-  const demand = requiredNegotiationWage(player.id, validYears ? years : 1, demandReleaseFee, season, role)
+  const demand = requiredNegotiationWage(player.id, validYears ? years : 1, demandReleaseFee, season, role, season.managedClubId)
 
   useEffect(() => {
     const element = dialog.current!

@@ -85,7 +85,7 @@ describe('real NBA head coaches (format 91)', () => {
     expect(worldOf(parseSeason(text)).nbaJobs).toBe(true);
     const envelope = JSON.parse(text);
     envelope.formatVersion = 90; envelope.state.schemaVersion = 90;  // A format-92 NBA world (with the cap) is refused first for its cap, then for the NBA careers marker.
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/format 9[12] or later/);
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/format 9[123] or later/);
     expect(() => createSeason({ seed: 3, world, managedClubId: BOS, ...NEW_CAREER_SYSTEMS, nbaJobs: 'yes' as unknown as boolean })).toThrow(/NBA careers/);
   });
 });

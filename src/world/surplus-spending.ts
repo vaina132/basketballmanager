@@ -38,9 +38,10 @@ import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
  * - **Transfers** (`transferShare` of the plan): a transfer budget for one paid signing in the offseason window (two
  *   from `secondSigningAppetite`; release clauses count), under the existing market rules (asking fee from the player's
  *   remaining contract, the seller's squad and wage guards, squad limits), for a player rated above the best free one.
- * - **Staff:** computer clubs aim up to `staffLevelBoost` higher on the staff ladder, and a role may use up to
- *   `staffCapBoost` more of the staff budget, within Wages left as before; at a contract's end, a person rated well
- *   below that aim (`staffUpgradeGap`) is replaced (`src/world/staff-upgrades.ts`).
+ * - **Staff** (from the cash at the latest completed season's end, as the wage room): computer clubs aim up to
+ *   `staffLevelBoost` higher on the staff ladder, and a role may use up to `staffCapBoost` more of the staff budget,
+ *   within Wages left as before; at a contract's end, a person rated well below that aim (`staffUpgradeGap`) is
+ *   replaced (`src/world/staff-upgrades.ts`).
  * - **Facilities:** automatic upgrades may carry upkeep up to `facilityUpkeepShare` of the budget (instead of the usual
  *   share), the weakest facility first; the usual cash cushion still applies.
  * - **Sale replacements:** a club that sold a player still buys one stronger replacement (as before), but its fee now
@@ -263,12 +264,14 @@ export function spendsSurplus(state: SpendingContext, clubId: string): boolean {
 }
 
 /**
- * Format 88: how far a computer club with a surplus reaches for better staff: 0 to 1, its appetite while it spends from
- * a surplus (0 for the manager's club, whose staff he hires himself, and for contexts without club money).
+ * Format 88: how far a computer club with a surplus reaches for better staff: 0 to 1, its appetite while its cash at the
+ * end of the latest completed season was above the reserve (`anchoredSurplus`; so never in a career's first season and
+ * never for its opening staff). 0 for the manager's club, whose staff he hires himself, and without club money.
  */
 export function staffReach(state: SpendingContext, clubId: string): number {
-  if (!usesSurplusSpending(state) || !state.world || clubId === state.managedClubId || !state.finance) return 0;
-  return plannedSurplusSpend(state, clubId) > 0 ? spendingAppetite(state.world, clubId) : 0;
+  if (!usesSurplusSpending(state) || !state.world || clubId === state.managedClubId || !state.finance || state.seasonNumber === undefined) return 0;
+  const appetite = spendingAppetite(state.world, clubId);
+  return appetite > 0 && anchoredSurplus(state as SpendingContext & { seasonNumber: number }, clubId) > 0 ? appetite : 0;
 }
 
 /**

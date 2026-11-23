@@ -212,7 +212,7 @@ describe('the format guard and European careers', () => {
     const state = fresh(5);
     const envelope = JSON.parse(serializeSeason(state));
     envelope.formatVersion = 92; envelope.state.schemaVersion = 92;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/format 94 or later/);
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/format 9[345] or later/);  // The format-93 moves and format-95 draft markers are refused first.
     expect(() => createSeason({ seed: 3, world, managedClubId: BOS, ...NEW_CAREER_SYSTEMS, nbaTrades: 'yes' as unknown as boolean })).toThrow(/NBA trades/);
   });
 

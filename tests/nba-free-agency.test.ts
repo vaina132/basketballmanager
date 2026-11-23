@@ -135,7 +135,7 @@ describe('one automatic season and offseason of the NBA with Spain', () => {
       expect(size).toBeLessThanOrEqual(15);
     }
     for (const club of world.clubs.filter(item => !nba(item.id))) expect(season2.filter(contract => contract.clubId === club.id).length).toBeGreaterThanOrEqual(8);
-    const signed = offseason.employment.contracts.filter(contract => contract.kind !== 'initial' && contract.kind !== 'joined' && contract.kind !== 'drafted' && nba(contract.clubId));
+    const signed = offseason.employment.contracts.filter(contract => contract.kind !== 'initial' && contract.kind !== 'joined' && contract.kind !== 'drafted' && contract.kind !== 'trade' && nba(contract.clubId));
     expect(signed.length).toBeGreaterThan(20);
     expect(signed.every(contract => contract.capRoute !== undefined)).toBe(true);
   });

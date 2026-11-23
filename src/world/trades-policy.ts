@@ -334,7 +334,8 @@ export interface ComputerTradePlan { first: TradeSide; second: TradeSide }
 export function planComputerTrades(context: TradeContext, date: string, count: number): ComputerTradePlan[] {
   if (count <= 0 || !usesTrades(context)) return [];
   const view = tradeView(context);
-  const excluded = context.managedClubId ? managedClubAtRound(context, context.seasonNumber, Math.max(1, context.round - 1)) : '';
+  // The club the manager ran at this date (a save check reads a later state, whose manager may have moved or lost his job since).
+  const excluded = managedClubAtRound(context, context.seasonNumber, Math.max(1, context.round - 1));
   const plans: ComputerTradePlan[] = [];
   let employment = context.employment;
   const moved = new Set<string>(), busy = new Set<string>();

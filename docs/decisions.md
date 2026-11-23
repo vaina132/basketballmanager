@@ -613,3 +613,21 @@ New careers with the wage pool: computer clubs appoint a missing training coach 
 ## Economy balance (format 87, 22 November 2026, reversible)
 
 New careers with researched money (`world.economyBalance`, `ECONOMY_BALANCE_RULES` in `src/world/economy-balance.ts`): league solidarity with the season funding (1% of budget for the top division's lower half, 2% second division, 3% third); automatic facility spending counts the expected gate only for the share of regular-season home games still to play; while a club run automatically projects season-end cash below 10% of its budget, its new player wages stay within 110% of the funded wage bill less 75% of the shortfall, never below 60%, and the eight-player minimum squad is never held back. The manager's own offers keep the shared guards.
+
+## Rich clubs spend (format 88, 23 November 2026, reversible)
+
+Owner decision (23 November): "Rich clubs can spend more on wages more on signing new players and investing in club facilities. Signing better staff, players, etc. some can still pile up money of course that's always an option. Depends on how u play the game."
+
+New careers only (`world.surplusSpending`, needs the format-87 economy balance; `SURPLUS_SPENDING_RULES` in `src/world/surplus-spending.ts`):
+
+- Reserve: a club keeps 25% of its budget as season-end cash; only cash above it is surplus.
+- Appetite: (president's generosity + ambition - 3) / 6, within 0-1. About 1 club in 11 has appetite 0 and keeps piling up. A club of full appetite plans to spend its whole surplus in a season (60% wages, 40% transfers).
+- Wages: computer clubs get extra wage room of up to 60% of their salary budget, set by the cash at the last finished season's end. Offers go up to +50% on the asking wage (full at a surplus of 25% of budget) or the club's own pay scale for the squad place, whichever is higher; full pay from appetite 0.5. Spending clubs rank their own expiring players with free agents.
+- Transfers: one paid signing a summer, two from appetite 0.5, under the existing market rules.
+- Staff: up to +0.3 on the staff ladder and +50% of the staff budget per role; staff rated 10% of the role's range below the aim are replaced when contracts end. Opening staff unchanged.
+- Facilities: added upkeep up to 3.5% of the budget at full appetite; the weakest facility first.
+- The manager's club spends only where he delegates and never gets the extra wage room (the save does not record past delegation). The manager may keep piling up money.
+- Protections: a club that sold a player buys its replacement only if it keeps 10% season-end cash; an automatic early sponsor exit must keep 10% too.
+- Save check: a refused sale's recorded "needs wages budget" reason is accepted (past staff are not saved); replays give clubs that have left the full world default plans; an in-season contract is accepted when it fits the wage budget with no staff.
+
+Measured over five automatic seasons (real Turkey seeds 7 and 11, Spain seeds 5 and 11): EuroLeague-top median cash 52-70% -> 37-40% of budget; top-division upper half 36-56% -> 33-41%; transfers between computer clubs 0 -> 8-26 a summer; best-eight strength within about one point; league winners 3-5 different per five seasons (Real Madrid 4 of 5 in Spain seed 5). One weak club (KSK, Turkey seed 11) ended one season €20k short (0.7% of budget) and recovered.

@@ -2432,6 +2432,11 @@ function knownAtBoundaries(state: SeasonState): (year: number, round: number, st
   };
 }
 
+/** The state with no staff under contract in any role (the most staff budget a wage-pool club can leave to wages). */
+function withoutStaffContracts(state: SeasonState): SeasonState {
+  return { ...state, coaching: { ...state.coaching, contracts: [] }, scouts: { ...state.scouts, contracts: [] }, fitness: { ...state.fitness, contracts: [] }, physio: { ...state.physio, contracts: [] }, assistant: { ...state.assistant, contracts: [] }, youth: { ...state.youth, contracts: [] } };
+}
+
 const SELLER_WAGES_REASON = 'The selling club needs wages budget to replace its departing players.';
 /** The replayed window with each refused sale's recorded wages-budget reason, where the replay found another reason. */
 function withRecordedSellerReasons(replayed: MarketWindow, saved: MarketWindow): MarketWindow {
@@ -2523,8 +2528,13 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
     };
     replay.clubs = getContractedClubsForRound(replay, year, round);
     // A dated offseason reply keeps the role checked when the offer was made (the market replay checks it there).
-    const quote = quotePlayerContract(replay, entry.playerId, offeredWage, offeredSeasons, entry.clubId, undefined, undefined, 'upfront', { ...(releaseFee === undefined ? {} : { releaseFee }), ...(role === undefined || linkedOffer ? {} : { role }) });
-    if (!inSeasonOffer && !linkedOffer?.transfer && !quote.canOffer) fail(path, 'must satisfy ownership, signing-window, overlap, roster and budget rules when submitted');
+    const terms = { ...(releaseFee === undefined ? {} : { releaseFee }), ...(role === undefined || linkedOffer ? {} : { role }) };
+    const quote = quotePlayerContract(replay, entry.playerId, offeredWage, offeredSeasons, entry.clubId, undefined, undefined, 'upfront', terms);
+    // Wage-pool careers (format 75): the wage budget includes the staff budget the club's staff leave unused, and the
+    // replay knows only today's staff (staff hired since use more of it), so an offer is also accepted within the budget
+    // the club would have had with no staff, the most it could have had (the registration check keeps the same bound).
+    const fits = quote.canOffer || inSeasonOffer || linkedOffer?.transfer || usesWagePool({ coaching: state.coaching as { model: string } | undefined }) && quotePlayerContract(withoutStaffContracts(replay), entry.playerId, offeredWage, offeredSeasons, entry.clubId, undefined, undefined, 'upfront', terms).canOffer;
+    if (!fits) fail(path, 'must satisfy ownership, signing-window, overlap, roster and budget rules when submitted');
     if (contractRolesApply(state) && role === undefined) fail(`${path}.role`, 'must record the squad role offered with these terms');
     const expected = evaluateNegotiation(entry.playerId, offeredWage, offeredSeasons, releaseFee, replay, role);
     const decision = { outcome: entry.outcome, reason: entry.reason, requiredWage: entry.requiredWage, counterOffer: entry.counterOffer, alternativeOffer: entry.alternativeOffer };

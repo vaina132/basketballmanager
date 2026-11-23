@@ -1,7 +1,7 @@
 import type { SeasonState } from '../domain/season';
 import type { CareerWorld, WorldContext } from '../domain/world';
 import { clubEconomy, REAL_ECONOMY_RULES } from './economy';
-import { usesEconomyBalance } from './economy-balance';
+import { ECONOMY_BALANCE_RULES, usesEconomyBalance } from './economy-balance';
 import { remainingSeasonShortfall } from './facilities-policy';
 import { getSpendablePosition } from './payroll-policy';
 import { seasonSalaryBudget } from './board-consequences';
@@ -43,6 +43,8 @@ import { financeLedgerCount, financeLedgerEntries } from './finance-ledger';
  *   below that aim (`staffUpgradeGap`) is replaced (`src/world/staff-upgrades.ts`).
  * - **Facilities:** automatic upgrades may carry upkeep up to `facilityUpkeepShare` of the budget (instead of the usual
  *   share), the weakest facility first; the usual cash cushion still applies.
+ * - **Sale replacements:** a club that sold a player still buys one stronger replacement (as before), but its fee now
+ *   keeps its projected season-end cash at the economy balance's target (`saleReplacementBudget`).
  * - **Sponsor exits:** an automatic early exit from a sponsorship deal also needs its fee to leave the season-end cash
  *   the economy balance aims for (measured: a promoted club's fee took its cash to nothing, with unpaid costs).
  */
@@ -232,6 +234,20 @@ export function surplusOfferWage(state: SpendingContext & { seasonNumber: number
   const scale = target * weight(rank) / total;
   const wage = Math.max(asking * (1 + premium), asking + payDrive(state.world!, clubId) * Math.max(0, scale - asking));
   return Math.min(economy.limits.maxContractWage * 100, Math.ceil(wage / 50_000) * 50_000);
+}
+
+/**
+ * Format 88: the most a club that has sold a player pays for its stronger replacement (the existing rule, which spent
+ * up to all its spendable cash): its transfer budget from a surplus, or what keeps its projected season-end cash at the
+ * economy balance's target, whichever is more (measured: with more sales to rich clubs, mid clubs spent their cash on
+ * replacements and ended seasons with 5% of their budget). Unlimited in careers without surplus spending.
+ */
+export function saleReplacementBudget(state: SpendingContext, clubId: string): number {
+  if (!usesSurplusSpending(state) || !state.finance || !state.payroll) return Infinity;
+  const economy = clubEconomy(state, clubId);
+  if (!economy) return Infinity;
+  const projected = getSpendablePosition(state as SeasonState, clubId) - remainingSeasonShortfall(state as SeasonState, clubId);
+  return Math.max(surplusTransferBudget(state, clubId), Math.floor(projected - economy.budget * ECONOMY_BALANCE_RULES.wageCap.targetCashShare));
 }
 
 /** Format 88: the paid signings a club may try in one offseason window: one after a sale (as before), up to two from a surplus. */

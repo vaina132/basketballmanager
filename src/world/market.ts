@@ -20,7 +20,7 @@ import { addMarketDays, compareMarketOffers, getLiveMarketOffers, getMarketStart
 import { playerInList, seasonRounds } from './career-world';
 import { contractAskingWage, offeredContractRole } from './contract-roles';
 import { automaticWageCheck } from './automatic-wages';
-import { paidSigningLimit, spendsSurplus, surplusOfferWage, surplusTransferBudget } from './surplus-spending';
+import { paidSigningLimit, saleReplacementBudget, spendsSurplus, surplusOfferWage, surplusTransferBudget } from './surplus-spending';
 
 export function createMarket(): SeasonMarket { return { model: 'market-1', enabledSince: null, windows: [] }; }
 
@@ -282,7 +282,7 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
       // Format 88: a club with a transfer budget from its surplus also tries paid signings (one, or two with a bigger
       // appetite), each fee within that budget; a club that sold keeps its one stronger replacement as before.
       const paidTries = getMarketWindow(next)!.offers.filter(offer => offer.clubId === club.id && offer.transfer).length;
-      const transferBudget = sold ? Infinity : surplusTransferBudget(next, club.id);
+      const transferBudget = sold ? saleReplacementBudget(next, club.id) : surplusTransferBudget(next, club.id);
       if (paidTries < paidSigningLimit(next, club.id, sold) && !finalProposalDay) {
         const assessed = (id: string) => fitted ? rating(id) : next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, id) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, id) : playerInList(getCareerPlayers(next), id)!.attributes).reduce((sum, value) => sum + value, 0);
         const approach = (id: string): { fee: number; options: ContractOfferOptions } => {

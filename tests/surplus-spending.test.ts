@@ -18,7 +18,7 @@ import { fullWorldClubsIn, requireWorldContexts } from '../src/world/career-worl
 import { withLowerDivisions } from '../src/world/lower-division';
 import { getClubContractSummary } from '../src/world/employment-policy';
 import { seasonSalaryBudget } from '../src/world/board-consequences';
-import { anchoredSurplus, clubSurplus, paidSigningLimit, plannedSurplusSpend, spendingAppetite, spendsSurplus, SURPLUS_SPENDING_RULES, surplusTransferBudget, surplusWageCeiling, surplusWagePremium, surplusWageRoom, usesSurplusSpending } from '../src/world/surplus-spending';
+import { anchoredSurplus, clubSurplus, paidSigningLimit, plannedSurplusSpend, saleReplacementBudget, spendingAppetite, spendsSurplus, SURPLUS_SPENDING_RULES, surplusTransferBudget, surplusWageCeiling, surplusWagePremium, surplusWageRoom, usesSurplusSpending } from '../src/world/surplus-spending';
 import { staffShareCap, staffTargetRating } from '../src/world/staff-levels';
 import { DEVELOPMENT_WORLD } from '../src/data/development-world';
 
@@ -130,6 +130,11 @@ describe('the surplus spending option (format 88)', () => {
     expect(clubSurplus(older, rich)).toBe(0);
     expect(anchoredSurplus(older, rich)).toBe(0);
     expect(surplusWageRoom(older, rich, 2)).toBe(0);
+    // A club that sold a player buys its replacement keeping the economy balance's season-end cash (unlimited before).
+    expect(saleReplacementBudget(older, rich)).toBe(Infinity);
+    expect(saleReplacementBudget(flush, careful)).toBeGreaterThan(clubEconomy(flush, careful)!.budget);
+    expect(saleReplacementBudget(addCash(base, careful, -5), careful)).toBe(0);
+    expect(saleReplacementBudget(flush, rich)).toBeGreaterThanOrEqual(surplusTransferBudget(flush, rich));
   }, 120_000);
 });
 

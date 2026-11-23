@@ -631,3 +631,7 @@ New careers only (`world.surplusSpending`, needs the format-87 economy balance; 
 - Save check: a refused sale's recorded "needs wages budget" reason is accepted (past staff are not saved); replays give clubs that have left the full world default plans; an in-season contract is accepted when it fits the wage budget with no staff.
 
 Measured over five automatic seasons (real Turkey seeds 7 and 11, Spain seeds 5 and 11): EuroLeague-top median cash 52-70% -> 37-40% of budget; top-division upper half 36-56% -> 33-41%; transfers between computer clubs 0 -> 8-26 a summer; best-eight strength within about one point; league winners 3-5 different per five seasons (Real Madrid 4 of 5 in Spain seed 5). One weak club (KSK, Turkey seed 11) ended one season €20k short (0.7% of budget) and recovered.
+
+## The NBA (owner decisions, 23 November 2026)
+
+Playable; offered like any other league in the career setup (alone or with European countries); real names (NBPA rights before sale); API-Sports data published to the Supabase pack; euros shown by default with a game setting to show US dollars (display only, fixed rate 1.16, reversible); one shared 1-20 rating scale anchored on Europe (European ratings unchanged, NBA stars may reach 20); estimated salaries that reflect that the NBA pays far more than Europe, shaped on each team's published payroll. Rules and reversible defaults: [nba.md](nba.md); technical plan: [nba-plan.md](nba-plan.md).

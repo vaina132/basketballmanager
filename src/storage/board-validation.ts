@@ -191,7 +191,7 @@ function reviewLedgerCount(state: SeasonState, year: number, round: number): num
   // Format 92: the NBA's luxury tax and its shares follow the week's transfer payments, before the review.
   while (count < financeLedgerCount({ ledger })) {
     const entry = financeLedgerEntry(state.finance, count)!;
-    if (entry.seasonNumber !== year || entry.round !== round || entry.kind !== 'luxury-tax' && entry.kind !== 'tax-share') break;
+    if (entry.seasonNumber !== year || entry.round !== round || entry.kind !== 'luxury-tax' && entry.kind !== 'tax-share' && entry.kind !== 'salary-floor') break;
     count += 1;
   }
   return count;

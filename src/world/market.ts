@@ -22,6 +22,7 @@ import { contractAskingWage, offeredContractRole } from './contract-roles';
 import { automaticWageCheck } from './automatic-wages';
 import { paidSigningLimit, saleReplacementBudget, spendsSurplus, surplusOfferWage, surplusTransferBudget } from './surplus-spending';
 import { usesSpendingBalance } from './spending-balance';
+import { isNbaPaidPlayer, NBA_MOVES_RULES, nbaEligibilityReason, usesNbaMoves } from './nba-moves';
 
 export function createMarket(): SeasonMarket { return { model: 'market-1', enabledSince: null, windows: [] }; }
 
@@ -152,7 +153,7 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
   if (!competitive) for (const offer of scheduled) answer(offer);
   else for (const playerId of [...new Set(scheduled.map(offer => offer.playerId))].sort()) {
     const proposals = scheduled.filter(offer => offer.playerId === playerId).sort((left, right) => compareMarketOffers(next, left, right));
-    const winner = proposals.find(offer => evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, state, offer.role).outcome === 'accepted');
+    const winner = proposals.find(offer => evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, state, offer.role, offer.clubId).outcome === 'accepted');
     if (!winner) { for (const offer of proposals) answer(offer); continue; }
     answer(winner);
     const chosen = getMarketWindow(next)!;
@@ -234,8 +235,8 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
   if (finalProposalDay) for (const club of state.clubs) {
     if (club.id === state.managedClubId && !state.employment.delegated || leaving.has(club.id) || getClubContractSummary(next, club.id).rosterSize >= minRosterSize(next, club.id)) continue;
     for (const offer of getLiveMarketOffers(next).filter(item => item.clubId === club.id)) {
-      const acceptable = offer.status === 'pending' && (!offer.transfer || offer.transfer.clubStatus === 'accepted') && evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, next, offer.role).outcome === 'accepted';
-      const better = getLiveMarketOffers(next).some(rival => rival.playerId === offer.playerId && rival.clubId !== club.id && rival.status === 'pending' && evaluateNegotiation(rival.playerId, rival.seasonWage, rival.seasons, rival.releaseFee, next, rival.role).outcome === 'accepted' && compareMarketOffers(next, rival, offer) < 0);
+      const acceptable = offer.status === 'pending' && (!offer.transfer || offer.transfer.clubStatus === 'accepted') && evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, next, offer.role, offer.clubId).outcome === 'accepted';
+      const better = getLiveMarketOffers(next).some(rival => rival.playerId === offer.playerId && rival.clubId !== club.id && rival.status === 'pending' && evaluateNegotiation(rival.playerId, rival.seasonWage, rival.seasons, rival.releaseFee, next, rival.role, rival.clubId).outcome === 'accepted' && compareMarketOffers(next, rival, offer) < 0);
       if (!acceptable || better) next = withdrawMarketOffer(next, offer.id, club.id);
     }
   }
@@ -265,7 +266,11 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
       // Format 88: a club spending from its surplus ranks its own expiring players with free agents (by need, then rating)
       // instead of renewing its own first, so its extra wage room buys better players.
       const spending = spendsSurplus(next, club.id);
-      const ranked = getActiveCareerPlayers(next, next.seasonNumber + 1, 1).filter(player => !contractForSeason(next.employment, player.id, next.seasonNumber + 1) && !live.some(item => item.playerId === player.id && (!isCompetitiveMarket(next) || finalProposalDay || item.clubId === club.id))).sort((left, right) => {
+      // Format 93: a computer-run NBA club signs at most `europeansPerWindow` Europeans (players never paid on the NBA's
+      // scale) in one offseason window, counting its open and accepted offers (on the last proposal day it may take more to reach 13).
+      const capMoves = usesNbaMoves(next) && isCapClub(next, club.id);
+      const europeansLeft = capMoves && !finalProposalDay ? NBA_MOVES_RULES.europeansPerWindow - getMarketWindow(next)!.offers.filter(offer => offer.clubId === club.id && (offer.status === 'accepted' || isLiveMarketOffer(offer)) && !isNbaPaidPlayer(next.world!, offer.playerId)).length : Infinity;
+      const ranked = getActiveCareerPlayers(next, next.seasonNumber + 1, 1).filter(player => (europeansLeft > 0 || isNbaPaidPlayer(next.world!, player.id)) && !contractForSeason(next.employment, player.id, next.seasonNumber + 1) && !live.some(item => item.playerId === player.id && (!isCompetitiveMarket(next) || finalProposalDay || item.clubId === club.id))).sort((left, right) => {
         const retained = spending ? 0 : Number(own.has(right.id)) - Number(own.has(left.id));
         return retained || (positions.get(left.position) ?? 0) - (positions.get(right.position) ?? 0) || rating(right.id) - rating(left.id) || Number(own.has(right.id)) - Number(own.has(left.id)) || left.id.localeCompare(right.id, 'en');
       });
@@ -292,8 +297,11 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
       // Format 88: a club with a transfer budget from its surplus also tries paid signings (one, or two with a bigger
       // appetite), each fee within that budget; a club that sold keeps its one stronger replacement as before.
       const paidTries = getMarketWindow(next)!.offers.filter(offer => offer.clubId === club.id && offer.transfer).length;
-      const transferBudget = sold ? saleReplacementBudget(next, club.id) : surplusTransferBudget(next, club.id);
-      if (paidTries < paidSigningLimit(next, club.id, sold) && !finalProposalDay) {
+      // Format 93: an NBA club tries one buyout a window: a European it may sign (`nbaEligibilityReason`) through his
+      // release clause (`nba-moves.ts`); it never pays fees to another NBA club.
+      const buyout = capMoves;
+      const transferBudget = buyout ? Infinity : sold ? saleReplacementBudget(next, club.id) : surplusTransferBudget(next, club.id);
+      if (paidTries < (buyout ? 1 : paidSigningLimit(next, club.id, sold)) && !finalProposalDay) {
         const assessed = (id: string) => fitted ? rating(id) : next.scouting.enabledSince ? scoutingRecruitmentRating(next, club.id, id) : Object.values(next.lifecycle?.enabledSince ? scoutingActualAttributes(next, id) : playerInList(getCareerPlayers(next), id)!.attributes).reduce((sum, value) => sum + value, 0);
         const approach = (id: string): { fee: number; options: ContractOfferOptions } => {
           const askingFee = requiredTransferFee(next, id), clause = getApplicableReleaseClause(next, id);
@@ -301,10 +309,10 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
         };
         // Format 88: the wage of a paid signing, as for free agents (the transfer's own guard decides whether more fits).
         const signingWage = (id: string, terms: { fee: number; options: ContractOfferOptions }) => spending && offered(id) > asking(id) && affordable(offered(id), 1, startsSeason) && quoteTransferOffer(next, id, offered(id), 1, terms.fee, club.id, 'upfront', terms.options).canOffer ? offered(id) : asking(id);
-        const paid = [...getTransferCandidates(next, club.id)].filter(candidate => (transferBudget === Infinity || requiredTransferFee(next, candidate.id) <= transferBudget) && !getMarketWindow(next)!.offers.some(offer => offer.clubId === club.id && offer.playerId === candidate.id && offer.transfer)).sort((a, b) => assessed(b.id) - assessed(a.id) || a.id.localeCompare(b.id, 'en')).find(candidate => { const terms = approach(candidate.id); return (!player || assessed(candidate.id) > assessed(player.id)) && terms.fee <= transferBudget && affordable(signingWage(candidate.id, terms), 1, startsSeason) && quoteTransferOffer(next, candidate.id, signingWage(candidate.id, terms), 1, terms.fee, club.id, 'upfront', terms.options).canOffer; });
+        const paid = [...getTransferCandidates(next, club.id)].filter(candidate => (!buyout || europeansLeft > 0 && !isCapClub(next, contractForSeason(next.employment, candidate.id, next.seasonNumber + 1)!.clubId) && getApplicableReleaseClause(next, candidate.id).canTrigger && !nbaEligibilityReason(next, club.id, candidate.id)) && (!usesNbaMoves(next) || buyout || !isCapClub(next, contractForSeason(next.employment, candidate.id, next.seasonNumber + 1)!.clubId)) && (transferBudget === Infinity || requiredTransferFee(next, candidate.id) <= transferBudget) && !getMarketWindow(next)!.offers.some(offer => offer.clubId === club.id && offer.playerId === candidate.id && offer.transfer)).sort((a, b) => assessed(b.id) - assessed(a.id) || a.id.localeCompare(b.id, 'en')).find(candidate => { const terms = approach(candidate.id); return (!player || assessed(candidate.id) > assessed(player.id)) && terms.fee <= transferBudget && affordable(signingWage(candidate.id, terms), 1, startsSeason) && quoteTransferOffer(next, candidate.id, signingWage(candidate.id, terms), 1, terms.fee, club.id, 'upfront', terms.options).canOffer; });
         if (paid) {
           const terms = approach(paid.id);
-          const openingFee = terms.options.transferMode === 'release-clause' ? terms.fee : Math.max(MIN_TRANSFER_FEE, Math.floor(terms.fee * .9 / TRANSFER_FEE_STEP) * TRANSFER_FEE_STEP);
+          const openingFee = terms.options.transferMode === 'release-clause' || buyout ? terms.fee : Math.max(MIN_TRANSFER_FEE, Math.floor(terms.fee * .9 / TRANSFER_FEE_STEP) * TRANSFER_FEE_STEP);
           next = submitTransferOffer(next, paid.id, signingWage(paid.id, terms), 1, openingFee, club.id, 'upfront', terms.options); continue;
         }
       }

@@ -27,7 +27,7 @@ function answerAsAiClub(state: SeasonState, clubId: string, playerId: string, la
   const role = offeredContractRole(state, clubId, playerId);
   for (const seasons of [...new Set([RULES.ai.renewalSeasons, 1])]) {
     let wage: number;
-    try { wage = requiredNegotiationWage(playerId, seasons, undefined, state, role); } catch { break; } // No wage terms: let him go.
+    try { wage = requiredNegotiationWage(playerId, seasons, undefined, state, role, clubId); } catch { break; } // No wage terms: let him go.
     // Format 88: a club spending from its surplus keeps its player at its own pay scale for his place when that fits.
     const offered = surplusOfferWage(state, clubId, wage, rank, clubRosterTarget(state, clubId), state.seasonNumber + 1);
     if (offered > wage && quotePlayerContract(state, playerId, offered, seasons, clubId).canOffer && automaticWageCheck(state, clubId)(offered, seasons, state.seasonNumber + 1)) return commitPlayerOffer(replyToContractRequest(state, playerId, 'talks', clubId), clubId, playerId, offered, seasons);

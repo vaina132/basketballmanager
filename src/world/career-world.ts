@@ -398,7 +398,7 @@ export const NO_LOWER_DIVISION_COUNTRIES: readonly string[] = Object.freeze(['It
 /** NBA step 4 (format 90): the NBA league, its two conferences of three divisions of five clubs, and its ruleset. */
 function checkNba(world: CareerWorld): void {
   const fail = worldFail, nba = world.nba as unknown as Record<string, any>;
-  if (!exactKeys(nba, ['model', 'leagueId', 'conferences', 'ruleset', ...(Object.hasOwn(nba, 'cap') ? ['cap'] : [])]) || nba.model !== 'nba-1' || nba.ruleset !== 'nba-2026' || Object.hasOwn(nba, 'cap') && nba.cap !== 'nba-cap-1') fail('world.nba', 'must name the NBA model, its league, conferences and ruleset');
+  if (!exactKeys(nba, ['model', 'leagueId', 'conferences', 'ruleset', ...(Object.hasOwn(nba, 'cap') ? ['cap'] : []), ...(Object.hasOwn(nba, 'moves') ? ['moves'] : [])]) || nba.model !== 'nba-1' || nba.ruleset !== 'nba-2026' || Object.hasOwn(nba, 'cap') && nba.cap !== 'nba-cap-1' || Object.hasOwn(nba, 'moves') && (nba.moves !== 'nba-moves-1' || nba.cap !== 'nba-cap-1')) fail('world.nba', 'must name the NBA model, its league, conferences and ruleset');
   const league = world.domesticLeagues?.find(item => item.id === nba.leagueId);
   if (!league || league.country !== 'USA' || league.tier !== 1 || league.clubIds.length !== 30) fail('world.nba.leagueId', 'must name the world\'s 30-club USA league');
   if (!Array.isArray(nba.conferences) || nba.conferences.length !== 2) fail('world.nba.conferences', 'must list two conferences');

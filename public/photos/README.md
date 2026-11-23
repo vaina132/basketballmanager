@@ -5,5 +5,6 @@
 - Only free licences that allow reuse and changes are kept: CC0, public domain, CC BY and CC BY-SA. Never NC, ND, fair use or non-free files.
 - Each photo belongs to its author and keeps its licence. The game names the author and licence, with links to the licence and the Commons file page, under the player's portrait and in the Credits list (career start, "Data" details, "Player photos").
 - The photos are adapted (cropped and resized). Photos under CC BY-SA stay under the same CC BY-SA licence in their adapted form.
+- A file whose author Commons gives as unknown is not used (23 November 2026: Pavlin Ivanov, source FIBA, and Kon Knueppel, nominated for deletion, removed); Davide Alviti's photo, released by Pallacanestro Varese with a VRT permission ticket, is credited to the club. Photos of players who left the pack stay for careers started on an older pack.
 - A photo is removed on request.
 - Players without a photo here keep the game's drawn avatar.

@@ -14,6 +14,8 @@
  *   lba   Serie A         legabasket.it public site data: Playmaker/Guardia/Centro (exact), Ala (broad), height, birth date
  *   lnp   Serie A2        legapallacanestro.com team pages: Play/Guardia/Centro (exact), Ala (broad), height, birth date
  *   bcl   Champions League championsleague.basketball team pages: PG/SG/SF/PF/C (exact) or G/F (broad), birth date
+ * Every source also gives the nationality as printed (a code or a country name in the site's language), kept raw
+ * for scripts/real-data-profile-gaps.mjs (23 November 2026).
  * The league's terms of use are summarised in the owner's report; facts are kept with their source link.
  *
  * Clubs are matched to the pack's clubs of that competition by name words (sponsor names ignored); ambiguous or
@@ -51,7 +53,7 @@ export const SOURCES = {
     teamName: html => cells(html).match(/\|([^|]+)\|Datos del Club\|/)?.[1] ?? '',
     players: html => {
       const text = cells(html), roster = text.slice(text.indexOf('|Nombre|Puesto|Dorsal|'), text.indexOf('|Datos del Club|'));
-      return [...roster.matchAll(/\|([^|]+)\|([^|]{1,12})\|(?:(\d{1,2}|-)\|)?(\d\d)\/(\d\d)\/(\d{4})[^|]*\|[^|]+\|(?:SI|NO)\|(\d{3}|-)\|/g)].map(match => ({ name: title(match[1].replace(/\s+/g, ' ').trim()), number: number(match[3]), position: match[2] === '-' ? null : match[2], birthDate: dmy(match[4], match[5], match[6]), heightCm: cm(match[7]) }));
+      return [...roster.matchAll(/\|([^|]+)\|([^|]{1,12})\|(?:(\d{1,2}|-)\|)?(\d\d)\/(\d\d)\/(\d{4})[^|]*\|([^|]+)\|(?:SI|NO)\|(\d{3}|-)\|/g)].map(match => ({ name: title(match[1].replace(/\s+/g, ' ').trim()), number: number(match[3]), position: match[2] === '-' ? null : match[2], birthDate: dmy(match[4], match[5], match[6]), heightCm: cm(match[8]), nationality: match[7].trim() }));
     },
   },
   bbl: {
@@ -60,26 +62,26 @@ export const SOURCES = {
     teamName: html => cells(html).match(/\|Unsere Teams\|\/\|([^|]+)\|/)?.[1] ?? '',
     players: html => {
       const text = cells(html), roster = text.slice(text.indexOf('|Nr|Spieler|Geboren|'), text.indexOf('|Trainerstab|'));
-      return [...roster.matchAll(/\|(\d{1,2})\|[^|]+\|([^|]+)\|,\|([^|]+)\|(\d\d)\.(\d\d)\.(\d{4})\|\d+\|(\d\.\d\d) m\|[^|]*\|(PG|SG|SF|PF|C|G|F|[A-Z/]{0,5})\|/g)].map(match => ({ name: `${match[3].trim()} ${match[2].trim()}`, number: number(match[1]), position: match[8], birthDate: dmy(match[4], match[5], match[6]), heightCm: cm(match[7]) }));
+      return [...roster.matchAll(/\|(\d{1,2})\|[^|]+\|([^|]+)\|,\|([^|]+)\|(\d\d)\.(\d\d)\.(\d{4})\|\d+\|(\d\.\d\d) m\|[^|]*\|(PG|SG|SF|PF|C|G|F|[A-Z/]{0,5})\|(?=([A-Z]{2}(?:\s*\/\s*[A-Z]{2})*)\||)/g)].map(match => ({ name: `${match[3].trim()} ${match[2].trim()}`, number: number(match[1]), position: match[8], birthDate: dmy(match[4], match[5], match[6]), heightCm: cm(match[7]), nationality: match[9] }));
     },
   },
   esake: {
     competition: 'Greek Basket League', name: 'esake.gr', list: 'https://www.esake.gr/',
     teams: html => [...new Set([...html.matchAll(/href="\/el\/action\/EsaketeamView\?idteam=([0-9A-F]+)&(?:amp;)?mode=1"/g)].map(match => match[1]))].map(id => ({ name: null, url: `https://www.esake.gr/el/action/EsaketeamView?idteam=${id}&mode=1` })),
     teamName: html => cells(html).match(/\|ΟΜΑΔΑ\|([^|]+)\|/)?.[1] ?? '',
-    players: html => [...cells(html).matchAll(/\|#\|(\d{1,2})\|([^|]+)\|([^|]+)\|[A-Z/-]*\|ΟΜΑΔΑ\|[^|]+\|ΥΨΟΣ\|([\d,]+)\|ΘΕΣΗ\|([^|]+)\|ΗΜ\. ΓΕΝΝΗΣΗΣ\|(\d\d)-(\d\d)-(\d{4})\|/g)].map(match => ({ name: title(`${match[3].trim()} ${match[2].trim()}`), number: number(match[1]), position: match[5].trim(), birthDate: dmy(match[6], match[7], match[8]), heightCm: cm(match[4]) })),
+    players: html => [...cells(html).matchAll(/\|#\|(\d{1,2})\|([^|]+)\|([^|]+)\|[A-Z/-]*\|ΟΜΑΔΑ\|[^|]+\|ΥΨΟΣ\|([\d,]+)\|ΘΕΣΗ\|([^|]+)\|ΗΜ\. ΓΕΝΝΗΣΗΣ\|(\d\d)-(\d\d)-(\d{4})\|(?:ΧΩΡΑ\|([^|]+)\|)?/g)].map(match => ({ name: title(`${match[3].trim()} ${match[2].trim()}`), number: number(match[1]), position: match[5].trim(), birthDate: dmy(match[6], match[7], match[8]), heightCm: cm(match[4]), nationality: match[9]?.trim() })),
   },
   lba: {
     competition: 'Lega Basket Serie A', name: 'legabasket.it', list: 'https://www.legabasket.it/api/teams/get-teams?year=2026', json: true,
     teams: data => data.teams.map(team => ({ name: team.name, url: `https://www.legabasket.it/api/teams/get-team-roster?id=${team.id}` })),
-    players: data => data.players.map(player => ({ name: `${player.name} ${player.surname}`, number: number(player.player_number), position: player.player_role === '-' ? null : player.player_role, birthDate: /^\d{4}-\d{2}-\d{2}$/.test(player.birth_date ?? '') ? player.birth_date : undefined, heightCm: cm(player.height) })),
+    players: data => data.players.map(player => ({ name: `${player.name} ${player.surname}`, number: number(player.player_number), position: player.player_role === '-' ? null : player.player_role, birthDate: /^\d{4}-\d{2}-\d{2}$/.test(player.birth_date ?? '') ? player.birth_date : undefined, heightCm: cm(player.height), nationality: player.country ?? undefined })),
   },
   lnp: {
     competition: 'Serie A2', name: 'legapallacanestro.com', list: 'https://www.legapallacanestro.com/serie/1/squadre',
     teams: html => [...new Set([...html.matchAll(/href="\/serie-a2\/([a-z0-9-]+)"/g)].map(match => match[1]))].filter(slug => !['calendario-dirette'].includes(slug) && !slug.startsWith('supercoppa')).map(slug => ({ name: slug.replace(/-/g, ' '), url: `https://www.legapallacanestro.com/serie-a2/${slug}` })),
     players: html => {
       const text = cells(html), roster = text.slice(text.indexOf('|N°|Atleta|Ruolo|'));
-      return [...roster.matchAll(/\|(\d{1,2})\|([^|]+)\|(Play|Play\/Guardia|Guardia|Guardia\/Ala|Ala|Ala\/Centro|Centro|Pivot)\|(\d\d?)\/(\d\d?)\/(\d{4})\|(\d{3})\|/g)].map(match => ({ name: match[2].replace(/\s+/g, ' ').trim(), surnameFirst: true, number: number(match[1]), position: match[3], birthDate: dmy(match[4], match[5], match[6]), heightCm: cm(match[7]) }));
+      return [...roster.matchAll(/\|(\d{1,2})\|([^|]+)\|(Play|Play\/Guardia|Guardia|Guardia\/Ala|Ala|Ala\/Centro|Centro|Pivot)\|(\d\d?)\/(\d\d?)\/(\d{4})\|(\d{3})\|(?=(?:\d{2,3}\|)?([A-Z]{3})\||)/g)].map(match => ({ name: match[2].replace(/\s+/g, ' ').trim(), surnameFirst: true, number: number(match[1]), position: match[3], birthDate: dmy(match[4], match[5], match[6]), heightCm: cm(match[7]), nationality: match[8] }));
     },
   },
   bcl: {
@@ -87,8 +89,8 @@ export const SOURCES = {
     teams: html => [...new Set([...html.matchAll(/href="\/en\/teams\/([a-z0-9-]+)"/g)].map(match => match[1]))].map(slug => ({ name: slug.replace(/-/g, ' '), url: `https://www.championsleague.basketball/en/teams/${slug}` })),
     players: html => {
       const seen = new Map();
-      for (const match of html.replace(/\\"/g, '"').matchAll(/\{"playerId":(\d+),"firstName":"([^"]*)","lastName":"([^"]*)","uniformNumber":"([^"]*)","positionCode":"([A-Z]*)"[^{}]*?"dateOfBirth":"(\d{4}-\d{2}-\d{2})?"?/g)) {
-        if (!seen.has(match[1])) seen.set(match[1], { name: `${match[2].trim()} ${match[3].trim()}`, number: number(match[4]), position: match[5] || null, birthDate: match[6] || undefined });
+      for (const match of html.replace(/\\"/g, '"').matchAll(/\{"playerId":(\d+),"firstName":"([^"]*)","lastName":"([^"]*)","uniformNumber":"([^"]*)","positionCode":"([A-Z]*)"(?:,"nationality":"([A-Z]{3})")?[^{}]*?"dateOfBirth":"(\d{4}-\d{2}-\d{2})?"?/g)) {
+        if (!seen.has(match[1])) seen.set(match[1], { name: `${match[2].trim()} ${match[3].trim()}`, number: number(match[4]), position: match[5] || null, birthDate: match[7] || undefined, nationality: match[6] || undefined });
       }
       return [...seen.values()];
     },

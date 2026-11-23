@@ -1,5 +1,5 @@
 {
- "source": "API-Sports team lists 2026-27, matched 22 November 2026; NBA clubs from the API-Sports league 12 team list 2026-27, matched 23 November 2026",
+ "source": "API-Sports team lists 2026-27, matched 22 November 2026; NBA clubs from the API-Sports league 12 team list 2026-27, matched 23 November 2026; Hestia Menorca from its earlier API-Sports team Vive Menorca (Menorca Bàsquet), merged 23 November 2026",
  "clubs": [
   {
    "clubId": "club-b5b3bb06-6c4c-4625-947f-66525fac1051",
@@ -697,9 +697,9 @@
   {
    "clubId": "club-3f788426-79bb-48e2-adce-524fc0865528",
    "club": "Hestia Menorca",
-   "apiSportsTeamId": 6040,
-   "apiSportsTeam": "Hestia Menorca",
-   "logo": false
+   "apiSportsTeamId": 1158,
+   "apiSportsTeam": "Vive Menorca",
+   "logo": true
   },
   {
    "clubId": "club-2f34fded-d6a3-447c-b8c9-708934b73462",

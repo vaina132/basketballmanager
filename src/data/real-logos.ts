@@ -59,6 +59,7 @@ export const REAL_CLUB_LOGOS: Readonly<Record<string, string>> = {
   "club-3b20c776-04f2-46f1-bcdf-3e1c3bde631d": "club-3b20c776-04f2-46f1-bcdf-3e1c3bde631d.webp",
   "club-3d47e5c0-ac8d-4d2b-b8ec-2bcba4e2f528": "club-3d47e5c0-ac8d-4d2b-b8ec-2bcba4e2f528.webp",
   "club-3f26292f-b1ef-5c9a-ab3c-3c88c3705d15": "club-3f26292f-b1ef-5c9a-ab3c-3c88c3705d15.webp",
+  "club-3f788426-79bb-48e2-adce-524fc0865528": "club-3f788426-79bb-48e2-adce-524fc0865528.webp",
   "club-4125871b-579a-50ca-8ab8-ffcfb4123ea8": "club-4125871b-579a-50ca-8ab8-ffcfb4123ea8.webp",
   "club-41cd990d-0d9b-5237-94dc-f4ef21f0ce56": "club-41cd990d-0d9b-5237-94dc-f4ef21f0ce56.webp",
   "club-4415c2e9-8c4b-47ae-82c2-6a56bc6cab8f": "club-4415c2e9-8c4b-47ae-82c2-6a56bc6cab8f.webp",

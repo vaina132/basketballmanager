@@ -32,6 +32,8 @@ const LEAGUES = {
 // API-Sports serves the Süper Ligi logo for the TBL too; a wrong mark is worse than the plain one.
 const SKIP_LEAGUE_LOGOS = new Set([102])
 const MANUAL = { 'LDLC ASVEL': 26, 'Champagne Basket': 12, 'Stade Rochelais': 2311, Juvecaserta: 704 }
+// Clubs whose 2026-27 API-Sports team has no logo but an earlier team of the same club has one (23 November 2026).
+const EARLIER_TEAM = { 'Hestia Menorca': { id: 1158, name: 'Vive Menorca' } }
 
 const STOP = new Set(['bc', 'bk', 'kk', 'sk', 'ks', 'cb', 'cd', 'ab', 'as', 'asd', 'ssd', 'sad', 'sa', 'fc', 'gs', 'bsk', 'jsk', 'basket', 'basketball', 'basketbol', 'baloncesto', 'pallacanestro', 'club', 'de', 'del', 'la', 'el', 'the', 'and', 'b', 'c', 'spor', 'kulubu', 'kulübü'])
 const plain = text => text.toLowerCase().replace(/ı/g, 'i').replace(/ß/g, 'ss').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
@@ -84,6 +86,7 @@ for (const competition of pack.competitions) {
   for (const clubId of competition.clubIds) if (!usedClubs.has(clubId) && !matches.has(clubId)) unmatched.push({ clubId, name: clubs.get(clubId).name, competition: competition.name, leftover: teams.filter(team => !usedTeams.has(team.id)).map(team => team.name) })
 }
 
+for (const [clubId, match] of matches) { const earlier = EARLIER_TEAM[clubs.get(clubId).name]; if (earlier) match.team = earlier }
 const rows = [...matches].map(([clubId, match]) => ({ clubId, club: clubs.get(clubId).name, country: clubs.get(clubId).country, teamId: match.team.id, team: match.team.name, score: Number(match.score.toFixed(2)), competition: match.competition }))
 rows.sort((a, b) => a.score - b.score)
 for (const row of rows) console.log(`${row.score.toFixed(2)}  ${row.club}  ->  ${row.team} (${row.teamId})  [${row.competition}]`)

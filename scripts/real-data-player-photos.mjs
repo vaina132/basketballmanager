@@ -23,6 +23,8 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
+/** Files whose author Commons gives as unknown but whose rights holder released them (VRT permission ticket). */
+const RELEASED_BY = { 'Pallacanestro Varese Davide Alviti.png': 'Pallacanestro Varese' }
 const args = process.argv.slice(2)
 const option = name => { const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined }
 const packPath = option('--pack'), cacheDir = option('--cache'), reportPath = option('--report')
@@ -200,7 +202,12 @@ function licenceOf(info) {
   const publicDomain = /^(cc0|public domain|pd)/i.test(licence)
   if (!publicDomain && (!author || !/^https?:\/\/creativecommons\.org\//.test(url))) return { reason: 'no author or licence link' }
   if (!/^image\/(jpeg|png|webp|tiff)$/.test(info.mime ?? '') || info.width < 120 || info.height < 120) return { reason: 'not a usable photo' }
-  return { licence, url: url || null, author: author ? author.replace(/^User:/i, '').slice(0, 120) : 'Unknown author', shareAlike: /-sa\b/i.test(licence) }
+  // An unknown author cannot be credited and cannot have released the file (23 November 2026: two such files, one up
+  // for deletion, were dropped); a file whose holder released it through a VRT ticket is credited to that holder.
+  const holder = RELEASED_BY[info.title.replace(/^File:/, '')]
+  if (!holder && (!author || /unknown author/i.test(author))) return { reason: 'unknown author' }
+  // Flickr profiles append their links to the name ("Keith Allison: Flickr, e-mail, …"); the credit is the name.
+  return { licence, url: url || null, author: holder ?? author.replace(/^User:/i, '').replace(/:\s*Flickr\b.*$/i, '').slice(0, 120), shareAlike: /-sa\b/i.test(licence) }
 }
 const accepted = [], rejected = {}
 for (const match of withImage) {

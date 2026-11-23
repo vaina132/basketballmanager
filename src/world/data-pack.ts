@@ -26,8 +26,16 @@ export interface DataPackPlayer {
 export interface DataPackClub {
   id: string; name: string; shortName: string; country: string | null; city: string | null; arena: string | null;
   color: string | null; secondaryColor: string | null; identitySource: string | null; playerIds: string[];
+  /** NBA step 4 (optional, pack v8): the arena's seats when known. Older packs and clients ignore it. */
+  capacity?: number;
 }
-export interface DataPackCompetition { id: string; name: string; country: string | null; tier: number; kind: 'domestic' | 'european'; season: string; clubIds: string[] }
+/**
+ * NBA step 4 (optional, pack v8): a competition's groups. The NBA lists its two conferences (no `parentId`), then the
+ * six divisions with the conference as `parentId`. The groups without a parent partition the clubs, and the groups of
+ * each parent partition that parent's clubs. Older packs and clients ignore it.
+ */
+export interface DataPackGroup { id: string; name: string; parentId?: string; clubIds: string[] }
+export interface DataPackCompetition { id: string; name: string; country: string | null; tier: number; kind: 'domestic' | 'european'; season: string; clubIds: string[]; groups?: DataPackGroup[] }
 export interface DataPack {
   format: typeof DATA_PACK_FORMAT; formatVersion: 1; version: string; season: string; source: Record<string, unknown>; notice: string;
   competitions: DataPackCompetition[]; clubs: DataPackClub[]; players: DataPackPlayer[];
@@ -85,8 +93,31 @@ export async function parseDataPack(fileText: string): Promise<DataPack> {
     clubIds.add(raw.id);
   }
   for (const raw of pack.competitions) if (!isObject(raw) || !Array.isArray(raw.clubIds) || raw.clubIds.some(id => !clubIds.has(id as string))) fail('a competition lists an unknown club');
+  for (const raw of pack.competitions as Record<string, unknown>[]) if (raw.groups !== undefined) checkGroups(raw.groups, raw.clubIds as string[], String(raw.name));
+  for (const raw of pack.clubs as Record<string, unknown>[]) if (raw.capacity !== undefined && (!Number.isInteger(raw.capacity) || (raw.capacity as number) < 500 || (raw.capacity as number) > 60_000)) fail(`${raw.name} has an invalid arena capacity`);
   for (const player of players.values()) if (!pack.clubs.some(raw => isObject(raw) && raw.id === player.clubId && Array.isArray(raw.playerIds) && raw.playerIds.includes(player.id))) fail(`${player.name} has an inconsistent club membership`);
   return pack as unknown as DataPack;
+}
+
+/** A competition's groups: top-level groups partition its clubs, and each parent's groups partition the parent's clubs. */
+function checkGroups(value: unknown, clubIds: readonly string[], name: string): void {
+  if (!Array.isArray(value) || value.length < 2 || value.length > 64) fail(`${name} has invalid groups`);
+  const groups = value as Record<string, unknown>[], ids = new Set<string>();
+  for (const group of groups) {
+    if (!isObject(group) || typeof group.id !== 'string' || !ID.test(group.id) || ids.has(group.id) || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 80 || !Array.isArray(group.clubIds) || group.clubIds.length < 1 || (group.parentId !== undefined && typeof group.parentId !== 'string')) fail(`${name} has an invalid group`);
+    ids.add(group.id as string);
+  }
+  const partitions = (members: readonly Record<string, unknown>[], of: readonly string[]) => {
+    const listed = members.flatMap(group => group.clubIds as string[]);
+    return listed.length === of.length && new Set(listed).size === listed.length && listed.every(id => of.includes(id));
+  };
+  const top = groups.filter(group => group.parentId === undefined);
+  if (top.length < 2 || !partitions(top, clubIds)) fail(`${name}'s groups must divide its clubs`);
+  for (const group of groups) {
+    if (group.parentId !== undefined && !top.some(parent => parent.id === group.parentId)) fail(`${name} has a group under an unknown parent`);
+    const children = groups.filter(child => child.parentId === group.id);
+    if (children.length && !partitions(children, group.clubIds as string[])) fail(`${name}'s groups must divide each parent's clubs`);
+  }
 }
 
 /** The same position-weighted overall rating the player sees next to the stars. */

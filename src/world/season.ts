@@ -41,7 +41,10 @@ import type { ManagerProfile } from '../domain/manager';
 import { DEVELOPMENT_CLUBS, DEVELOPMENT_START_DATE } from '../data/development-league';
 import { DEVELOPMENT_WORLD } from '../data/development-world';
 import type { CareerWorld } from '../domain/world';
-import { fixtureRuleset, fullWorldClubs, isMemberList, playsAtNeutralVenue, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
+import { nbaSchedule, nbaPostseasonSlotDay } from './nba-schedule';
+import { nbaCompetitionTables } from './competition-table';
+import type { NbaTables } from './nba-ranking';
+import { expectedRegularGames, fixtureRuleset, fullWorldClubs, isMemberList, playsAtNeutralVenue, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
 import { createFixtureMatch, isPlayerEligible, preTipoffLineup, simulateToEnd } from '../engine/match';
 import { isCourtPosition } from '../engine/positions';
 import { INJURY_MODEL_2 } from '../domain/injuries';
@@ -162,6 +165,13 @@ export function domesticSchedule(clubs: readonly Team[] = DEVELOPMENT_CLUBS, sea
   const world = context.world;
   if (world?.domesticLeagues) {
     const start = seasonStartDate(seasonNumber), weeks = regularWorldRounds(world);
+    // NBA step 5: the NBA's own 82-game calendar (`src/world/nba-schedule.ts`); every other league keeps its Saturdays.
+    if (world.nba) {
+      const nbaId = world.nba.leagueId;
+      const nba: SeasonFixture[] = nbaSchedule(world, seasonNumber).map(game => ({ id: game.id, round: calendarDaysBetween(start, game.date) / 7 + 1 | 0, date: game.date, homeClubId: game.homeClubId, awayClubId: game.awayClubId, result: null }));
+      const others = seasonLeagues(world, context.divisions).filter(league => league.id !== nbaId).flatMap(league => roundRobinGames({ competitionId: league.id, clubIds: league.clubIds, dates: domesticRoundDates(start, roundRobinRoundCount(league.clubIds.length), weeks, context.national ? nationalPausedWeeks(seasonNumber, roundRobinRoundCount(league.clubIds.length), weeks) : []), season: seasonNumber }).map(game => ({ id: game.id, round: calendarDaysBetween(start, game.date) / 7 + 1, date: game.date, homeClubId: game.homeClubId, awayClubId: game.awayClubId, result: null })));
+      return [...nba, ...others].sort(byCalendar);
+    }
     return seasonLeagues(world, context.divisions).flatMap(league => roundRobinGames({ competitionId: league.id, clubIds: league.clubIds, dates: domesticRoundDates(start, roundRobinRoundCount(league.clubIds.length), weeks, context.national ? nationalPausedWeeks(seasonNumber, roundRobinRoundCount(league.clubIds.length), weeks) : []), season: seasonNumber }).map(game => ({ id: game.id, round: calendarDaysBetween(start, game.date) / 7 + 1, date: game.date, homeClubId: game.homeClubId, awayClubId: game.awayClubId, result: null }))).sort((a, b) => a.round - b.round || a.id.localeCompare(b.id));
   }
   const count = clubs.length;
@@ -197,14 +207,44 @@ type DomesticLeague = NonNullable<CareerWorld['domesticLeagues']>[number];
 /** A league's final regular-season order (first to last), or null while any of its regular games is unplayed. */
 function regularOrder(world: CareerWorld, league: DomesticLeague, fixtures: readonly (SeasonFixture | ArchivedFixture)[]): string[] | null {
   const games = fixtures.filter(fixture => isRegularFixture(fixture) && league.clubIds.includes(fixture.homeClubId));
-  if (games.length !== league.clubIds.length * (league.clubIds.length - 1) || games.some(fixture => !fixture.result)) return null;
+  if (games.length !== expectedRegularGames(world, league) || games.some(fixture => !fixture.result)) return null;
   return getStandings({ clubs: world.clubs, fixtures: games, world: { ...world, domesticLeagues: [league] } }).map(row => row.clubId);
 }
 
+/** NBA step 5: the NBA's league, conference and division tables from a season's regular-season games. */
+export function nbaStandings(world: CareerWorld, fixtures: readonly (SeasonFixture | ArchivedFixture)[]): NbaTables | null {
+  const nba = world.nba, league = nba && world.domesticLeagues?.find(item => item.id === nba.leagueId);
+  if (!nba || !league) return null;
+  const games = fixtures.filter(fixture => isRegularFixture(fixture) && league.clubIds.includes(fixture.homeClubId));
+  return nbaCompetitionTables({
+    competitionId: league.id, clubIds: league.clubIds, nba: nba.conferences,
+    games: games.map(fixture => ({ ...fixture, competitionId: league.id, stage: 'regular' as const, stageRound: fixture.round, groupId: null, seriesId: null, neutral: false })),
+    results: games.flatMap(fixture => fixture.result ? [{ fixtureId: fixture.id, home: fixture.result.officialScore.home, away: fixture.result.officialScore.away, winnerClubId: fixture.result.winnerClubId }] : []),
+  });
+}
+
+/** NBA step 5: which of the world's two conferences the `nba-2026-1` format calls east and west (by name, else listed order). */
+export function nbaConferenceKeys(world: CareerWorld): { east: string; west: string } | null {
+  const conferences = world.nba?.conferences;
+  if (!conferences) return null;
+  const east = conferences.find(item => /east/i.test(`${item.id} ${item.name}`)) ?? conferences[0]!;
+  return { east: east.id, west: conferences.find(item => item !== east)!.id };
+}
+
 /** The league calendar's week and date of a postseason slot: three a week (Saturday, Tuesday, Thursday) after the regular season. */
-export function postseasonSlotDay(world: CareerWorld, seasonNumber: number, slot: number): { round: number; date: string } {
+export function postseasonSlotDay(world: CareerWorld, seasonNumber: number, slot: number, leagueId?: string): { round: number; date: string } {
+  // NBA step 5: the NBA's play-in and playoffs have a game every second day after its own regular season.
+  if (world.nba && leagueId === world.nba.leagueId) return nbaPostseasonSlotDay(seasonNumber, slot);
   const perWeek = POSTSEASON_SLOT_OFFSETS.length, round = regularWorldRounds(world) + Math.floor((slot - 1) / perWeek) + 1;
   return { round, date: addCalendarDays(dateForRound(round, seasonNumber), POSTSEASON_SLOT_OFFSETS[(slot - 1) % perWeek]!) };
+}
+
+/** NBA step 5: each conference's final order under the format's keys, once the regular season is complete. */
+function nbaGroupOrders(world: CareerWorld, fixtures: readonly (SeasonFixture | ArchivedFixture)[], order: readonly string[] | null): Record<string, readonly string[] | null> {
+  const keys = nbaConferenceKeys(world)!;
+  if (!order) return { east: null, west: null };
+  const tables = nbaStandings(world, fixtures)!;
+  return { east: tables.conferences[keys.east]!.map(row => row.clubId), west: tables.conferences[keys.west]!.map(row => row.clubId) };
 }
 
 /** Each league's postseason as far as results decide it: its series, the games that should exist and the outcome so far. */
@@ -214,7 +254,9 @@ export function getPostseasons(context: { fixtures: readonly (SeasonFixture | Ar
   return leagues.map(league => {
     const other = leagues.find(item => item.country === league.country && item.tier !== league.tier);
     const format = POSTSEASON_FORMATS[league.postseason!], order = orders.get(league.id)!;
-    const derived = derivePostseason({ leagueId: league.id, format, seasonNumber, order, otherOrder: other ? orders.get(other.id)! : null, slotDay: slot => postseasonSlotDay(world, seasonNumber, slot), fixtures: context.fixtures });
+    // NBA step 5: the play-in and the bracket seed by conference.
+    const groupOrders = world.nba?.leagueId === league.id ? nbaGroupOrders(world, context.fixtures, order) : undefined;
+    const derived = derivePostseason({ leagueId: league.id, format, seasonNumber, order, otherOrder: other ? orders.get(other.id)! : null, slotDay: slot => postseasonSlotDay(world, seasonNumber, slot, league.id), fixtures: context.fixtures, ...(groupOrders ? { groupOrders } : {}) });
     return { league, format, order, ...derived, outcome: postseasonOutcome(format, order, derived.series) };
   });
 }
@@ -224,6 +266,8 @@ export function scheduledFixtures(context: { clubs: readonly Team[]; fixtures: r
   const regular = createSchedule(context.clubs, seasonNumber, context), world = worldOf(context), europe = playsEurope(world);
   if (!world.domesticLeagues?.some(league => league.postseason) && !europe) return regular;
   const post: SeasonFixture[] = getPostseasons(context, seasonNumber).flatMap(entry => entry.fixtures).map(fixture => ({ ...fixture, result: null }));
+  // NBA step 5: the NBA's postseason overlaps the other leagues' regular seasons, so the season is in calendar order too.
+  if (world.nba && !europe) return [...regular, ...post].sort(byCalendar);
   // Format 57: European knockout games share the weeks of the domestic regular season, so the whole season is in calendar order.
   if (europe) return [...regular, ...post, ...getEuropeanCompetitions(context, seasonNumber).flatMap(entry => entry.fixtures).map(fixture => ({ ...fixture, result: null }))].sort(byCalendar);
   return [...regular, ...post.sort((a, b) => a.round - b.round || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))];
@@ -579,6 +623,12 @@ export interface SeasonSystems {
    * and by their president's spending style (`world.surplusSpending`, `src/world/surplus-spending.ts`). New careers only.
    */
   surplusSpending?: boolean;
+  /**
+   * Format 90 (owner, 23 November 2026: the NBA is playable, offered like any other league, new careers only): a world
+   * with the NBA (`world.nba`, built by `worldFromPack` when the NBA is chosen) plays its rules, calendar, standings and
+   * postseason. A career in such a world needs this option; worlds without the NBA are unchanged by it.
+   */
+  nba?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -592,7 +642,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, nba: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -628,6 +678,8 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.coachSteering !== undefined && typeof options.coachSteering !== 'boolean') throw new Error('Choose a valid head coach steering setting.');
   if (options.economyBalance !== undefined && typeof options.economyBalance !== 'boolean') throw new Error('Choose a valid club money setting.');
   if (options.surplusSpending !== undefined && typeof options.surplusSpending !== 'boolean') throw new Error('Choose a valid club spending setting.');
+  if (options.nba !== undefined && typeof options.nba !== 'boolean') throw new Error('Choose a valid NBA setting.');
+  if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
   // Format 67: systems added after the flag list was frozen apply to the finished opening; media changes no match.
@@ -1323,7 +1375,7 @@ export function getStandings(season: { clubs: readonly Team[]; fixtures: readonl
   if (season.world?.domesticLeagues) return seasonLeagues(season.world, season.divisions).flatMap(league => {
     const fixtures = season.fixtures.filter(fixture => isRegularFixture(fixture) && league.clubIds.includes(fixture.homeClubId));
     if (league.standingsRule) return competitionTable({
-      competitionId: league.id, clubIds: league.clubIds, rule: league.standingsRule,
+      competitionId: league.id, clubIds: league.clubIds, rule: league.standingsRule, ...(season.world!.nba?.leagueId === league.id ? { nba: season.world!.nba.conferences } : {}),
       games: fixtures.map(fixture => ({ ...fixture, competitionId: league.id, stage: 'regular' as const, stageRound: fixture.round, groupId: null, seriesId: null, neutral: false })),
       results: fixtures.flatMap(fixture => fixture.result ? [{ fixtureId: fixture.id, home: fixture.result.officialScore.home, away: fixture.result.officialScore.away, winnerClubId: fixture.result.winnerClubId, ...(league.standingsRule === 'fip-art62-2026' ? { fouls: fixtureFouls(fixture) } : {}) }] : []),
     }).map(row => ({ ...row, difference: row.pointsFor - row.pointsAgainst }));

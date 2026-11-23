@@ -9,6 +9,7 @@ import { overallRating } from './overall-rating';
 import { STAFF_BUDGET } from './staff-constants';
 import { clubCountry, fullWorldClubsIn, worldOf } from './career-world';
 import { seasonLeagues } from './divisions';
+import { NBA_BUDGET_EUROS, NBA_ECONOMY, NBA_MAXIMUM_WAGE, NBA_MINIMUM_WAGE, nbaPlayerBill, usdToEur } from './nba-economy';
 
 /**
  * Realistic money for real-club worlds (sprint 4, format 62). Every number below is a rule the owner can adjust; the
@@ -44,6 +45,8 @@ export const REAL_ECONOMY_RULES = Object.freeze({
     second: { France: [2e6, 3.5e6, 5.75e6], Italy: [1e6, 2e6, 3e6], Spain: [0.4e6, 1.5e6, 2.6e6], Germany: [0.8e6, 1.5e6, 2.5e6], Turkey: [0.5e6, 1e6, 1.8e6], Greece: [0.3e6, 0.6e6, 1e6], default: [0.5e6, 1e6, 2e6] },
     /** [E] Third divisions (Spain's Segunda FEB): no published figures; about a third of the second division. */
     third: { default: [0.15e6, 0.45e6, 0.9e6] },
+    /** NBA step 4: the NBA's clubs (`src/world/nba-economy.ts`, placeholder until step 6). */
+    nba: { default: NBA_BUDGET_EUROS },
   } as Readonly<Record<EconomyBand, Readonly<Record<string, readonly [number, number, number]>>>>),
   /**
    * [S] Published club budgets (EUR million) from the sprint-4 finance research (2025-27 money: the latest published
@@ -76,7 +79,7 @@ export const REAL_ECONOMY_RULES = Object.freeze({
   /** [S] The EuroLeague's strongest squads form its top group: this share of its clubs (9 of 20). */
   euroleagueTopShare: 0.45,
   /** [S] Players plus head coach, gross cost to the club, % of budget. */
-  wageShare: Object.freeze({ 'euroleague-top': 55, euroleague: 45, 'top-upper': 40, 'top-lower': 38, second: 35, third: 35 } as Readonly<Record<EconomyBand, number>>),
+  wageShare: Object.freeze({ 'euroleague-top': 55, euroleague: 45, 'top-upper': 40, 'top-lower': 38, second: 35, third: 35, nba: 40 } as Readonly<Record<EconomyBand, number>>),
   /** [E] The head coach's part of that wage bill; it funds the staff allocation (the game's coaches) instead of player wages. */
   headCoachPercent: 8,
   /** [E] Assistants, medical, scouting and youth staff, % of budget, added to the staff allocation. */
@@ -98,6 +101,7 @@ export const REAL_ECONOMY_RULES = Object.freeze({
     second: { tickets: 22, sponsorship: 36, central: 2, public: 24, owner: 6, other: 10 },
     /** [E] as the second division. */
     third: { tickets: 22, sponsorship: 36, central: 2, public: 24, owner: 6, other: 10 },
+    nba: NBA_ECONOMY.revenueMix,
   } as Readonly<Record<EconomyBand, RevenueMix>>),
   /** [S] Country adjustments in points; the net change is taken from other income, then sponsorship, so the mix sums to 100. */
   countryMix: Object.freeze({ Spain: { public: 10 }, Italy: { owner: 10 }, Turkey: { owner: 15 }, Greece: { owner: 15 }, Germany: { owner: -5, sponsorship: 10 } } as Readonly<Record<string, Partial<RevenueMix>>>),
@@ -115,7 +119,7 @@ export const REAL_ECONOMY_RULES = Object.freeze({
    * 80-150k, bench 30-80k; lower star 150-300k, starter 80-150k, rotation 40-80k, bench 15-40k; second division star
    * 60-120k, starter 35-60k, rotation 20-35k, bench 8-20k. [E] third division bench 4k.
    */
-  benchFloor: Object.freeze({ 'euroleague-top': 150_000, euroleague: 100_000, 'top-upper': 30_000, 'top-lower': 15_000, second: 8_000, third: 4_000 } as Readonly<Record<EconomyBand, number>>),
+  benchFloor: Object.freeze({ 'euroleague-top': 150_000, euroleague: 100_000, 'top-upper': 30_000, 'top-lower': 15_000, second: 8_000, third: 4_000, nba: NBA_MINIMUM_WAGE / 100 } as Readonly<Record<EconomyBand, number>>),
   wageRanks: Object.freeze([15, 10, 9, 8.5, 7.5, 7, 6.5, 6, 5.5, 5, 4.5, 4] as const),
   wageExtra: 2.5,
   wageFringe: 1.5,
@@ -124,7 +128,7 @@ export const REAL_ECONOMY_RULES = Object.freeze({
   wageGenerated: 0.5,
   wageTopShare: 0.25,
   /** [S] Gross cost to the club per euro net: Spain, Germany 2.0; Italy 2.4; France 1.9; Greece 1.5; Turkey 1.4. [E] elsewhere 1.8. */
-  costPerNet: Object.freeze({ Spain: 2, Germany: 2, Italy: 2.4, France: 1.9, Greece: 1.5, Turkey: 1.4, default: 1.8 } as Readonly<Record<string, number>>),
+  costPerNet: Object.freeze({ Spain: 2, Germany: 2, Italy: 2.4, France: 1.9, Greece: 1.5, Turkey: 1.4, USA: 1, default: 1.8 } as Readonly<Record<string, number>>),
   /**
    * Gates: average arena seats, usual fill and average ticket yield in euros per league. [S] EuroLeague 10,589 at 84%
    * (about 12,600 seats) for €30-40; ACB 6,633 for €22; BBL 4,676 at 90% for €24; Betclic Élite 4,139 at 94% for €25;
@@ -137,7 +141,8 @@ export const REAL_ECONOMY_RULES = Object.freeze({
     top: { Spain: { seats: 8_300, fill: 0.8, price: 22 }, Germany: { seats: 5_200, fill: 0.9, price: 24 }, France: { seats: 4_400, fill: 0.94, price: 25 }, Italy: { seats: 5_400, fill: 0.76, price: 15.5 }, Turkey: { seats: 5_000, fill: 0.6, price: 10 }, Greece: { seats: 4_000, fill: 0.5, price: 10 }, default: { seats: 4_300, fill: 0.7, price: 12 } },
     second: { France: { seats: 3_500, fill: 0.8, price: 15 }, Italy: { seats: 3_600, fill: 0.7, price: 12 }, Spain: { seats: 3_100, fill: 0.65, price: 10 }, Turkey: { seats: 2_000, fill: 0.4, price: 5 }, default: { seats: 2_500, fill: 0.6, price: 8 } },
     third: { default: { seats: 1_500, fill: 0.5, price: 6 } },
-  } as { euroleague: Gate; top: Readonly<Record<string, Gate>>; second: Readonly<Record<string, Gate>>; third: Readonly<Record<string, Gate>> }),
+    nba: { seats: NBA_ECONOMY.gate.seats, fill: NBA_ECONOMY.gate.fill, price: Math.round(usdToEur(NBA_ECONOMY.gate.price)) },
+  } as { nba: Gate; euroleague: Gate; top: Readonly<Record<string, Gate>>; second: Readonly<Record<string, Gate>>; third: Readonly<Record<string, Gate>> }),
   /** [S] Bigger and stronger clubs draw more (Berlin 8,277, Bayern 6,943, Göttingen 2,546 against the BBL's 4,676): seats from 55% to 170% of the league's average by strength. */
   seatSpread: Object.freeze([0.55, 1, 1.7] as const),
   /** [E] Fill moves this much either side of the league's usual fill with strength. */
@@ -359,7 +364,7 @@ export const knownClubBudget = (name: string): number | null => { const budget =
  * Each player's season wage (club cost, cents, in €500 steps) sharing `bill` by rank in the squad (see `wageRanks`),
  * never below `floor` per player, the best paid at most `wageTopShare` of the bill. `generated` names generated players.
  */
-export function shareWageBill(players: readonly Team['players'][number][], bill: number, floor: number, generated: ReadonlySet<string> = new Set()): Record<string, number> {
+export function shareWageBill(players: readonly Team['players'][number][], bill: number, floor: number, generated: ReadonlySet<string> = new Set(), limit = REAL_ECONOMY_RULES.limits.maxContractWage * CENTS): Record<string, number> {
   const rules = REAL_ECONOMY_RULES;
   const ratings = players.map(player => overallRating(player.attributes, player.position));
   const order = players.map((_, index) => index).sort((a, b) => ratings[b]! - ratings[a]!);
@@ -391,7 +396,6 @@ export function shareWageBill(players: readonly Team['players'][number][], bill:
     const free = bill - floored.filter(Boolean).length * minimum, flexible = amounts.reduce((total, value, index) => total + (floored[index] ? 0 : value), 0);
     amounts = amounts.map((value, index) => floored[index] ? minimum : value * free / flexible);
   }
-  const limit = rules.limits.maxContractWage * CENTS;
   return Object.fromEntries(players.map((player, index) => {
     const wage = amounts[index]!;
     // Larger wages round to €5,000, smaller ones to €500 (the contract wage step).
@@ -421,6 +425,8 @@ interface EconomyLayoutInput {
   clubIds: readonly string[];
   strength: ReadonlyMap<string, number>;
   countryOf: (clubId: string) => string | null;
+  /** NBA step 4: the world's NBA league, whose clubs form the `nba` band. */
+  nbaLeague?: string;
 }
 
 /**
@@ -452,6 +458,7 @@ function economyLayout(input: EconomyLayoutInput): EconomyLayout {
   for (const [clubId, item] of place) if (item.league) addTo(byLeague, item.league, clubId);
   for (const [clubId, item] of place) {
     if (band.has(clubId)) continue;
+    if (input.nbaLeague && item.league === input.nbaLeague) { band.set(clubId, 'nba'); continue; }
     if (item.tier >= 3) { band.set(clubId, 'third'); continue; }
     if (item.tier === 2) { band.set(clubId, 'second'); continue; }
     const members = item.league ? [...byLeague.get(item.league)!].sort((a, b) => strength.get(b)! - strength.get(a)! || (a < b ? -1 : 1)) : [];
@@ -480,7 +487,7 @@ const budgetCents = (euros: number): number => Math.round(euros / 10_000) * 10_0
 /** Gate: seats around the league's average by strength, a usual crowd within them, and the league's ticket yield. */
 function gateFor(place: EconomyPlace, band: EconomyBand, g: number): { capacity: number; referenceDemand: number; ticketPrice: number } {
   const rules = REAL_ECONOMY_RULES, euro = band === 'euroleague-top' || band === 'euroleague';
-  const gate = euro ? rules.gates.euroleague : bandFor(place.tier >= 3 ? rules.gates.third : place.tier === 2 ? rules.gates.second : rules.gates.top, place.country);
+  const gate = band === 'nba' ? rules.gates.nba : euro ? rules.gates.euroleague : bandFor(place.tier >= 3 ? rules.gates.third : place.tier === 2 ? rules.gates.second : rules.gates.top, place.country);
   const [small, middle, large] = rules.seatSpread;
   const capacity = clamp(Math.round(gate.seats * (g < 0.5 ? lerp(small, middle, g * 2) : lerp(middle, large, g * 2 - 1)) / 100) * 100, 500, 60_000);
   const referenceDemand = clamp(Math.round(capacity * clamp(gate.fill + rules.fillSpread * (g - 0.5), 0.2, 0.98) / 100) * 100, 100, capacity);
@@ -498,14 +505,14 @@ function clubFigures(band: EconomyBand, place: EconomyPlace, competition: Europe
   // Expected gate income: delegated pricing sells out at the price where the usual crowd fills the arena.
   const kind = competition?.kind ?? null;
   const european = !competition?.format ? 0 : kind === 'euroleague' ? competition.clubIds.length - 1 : kind === 'eurocup' ? Math.max(1, competition.clubIds.length / rules.europeanHomeGames.eurocupGroups - 1) : rules.europeanHomeGames.bcl;
-  const homeGames = (place.league ? place.size - 1 + rules.playoffHomeGames : 0) + european;
+  const homeGames = band === 'nba' ? NBA_ECONOMY.homeGames + rules.playoffHomeGames : (place.league ? place.size - 1 + rules.playoffHomeGames : 0) + european;
   const tickets = Math.round(homeGames * capacity * ticketPrice * (referenceDemand / capacity) ** (1 / 1.4));
   const mix = revenueMixFor(band, place.country);
   const sponsorship = Math.round(budget * mix.sponsorship / 100 / 10_000) * 10_000;
   const funding = Math.max(0, Math.round((budget - sponsorship - tickets) / 10_000) * 10_000);
   // Costs: player wages, the staff allocation (head coach and support staff), a reserve and operating costs.
-  const wageBill = budget * rules.wageShare[band] / 100;
-  const playerBill = Math.round(wageBill * (100 - rules.headCoachPercent) / 100);
+  const playerBill = playerBillOf({ band, budget });
+  const wageBill = band === 'nba' ? playerBill * 100 / (100 - rules.headCoachPercent) : budget * rules.wageShare[band] / 100;
   const staff = wageBill * rules.headCoachPercent / 100 + budget * rules.supportStaffPercent / 100;
   const operatingCost = Math.max(0, Math.round((budget - playerBill - staff - budget * rules.reservePercent / 100) / 10_000) * 10_000);
   return {
@@ -515,7 +522,9 @@ function clubFigures(band: EconomyBand, place: EconomyPlace, competition: Europe
 }
 
 /** The player wage bill (cents) a club's figures fund, as `withRealEconomy` sets it from the budget and band. */
-export function playerBillOf(economy: ClubEconomy): number {
+export function playerBillOf(economy: Pick<ClubEconomy, 'band' | 'budget'>): number {
+  // NBA step 4: the NBA's payroll follows its own range (`src/world/nba-economy.ts`).
+  if (economy.band === 'nba') return nbaPlayerBill(economy.budget);
   const wageBill = economy.budget * REAL_ECONOMY_RULES.wageShare[economy.band] / 100;
   return Math.round(wageBill * (100 - REAL_ECONOMY_RULES.headCoachPercent) / 100);
 }
@@ -527,12 +536,12 @@ export function playerBillOf(economy: ClubEconomy): number {
  * funding that balance the budget, operating costs, opening cash and a scale for catalog amounts. `countryOf` names a
  * European-only entrant's country when the world does not record it.
  */
-export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) => string | null = () => null): CareerWorld {
+export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) => string | null = () => null, knownCapacity?: (clubId: string) => number | null): CareerWorld {
   const rules = REAL_ECONOMY_RULES;
   const strength = new Map(world.clubs.map(club => [club.id, strengthOf(club.players)]));
   const layout = economyLayout({
     leagues: world.domesticLeagues ?? [], lower: (world.lowerDivisions ?? []).flatMap(list => 'clubIds' in list ? [list] : []), background: world.backgroundLeagues ?? [],
-    competitions: world.europeanCompetitions ?? [], clubIds: world.clubs.map(club => club.id), strength, countryOf,
+    competitions: world.europeanCompetitions ?? [], clubIds: world.clubs.map(club => club.id), strength, countryOf, ...(world.nba ? { nbaLeague: world.nba.leagueId } : {}),
   });
   const capitals = DEVELOPMENT_WORLD.presidents.map(president => president.seasonCapital);
 
@@ -545,7 +554,10 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
     const gate = gateFor(item, own, layout.gateT.get(clubId)!);
     const { economy, playerBill } = clubFigures(own, item, layout.competition.get(clubId), budget, gate);
     const floor = rules.benchFloor[own] * bandFor(rules.costPerNet, item.country) * CENTS;
-    Object.assign(wages, shareWageBill(club.players, playerBill, floor, new Set(club.players.filter(player => world.playerProfiles[player.id]?.source === 'generated').map(player => player.id))));
+    Object.assign(wages, shareWageBill(club.players, playerBill, floor, new Set(club.players.filter(player => world.playerProfiles[player.id]?.source === 'generated').map(player => player.id)), own === 'nba' ? NBA_MAXIMUM_WAGE : undefined));
+    // NBA step 4: an arena's known seats (from the pack) stay, with the usual crowd at the NBA's fill.
+    const seats = own === 'nba' ? knownCapacity?.(clubId) ?? null : null;
+    if (seats !== null) return { ...definition, capacity: seats, referenceDemand: Math.round(seats * NBA_ECONOMY.gate.fill / 100) * 100, economy };
     return { ...definition, capacity: gate.capacity, referenceDemand: gate.referenceDemand, economy };
   });
   const scaleOf = new Map(finances.map(item => [item.clubId, item.economy!.scale]));
@@ -554,7 +566,7 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
 }
 
 /** Bands from the smallest to the largest money level: the direction of a change between seasons. */
-const BAND_RANK: Readonly<Record<EconomyBand, number>> = Object.freeze({ third: 0, second: 1, 'top-lower': 2, 'top-upper': 3, euroleague: 4, 'euroleague-top': 5 });
+const BAND_RANK: Readonly<Record<EconomyBand, number>> = Object.freeze({ third: 0, second: 1, 'top-lower': 2, 'top-upper': 3, euroleague: 4, 'euroleague-top': 5, nba: 6 });
 const strengthCache = new WeakMap<readonly Team['players'][number][], number>();
 const cachedStrength = (players: readonly Team['players'][number][]): number => {
   let value = strengthCache.get(players);
@@ -579,7 +591,7 @@ function seasonLayout(world: CareerWorld, divisions: DomesticDivisions | undefin
   const lower = (world.lowerDivisions ?? []).flatMap(list => 'clubIds' in list ? [{ country: list.country, tier: list.tier, clubIds: [...new Set([...list.clubIds, ...opening.filter(league => league.country === list.country).flatMap(league => league.clubIds)])].filter(clubId => !inLeague.has(clubId)) }] : []);
   // Format 83: a season's money follows its places as offered on the places day (a later Decline changes who plays, not the money).
   const competitions = (world.europeanCompetitions ?? []).map(competition => { const entry = (europe?.offered ?? europe?.entrants)?.find(item => item.competitionId === competition.id); return entry ? { ...competition, clubIds: entry.clubIds } : competition; });
-  return economyLayout({ leagues, lower, background: world.backgroundLeagues ?? [], competitions, clubIds: world.clubs.map(club => club.id), strength, countryOf: clubId => clubCountry(world, clubId) });
+  return economyLayout({ leagues, lower, background: world.backgroundLeagues ?? [], competitions, clubIds: world.clubs.map(club => club.id), strength, countryOf: clubId => clubCountry(world, clubId), ...(world.nba ? { nbaLeague: world.nba.leagueId } : {}) });
 }
 
 /** Why a club's band changed between two seasons' places. */
@@ -713,6 +725,6 @@ export function economyChange(context: WorldContext & { seasonNumber: number }, 
 
 /** The money fields a world with an economy carries on each club's finance definition. */
 export const CLUB_ECONOMY_KEYS = ['band', 'budget', 'sponsorship', 'funding', 'openingCash', 'ticketPrice', 'operatingCost', 'scale'] as const;
-export const ECONOMY_BANDS: readonly EconomyBand[] = ['euroleague-top', 'euroleague', 'top-upper', 'top-lower', 'second', 'third'];
-/** The largest single amount a club economy may carry (EUR 200 million), well inside safe integers. */
-export const MAX_ECONOMY_AMOUNT = 20_000_000_000;
+export const ECONOMY_BANDS: readonly EconomyBand[] = ['euroleague-top', 'euroleague', 'top-upper', 'top-lower', 'second', 'third', 'nba'];
+/** The largest single amount a club economy may carry (EUR 2 billion since NBA step 4; EUR 200 million before), well inside safe integers. */
+export const MAX_ECONOMY_AMOUNT = 200_000_000_000;

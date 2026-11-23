@@ -52,7 +52,7 @@ const money = (cents: number) => formatEuros(cents, true)
 /** Ledger rows keep exact amounts so detailed accounting reconciles to the cent. */
 const exact = formatExactEuros
 const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${exact(Math.abs(cents))}`
-const BAND_LABELS = { 'euroleague-top': 'EuroLeague top group', euroleague: 'EuroLeague', 'top-upper': 'top division, upper half', 'top-lower': 'top division, lower half', second: 'second division', third: 'third division' } as const
+const BAND_LABELS = { 'euroleague-top': 'EuroLeague top group', euroleague: 'EuroLeague', 'top-upper': 'top division, upper half', 'top-lower': 'top division, lower half', second: 'second division', third: 'third division', nba: 'NBA' } as const
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
 const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Training coach fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital', 'naming-rights': 'Arena naming rights', 'sponsor-exit': 'Sponsor exit', loan: 'Bank loan', 'loan-repayment': 'Loan repayment', lease: 'Facility lease', 'staff-wages': 'Staff salaries', 'staff-compensation': 'Staff compensation' }

@@ -60,7 +60,7 @@ import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
-import { clubsEverInFullWorld, fixtureRuleset, fullWorldClubs, fullWorldClubsIn, isMemberList, isWorldClub, playsAtNeutralVenue, roundKey, roundOrdinal, seasonRounds, validateWorld, worldOf, worldPlayer, worldRounds } from '../world/career-world';
+import { clubHasAcademy, clubsEverInFullWorld, fixtureRuleset, fullWorldClubs, fullWorldClubsIn, isMemberList, isWorldClub, playsAtNeutralVenue, roundKey, roundOrdinal, seasonRounds, validateWorld, worldOf, worldPlayer, worldRounds } from '../world/career-world';
 import type { CareerWorld, SeasonEconomy, WorldContext } from '../domain/world';
 import { getCareerPlayers, getCareerPlayer, getCareerWage, type CareerPlayerContext } from '../world/player-catalog';
 import { MAX_MATCH_PERIODS } from '../engine/match';
@@ -117,7 +117,7 @@ import { maxTransferFee } from '../world/transfers-policy';
 import { maxReleaseFee } from '../world/release-clauses';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
 import { validateMatchState } from './validate-match';
-import { FIBA_2024, gameSeconds, type Ruleset } from '../engine/rulesets';
+import { FIBA_2024, gameSeconds, rulesetById, type Ruleset } from '../engine/rulesets';
 import { MAX_SEASON_COLLECTION_ENTRIES, MAX_SEASON_SAVE_BYTES, MAX_SEASON_SAVE_VALUES } from './season-limits';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
 import { COMPACT_JSON_3_ENCODING, COMPACT_JSON_ENCODING, LEGACY_COMPACT_JSON_ENCODING, compactJson3, expandJson, expandJson3 } from './compact-json';
@@ -144,7 +144,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -456,16 +456,16 @@ function validateResult(value: unknown, path: string, home: Team, away: Team, le
 }
 
 /** Migrated archives have no box scores; newly retained ones validate all player accounting. */
-function validateArchivedResult(value: unknown, path: string, home: Team, away: Team, rosterAware = false, outcomes = false, selection = false): ArchivedFixture['result'] {
+function validateArchivedResult(value: unknown, path: string, home: Team, away: Team, rosterAware = false, outcomes = false, selection = false, rules: Ruleset = FIBA_2024): ArchivedFixture['result'] {
   const summarized = outcomes && value !== null && typeof value === 'object' && Object.hasOwn(value, 'appearances');
   const fields = record(value, path, ['score', 'officialScore', 'winnerClubId', 'kind', 'periods', 'injuries', ...(rosterAware ? ['stats', 'rosterIds'] : []), ...(summarized ? ['appearances'] : []), ...(selection ? ['selection'] : [])]);
   if (summarized) {
     validateResultSummary(fields, path, home, away);
     validateInjuryMap(fields.injuries, `${path}.injuries`, [...home.players, ...away.players].map(player => player.id));
-    validateArchivedAppearances(fields as unknown as ArchivedFixture['result'], path, home, away);
+    validateArchivedAppearances(fields as unknown as ArchivedFixture['result'], path, home, away, rules);
     return fields as unknown as ArchivedFixture['result'];
   }
-  if (rosterAware && fields.stats !== null) return validateResult(value, path, home, away, false, true, selection);
+  if (rosterAware && fields.stats !== null) return validateResult(value, path, home, away, false, true, selection, rules);
   validateResultSummary(fields, path, home, away);
   validateInjuryMap(fields.injuries, `${path}.injuries`, [...home.players, ...away.players].map(player => player.id));
   return fields as unknown as ArchivedFixture['result'];
@@ -1014,7 +1014,7 @@ function validateYouthCompetitionShape(value: unknown, state: SeasonState, versi
     const season = record(item, path, ['seasonNumber', 'fromRound', 'preparedOn', 'supplementalIntakeIds', 'fixtures']);
     if (season.seasonNumber !== year || season.fromRound !== fromRound || season.preparedOn !== dateForRound(fromRound, year)) fail(path, 'must retain the chronological competition preparation boundary');
     if (!Array.isArray(season.supplementalIntakeIds) || season.supplementalIntakeIds.length > state.clubs.length) fail(`${path}.supplementalIntakeIds`, 'must retain at most one supplemental intake per club');
-    const fixtures = array(season.fixtures, `${path}.fixtures`, domesticSchedule(state.clubs, year, { ...state, divisions: divisionsInSeason(state, year) }).filter(fixture => fixture.round >= fromRound).length);
+    const fixtures = array(season.fixtures, `${path}.fixtures`, domesticSchedule(state.clubs, year, { ...state, divisions: divisionsInSeason(state, year) }).filter(fixture => fixture.round >= fromRound && clubHasAcademy(worldOf(state), fixture.homeClubId)).length);
     for (const [fixtureIndex, value] of fixtures.entries()) {
       const fixturePath = `${path}.fixtures[${fixtureIndex}]`;
       const outcome = version >= 43 && value !== null && typeof value === 'object' && 'detail' in value && value.detail === 'outcome';
@@ -3567,6 +3567,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 87 && Object.hasOwn(world, 'economyBalance')) fail('world.economyBalance', 'requires format 87 or later');
   // Format 88: rich clubs' surplus spending is a rule of new careers only.
   if (version < 88 && Object.hasOwn(world, 'surplusSpending')) fail('world.surplusSpending', 'requires format 88 or later');
+  // Format 90: the NBA (its league, standings rule and postseason) is a rule of new careers only.
+  if (version < 90 && (Object.hasOwn(world, 'nba') || world.domesticLeagues?.some(league => league.postseason === 'nba-2026-1'))) fail('world.nba', 'requires format 90 or later');
   // Format 63: the career-2 rules (protected first season, fresh confidence, mid-season moves, resignations) need it.
   const careerModel = state.career !== null && typeof state.career === 'object' ? (state.career as { model?: unknown }).model : undefined;
   if (version < 63 && (careerModel === 'career-2' || state.board !== null && typeof state.board === 'object' && Object.hasOwn(state.board, 'restarts'))) fail('career.model', 'requires format 63 or later');
@@ -3761,12 +3763,13 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
           validateResultSummary(sealed, `${location}.result`, home, away);
           validateInjuryMap(sealed.injuries, `${location}.result.injuries`, [...home.players, ...away.players].map(player => player.id));
           const fouls = record(sealed.fouls, `${location}.result.fouls`, SIDES);
-          number(fouls.home, `${location}.result.fouls.home`, 0, 5 * home.players.length); number(fouls.away, `${location}.result.fouls.away`, 0, 5 * away.players.length);
+          const foulOut = rulesetById(fixtureRuleset({ world }, expected)).foulOut;
+          number(fouls.home, `${location}.result.fouls.home`, 0, foulOut * home.players.length); number(fouls.away, `${location}.result.fouls.away`, 0, foulOut * away.players.length);
           recordSealedInjuries(sealed as unknown as ArchivedFixture['result'], expected, home, away, location);
           continue;
         }
         const { home, away } = archivedRosters ? recordedTeams(fixture.result, expected, archiveClubs, archivedRosters, `${location}.result`, version >= 45, fullRoster, backgroundSelection(archiveIndex + 1, expected)) : { home: archiveClubs.find(club => club.id === expected.homeClubId)!, away: archiveClubs.find(club => club.id === expected.awayClubId)! };
-        const result = validateArchivedResult(fixture.result, `${location}.result`, home, away, version >= 9, version >= 45, fullRoster);
+        const result = validateArchivedResult(fixture.result, `${location}.result`, home, away, version >= 9, version >= 45, fullRoster, rulesetById(fixtureRuleset({ world }, expected)));
         if (version >= 9) {
           const available = result.stats !== null || result.appearances !== undefined;
           if (hasPlayerStats !== undefined && available !== hasPlayerStats) fail(`${path}.fixtures`, 'must have consistent player-statistics coverage for the archived season');
@@ -3807,7 +3810,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
     if (expected.round <= committedRound || expected.round === round && pendingDay !== null && expected.date < pendingDay) {
       if (fixture.result === null) fail(`${path}.result`, 'is missing from a completed matchday');
       const { home, away } = rosters ? recordedTeams(fixture.result, expected, clubs, rosters, `${path}.result`, false, fullRoster, backgroundSelection(seasonNumber, expected)) : { home: clubs.find(club => club.id === expected.homeClubId)!, away: clubs.find(club => club.id === expected.awayClubId)! };
-      const result = validateResult(fixture.result, `${path}.result`, home, away, legacy, version >= 9, fullRoster);
+      const result = validateResult(fixture.result, `${path}.result`, home, away, legacy, version >= 9, fullRoster, rulesetById(fixtureRuleset({ world }, expected)));
       if (!legacy) recordFixtureInjuries(result, expected, home, away, path, result.stats);
     } else if (fixture.result !== null) fail(`${path}.result`, 'cannot be committed before its matchday');
   }

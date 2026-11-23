@@ -137,7 +137,7 @@ export const FACILITY_RULES_3 = Object.freeze({
    * band's default budget range, low to high), and a stable per-facility offset of up to half a level either way varies
    * its facilities. Without an economy every club starts at Average.
    */
-  startingLevels: Object.freeze({ 'euroleague-top': [5, 6], euroleague: [4, 6], 'top-upper': [3, 5], 'top-lower': [2, 4], second: [2, 3], third: [1, 2] }) as Readonly<Record<EconomyBand, readonly [number, number]>>,
+  startingLevels: Object.freeze({ 'euroleague-top': [5, 6], euroleague: [4, 6], 'top-upper': [3, 5], 'top-lower': [2, 4], second: [2, 3], third: [1, 2], nba: [5, 6] }) as Readonly<Record<EconomyBand, readonly [number, number]>>,
   /** Effects by level, Very Poor to Excellent. Average is today's standard facility; Excellent about today's level 4. */
   practicePercent: Object.freeze([-4, -2, 0, 4, 7, 10]) as readonly number[],
   medicalRecoveryPercent: Object.freeze([-6, -3, 0, 4, 8, 12]) as readonly number[],

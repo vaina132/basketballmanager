@@ -14,7 +14,7 @@ import { dateForRound } from './season';
 import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES } from './training';
 import { youthCoachAssignments } from './youth-policy';
 import { getYouthPlayerStatus } from './youth-competition';
-import { roundKey, seasonRounds, worldOf } from './career-world';
+import { clubHasAcademy, roundKey, seasonRounds, worldOf } from './career-world';
 import { prospectsWithExtras } from './extra-attributes';
 import type { CareerWorld } from '../domain/world';
 import { cachedCalculation } from './pure-cache';
@@ -24,6 +24,8 @@ export function createAcademy(): SeasonAcademy { return { model: 'academy-1', en
 function intake(state: SeasonState, initial: boolean): SeasonState {
   let academy = state.academy;
   for (const club of state.clubs) {
+    // NBA step 4: NBA clubs have no academy (their young players come through the draft).
+    if (!clubHasAcademy(worldOf(state), club.id)) continue;
     if (academy.intakes.some(record => record.clubId === club.id && record.seasonNumber === state.seasonNumber && !record.source)) continue;
     const active = academy.prospects.filter(prospect => prospect.clubId === club.id && !academy.graduates.some(graduate => graduate.prospectId === prospect.player.id)).length;
     const count = initial ? 3 : Math.min(2, Math.max(0, getAcademyCapacity(state) - active));

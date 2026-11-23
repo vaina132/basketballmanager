@@ -119,7 +119,7 @@ import { getTransferPaymentSchedule, processTransferPayments } from '../world/tr
 import { addMarketDays, MARKET_MAX_EVENTS, MARKET_WINDOW_DAYS, isLiveMarketOffer } from '../world/market-policy';
 import { evaluateNegotiation } from '../world/negotiations-policy';
 import { contractRolesApply, isSquadRole, roleWage } from '../world/contract-roles';
-import { contractForSeason, contractForRound, effectiveContractsForSeason, effectiveContractsForRound, getContractedClubs, getContractedClubsForRound, registrationChangeRounds, quotePlayerContract, MIN_ROSTER_SIZE, MIN_CONTRACT_WAGE, maxContractWage, MAX_CONTRACT_SEASONS, WAGE_STEP, lowestMinimumSquadWage } from '../world/employment-policy';
+import { contractForSeason, contractForRound, effectiveContractsForSeason, effectiveContractsForRound, playerContractsForRound, markSequentialContracts, getContractedClubs, getContractedClubsForRound, registrationChangeRounds, quotePlayerContract, MIN_ROSTER_SIZE, MIN_CONTRACT_WAGE, maxContractWage, MAX_CONTRACT_SEASONS, WAGE_STEP, lowestMinimumSquadWage } from '../world/employment-policy';
 import { maxTransferFee } from '../world/transfers-policy';
 import { maxReleaseFee } from '../world/release-clauses';
 import { readLocalSeason, writeLocalSeason } from './season-indexed-db';
@@ -1991,10 +1991,19 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     }
     if (!source || source.clubId !== buyout.clubId || !sameData(buyout.releasedContractIds, contracts.filter(contract => released.some(item => item.id === contract.id)).map(contract => contract.id)) || buyout.amount !== amount) fail(path, 'must settle exactly the releasing club\'s effective remaining future salary at its recorded history prefix');
   }
-  const validated: EmploymentContract[] = [];
+  const validated: EmploymentContract[] = [], validatedIds = new Set<string>();
+  // The replayed prefix at the current contract, built once per contract and shape (each record's registrations are
+  // remembered per record, `employment-policy.ts`), instead of a new record for every question about it.
+  let prefixes = new Map<string, SeasonEmployment>(), prefixesAt = -1;
   const prefixEmployment = (include?: EmploymentContract, buyoutLimit = validated.length): SeasonEmployment => {
-    const contracts = include ? [...validated, include] : validated;
-    return { ...normalized, contracts, transfers: (transfers as EmploymentTransfer[]).filter(transfer => contracts.some(contract => contract.id === transfer.contractId)), buyouts: (buyouts as EmploymentBuyout[]).filter(buyout => buyout.contractCountBefore <= buyoutLimit) };
+    if (prefixesAt !== validated.length) { prefixes = new Map(); prefixesAt = validated.length; }
+    const key = `${include ? include.id : ''}|${buyoutLimit}`, known = prefixes.get(key);
+    if (known) return known;
+    // Every identity in it was checked to be sequential (`employment-contract-<n>` at index n - 1) before it joined.
+    const contracts = markSequentialContracts(include ? [...validated, include] : validated.slice());
+    const employment = { ...normalized, contracts, transfers: (transfers as EmploymentTransfer[]).filter(transfer => validatedIds.has(transfer.contractId) || transfer.contractId === include?.id), buyouts: (buyouts as EmploymentBuyout[]).filter(buyout => buyout.contractCountBefore <= buyoutLimit) };
+    prefixes.set(key, employment);
+    return employment;
   };
   const validateClauseTrigger = (transfer: EmploymentTransfer, source: EmploymentContract, path: string) => {
     if (transfer.mode !== 'release-clause') return;
@@ -2021,7 +2030,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
   // unchanged and were checked by it; only their place in the replayed prefix is kept.
   const contractPlan = version === SEASON_SCHEMA_VERSION ? prefixPlan('employment.contracts', fields.contracts as EmploymentContract[], contract => roundKey(contract.signedSeason, contract.signedRound)) : { skip: 0 };
   for (const [index, value] of fields.contracts.entries()) {
-    if (index < contractPlan.skip) { const trusted = value as EmploymentContract; previousBoundary = roundKey(trusted.signedSeason, trusted.signedRound); validated.push(trusted); continue; }
+    if (index < contractPlan.skip) { const trusted = value as EmploymentContract; previousBoundary = roundKey(trusted.signedSeason, trusted.signedRound); validated.push(trusted); validatedIds.add(trusted.id); continue; }
     const path = `employment.contracts[${index}]`;
     const raw = record(value, path, ['id', 'playerId', 'clubId', 'startsSeason', 'endsSeason', 'seasonWage', 'signedSeason', 'signedRound', 'kind', ...(version >= 18 ? ['startsRound'] : []), ...optionalClauseKeys(value, version, ['releaseFee']), ...roleKeys(value, context), ...(version >= 92 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'capRoute') ? ['capRoute'] : [])]);
     // Format 92: an NBA club's cap route, on its own signings only.
@@ -2099,9 +2108,11 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
         validateClauseTrigger(transfer, source, path);
       } else fail(`${path}.kind`, 'must identify an initial agreement, renewal, free-agent signing, transfer or trade');
     }
-    if (Array.from({ length: endsSeason - startsSeason + 1 }, (_, offset) => startsSeason + offset).some(year => Array.from({ length: seasonRounds(context) }, (_, offset) => offset + 1).some(round => effectiveContractsForRound(prefixEmployment(entry as unknown as EmploymentContract), year, round).filter(contract => contract.playerId === player.id).length > 1))) fail(path, 'overlaps another effective employment agreement for this player');
+    const withEntry = prefixEmployment(entry as unknown as EmploymentContract);
+    if (Array.from({ length: endsSeason - startsSeason + 1 }, (_, offset) => startsSeason + offset).some(year => Array.from({ length: seasonRounds(context) }, (_, offset) => offset + 1).some(round => playerContractsForRound(withEntry, player.id, year, round).length > 1))) fail(path, 'overlaps another effective employment agreement for this player');
     const contract = entry as unknown as EmploymentContract;
     validated.push(contract);
+    validatedIds.add(contract.id);
     // A joining club's opening squad is not bought within a budget, like the career's opening contracts.
     if (entry.kind === 'drafted') for (let year = startsSeason; year <= endsSeason; year += 1) if (effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId).length > clubRosterLimit(context, entry.clubId as string)) fail(path, 'must fit the club\'s squad limit');
     // Format 94: a trade's salary matching replaces the club's wage budget; its squad limits are checked with the trade.
@@ -2553,6 +2564,42 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
   // Incremental checkpoint checks (`trusted-prefix.ts`): offers made before the trusted checkpoint's week are unchanged and
   // were checked by it; only the contract prefix, conversations and chronology they leave behind are rebuilt.
   const plan = prefixPlan('negotiations.records', fields.records as SeasonNegotiations['records'], record => roundKey(record.seasonNumber, record.round));
+  // The replayed records at an offer: consecutive offers made with the same contract prefix, academy boundary and releases
+  // share one academy and one employment record, so the registrations derived from them are worked out once, not per offer.
+  // Each is exactly what the offer's own boundary gives (`prefix` is always the journal's first `prefix.length` contracts).
+  const firstContractIndex = new Map<string, number>();
+  contracts.forEach((contract, index) => { if (!firstContractIndex.has(contract.id)) firstContractIndex.set(contract.id, index); });
+  let replayAcademy: { key: string; academy: SeasonAcademy } | null = null;
+  let replayEmployment: { prefix: EmploymentContract[]; key: string; employment: SeasonEmployment } | null = null;
+  // `academyAtBoundary` reads the contract prefix only to keep graduates whose contract number is within it: the prefix's
+  // length matters only through how many graduates' numbers it reaches.
+  const graduateNumbers = (state.academy?.graduates ?? []).filter(graduate => graduate.kind !== 'age-out').map(graduate => Number(graduate.contractId?.replace('employment-contract-', ''))).filter(number => !Number.isNaN(number)).sort((left, right) => left - right);
+  const graduatesWithin = (count: number) => { let reached = 0; while (reached < graduateNumbers.length && graduateNumbers[reached]! <= count) reached += 1; return reached; };
+  const academyAt = (year: number, round: number, count: number) => {
+    const key = `${year}/${round}/${graduatesWithin(count)}`;
+    if (replayAcademy?.key !== key) replayAcademy = { key, academy: academyAtBoundary(state.academy, year, round, count) };
+    return replayAcademy.academy;
+  };
+  // The registrations at an offer's week, reused while the boundary, academy and releases stay the same and every
+  // contract added since starts in a later season (it cannot change that season's squads, and the releases its transfer
+  // carries start with it). A trade contract always recomputes.
+  let replayClubs: { year: number; round: number; academy: SeasonAcademy; key: string; count: number; clubs: readonly Team[] } | null = null;
+  const clubsAt = (replay: SeasonState, year: number, round: number): readonly Team[] => {
+    const key = replayEmployment!.key, count = prefix.length;
+    const reusable = replayClubs && replayClubs.year === year && replayClubs.round === round && replayClubs.academy === replay.academy && replayClubs.key === key && replayClubs.count <= count && prefix.slice(replayClubs.count, count).every(contract => contract.startsSeason > year && contract.kind !== 'trade');
+    if (!reusable) replayClubs = { year, round, academy: replay.academy, key, count, clubs: getContractedClubsForRound(replay, year, round) };
+    else replayClubs!.count = count;
+    return replayClubs!.clubs;
+  };
+  const employmentAt = (index: number, date: string, year: number, status: unknown): SeasonEmployment => {
+    const buyouts = (state.employment.buyouts ?? []).filter(buyout => buyout.negotiationCountBefore <= index && buyout.completedOn <= date);
+    const key = `${status === 'complete' ? year + 1 : '-'}|${buyouts.map(buyout => buyout.id).join(',')}`;
+    if (replayEmployment?.prefix !== prefix || replayEmployment.key !== key) {
+      const count = prefix.length;
+      replayEmployment = { prefix, key, employment: { ...state.employment, contracts: prefix, transfers: (state.employment.transfers ?? []).filter(transfer => (firstContractIndex.get(transfer.contractId) ?? Infinity) < count), buyouts, market: status === 'complete' ? { seasonNumber: year + 1 } : null } };
+    }
+    return replayEmployment.employment;
+  };
   for (const [index, value] of fields.records.entries()) {
     if (index < plan.skip) {
       const entry = value as SeasonNegotiations['records'][number], year = entry.seasonNumber;
@@ -2596,13 +2643,13 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
     if (previous?.offeredWage === offeredWage && previous.offeredSeasons === offeredSeasons && previous.releaseFee === releaseFee && previous.role === role && previous.boundary === boundary && previous.date === entry.date) fail(path, 'duplicates the unchanged latest offer in this negotiation at this boundary');
     if (entry.contractCountBefore !== prefix.length) fail(`${path}.contractCountBefore`, 'must identify the complete employment history when this offer was submitted');
     const replay: SeasonState = {
-      ...state, ...knownAt(year, round, entry.status), managedClubId: entry.status === 'complete' ? managedClubFor(state, year, true) : managedClubAtRound(state, year, round), academy: academyAtBoundary(state.academy, year, round, prefix.length), lifecycle: lifecycleAtBoundary(state.lifecycle, year, round, prefix.length, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, index), seasonNumber: year, round, date: entry.date as string, status: entry.status,
-      employment: { ...state.employment, contracts: prefix, transfers: (state.employment.transfers ?? []).filter(transfer => prefix.some(contract => contract.id === transfer.contractId)), buyouts: (state.employment.buyouts ?? []).filter(buyout => buyout.negotiationCountBefore <= index && buyout.completedOn <= (entry.date as string)), market: entry.status === 'complete' ? { seasonNumber: year + 1 } : null },
+      ...state, ...knownAt(year, round, entry.status), managedClubId: entry.status === 'complete' ? managedClubFor(state, year, true) : managedClubAtRound(state, year, round), academy: academyAt(year, round, prefix.length), lifecycle: lifecycleAtBoundary(state.lifecycle, year, round, prefix.length, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, index), seasonNumber: year, round, date: entry.date as string, status: entry.status,
+      employment: employmentAt(index, entry.date as string, year, entry.status),
       negotiations: { model: 'negotiations-1', enabledSince: { seasonNumber: firstYear, round: firstRound, contractCount }, records: entries },
       market: createMarket(),
       recruitment: { ...createRecruitment(), offers: recruitmentHolds.filter(hold => hold.negotiationCount <= index && (hold.seasonNumber < year || hold.seasonNumber === year && hold.round <= round)).at(-1)?.offers ?? [] },
     };
-    replay.clubs = getContractedClubsForRound(replay, year, round);
+    replay.clubs = clubsAt(replay, year, round);
     // A dated offseason reply keeps the role checked when the offer was made (the market replay checks it there).
     const terms = { ...(releaseFee === undefined ? {} : { releaseFee }), ...(role === undefined || linkedOffer ? {} : { role }) };
     const quote = quotePlayerContract(replay, entry.playerId, offeredWage, offeredSeasons, entry.clubId, undefined, undefined, 'upfront', terms);

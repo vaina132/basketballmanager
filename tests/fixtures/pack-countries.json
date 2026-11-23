@@ -1,7 +1,7 @@
 {
  "source": "Distinct country fields of the published real pack (game-data/real-pack.json), saved so tests never fetch it. Refresh when a new pack is published.",
- "packVersion": "2026.11-world-11-online",
- "savedAt": "2026-11-22",
+ "packVersion": "2026.11-world-14-online",
+ "savedAt": "2026-11-23",
  "playerNationalities": [
   "Albania",
   "Angola",
@@ -22,6 +22,7 @@
   "Cape Verde",
   "Central African Republic",
   "Chile",
+  "China",
   "Colombia",
   "Congo",
   "Croatia",
@@ -48,6 +49,7 @@
   "Italy",
   "Ivory Coast",
   "Jamaica",
+  "Japan",
   "Latvia",
   "Lithuania",
   "Mali",
@@ -100,6 +102,7 @@
   "Belgium",
   "Bosnia and Herzegovina",
   "Bulgaria",
+  "Canada",
   "Croatia",
   "Cyprus",
   "Czech Republic",
@@ -125,6 +128,7 @@
   "Spain",
   "Switzerland",
   "Turkey",
+  "USA",
   "United Arab Emirates",
   "United Kingdom"
  ],
@@ -134,6 +138,7 @@
   "Greece",
   "Italy",
   "Spain",
-  "Turkey"
+  "Turkey",
+  "USA"
  ]
 }

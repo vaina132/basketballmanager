@@ -78,14 +78,22 @@ export const EUROPE_SCALE = Object.freeze({
  * afterwards on the NBA alone: it keeps this order within each position and the overall spread, but gives the best
  * player of every position about the same overall, so `top` is set for about one 99 per position (5) and the second
  * of a crowded position (point guards: Dončić, Gilgeous-Alexander, Cunningham) stays at 96-98.
+ *
+ * Plus-minus (24 November 2026): with the box score alone, team strength followed real results only loosely (each
+ * club's eight best against its 2025-26 record: Spearman 0.54; simulated seasons 0.45, Oklahoma City and Boston near
+ * the bottom), because the provider gives no steals, blocks or defense and the defense skill was an estimate. The
+ * score now also weighs each player's adjusted plus-minus from whole games (nbaAdjustedPlusMinus; 0.87 at team level),
+ * and the plus-minus tilts his profile towards defense (`plusMinus.defense` skill points per spread) before the move.
  */
 export const NBA_IMPACT_RULES = Object.freeze({
-  weights: Object.freeze({ production: 0.45, rating: 0.25, minutes: 0.15, starts: 0.15 }),
+  weights: Object.freeze({ production: 0.35, rating: 0.15, minutes: 0.1, starts: 0.1, plusMinus: 0.3 }),
   /** Game Score: points + 0.4 field goals made - 0.7 attempted - 0.4 missed free throws + 0.4 rebounds + 0.7 assists. */
   gameScore: Object.freeze({ fieldMade: 0.4, fieldAttempted: -0.7, freeMissed: -0.4, rebounds: 0.4, assists: 0.7 }),
   /** Few games say little: production and minutes per game start from a fringe player's, starts from none. */
   priorGames: 15, priorGameScore: 3, priorMinutes: 10,
-  centre: 74, spread: 12, bend: 88, top: 104,
+  centre: 74, spread: 14, bend: 88, top: 106,
+  /** Adjusted plus-minus (nbaAdjustedPlusMinus): ridge penalty per player, and skill points of defense per spread of it. */
+  plusMinus: Object.freeze({ lambda: 60, defense: 1.5 }),
 });
 
 /** Recency-weighted NBA totals per player (regular season and playoffs), with Game Score, minutes and starts. */
@@ -107,6 +115,46 @@ export function nbaImpactTotals(totals, rules = NBA_IMPACT_RULES) {
   }]));
 }
 
+/**
+ * Adjusted plus-minus per player from whole games (`data.games`, scripts/real-data-nba.mjs nbaGameLines): each game's
+ * final margin (home minus away) is explained by a home edge plus, for every player, his share of his team's minutes
+ * (five players on court, so the shares sum to 5 per team) times his value in points per 48 minutes. A ridge solve
+ * (penalty `lambda` per player, games weighted by season recency) shrinks players with few minutes to the average. It
+ * sees what the box score misses (defense, spacing, the team around a player), so it ranks teams by their real results.
+ */
+export function nbaAdjustedPlusMinus(games, rules = NBA_IMPACT_RULES) {
+  const index = new Map(), lambda = rules.plusMinus.lambda;
+  for (const [, , , , , lines] of games) for (const [player] of lines) if (!index.has(player)) index.set(player, index.size);
+  const n = index.size + 1, edge = n - 1, matrix = Array.from({ length: n }, () => new Float64Array(n)), right = new Float64Array(n), minutes = new Map();
+  for (const [season, home, away, homePoints, awayPoints, lines] of games) {
+    const weight = RATING_RULES.recency[season] ?? 0.5, total = { [home]: 0, [away]: 0 };
+    for (const [, team, seconds] of lines) total[team] = (total[team] ?? 0) + seconds;
+    if (!(total[home] > 0) || !(total[away] > 0)) continue;
+    const row = new Map([[edge, 1]]);
+    for (const [player, team, seconds] of lines) {
+      const sign = team === home ? 1 : team === away ? -1 : 0;
+      if (!sign) continue;
+      const column = index.get(player);
+      row.set(column, (row.get(column) ?? 0) + sign * 5 * seconds / total[team]);
+      minutes.set(player, (minutes.get(player) ?? 0) + weight * seconds / 60);
+    }
+    const margin = homePoints - awayPoints, entries = [...row];
+    for (const [i, xi] of entries) { right[i] += weight * xi * margin; for (const [j, xj] of entries) matrix[i][j] += weight * xi * xj; }
+  }
+  for (let i = 0; i < edge; i += 1) matrix[i][i] += lambda;
+  // Cholesky solve of the symmetric positive-definite system.
+  for (let j = 0; j < n; j += 1) {
+    let diagonal = matrix[j][j];
+    for (let k = 0; k < j; k += 1) diagonal -= matrix[j][k] * matrix[j][k];
+    matrix[j][j] = Math.sqrt(diagonal);
+    for (let i = j + 1; i < n; i += 1) { let value = matrix[i][j]; for (let k = 0; k < j; k += 1) value -= matrix[i][k] * matrix[j][k]; matrix[i][j] = value / matrix[j][j]; }
+  }
+  const middle = new Float64Array(n), beta = new Float64Array(n);
+  for (let i = 0; i < n; i += 1) { let value = right[i]; for (let k = 0; k < i; k += 1) value -= matrix[i][k] * middle[k]; middle[i] = value / matrix[i][i]; }
+  for (let i = n - 1; i >= 0; i -= 1) { let value = middle[i]; for (let k = i + 1; k < n; k += 1) value -= matrix[k][i] * beta[k]; beta[i] = value / matrix[i][i]; }
+  return { homeEdge: beta[edge], players: new Map([...index].map(([player, column]) => [player, { value: beta[column], minutes: minutes.get(player) ?? 0 }])) };
+}
+
 /** The target overall for an impact score: the line, its top bent towards `top` above `bend`. */
 export function impactOverall(score, rules = NBA_IMPACT_RULES) {
   const straight = rules.centre + rules.spread * score;
@@ -119,8 +167,9 @@ export function impactOverall(score, rules = NBA_IMPACT_RULES) {
  * Moves each rated NBA player's abilities (in place, on the rating rows of `byId`) so that his overall level is the one
  * his impact score gives (NBA_IMPACT_RULES); returns the score and its inputs by API-Sports id for the report.
  */
-export function applyNbaImpact(standard, byId, totals, positionOf, rules = NBA_IMPACT_RULES) {
+export function applyNbaImpact(standard, byId, totals, positionOf, rules = NBA_IMPACT_RULES, games = []) {
   const totalsById = nbaImpactTotals(totals, rules);
+  const plusMinus = rules.weights.plusMinus && games.length ? nbaAdjustedPlusMinus(games, rules).players : new Map();
   const entries = standard.filter(player => byId.has(player.apiPlayerId) && totalsById.has(player.apiPlayerId)).map(player => {
     const rating = byId.get(player.apiPlayerId), position = positionOf(player), age = rating.method.age;
     const penalty = age && age > RATING_RULES.staminaAge ? Math.min(4, age - RATING_RULES.staminaAge) : 0;
@@ -128,7 +177,7 @@ export function applyNbaImpact(standard, byId, totals, positionOf, rules = NBA_I
     return { player, rating, position, base, totals: totalsById.get(player.apiPlayerId), level: weightedLevel(base, position) };
   });
   const pool = entries.filter(entry => entry.rating.method.weightedMinutes >= RATING_RULES.scaleMinutes);
-  const feature = { production: entry => entry.totals.production, rating: entry => entry.level, minutes: entry => entry.totals.minutesPerGame, starts: entry => entry.totals.startShare };
+  const feature = { production: entry => entry.totals.production, rating: entry => entry.level, minutes: entry => entry.totals.minutesPerGame, starts: entry => entry.totals.startShare, plusMinus: entry => plusMinus.get(entry.player.apiPlayerId)?.value ?? 0 };
   const scales = Object.fromEntries(Object.entries(feature).map(([name, read]) => {
     const values = pool.map(read), m = values.reduce((a, b) => a + b, 0) / values.length, s = Math.sqrt(values.reduce((a, b) => a + (b - m) ** 2, 0) / values.length) || 1;
     return [name, value => (value - m) / s];
@@ -138,14 +187,16 @@ export function applyNbaImpact(standard, byId, totals, positionOf, rules = NBA_I
   for (const entry of entries) {
     const score = Object.entries(rules.weights).reduce((sum, [name, weight]) => sum + weight * scales[name](feature[name](entry)), 0);
     const target = impactOverall(score, rules), level = (target - OVR_SCALE.offset) / OVR_SCALE.perSkillPoint;
+    // What the box score misses is mostly defense: the plus-minus also tilts the profile towards (or away from) it.
+    const base = { ...entry.base, defense: entry.base.defense + (rules.plusMinus?.defense ?? 0) * (scales.plusMinus ? scales.plusMinus(feature.plusMinus(entry)) : 0) };
     // The same move for every skill, found by bisection because skills stop at 1 and 20.
     let low = -25, high = 25;
-    for (let step = 0; step < 60; step += 1) { const middle = (low + high) / 2; if (weightedLevel(Object.fromEntries(Object.entries(entry.base).map(([key, value]) => [key, clamp(value + middle)])), entry.position) < level) low = middle; else high = middle; }
-    const moved = Object.fromEntries(Object.entries(entry.base).map(([key, value]) => [key, clamp(value + high)]));
+    for (let step = 0; step < 60; step += 1) { const middle = (low + high) / 2; if (weightedLevel(Object.fromEntries(Object.entries(base).map(([key, value]) => [key, clamp(value + middle)])), entry.position) < level) low = middle; else high = middle; }
+    const moved = Object.fromEntries(Object.entries(base).map(([key, value]) => [key, clamp(value + high)]));
     const attributes = roundProfile(moved, entry.position);
     for (const [key, game] of Object.entries(GAME_KEYS)) entry.rating[key] = attributes[game];
     const round = value => Math.round(value * 100) / 100;
-    out.set(entry.player.apiPlayerId, { score: round(score), target: round(target), production: round(entry.totals.production), minutesPerGame: round(entry.totals.minutesPerGame), startShare: round(entry.totals.startShare), games: round(entry.totals.games), per40Overall: round(OVR_SCALE.perSkillPoint * entry.level + OVR_SCALE.offset) });
+    out.set(entry.player.apiPlayerId, { score: round(score), target: round(target), production: round(entry.totals.production), minutesPerGame: round(entry.totals.minutesPerGame), startShare: round(entry.totals.startShare), games: round(entry.totals.games), plusMinus: round(feature.plusMinus(entry)), per40Overall: round(OVR_SCALE.perSkillPoint * entry.level + OVR_SCALE.offset) });
   }
   return out;
 }
@@ -180,7 +231,7 @@ export function rateNba(data, europeRows, rules = NBA_LEVEL_RULES, impactRules =
   const ids = new Set(profiles.map(profile => profile.id));
   const ratings = computeRatings(rows.filter(row => ids.has(row.player_id)), profiles, levels, trusted, { competitions, scale: EUROPE_SCALE, unclamped: true });
   const byId = new Map(ratings.map(rating => [rating.player_id, rating]));
-  const impacts = applyNbaImpact(standard, byId, data.totals, player => player.position ?? withinGroup(player.group, byId.get(player.apiPlayerId)?.method), impactRules);
+  const impacts = applyNbaImpact(standard, byId, data.totals, player => player.position ?? withinGroup(player.group, byId.get(player.apiPlayerId)?.method), impactRules, data.games ?? []);
   // Players without statistics start from the NBA's average profile of their position (the game lifts them to their club's level).
   const averages = {};
   for (const position of ['PG', 'SG', 'SF', 'PF', 'C']) {

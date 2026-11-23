@@ -2,7 +2,8 @@
 /**
  * NBA data (docs/nba-plan.md step 1, 23 November 2026). Builds one reviewed file with the 30 NBA clubs (conference,
  * division, arena, capacity, colours, head coach) and their 2026-27 standard-contract rosters (number, exact position,
- * height, weight, birth date, nationality, API-Sports player id), plus the NBA season totals behind the ratings.
+ * height, weight, birth date, nationality, API-Sports player id), plus the NBA season totals and game lines behind the
+ * ratings.
  *
  * Sources: API-Sports league 12 (teams, 2026-27 team lists, every finished 2025-26 and 2026-27 game's player box
  * scores; downloaded once by the main session, read here from --raw, no API calls); English Wikipedia (CC BY-SA 4.0,
@@ -118,6 +119,35 @@ export function nbaSeasonTotals(rawDir) {
     }
   }
   return [...rows.values()];
+}
+
+/**
+ * Every finished NBA game behind the totals (same games as nbaSeasonTotals: regular season and playoffs, no preseason,
+ * only the 30 clubs) with its final score and each player's seconds, for the NBA impact's adjusted plus-minus
+ * (scripts/real-data-nba-ratings.mjs). One row per game: [season label, home team, away team, home points, away
+ * points, [[player, team, seconds], ...]].
+ */
+export function nbaGameLines(rawDir) {
+  const teams = new Set(JSON.parse(readFileSync(join(rawDir, 'teams-2026-2027.json'), 'utf8')).response.map(team => team.id));
+  const out = [];
+  for (const season of ['2025-2026', '2026-2027']) {
+    const label = `${season.slice(0, 4)}-${season.slice(7, 9)}`;
+    const games = JSON.parse(readFileSync(join(rawDir, 'games', `${season}.json`), 'utf8')).response.filter(game => ['FT', 'AOT'].includes(game.status.short) && teams.has(game.teams.home.id) && teams.has(game.teams.away.id) && game.date.slice(0, 10) >= NBA_SEASON_OPENERS[label]);
+    for (const game of [...games].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)) {
+      const file = join(rawDir, 'box', `${game.id}.json`);
+      if (!existsSync(file)) continue;
+      const box = JSON.parse(readFileSync(file, 'utf8')).response;
+      if (!box.length) continue;
+      const lines = new Map();
+      for (const line of box) {
+        if (!teams.has(line.team.id)) continue;
+        const key = `${line.player.id}/${line.team.id}`, s = seconds(line.minutes) ?? 0;
+        if (s > 0 && !lines.has(key)) lines.set(key, [String(line.player.id), line.team.id, s]);
+      }
+      out.push([label, game.teams.home.id, game.teams.away.id, Number(game.scores.home.total), Number(game.scores.away.total), [...lines.values()]]);
+    }
+  }
+  return out;
 }
 
 // ---- Wikipedia and Wikidata ------------------------------------------------------------------------------------
@@ -369,7 +399,7 @@ async function main() {
     Object.assign(club.headCoach, { article: `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title.replace(/ /g, '_'))}`, born: birthDateOf(params), nationality: statedNationality(params) ?? nationalityOf(params), since: career.firstHeadCoachYear, currentTeam: career.currentTeam, titles: highlights.titles, highlights: highlights.items });
     if (career.currentTeam && !career.currentTeam.includes(club.name.split(' ').at(-1))) gaps.push(`${club.name}: ${club.headCoach.name}'s article names ${career.currentTeam} as his current team`);
   }
-  const file = { model: 'nba-data-1', observedOn: new Date().toISOString().slice(0, 10), competition: { id: `competition-${NBA_COMPETITION_UUID}`, uuid: NBA_COMPETITION_UUID, name: 'NBA', country: 'USA', tier: 1, kind: 'domestic', apiLeagueId: 12 }, divisions: NBA_DIVISIONS, clubs, players, totals, gaps };
+  const file = { model: 'nba-data-1', observedOn: new Date().toISOString().slice(0, 10), competition: { id: `competition-${NBA_COMPETITION_UUID}`, uuid: NBA_COMPETITION_UUID, name: 'NBA', country: 'USA', tier: 1, kind: 'domestic', apiLeagueId: 12 }, divisions: NBA_DIVISIONS, clubs, players, totals, games: nbaGameLines(rawDir), gaps };
   writeFileSync(out, `${JSON.stringify(file, null, 1)}\n`);
   console.log(`${clubs.length} clubs, ${players.filter(player => !player.twoWay).length} standard players (${players.filter(player => player.twoWay).length} two-way left out), ${totals.length} season-total rows; ${requests} Wikipedia/Wikidata requests; ${gaps.length} gaps`);
 }

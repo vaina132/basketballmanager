@@ -232,11 +232,15 @@ const FIBA_CALIBRATION: Calibration = Object.freeze({
  * 19 personal fouls; 6% of games go to overtime and home teams win 54-55%; starters play 30-34 minutes. Against the
  * European set: quicker actions, more threes, far fewer fouls per minute, fewer offensive rebounds, more blocks.
  * Measured by tests/nba-match-calibration.test.ts on NBA-strength squads. The NBA plays only with the play model.
+ * Retuned 24 November 2026 on the real NBA rosters (world-14 preview, rating-4 with plus-minus): real NBA players
+ * defend better and shoot inside and from the line worse than the first synthetic squads, so games ended near 106
+ * points with 50% on twos, 71% free throws and 17 turnovers; shot bases, the free-throw base and turnovers per action
+ * were moved (about 113 points, 53.5% on twos, 77% free throws, 14.5 turnovers on the real rosters). FIBA untouched.
  */
 const NBA_CALIBRATION: Calibration = Object.freeze({
   ...FIBA_CALIBRATION,
   HOME_COURT_MAKE_BONUS: .007,
-  FREE_THROWS: { ...FREE_THROWS, base: .41 },
+  FREE_THROWS: { ...FREE_THROWS, base: .48 },
   REBOUNDS: { ...REBOUNDS, offensiveBase: .245 },
   TEAM_REBOUND_SHARE: .08,
   ROTATION: {
@@ -249,10 +253,10 @@ const NBA_CALIBRATION: Calibration = Object.freeze({
     seconds: { ...PLAYS.seconds, advance: 6.6, inbound: 4.3, fastBreak: 4.1, pnr: 8.5, drive: 7.7, post: 9.1, motion: 8.5, early: 4.7 },
     choice: { pnr: .36, drive: .37, post: .07, motion: .17, early: .03 },
     reads: { ...PLAYS.reads, threeValue: .95 },
-    shots: { ...PLAYS.shots, rim: .51, floater: .38, mid: .365, post: .43, catchThree: .36, pullThree: .32 },
+    shots: { ...PLAYS.shots, rim: .565, dunk: .85, floater: .43, mid: .41, post: .48, catchThree: .37, pullThree: .33, putback: .565, tip: .51 },
     fouls: { rim: .13, dunk: .1, floater: .06, mid: .028, post: .11, catchThree: .009, pullThree: .013, putback: .1, tip: .06, heave: .003 },
     blocks: { rim: .095, dunk: .028, floater: .068, mid: .029, post: .08, catchThree: .008, pullThree: .012, putback: .095, tip: .036, heave: 0 },
-    turnovers: { ...PLAYS.turnovers, advance: .02, pass: .073, drive: .1, post: .088, fastBreak: .092 },
+    turnovers: { ...PLAYS.turnovers, advance: .016, pass: .058, drive: .08, post: .07, fastBreak: .075 },
     defensiveFouls: { advance: .022, pass: .018, drive: .039, post: .05, screen: .028, fastBreak: .037, pressure: .022 },
   },
   FLOW: { ...FLOW, seconds: { advance: 6.1, pnr: 7.9, drive: 7.1, post: 8.5, motion: 7.9, early: 4.4 } },

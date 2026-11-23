@@ -65,7 +65,7 @@ export function nbaOverrides(data, rated, batch) {
     rows: data.clubs.map(club => {
       const players = addedPlayers(club, rated.players);
       const sources = [...new Set([...club.sources.slice(0, 1), ...rated.players.filter(player => player.clubId === club.id).flatMap(player => player.sources.slice(1)), `https://v1.basketball.api-sports.io/players?team=${club.apiTeamId}&season=2026-2027`])];
-      return { entity_type: 'club', entity_id: club.uuid, field: 'added_players', reason: `NBA 2026-27 standard-contract roster of the ${club.name} (Wikipedia roster template, two-way players left out), rated from API-Sports box scores with rating-4 and its NBA impact score (scripts/real-data-nba-ratings.mjs). Owner permission 23 November 2026.`, value: { value: players, sources, observedOn: data.observedOn } };
+      return { entity_type: 'club', entity_id: club.uuid, field: 'added_players', reason: `NBA 2026-27 standard-contract roster of the ${club.name} (Wikipedia roster template, two-way players left out), rated from API-Sports box scores with rating-4 and its NBA impact score with adjusted plus-minus (scripts/real-data-nba-ratings.mjs). Owner permission 23 November 2026.`, value: { value: players, sources, observedOn: data.observedOn } };
     }),
   };
 }

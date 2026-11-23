@@ -647,3 +647,7 @@ Owner decisions (23 November): add the look-ahead fix; careful clubs "can spend 
 - A computer club that agreed to sell a player withdraws its pending offers that no longer fit its wage budget, as a recorded step.
 - Measured over five automatic seasons (real Turkey seeds 7, 11; Spain 5, 11; synthetic): no unpaid costs; lowest season-end cash about 10% (was 0-1%); Efes 113% -> 85%; Breogán still 128-143% (open).
 
+## Weak squads and the Turkish division gap (owner decision, 23 November 2026)
+
+The release data check found three top-division squads weak for their league (Scafati, Vikos, Körfez) and a large strength gap between Turkey's top and second divisions (best-eight averages 66.7 and 38.2). The owner decided to keep them as the real data shows: no artificial strengthening.
+

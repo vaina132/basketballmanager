@@ -34,6 +34,11 @@ export interface NbaWorld {
    * Format-90 NBA worlds without it keep the placeholder money of NBA step 4.
    */
   cap?: 'nba-cap-1';
+  /**
+   * NBA step 8 (format 94, provisional; new NBA worlds with the cap): the NBA draft (`src/world/nba-draft.ts`,
+   * `nba-draft-policy.ts`): generated prospects, the lottery, two rounds of picks with rookie contracts (`state.draft`).
+   */
+  draft?: 'nba-draft-1';
 }
 /** Format 62 (sprint 4): money of real-club worlds follows researched 2025-27 club budgets (`src/world/economy.ts`). */
 export type WorldEconomyId = 'real-2026-1';

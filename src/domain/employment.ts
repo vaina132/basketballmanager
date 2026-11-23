@@ -30,8 +30,8 @@ export interface EmploymentContract {
   capRoute?: NbaCapRoute;
   signedSeason: number;
   signedRound: number;
-  /** `joined`: an opening term for a player of a club joining the full world (format 55). */
-  kind: 'initial' | 'renewal' | 'free-agent' | 'transfer' | 'midseason' | 'midseason-transfer' | 'joined';
+  /** `joined`: an opening term for a player of a club joining the full world (format 55). `drafted` (format 94): a rookie contract signed with an NBA draft pick. */
+  kind: 'initial' | 'renewal' | 'free-agent' | 'transfer' | 'midseason' | 'midseason-transfer' | 'joined' | 'drafted';
 }
 
 /** Completed club sale; old agreements remain intact for historical registration and payroll. */

@@ -3,6 +3,7 @@ import type { MarketOffer, MarketWindow } from '../domain/market';
 import type { SeasonState } from '../domain/season';
 import { contractForSeason, effectiveContractsForSeason } from './employment-policy';
 import { minRosterSize, minRosterText } from './club-roster-policy';
+import { draftClassOf, isDraftComplete, nbaDraftDay } from './draft-index';
 
 export const MARKET_WINDOW_DAYS = 28;
 export const MARKET_RESPONSE_DAYS = 1;
@@ -68,11 +69,27 @@ export function getLiveMarketOffers(state: { market?: SeasonState['market']; sea
   return [...known.live];
 }
 
+/** NBA step 8 (format 94): draft day, while this season's class is not recorded (the market stops on it). */
+function draftDayDue(state: SeasonState, window: MarketWindow): string[] {
+  if (state.world?.nba?.draft !== 'nba-draft-1' || !state.draft || draftClassOf(state, state.seasonNumber)) return [];
+  return [nbaDraftDay(state.seasonNumber, window.openedOn, window.closesOn)];
+}
+
+/** NBA step 8 (format 94): why the draft keeps the offseason going (draft day still to come, or picks still to make). */
+function draftReason(state: SeasonState): string | null {
+  const window = getMarketWindow(state);
+  if (state.world?.nba?.draft !== 'nba-draft-1' || !state.draft || !window) return null;
+  const entry = draftClassOf(state, state.seasonNumber);
+  if (!entry) return `The NBA draft is on ${nbaDraftDay(state.seasonNumber, window.openedOn, window.closesOn)}. Continue the offseason to reach draft day.`;
+  if (isDraftComplete(entry)) return null;
+  return entry.order[entry.picks.length] === state.managedClubId ? 'Your club is on the clock in the NBA draft. Make your pick on Transfers > Draft, or continue to let your assistant pick.' : 'The NBA draft is still under way. Continue the offseason to finish it.';
+}
+
 /** Advancing stops at the first response or expiry, so a decision cannot silently be skipped. */
 export function getNextMarketDate(state: SeasonState): string | null {
   const window = getMarketWindow(state);
   if (!isMarketActive(state) || !window || window.date >= window.closesOn) return null;
-  const dates = [addMarketDays(window.date, 7), window.closesOn, ...window.offers.filter(isLiveMarketOffer).map(offer => offer.status === 'pending' ? offer.responseOn : offer.expiresOn)];
+  const dates = [addMarketDays(window.date, 7), window.closesOn, ...window.offers.filter(isLiveMarketOffer).map(offer => offer.status === 'pending' ? offer.responseOn : offer.expiresOn), ...draftDayDue(state, window)];
   return dates.filter(date => date > window.date).sort()[0] ?? null;
 }
 
@@ -87,6 +104,8 @@ export function quoteMarketDates(state: SeasonState, transfer = false): { respon
 export function getMarketStartReason(state: SeasonState): string | null {
   if (!state.market?.enabledSince) return null;
   if (!isMarketActive(state)) return 'Finish this season before starting the next one.';
+  const draft = draftReason(state);
+  if (draft) return draft;
   // Say whose offers still wait and what to do (browser play-through, 16 November 2026: "Resolve or withdraw outstanding
   // offers" showed while the manager had none open; the open offers were other clubs').
   const live = getLiveMarketOffers(state);

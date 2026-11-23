@@ -1,3 +1,5 @@
+import { draftDateOfBirth } from './draft-index';
+import type { SeasonDraft } from '../domain/draft';
 import type { PresidentTraitLevel, PresidentTraits } from '../data/development-presidents';
 import type { BoardClubMandate, BoardCultureObjective, BoardMandate, BoardRequest, BoardYouthObjective, SeasonBoard } from '../domain/board';
 import type { SeasonAcademy } from '../domain/academy';
@@ -151,7 +153,7 @@ function academyIndex(academy: PresidentContext['academy']) {
 export function boardDateOfBirth(context: PresidentContext & { world?: CareerWorld; dataPackId?: string }, playerId: string): string | null {
   const profiles = worldOf(context).playerProfiles;
   if (Object.hasOwn(profiles, playerId)) return profiles[playerId]!.dateOfBirth;
-  return academyIndex(context.academy)?.births.get(playerId) ?? null;
+  return academyIndex(context.academy)?.births.get(playerId) ?? draftDateOfBirth(context as { draft?: SeasonDraft }, playerId);
 }
 
 /** Under-23 at the mandate date, or a graduate of the club's own academy. */

@@ -1,0 +1,18 @@
+/* NBA step 8: Transfers > Draft. */
+.nba-draft { display: grid; gap: 12px; }
+.nba-draft-bar { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 10px 14px; }
+.nba-draft-bar h3 { margin: 0; font-size: 15px; }
+.nba-draft-bar span { color: var(--muted); font-size: 13px; flex: 1; }
+.nba-draft-top { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(280px, 1.4fr); gap: 12px; }
+.nba-draft .panel { padding: 12px 14px; }
+.nba-draft h4 { margin: 0 0 8px; font-size: 14px; }
+.nba-draft-lottery ol { margin: 0 0 8px; padding-left: 18px; display: grid; gap: 4px; }
+.nba-draft-lottery small, .nba-draft-player small { color: var(--muted); margin-left: 6px; }
+.nba-draft-scroll { max-height: 420px; overflow: auto; }
+.nba-draft table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.nba-draft th, .nba-draft td { padding: 5px 6px; text-align: left; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.nba-draft thead th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--surface-2); }
+.nba-draft-own td { color: var(--accent); }
+.nba-draft-board header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.nba-draft-player { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px; font-weight: 600; }
+@media (max-width: 900px) { .nba-draft-top { grid-template-columns: 1fr; } }

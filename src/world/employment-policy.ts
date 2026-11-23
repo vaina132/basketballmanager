@@ -1,3 +1,4 @@
+import { draftRightsHolder } from './draft-index';
 import { NBA_MAXIMUM_WAGE } from './nba-economy';
 import { staffRoomForWages } from './wage-pool';
 import { leavingClubIds } from './background';
@@ -240,6 +241,8 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
     else if (state.status === 'complete' && state.market?.enabledSince && (!isMarketActive(state) || !window)) reason = 'Open the offseason decision calendar before sending offers.';
     else if (state.status === 'complete' && state.market?.enabledSince && window && state.date >= window.closesOn && !resolving) reason = 'The recruitment period has closed.';
     else if (rivalOffer && !competitive()) reason = `This player is considering an offer from ${state.clubs.find(club => club.id === rivalOffer.clubId)?.name ?? 'another club'}.`;
+    // Format 94 (NBA step 8): while an NBA club holds his draft rights, no other NBA club may sign him.
+    else if (capClub() && (draftRightsHolder(state, playerId) ?? clubId) !== clubId) reason = 'Another NBA club holds this player\'s draft rights.';
     // Format 92: an NBA club's signing must fit the salary cap (`nba-cap-policy.ts`); a scheduled reply keeps the route its offer took.
     let capRoute: NbaCapRoute | undefined;
     if (reason === null && capClub()) {

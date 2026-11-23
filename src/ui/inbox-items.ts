@@ -8,6 +8,7 @@ import { boardFundingRefusal } from '../world/board-funding-policy'
 import { getClubNamingRights, getClubSponsorship } from '../world/commercial'
 import { exitExplanation } from './sponsor-exit-text'
 import { getCareerPlayer } from '../world/player-catalog'
+import { contractForSeason } from '../world/employment-policy'
 import { getPressQuestion, PRESS_ANSWER_TEXT, pressAnswerLabel, pressQuote } from '../world/press-policy'
 import { PRESS_TOPIC_TITLES } from '../world/media'
 import { awaitsContractReply, getClubContractRequests, getSquadRelationships } from '../world/relationships'
@@ -160,6 +161,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   }
   items.push(...careerMoveItems(season))
   items.push(...bidInboxItems(season))
+  items.push(...draftInboxItems(season))
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })
 
   items.push(...nationalInboxItems(season))
@@ -171,6 +173,20 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
  * Owner feedback (22 November 2026): every club's offer for one of your players, listed or not, waits in the Inbox with
  * Accept and Decline. Declined and expired offers leave the Inbox; an accepted fee stays until the player decides.
  */
+/**
+ * Format 94 (NBA step 8, owner 23 November 2026): a player of the manager's European club drafted by an NBA club. He
+ * stays while under contract; the club's offer to bring him over, with its fee, comes as an ordinary offer for him.
+ */
+export function draftInboxItems(season: SeasonState): InboxItem[] {
+  const clubId = season.managedClubId
+  if (!clubId || !season.draft) return []
+  return season.draft.classes.flatMap(entry => entry.picks.filter(pick => contractForSeason(season.employment, pick.playerId, entry.seasonNumber)?.clubId === clubId && pick.clubId !== clubId).map(pick => {
+    const name = getCareerPlayer(season, pick.playerId).name, nba = season.clubs.find(club => club.id === pick.clubId)?.name ?? 'An NBA club'
+    const stays = (season.draft!.rights ?? []).some(right => right.playerId === pick.playerId && right.seasonNumber === entry.seasonNumber)
+    return { id: `draft-${entry.seasonNumber}-${pick.pick}`, date: entry.date, category: 'players' as const, title: `${name} drafted by ${nba}`, detail: stays ? `Pick ${pick.pick} of the NBA draft. He stays with you while under contract; ${nba} holds his draft rights and may offer to buy him out in an offseason.` : `Pick ${pick.pick} of the NBA draft. His contract with you ends, and he joins ${nba} on a rookie contract.`, needsAction: false, target: 'squad' as const, playerId: pick.playerId }
+  }))
+}
+
 export function bidInboxItems(season: SeasonState): InboxItem[] {
   const clubId = season.managedClubId, items: InboxItem[] = []
   const name = (id: string) => season.clubs.find(club => club.id === id)?.name ?? 'A club'

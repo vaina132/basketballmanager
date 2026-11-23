@@ -80,7 +80,7 @@ function contextAt(state: SeasonState, anchor: BoardAnchor, board: SeasonBoard, 
     finance: { ...finance, enabledSince: ledger.some(entry => entry.kind === 'opening') ? state.finance.enabledSince : null },
     // Format 70 (board-2): the academy, the previous season's squads, the managed club and the president's requests.
     // Step 3.7: the club managed at the anchor's own week (a season opening before a mid-season dismissal kept the club).
-    ...(usesPresidentBoard(board) ? { academy: state.academy, history: history.filter(archive => archive.seasonNumber === anchor.seasonNumber - 1), managedClubId: managedClubAtRound(state, anchor.seasonNumber, opening ? anchor.round - 1 : anchor.round), boardRequests: (state.board.requests ?? []) as BoardRequest[] } : {}),
+    ...(usesPresidentBoard(board) ? { academy: state.academy, ...(state.draft ? { draft: state.draft } : {}), history: history.filter(archive => archive.seasonNumber === anchor.seasonNumber - 1), managedClubId: managedClubAtRound(state, anchor.seasonNumber, opening ? anchor.round - 1 : anchor.round), boardRequests: (state.board.requests ?? []) as BoardRequest[] } : {}),
   };
 }
 

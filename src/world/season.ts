@@ -35,6 +35,7 @@ import { nextEuropeanPlaces, openingEurope } from './european-places';
 import { openingEuropeTwo } from './european-entry';
 import { europeanEntryAfter, type PlacesDayOptions, type PlacesDayState } from './european-entry-day';
 import { SEASON_SCHEMA_VERSION } from '../domain/season';
+import { createDraft, usesNbaDraft } from './nba-draft-policy';
 import { archiveFinancialHistory } from './finance-archives';
 import type { InjuryMode, MatchState, Position, Side, Team } from '../domain/types';
 import type { ManagerProfile } from '../domain/manager';
@@ -827,6 +828,8 @@ function createSeasonFromFlags(seed = 42, managedClubId?: string, injuryMode: In
     ...preparation, ...(world.domesticLeagues ? { restWeeks: [] } : {}), ...(divisions ? { divisions, background: createBackground() } : {}), ...(europe ? { europe } : {}), ...(national ? { national } : {}), date: dateForRound(1), status: 'active', round: 1, fixtures,
     // Format 72: club money follows promotion and relegation in new careers of real-data worlds that start with finances.
     ...(world.economy && financeEnabled ? { economySeasons: createEconomySeasons() } : {}),
+    // Format 94 (NBA step 8): the NBA draft's journal in worlds with the draft.
+    ...(usesNbaDraft({ world }) ? { draft: createDraft() } : {}),
     activeFixtureId: first?.id ?? null, activeMatch: first ? prepareMatch({ ...preparation, dataPackId: world.id }, first) : null,
   };
   const funded = financeEnabled ? enableFinance(state) : state;

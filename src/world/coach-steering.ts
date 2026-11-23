@@ -1,3 +1,5 @@
+import { draftDateOfBirth } from './draft-index';
+import type { SeasonDraft } from '../domain/draft';
 import type { CoachAttributes, CoachStyle } from '../domain/coaches';
 import type { SeasonState } from '../domain/season';
 import type { TrainingFocus, TrainingIntensity, TrainingPlan } from '../domain/training';
@@ -59,7 +61,7 @@ export interface SteeringCoach { attributes: CoachAttributes; style: CoachStyle 
 export function steeringDateOfBirth(context: WorldContext & Partial<Pick<SeasonState, 'academy'>>, playerId: string): string | null {
   const profiles = worldOf(context).playerProfiles;
   if (Object.hasOwn(profiles, playerId)) return profiles[playerId]!.dateOfBirth;
-  return context.academy?.prospects.find(prospect => prospect.player.id === playerId)?.dateOfBirth ?? context.academy?.graduates.find(graduate => graduate.player.id === playerId)?.dateOfBirth ?? null;
+  return context.academy?.prospects.find(prospect => prospect.player.id === playerId)?.dateOfBirth ?? context.academy?.graduates.find(graduate => graduate.player.id === playerId)?.dateOfBirth ?? draftDateOfBirth(context as { draft?: SeasonDraft }, playerId);
 }
 
 /** Whether a player is young (22 or under) on a date; unknown ages are never young. */

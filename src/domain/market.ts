@@ -47,7 +47,9 @@ export type MarketEvent =
   | { type: 'buyout'; id: string; date: string; clubId: string; playerId: string }
   | { type: 'withdraw'; date: string; offerId: string }
   | { type: 'club-decision'; date: string; offerId: string; response: 'accept' | 'reject' | 'counter' }
-  | { type: 'advance'; date: string };
+  | { type: 'advance'; date: string }
+  /** Format 94 (NBA step 8): `picks` draft picks on draft day; with `playerId`, the first is the manager's own choice. */
+  | { type: 'draft'; date: string; picks: number; playerId: string | null };
 
 export interface MarketWindow {
   seasonNumber: number;

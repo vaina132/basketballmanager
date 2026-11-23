@@ -7,9 +7,10 @@ import { playerAgeOnDate } from '../data/development-player-profiles';
 import { joinedPlayers, playerInList, roundKey, seasonRounds, worldOf, worldPlayer, worldPlayers } from './career-world';
 import { isPlayerRetired } from './lifecycle-policy';
 import { scaledMoney } from './economy';
+import { draftedPlayers, draftProspect } from './draft-index';
 
 /** A catalog is local to a career and a calendar boundary, never a global mutable registry. */
-export type CareerPlayerContext = Partial<Pick<SeasonState, 'academy' | 'lifecycle' | 'seasonNumber' | 'round' | 'date' | 'background'>> & WorldContext;
+export type CareerPlayerContext = Partial<Pick<SeasonState, 'academy' | 'lifecycle' | 'seasonNumber' | 'round' | 'date' | 'background' | 'draft'>> & WorldContext;
 
 function atBoundary(context: CareerPlayerContext, seasonNumber = context.seasonNumber ?? 7974, round = context.round ?? seasonRounds(context)): number {
   if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || seasonNumber > 7974 || !Number.isInteger(round) || round < 1 || round > seasonRounds(context)) throw new Error('Choose a supported player-catalog calendar boundary.');
@@ -33,7 +34,17 @@ function graduatesAt(graduates: readonly AcademyGraduate[], boundary: number): r
   return players;
 }
 const catalogs = new WeakMap<readonly Player[], WeakMap<readonly Player[], WeakMap<readonly Player[], readonly Player[]>>>();
-function catalogOf(originals: readonly Player[], joined: readonly Player[], graduates: readonly Player[]): readonly Player[] {
+const draftedCatalogs = new WeakMap<readonly Player[], WeakMap<readonly Player[], readonly Player[]>>();
+function catalogOf(originals: readonly Player[], joined: readonly Player[], graduates: readonly Player[], drafted: readonly Player[] = NO_PLAYERS): readonly Player[] {
+  // NBA step 8: draft prospects join after every other player (from their draft day on).
+  if (drafted.length) {
+    const base = catalogOf(originals, joined, graduates);
+    let byDrafted = draftedCatalogs.get(base);
+    if (!byDrafted) { byDrafted = new WeakMap(); draftedCatalogs.set(base, byDrafted); }
+    let catalog = byDrafted.get(drafted);
+    if (!catalog) { catalog = Object.freeze([...base, ...drafted]); byDrafted.set(drafted, catalog); }
+    return catalog;
+  }
   if (!joined.length && !graduates.length) return originals;
   let byJoined = catalogs.get(originals);
   if (!byJoined) { byJoined = new WeakMap(); catalogs.set(originals, byJoined); }
@@ -51,7 +62,12 @@ export function getCareerPlayers(context: CareerPlayerContext, seasonNumber = co
   const originals = worldPlayers(worldOf(context));
   // Format 55: generated players of next-division clubs join the catalog with their club (step 3.4d-2).
   const joined = joinedPlayers(context, seasonNumber);
-  return catalogOf(originals, joined, graduates);
+  return catalogOf(originals, joined, graduates, draftedPlayers(context, seasonNumber, inOffseason(context, seasonNumber, round)));
+}
+
+/** NBA step 8: a boundary in a season's last week, where its offseason (and its draft day) belongs: a recorded class of that season has joined. */
+function inOffseason(context: CareerPlayerContext, _seasonNumber: number, round: number): boolean {
+  return round === seasonRounds(context);
 }
 
 /** Currently known seniors who can still play at the requested registration boundary.
@@ -71,6 +87,9 @@ export function getCareerPlayer(context: CareerPlayerContext, playerId: string, 
   const boundary = atBoundary(context, seasonNumber, round);
   const original = worldPlayer(worldOf(context), playerId) ?? playerInList(joinedPlayers(context, seasonNumber), playerId);
   if (original) return original;
+  // NBA step 8: a draft prospect from his class's draft day on.
+  const drafted = draftProspect(context, playerId);
+  if (drafted && (drafted.seasonNumber < seasonNumber || drafted.seasonNumber === seasonNumber && inOffseason(context, seasonNumber, round))) return drafted.prospect.player;
   if (context.academy?.enabledSince) {
     const graduate = context.academy.graduates.find(entry => entry.player.id === playerId && roundKey(entry.availableSince.seasonNumber, entry.availableSince.round) <= boundary);
     if (graduate) return graduate.player;
@@ -84,6 +103,8 @@ export function getCareerWage(context: CareerPlayerContext, playerId: string): n
   getCareerPlayer(context, playerId);
   const wages = worldOf(context).wages;
   if (Object.hasOwn(wages, playerId)) return wages[playerId]!;
+  const drafted = draftProspect(context, playerId);
+  if (drafted) return drafted.prospect.wage;
   const prospect = context.academy?.prospects.find(entry => entry.player.id === playerId);
   if (prospect) return academyWage(context, prospect);
   throw new Error('This career has no wage terms for the selected player.');
@@ -102,6 +123,8 @@ export function getCareerPlayerAge(context: CareerPlayerContext, playerId: strin
   const profiles = worldOf(context).playerProfiles;
   const original = Object.hasOwn(profiles, playerId) ? profiles[playerId] : undefined;
   if (original) return playerAgeOnDate(original.dateOfBirth, onDate);
+  const drafted = draftProspect(context, playerId);
+  if (drafted) return playerAgeOnDate(drafted.prospect.dateOfBirth, onDate);
   const boundary = atBoundary(context);
   const prospect = context.academy?.enabledSince ? context.academy.prospects.find(entry => entry.player.id === playerId && roundKey(entry.intakeSeason, entry.intakeRound) <= boundary) : undefined;
   return playerAgeOnDate(prospect?.dateOfBirth, onDate);

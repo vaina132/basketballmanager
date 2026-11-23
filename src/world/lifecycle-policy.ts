@@ -7,8 +7,9 @@ import type { WorldContext } from '../domain/world';
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { roundKey, seasonRounds, worldOf } from './career-world';
 import { memoizePure } from './pure-cache';
+import { draftDateOfBirth, draftProspect } from './draft-index';
 
-export type LifecycleContext = Partial<Pick<SeasonState, 'lifecycle' | 'academy' | 'seasonNumber' | 'round' | 'date'>> & WorldContext;
+export type LifecycleContext = Partial<Pick<SeasonState, 'lifecycle' | 'academy' | 'seasonNumber' | 'round' | 'date' | 'draft'>> & WorldContext;
 /** An original player's profile in the career's world, if the player is one. */
 const originalProfile = (context: LifecycleContext, playerId: string) => { const profiles = worldOf(context).playerProfiles; return Object.hasOwn(profiles, playerId) ? profiles[playerId] : undefined; };
 const ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
@@ -30,7 +31,7 @@ const dateNumber = memoizePure((date: string): number => {
 });
 
 export function lifecycleDateOfBirth(context: LifecycleContext, playerId: string): string | null {
-  return originalProfile(context, playerId)?.dateOfBirth ?? context.academy?.prospects.find(prospect => prospect.player.id === playerId)?.dateOfBirth ?? null;
+  return originalProfile(context, playerId)?.dateOfBirth ?? context.academy?.prospects.find(prospect => prospect.player.id === playerId)?.dateOfBirth ?? draftDateOfBirth(context, playerId);
 }
 
 /** Match the public calendar-age convention: leap-day birthdays fall on March 1 otherwise. */
@@ -49,6 +50,9 @@ function agingStart(context: LifecycleContext, playerId: string, onDate: string)
   const anchor = context.lifecycle?.enabledSince;
   if (!anchor || onDate < anchor.date) return null;
   if (originalProfile(context, playerId)) return anchor.date;
+  // NBA step 8: a draft prospect ages from his draft day.
+  const drafted = draftProspect(context, playerId);
+  if (drafted) return drafted.date <= onDate ? (drafted.date > anchor.date ? drafted.date : anchor.date) : null;
   const graduate = context.academy?.graduates.find(entry => entry.player.id === playerId && entry.graduatedOn <= onDate);
   return graduate ? (graduate.graduatedOn > anchor.date ? graduate.graduatedOn : anchor.date) : null;
 }

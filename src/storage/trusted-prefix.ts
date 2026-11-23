@@ -293,6 +293,9 @@ export function trustedPrefixMismatch(trusted: CheckRecord, state: SeasonState):
   if (!digest || digest.hash !== trusted.digest.hash) return 'trusted prefix digest';
   // Format 80: national teams pause the domestic calendar; the national section itself is checked in full every time.
   if (Object.hasOwn(before, 'national') !== Object.hasOwn(state, 'national')) return 'national';
+  // Format 94: earlier seasons' drafts (checked by the trusted check's market replay) and their rights are unchanged.
+  const pastDraft = (value: unknown) => { const draft = (value as { draft?: { classes?: { seasonNumber: number }[]; rights?: { seasonNumber: number }[] } }).draft; return draft ? [draft.classes?.filter(entry => entry.seasonNumber < before.seasonNumber), draft.rights?.filter(entry => entry.seasonNumber < before.seasonNumber)] : null; };
+  if (!sameJson(pastDraft(before), pastDraft(state))) return 'draft';
   for (const key of SEASON_CONSTANTS) if (Object.hasOwn(before, key) !== Object.hasOwn(state, key) || !sameJson(before[key], state[key])) return key;
   if (!sameJson((before.finance as { archives?: unknown })?.archives, (state.finance as { archives?: unknown })?.archives)) return 'finance.archives';
   for (const [name, journal] of JOURNALS) {

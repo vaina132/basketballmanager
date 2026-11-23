@@ -106,7 +106,7 @@ const EMPHASIS: Readonly<Record<Position, Partial<Record<keyof SkillAttributes, 
 };
 
 /** Integer abilities whose position-weighted overall rating is as close to `target` as the 1-20 scale allows. */
-function attributesFor(target: number, position: Position, variation: (key: string) => number): PlayerAttributes {
+export function attributesFor(target: number, position: Position, variation: (key: string) => number): PlayerAttributes {
   const uniform = (level: number) => overallRating(Object.fromEntries(ATTRIBUTES.map(key => [key, level])) as unknown as PlayerAttributes, position);
   let level = 1;
   while (level < 20 && uniform(level + 1) <= target) level += 1;

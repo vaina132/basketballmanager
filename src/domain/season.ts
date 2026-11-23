@@ -1,3 +1,4 @@
+import type { SeasonDraft } from './draft';
 import type { SeasonBackground } from './background';
 import type { CompetitionStage } from './competition';
 import type { CareerWorld, SeasonEconomy } from './world';
@@ -232,7 +233,8 @@ export interface DomesticDivisions {
 /** Format 90 (NBA steps 3-5; format 89 is the spending balance): the NBA as a playable league in new careers (`world.nba`, option `nba`): its match rules, 82-game calendar, conference standings, play-in and playoffs. */
 /** Format 91 (NBA step 10): NBA careers in new careers with the NBA (`world.nbaJobs`, option `nbaJobs`): real NBA head coaches, NBA jobs above EuroLeague jobs and their reputation requirement. */
 /** Format 92 (NBA step 6): NBA money in new NBA worlds (`world.nba.cap`): estimated NBA salaries and revenue, the salary cap with its exceptions (`capRoute` on contracts and offers), rosters of 13-15, the luxury tax (`luxury-tax`, `tax-share` ledger entries) and the owner's payroll ceiling and playoff aim. */
-export const SEASON_SCHEMA_VERSION = 92;
+/** Format 94 (NBA step 8, provisional number): the NBA draft in new NBA worlds (`world.nba.draft`, `state.draft`): generated prospects, the lottery, two rounds of picks on draft day with rookie contracts (`kind` 'drafted'). */
+export const SEASON_SCHEMA_VERSION = 94;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -305,6 +307,8 @@ export interface SeasonState {
   media?: SeasonMedia;
   /** Format 72: each season's club money figures, in new careers of real-data worlds; absent careers keep the world's opening figures. */
   economySeasons?: SeasonEconomy;
+  /** Format 94 (NBA step 8, provisional number): the NBA draft's classes, exactly in worlds with `world.nba.draft`. */
+  draft?: SeasonDraft;
   activeFixtureId: string | null;
   activeMatch: MatchState | null;
 }

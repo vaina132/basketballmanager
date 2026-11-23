@@ -31,6 +31,7 @@ import type { SeasonLifecycle } from './lifecycle';
 import type { SeasonYouthCompetition } from './youth-competition';
 import type { SeasonFacilities } from './facilities';
 import type { SeasonMedia } from './media';
+import type { SeasonTrades } from './trades';
 
 export interface ClubPlan {
   tactics: Tactics;
@@ -232,7 +233,8 @@ export interface DomesticDivisions {
 /** Format 90 (NBA steps 3-5; format 89 is the spending balance): the NBA as a playable league in new careers (`world.nba`, option `nba`): its match rules, 82-game calendar, conference standings, play-in and playoffs. */
 /** Format 91 (NBA step 10): NBA careers in new careers with the NBA (`world.nbaJobs`, option `nbaJobs`): real NBA head coaches, NBA jobs above EuroLeague jobs and their reputation requirement. */
 /** Format 92 (NBA step 6): NBA money in new NBA worlds (`world.nba.cap`): estimated NBA salaries and revenue, the salary cap with its exceptions (`capRoute` on contracts and offers), rosters of 13-15, the luxury tax (`luxury-tax`, `tax-share` ledger entries) and the owner's payroll ceiling and playoff aim. */
-export const SEASON_SCHEMA_VERSION = 92;
+/** Format 95 (provisional, NBA step 9): trades between NBA clubs in new NBA worlds (`world.nbaTrades`): the `trades-1` journal of the manager's offers (`state.trades`), completed trades (`employment.trades`) and `trade` contracts that carry each traded player's terms on unchanged. */
+export const SEASON_SCHEMA_VERSION = 95;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -267,6 +269,8 @@ export interface SeasonState {
   national?: SeasonNational;
   /** Format 82 (owner, 22 November 2026, item E): real head coaches; the manager's own coaching attributes. */
   coaches?: SeasonCoaches;
+  /** Format 95 (NBA step 9): the manager's trade offers and the answers (worlds with `world.nbaTrades` only). */
+  trades?: SeasonTrades;
   training: SeasonTraining;
   coaching: SeasonCoaching;
   finance: SeasonFinance;

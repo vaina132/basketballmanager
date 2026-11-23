@@ -22,6 +22,7 @@ import { contractAskingWage, offeredContractRole } from './contract-roles';
 import { automaticWageCheck } from './automatic-wages';
 import { paidSigningLimit, saleReplacementBudget, spendsSurplus, surplusOfferWage, surplusTransferBudget } from './surplus-spending';
 import { usesSpendingBalance } from './spending-balance';
+import { answerOffseasonTrades } from './trades';
 
 export function createMarket(): SeasonMarket { return { model: 'market-1', enabledSince: null, windows: [] }; }
 
@@ -322,7 +323,8 @@ export function advanceMarket(state: SeasonState): SeasonState {
   const date = getNextMarketDate(prepared);
   if (!date) throw new Error('Recruitment has closed. Review the squad and start next season.');
   const advanced = scheduleMarketRecruitment(activateCompetition(applyMarketEvent(prepared, { type: 'advance', date })));
-  return automateFacilities(processFacilityProjects(advanced));
+  // Format 95: trade offers due on the new day are answered.
+  return answerOffseasonTrades(automateFacilities(processFacilityProjects(advanced)));
 }
 
 export function finishMarketWindow(state: SeasonState): SeasonState {

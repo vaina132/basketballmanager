@@ -9,6 +9,7 @@ import { getTransferObligationReserve } from './transfer-payments';
 import { getReservedInSeasonFees, getReservedInSeasonWages } from './recruitment-policy';
 import { ledgerClubNet, payrollLedgerReader, type PayrollLedgerReader } from './finance-ledger-index';
 import { debtReserve } from './facility-debt';
+import { tradeReleases } from './employment-policy';
 
 /** Installments in the built-in league's season; every season pays one installment per matchday (`seasonRounds`). */
 export const PAYROLL_INSTALLMENTS = 10;
@@ -79,7 +80,10 @@ function clubSeasonAgreements(agreements: readonly PlayerWageAgreement[], clubId
 
 export function agreementThroughRound(state: Partial<Pick<SeasonState, 'employment'>> & WorldContext, agreement: PlayerWageAgreement): number {
   const departure = state.employment ? transfersOfPlayer(state.employment.transfers, agreement.playerId).find(transfer => transfer.fromClubId === agreement.clubId && transfer.startsSeason === agreement.seasonNumber && transfer.startsRound > agreement.startsRound) : undefined;
-  return departure ? departure.startsRound - 1 : seasonRounds(state);
+  if (departure) return departure.startsRound - 1;
+  // Format 95: a player traded during the season is paid by his former club until the week before the trade.
+  const traded = state.employment?.trades?.length ? tradeReleases(state.employment).find(release => release.playerId === agreement.playerId && release.fromClubId === agreement.clubId && release.startsSeason === agreement.seasonNumber && release.startsRound > agreement.startsRound) : undefined;
+  return traded ? traded.startsRound - 1 : seasonRounds(state);
 }
 
 export function getPayrollReserve(state: Pick<SeasonState, 'payroll' | 'finance' | 'seasonNumber'> & Partial<Pick<SeasonState, 'round' | 'employment'>> & WorldContext, clubId: string): number {

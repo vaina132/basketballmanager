@@ -178,6 +178,8 @@ export interface CareerWorld {
    * for a reputation of about 60-70 (`src/world/nba-jobs.ts`). Only worlds with the NBA carry it.
    */
   nbaJobs?: true;
+  /** NBA step 9 (format 95, new careers with the NBA's money rules and the option `nbaTrades`): player-for-player trades between NBA clubs (`src/world/trades.ts`). */
+  nbaTrades?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

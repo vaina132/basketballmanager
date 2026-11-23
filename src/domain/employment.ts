@@ -2,6 +2,7 @@ import type { TransferInstallment, TransferPayment, TransferPaymentPlan } from '
 
 import type { SquadRole } from './relationships';
 import type { NbaCapRoute } from '../world/nba-cap';
+import type { EmploymentTrade } from './trades';
 
 export interface ContractOfferOptions {
   releaseFee?: number;
@@ -30,8 +31,8 @@ export interface EmploymentContract {
   capRoute?: NbaCapRoute;
   signedSeason: number;
   signedRound: number;
-  /** `joined`: an opening term for a player of a club joining the full world (format 55). */
-  kind: 'initial' | 'renewal' | 'free-agent' | 'transfer' | 'midseason' | 'midseason-transfer' | 'joined';
+  /** `joined`: an opening term for a player of a club joining the full world (format 55). `trade` (format 95): a traded player's term carried on unchanged at his new club. */
+  kind: 'initial' | 'renewal' | 'free-agent' | 'transfer' | 'midseason' | 'midseason-transfer' | 'joined' | 'trade';
 }
 
 /** Completed club sale; old agreements remain intact for historical registration and payroll. */
@@ -87,6 +88,8 @@ export interface SeasonEmployment {
   buyouts: EmploymentBuyout[];
   /** Format 55: terms ended because their club left the full world. */
   departures?: EmploymentDeparture[];
+  /** Format 95 (NBA step 9): completed trades between NBA clubs; each releases the traded players' former terms. */
+  trades?: EmploymentTrade[];
   /** Completed-season rosters remain unchanged while next year's terms are agreed. */
   market: { seasonNumber: number } | null;
 }

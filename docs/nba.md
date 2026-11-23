@@ -10,6 +10,11 @@ Owner decisions, 23 November 2026:
 - **Ratings:** one shared 1-20 scale anchored on Europe. NBA stars rate higher than EuroLeague stars and may reach 20. European ratings stay exactly as they are.
 - **Salaries:** estimated (no licensed salary source). They must reflect reality: **the NBA pays far more than Europe**. A 2026-27 NBA team payroll is roughly $150-200M (salary cap about $155M in 2025-26, luxury tax about $188M), the minimum salary about $1.2M and a maximum contract 25-35% of the cap ($39-55M); a top EuroLeague payroll is about €25-40M. Each team's estimated total is shaped on its published payroll.
 
+- **Young European talents go to the NBA** (owner, 23 November 2026), in worlds with the NBA and European countries:
+  - **Through the draft:** real draft-eligible European players (aged 19-22, never drafted) join the draft pool alongside the generated prospects. An NBA club that drafts a player under contract in Europe holds his draft rights. He stays at his European club ("draft and stash") until the club brings him over in an offseason. The NBA club pays up to the CBA buyout allowance (about $875k) and his European club receives the buyout. First-round picks usually join within 0-2 seasons; second-rounders often stay longer.
+  - **By other means:** undrafted European players good enough for the NBA get NBA free-agent offers when their contracts end, or through a buyout clause. They choose the NBA over European offers. NBA players without NBA offers go to Europe.
+  - **The manager is told:** a European club's manager gets an Inbox notice when his player is drafted or signs in the NBA. An NBA manager sees his stashed draft rights on Transfers > Draft.
+
 ## Rules used (reversible defaults unless the owner decided)
 
 - Match: 4 x 12 minutes, 5-minute overtime, foul-out at 6, team-foul penalty from the 5th foul in a quarter (2nd in the last two minutes), seven timeouts, three-point line 7.24 m (corners 6.71 m). FIBA matches stay bit for bit as today.

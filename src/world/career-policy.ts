@@ -3,7 +3,7 @@ import type { ArchivedFixture, SeasonFixture, SeasonState } from '../domain/seas
 import type { Team } from '../domain/types';
 import { careerMovesGovern, managedClubAtRound, managedClubFor } from './career';
 import { seasonVerdict, verdictForConfidence, type SeasonVerdict } from './board-consequences';
-import { getStandings } from './season';
+import { getStandings, nbaStandings } from './season';
 import { fullWorldClubsIn, seasonRounds } from './career-world';
 import { seasonLeagues } from './divisions';
 import type { WorldContext } from '../domain/world';
@@ -11,6 +11,8 @@ import { allowsUnemployment, CAREER_RULES, careerPointKey, coachProtected, faded
 import { calendarDaysBetween } from './competition-calendar';
 import { dateForRound } from './season';
 import { managerCoachingReputation } from './head-coaches';
+import { europeanEntrants } from './europe';
+import { isNbaJob, NBA_JOB_RULES, nbaVacancyRequirement, usesNbaJobs } from './nba-jobs';
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
@@ -24,7 +26,7 @@ export const STARTING_REPUTATION = 45;
 export const VACANCY_BASE_REQUIREMENT = 25;
 export const VACANCY_STEP = 6;
 
-type CareerContext = Pick<SeasonState, 'managedClubId' | 'board' | 'clubs' | 'fixtures' | 'history' | 'seasonNumber'> & { career?: SeasonCareer; divisions?: SeasonState['divisions']; background?: SeasonState['background']; coaches?: SeasonState['coaches'] } & WorldContext;
+type CareerContext = Pick<SeasonState, 'managedClubId' | 'board' | 'clubs' | 'fixtures' | 'history' | 'seasonNumber'> & { career?: SeasonCareer; divisions?: SeasonState['divisions']; background?: SeasonState['background']; coaches?: SeasonState['coaches']; europe?: SeasonState['europe'] } & WorldContext;
 
 export interface ReputationSeason { seasonNumber: number; clubId: string; confidence: number; weight: number }
 /** `resignations` (career-2 careers, only when there are any): resignations still costing reputation. */
@@ -94,6 +96,23 @@ export function vacancyRequirement(position: number, clubs: readonly Pick<Team, 
   return VACANCY_BASE_REQUIREMENT + VACANCY_STEP * (clubs.length - position);
 }
 
+/**
+ * The reputation a club's vacancy asks for, from its place in its own league's table (`fixtures`: the games counted).
+ * NBA step 10 (format 91): an NBA job in an NBA career asks for 60-70, or the usual requirement within its conference
+ * when higher (`nbaVacancyRequirement`); every other job, and every job in other careers, as `vacancyRequirement`.
+ */
+const nbaTablesCache = new WeakMap<readonly (SeasonFixture | ArchivedFixture)[], ReturnType<typeof nbaStandings>>();
+function clubRequirement(state: CareerContext, fixtures: readonly (SeasonFixture | ArchivedFixture)[], clubId: string, position: number, leagueClubs: readonly Pick<Team, 'id'>[]): number {
+  const world = state.world;
+  if (!world || !isNbaJob(world, clubId)) return vacancyRequirement(position, leagueClubs);
+  const conference = world.nba!.conferences.find(item => item.divisions.some(division => division.clubIds.includes(clubId)))!;
+  let tables = nbaTablesCache.get(fixtures);
+  if (tables === undefined) { tables = nbaStandings(world, fixtures); nbaTablesCache.set(fixtures, tables); }
+  const rows = tables?.conferences[conference.id] ?? [];
+  const conferencePosition = rows.findIndex(row => row.clubId === clubId) + 1 || rows.length;
+  return nbaVacancyRequirement(position, leagueClubs.length, conferencePosition, rows.length, VACANCY_BASE_REQUIREMENT, VACANCY_STEP);
+}
+
 /** Offers come best first (the highest requirement); ties keep the world's club order. */
 const orderBy = (clubs: readonly Pick<Team, 'id'>[]) => (a: ClubVacancy, b: ClubVacancy) => b.requirement - a.requirement || clubs.findIndex(club => club.id === a.clubId) - clubs.findIndex(club => club.id === b.clubId);
 
@@ -108,13 +127,29 @@ export function isReserveTeam(club: Pick<Team, 'name'>): boolean {
 /** Whether a club can offer the manager its job: any club of the world except a reserve or B team. */
 const offersJob = (clubs: readonly Pick<Team, 'id' | 'name'>[], clubId: string) => { const club = clubs.find(item => item.id === clubId); return !club || !isReserveTeam(club); };
 
-/** A club's level for job offers: its league's tier in that season (1 is a top division); 1 in a world of one league. */
-function clubLevel(state: CareerContext, seasonNumber: number): (clubId: string) => number {
+/**
+ * A club's level for job offers: its league's tier in that season (1 is a top division); 1 in a world of one league.
+ * NBA step 10 (format 91): in an NBA career an NBA club comes first (`NBA_JOB_RULES.nbaLevel`), then a club in that
+ * season's EuroLeague (`euroleagueLevel`), then the tiers.
+ */
+export function clubLevel(state: CareerContext, seasonNumber: number): (clubId: string) => number {
   if (!state.world?.domesticLeagues) return () => 1;
-  const divisions = seasonNumber === state.seasonNumber ? state.divisions : state.history.find(archive => archive.seasonNumber === seasonNumber)?.divisions;
+  const archive = seasonNumber === state.seasonNumber ? null : state.history.find(item => item.seasonNumber === seasonNumber);
+  const divisions = archive ? archive.divisions : state.divisions;
   const leagues = seasonLeagues(state.world, divisions);
-  return clubId => leagues.find(league => league.clubIds.includes(clubId))?.tier ?? 1;
+  const tier = (clubId: string) => leagues.find(league => league.clubIds.includes(clubId))?.tier ?? 1;
+  const world = state.world;
+  if (!usesNbaJobs(world)) return tier;
+  const europe = archive ? archive.europe : state.europe;
+  const euroleague = new Set((world.europeanCompetitions ?? []).filter(competition => competition.kind === 'euroleague').flatMap(competition => europeanEntrants(competition, europe)));
+  return clubId => isNbaJob(world, clubId) ? NBA_JOB_RULES.nbaLevel : euroleague.has(clubId) ? NBA_JOB_RULES.euroleagueLevel : tier(clubId);
 }
+
+/**
+ * NBA step 10 (format 91): whether a vacancy is beyond a manager as a job of last resort: an NBA job asking more than
+ * his reputation. Always false in other careers.
+ */
+const beyondReach = (state: CareerContext, reputation: number) => (vacancy: Pick<ClubVacancy, 'clubId' | 'requirement'>) => isNbaJob(state.world, vacancy.clubId) && vacancy.requirement > reputation;
 
 /** The best fits first: the highest club level, then the highest requirement; ties keep the world's club order. */
 const bestFit = (clubs: readonly Pick<Team, 'id'>[], level: (clubId: string) => number) => (a: ClubVacancy, b: ClubVacancy) => level(a.clubId) - level(b.clubId) || orderBy(clubs)(a, b);
@@ -123,16 +158,20 @@ const bestFit = (clubs: readonly Pick<Team, 'id'>[], level: (clubId: string) => 
  * Vacancies the reputation earns, at most `CAREER_RULES.maxJobOffers` best fits and never a reserve team's; a manager
  * who must find a club still gets the job asking for the least.
  */
-export function offersFor(vacancies: readonly ClubVacancy[], reputation: number, mustMove: boolean, clubs: readonly Pick<Team, 'id' | 'name'>[], level: (clubId: string) => number): ClubVacancy[] {
+export function offersFor(vacancies: readonly ClubVacancy[], reputation: number, mustMove: boolean, clubs: readonly Pick<Team, 'id' | 'name'>[], level: (clubId: string) => number, beyond?: (vacancy: ClubVacancy) => boolean): ClubVacancy[] {
   const open = vacancies.filter(item => offersJob(clubs, item.clubId));
   const offers = open.filter(item => item.requirement <= reputation).sort(bestFit(clubs, level)).slice(0, CAREER_RULES.maxJobOffers);
-  if (mustMove && !offers.length && open.length) return [[...open].sort((a, b) => a.requirement - b.requirement || clubs.findIndex(club => club.id === a.clubId) - clubs.findIndex(club => club.id === b.clubId))[0]!];
+  // NBA step 10 (format 91): the job of last resort is never an NBA job beyond the manager while another club is open.
+  const reachable = beyond && open.some(item => !beyond(item)) ? open.filter(item => !beyond(item)) : open;
+  if (mustMove && !offers.length && open.length) return [[...reachable].sort((a, b) => a.requirement - b.requirement || clubs.findIndex(club => club.id === a.clubId) - clubs.findIndex(club => club.id === b.clubId))[0]!];
   return offers;
 }
 
 /** The board that makes a change for a dismissed or resigning manager without offers: the least confident one that can offer a job. */
-function leastConfident<T extends Pick<Team, 'id' | 'name'>>(others: readonly T[], order: (a: T, b: T) => number): T {
-  const eligible = others.filter(club => !isReserveTeam(club));
+function leastConfident<T extends Pick<Team, 'id' | 'name'>>(others: readonly T[], order: (a: T, b: T) => number, beyond?: (club: T) => boolean): T {
+  // NBA step 10 (format 91): an NBA board beyond the manager makes no change for him while another board can.
+  const within = beyond && others.some(club => !isReserveTeam(club) && !beyond(club)) ? others.filter(club => !beyond(club)) : others;
+  const eligible = within.filter(club => !isReserveTeam(club));
   return [...(eligible.length ? eligible : others)].sort(order)[0]!;
 }
 
@@ -163,7 +202,7 @@ export function seasonEndOutlook(state: CareerContext, seasonNumber = state.seas
   const standings = getStandings({ ...state, fixtures, divisions });
   const vacancy = (id: string, reason: ClubVacancy['reason']): ClubVacancy => {
     const position = standings.find(row => row.clubId === id)!.position;
-    return { clubId: id, position, requirement: vacancyRequirement(position, seasonClubs.filter(club => !state.world?.domesticLeagues || seasonLeagues(state.world, divisions).find(league => league.clubIds.includes(id))!.clubIds.includes(club.id))), reason, confidence: seasonVerdict(state.board, id, seasonNumber, seasonRounds(state))!.confidence };
+    return { clubId: id, position, requirement: clubRequirement(state, fixtures, id, position, seasonClubs.filter(club => !state.world?.domesticLeagues || seasonLeagues(state.world, divisions).find(league => league.clubIds.includes(id))!.clubIds.includes(club.id))), reason, confidence: seasonVerdict(state.board, id, seasonNumber, seasonRounds(state))!.confidence };
   };
   const others = seasonClubs.filter(club => club.id !== clubId && !leaving.has(club.id) && seasonVerdict(state.board, club.id, seasonNumber, seasonRounds(state)));
   const vacancies = others.filter(club => seasonVerdict(state.board, club.id, seasonNumber, seasonRounds(state))!.verdict === DISMISSAL_VERDICT && !isProtected(club.id)).map(club => vacancy(club.id, 'pressure'));
@@ -171,12 +210,13 @@ export function seasonEndOutlook(state: CareerContext, seasonNumber = state.seas
   // whose coach is outside his protected first season, when there is one). Career-3 keeps this only for a club leaving
   // the full world (owner decision (a)); otherwise a dismissed manager without offers becomes unemployed.
   const guaranteed = !unemployment || leaving.has(clubId);
-  if (dismissed && guaranteed && !vacancies.some(item => offersJob(seasonClubs, item.clubId)) && others.length) {
-    const least = leastConfident(others, (a, b) => Number(isProtected(a.id)) - Number(isProtected(b.id)) || seasonVerdict(state.board, a.id, seasonNumber, seasonRounds(state))!.confidence - seasonVerdict(state.board, b.id, seasonNumber, seasonRounds(state))!.confidence);
+  const reputation = managerReputation(state, seasonNumber, rules ? { seasonNumber, before: careerPointKey(seasonNumber, seasonRounds(state), 'end') } : undefined);
+  const beyond = beyondReach(state, reputation.value);
+  if (dismissed && guaranteed && !vacancies.some(item => offersJob(seasonClubs, item.clubId) && !beyond(item)) && others.length) {
+    const least = leastConfident(others, (a, b) => Number(isProtected(a.id)) - Number(isProtected(b.id)) || seasonVerdict(state.board, a.id, seasonNumber, seasonRounds(state))!.confidence - seasonVerdict(state.board, b.id, seasonNumber, seasonRounds(state))!.confidence, club => isNbaJob(state.world, club.id) && beyond(vacancy(club.id, 'change')));
     vacancies.push(vacancy(least.id, 'change'));
   }
-  const reputation = managerReputation(state, seasonNumber, rules ? { seasonNumber, before: careerPointKey(seasonNumber, seasonRounds(state), 'end') } : undefined);
-  const offers = offersFor(vacancies, reputation.value, dismissed && guaranteed, seasonClubs, clubLevel(state, seasonNumber));
+  const offers = offersFor(vacancies, reputation.value, dismissed && guaranteed, seasonClubs, clubLevel(state, seasonNumber), beyond);
   return { seasonNumber, clubId, verdict, dismissed, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers, ...(rules && pressure && !dismissed ? { warning: true as const } : {}), ...(unemployment && dismissed ? { unemployment: true as const } : {}) };
 }
 
@@ -197,7 +237,7 @@ export function unemployedSeasonEndVacancies(state: CareerContext, seasonNumber 
   const vacancies = seasonClubs.filter(club => !leaving.has(club.id) && seasonVerdict(state.board, club.id, seasonNumber, rounds)?.verdict === DISMISSAL_VERDICT && !coachProtected(restarts, club.id, seasonNumber)).map((club): ClubVacancy => {
     const position = standings.find(row => row.clubId === club.id)!.position;
     const league = state.world?.domesticLeagues ? seasonLeagues(state.world, divisions).find(item => item.clubIds.includes(club.id)) : undefined;
-    return { clubId: club.id, position, requirement: vacancyRequirement(position, league ? seasonClubs.filter(item => league.clubIds.includes(item.id)) : seasonClubs), reason: 'pressure', confidence: seasonVerdict(state.board, club.id, seasonNumber, rounds)!.confidence };
+    return { clubId: club.id, position, requirement: clubRequirement(state, fixtures, club.id, position, league ? seasonClubs.filter(item => league.clubIds.includes(item.id)) : seasonClubs), reason: 'pressure', confidence: seasonVerdict(state.board, club.id, seasonNumber, rounds)!.confidence };
   });
   return vacancies.sort(orderBy(seasonClubs));
 }
@@ -210,7 +250,7 @@ function liveVacancy(state: CareerContext, seasonNumber: number, throughRound: n
   return (id: string, reason: ClubVacancy['reason'], confidence: number): ClubVacancy => {
     const position = standings.find(row => row.clubId === id)!.position;
     const league = state.world?.domesticLeagues ? seasonLeagues(state.world, divisions).find(item => item.clubIds.includes(id)) : undefined;
-    return { clubId: id, position, requirement: vacancyRequirement(position, league ? seasonClubs.filter(club => league.clubIds.includes(club.id)) : seasonClubs), reason, confidence };
+    return { clubId: id, position, requirement: clubRequirement(state, fixtures, id, position, league ? seasonClubs.filter(club => league.clubIds.includes(club.id)) : seasonClubs), reason, confidence };
   };
 }
 
@@ -254,15 +294,16 @@ export function midSeasonChanges(state: CareerContext, reviewIndex = state.board
   const others = seasonClubs.filter(club => club.id !== managed);
   // Career-3 (format 69): no board makes a change only to find the dismissed manager a club.
   const unemployment = allowsUnemployment(state.career);
-  if (!unemployment && !vacancies.some(item => offersJob(seasonClubs, item.clubId)) && others.length) {
-    const least = leastConfident(others, (a, b) => Number(isProtected(a.id)) - Number(isProtected(b.id)) || review.clubs[a.id]!.confidence - review.clubs[b.id]!.confidence);
+  const reputation = managerReputation(state, seasonNumber - 1, { seasonNumber, before: careerPointKey(seasonNumber, round + 1, 'season') });
+  const beyond = beyondReach(state, reputation.value);
+  if (!unemployment && !vacancies.some(item => offersJob(seasonClubs, item.clubId) && !beyond(item)) && others.length) {
+    const least = leastConfident(others, (a, b) => Number(isProtected(a.id)) - Number(isProtected(b.id)) || review.clubs[a.id]!.confidence - review.clubs[b.id]!.confidence, club => isNbaJob(state.world, club.id) && beyond(vacancy(club.id, 'change', review.clubs[club.id]!.confidence)));
     vacancies.push(vacancy(least.id, 'change', review.clubs[least.id]!.confidence));
     replaced.push(least.id);
   }
   const confidence = review.clubs[managed]!.confidence;
-  const reputation = managerReputation(state, seasonNumber - 1, { seasonNumber, before: careerPointKey(seasonNumber, round + 1, 'season') });
   const verdict: SeasonVerdict = { clubId: managed, seasonNumber, reviewId: review.id, date: review.date, confidence, verdict: verdictForConfidence(confidence) };
-  return { seasonNumber, round, reviewId: review.id, replaced, outlook: { seasonNumber, clubId: managed, verdict, dismissed: true, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers: offersFor(vacancies, reputation.value, !unemployment, seasonClubs, clubLevel(state, seasonNumber)), timing: 'mid-season', ...(unemployment ? { unemployment: true as const } : {}) } };
+  return { seasonNumber, round, reviewId: review.id, replaced, outlook: { seasonNumber, clubId: managed, verdict, dismissed: true, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers: offersFor(vacancies, reputation.value, !unemployment, seasonClubs, clubLevel(state, seasonNumber), beyond), timing: 'mid-season', ...(unemployment ? { unemployment: true as const } : {}) } };
 }
 
 /** Why the manager cannot resign now, or null. Career-2 careers resign between matches, during a season or offseason. */
@@ -299,15 +340,16 @@ export function resignationOutlook(state: SeasonState): SeasonEndOutlook | null 
   const vacancies = others.filter(club => confidence(club.id) < CAREER_RULES.seasonDismissalBelow && !isProtected(club.id)).map(club => vacancy(club.id, 'pressure', confidence(club.id)));
   // Career-3 (format 69): only boards Under pressure offer a job; the manager may leave without one.
   const unemployment = allowsUnemployment(state.career);
-  if (!vacancies.some(item => offersJob(seasonClubs, item.clubId)) && !unemployment) {
-    const least = leastConfident(others, (a, b) => Number(isProtected(a.id)) - Number(isProtected(b.id)) || confidence(a.id) - confidence(b.id));
-    vacancies.push(vacancy(least.id, 'change', confidence(least.id)));
-  }
   const base = managerReputation(state, inSeason ? seasonNumber - 1 : seasonNumber, { seasonNumber, before: Infinity });
   const reputation: ManagerReputation = { ...base, value: Math.max(0, base.value - CAREER_RULES.resignationReputationCost), resignations: (base.resignations ?? 0) + 1 };
+  const beyond = beyondReach(state, reputation.value);
+  if (!vacancies.some(item => offersJob(seasonClubs, item.clubId) && !beyond(item)) && !unemployment) {
+    const least = leastConfident(others, (a, b) => Number(isProtected(a.id)) - Number(isProtected(b.id)) || confidence(a.id) - confidence(b.id), club => isNbaJob(state.world, club.id) && beyond(vacancy(club.id, 'change', confidence(club.id))));
+    vacancies.push(vacancy(least.id, 'change', confidence(least.id)));
+  }
   const current = confidence(managed), latest = state.board.reviews.at(-1);
   const verdict: SeasonVerdict = { clubId: managed, seasonNumber, reviewId: latest?.id ?? '', date: state.date, confidence: current, verdict: verdictForConfidence(current) };
-  return { seasonNumber, clubId: managed, verdict, dismissed: false, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers: offersFor(vacancies, reputation.value, !unemployment, seasonClubs, clubLevel(state, seasonNumber)), timing: 'resignation', ...(unemployment ? { unemployment: true as const } : {}) };
+  return { seasonNumber, clubId: managed, verdict, dismissed: false, reputation, vacancies: [...vacancies].sort(orderBy(seasonClubs)), offers: offersFor(vacancies, reputation.value, !unemployment, seasonClubs, clubLevel(state, seasonNumber), beyond), timing: 'resignation', ...(unemployment ? { unemployment: true as const } : {}) };
 }
 
 /**

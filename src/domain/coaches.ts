@@ -15,7 +15,11 @@ export const COACH_ATTRIBUTE_LABELS: Readonly<Record<CoachAttribute, string>> = 
 export interface CoachStyle { pace: number; shooting: number; pressure: number; youthTrust: number }
 
 /** Titles won as a head coach, from the coach's sources (national-team medals: gold 1.5, other medals 1). */
-export interface CoachTitles { euroleague: number; europe: number; league: number; cup: number; national: number; awards: number }
+export interface CoachTitles {
+  euroleague: number; europe: number; league: number; cup: number; national: number; awards: number;
+  /** NBA step 10 (format 91): NBA championships as a head coach, counted apart from other league titles (NBA coaches only). */
+  nba?: number;
+}
 
 /** A head coach of the game: a real person from the data, or a generated one (marked). */
 export interface HeadCoach {

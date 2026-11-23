@@ -636,6 +636,12 @@ export interface SeasonSystems {
    * postseason. A career in such a world needs this option; worlds without the NBA are unchanged by it.
    */
   nba?: boolean;
+  /**
+   * Format 91 (NBA step 10): NBA careers in a world with the NBA (`world.nbaJobs`, `src/world/nba-jobs.ts`): NBA clubs
+   * start with their real head coaches, NBA jobs rank above EuroLeague jobs and above other top-division jobs, and an
+   * NBA job asks for a reputation of about 60-70. Worlds without the NBA are unchanged by it.
+   */
+  nbaJobs?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -649,7 +655,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -687,6 +693,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.surplusSpending !== undefined && typeof options.surplusSpending !== 'boolean') throw new Error('Choose a valid club spending setting.');
   if (options.spendingBalance !== undefined && typeof options.spendingBalance !== 'boolean') throw new Error('Choose a valid spending balance setting.');
   if (options.nba !== undefined && typeof options.nba !== 'boolean') throw new Error('Choose a valid NBA setting.');
+  if (options.nbaJobs !== undefined && typeof options.nbaJobs !== 'boolean') throw new Error('Choose a valid NBA careers setting.');
   if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');

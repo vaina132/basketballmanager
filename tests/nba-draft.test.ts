@@ -193,7 +193,7 @@ describe('the format guard and careers without the NBA draft', () => {
     const text = serializeSeason(state);
     expect(parseSeason(text).draft).toEqual(state.draft);
     const envelope = JSON.parse(text);
-    envelope.formatVersion = 92; envelope.state.schemaVersion = 92; delete envelope.state.draft;
+    envelope.formatVersion = 93; envelope.state.schemaVersion = 93; delete envelope.state.draft;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/format 94 or later|draft/);
   });
 

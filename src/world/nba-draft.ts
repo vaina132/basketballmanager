@@ -20,7 +20,8 @@ import { memoizePure } from './pure-cache';
  * approximate the 2025-26 first-year scale and grow with the cap); the game keeps three
  * seasons (the scale's two guaranteed years plus the first team option) because contracts are at most three seasons.
  * [E] Second-round picks sign two-season minimum contracts. [E] Prospect ratings are calibrated on the real first-year and
- * second-year NBA players of the published pack (world-14, 23 November 2026: the 44 players aged 19-20 average an overall
+ * second-year NBA players of the published pack (world-14, 23 November 2026: the 17 players aged 19, nearly all 2026
+ * first-round picks, average an overall rating of 70.6; the 44 players aged 19-20 average an overall
  * rating of 67, median 68, 10th-90th percentile 58-73, best 85; about 30% of players aged 22 or under are international).
  */
 export const NBA_DRAFT_RULES = Object.freeze({
@@ -31,7 +32,7 @@ export const NBA_DRAFT_RULES = Object.freeze({
   /** [E] Share of international prospects (about 25%). */
   internationalShare: 0.25,
   /** [E] Overall rating by class rank (rank, rating), linear in between, before the prospect's own variation. */
-  ratingByRank: Object.freeze([[1, 82], [3, 77], [5, 74], [10, 71], [14, 70], [20, 68], [30, 65], [45, 61], [60, 58], [75, 54], [90, 49]] as const),
+  ratingByRank: Object.freeze([[1, 81], [3, 76], [5, 73], [10, 70], [14, 69], [20, 67], [30, 64], [45, 60], [60, 57], [75, 53], [90, 48]] as const),
   /** [E] Each prospect's own variation around his rank's rating: up to this many points either side. */
   ratingSpread: 3,
   /** [E] Young players' stamina sits about two points below their other skills (real 19-20-year-olds: 10.7 vs 12.6). */

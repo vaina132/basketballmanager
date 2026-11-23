@@ -10,7 +10,8 @@ import { clubRosterLimit } from './club-roster-policy';
 import { draftClassOf, isDraftComplete, nbaDraftDay, NBA_DRAFT_PICKS } from './draft-index';
 import { contractForSeason, getClubContractSummary } from './employment-policy';
 import { storesExtraAttributes } from './extra-attributes';
-import { addMarketDays, getMarketWindow, MARKET_WINDOW_DAYS } from './market-policy';
+import { addMarketDays, getMarketWindow, isLiveMarketOffer, MARKET_WINDOW_DAYS } from './market-policy';
+import type { MarketOffer } from '../domain/market';
 import { bestAvailable, draftClassProspects, draftOrder, drawLottery, NBA_DRAFT_RULES, rookieContract, type DraftCandidate } from './nba-draft';
 import { maximumHeadroomForAge, playerHeadroom, potentialAttributes, potentialShareBasisPoints, skillHeadroom, POTENTIAL_ATTRIBUTES } from './potential';
 import { dateForRound, getPostseasons, nbaStandings } from './season';
@@ -184,7 +185,12 @@ function makePick(state: SeasonState, entry: DraftClass, playerId: string, by: D
     employment = { ...state.employment, contracts: [...state.employment.contracts, contract] };
   }
   const updated: DraftClass = { ...entry, picks: [...entry.picks, { pick, clubId, playerId, by, contractId }] };
-  return { ...state, employment, draft: { ...state.draft!, classes: state.draft!.classes.map(item => item.seasonNumber === entry.seasonNumber ? updated : item), ...(rights ? { rights } : {}) } };
+  // Open offers for him end with the pick: every one when he signs his rookie contract, NBA clubs' when he stays in
+  // Europe (the rights holder alone may sign him).
+  const world = worldOf(state), window = getMarketWindow(state);
+  const ends = (offer: MarketOffer) => offer.playerId === playerId && isLiveMarketOffer(offer) && (contractId !== null || isNbaClub(world, offer.clubId));
+  const market = window && window.offers.some(ends) ? { ...state.market, windows: state.market.windows.map(item => item === window ? { ...window, offers: window.offers.map(offer => ends(offer) ? { ...offer, status: 'withdrawn' as const, closedOn: state.date } : offer) } : item) } : state.market;
+  return { ...state, employment, market, draft: { ...state.draft!, classes: state.draft!.classes.map(item => item.seasonNumber === entry.seasonNumber ? updated : item), ...(rights ? { rights } : {}) } };
 }
 
 /**

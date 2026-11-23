@@ -53,7 +53,7 @@ describe('NBA world builder', () => {
   const world = worldFromPack(nbaPack(), 'nba');
 
   it('builds the NBA league with its conferences, divisions, ruleset, standings rule and postseason', () => {
-    expect(world.nba).toEqual({ model: 'nba-1', leagueId: 'nba', conferences: expect.any(Array), ruleset: 'nba-2026', cap: 'nba-cap-1' });
+    expect(world.nba).toEqual({ model: 'nba-1', leagueId: 'nba', conferences: expect.any(Array), ruleset: 'nba-2026', cap: 'nba-cap-1', draft: 'nba-draft-1' });
     expect(world.nba!.conferences.map(conference => [conference.name, conference.divisions.map(division => division.name)])).toEqual([
       ['Eastern Conference', ['Atlantic', 'Central', 'Southeast']], ['Western Conference', ['Northwest', 'Pacific', 'Southwest']]]);
     expect(world.domesticLeagues).toEqual([{ id: 'nba', name: 'NBA', country: 'USA', tier: 1, clubIds: NBA_CLUB_IDS, standingsRule: 'nba-2026', postseason: 'nba-2026-1' }]);

@@ -118,8 +118,8 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
   }
   if (event.type === 'draft') {
     // Format 94 (NBA step 8): picks of this season's draft, on draft day.
-    const next = applyDraftPicks(state, event.picks, event.playerId);
-    return replaceWindow(next, { ...window, events: [...window.events, { ...event }] });
+    const next = applyDraftPicks(state, event.picks, event.playerId), picked = getMarketWindow(next)!;
+    return replaceWindow(next, { ...picked, events: [...picked.events, { ...event }] });
   }
   if (event.type === 'club-decision') {
     const offer = window.offers.find(item => item.id === event.offerId);

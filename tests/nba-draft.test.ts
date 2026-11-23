@@ -6,7 +6,7 @@ import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverS
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { advanceMarket, makeDraftPick } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
-import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
+import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { draftClassProspects, draftOrder, drawLottery, NBA_DRAFT_RULES, rookieContract, rookieScaleWage } from '../src/world/nba-draft';
 import { availableCandidates, draftStandings, managerOnTheClock, seasonLottery, seasonProspects } from '../src/world/nba-draft-policy';
 import { draftClassOf, isDraftComplete } from '../src/world/draft-index';
@@ -190,7 +190,7 @@ describe('the format guard and careers without the NBA draft', () => {
     const state = createSeason({ seed: 5, world, managedClubId: 'nba-bos', ...NEW_CAREER_SYSTEMS });
     expect(worldOf(state).nba!.draft).toBe('nba-draft-1');
     expect(state.draft).toEqual({ model: 'draft-1', classes: [] });
-    const text = serializeSeasonCompact(state);
+    const text = serializeSeason(state);
     expect(parseSeason(text).draft).toEqual(state.draft);
     const envelope = JSON.parse(text);
     envelope.formatVersion = 92; envelope.state.schemaVersion = 92; delete envelope.state.draft;

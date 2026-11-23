@@ -71,7 +71,7 @@ describe('three automatic NBA seasons under the salary cap', () => {
   });
 
   it('signs above the cap only on a legal route, and every save passes the strict check', () => {
-    const signed = finalState.employment.contracts.filter(contract => contract.kind !== 'initial' && NBA_CLUB_IDS.includes(contract.clubId));
+    const signed = finalState.employment.contracts.filter(contract => contract.kind !== 'initial' && contract.kind !== 'drafted' && NBA_CLUB_IDS.includes(contract.clubId));
     expect(signed.length).toBeGreaterThan(30);
     expect(signed.every(contract => contract.capRoute !== undefined)).toBe(true);
     const midLevel = signed.filter(contract => contract.capRoute === 'mle');

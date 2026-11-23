@@ -22,12 +22,12 @@ export function projectedCashShare(state: SeasonState, clubId: string): number |
 
 /**
  * Format 89: whether the low-cash wage limit for `seasonNumber`'s wages looks ahead (a season after the one being played).
- * Format 92: never for an NBA club (`clubId`): its owner's payroll ceiling sets how far it spends, and its loss of a
+ * Format 94 NBA worlds (marked by `world.nbaTrades`, so format 92-93 careers replay unchanged): never for an NBA club (`clubId`): its owner's payroll ceiling sets how far it spends, and its loss of a
  * season is mostly the luxury tax its owner chose to pay; looking ahead on it pushed every taxpayer under the tax line
  * the next season (measured, synthetic NBA seed 21: 7 taxpayers, then 2). The current-season limit (10%) still applies.
  */
 function looksAhead(state: SeasonState, seasonNumber: number, clubId?: string): boolean {
-  return usesSpendingBalance(state) && (state.status === 'complete' || seasonNumber > state.seasonNumber) && !(clubId !== undefined && isCapClub(state, clubId));
+  return usesSpendingBalance(state) && (state.status === 'complete' || seasonNumber > state.seasonNumber) && !(clubId !== undefined && !!state.world?.nbaTrades && isCapClub(state, clubId));
 }
 
 /**

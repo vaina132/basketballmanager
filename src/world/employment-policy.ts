@@ -80,9 +80,29 @@ function contractsAt(employment: SeasonEmployment, seasonNumber: number, round: 
   if (known) return known;
   // Format 78: a loan releases the lending club's terms for its own season only; they apply again from the next one.
   const released = new Set([...(employment.transfers ?? []).filter(release => (release.mode !== 'loan' || release.startsSeason === seasonNumber) && (release.startsSeason < seasonNumber || release.startsSeason === seasonNumber && (release.startsRound ?? 1) <= round)), ...(employment.buyouts ?? []).filter(release => release.startsSeason <= seasonNumber), ...(employment.departures ?? []).filter(release => release.startsSeason <= seasonNumber)].flatMap(release => release.releasedContractIds));
+  // Format 94: a trade releases each former term once the `trade` contract carrying it on is in this record.
+  for (const release of tradeReleases(employment)) if (release.startsSeason < seasonNumber || release.startsSeason === seasonNumber && release.startsRound <= round) released.add(release.contractId);
   const contracts = employment.contracts.filter(contract => contract.startsSeason <= seasonNumber && contract.endsSeason >= seasonNumber && (contract.startsSeason < seasonNumber || (contract.startsRound ?? 1) <= round) && !released.has(contract.id));
   byWeek.set(key, contracts);
   return contracts;
+}
+
+export interface TradeRelease { contractId: string; playerId: string; fromClubId: string; startsSeason: number; startsRound: number }
+const tradeReleaseCache = new WeakMap<SeasonEmployment, readonly TradeRelease[]>();
+const NO_RELEASES: readonly TradeRelease[] = Object.freeze([]);
+/**
+ * Format 94 (NBA step 9): the former terms the record's completed trades release, each from the trade's boundary. A
+ * release counts only once the `trade` contract that carries the term on is part of the record, so a contract prefix
+ * (save checks replay them) sees exactly the trades completed by then.
+ */
+export function tradeReleases(employment: SeasonEmployment): readonly TradeRelease[] {
+  if (!employment.trades?.length) return NO_RELEASES;
+  let releases = tradeReleaseCache.get(employment);
+  if (releases) return releases;
+  const present = new Set(employment.contracts.map(contract => contract.id));
+  releases = employment.trades.flatMap(trade => trade.moves.flatMap(move => move.releasedContractIds.flatMap((contractId, index) => present.has(move.contractIds[index]!) ? [{ contractId, playerId: move.playerId, fromClubId: move.fromClubId, startsSeason: trade.startsSeason, startsRound: trade.startsRound }] : [])));
+  tradeReleaseCache.set(employment, releases);
+  return releases;
 }
 
 const contractsByClubCache = new WeakMap<readonly EmploymentContract[], Map<string, readonly EmploymentContract[]>>();

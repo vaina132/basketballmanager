@@ -2,6 +2,7 @@ import { clubRosterLimit, clubSalaryBudget, clubSalaryCeiling, isCapClub, minRos
 import { NBA_CAP_ROUTES, NBA_LOWEST_MINIMUM, type NbaCapRoute } from '../world/nba-cap';
 import { nbaRegularSeasonEndRound, nbaTaxBills } from '../world/nba-cap-policy';
 import { isNbaPaidPlayer, nbaSalaryFloorShortfall, usesNbaMoves } from '../world/nba-moves';
+import { TRADES_FORMAT, validateTradeAt, validateTradeRecords, validateTradesState } from './trades-validation';
 import { seasonSalaryCeiling, staffAllocationCeiling } from '../world/board-consequences';
 import { usesWagePool } from '../world/wage-pool';
 import { usesClubLevelStaff } from '../world/staff-levels';
@@ -147,7 +148,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -288,7 +289,8 @@ function validateEuropeHistory(state: SeasonState, context: CareerPlayerContext)
 const inFullWorld = (context: WorldContext & { background?: SeasonBackground }, clubId: string, year: unknown) => typeof year === 'number' && Number.isInteger(year) && year >= 1 && fullWorldClubsIn(context, year).some(club => club.id === clubId);
 
 /** Opening terms of clubs joining the full world among the first `count` contracts: they need no player response (step 3.4d-2). */
-const joinedIn = (contracts: readonly { kind: string }[] | undefined, count: number) => (contracts ?? []).slice(0, count).filter(contract => contract.kind === 'joined').length;
+/** Agreements in a contract prefix that no player response explains: joining squads' opening terms (format 55) and `trade` contracts (format 94). */
+const joinedIn = (contracts: readonly { kind: string }[] | undefined, count: number) => (contracts ?? []).slice(0, count).filter(contract => contract.kind === 'joined' || contract.kind === 'trade').length;
 
 /**
  * Step 3.4d-2: every completed season's exchanges with a next division, and the record of clubs outside the full world,
@@ -1877,7 +1879,9 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
   // Format 88: clubs run automatically may use extra wage room from cash above their reserve; a basic bound (development mode).
   const spending = usesSurplusSpending(context);
   const surplusRoom = (ceiling: number): number => spending ? surplusWageCeiling(ceiling) : 0;
-  const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market', ...(version >= 15 ? ['transfers'] : []), ...(version >= 17 ? ['buyouts'] : []), ...(version >= 55 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'departures') ? ['departures'] : [])]);
+  const fields = record(value, 'employment', ['model', 'enabledSince', 'delegated', 'contracts', 'market', ...(version >= 15 ? ['transfers'] : []), ...(version >= 17 ? ['buyouts'] : []), ...(version >= 55 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'departures') ? ['departures'] : []), ...(version >= TRADES_FORMAT && value !== null && typeof value === 'object' && Object.hasOwn(value, 'trades') ? ['trades'] : [])]);
+  // Format 94: completed NBA trades, in worlds with trades only (their shape here; each trade is checked at its first contract).
+  const trades = validateTradeRecords(fields.trades, context, seasonNumber, round, status);
   const rawTransfers = version >= 15 ? fields.transfers : [];
   if (!Array.isArray(rawTransfers) || rawTransfers.length > 20_000) fail('employment.transfers', 'must retain at most 20000 completed transfers');
   const transfers = rawTransfers.map(transfer => version < 19 ? { ...transfer, startsRound: 1 } : transfer);
@@ -2032,8 +2036,8 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     const startsSeason = number(entry.startsSeason, `${path}.startsSeason`, firstYear, Math.min(MAX_SEASON_NUMBER, seasonNumber + 1));
     const endsSeason = number(entry.endsSeason, `${path}.endsSeason`, startsSeason, Math.min(MAX_SEASON_NUMBER, startsSeason + MAX_CONTRACT_SEASONS - 1));
     const startsRound = number(entry.startsRound, `${path}.startsRound`, 1, seasonRounds(context));
-    const midseason = entry.kind === 'midseason' || entry.kind === 'midseason-transfer';
-    if (!midseason && startsRound !== 1) fail(`${path}.startsRound`, 'must preserve opening-day registration for ordinary contracts');
+    const midseason = entry.kind === 'midseason' || entry.kind === 'midseason-transfer', traded = entry.kind === 'trade' && version >= TRADES_FORMAT;
+    if (!midseason && !traded && startsRound !== 1) fail(`${path}.startsRound`, 'must preserve opening-day registration for ordinary contracts');
     validateOptionalRole(entry, path);
     // relationships-3: a smaller role offered lowers the player's demand (`SQUAD_ROLE_RULES.contracts`).
     // Format 92: an NBA signing may be a late free agent's minimum salary (`nbaLateFreeAgentMinimum`), never below the rookie minimum.
@@ -2041,7 +2045,8 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     // negotiation replay checks his exact demand, so only the contract minimum bounds it here.
     const usualWage = roleWage(getCareerWage(context, player.id), entry.role as EmploymentContract['role'], context);
     const lowestWage = usesNbaMoves(context) && isNbaPaidPlayer(worldOf(context), player.id) && !isCapClub(context, entry.clubId as string) ? MIN_CONTRACT_WAGE : usualWage;
-    const seasonWage = number(entry.seasonWage, `${path}.seasonWage`, Object.hasOwn(entry, 'capRoute') ? Math.min(NBA_LOWEST_MINIMUM, usualWage) : lowestWage, maxContractWage(context));
+    // Format 94: a traded term keeps its wage exactly (checked against the released term below).
+    const seasonWage = number(entry.seasonWage, `${path}.seasonWage`, traded ? 0 : Object.hasOwn(entry, 'capRoute') ? Math.min(NBA_LOWEST_MINIMUM, usualWage) : lowestWage, maxContractWage(context));
     if (seasonWage % WAGE_STEP !== 0) fail(`${path}.seasonWage`, 'must use supported wage increments');
     validateOptionalReleaseFee(entry, path, context);
     if (index < catalog.length) {
@@ -2049,9 +2054,14 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
       const expected = catalog[index]!;
       if (entry.kind !== 'initial' || entry.playerId !== expected.player.id || entry.clubId !== expected.clubId || startsSeason !== firstYear || endsSeason !== firstYear + (worldOf(context).playerContracts?.[player.id] ?? 1) - 1 || signedSeason !== firstYear || signedRound !== firstRound || seasonWage !== wages[player.id]) fail(path, 'must preserve the opening squad and initial terms at activation');
     } else {
-      if (!midseason && startsSeason !== signedSeason + 1) fail(`${path}.startsSeason`, 'must start in the season following the signing');
+      if (!midseason && !traded && startsSeason !== signedSeason + 1) fail(`${path}.startsSeason`, 'must start in the season following the signing');
       const current = contractForRound(prefixEmployment(), player.id, signedSeason, signedRound);
-      if (entry.kind === 'midseason' && version >= 18) {
+      if (traded) {
+        // Format 94: a traded player's term carried on unchanged; the whole trade is checked at its first contract.
+        const trade = trades.find(item => item.moves.some(move => move.contractIds.includes(entry.id as string)));
+        if (!trade) fail(path, 'must belong to a completed trade');
+        if (trade.moves[0]!.contractIds[0] === entry.id) validateTradeAt(trade, prefixEmployment(), fields.contracts as EmploymentContract[], index, context, path);
+      } else if (entry.kind === 'midseason' && version >= 18) {
         if (current || startsSeason !== signedSeason || endsSeason !== signedSeason || startsRound !== signedRound || signedRound < 2) fail(path, 'must register a previously uncontracted player for the remaining current season at the reply boundary');
       } else if (entry.kind === 'midseason-transfer' && version >= 19) {
         const transfer = (transfers as EmploymentTransfer[]).find(item => item.contractId === entry.id);
@@ -2079,13 +2089,14 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
         const released = validated.filter(contract => contract.playerId === player.id && contract.clubId === transfer.fromClubId && contract.endsSeason >= startsSeason && ![...prefixEmployment().transfers, ...prefixEmployment().buyouts].some(previous => previous.releasedContractIds.includes(contract.id)));
         if (!source || source.clubId !== transfer.fromClubId || !sameData(transfer.releasedContractIds, released.map(contract => contract.id))) fail(path, 'must release exactly the effective future terms of the selling club');
         validateClauseTrigger(transfer, source, path);
-      } else fail(`${path}.kind`, 'must identify an initial agreement, renewal, free-agent signing or transfer');
+      } else fail(`${path}.kind`, 'must identify an initial agreement, renewal, free-agent signing, transfer or trade');
     }
     if (Array.from({ length: endsSeason - startsSeason + 1 }, (_, offset) => startsSeason + offset).some(year => Array.from({ length: seasonRounds(context) }, (_, offset) => offset + 1).some(round => effectiveContractsForRound(prefixEmployment(entry as unknown as EmploymentContract), year, round).filter(contract => contract.playerId === player.id).length > 1))) fail(path, 'overlaps another effective employment agreement for this player');
     const contract = entry as unknown as EmploymentContract;
     validated.push(contract);
     // A joining club's opening squad is not bought within a budget, like the career's opening contracts.
-    if (index >= catalog.length && entry.kind !== 'joined') for (let year = startsSeason; year <= endsSeason; year += 1) {
+    // Format 94: a trade's salary matching replaces the club's wage budget; its squad limits are checked with the trade.
+    if (index >= catalog.length && entry.kind !== 'joined' && !traded) for (let year = startsSeason; year <= endsSeason; year += 1) {
       const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
       // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow.
@@ -2095,6 +2106,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     }
   }
   const employment = normalized;
+  if (trades.some(trade => trade.moves.some(move => move.contractIds.some(id => !validated.some(contract => contract.id === id && contract.kind === 'trade'))))) fail('employment.trades', 'must link every traded term to one retained trade contract');
   if ((transfers as EmploymentTransfer[]).some(transfer => !validated.some(contract => contract.id === transfer.contractId && contract.kind === (transfer.startsRound > 1 ? 'midseason-transfer' : 'transfer')))) fail('employment.transfers', 'must link every transfer to one retained transfer contract');
   // Each season's own full-world clubs (step 3.4d-2): clubs outside the full world that season hold no registrations.
   // Registration rounds before the trusted checkpoint's week were checked by it; no later agreement or release reaches them.
@@ -2181,7 +2193,8 @@ function validateMarket(value: unknown, state: SeasonState, version: number, sna
     const expectedNegotiationCount = beforeRecords.length;
     if (!sameData(beforeRecords, records.slice(0, expectedNegotiationCount))) fail(`${path}.negotiationCountBefore`, 'must identify a chronological response prefix');
     // Opening terms of clubs that joined at an earlier season end come before the window too (step 3.4d-2).
-    const expectedContractCount = baselineContracts + beforeRecords.filter(entry => entry.outcome === 'accepted').length + state.employment.contracts.filter(contract => contract.kind === 'joined' && contract.signedSeason < year).length;
+    // Format 94: trades before the window too (in-season trades of this season; offseason trades complete at the season change, after it).
+    const expectedContractCount = baselineContracts + beforeRecords.filter(entry => entry.outcome === 'accepted').length + state.employment.contracts.filter(contract => contract.kind === 'joined' && contract.signedSeason < year || contract.kind === 'trade' && (contract.signedSeason < year || contract.signedSeason === year && contract.signedRound < seasonRounds(state))).length;
     if (window.negotiationCountBefore !== expectedNegotiationCount || window.contractCountBefore !== expectedContractCount) fail(path, 'must anchor the exact agreements and responses already present before the window');
     const beforeTransfers = (state.employment.transfers ?? []).filter(transfer => transfer.seasonNumber < year || transfer.seasonNumber === year && transfer.startsRound > 1);
     const beforeBuyouts = (state.employment.buyouts ?? []).filter(buyout => buyout.seasonNumber < year);
@@ -2463,6 +2476,17 @@ function withRecordedSellerReasons(replayed: MarketWindow, saved: MarketWindow):
 }
 
 /** Replay accepted replies against the contract prefix independently of present-day reservations. */
+/**
+ * Whether the next agreement in a contract prefix came before an offer without a player response: a joining squad's
+ * opening term from an earlier season end, or a `trade` contract (format 94) within the offer's recorded contract count
+ * (trades complete between replies, so only that count places them; any other agreement still needs its reply).
+ */
+function unexplainedBefore(contract: EmploymentContract | undefined, year: number, prefixLength: number, countBefore: unknown): boolean {
+  if (!contract) return false;
+  if (contract.kind === 'joined') return contract.signedSeason < year;
+  return contract.kind === 'trade' && typeof countBefore === 'number' && prefixLength < countBefore;
+}
+
 function validateNegotiations(value: unknown, state: SeasonState, recruitmentHolds: RecruitmentHolds[] = [], version = 30): SeasonNegotiations {
   const fields = record(value, 'negotiations', ['model', 'enabledSince', 'records']);
   if (fields.model !== 'negotiations-1') fail('negotiations.model', 'is unsupported');
@@ -2495,7 +2519,7 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
   for (const [index, value] of fields.records.entries()) {
     if (index < plan.skip) {
       const entry = value as SeasonNegotiations['records'][number], year = entry.seasonNumber;
-      while (contracts[prefix.length]?.kind === 'joined' && contracts[prefix.length]!.signedSeason < year) prefix = [...prefix, contracts[prefix.length]!];
+      while (unexplainedBefore(contracts[prefix.length], year, prefix.length, entry.contractCountBefore)) prefix = [...prefix, contracts[prefix.length]!];
       previousBoundary = roundKey(year, entry.round) * 2 + (entry.status === 'complete' ? 1 : 0);
       previousDate = entry.date;
       if (entry.outcome === 'accepted') prefix = [...prefix, contracts[prefix.length]!];
@@ -2510,8 +2534,8 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
     if (typeof entry.playerId !== 'string') fail(`${path}.playerId`, 'must identify an existing career player');
     const year = number(entry.seasonNumber, `${path}.seasonNumber`, firstYear, state.seasonNumber);
     // Joining squads' opening terms (step 3.4d-2) were written at earlier rollovers, without a player response.
-    while (contracts[prefix.length]?.kind === 'joined' && contracts[prefix.length]!.signedSeason < year) prefix = [...prefix, contracts[prefix.length]!];
     const round = number(entry.round, `${path}.round`, 1, year === state.seasonNumber ? state.round : seasonRounds(state));
+    while (unexplainedBefore(contracts[prefix.length], year, prefix.length, entry.contractCountBefore)) prefix = [...prefix, contracts[prefix.length]!];
     getCareerPlayer(state, entry.playerId, year, round);
     if (entry.status !== 'active' && entry.status !== 'complete') fail(`${path}.status`, 'must identify the calendar phase when the offer was made');
     if (entry.status === 'complete' && (round !== seasonRounds(state) || year === state.seasonNumber && state.status !== 'complete')) fail(`${path}.status`, 'cannot negotiate in an offseason before it begins');
@@ -2564,7 +2588,7 @@ function validateNegotiations(value: unknown, state: SeasonState, recruitmentHol
     conversations.set(conversation, { offeredWage, offeredSeasons, releaseFee, role, boundary, date: entry.date });
     entries.push(entry as unknown as SeasonNegotiations['records'][number]);
   }
-  while (contracts[prefix.length]?.kind === 'joined') prefix = [...prefix, contracts[prefix.length]!];
+  while (contracts[prefix.length]?.kind === 'joined' || contracts[prefix.length]?.kind === 'trade') prefix = [...prefix, contracts[prefix.length]!];
   if (prefix.length !== contracts.length) fail('negotiations.records', 'must explain every employment agreement signed after negotiation activation');
   return fields as unknown as SeasonNegotiations;
 }
@@ -2799,7 +2823,8 @@ function validatePayroll(value: unknown, clubs: readonly Team[], seasonNumber: n
       const contract = employment ? contractForRound(employment, player.id, year, fromRound) : undefined;
       expectedAgreements.push({ id: `wage-s${year}-${player.id}`, playerId: player.id, clubId: club.id, seasonNumber: year, startsRound: fromRound, seasonWage: contract?.seasonWage ?? getCareerWage(context, player.id) });
     }
-    for (const contract of employment?.contracts ?? []) if ((contract.kind === 'midseason' || contract.kind === 'midseason-transfer') && contract.startsSeason === year && contract.startsRound > fromRound && contract.startsRound <= throughRound) expectedAgreements.push({ id: `wage-s${year}-${contract.playerId}${contract.kind === 'midseason-transfer' ? `-r${contract.startsRound}` : ''}`, playerId: contract.playerId, clubId: contract.clubId, seasonNumber: year, startsRound: contract.startsRound, seasonWage: contract.seasonWage });
+    // Format 94: a player traded during the season is paid by his new club from the trade's week.
+    for (const contract of employment?.contracts ?? []) if ((contract.kind === 'midseason' || contract.kind === 'midseason-transfer' || contract.kind === 'trade') && contract.startsSeason === year && contract.startsRound > fromRound && contract.startsRound <= throughRound) expectedAgreements.push({ id: `wage-s${year}-${contract.playerId}${contract.kind !== 'midseason' ? `-r${contract.startsRound}` : ''}`, playerId: contract.playerId, clubId: contract.clubId, seasonNumber: year, startsRound: contract.startsRound, seasonWage: contract.seasonWage });
   }
   const agreements = array(fields.agreements, 'payroll.agreements', expectedAgreements.length);
   for (const [index, value] of agreements.entries()) {
@@ -3562,7 +3587,7 @@ function validateState(value: unknown, version: SeasonFormatVersion): void {
 function validateStateUncached(value: unknown, version: SeasonFormatVersion): void {
   const legacy = version === 1, career = version >= 3;
   checkStateTree(value);
-  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 53 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'background') ? ['background'] : []), ...(version >= 60 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'europe') ? ['europe'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'media') ? ['media'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'economySeasons') ? ['economySeasons'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'injuryModel') ? ['injuryModel'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'matchModel') ? ['matchModel'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'national') ? ['national'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'coaches') ? ['coaches'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
+  const state = record(value, 'state', ['schemaVersion', 'engineVersion', 'dataPackId', 'seed', 'managedClubId', 'date', 'status', 'round', 'clubs', 'plans', 'conditions', 'fixtures', 'activeFixtureId', 'activeMatch', ...(legacy ? [] : ['injuryMode', 'injuries']), ...(career ? ['seasonNumber', 'history'] : []), ...(version >= 4 ? ['training'] : []), ...(version >= 5 ? ['coaching'] : []), ...(version >= 6 ? ['finance'] : []), ...(version >= 7 ? ['payroll'] : []), ...(version >= 8 ? ['manager'] : []), ...(version >= 9 ? ['rosters'] : []), ...(version >= 10 ? ['employment'] : []), ...(version >= 11 ? ['scouting'] : []), ...(version >= 12 ? ['negotiations'] : []), ...(version >= 13 ? ['market'] : []), ...(version >= 18 ? ['recruitment'] : []), ...(version >= 21 ? ['scouts'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['academy', 'youth'] : []), ...(version >= 26 ? ['lifecycle'] : []), ...(version >= 27 ? ['youthCompetition'] : []), ...(version >= 28 ? ['facilities'] : []), ...(version >= 29 ? ['relationships'] : []), ...(version >= 30 ? ['board'] : []), ...(version >= 37 ? ['commercial', 'rivalries', 'career'] : version >= 35 ? ['commercial', 'rivalries'] : version >= 31 ? ['commercial'] : []), ...(version >= 47 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'restWeeks') ? ['restWeeks'] : []), ...(version >= 50 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'divisions') ? ['divisions'] : []), ...(version >= 53 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'background') ? ['background'] : []), ...(version >= 60 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'europe') ? ['europe'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'media') ? ['media'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'economySeasons') ? ['economySeasons'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'injuryModel') ? ['injuryModel'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'matchModel') ? ['matchModel'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'national') ? ['national'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'coaches') ? ['coaches'] : []), ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'trades') ? ['trades'] : []), ...(version >= 39 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'world') ? ['world'] : [])]);
   if (state.schemaVersion !== version || state.engineVersion !== 'possession-3') fail('state', 'uses an unsupported schema or engine');
   // Format 39: careers outside the built-in league carry their world, which must be complete and named by dataPackId.
   if (Object.hasOwn(state, 'world')) {
@@ -3603,6 +3628,9 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 90 && (Object.hasOwn(world, 'nba') || world.domesticLeagues?.some(league => league.postseason === 'nba-2026-1'))) fail('world.nba', 'requires format 90 or later');
   // Format 91: NBA careers (real NBA head coaches, NBA job rules).
   if (version < 91 && Object.hasOwn(world, 'nbaJobs')) fail('world.nbaJobs', 'requires format 91 or later');
+  // Format 94: NBA trades (the world marker, the offer journal and completed trades).
+  if (version < TRADES_FORMAT && Object.hasOwn(world, 'nbaTrades')) fail('world.nbaTrades', `requires format ${TRADES_FORMAT} or later`);
+  if (version < TRADES_FORMAT && Object.hasOwn(state, 'trades')) fail('trades', `requires format ${TRADES_FORMAT} or later`);
   // Format 63: the career-2 rules (protected first season, fresh confidence, mid-season moves, resignations) need it.
   const careerModel = state.career !== null && typeof state.career === 'object' ? (state.career as { model?: unknown }).model : undefined;
   if (version < 63 && (careerModel === 'career-2' || state.board !== null && typeof state.board === 'object' && Object.hasOwn(state.board, 'restarts'))) fail('career.model', 'requires format 63 or later');
@@ -3895,6 +3923,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version >= 28) validateFacilitiesHistory(normalizedState, recruitmentHolds, marketSnapshots);
   if (version >= 12) validateNegotiations(state.negotiations, normalizedState, recruitmentHolds, version);
   validateLifecycleHistory(normalizedState, recruitmentHolds);
+  // Format 94: the manager's trade offers and every computer trade, decided again.
+  validateTradesState(normalizedState as unknown as SeasonState, version);
   const marketWindow = marketEnabled ? (state.market as unknown as SeasonMarket).windows.find(window => window.seasonNumber === seasonNumber) : null;
   const expectedDate = state.status === 'complete' && marketWindow ? marketWindow.date : dateForRound(round, seasonNumber);
   if (state.activeFixtureId !== (active?.id ?? null) || state.date !== expectedDate) fail('activeFixtureId/date', 'must identify the current fixture or validated offseason date');

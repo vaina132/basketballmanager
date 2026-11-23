@@ -1,4 +1,5 @@
-import { clubRosterLimitText, clubRosterLimit } from './club-roster-policy';
+import { clubRosterLimitText, clubRosterLimit, minRosterSize, minRosterText } from './club-roster-policy';
+import { nbaInSeasonReason } from './nba-cap-policy';
 import type { InSeasonSaleQuote, InSeasonTransferQuote } from '../domain/recruitment';
 import type { ContractOfferOptions } from '../domain/employment';
 import { contractRoleReason } from './contract-roles';
@@ -7,7 +8,7 @@ import { financeLedgerEntries } from './finance-ledger';
 import type { TransferPaymentPlan } from '../domain/transfer-payments';
 import type { Player } from '../domain/types';
 import { getActiveCareerPlayers } from './player-catalog';
-import { contractForRound, contractForSeason, effectiveContractsForRound, getClubContractSummary, MAX_CONTRACT_SEASONS, maxContractWage, MIN_CONTRACT_WAGE, MIN_ROSTER_SIZE, outgoingReplacementReserve, WAGE_STEP } from './employment-policy';
+import { contractForRound, contractForSeason, effectiveContractsForRound, getClubContractSummary, MAX_CONTRACT_SEASONS, maxContractWage, MIN_CONTRACT_WAGE, outgoingReplacementReserve, WAGE_STEP } from './employment-policy';
 import { getFinanceBalance } from './finance';
 import { getPlayerPayroll } from './payroll';
 import { getInSeasonBudget, getInSeasonOffers, remainingSeasonWages } from './recruitment-policy';
@@ -71,7 +72,7 @@ export function inSeasonSellerReason(state: SeasonState, playerId: string, selle
   if (futureReason) return futureReason;
   const outgoing = new Set([playerId, ...getInSeasonOffers(state, undefined, true).filter(offer => offer.id !== excludeOfferId && offer.transfer?.sellerClubId === sellerClubId && offer.transfer.clubStatus === 'accepted').map(offer => offer.playerId)]);
   const current = effectiveContractsForRound(state.employment, state.seasonNumber, state.round).filter(contract => contract.clubId === sellerClubId);
-  if (current.filter(contract => !outgoing.has(contract.playerId)).length < MIN_ROSTER_SIZE) return 'The selling club must retain at least eight registered players after all approved departures.';
+  if (current.filter(contract => !outgoing.has(contract.playerId)).length < minRosterSize(state, sellerClubId)) return `The selling club must retain at least ${minRosterText(state, sellerClubId)} registered players after all approved departures.`;
   const through = Math.max(state.seasonNumber, ...state.employment.contracts.filter(contract => outgoing.has(contract.playerId) && contract.clubId === sellerClubId).map(contract => contract.endsSeason));
   for (let year = state.seasonNumber + 1; year <= through; year += 1) {
     const summary = getClubContractSummary(state, sellerClubId, year);
@@ -80,7 +81,7 @@ export function inSeasonSellerReason(state: SeasonState, playerId: string, selle
     const wages = summary.seasonWages - removed.reduce((sum, contract) => sum + contract.seasonWage, 0);
     const holds = getInSeasonOffers(state, sellerClubId, true).filter(offer => offer.seasonNumber + offer.seasons - 1 >= year);
     const shortfalls = holds.reduce((sum, offer) => sum + Math.max(0, summary.reserveWage - offer.seasonWage), 0);
-    const reserve = Math.max(0, MIN_ROSTER_SIZE - size - summary.reservedRosterSize) * summary.reserveWage + shortfalls;
+    const reserve = Math.max(0, minRosterSize(state, sellerClubId) - size - summary.reservedRosterSize) * summary.reserveWage + shortfalls;
     if (wages + summary.reservedWages + reserve > summary.budget) return `The selling club needs wages budget to replace its departing players in season ${year}.`;
   }
   return null;
@@ -116,7 +117,9 @@ export function quoteInSeasonTransferOffer(state: SeasonState, playerId: string,
   else if (resolving && (!own?.transfer || own.transfer.clubStatus !== 'accepted' || own.transfer.contractId !== current.id || own.transfer.sellerClubId !== current.clubId || own.seasonWage !== seasonWage || own.seasons !== seasons || own.releaseFee !== options.releaseFee || own.transfer.fee !== fee || own.transfer.paymentPlan !== paymentPlan || (own.transfer.mode ?? 'negotiated') !== (options.transferMode ?? 'negotiated'))) reason = 'The selling club must approve these transfer terms before the player can join.';
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before offering a transfer fee.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before offering another transfer fee.';
-  else if (budget.rosterSize + budget.reservedRosterSize + 1 > clubRosterLimit(state)) reason = `The squad already has ${clubRosterLimitText(state)} registered players or reserved places.`;
+  else if (budget.rosterSize + budget.reservedRosterSize + 1 > clubRosterLimit(state, clubId)) reason = `The squad already has ${clubRosterLimitText(state, clubId)} registered players or reserved places.`;
+  // Format 91: an NBA club signs in season only with room under the cap or on a minimum contract.
+  else if (nbaInSeasonReason(state, clubId, playerId, seasonWage, budget.reservedWages)) reason = nbaInSeasonReason(state, clubId, playerId, seasonWage, budget.reservedWages);
   else if (budget.seasonWages + budget.reservedWages + seasonWage > budget.budget) reason = 'This offer exceeds the current season player wages budget.';
   else if (budget.spendableCash < fee + remainingWages) reason = 'The transfer fee and remaining salary exceed the available budget after existing commitments.';
   else reason = inSeasonSellerReason(state, playerId, current.clubId, own?.id);
@@ -125,11 +128,11 @@ export function quoteInSeasonTransferOffer(state: SeasonState, playerId: string,
     const size = summary.rosterSize + summary.reservedRosterSize + 1;
     const reserveWage = summary.reserveWage;
     const shortfalls = getInSeasonOffers(state, clubId, true).filter(offer => offer.id !== own?.id && offer.seasonNumber + offer.seasons - 1 >= year).reduce((sum, offer) => sum + Math.max(0, reserveWage - offer.seasonWage), 0);
-    const reserve = Math.max(0, MIN_ROSTER_SIZE - size) * reserveWage + shortfalls + (resolving ? 0 : Math.max(0, reserveWage - seasonWage)) + outgoingReplacementReserve(state, clubId, year);
+    const reserve = Math.max(0, minRosterSize(state, clubId) - size) * reserveWage + shortfalls + (resolving ? 0 : Math.max(0, reserveWage - seasonWage)) + outgoingReplacementReserve(state, clubId, year);
     const remainingBudget = Math.max(0, summary.budget - summary.seasonWages - summary.reservedWages - (wageValid ? seasonWage : 0));
     futureBudgets.push({ seasonNumber: year, remainingBudget, rosterSize: size });
-    if (!reason && size > clubRosterLimit(state)) reason = `The squad already has ${clubRosterLimitText(state)} signed or reserved players for season ${year}.`;
-    if (!reason && summary.seasonWages + summary.reservedWages + seasonWage + reserve > summary.budget) reason = `This offer exceeds the season ${year} wages budget after protecting space for eight players.`;
+    if (!reason && size > clubRosterLimit(state, clubId)) reason = `The squad already has ${clubRosterLimitText(state, clubId)} signed or reserved players for season ${year}.`;
+    if (!reason && summary.seasonWages + summary.reservedWages + seasonWage + reserve > summary.budget) reason = `This offer exceeds the season ${year} wages budget after protecting space for ${minRosterText(state, clubId)} players.`;
   }
   return { playerId, clubId, seasonWage, seasons, endsSeason: state.seasonNumber + seasons - 1, fee, paymentPlan, sellerClubId: current?.clubId ?? null, contractId: current?.id ?? null, requiredFee: current ? requiredInSeasonTransferFee(state, playerId) : 0, installments: feeValid && planValid && (paymentPlan === 'upfront' || state.seasonNumber < 7974) ? getTransferPaymentSchedule(fee, paymentPlan, responseOn, state.seasonNumber, responseRound) : [], remainingWages, responseRound, responseOn, remainingBudgetAfter: Math.max(0, budget.spendableCash - remainingWages - (feeValid ? fee : 0)), annualBudgetRemaining: Math.max(0, budget.budget - budget.seasonWages - budget.reservedWages - (wageValid ? seasonWage : 0)), rosterSize: budget.rosterSize + budget.reservedRosterSize + 1, canOffer: reason === null, reason, futureBudgets, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }), ...(options.transferMode === 'release-clause' ? { transferMode: 'release-clause' as const } : {}) };
 }

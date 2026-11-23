@@ -3,7 +3,7 @@ import type { SeasonState } from '../domain/season'
 import { getPlayerListing, playerListingReason, suggestedAskingFee, usesPlayerListings } from '../world/listings'
 import { maxTransferFee, MIN_TRANSFER_FEE, TRANSFER_FEE_STEP } from '../world/transfers-policy'
 import { Icon } from './Icon'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import './player-listing.css'
 
 export type ListingChoice = { transfer: boolean; loan: boolean; askingFee?: number }
@@ -28,6 +28,6 @@ export function PlayerListingControl({ season, playerId, busy, onListing }: { se
       <button className={`button small${loan ? ' primary' : ''}`} aria-pressed={loan} data-listing-loan={playerId} onClick={() => choose({ transfer, loan: !loan })} disabled={busy}><Icon name="clock" size={14} />{loan ? 'On loan list' : 'Loan list'}</button>
     </div>
     <label className="player-listing-price">Asking price €<input type="number" inputMode="numeric" min={MIN_TRANSFER_FEE / 100} step={TRANSFER_FEE_STEP / 100} value={price} onChange={event => setPrice(event.target.value)} onBlur={() => { if (transfer && askingFee !== listing?.askingFee) choose({ transfer, loan }) }} disabled={busy} aria-describedby={`listing-note-${playerId}`} /></label>
-    <small id={`listing-note-${playerId}`}>Suggested {formatEuros(suggested)}. Listed players get more offers; offers arrive in the Inbox.</small>
+    <small id={`listing-note-${playerId}`}>Suggested {formatMoney(suggested)}. Listed players get more offers; offers arrive in the Inbox.</small>
   </section></details>
 }

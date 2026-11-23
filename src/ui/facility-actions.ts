@@ -1,6 +1,6 @@
 import type { SeasonState } from '../domain/season'
 import { startArenaExpansion, takeBankLoan } from '../world/facilities'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 
 type UpdateCareer = (action: (state: SeasonState) => SeasonState, message?: string | ((next: SeasonState) => string), checkpoint?: boolean) => void
 
@@ -11,6 +11,6 @@ type UpdateCareer = (action: (state: SeasonState) => SeasonState, message?: stri
 export function simpleFacilityActions(updateCareer: UpdateCareer) {
   return {
     onArenaExpansion: (seats: number) => updateCareer(state => startArenaExpansion(state, seats), `Arena expansion started: ${seats.toLocaleString('en-GB')} seats are added when the work is finished.`, true),
-    onBankLoan: (principal: number, seasons: number) => updateCareer(state => takeBankLoan(state, principal, seasons), `${formatEuros(principal)} borrowed and added to Spending left. Repayments start next season.`, true),
+    onBankLoan: (principal: number, seasons: number) => updateCareer(state => takeBankLoan(state, principal, seasons), `${formatMoney(principal)} borrowed and added to Spending left. Repayments start next season.`, true),
   }
 }

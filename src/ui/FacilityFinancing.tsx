@@ -8,11 +8,11 @@ import { FACILITY_FINANCING_RULES as RULES, paymentRounds } from '../world/facil
 import { quoteFacilityLease, quoteFacilityLoan } from '../world/facility-financing'
 import { Icon } from './Icon'
 import { scoutingDate } from './ScoutingKnowledge'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import './facility-financing.css'
 
 export type FinancingChoice = 'cash' | 'board' | 'loan' | 'lease'
-const money = (amount: number) => formatEuros(amount)
+const money = (amount: number) => formatMoney(amount)
 /** A yearly rate in basis points, as "5.25%". */
 export const ratePercent = (basisPoints: number) => `${(basisPoints / 100).toLocaleString('en-GB', { maximumFractionDigits: 2 })}%`
 const SHARES = [100, 75, 50] as const

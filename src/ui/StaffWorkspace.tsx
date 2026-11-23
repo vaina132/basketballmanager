@@ -24,7 +24,7 @@ import { CoachPortrait } from './CoachPortrait'
 import { Icon } from './Icon'
 import { HeadCoachesPanel } from './HeadCoachesPanel'
 import './staff-workspace.css'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { staffFee } from '../world/economy'
 import { ReplaceStaffButton, StaffContractEnd, replacementTarget, revealCandidates, ShowCandidatesButton, SpendingAfterHire, StaffReplacementOffer, type StaffCandidateControls } from './StaffReplacement'
 import { sackingTerms, STAFF_ROLE_LABELS, roleStaff, type StaffRole } from '../world/staff-roster'
@@ -56,7 +56,7 @@ interface StaffWorkspaceProps extends ScoutStaffProps, FitnessStaffProps, Physio
 const RECRUITMENT_TITLES: Readonly<Record<StaffRole, string>> = { coaches: 'staff-recruitment-title', scouts: 'scout-recruitment-title', fitness: 'fitness-recruitment-title', physio: 'physio-recruitment-title', assistant: 'assistant-recruitment-title', youth: 'youth-recruitment-title' }
 
 const moneyFormatter = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 const coachById = (id: string) => COACHES.find(coach => coach.id === id)!
 const compareNames = (left: Coach, right: Coach) => left.name.localeCompare(right.name, 'en') || left.id.localeCompare(right.id, 'en')
 type CoachSort = 'rating-desc' | 'rating-asc' | 'fee-asc' | 'fee-desc'

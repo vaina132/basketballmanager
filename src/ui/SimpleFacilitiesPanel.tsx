@@ -7,7 +7,7 @@ import { focusWhenReady } from './focus-when-ready'
 import { Icon, type IconName } from './Icon'
 import { scoutingDate } from './ScoutingKnowledge'
 import { facilityFinishDate, facilityWeeksLeft } from './FacilitiesPanel'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import './facilities-panel.css'
 import './simple-facilities.css'
 
@@ -24,7 +24,7 @@ export interface SimpleFacilitiesActions {
 
 const LABELS: Record<FacilityType, string> = { arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure', medical: 'Medical centre', scouting: 'Scouting office' }
 const icons: Record<FacilityType, IconName> = { arena: 'building', training: 'training', youth: 'people', medical: 'medical', scouting: 'search' }
-const money = (amount: number) => formatEuros(amount)
+const money = (amount: number) => formatMoney(amount)
 const count = (value: number) => value.toLocaleString('en-GB')
 const weeks = (value: number) => `${value} ${value === 1 ? 'week' : 'weeks'}`
 const signed = (percent: number) => `${percent > 0 ? '+' : '−'}${Math.abs(percent)}%`

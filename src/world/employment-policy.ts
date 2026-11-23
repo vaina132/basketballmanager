@@ -13,7 +13,9 @@ import { getInSeasonOffers } from './recruitment-policy';
 import { offerOptionsReason } from './release-clauses';
 import { retirementContractReason } from './lifecycle-policy';
 import type { WorldContext } from '../domain/world';
-import { clubRosterLimitText, clubRosterLimit, clubSalaryCeiling } from './club-roster-policy';
+import { clubRosterLimitText, clubRosterLimit, clubSalaryCeiling, isCapClub, minRosterSize, minRosterText } from './club-roster-policy';
+import { nbaDeadMoney, nbaSigningCheck } from './nba-cap-policy';
+import type { NbaCapRoute } from './nba-cap';
 import { seasonSalaryBudget } from './board-consequences';
 import { benchWage, knownMoneySeason, moneyAt, REAL_ECONOMY_RULES, worldEconomy } from './economy';
 import { refusedContractMinimum, refusedContractPremium } from './contract-requests-policy';
@@ -85,7 +87,7 @@ function contractsAt(employment: SeasonEmployment, seasonNumber: number, round: 
 const contractsByClubCache = new WeakMap<readonly EmploymentContract[], Map<string, readonly EmploymentContract[]>>();
 const NO_CONTRACTS: readonly EmploymentContract[] = Object.freeze([]);
 /** One club's contracts in force at the end of a season, in journal order (shared: callers must copy before changing). */
-function clubContractsForSeason(employment: SeasonEmployment, clubId: string, seasonNumber: number): readonly EmploymentContract[] {
+export function clubContractsForSeason(employment: SeasonEmployment, clubId: string, seasonNumber: number): readonly EmploymentContract[] {
   const contracts = contractsAt(employment, seasonNumber, MAX_SEASON_ROUNDS);
   let byClub = contractsByClubCache.get(contracts);
   if (!byClub) {
@@ -149,11 +151,12 @@ export function getClubContractSummary(state: Pick<SeasonState, 'employment' | '
   // A rival can win any pending player. Keep enough to replace a cheap held slot
   // until that player actually signs, so losing a bid cannot strand the club.
   const pendingShortfalls = (isCompetitiveMarket(state) ? reserved : inSeasonReserved).reduce((total, offer) => total + Math.max(0, reserveWage - offer.seasonWage), 0);
-  const minimumReserve = Math.max(0, MIN_ROSTER_SIZE - rosterSize - reservedRosterSize) * reserveWage + pendingShortfalls + outgoingReplacementReserve(state, clubId, seasonNumber);
+  const minimumRoster = minRosterSize(state, clubId);
+  const minimumReserve = Math.max(0, minimumRoster - rosterSize - reservedRosterSize) * reserveWage + pendingShortfalls + outgoingReplacementReserve(state, clubId, seasonNumber);
   // Format 72: a club whose money fell keeps its agreed wages; cheap signings (at most the reserve wage) it still needs
   // for the minimum squad may use the highest allocation it has had for the season, which reserved room for them when
   // the earlier terms were agreed. Without this, a relegated club could be unable to field eight players.
-  const minimumSquadBudget = rosterSize + reservedRosterSize < MIN_ROSTER_SIZE && state.economySeasons ? Math.max(budget, clubSalaryCeiling(state, clubId, seasonNumber)) : budget;
+  const minimumSquadBudget = rosterSize + reservedRosterSize < minimumRoster && state.economySeasons ? Math.max(budget, clubSalaryCeiling(state, clubId, seasonNumber)) : budget;
   return { clubId, seasonNumber, rosterSize, seasonWages, reservedWages, reservedRosterSize, budget, remainingBudget, minimumReserve, spendableBudget: Math.max(0, remainingBudget - minimumReserve), contracts, reserveWage, minimumSquadBudget };
 }
 
@@ -175,6 +178,7 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
   const liveOffers = getLiveMarketOffers(state);
   const window = getMarketWindow(state);
   const competitive = once(() => isCompetitiveMarket(state));
+  const capClub = once(() => isCapClub(state, clubId));
   const leaving = once(() => leavingClubIds(state).has(clubId));
   const inSeasonOffers = once(() => getInSeasonOffers(state, undefined, true));
   const clubInSeasonOffers = once(() => getInSeasonOffers(state, clubId, true));
@@ -236,18 +240,29 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
     else if (state.status === 'complete' && state.market?.enabledSince && (!isMarketActive(state) || !window)) reason = 'Open the offseason decision calendar before sending offers.';
     else if (state.status === 'complete' && state.market?.enabledSince && window && state.date >= window.closesOn && !resolving) reason = 'The recruitment period has closed.';
     else if (rivalOffer && !competitive()) reason = `This player is considering an offer from ${state.clubs.find(club => club.id === rivalOffer.clubId)?.name ?? 'another club'}.`;
+    // Format 91: an NBA club's signing must fit the salary cap (`nba-cap-policy.ts`); a scheduled reply keeps the route its offer took.
+    let capRoute: NbaCapRoute | undefined;
+    if (reason === null && capClub()) {
+      if (resolving && openOffer?.capRoute) capRoute = openOffer.capRoute;
+      else {
+        const summary = summaryFor(startsSeason, openOffer?.clubId === clubId ? openOffer.id : undefined);
+        const check = nbaSigningCheck(state, { clubId, playerId, seasonWage, seasonNumber: startsSeason, payrollBefore: summary.seasonWages + summary.reservedWages + nbaDeadMoney(state.employment, clubId, startsSeason), ...(openOffer ? { excludeOfferId: openOffer.id } : {}), inSeason: state.status === 'active' && current?.clubId !== clubId });
+        if (check.route) capRoute = check.route; else reason = check.reason;
+      }
+    }
     if (reason === null) for (let year = startsSeason; year <= endsSeason; year += 1) {
       const summary = summaryFor(year, openOffer?.clubId === clubId ? openOffer.id : undefined), size = summary.rosterSize + summary.reservedRosterSize + 1;
-      if (size > clubRosterLimit(state)) { reason = `The squad already has ${clubRosterLimitText(state)} contracted players for season ${year}.`; break; }
-      const reserveWage = summary.reserveWage;
+      if (size > clubRosterLimit(state, clubId)) { reason = `The squad already has ${clubRosterLimitText(state, clubId)} contracted players for season ${year}.`; break; }
+      const reserveWage = summary.reserveWage, minimumRoster = minRosterSize(state, clubId);
       const pendingShortfalls = pendingShortfallsFor(year, openOffer?.id, reserveWage);
       const proposalShortfall = competitive() && !resolving ? Math.max(0, reserveWage - seasonWage) : 0;
-      const reserve = Math.max(0, MIN_ROSTER_SIZE - size) * reserveWage + pendingShortfalls + proposalShortfall + outgoingFor(year);
+      const reserve = Math.max(0, minimumRoster - size) * reserveWage + pendingShortfalls + proposalShortfall + outgoingFor(year);
       // A cheap signing still needed for the minimum squad may use the season's highest allocation (format 72, see the summary).
-      const limit = size <= MIN_ROSTER_SIZE && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
-      if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > limit) { reason = `This offer exceeds the season ${year} wage budget after protecting space for eight players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
+      // Format 91: an NBA club may always sign the minimum contracts it needs for its 13 players, whatever its owner's ceiling.
+      const limit = capClub() && capRoute === 'minimum' && size <= minimumRoster ? Infinity : size <= minimumRoster && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
+      if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > limit) { reason = `This offer exceeds the season ${year} wage budget after protecting space for ${minRosterText(state, clubId)} players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
     }
-    return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }), ...(role === undefined ? {} : { role }) };
+    return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }), ...(role === undefined ? {} : { role }), ...(reason === null && capRoute ? { capRoute } : {}) };
   };
 }
 

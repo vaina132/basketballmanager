@@ -4,6 +4,7 @@ import { getCareerWage, type CareerPlayerContext } from './player-catalog';
 import { releaseFeeReason } from './release-clauses';
 import { maxContractWage, MIN_CONTRACT_WAGE } from './employment-policy';
 import { roleWage } from './contract-roles';
+import { nbaLateFreeAgentMinimum } from './nba-cap-policy';
 
 const WAGE_STEP = 50_000;
 export const NEGOTIATION_TERM_PREMIUMS = [0, 5, 10] as const;
@@ -14,7 +15,10 @@ export const RELEASE_CLAUSE_PREMIUM_CAP = 5;
  * older careers leaves it unchanged).
  */
 function roleBase(playerId: string, context: CareerPlayerContext, role: SquadRole | undefined): number {
-  return roleWage(getCareerWage(context, playerId), role, context);
+  const base = roleWage(getCareerWage(context, playerId), role, context);
+  // Format 91: late in the NBA's free agency an unsigned player accepts his minimum salary.
+  const late = nbaLateFreeAgentMinimum(context, playerId);
+  return late !== null && late < base ? late : base;
 }
 
 /** Uniform development contract rule, independent of hidden abilities or invented preferences. */

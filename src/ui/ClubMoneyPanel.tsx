@@ -3,7 +3,7 @@ import type { EconomyBand, EconomyChangeReason } from '../domain/world'
 import { economyChange, REAL_ECONOMY_RULES } from '../world/economy'
 import { worldOf } from '../world/career-world'
 import { seasonLabel } from '../world/season'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { Icon } from './Icon'
 
 export const ECONOMY_BAND_LABELS: Readonly<Record<EconomyBand, string>> = { 'euroleague-top': 'EuroLeague top group', euroleague: 'EuroLeague', 'top-upper': 'Top division, upper half', nba: 'NBA', 'top-lower': 'Top division, lower half', second: 'Second division', third: 'Third division' }
@@ -33,9 +33,9 @@ export function ClubMoneyPanel({ season }: { season: SeasonState }) {
     <header className="club-heading"><h2 id="club-money-title"><Icon name="wallet" size={18} />Club budget</h2><span>{seasonLabel(season.seasonNumber)}</span></header>
     <dl>
       <div><dt>Money level</dt><dd>{ECONOMY_BAND_LABELS[band]}</dd></div>
-      <div><dt>Budget this season</dt><dd>{formatEuros(budget)}</dd></div>
-      <div><dt>{previous ? `Change from ${seasonLabel(season.seasonNumber - 1)}` : 'Change'}</dt><dd data-club-money-change={difference}>{previous ? <>{difference > 0 ? '+' : difference < 0 ? '−' : ''}{formatEuros(Math.abs(difference))}{percent ? ` (${percent > 0 ? '+' : ''}${percent}%)` : ''}<small>{why}</small></> : <>Opening figures<small>Estimated from published club budgets</small></>}</dd></div>
+      <div><dt>Budget this season</dt><dd>{formatMoney(budget)}</dd></div>
+      <div><dt>{previous ? `Change from ${seasonLabel(season.seasonNumber - 1)}` : 'Change'}</dt><dd data-club-money-change={difference}>{previous ? <>{difference > 0 ? '+' : difference < 0 ? '−' : ''}{formatMoney(Math.abs(difference))}{percent ? ` (${percent > 0 ? '+' : ''}${percent}%)` : ''}<small>{why}</small></> : <>Opening figures<small>Estimated from published club budgets</small></>}</dd></div>
     </dl>
-    <details className="game-disclosure"><summary><Icon name="clock" size={15} />How the budget changes</summary><div className="club-note"><p>Each new season the club’s division, European competition and squad strength set the budget it is heading for{target !== budget ? `: ${formatEuros(target)} this season` : ''}. Sponsorship, season funding, ticket prices, staff costs and the player wages budget move {Math.round(REAL_ECONOMY_RULES.seasons.share * 100)}% of the way there each season, so promotion and relegation take effect over two or three seasons.</p><p>Signed contracts keep their agreed wages. New figures apply when the next season starts.</p></div></details>
+    <details className="game-disclosure"><summary><Icon name="clock" size={15} />How the budget changes</summary><div className="club-note"><p>Each new season the club’s division, European competition and squad strength set the budget it is heading for{target !== budget ? `: ${formatMoney(target)} this season` : ''}. Sponsorship, season funding, ticket prices, staff costs and the player wages budget move {Math.round(REAL_ECONOMY_RULES.seasons.share * 100)}% of the way there each season, so promotion and relegation take effect over two or three seasons.</p><p>Signed contracts keep their agreed wages. New figures apply when the next season starts.</p></div></details>
   </section>
 }

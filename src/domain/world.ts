@@ -26,7 +26,15 @@ export interface NbaConference { id: string; name: string; divisions: { id: stri
  * leagues, 30 clubs), its two conferences and six divisions, and the match rules it plays (`ruleset`). Its schedule,
  * standings and postseason follow `src/world/nba-schedule.ts`, `nba-ranking.ts` and the `nba-2026-1` postseason.
  */
-export interface NbaWorld { model: 'nba-1'; leagueId: string; conferences: NbaConference[]; ruleset: 'nba-2026' }
+export interface NbaWorld {
+  model: 'nba-1'; leagueId: string; conferences: NbaConference[]; ruleset: 'nba-2026';
+  /**
+   * NBA step 6 (format 91, new NBA worlds): the NBA's money rules (`src/world/nba-cap.ts`, `nba-cap-policy.ts`): the salary
+   * cap and its exceptions, rosters of 13-15, the luxury tax shared among non-payers and the owner's payroll ceiling.
+   * Format-90 NBA worlds without it keep the placeholder money of NBA step 4.
+   */
+  cap?: 'nba-cap-1';
+}
 /** Format 62 (sprint 4): money of real-club worlds follows researched 2025-27 club budgets (`src/world/economy.ts`). */
 export type WorldEconomyId = 'real-2026-1';
 /** The money level a club's figures were placed in (`REAL_ECONOMY_RULES`). */

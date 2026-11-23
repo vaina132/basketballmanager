@@ -10,7 +10,7 @@ import { Icon } from './Icon'
 import { scoutingDate } from './ScoutingKnowledge'
 import './facilities-panel.css'
 import './sponsorship-panel.css'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { worldOf } from '../world/career-world'
 import { clauseSummary, exitExplanation } from './sponsor-exit-text'
 
@@ -42,7 +42,7 @@ export function TerminationControl({ quote, contract, busy, onTerminate }: { quo
   </div>
 }
 
-const money = (amount: number) => formatEuros(amount)
+const money = (amount: number) => formatMoney(amount)
 const seasons = (from: number, count: number) => count === 1 ? seasonLabel(from) : `${seasonLabel(from)} – ${seasonLabel(from + count - 1)}`
 // Format 64: an agreement ended early covers only the seasons up to its exit.
 const covered = (agreement: SponsorshipAgreement) => seasons(agreement.startsSeason, agreementLastSeason(agreement) - agreement.startsSeason + 1)

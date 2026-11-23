@@ -6,11 +6,11 @@ import { getClubDebts, quoteBankLoan, type ClubDebts } from '../world/facility-f
 import { financeLedgerRows } from '../world/finance'
 import { Icon } from './Icon'
 import { scoutingDate } from './ScoutingKnowledge'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import './facility-financing.css'
 import './simple-facilities.css'
 
-const money = (amount: number) => formatEuros(amount)
+const money = (amount: number) => formatMoney(amount)
 const rate = (basisPoints: number) => `${(basisPoints / 100).toLocaleString('en-GB', { maximumFractionDigits: 2 })}%`
 const seasons = (value: number) => `${value} ${value === 1 ? 'season' : 'seasons'}`
 

@@ -4,9 +4,9 @@ import { getDevelopmentSponsor } from '../data/development-sponsors'
 import { worldOf } from '../world/career-world'
 import { objectiveBadMiss } from '../world/commercial-policy'
 import { seasonLabel } from '../world/season'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 
 export function ordinal(position: number): string {
   const tens = position % 100, ones = position % 10

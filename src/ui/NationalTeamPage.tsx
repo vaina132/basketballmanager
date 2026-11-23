@@ -4,7 +4,7 @@ import { worldOf } from '../world/career-world'
 import { isUnemployed } from '../world/career-rules'
 import { careerEarnings, nationalCoach, nationalPlayerPool, nationalTeam, pickNationalSquad, type NationalCandidate } from '../world/national'
 import { NATIONAL_RULES, nationalTournamentName, nationalWindowSaturday } from '../world/national-calendar'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { MoreInfo } from './MoreInfo'
 import { Nationality } from './Nationality'
 import { federationMood } from './national-inbox'
@@ -60,8 +60,8 @@ export function NationalTeamPage({ season, busy, onSelect, onResign, onOpenCompe
         <div><span>Federation</span><strong data-national-confidence={coach.confidence}>{federationMood(coach.confidence)} · {coach.confidence}/100</strong></div>
         <div><span>Next game</span><strong>{next ? `${nationalDate(next.date)} · ${next.homeTeamId === team.id ? 'v' : 'at'} ${opponent(next).name}` : 'None this season'}</strong></div>
         <div><span>Contract</span><strong>To the {tournamentShort(job.untilSeason)}</strong></div>
-        <div><span>Salary</span><strong>{formatEuros(job.salary)} a season · paid monthly</strong></div>
-        <div><span>Career earnings</span><strong data-national-earnings={earnings?.total ?? 0}>{formatEuros(earnings?.total ?? 0)}</strong></div>
+        <div><span>Salary</span><strong>{formatMoney(job.salary)} a season · paid monthly</strong></div>
+        <div><span>Career earnings</span><strong data-national-earnings={earnings?.total ?? 0}>{formatMoney(earnings?.total ?? 0)}</strong></div>
       </div>
       {isUnemployed(season) && <p className="muted national-panel-body">Without a club, you are still head coach in your national games: Continue stops for them and they open in the Match center.</p>}
       <div className="national-actions"><button className="button small" onClick={() => { if (globalThis.confirm?.(`Resign as head coach of ${team.name}? Your club job is not affected.`) ?? true) onResign() }} disabled={busy}>Resign</button></div>

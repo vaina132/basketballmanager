@@ -230,7 +230,8 @@ export interface DomesticDivisions {
 /** Format 87: weak clubs stay sustainable in new real-money careers (`world.economyBalance`, `src/world/economy-balance.ts`): league solidarity money, automatic facility spending by home games left, and automatic wage targets that follow the club's money when cash is low. */
 /** Format 88: rich clubs spend part of the cash above a healthy reserve in new real-money careers (`world.surplusSpending`, `src/world/surplus-spending.ts`): more wage room, a transfer budget, better staff and facilities, by each president's spending style. */
 /** Format 90 (NBA steps 3-5; 89 is reserved for the economy follow-ups): the NBA as a playable league in new careers (`world.nba`, option `nba`): its match rules, 82-game calendar, conference standings, play-in and playoffs. */
-export const SEASON_SCHEMA_VERSION = 90;
+/** Format 91 (NBA step 6; number provisional, the next free one above 90): NBA money in new NBA worlds (`world.nba.cap`): estimated NBA salaries and revenue, the salary cap with its exceptions (`capRoute` on contracts and offers), rosters of 13-15, the luxury tax (`luxury-tax`, `tax-share` ledger entries) and the owner's payroll ceiling and playoff aim. */
+export const SEASON_SCHEMA_VERSION = 91;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

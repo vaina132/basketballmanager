@@ -1,16 +1,19 @@
 import { archivedFinanceIndex, financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntries } from './finance-ledger';
-import type { BoardAnchor, BoardClubReview, BoardMandate, BoardRequest, BoardReview, BoardSummary, SeasonBoard } from '../domain/board';
+import type { BoardAnchor, BoardClubReview, BoardMandate, BoardPlayoffAim, BoardRequest, BoardReview, BoardSummary, SeasonBoard } from '../domain/board';
 import type { SeasonState } from '../domain/season';
 import type { FinanceEntry } from '../domain/finance';
 import { getFinanceBalance } from './finance';
 import { isRecovering } from './health';
 import { rosterForRound } from './rosters';
-import { dateForRound, europeanPlacesAfter, isRegularFixture } from './season';
+import { dateForRound, europeanPlacesAfter, isRegularFixture, nbaStandings } from './season';
+import { NBA_OWNER_RULES } from './nba-owner';
+import { usesNbaCap } from './nba-cap-policy';
+import { EUROPEAN_ENTRY_RULES } from './european-entry';
 import type { PlacesDayState } from './european-entry-day';
 import { getTransferPaymentSummary } from './transfer-payments';
 import { BOARD_VERDICT_EFFECTS, verdictForConfidence, verdictOnLine } from './board-consequences';
 import { governingDerby, RIVALRY_BOARD_CAP, RIVALRY_BOARD_POINTS } from './rivalries';
-import { roundKey, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
+import { isNbaClub, roundKey, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek } from './career-world';
 import { seasonLeagues } from './divisions';
 import { scaledMoney } from './economy';
 import { boardMediaEvidence, type BoardMediaEvidence } from './media';
@@ -100,6 +103,12 @@ export function buildBoardMandate<T extends BoardCalculationContext>(state: T, s
     const playerIds = rosterForRound(state.rosters, resource.clubId, state.round).players.map(player => player.id);
     return [resource.clubId, { ...mandate, targetWins: Math.ceil(games * rate), ...presidentMandate(state, { clubId: resource.clubId, seasonNumber: state.seasonNumber, date: state.date, games, tier: clubTier(resourceRank, rivals.length), playerIds }) }];
   })) };
+  // Format 91: an NBA owner's playoff aim, from the club's resource rank among the NBA's clubs.
+  if (usesNbaCap(state)) for (const [clubId, objective] of Object.entries(mandate.clubs)) {
+    if (!isNbaClub(worldOf(state), clubId)) continue;
+    const kind = objective.resourceRank <= NBA_OWNER_RULES.playoffsRank ? 'nba-playoffs' as const : objective.resourceRank <= NBA_OWNER_RULES.playInRank ? 'nba-play-in' as const : null;
+    mandate.clubs[clubId] = { ...objective, playoffs: kind ? { kind } : null };
+  }
   // Format 83: the board's European aim, from the club's place this season (or its league rank outside Europe).
   if (!usesEuropeanEntry(state.europe)) return mandate;
   const leagues = seasonLeagues(worldOf(state), (state as { divisions?: SeasonState['divisions'] }).divisions);
@@ -149,6 +158,7 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
   const rivalriesCount = !!from && roundKey(state.seasonNumber, state.round) >= roundKey(from.seasonNumber, from.round);
   // Format 83: the European aim's progress from the season's European games (and the places day at the last review).
   const europeAim = usesEuropeanEntry(state.europe) ? europeanAimProgress(state) : null;
+  const playoffAim = usesNbaCap(state) ? nbaPlayoffAimProgress(state) : null;
   for (const club of state.clubs) {
     const objective = mandate.clubs[club.id];
     if (!objective) throw new Error('Review a club with a communicated sporting objective.');
@@ -176,7 +186,8 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     // Format 70, board-2: youth and culture objectives count in the assessment; met or ignored requests move confidence.
     const president = usesPresidentBoard(state.board) ? presidentReview(state, mandate, club.id, games, played) : null;
     const europe = europeAim?.(club.id, objective) ?? null;
-    const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact + rivalryImpact + (mediaImpact ?? 0) + (debtImpact ?? 0) + (president?.youth?.impact ?? 0) + (president?.culture?.impact ?? 0) + (europe?.europeImpact ?? 0), 0, 100);
+    const playoffs = objective.playoffs ? playoffAim?.(club.id, objective.playoffs) ?? null : null;
+    const assessment = clamp(50 + resultsImpact + injuryRelief + financeImpact + rivalryImpact + (mediaImpact ?? 0) + (debtImpact ?? 0) + (president?.youth?.impact ?? 0) + (president?.culture?.impact ?? 0) + (europe?.europeImpact ?? 0) + (playoffs?.playoffsImpact ?? 0), 0, 100);
     // Format 63: a new coach's board starts from the fresh confidence recorded after the latest review.
     const previousConfidence = startingConfidence(state.board, club.id);
     // Format 70: the president's patience sets the most confidence can move in one review.
@@ -185,10 +196,33 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     const confidence = president && president.requestImpact !== null ? clamp(moved + president.requestImpact, 0, 100) : moved;
     clubs[club.id] = { fixtureIds: games.map(fixture => fixture.id), played, wins, targetPace: rounded(targetPace), carriedAbsences, rosterPlaces, unpaid, resultsImpact, injuryRelief, financeImpact, ...(rivalriesCount ? { rivalryImpact } : {}), ...(mediaImpact !== undefined ? { mediaImpact } : {}), ...(debtImpact !== undefined ? { debtImpact } : {}),
       ...(president?.youth ? { youthProgress: president.youth.progress, youthImpact: president.youth.impact } : {}), ...(president?.culture ? { cultureProgress: president.culture.progress, cultureImpact: president.culture.impact } : {}), ...(president && president.requestImpact !== null ? { requestImpact: president.requestImpact } : {}),
-      ...(europe ?? {}), assessment, previousConfidence, confidence };
+      ...(europe ?? {}), ...(playoffs ?? {}), assessment, previousConfidence, confidence };
   }
   // A review follows its week's commit, so that week counts as completed even when it had no game (format 57).
   return { ...boardEventAnchor(state), completedRounds: roundOrdinal(state.seasonNumber, state.round, seasonRounds(state)), id: `board-review-${state.board.reviews.length + 1}`, mandateId: mandate.id, clubs };
+}
+
+/**
+ * Format 91: an NBA playoff aim's progress at a review. Open while the NBA's regular season runs; then the play-in aim
+ * is met by a top-ten conference place, and the playoff aim by a top-six place or by reaching the first round through
+ * the play-in (missed once the first round is complete without the club). A met aim adds the European aim's board
+ * points (`EUROPEAN_ENTRY_RULES.boardPoints`), a missed one takes them away.
+ */
+function nbaPlayoffAimProgress(state: BoardCalculationContext): (clubId: string, aim: BoardPlayoffAim) => { playoffsProgress: 'open' | 'met' | 'missed'; playoffsImpact: number } {
+  const world = worldOf(state), nba = world.nba!, points = EUROPEAN_ENTRY_RULES.boardPoints;
+  const result = (status: 'open' | 'met' | 'missed') => ({ playoffsProgress: status, playoffsImpact: status === 'met' ? points : status === 'missed' ? -points : 0 });
+  const games = state.fixtures.filter(fixture => isRegularFixture(fixture) && isNbaClub(world, fixture.homeClubId));
+  const done = games.length > 0 && games.every(fixture => fixture.result);
+  const tables = done ? nbaStandings(world, state.fixtures) : null;
+  const firstRound = new Set(state.fixtures.filter(fixture => fixture.stage === 'round-of-16' && isNbaClub(world, fixture.homeClubId)).flatMap(fixture => [fixture.homeClubId, fixture.awayClubId]));
+  return (clubId, aim) => {
+    if (!tables) return result('open');
+    const conference = nba.conferences.find(item => item.divisions.some(division => division.clubIds.includes(clubId)));
+    const place = conference ? (tables.conferences[conference.id] ?? []).findIndex(row => row.clubId === clubId) + 1 : 0;
+    if (aim.kind === 'nba-play-in') return result(place >= 1 && place <= 10 ? 'met' : 'missed');
+    if (place >= 1 && place <= 6 || firstRound.has(clubId)) return result('met');
+    return result(place > 10 || firstRound.size >= 16 ? 'missed' : 'open');
+  };
 }
 
 /** Format 70: one club's youth and culture progress and its settled requests at a review. */

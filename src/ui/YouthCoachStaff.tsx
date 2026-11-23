@@ -13,7 +13,7 @@ import { Icon } from './Icon'
 import './youth-staff.css'
 import { seasonRounds } from '../world/career-world'
 import { YOUTH_COACH_DIRECTORY } from '../data/staff-directory'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { staffFee } from '../world/economy'
 import { StaffNationality } from './Nationality'
 
@@ -27,7 +27,7 @@ export interface YouthCoachStaffProps extends StaffCandidateControls {
   onOpenAcademy: () => void
 }
 
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 const coachById = (id: string) => YOUTH_COACH_DIRECTORY.find(coach => coach.id === id)!
 
 function YouthSkills({ coach }: { coach: YouthCoach }) {

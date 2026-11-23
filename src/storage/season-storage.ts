@@ -1,4 +1,6 @@
-import { clubRosterLimit, clubSalaryBudget, clubSalaryCeiling, usesFullClubRoster } from '../world/club-roster-policy';
+import { clubRosterLimit, clubSalaryBudget, clubSalaryCeiling, isCapClub, minRosterSize, usesFullClubRoster } from '../world/club-roster-policy';
+import { NBA_CAP_ROUTES, NBA_LOWEST_MINIMUM, type NbaCapRoute } from '../world/nba-cap';
+import { nbaRegularSeasonEndRound, nbaTaxBills } from '../world/nba-cap-policy';
 import { seasonSalaryCeiling, staffAllocationCeiling } from '../world/board-consequences';
 import { usesWagePool } from '../world/wage-pool';
 import { usesClubLevelStaff } from '../world/staff-levels';
@@ -60,7 +62,7 @@ import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness';
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios';
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
-import { clubHasAcademy, clubsEverInFullWorld, fixtureRuleset, fullWorldClubs, fullWorldClubsIn, isMemberList, isWorldClub, playsAtNeutralVenue, roundKey, roundOrdinal, seasonRounds, validateWorld, worldOf, worldPlayer, worldRounds } from '../world/career-world';
+import { isNbaClub, clubHasAcademy, clubsEverInFullWorld, fixtureRuleset, fullWorldClubs, fullWorldClubsIn, isMemberList, isWorldClub, playsAtNeutralVenue, roundKey, roundOrdinal, seasonRounds, validateWorld, worldOf, worldPlayer, worldRounds } from '../world/career-world';
 import type { CareerWorld, SeasonEconomy, WorldContext } from '../domain/world';
 import { getCareerPlayers, getCareerPlayer, getCareerWage, type CareerPlayerContext } from '../world/player-catalog';
 import { MAX_MATCH_PERIODS } from '../engine/match';
@@ -144,7 +146,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -2013,7 +2015,9 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
   for (const [index, value] of fields.contracts.entries()) {
     if (index < contractPlan.skip) { const trusted = value as EmploymentContract; previousBoundary = roundKey(trusted.signedSeason, trusted.signedRound); validated.push(trusted); continue; }
     const path = `employment.contracts[${index}]`;
-    const raw = record(value, path, ['id', 'playerId', 'clubId', 'startsSeason', 'endsSeason', 'seasonWage', 'signedSeason', 'signedRound', 'kind', ...(version >= 18 ? ['startsRound'] : []), ...optionalClauseKeys(value, version, ['releaseFee']), ...roleKeys(value, context)]);
+    const raw = record(value, path, ['id', 'playerId', 'clubId', 'startsSeason', 'endsSeason', 'seasonWage', 'signedSeason', 'signedRound', 'kind', ...(version >= 18 ? ['startsRound'] : []), ...optionalClauseKeys(value, version, ['releaseFee']), ...roleKeys(value, context), ...(version >= 91 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'capRoute') ? ['capRoute'] : [])]);
+    // Format 91: an NBA club's cap route, on its own signings only.
+    if (Object.hasOwn(raw, 'capRoute') && (!NBA_CAP_ROUTES.includes(raw.capRoute as NbaCapRoute) || !isCapClub(context, raw.clubId as string) || raw.kind === 'initial' || raw.kind === 'joined')) fail(`employment.contracts[${index}].capRoute`, 'must name the cap route of an NBA club\'s signing');
     const entry = version < 18 ? { ...raw, startsRound: 1 } : raw;
     if (entry.id !== `employment-contract-${index + 1}`) fail(`${path}.id`, 'must use sequential contract identities');
     const player = catalogById.get(entry.playerId as string)?.player;
@@ -2031,7 +2035,8 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     if (!midseason && startsRound !== 1) fail(`${path}.startsRound`, 'must preserve opening-day registration for ordinary contracts');
     validateOptionalRole(entry, path);
     // relationships-3: a smaller role offered lowers the player's demand (`SQUAD_ROLE_RULES.contracts`).
-    const seasonWage = number(entry.seasonWage, `${path}.seasonWage`, roleWage(getCareerWage(context, player.id), entry.role as EmploymentContract['role'], context), maxContractWage(context));
+    // Format 91: an NBA signing may be a late free agent's minimum salary (`nbaLateFreeAgentMinimum`), never below the rookie minimum.
+    const seasonWage = number(entry.seasonWage, `${path}.seasonWage`, Object.hasOwn(entry, 'capRoute') ? Math.min(NBA_LOWEST_MINIMUM, roleWage(getCareerWage(context, player.id), entry.role as EmploymentContract['role'], context)) : roleWage(getCareerWage(context, player.id), entry.role as EmploymentContract['role'], context), maxContractWage(context));
     if (seasonWage % WAGE_STEP !== 0) fail(`${path}.seasonWage`, 'must use supported wage increments');
     validateOptionalReleaseFee(entry, path, context);
     if (index < catalog.length) {
@@ -2079,7 +2084,9 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
       const annual = effectiveContractsForSeason(prefixEmployment(undefined, index), year).filter(contract => contract.clubId === entry.clubId);
       const wages = annual.reduce((sum, contract) => sum + contract.seasonWage, 0);
       // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow.
-      if (annual.length > clubRosterLimit(context) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)) + pooledStaffRoom(entry.clubId as string, year) + surplusRoom(Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+      // Format 91: an NBA club's minimum contracts it needs for its 13 players fit whatever its owner's ceiling (as the guard allows).
+      if (entry.capRoute === 'minimum' && annual.length <= minRosterSize(context, entry.clubId as string)) { if (annual.length > clubRosterLimit(context, entry.clubId as string)) fail(path, 'must fit the club\'s squad limit'); continue; }
+      if (annual.length > clubRosterLimit(context, entry.clubId as string) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)) + pooledStaffRoom(entry.clubId as string, year) + surplusRoom(Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
   }
   const employment = normalized;
@@ -2094,7 +2101,8 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     for (let at = 1; at <= (year === seasonNumber ? round : seasonRounds(context)); at += 1) {
       if (roundKey(year, at) < checkedBefore) continue;
       const registrations = effectiveContractsForRound(employment, year, at).filter(contract => contract.clubId === clubId);
-      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context) || registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > Math.max(ceiling, seasonSalaryCeiling(context, clubId, year)) + pooledStaffRoom(clubId, year) + surplusRoom(Math.max(ceiling, seasonSalaryCeiling(context, clubId, year)))) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
+      // Format 91: an NBA club's payroll follows the cap rules (opening payrolls may stand above the owner's ceiling).
+      if (registrations.length < MIN_ROSTER_SIZE || registrations.length > clubRosterLimit(context, clubId) || !isCapClub(context, clubId) && registrations.reduce((sum, contract) => sum + contract.seasonWage, 0) > Math.max(ceiling, seasonSalaryCeiling(context, clubId, year)) + pooledStaffRoom(clubId, year) + surplusRoom(Math.max(ceiling, seasonSalaryCeiling(context, clubId, year)))) fail('employment.contracts', 'must retain a legal squad and salary allocation at every registration boundary');
     }
   }
   // Clubs leaving the full world sit out the window; joining clubs' squads sign at the rollover (step 3.4d-2).
@@ -3031,6 +3039,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   let previousDate = roundKey(firstYear, firstRound), entryYear = firstYear, yearIndex = 0;
   const operatingClubs = new Set<string>();
   let payrollStarted = false;
+  const taxEntries = new Map<number, { round: number; count: number; expected: number }>();
   // Incremental checkpoint checks (`trusted-prefix.ts`): entries booked before the trusted checkpoint's week are unchanged
   // and their recomputed gates and upkeep were checked by it. Every entry still runs the ledger's order, balance and
   // requirement bookkeeping below; only those two recomputations are skipped for trusted entries.
@@ -3050,7 +3059,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     }
     if (calendar !== previousDate) { operatingClubs.clear(); payrollStarted = false; }
     previousDate = calendar;
-    if (!['opening', 'sponsor', 'operations', 'tickets', 'coaching', ...(version >= 21 ? ['scouting'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['youth'] : []), ...(version >= 28 ? ['facility', 'facility-upkeep'] : []), ...(version >= 32 ? ['board-capital'] : []), ...(version >= 64 ? ['naming-rights', 'sponsor-exit'] : []), ...(version >= 71 ? ['loan', 'loan-repayment', 'lease'] : []), ...(staffContracts ? ['staff-wages', 'staff-compensation'] : []), ...(payroll ? ['payroll'] : []), ...(employment?.transfers ? ['transfer'] : []), ...(employment?.buyouts ? ['buyout'] : [])].includes(entry.kind as string)) fail(`${path}.kind`, 'is unsupported');
+    if (!['opening', 'sponsor', 'operations', 'tickets', 'coaching', ...(version >= 21 ? ['scouting'] : []), ...(version >= 22 ? ['fitness'] : []), ...(version >= 23 ? ['physio'] : []), ...(version >= 24 ? ['assistant'] : []), ...(version >= 25 ? ['youth'] : []), ...(version >= 28 ? ['facility', 'facility-upkeep'] : []), ...(version >= 32 ? ['board-capital'] : []), ...(version >= 64 ? ['naming-rights', 'sponsor-exit'] : []), ...(version >= 71 ? ['loan', 'loan-repayment', 'lease'] : []), ...(staffContracts ? ['staff-wages', 'staff-compensation'] : []), ...(payroll ? ['payroll'] : []), ...(employment?.transfers ? ['transfer'] : []), ...(employment?.buyouts ? ['buyout'] : []), ...(version >= 91 && world?.nba?.cap ? ['luxury-tax', 'tax-share'] : [])].includes(entry.kind as string)) fail(`${path}.kind`, 'is unsupported');
     const kind = entry.kind as FinanceEntry['kind'];
     if (kind !== 'scouting' && Object.hasOwn(entry, 'scout')) fail(`${path}.scout`, 'must be absent from other financial events');
     if (kind !== 'fitness' && Object.hasOwn(entry, 'fitness')) fail(`${path}.fitness`, 'must be absent from other financial events');
@@ -3262,6 +3271,15 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
       const balance = balances.get(entry.clubId)!;
       const transferReserve = (employment?.transfers ?? []).filter(transfer => transfer.toClubId === entry.clubId && paidTransferTotals.has(transfer.id)).reduce((sum, transfer) => sum + transfer.fee - paidTransferTotals.get(transfer.id)!, 0);
       if (!fullStaff && (balance.unpaid > 0 || !staffContracts && balance.cash < -amount + wageReserve(year, entry.clubId, index, entryRound) + transferReserve + recruitmentReserve(year, entry.clubId, index))) fail(path, 'cannot hire or renew a coach without sufficient cash, settled obligations, reserved player wages and agreed transfer installments');
+    } else if (kind === 'luxury-tax' || kind === 'tax-share') {
+      // Format 91: the luxury tax at the end of the NBA's regular season, and the equal shares of the clubs that paid none.
+      if (entry.ticket !== null || entry.coach !== null || !world?.nba || !employment || !isNbaClub(world, entry.clubId) || entry.sourceId !== `${kind}-s${year}`) fail(path, 'must be an NBA club\'s luxury tax or tax share of its season');
+      if (year === seasonNumber && entryRound !== nbaRegularSeasonEndRound({ world, fixtures })) fail(path, 'must be booked in the NBA\'s last regular-season week');
+      const bills = nbaTaxBills({ world, employment, fixtures: [], seasonNumber: year }, entryRound), bill = bills.bills.find(item => item.clubId === entry.clubId);
+      if (kind === 'luxury-tax' ? !bill || bill.tax <= 0 || amount !== -bill.tax : bills.share <= 0 || !bills.receivers.includes(entry.clubId) || amount !== bills.share) fail(path, 'must charge the exact luxury tax on the payroll, or pay the exact equal share of a club that paid none');
+      const counted = taxEntries.get(year) ?? { round: entryRound, count: 0, expected: bills.bills.filter(item => item.tax > 0).length + (bills.share > 0 ? bills.receivers.length : 0) };
+      if (counted.round !== entryRound) fail(path, 'must book the season\'s luxury tax in one week');
+      counted.count += 1; taxEntries.set(year, counted);
     } else if (kind === 'staff-wages' || kind === 'staff-compensation') {
       // Format 76: weekly staff salaries (checked against the contracts of the current season) and sacking compensation.
       if (entry.ticket !== null || entry.coach !== null || amount >= 0) fail(path, 'must be a staff salary or compensation payment');
@@ -3307,6 +3325,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     if (kind === 'operations') operatingClubs.add(entry.clubId);
     if (kind === 'payroll' && (entry.payroll as PayrollCharge | null)?.type === 'installment') payrollStarted = true;
   }
+  for (const [year, counted] of taxEntries) if (counted.count !== counted.expected) fail('finance.ledger', `must book every luxury tax and tax share of season ${year}`);
   if (required.size) { if ((globalThis as { DEBUG_FIN?: (keys: string[]) => void }).DEBUG_FIN) (globalThis as unknown as { DEBUG_FIN: (keys: string[]) => void }).DEBUG_FIN([...required.keys()]); fail('finance.ledger', 'is missing required calendar financial events'); }
   for (const contract of coaching.contracts) if (!coachOrigins.has(contract.id)) fail('finance.ledger', 'must retain the fee for every current-year coaching contract, including releases');
 }
@@ -3568,6 +3587,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Format 88: rich clubs' surplus spending is a rule of new careers only.
   if (version < 88 && Object.hasOwn(world, 'surplusSpending')) fail('world.surplusSpending', 'requires format 88 or later');
   // Format 90: the NBA (its league, standings rule and postseason) is a rule of new careers only.
+  if (version < 91 && world.nba && Object.hasOwn(world.nba, 'cap')) fail('world.nba.cap', 'requires format 91 or later');
   if (version < 90 && (Object.hasOwn(world, 'nba') || world.domesticLeagues?.some(league => league.postseason === 'nba-2026-1'))) fail('world.nba', 'requires format 90 or later');
   // Format 63: the career-2 rules (protected first season, fresh confidence, mid-season moves, resignations) need it.
   const careerModel = state.career !== null && typeof state.career === 'object' ? (state.career as { model?: unknown }).model : undefined;

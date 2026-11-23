@@ -5,7 +5,7 @@ import { injuryLabel } from '../domain/injuries'
 import { NATIONAL_RULES, nationalTournamentName, nationalWindowDays } from '../world/national-calendar'
 import { isUnemployed } from '../world/career-rules'
 import { addCalendarDays } from '../world/competition-calendar'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { medicalDate } from './SeasonMedicalReport'
 
 const WINDOW_NAMES: Record<number, string> = { 1: 'November window', 2: 'February window', 3: 'summer tournament' }
@@ -26,7 +26,7 @@ export function nationalInboxItems(season: SeasonState): InboxItem[] {
   const items: InboxItem[] = [], name = (teamId: string) => nationalTeam(national, teamId).name
   for (const offer of national.offers) {
     const team = nationalTeam(national, offer.teamId), open = offer.status === 'open' && offer.expiresOn >= season.date
-    const contract = `The contract runs to the end of the ${nationalTournamentName(season.seasonNumber + NATIONAL_RULES.contractSeasons - 1).replace(/ \(.*\)$/u, '')} summer; salary ${formatEuros(NATIONAL_RULES.salary[team.level])} a season, paid monthly by the federation into your career earnings (it does not enter club budgets).`
+    const contract = `The contract runs to the end of the ${nationalTournamentName(season.seasonNumber + NATIONAL_RULES.contractSeasons - 1).replace(/ \(.*\)$/u, '')} summer; salary ${formatMoney(NATIONAL_RULES.salary[team.level])} a season, paid monthly by the federation into your career earnings (it does not enter club budgets).`
     items.push({
       id: offer.id, date: offer.date, category: 'board', target: 'national', offerId: offer.id, needsAction: open,
       title: open ? `Job offer · ${team.name} national team` : offer.status === 'accepted' ? `You accepted ${team.name}'s offer` : `${team.name}'s offer ${offer.status === 'declined' ? 'declined' : 'expired'}`,

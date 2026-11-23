@@ -1,3 +1,4 @@
+import { minRosterSize } from '../world/club-roster-policy'
 import { getPlayerRetirement } from '../world/lifecycle-policy'
 import { rulesOf } from '../engine/rulesets'
 import { awaitsContractReply, getClubContractRequests, getSquadRelationships } from '../world/relationships'
@@ -28,7 +29,7 @@ import { getPayrollReserve } from '../world/payroll'
 import { getTransferPaymentSummary } from '../world/transfer-payments'
 import { getInSeasonOffers } from '../world/recruitment-policy'
 import { getLiveMarketOffers, getMarketOffers, getMarketWindow, getNextMarketDate, isMarketActive } from '../world/market-policy'
-import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE } from '../world/employment-policy'
+import { contractForSeason, getClubContractSummary } from '../world/employment-policy'
 import { medicalDate } from './SeasonMedicalReport'
 import type { MatchState, Side } from '../domain/types'
 import { isPlayerEligible } from '../engine/match'
@@ -38,7 +39,7 @@ import { StaminaMeter } from './StaminaMeter'
 import { TeamInstructions } from './TeamInstructions'
 import './manager-desk.css'
 import { presidentTitle, seasonRounds, worldOf } from '../world/career-world'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { ClubBadge } from './ClubLogo'
 import { clubHeadCoach, MANAGER_COACH } from '../world/head-coaches'
 import { styleWords } from '../world/coach-ratings'
@@ -70,7 +71,7 @@ interface ManagerDeskProps {
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
 const period = (value: number) => value <= 4 ? `Q${value}` : `OT${value - 4}`
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 
 /** Format 82: the opponent's head coach and his style in a few words (real head coaches only). */
 function OpponentCoach({ season, clubId }: { season?: SeasonState | null; clubId: string }) {
@@ -160,7 +161,7 @@ export function ManagerDesk({ match, assistant, onOpenAssistantAdvice, season, m
   if (season?.employment.enabledSince) {
     const nextSquad = getClubContractSummary(season, season.managedClubId)
     const expiring = team.players.filter(player => (getPlayerRetirement(season, player.id).notice?.lastSeason ?? Infinity) > season.seasonNumber && !contractForSeason(season.employment, player.id, season.seasonNumber + 1)).length
-    if (season.status === 'complete') notices.push({ key: 'offseason', title: 'Prepare next season’s squad', detail: `${nextSquad.rosterSize} players signed for next season. ${Math.max(0, MIN_ROSTER_SIZE - nextSquad.rosterSize)} more needed to reach the minimum squad.`, urgent: nextSquad.rosterSize < MIN_ROSTER_SIZE, action: 'Review offseason', open: onOpenTransfers })
+    if (season.status === 'complete') notices.push({ key: 'offseason', title: 'Prepare next season’s squad', detail: `${nextSquad.rosterSize} players signed for next season. ${Math.max(0, minRosterSize(season, season.managedClubId) - nextSquad.rosterSize)} more needed to reach the minimum squad.`, urgent: nextSquad.rosterSize < minRosterSize(season, season.managedClubId), action: 'Review offseason', open: onOpenTransfers })
     else if (expiring) notices.push({ key: 'contracts', title: `${expiring} contracts awaiting renewal`, detail: 'Unrenewed players leave at the end of this season. Renewals take effect next season.', action: 'Review contracts', open: onOpenContracts ?? onOpenTransfers })
   }
   if (season?.lifecycle.enabledSince) {

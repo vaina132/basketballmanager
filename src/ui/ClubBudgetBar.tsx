@@ -12,7 +12,7 @@ import { staffWageReserve, usesStaffContracts } from '../world/staff-contracts'
 import { seasonLabel } from '../world/season'
 import { Icon } from './Icon'
 import './club-budget-bar.css'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 
 interface ClubBudgetBarProps {
   season: SeasonState
@@ -21,7 +21,7 @@ interface ClubBudgetBarProps {
   onOpenStaff: () => void
   onOpenTransfers: () => void
 }
-const money = (value: number) => formatEuros(value, true)
+const money = (value: number) => formatMoney(value, true)
 const signedPercent = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value)}%`
 /** Format 70: how the board's season verdict set a salary budget, for the budget details. */
 function salaryBasisText(basis: SalaryBudgetBasis): string | null {

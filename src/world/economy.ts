@@ -9,7 +9,10 @@ import { overallRating } from './overall-rating';
 import { STAFF_BUDGET } from './staff-constants';
 import { clubCountry, fullWorldClubsIn, worldOf } from './career-world';
 import { seasonLeagues } from './divisions';
-import { NBA_BUDGET_EUROS, NBA_ECONOMY, NBA_MAXIMUM_WAGE, NBA_MINIMUM_WAGE, nbaPlayerBill, usdToEur } from './nba-economy';
+import { NBA_BUDGET_EUROS, NBA_ECONOMY, NBA_MAXIMUM_WAGE, NBA_MINIMUM_WAGE, nbaPayrollTarget, nbaPlayerBill, nbaRevenueEuros, nbaSquadWages, usdToEur } from './nba-economy';
+import { NBA_LOWEST_MINIMUM } from './nba-cap';
+import { nbaOwnerCeiling } from './nba-owner';
+import { playerAgeOnDate } from '../data/development-player-profiles';
 
 /**
  * Realistic money for real-club worlds (sprint 4, format 62). Every number below is a rule the owner can adjust; the
@@ -305,6 +308,8 @@ export function staffFee(context: WorldContext | undefined, clubId: string, fee:
 export function benchWage(context: WorldContext | undefined, clubId: string): number | null {
   const economy = clubEconomy(context, clubId);
   if (!economy || !context?.world) return null;
+  // Format 91: an NBA club's cheapest player earns the rookie minimum salary.
+  if (economy.band === 'nba' && context.world.nba?.cap) return NBA_LOWEST_MINIMUM;
   return Math.round(REAL_ECONOMY_RULES.benchFloor[economy.band] * bandFor(REAL_ECONOMY_RULES.costPerNet, moneyCountry(context.world, clubId)) * CENTS / 50_000) * 50_000;
 }
 const moneyCountries = new WeakMap<CareerWorld, Map<string, string>>();
@@ -500,7 +505,7 @@ function gateFor(place: EconomyPlace, band: EconomyBand, g: number): { capacity:
  * funding that balance the budget with the expected gate, the player wage bill, operating costs, opening cash and the
  * scale for catalog amounts.
  */
-function clubFigures(band: EconomyBand, place: EconomyPlace, competition: EuropeanCompetition | undefined, budget: number, gate: { capacity: number; referenceDemand: number; ticketPrice: number }): { economy: ClubEconomy; playerBill: number } {
+function clubFigures(band: EconomyBand, place: EconomyPlace, competition: EuropeanCompetition | undefined, budget: number, gate: { capacity: number; referenceDemand: number; ticketPrice: number }, nbaBill?: number): { economy: ClubEconomy; playerBill: number } {
   const rules = REAL_ECONOMY_RULES, { capacity, referenceDemand, ticketPrice } = gate;
   // Expected gate income: delegated pricing sells out at the price where the usual crowd fills the arena.
   const kind = competition?.kind ?? null;
@@ -511,7 +516,8 @@ function clubFigures(band: EconomyBand, place: EconomyPlace, competition: Europe
   const sponsorship = Math.round(budget * mix.sponsorship / 100 / 10_000) * 10_000;
   const funding = Math.max(0, Math.round((budget - sponsorship - tickets) / 10_000) * 10_000);
   // Costs: player wages, the staff allocation (head coach and support staff), a reserve and operating costs.
-  const playerBill = playerBillOf({ band, budget });
+  // Format 91: an NBA club plans its money on its owner's payroll ceiling (`nba-owner.ts`).
+  const playerBill = nbaBill ?? playerBillOf({ band, budget });
   const wageBill = band === 'nba' ? playerBill * 100 / (100 - rules.headCoachPercent) : budget * rules.wageShare[band] / 100;
   const staff = wageBill * rules.headCoachPercent / 100 + budget * rules.supportStaffPercent / 100;
   const operatingCost = Math.max(0, Math.round((budget - playerBill - staff - budget * rules.reservePercent / 100) / 10_000) * 10_000);
@@ -550,11 +556,15 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
     const clubId = definition.clubId, item = layout.place.get(clubId)!, own = layout.band.get(clubId)!;
     const club = world.clubs.find(entry => entry.id === clubId)!;
     // A published budget replaces the strength placement (the band stays the competition's).
-    const budget = budgetCents(knownClubBudget(club.name) ?? placedBudget(own, item.country, layout.budgetT.get(clubId)!));
+    // Format 91 (`world.nba.cap`): an NBA club's revenue follows its market and its money plans on its owner's ceiling.
+    const capped = own === 'nba' && !!world.nba?.cap;
+    const budget = budgetCents(capped ? nbaRevenueEuros(club.name) : knownClubBudget(club.name) ?? placedBudget(own, item.country, layout.budgetT.get(clubId)!));
     const gate = gateFor(item, own, layout.gateT.get(clubId)!);
-    const { economy, playerBill } = clubFigures(own, item, layout.competition.get(clubId), budget, gate);
+    const { economy, playerBill } = clubFigures(own, item, layout.competition.get(clubId), budget, gate, capped ? nbaOwnerCeiling(world, clubId) : undefined);
     const floor = rules.benchFloor[own] * bandFor(rules.costPerNet, item.country) * CENTS;
-    Object.assign(wages, shareWageBill(club.players, playerBill, floor, new Set(club.players.filter(player => world.playerProfiles[player.id]?.source === 'generated').map(player => player.id)), own === 'nba' ? NBA_MAXIMUM_WAGE : undefined, own === 'nba' ? NBA_ECONOMY.wageRanks : undefined));
+    // Format 91: NBA salaries estimated from rating, age and role, summing to the payroll shaped on the club's published one.
+    if (capped) Object.assign(wages, nbaSquadWages(club.players, nbaPayrollTarget(club.name), playerId => playerAgeOnDate(world.playerProfiles[playerId]?.dateOfBirth, NBA_WAGE_AGE_DATE)));
+    else Object.assign(wages, shareWageBill(club.players, playerBill, floor, new Set(club.players.filter(player => world.playerProfiles[player.id]?.source === 'generated').map(player => player.id)), own === 'nba' ? NBA_MAXIMUM_WAGE : undefined, own === 'nba' ? NBA_ECONOMY.wageRanks : undefined));
     // NBA step 4: an arena's known seats (from the pack) stay, with the usual crowd at the NBA's fill.
     const seats = own === 'nba' ? knownCapacity?.(clubId) ?? null : null;
     if (seats !== null) return { ...definition, capacity: seats, referenceDemand: Math.round(seats * NBA_ECONOMY.gate.fill / 100) * 100, economy };
@@ -564,6 +574,9 @@ export function withRealEconomy(world: CareerWorld, countryOf: (clubId: string) 
   const presidents: DevelopmentPresident[] = world.presidents.map((president, index) => ({ ...president, seasonCapital: Math.max(10_000, Math.round(capitals[index % capitals.length]! * scaleOf.get(president.clubId)! / PER_MILLE / 10_000) * 10_000) }));
   return { ...world, economy: rules.id, wages: { ...world.wages, ...wages }, finances, presidents };
 }
+
+/** NBA step 6: ages for estimated NBA salaries are taken at the 2026-27 season's opening. */
+const NBA_WAGE_AGE_DATE = '2026-10-01';
 
 /** Bands from the smallest to the largest money level: the direction of a change between seasons. */
 const BAND_RANK: Readonly<Record<EconomyBand, number>> = Object.freeze({ third: 0, second: 1, 'top-lower': 2, 'top-upper': 3, euroleague: 4, 'euroleague-top': 5, nba: 6 });
@@ -647,13 +660,14 @@ export function computeEconomySeasons(context: EconomySeasonsContext, next?: Eco
       const clubId = club.id, item = layout.place.get(clubId)!, band = layout.band.get(clubId)!, prior = latest.get(clubId)!;
       const opening = openingEconomy(world, clubId)!, known = knownClubBudget(names.get(clubId)!);
       // A published budget describes the club at its opening level; elsewhere the strength placement applies.
-      let budget = budgetCents(known !== null && band === opening.band ? known : placedBudget(band, item.country, layout.budgetT.get(clubId)!));
+      const capped = band === 'nba' && !!world.nba?.cap;
+      let budget = budgetCents(capped ? nbaRevenueEuros(names.get(clubId)!) : known !== null && band === opening.band ? known : placedBudget(band, item.country, layout.budgetT.get(clubId)!));
       if (BAND_RANK[band] < BAND_RANK[prior.band]) budget = Math.min(budget, prior.budget);
       else if (BAND_RANK[band] > BAND_RANK[prior.band]) budget = Math.max(budget, prior.budget);
       // The club's own arena and usual crowd, at its new league's ticket yield.
       const definition = definitions.get(clubId)!;
       const gate = { capacity: definition.capacity, referenceDemand: definition.referenceDemand, ticketPrice: gateFor(item, band, layout.gateT.get(clubId)!).ticketPrice };
-      const target = clubFigures(band, item, layout.competition.get(clubId), budget, gate);
+      const target = clubFigures(band, item, layout.competition.get(clubId), budget, gate, capped ? nbaOwnerCeiling(world, clubId) : undefined);
       const before = previous.place.get(clubId)!;
       const sponsorship = Math.max(0, move(prior.sponsorship, target.economy.sponsorship, 10_000));
       // Money gaps fix: a season's main sponsorship deal is priced a season earlier, so when the sponsorship figure rises

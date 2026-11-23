@@ -1,7 +1,8 @@
 import type { EmploymentBuyout } from '../domain/employment';
 import type { SeasonState } from '../domain/season';
 import { getCareerPlayers } from './player-catalog';
-import { contractForSeason, effectiveContractsForSeason, getClubContractSummary, MIN_ROSTER_SIZE } from './employment-policy';
+import { contractForSeason, effectiveContractsForSeason, getClubContractSummary } from './employment-policy';
+import { minRosterSize, minRosterText } from './club-roster-policy';
 import { getFinanceBalance, recordContractBuyout } from './finance';
 import { addMarketDays, getLiveMarketOffers, getMarketWindow, isCompetitiveMarket, isMarketActive } from './market-policy';
 import { getSpendableCash } from './payroll-policy';
@@ -57,11 +58,11 @@ export function quoteContractBuyout(state: SeasonState, playerId: string, clubId
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before buying out a contract.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before buying out a contract.';
   else if (cash < amount) reason = 'The buyout exceeds your Spending left after protecting salaries and transfer commitments.';
-  else if (rosterSizeAfter < MIN_ROSTER_SIZE && addMarketDays(state.date, 1) > window.closesOn) reason = 'Keep a reply day available to sign a replacement before recruitment closes.';
+  else if (rosterSizeAfter < minRosterSize(state, clubId) && addMarketDays(state.date, 1) > window.closesOn) reason = 'Keep a reply day available to sign a replacement before recruitment closes.';
   if (reason === null) for (let year = startsSeason; year <= endsSeason; year += 1) {
     const summary = getClubContractSummary(after, clubId, year);
     if (summary.seasonWages + summary.reservedWages + summary.minimumReserve > summary.budget) {
-      reason = `The buyout would leave too little wages budget to complete an eight-player squad in season ${year}.`;
+      reason = `The buyout would leave too little wages budget to complete a ${minRosterText(state, clubId)}-player squad in season ${year}.`;
       break;
     }
   }

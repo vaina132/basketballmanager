@@ -13,7 +13,7 @@ export interface FinanceEntry {
   clubId: string;
   seasonNumber: number;
   round: number;
-  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout' | 'facility' | 'facility-upkeep' | 'board-capital' | 'naming-rights' | 'sponsor-exit' | 'loan' | 'loan-repayment' | 'lease' | 'staff-wages' | 'staff-compensation';
+  kind: 'opening' | 'sponsor' | 'operations' | 'tickets' | 'coaching' | 'scouting' | 'fitness' | 'physio' | 'assistant' | 'youth' | 'payroll' | 'transfer' | 'buyout' | 'facility' | 'facility-upkeep' | 'board-capital' | 'naming-rights' | 'sponsor-exit' | 'loan' | 'loan-repayment' | 'lease' | 'staff-wages' | 'staff-compensation' | 'luxury-tax' | 'tax-share';
   /** Income or cost in signed euro cents; cash effects also depend on unpaid obligations. */
   amount: number;
   sourceId: string;

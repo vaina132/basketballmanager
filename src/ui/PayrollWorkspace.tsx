@@ -7,7 +7,7 @@ import { Avatar } from './Avatar'
 import { MoreInfo } from './MoreInfo'
 import { Icon } from './Icon'
 import './payroll-workspace.css'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 
 interface PayrollWorkspaceProps {
   season: SeasonState
@@ -18,7 +18,7 @@ interface PayrollWorkspaceProps {
 }
 
 const moneyFormatter = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 })
-const money = (cents: number) => Math.abs(cents) >= 100_000_000 ? formatEuros(cents) : moneyFormatter.format(cents / 100)
+const money = (cents: number) => Math.abs(cents) >= 100_000_000 ? formatMoney(cents) : moneyFormatter.format(cents / 100)
 
 /**
  * Owner feedback (18 November 2026): wages are paid automatically every week, so this page only shows what each

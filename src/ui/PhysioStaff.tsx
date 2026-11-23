@@ -12,7 +12,7 @@ import { StaffStars } from './StaffRating'
 import { Icon } from './Icon'
 import { seasonRounds } from '../world/career-world'
 import { PHYSIO_DIRECTORY } from '../data/staff-directory'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { staffFee } from '../world/economy'
 import { StaffNationality } from './Nationality'
 
@@ -26,7 +26,7 @@ export interface PhysioStaffProps extends StaffCandidateControls {
   onOpenMedical: () => void
 }
 
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 const coachById = (id: string) => PHYSIO_DIRECTORY.find(coach => coach.id === id)!
 function PhysioSkills({ coach }: { coach: Physio }) {
   return <dl className="staff-skill-list compact"><div><dt>Rehabilitation</dt><dd><span className="staff-skill-bar" aria-hidden="true"><span style={{ width: `${coach.rehabilitation * 10}%` }} /></span><span className="staff-skill-value" aria-label={`${coach.rehabilitation / 2} out of 5 stars`}>{(coach.rehabilitation / 2).toFixed(1)}</span></dd></div></dl>

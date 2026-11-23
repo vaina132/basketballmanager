@@ -1,5 +1,6 @@
 import { staffRoomForWages } from './wage-pool';
 import { clubRosterLimitText, clubRosterLimit } from './club-roster-policy';
+import { nbaInSeasonReason } from './nba-cap-policy';
 import { seasonSalaryBudget } from './board-consequences';
 import { surplusWageRoom } from './surplus-spending';
 import type { InSeasonBudget, InSeasonOffer, InSeasonOfferQuote } from '../domain/recruitment';
@@ -80,7 +81,9 @@ export function quoteInSeasonOffer(state: SeasonState, playerId: string, seasonW
   else if (contractRoleReason(state, clubId, playerId, options.role)) reason = contractRoleReason(state, clubId, playerId, options.role);
   else if (getFinanceBalance(state.finance, clubId).unpaid > 0) reason = 'Settle unpaid club costs before offering another salary.';
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before offering another salary.';
-  else if (budget.rosterSize + budget.reservedRosterSize + 1 > clubRosterLimit(state)) reason = `The squad already has ${clubRosterLimitText(state)} registered players or reserved places.`;
+  else if (budget.rosterSize + budget.reservedRosterSize + 1 > clubRosterLimit(state, clubId)) reason = `The squad already has ${clubRosterLimitText(state, clubId)} registered players or reserved places.`;
+  // Format 91: an NBA club signs in season only with room under the cap or on a minimum contract.
+  else if (!prospect && nbaInSeasonReason(state, clubId, playerId, seasonWage, budget.reservedWages)) reason = nbaInSeasonReason(state, clubId, playerId, seasonWage, budget.reservedWages);
   else if (budget.seasonWages + budget.reservedWages + seasonWage > budget.budget) reason = 'This offer exceeds the current season player wages budget.';
   else if (budget.spendableCash < remainingWages) reason = 'The remaining salary exceeds the available budget after existing commitments.';
   return { playerId, clubId, seasonWage, remainingWages, responseRound, responseOn, remainingBudgetAfter: Math.max(0, budget.spendableCash - remainingWages), annualBudgetRemaining: Math.max(0, budget.budget - budget.seasonWages - budget.reservedWages - (validWage ? seasonWage : 0)), rosterSize: budget.rosterSize + budget.reservedRosterSize + 1, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }) };

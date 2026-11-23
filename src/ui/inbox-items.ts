@@ -23,7 +23,7 @@ import { jobMarket, seasonEndOutlook } from '../world/career-policy'
 import { isUnemployed } from '../world/career-rules'
 import { medicalDate } from './SeasonMedicalReport'
 import { seasonRounds, worldOf } from '../world/career-world'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 
 export type InboxCategory = 'press' | 'board' | 'club' | 'players'
 /** `jobs` (format 69): the job market on the unemployed desk. */
@@ -47,7 +47,7 @@ export interface InboxItem {
   /** `national` job offers (format 80): the offer answered in the reading pane uses `offerId`. */
 }
 
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 const FACILITIES: Record<string, string> = { arena: 'Arena', training: 'Training facilities', youth: 'Youth infrastructure', medical: 'Medical centre', scouting: 'Scouting office' }
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
 

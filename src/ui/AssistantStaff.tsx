@@ -13,7 +13,7 @@ import { Icon } from './Icon'
 import './assistant-staff.css'
 import { seasonRounds } from '../world/career-world'
 import { ASSISTANT_DIRECTORY } from '../data/staff-directory'
-import { formatEuros } from './money-format'
+import { formatMoney } from './money-format'
 import { staffFee } from '../world/economy'
 import { StaffNationality } from './Nationality'
 
@@ -27,7 +27,7 @@ export interface AssistantStaffProps extends StaffCandidateControls {
   onOpenAssistantAdvice: () => void
 }
 
-const money = (cents: number) => formatEuros(cents)
+const money = (cents: number) => formatMoney(cents)
 const assistantById = (id: string) => ASSISTANT_DIRECTORY.find(coach => coach.id === id)!
 
 function AssistantSkills({ coach }: { coach: AssistantCoach }) {

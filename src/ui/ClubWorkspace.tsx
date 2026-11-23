@@ -11,7 +11,7 @@ import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants'
 import { financeLedgerRows, forecastGate, fundingSourceId, getFinanceBalance, maxTicketPriceFor, openingCashFor, recommendTicketPrice, roundOperatingCostFor, TICKET_PRICE_STEP } from '../world/finance'
 import { clubEconomy } from '../world/economy'
 import { usesEconomyBalance } from '../world/economy-balance'
-import { formatEuros, formatExactEuros } from './money-format'
+import { formatMoney, formatExactMoney } from './money-format'
 import { dateForRound, seasonLabel } from '../world/season'
 import { getTransferPayments } from '../world/transfer-payments'
 import { TransferPaymentsPanel } from './TransferPaymentsPanel'
@@ -48,14 +48,14 @@ interface ClubWorkspaceProps extends FacilitiesActions, SponsorshipActions {
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
-const money = (cents: number) => formatEuros(cents, true)
+const money = (cents: number) => formatMoney(cents, true)
 /** Ledger rows keep exact amounts so detailed accounting reconciles to the cent. */
-const exact = formatExactEuros
+const exact = formatExactMoney
 const movement = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${exact(Math.abs(cents))}`
 const BAND_LABELS = { 'euroleague-top': 'EuroLeague top group', euroleague: 'EuroLeague', 'top-upper': 'top division, upper half', 'top-lower': 'top division, lower half', second: 'second division', third: 'third division', nba: 'NBA' } as const
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 const count = (value: number) => value.toLocaleString('en-GB')
-const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Training coach fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital', 'naming-rights': 'Arena naming rights', 'sponsor-exit': 'Sponsor exit', loan: 'Bank loan', 'loan-repayment': 'Loan repayment', lease: 'Facility lease', 'staff-wages': 'Staff salaries', 'staff-compensation': 'Staff compensation' }
+const kinds: Record<FinanceEntry['kind'], string> = { opening: 'Opening cash', sponsor: 'Sponsorship', operations: 'Operating costs', tickets: 'Ticket income', coaching: 'Training coach fee', scouting: 'Scout fee', fitness: 'Fitness coach fee', physio: 'Physio fee', assistant: 'Assistant coach fee', youth: 'Youth coach fee', payroll: 'Player wages', transfer: 'Player transfer', buyout: 'Contract buyout', facility: 'Facility upgrade', 'facility-upkeep': 'Facilities upkeep', 'board-capital': 'Board capital', 'naming-rights': 'Arena naming rights', 'sponsor-exit': 'Sponsor exit', loan: 'Bank loan', 'loan-repayment': 'Loan repayment', lease: 'Facility lease', 'staff-wages': 'Staff salaries', 'staff-compensation': 'Staff compensation' , 'luxury-tax': 'Luxury tax', 'tax-share': 'Luxury tax share' }
 
 export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFacilities, onFacilityUpgrade, onCancelFacilityUpgrade, onFacilityDelegation, onRequestBoardFunding, onEnableMaintenance, onMaintenancePlan, onFacilityRepair, onFacilityLoan, onFacilityLease, onRepayLoan, onEndLease, onArenaExpansion, onBankLoan, onEnableSponsorship, onAcceptSponsorship, onDeclineSponsorship, onRequestSponsorship, onSponsorshipDelegation, onAcceptNaming, onDeclineNaming, onRequestNaming, onNamingDelegation, onTerminateSponsorship, busy = false }: ClubWorkspaceProps) {
   const [kind, setKind] = useState<FinanceEntry['kind'] | 'all'>('all')
@@ -163,7 +163,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
 
       <section className="club-venue panel" aria-labelledby="club-venue-title">
         <header className="club-heading"><h2 id="club-venue-title">Venue</h2></header>
-        <dl>{arenaName && arenaName !== definition.venue ? <><div><dt>Arena name</dt><dd data-arena-name={arenaName}>{arenaName}</dd></div><div><dt>Official venue</dt><dd>{definition.venue}</dd></div></> : <div><dt>Venue</dt><dd data-arena-name={definition.venue}>{definition.venue}</dd></div>}<div><dt>{facilities.arenaCapacity === facilities.arenaFullCapacity ? 'Capacity' : 'Capacity this matchday'}</dt><dd>{count(facilities.arenaCapacity)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{formatEuros(roundOperatingCostFor(season, club.id) + facilities.upkeepPerRound)}</dd></div></dl>
+        <dl>{arenaName && arenaName !== definition.venue ? <><div><dt>Arena name</dt><dd data-arena-name={arenaName}>{arenaName}</dd></div><div><dt>Official venue</dt><dd>{definition.venue}</dd></div></> : <div><dt>Venue</dt><dd data-arena-name={definition.venue}>{definition.venue}</dd></div>}<div><dt>{facilities.arenaCapacity === facilities.arenaFullCapacity ? 'Capacity' : 'Capacity this matchday'}</dt><dd>{count(facilities.arenaCapacity)}</dd></div><div><dt>Operating cost / matchday</dt><dd>{formatMoney(roundOperatingCostFor(season, club.id) + facilities.upkeepPerRound)}</dd></div></dl>
       </section>
 
       <ClubMoneyPanel season={season} />
@@ -208,6 +208,6 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
         <p className="club-note">Income clears unpaid costs before adding to cash. Balances include all earlier activity, even when filtered. Staff commitments track season allocation separately from cash.</p>
       </details>
     </>}
-    <MoreInfo label="About these figures"><p className="club-model-note">{economy ? `Estimated from published 2025-27 club budgets, salary and attendance reports: about ${formatEuros(economy.budget)} a season (${BAND_LABELS[economy.band]}). ` : 'Fictional development finances. '}{payrollEnabled ? season.employment.enabledSince ? 'Player wages follow signed employment contracts.' : 'Player wages follow the fixed squad terms.' : 'Player payroll is not enabled.'}</p></MoreInfo>
+    <MoreInfo label="About these figures"><p className="club-model-note">{economy ? `Estimated from published 2025-27 club budgets, salary and attendance reports: about ${formatMoney(economy.budget)} a season (${BAND_LABELS[economy.band]}). ` : 'Fictional development finances. '}{payrollEnabled ? season.employment.enabledSince ? 'Player wages follow signed employment contracts.' : 'Player wages follow the fixed squad terms.' : 'Player payroll is not enabled.'}</p></MoreInfo>
   </div>
 }

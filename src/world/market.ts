@@ -1,5 +1,5 @@
 import { leavingClubIds } from './background';
-import { clubRosterTarget } from './club-roster-policy';
+import { clubRosterTarget, isCapClub, minRosterSize } from './club-roster-policy';
 import { processFacilityProjects, automateFacilities } from './facilities';
 import type { MarketEvent, MarketOffer, MarketWindow, SeasonMarket } from '../domain/market';
 import type { ContractOfferOptions } from '../domain/employment';
@@ -85,7 +85,7 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
     const offer: MarketOffer = {
       id: event.id, clubId: event.clubId, playerId: event.playerId, seasonNumber: state.seasonNumber,
       offeredOn: event.date, responseOn, expiresOn: [addMarketDays(event.date, MARKET_OFFER_DAYS), window.closesOn].sort()[0]!,
-      seasonWage: event.seasonWage, seasons: event.seasons, status: 'pending', respondedOn: null, closedOn: null, negotiationId: null, chosenOfferId: null,
+      seasonWage: event.seasonWage, seasons: event.seasons, ...(quote.capRoute ? { capRoute: quote.capRoute } : {}), status: 'pending', respondedOn: null, closedOn: null, negotiationId: null, chosenOfferId: null,
       ...(event.releaseFee === undefined ? {} : { releaseFee: event.releaseFee }),
       ...(event.role === undefined ? {} : { role: event.role }),
       transfer: event.transferFee === undefined ? null : {
@@ -160,8 +160,8 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
   const resolved = getMarketWindow(next)!;
   next = replaceWindow(next, { ...resolved, competitionFromEvent: window.competitionFromEvent, offers: resolved.offers.map(offer => isLiveMarketOffer(offer) && offer.expiresOn <= date ? { ...offer, status: 'expired', closedOn: date } : offer) });
   const leaving = leavingClubIds(next);
-  const incomplete = next.clubs.filter(club => !leaving.has(club.id) && getClubContractSummary(next, club.id).rosterSize < MIN_ROSTER_SIZE);
-  if (date === window.closesOn && incomplete.length) throw new Error(`Recruitment cannot close: ${incomplete.map(club => club.name).join(', ')} need eight signed players. The date and offers are unchanged. Improve or withdraw competing offers, or delegate recruitment before continuing.`);
+  const incomplete = next.clubs.filter(club => !leaving.has(club.id) && getClubContractSummary(next, club.id).rosterSize < minRosterSize(next, club.id));
+  if (date === window.closesOn && incomplete.length) throw new Error(`Recruitment cannot close: ${incomplete.map(club => club.name).join(', ')} need ${incomplete.some(club => isCapClub(next, club.id)) ? 'their minimum of' : 'eight'} signed players. The date and offers are unchanged. Improve or withdraw competing offers, or delegate recruitment before continuing.`);
   return processTransferPayments(next);
 }
 
@@ -222,7 +222,7 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
   // unopposed alternatives, rather than trapping the calendar in an AI tie.
   const leaving = leavingClubIds(state);
   if (finalProposalDay) for (const club of state.clubs) {
-    if (club.id === state.managedClubId && !state.employment.delegated || leaving.has(club.id) || getClubContractSummary(next, club.id).rosterSize >= MIN_ROSTER_SIZE) continue;
+    if (club.id === state.managedClubId && !state.employment.delegated || leaving.has(club.id) || getClubContractSummary(next, club.id).rosterSize >= minRosterSize(next, club.id)) continue;
     for (const offer of getLiveMarketOffers(next).filter(item => item.clubId === club.id)) {
       const acceptable = offer.status === 'pending' && (!offer.transfer || offer.transfer.clubStatus === 'accepted') && evaluateNegotiation(offer.playerId, offer.seasonWage, offer.seasons, offer.releaseFee, next, offer.role).outcome === 'accepted';
       const better = getLiveMarketOffers(next).some(rival => rival.playerId === offer.playerId && rival.clubId !== club.id && rival.status === 'pending' && evaluateNegotiation(rival.playerId, rival.seasonWage, rival.seasons, rival.releaseFee, next, rival.role).outcome === 'accepted' && compareMarketOffers(next, rival, offer) < 0);

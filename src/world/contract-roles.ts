@@ -4,6 +4,9 @@ import type { SeasonState } from '../domain/season';
 import { getCareerPlayer, getCareerPlayerAge, getCareerWage, type CareerPlayerContext } from './player-catalog';
 import { clubContractsForRound, maxContractWage, MIN_CONTRACT_WAGE, WAGE_STEP } from './employment-policy';
 import { SQUAD_ROLE_RULES } from './relationship-rules';
+import { isCapClub } from './club-roster-policy';
+import { nbaMinimumWage } from './nba-cap';
+import { nbaLateFreeAgentMinimum } from './nba-cap-policy';
 
 /**
  * Squad roles in contracts (`relationships-3`, new careers from format 74). The role offered is part of every contract
@@ -63,7 +66,10 @@ export function roleWage(base: number, role: SquadRole | undefined, context: Car
 
 /** The one-season asking wage for a role (the natural one when omitted): what computer clubs offer. */
 export function contractAskingWage(context: ContractRoleContext, clubId: string, playerId: string, role?: SquadRole): number {
-  return roleWage(getCareerWage(context, playerId), offeredContractRole(context, clubId, playerId, role ? { role } : {}), context);
+  const usual = roleWage(getCareerWage(context, playerId), offeredContractRole(context, clubId, playerId, role ? { role } : {}), context);
+  // Format 91: late in the NBA's free agency an unsigned player accepts his minimum salary; an NBA club pays at least it.
+  const late = nbaLateFreeAgentMinimum(context, playerId), wage = late !== null && late < usual ? late : usual;
+  return isCapClub(context, clubId) ? Math.max(wage, nbaMinimumWage(context.date ? getCareerPlayerAge(context, playerId, context.date) : null)) : wage;
 }
 
 /** Why a player would refuse this role from this club, or null when he accepts it. */

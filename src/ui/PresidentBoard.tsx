@@ -1,7 +1,7 @@
 import type { BoardClubMandate, BoardClubReview, BoardRequest } from '../domain/board'
 import type { SeasonState } from '../domain/season'
 import type { PresidentNegotiationStyle, PresidentTraitLevel } from '../data/development-presidents'
-import { clubPresident, lastCommittedWeek, worldOf } from '../world/career-world'
+import { clubPresident, lastCommittedWeek, presidentTitle, worldOf } from '../world/career-world'
 import { ambitionWinRate, PRESIDENT_RULES, presidentPressureLine, presidentReviewStep, presidentTraits, salaryVerdictPercent } from '../world/presidents'
 import { boardFundingTerms } from '../world/board-funding-policy'
 import { requestSeconds } from '../world/board-requests'
@@ -33,7 +33,7 @@ export function PresidentProfile({ season }: { season: SeasonState }) {
   const chance = Math.round(PRESIDENT_RULES.requests.weeklyChance[traits.interference - 1]! * 100)
   const salary = (['confident', 'concerned', 'pressure'] as const).map(verdict => salaryVerdictPercent(president.generosity, verdict))
   return <div className="board-president board-president-profile" data-board-president-profile={clubId}>
-    <div className="board-president-identity"><strong>President profile</strong><span>{world.source === 'real-data-pack' ? 'Fictional game traits, not claims about the real club or any real person.' : 'Fictional game traits.'}</span></div>
+    <div className="board-president-identity"><strong>{presidentTitle(world, clubId)} profile</strong><span>{world.source === 'real-data-pack' ? 'Fictional game traits, not claims about the real club or any real person.' : 'Fictional game traits.'}</span></div>
     <dl className="board-president-facts">
       <div data-president-trait="patience"><dt>Patience · {PATIENCE[traits.patience]}</dt><dd>Confidence moves up to {presidentReviewStep(traits)} a review<small>Under pressure below {presidentPressureLine(traits)} (standard 30)</small></dd></div>
       <div data-president-trait="ambition"><dt>Ambition · {AMBITION[traits.ambition]}</dt><dd>Results targets {ambition === 0 ? 'standard' : `${ambition > 0 ? '+' : '−'}${Math.abs(ambition)} points`}<small>Also shapes the youth and culture objectives</small></dd></div>
@@ -92,7 +92,7 @@ export function PresidentRequests({ season }: { season: SeasonState }) {
   const open = requests.find(request => request.outcome === 'open')
   const name = clubPresident(worldOf(season), season.managedClubId).name
   return <>
-    <h3 className="board-section-heading"><Icon name="mail" size={16} />President's requests</h3>
+    <h3 className="board-section-heading"><Icon name="mail" size={16} />{presidentTitle(worldOf(season), season.managedClubId)}'s requests</h3>
     {open && <div className="board-objective board-request-open" data-board-request={open.kind}><Icon name="mail" size={23} /><div className="board-objective-name"><strong>{requestText(season, open)}</strong><span>{name} asked on {medicalDate(open.date)}. Deadline: the review after matchday {open.deadlineRound}, <time dateTime={dateForRound(open.deadlineRound, open.seasonNumber)}>{medicalDate(dateForRound(open.deadlineRound, open.seasonNumber))}</time>.</span></div><div className="board-objective-progress"><strong>{requestProgress(season, open)}</strong><span>Met: +{PRESIDENT_RULES.requests.met} confidence · ignored: {PRESIDENT_RULES.requests.ignored}</span></div><Status label="Open" state="waiting" /></div>}
     {!requests.length ? <p className="board-empty board-funding-empty">No requests yet. The more involved the president, the more often requests come, from the third week of a season.</p>
       : requests.some(request => request.outcome !== 'open') && <ul className="board-funding-history" aria-label="Earlier president requests">{requests.filter(request => request.outcome !== 'open').map(request => <li key={request.id} data-board-request-outcome={request.outcome}><span><strong>{requestText(season, request)}</strong><small><time dateTime={request.date}>{medicalDate(request.date)}</time> · {seasonLabel(request.seasonNumber)} · settled after matchday {request.resolvedRound}</small></span><span className="board-funding-outcome"><Status label={OUTCOMES[request.outcome].label} state={OUTCOMES[request.outcome].state} /></span></li>)}</ul>}

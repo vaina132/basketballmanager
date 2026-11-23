@@ -1,4 +1,4 @@
-import type { BackgroundLeague, CareerWorld, EuropeanCompetition, EuropeanCompetitionKind } from '../domain/world';
+import type { BackgroundLeague, CareerWorld, EuropeanCompetition, EuropeanCompetitionKind, NbaConference } from '../domain/world';
 import { EUROPEAN_FORMATS, fieldFits } from './european-formats';
 import type { Team } from '../domain/types';
 import type { ClubFinanceDefinition } from '../data/development-finances';
@@ -81,9 +81,30 @@ export function openingContractYears(age: number, stable: number, level: Contrac
 function hash(text: string): number { let value = 2166136261; for (const character of text) value = Math.imul(value ^ character.charCodeAt(0), 16777619) >>> 0; return value; }
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 
-/** Domestic leagues in the pack that a career can be played in (an even number of 4 to 40 clubs). */
-export function careerCompetitions(pack: DataPack): DataPackCompetition[] {
-  return pack.competitions.filter(item => item.kind === 'domestic' && item.clubIds.length >= MIN_WORLD_CLUBS && item.clubIds.length <= 20);
+/**
+ * NBA step 5: the NBA is offered in the career setup like any other league. A pack without a USA league (every pack
+ * published before the NBA data) simply offers none.
+ */
+export const NBA_PLAYABLE = true;
+/** NBA step 4: the pack's NBA (the USA's 30-club league with its conferences and divisions). */
+export const isNbaCompetition = (item: Pick<DataPackCompetition, 'kind' | 'country' | 'clubIds'>): boolean => item.kind === 'domestic' && item.country === 'USA' && item.clubIds.length === NBA_CLUBS;
+export const NBA_CLUBS = 30;
+
+/** Domestic leagues in the pack that a career can be played in (4 to 20 clubs; the NBA's 30 when `nba` is on). */
+export function careerCompetitions(pack: DataPack, options: { nba?: boolean } = { nba: NBA_PLAYABLE }): DataPackCompetition[] {
+  return pack.competitions.filter(item => item.kind === 'domestic' && (item.clubIds.length >= MIN_WORLD_CLUBS && item.clubIds.length <= 20 && item.country !== 'USA' || !!options.nba && isNbaCompetition(item) && !!nbaConferences(item)));
+}
+
+/**
+ * NBA step 4: the NBA's two conferences and their six divisions from the pack's groups (conferences without a parent,
+ * divisions under them), or null when the pack does not give them in that shape (two conferences of three divisions).
+ */
+export function nbaConferences(item: Pick<DataPackCompetition, 'groups' | 'clubIds'>): NbaConference[] | null {
+  const groups = item.groups ?? [];
+  const conferences = groups.filter(group => group.parentId === undefined);
+  if (conferences.length !== 2) return null;
+  const built = conferences.map(conference => ({ id: conference.id, name: conference.name, divisions: groups.filter(group => group.parentId === conference.id).map(division => ({ id: division.id, name: division.name, clubIds: [...division.clubIds] })) }));
+  return built.every(conference => conference.divisions.length === 3 && conference.divisions.every(division => division.clubIds.length === 5)) ? built : null;
 }
 
 /** New worlds change prefix whenever they gain a rule: `real-tables-` (format 48), `real-playoffs-` (49), `real-tiebreak-` (51), `real-rules-` (52), `real-europe-` (56), `real-europlay-` (57), `real-bcl-` (59), `real-places-` (60), `real-economy-` (62). */
@@ -104,7 +125,7 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   // Sprint 4: ratings resting on few minutes are pulled towards their club's level.
   const pack = withFairRatings(original);
   const ids = typeof competitionId === 'string' ? [competitionId] : [...competitionId];
-  const competitions = careerCompetitions(pack).filter(item => ids.includes(item.id));
+  const competitions = careerCompetitions(pack, { nba: true }).filter(item => ids.includes(item.id));
   if (!ids.length || new Set(ids).size !== ids.length || competitions.length !== ids.length) throw new Error('Choose supported domestic leagues from the loaded data pack.');
   const competition = competitions[0]!;
   const clubIds = competitions.flatMap(item => item.clubIds);
@@ -141,7 +162,10 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   // Young players tend to have longer deals and veterans shorter ones; a stable per-player choice spreads the expiries.
   const ageOf = (playerId: string) => byId.get(playerId)?.age ?? REAL_WORLD_RULES.defaultAge;
   // Sprint 4: lengths by level (EuroLeague, top or second division), age and US import status.
-  const euroleagueClubs = new Set(pack.competitions.filter(item => item.kind === 'european' && item.season === competition.season && europeanKind(item.name) === 'euroleague').flatMap(item => item.clubIds));
+  // NBA step 4: NBA deals are long (estimates on the EuroLeague's shares).
+  const nbaLeague = competitions.find(isNbaCompetition);
+  const euroleagueClubs = new Set(nbaLeague?.clubIds ?? []);
+  for (const clubId of pack.competitions.filter(item => item.kind === 'european' && item.season === competition.season && europeanKind(item.name) === 'euroleague').flatMap(item => item.clubIds)) euroleagueClubs.add(clubId);
   const tierOf = new Map(competitions.flatMap(item => item.clubIds.map(clubId => [clubId, item.tier] as const)));
   const levelOf = (clubId: string): ContractLevel => euroleagueClubs.has(clubId) ? 'euroleague' : (tierOf.get(clubId) ?? 1) >= 2 ? 'second' : 'top';
   const playerContracts = Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, openingContractYears(ageOf(player.id), hash(player.id), levelOf(team.id), byId.get(player.id)?.nationality)])));
@@ -149,7 +173,7 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
     positionSource: byId.get(playerId)?.profileEvidence?.positionSource ?? (byId.get(playerId)?.estimated.includes('game_position') ? 'estimated' as const : 'unverified' as const),
     ...(byId.get(playerId)?.nationality ? { nationality: byId.get(playerId)!.nationality! } : {}) });
   const domesticWorld: CareerWorld = {
-    id: realWorldId(pack, competitions.length === 1 ? competition.id : `leagues-${hash(competitions.map(item => item.id).sort().join('|')).toString(16)}`), name: competitions.length === 1 ? `${competition.name} ${competition.season}` : `European domestic leagues ${competition.season}`, source: 'real-data-pack', rosterModel: FULL_ROSTER_MODEL, startDate: DEVELOPMENT_WORLD.startDate,
+    id: realWorldId(pack, competitions.length === 1 ? competition.id : `leagues-${hash(competitions.map(item => item.id).sort().join('|')).toString(16)}`), name: competitions.length === 1 ? `${competition.name} ${competition.season}` : nbaLeague ? `NBA and European leagues ${competition.season}` : `European domestic leagues ${competition.season}`, source: 'real-data-pack', rosterModel: FULL_ROSTER_MODEL, startDate: DEVELOPMENT_WORLD.startDate,
     domesticLeagues: competitions.map(item => ({ id: item.id, name: item.name, country: item.country ?? 'Other', tier: item.tier, clubIds: [...item.clubIds], standingsRule: standingsRuleFor(item.country ?? 'Other', item.tier), ...(postseasons ? { postseason: postseasons.get(item.id)! } : {}) })),
     clubs: teams,
     playerProfiles: Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, profileOf(player.id)]))),
@@ -157,12 +181,13 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
     wages: Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, realWorldWage(overallRating(player.attributes, player.position))]))),
     finances: teams.map((team, index) => {
       const club = pack.clubs.find(item => item.id === team.id)!, t = share(team.id);
-      const capacity = Math.round((arena.smallest + t * (arena.largest - arena.smallest)) / arena.step) * arena.step;
+      const capacity = nbaLeague?.clubIds.includes(team.id) && club.capacity ? club.capacity : Math.round((arena.smallest + t * (arena.largest - arena.smallest)) / arena.step) * arena.step;
       return { clubId: team.id, venue: club.arena ?? `${team.name} Arena`, sponsor: market[index]!.name, capacity, referenceDemand: Math.round(capacity * (arena.fillFrom + arena.fillRange * t) / arena.step) * arena.step };
     }),
     presidents,
     sponsors: [...market],
     rivalries: [],
+    ...(nbaLeague ? { nba: { model: 'nba-1' as const, leagueId: nbaLeague.id, conferences: nbaConferences(nbaLeague)!, ruleset: 'nba-2026' as const } } : {}),
   };
   validateWorld(domesticWorld);
   // Step 3.4d-4: each chosen country's real next division (researched names, generated squads), never Italy or France.
@@ -174,7 +199,7 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   });
   const world = lowerLists.length ? withLowerDivisions(domesticWorld, lowerLists) : domesticWorld;
   // Format 62 (sprint 4): every club's money follows researched club budgets, once the world has all its clubs.
-  const priced = (complete: CareerWorld) => { const next = withRealEconomy(complete, clubId => pack.clubs.find(club => club.id === clubId)?.country ?? null); validateWorld(next); return next; };
+  const priced = (complete: CareerWorld) => { const next = withRealEconomy(complete, clubId => pack.clubs.find(club => club.id === clubId)?.country ?? null, clubId => pack.clubs.find(club => club.id === clubId)?.capacity ?? null); validateWorld(next); return next; };
   // Step 3.5a: the season's European competitions (each kind once, a club in one competition) and their entrants.
   const seen = new Set<string>(), kinds = new Set<string>();
   const european: EuropeanCompetition[] = pack.competitions.filter(item => item.kind === 'european' && item.season === competition.season).flatMap(item => {
@@ -199,10 +224,10 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   // estimated tables, every played competition gives its entrants' countries and the EuroLeague its one-year places.
   const played = european.some(item => item.format);
   const chosenCountries = new Set(competitions.map(item => item.country));
-  // Only leagues the game can play (careerCompetitions: 4-20 clubs) become unchosen top divisions: the NBA (30 clubs,
-  // docs/nba-plan.md) stays out of European worlds until the world builder supports it (step 4).
+  // Only leagues the game can play as a background league become unchosen top divisions: the NBA (30 clubs,
+  // docs/nba-plan.md) is never a background league in European worlds; it is chosen like any league instead.
   const playable = new Set(careerCompetitions(pack).map(item => item.id));
-  const backgroundLeagues: BackgroundLeague[] = played ? pack.competitions.filter(item => item.kind === 'domestic' && item.tier === 1 && playable.has(item.id) && item.season === competition.season && item.country && !chosenCountries.has(item.country)).flatMap(item => {
+  const backgroundLeagues: BackgroundLeague[] = played ? pack.competitions.filter(item => item.kind === 'domestic' && item.tier === 1 && playable.has(item.id) && item.season === competition.season && item.country && !chosenCountries.has(item.country) && item.country !== 'USA').flatMap(item => {
     const members = [...new Set(item.clubIds)].filter(clubId => !clubIds.includes(clubId) && (pack.clubs.find(club => club.id === clubId)?.playerIds.length ?? 0) >= 8);
     return members.length >= 2 ? [{ id: item.id, name: item.name, country: item.country!, tier: 1 as const, clubIds: members }] : [];
   }) : [];

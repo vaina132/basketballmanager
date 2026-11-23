@@ -1,3 +1,4 @@
+import { NBA_MAXIMUM_WAGE } from './nba-economy';
 import { staffRoomForWages } from './wage-pool';
 import { leavingClubIds } from './background';
 import type { ClubContractSummary, ContractOfferOptions, EmploymentContract, PlayerContractQuote, SeasonEmployment } from '../domain/employment';
@@ -51,7 +52,8 @@ export function lowestMinimumSquadWage(context: WorldContext, clubId: string, se
  * The largest annual wage a contract may carry: EUR 50,000 in the development economy; with a researched economy
  * (format 62) EUR 15 million, above any real salary. Wages are the club's gross cost.
  */
-export const maxContractWage = (context?: WorldContext): number => worldEconomy(context) ? REAL_ECONOMY_RULES.limits.maxContractWage * 100 : MAX_CONTRACT_WAGE;
+/** NBA step 4: worlds with the NBA allow NBA maximum contracts (`src/world/nba-economy.ts`). */
+export const maxContractWage = (context?: WorldContext): number => worldEconomy(context) ? context?.world?.nba ? NBA_MAXIMUM_WAGE : REAL_ECONOMY_RULES.limits.maxContractWage * 100 : MAX_CONTRACT_WAGE;
 /** The wage rule's wording for a context (the development text is kept for historical replies). */
 export const contractWageRuleText = (context?: WorldContext): string => worldEconomy(context) ? `Choose an annual wage from €5,000 to €${(maxContractWage(context) / 100).toLocaleString('en-GB')} in €500 steps.` : 'Choose an annual wage from €5,000 to €50,000 in €500 steps.';
 

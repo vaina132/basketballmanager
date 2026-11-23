@@ -19,10 +19,19 @@ export type EuropeanFormatId = 'euroleague-2026-1' | 'eurocup-2026-1' | 'bcl-202
 export interface EuropeanCompetition { id: string; name: string; kind: EuropeanCompetitionKind; season: string; clubIds: string[]; format?: EuropeanFormatId; countries?: Record<string, string>; oneYear?: string[] }
 /** Format 60 (step 3.5f): a top division of a country with domestic data that was not chosen. Its clubs are in the world outside the full world; each season end ranks them in an estimated table. */
 export interface BackgroundLeague { id: string; name: string; country: string; tier: 1; clubIds: string[] }
+/** NBA step 4 (format 90): a conference with its divisions, each listing its clubs (five per division in the real NBA). */
+export interface NbaConference { id: string; name: string; divisions: { id: string; name: string; clubIds: string[] }[] }
+/**
+ * NBA step 4 (format 90, new careers with the option `nba`): the world's NBA league (`leagueId`, one of its domestic
+ * leagues, 30 clubs), its two conferences and six divisions, and the match rules it plays (`ruleset`). Its schedule,
+ * standings and postseason follow `src/world/nba-schedule.ts`, `nba-ranking.ts` and the `nba-2026-1` postseason.
+ */
+export interface NbaWorld { model: 'nba-1'; leagueId: string; conferences: NbaConference[]; ruleset: 'nba-2026' }
 /** Format 62 (sprint 4): money of real-club worlds follows researched 2025-27 club budgets (`src/world/economy.ts`). */
 export type WorldEconomyId = 'real-2026-1';
 /** The money level a club's figures were placed in (`REAL_ECONOMY_RULES`). */
-export type EconomyBand = 'euroleague-top' | 'euroleague' | 'top-upper' | 'top-lower' | 'second' | 'third';
+/** `nba` (NBA step 4, format 90): the NBA's clubs, a money level far above Europe's (`src/world/nba-economy.ts`). */
+export type EconomyBand = 'euroleague-top' | 'euroleague' | 'top-upper' | 'top-lower' | 'second' | 'third' | 'nba';
 /**
  * A club's estimated money for one season, in euro cents (format 62). Flows read these figures when a world has an
  * economy and the development constants otherwise.
@@ -147,6 +156,8 @@ export interface CareerWorld {
    * (`src/world/surplus-spending.ts`).
    */
   surplusSpending?: true;
+  /** NBA step 4 (format 90, new careers with the option `nba`): the NBA league of this world. */
+  nba?: NbaWorld;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

@@ -141,7 +141,8 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
   if (mandate.seasonNumber !== state.seasonNumber || state.round < mandate.startsRound || state.date !== dateForRound(state.round, state.seasonNumber)) throw new Error('Review only an eligible committed matchday of this mandate.');
   // Board targets are regular-season results: postseason games (step 3.4b) are not counted.
   const fixtures = state.fixtures.filter(fixture => isRegularFixture(fixture) && fixture.round >= mandate.startsRound && fixture.round <= state.round);
-  if (!fixtures.length || fixtures.some(fixture => !fixture.result)) throw new Error('Commit every fixture in the board review window first.');
+  // NBA step 5: a world of the NBA alone has weeks before its first game day; their reviews count no games yet.
+  if (!fixtures.length && !worldOf(state).nba || fixtures.some(fixture => !fixture.result)) throw new Error('Commit every fixture in the board review window first.');
   const clubs: Record<string, BoardClubReview> = {};
   // Derbies count only once rivalries govern this review's matchday, so earlier reviews rebuild unchanged.
   const from = state.rivalries?.enabledSince?.effectiveFrom;

@@ -5,7 +5,7 @@ import type { SeasonYouth, YouthCoachContract } from '../domain/youth';
 import type { SeasonState } from '../domain/season';
 import { recordYouthFee } from './finance';
 import { availableYouthCoaches, getClubYouthCoach, quoteYouthCoachHire, youthCoachEffects } from './youth-policy';
-import { seasonRounds } from './career-world';
+import { clubHasAcademy, seasonRounds, worldOf } from './career-world';
 import type { YouthCoach } from '../domain/youth';
 import { youthCoachRating } from './youth-policy';
 import { DEVELOPMENT_YOUTH_COACHES } from '../data/development-youth';
@@ -50,7 +50,8 @@ export function setYouthCoachRenewal(state: SeasonState, contractId: string, ren
 export function recruitAiYouthCoaches(state: SeasonState, includeManaged = false): SeasonState {
   if (!state.youth.enabledSince || state.status !== 'active' || state.round === seasonRounds(state)) return state;
   let next = state;
-  const levelled = usesClubLevelStaff(state), clubs = state.clubs.filter(club => includeManaged || club.id !== state.managedClubId);
+  // NBA step 4: NBA clubs have no academy, so no youth coach.
+  const world = worldOf(state), levelled = usesClubLevelStaff(state), clubs = state.clubs.filter(club => (includeManaged || club.id !== state.managedClubId) && clubHasAcademy(world, club.id));
   for (const club of levelled ? clubsByStaffLevel(state, clubs) : clubs) {
     if (getClubYouthCoach(next, club.id)) continue;
     const coach = levelled ? fittingYouthCoach(next, club.id) : withCalculationCache(() => availableYouthCoaches(next).filter(coach => quoteYouthCoachHire(next, coach.id, club.id).canHire)).sort((left, right) => youthCoachEffects(right).bonusPercent / right.fee - youthCoachEffects(left).bonusPercent / left.fee || left.fee - right.fee || left.id.localeCompare(right.id, 'en'))[0];

@@ -3,11 +3,32 @@ import { validateCompetitionResult } from './competition-series';
 import { rankLnbTable } from './lnb-ranking';
 import { rankFibaTable } from './fiba-ranking';
 import { rankAcbTable, rankBblTable, rankFipTable } from './league-rankings';
+import { rankNbaTables, type NbaTables } from './nba-ranking';
+import type { NbaConference } from '../domain/world';
 
-const RANKINGS = { 'lnb-2026-1': rankLnbTable, 'fiba-2026-d': rankFibaTable, 'acb-art7-2026': rankAcbTable, 'bbl-art20-2026': rankBblTable, 'fip-art62-2026': rankFipTable } as const;
+/** NBA step 5: the NBA rule (`nba-2026`) ranks by conference and division as well, so it needs the league's structure. */
+const RANKINGS = { 'lnb-2026-1': rankLnbTable, 'fiba-2026-d': rankFibaTable, 'acb-art7-2026': rankAcbTable, 'bbl-art20-2026': rankBblTable, 'fip-art62-2026': rankFipTable, 'nba-2026': null } as const;
+type TableInput = { competitionId: string; clubIds: readonly string[]; games: readonly CompetitionGame[]; results: readonly CompetitionGameResult[]; stage?: 'regular' | 'round-of-16'; groupId?: string | null; rule?: DomesticStandingsRule; nba?: readonly NbaConference[] };
+
+/** NBA step 5: the NBA's league, conference and division tables from its regular-season games (`nba-2026`). */
+export function nbaCompetitionTables(input: Omit<TableInput, 'rule'> & { nba: readonly NbaConference[] }): NbaTables {
+  const { rows, ranked, drawKey } = tableParts(input);
+  return rankNbaTables(rows, ranked, drawKey, input.nba);
+}
 
 /** A table is scoped explicitly to one stage/group. Knockout games never leak into the league standings. */
-export function competitionTable(input: { competitionId: string; clubIds: readonly string[]; games: readonly CompetitionGame[]; results: readonly CompetitionGameResult[]; stage?: 'regular' | 'round-of-16'; groupId?: string | null; rule?: DomesticStandingsRule }): CompetitionTableRow[] {
+export function competitionTable(input: TableInput): CompetitionTableRow[] {
+  if (input.rule !== undefined && !Object.hasOwn(RANKINGS, input.rule)) throw new Error('Unsupported standings rule.');
+  if (input.rule === 'nba-2026') {
+    if (!input.nba) throw new Error('The NBA table needs its conferences and divisions.');
+    return nbaCompetitionTables({ ...input, nba: input.nba }).league;
+  }
+  const { rows, ranked, drawKey, played, byId } = tableParts(input);
+  if (input.rule !== undefined) return RANKINGS[input.rule]!(rows, ranked, drawKey);
+  return defaultTable(input.clubIds, rows, played, byId);
+}
+
+function tableParts(input: TableInput) {
   const { clubIds, results } = input;
   if (input.rule !== undefined && !Object.hasOwn(RANKINGS, input.rule)) throw new Error('Unsupported standings rule.');
   if (clubIds.length < 2 || new Set(clubIds).size !== clubIds.length || clubIds.some(id => !id)) throw new Error('A table needs distinct registered clubs.');
@@ -26,10 +47,13 @@ export function competitionTable(input: { competitionId: string; clubIds: readon
       row.played++; row.wins += Number(result.winnerClubId === id); row.losses += Number(result.winnerClubId !== id); row.pointsFor += pointsFor; row.pointsAgainst += pointsAgainst;
     }
   }
-  if (input.rule !== undefined) {
-    const drawKey = games.length > 0 && played.length === games.length ? JSON.stringify([input.competitionId, games.map(game => game.id).sort()]) : null;
-    return RANKINGS[input.rule]([...rows.values()], played.map(result => ({ ...byId.get(result.fixtureId)!, home: result.home, away: result.away, winnerClubId: result.winnerClubId, ...(result.fouls ? { fouls: result.fouls } : {}) })), drawKey);
-  }
+  const drawKey = games.length > 0 && played.length === games.length ? JSON.stringify([input.competitionId, games.map(game => game.id).sort()]) : null;
+  const ranked = played.map(result => ({ ...byId.get(result.fixtureId)!, home: result.home, away: result.away, winnerClubId: result.winnerClubId, ...(result.fouls ? { fouls: result.fouls } : {}) }));
+  return { rows: [...rows.values()], ranked, drawKey, played, byId, tallies: rows };
+}
+
+function defaultTable(clubIds: readonly string[], list: readonly CompetitionTableRow[], played: readonly CompetitionGameResult[], byId: ReadonlyMap<string, CompetitionGame>): CompetitionTableRow[] {
+  const rows = new Map(list.map(row => [row.clubId, row]));
   const partition = (ids: string[], measure: (id: string) => number): string[][] => {
     const values = ids.map(id => ({ id, value: measure(id) })).sort((a, b) => b.value - a.value || a.id.localeCompare(b.id));
     const groups: { value: number; ids: string[] }[] = [];

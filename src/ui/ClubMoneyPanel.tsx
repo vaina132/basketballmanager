@@ -6,7 +6,7 @@ import { seasonLabel } from '../world/season'
 import { formatEuros } from './money-format'
 import { Icon } from './Icon'
 
-export const ECONOMY_BAND_LABELS: Readonly<Record<EconomyBand, string>> = { 'euroleague-top': 'EuroLeague top group', euroleague: 'EuroLeague', 'top-upper': 'Top division, upper half', 'top-lower': 'Top division, lower half', second: 'Second division', third: 'Third division' }
+export const ECONOMY_BAND_LABELS: Readonly<Record<EconomyBand, string>> = { 'euroleague-top': 'EuroLeague top group', euroleague: 'EuroLeague', 'top-upper': 'Top division, upper half', nba: 'NBA', 'top-lower': 'Top division, lower half', second: 'Second division', third: 'Third division' }
 
 /** One reason in plain words; European competitions use the world's own names. */
 function reasonText(season: SeasonState, reason: EconomyChangeReason, band: EconomyBand): string {

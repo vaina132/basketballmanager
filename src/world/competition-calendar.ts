@@ -67,8 +67,11 @@ export function domesticRoundDates(start: string, rounds: number, weeks = 38, pa
   return Array.from({ length: rounds }, (_, i) => addCalendarDays(start, (available[Math.round(i * (available.length - 1) / (rounds - 1))]! - 1) * 7));
 }
 
-/** A single calendar, with explicit weekly boundaries even when no club plays on that day. */
-export function buildCompetitionCalendar(input: { start: string; end: string; nextSeasonStart: string; games: readonly CompetitionGame[]; minimumOffseasonDays?: number }): CalendarDay[] {
+/**
+ * A single calendar, with explicit weekly boundaries even when no club plays on that day. `gameGap` (NBA step 5) is
+ * the fewest days between two games of a club: 2 (a full rest day) unless given; NBA clubs may play on consecutive days.
+ */
+export function buildCompetitionCalendar(input: { start: string; end: string; nextSeasonStart: string; games: readonly CompetitionGame[]; minimumOffseasonDays?: number; gameGap?: (clubId: string) => number }): CalendarDay[] {
   const { start, end, nextSeasonStart, games } = input;
   const length = calendarDaysBetween(start, end), offseason = input.minimumOffseasonDays ?? 42;
   if (new Date(calendarDate(start)).getUTCDay() !== 6 || !Number.isInteger(offseason) || offseason < 0 || length < 0 || length > 330 || calendarDaysBetween(end, nextSeasonStart) < offseason) throw new Error('The calendar must finish before the next season and leave its offseason intact.');
@@ -80,9 +83,10 @@ export function buildCompetitionCalendar(input: { start: string; end: string; ne
     for (const club of [game.homeClubId, game.awayClubId]) appearances.set(club, [...(appearances.get(club) ?? []), game.date]);
     byDate.set(game.date, [...(byDate.get(game.date) ?? []), game]);
   }
-  for (const dates of appearances.values()) {
+  for (const [club, dates] of appearances) {
     dates.sort();
-    if (dates.some((date, index) => index > 0 && calendarDaysBetween(dates[index - 1]!, date) < 2)) throw new Error('A club has overlapping games or less than one full rest day.');
+    const gap = input.gameGap?.(club) ?? 2;
+    if (dates.some((date, index) => index > 0 && calendarDaysBetween(dates[index - 1]!, date) < gap)) throw new Error(gap > 1 ? 'A club has overlapping games or less than one full rest day.' : 'A club has two games on one day.');
   }
   const days: CalendarDay[] = [];
   for (let offset = 0; offset <= length; offset++) {

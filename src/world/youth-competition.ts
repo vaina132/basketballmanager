@@ -1,5 +1,5 @@
 import type { WorldContext } from '../domain/world';
-import { worldOf } from './career-world';
+import { clubHasAcademy, worldOf } from './career-world';
 import { prospectsWithExtras } from './extra-attributes';
 import { financeLedgerCount } from './finance-ledger';
 import type { SeasonAcademy } from '../domain/academy';
@@ -123,6 +123,8 @@ function supplement(state: SeasonState): { academy: SeasonAcademy; intakeIds: st
   let academy = state.academy;
   const intakeIds: string[] = [];
   for (const club of state.clubs) {
+    // NBA step 4: NBA clubs have no youth team.
+    if (!clubHasAcademy(worldOf(state), club.id)) continue;
     if (academy.intakes.some(entry => entry.clubId === club.id && entry.seasonNumber === state.seasonNumber && entry.source === 'youth-squad')) throw new Error('Supplement each youth squad at most once per season.');
     const current = academy.prospects.filter(prospect => prospect.clubId === club.id && getAcademyProspect({ ...state, academy }, prospect.player.id));
     const prospects = prospectsWithExtras(worldOf(state), generateYouthSquadProspects(state.seed, club.id, state.seasonNumber, state.round, current, Math.max(0, YOUTH_SQUAD_SIZE - current.length)), state.date);
@@ -135,7 +137,9 @@ function supplement(state: SeasonState): { academy: SeasonAcademy; intakeIds: st
 
 /** A youth season's scheduled games from `fromRound`, unplayed: the senior calendar's pairings with youth identities. */
 export function youthSeasonFixtures(state: SeasonState, fromRound: number): YouthFixtureFull[] {
-  return domesticSchedule(state.clubs, state.seasonNumber, state).filter(fixture => fixture.round >= fromRound).map(fixture => ({ ...fixture, id: `youth-s${state.seasonNumber}-r${fixture.round}-${worldOf(state).domesticLeagues ? fixture.id : fixture.id.slice(fixture.id.lastIndexOf('g'))}`, seasonNumber: state.seasonNumber, home: null, away: null, startingConditions: null, result: null }));
+  // NBA step 4: NBA clubs have no youth team, so the NBA's games have no youth game.
+  const world = worldOf(state);
+  return domesticSchedule(state.clubs, state.seasonNumber, state).filter(fixture => fixture.round >= fromRound && clubHasAcademy(world, fixture.homeClubId)).map(fixture => ({ ...fixture, id: `youth-s${state.seasonNumber}-r${fixture.round}-${worldOf(state).domesticLeagues ? fixture.id : fixture.id.slice(fixture.id.lastIndexOf('g'))}`, seasonNumber: state.seasonNumber, home: null, away: null, startingConditions: null, result: null }));
 }
 
 function prepare(state: SeasonState, fromRound: number): SeasonState {

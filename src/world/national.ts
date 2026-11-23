@@ -6,7 +6,7 @@ import { NATIONAL_TEAMS, NATIONALITY_ALIASES, QUALIFIER_GROUPS_2026, nationalPer
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
 import { NATIONAL_RULES, nationalAwayDays, nationalTournamentDays, nationalTournamentName, nationalWindowDays, nationalWindowSaturday } from './national-calendar';
 import { addCalendarDays } from './competition-calendar';
-import { worldOf } from './career-world';
+import { isNbaClub, worldOf } from './career-world';
 import { createSeasonInjury, injuryRiskMap, isRecovering } from './health';
 import { medicalRecoveryPercent } from './facilities-policy';
 import { overallRating } from './overall-rating';
@@ -201,7 +201,8 @@ export function nationalPlayerPool(state: SeasonState, date: string, window: { s
     if (seen.has(player.id)) return;
     seen.add(player.id);
     const country = Object.hasOwn(profiles, player.id) ? nationalCountry(profiles[player.id]!.nationality) : null;
-    if (!country || !countries.has(country) || busy.has(clubId) || injured.has(player.id)) return;
+    // NBA step 4: NBA clubs do not release their players for the FIBA windows.
+    if (!country || !countries.has(country) || busy.has(clubId) || injured.has(player.id) || window && isNbaClub(world, clubId)) return;
     const list = pool.get(country) ?? [];
     list.push({ player, clubId, ovr: overallRating(player.attributes, player.position) });
     pool.set(country, list);

@@ -13,3 +13,4 @@
 .postseason-winner{font-weight:650}
 .postseason-loser{color:var(--muted)}
 .postseason-status,.postseason-waiting{color:var(--muted);font-size:.82rem}
+.postseason-conference{color:var(--muted);font-size:.75rem;margin-right:6px;text-transform:uppercase;letter-spacing:.04em}

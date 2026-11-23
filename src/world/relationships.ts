@@ -10,7 +10,8 @@ import { withoutEarlierMorale } from './sealed-history';
 import { getPlayerRetirement } from './lifecycle-policy';
 import { getPressQuestion, pressAnswerLabel, pressEventFields, pressEventMatches, pressImpact, pressMoraleValue } from './press-policy';
 import { governingDerby, RIVALRY_MORALE_WEIGHT } from './rivalries';
-import { ordinalRound, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek, weekStartView } from './career-world';
+import { fixtureRuleset, ordinalRound, roundOrdinal, seasonRounds, worldOf, lastCommittedWeek, weekStartView } from './career-world';
+import { rulesetById } from '../engine/rulesets';
 import { overallRating } from './overall-rating';
 import { scoutingActualAttributes } from './scouting-policy';
 import { contractForSeason, effectiveContractsForRound, effectiveContractsForSeason } from './employment-policy';
@@ -194,7 +195,8 @@ function clubHistory(current: SeasonState, clubId: string) {
         if (!game.players.has(playerId)) continue;
         const fixture = game.fixture, result = fixture.result!, stats = fixturePlayerEvidence(fixture, playerId);
         const recoveringOutsideSquad = result.selection && Object.hasOwn(result.selection.rested, playerId) && state.injuries.some(injury => injury.playerId === playerId && isRecovering(injury, fixture.date, state.physio));
-        const eligible = !!stats && result.kind === 'normal' && !result.injuries[playerId] && !recoveringOutsideSquad && stats.fouls < 5;
+        // NBA step 4: fouling out follows the game's rules (six fouls in the NBA).
+        const eligible = !!stats && result.kind === 'normal' && !result.injuries[playerId] && !recoveringOutsideSquad && stats.fouls < rulesetById(fixtureRuleset(state, fixture)).foulOut;
         // relationships-4: a game outside the matchday squad (rested or left out) is not held against him.
         const dressed = !(result.selection && Object.hasOwn(result.selection.rested, playerId));
         if (window.eligibleOnly && !eligible || window.dressedOnly && !dressed || window.beforeDate && fixture.date >= window.beforeDate) continue;

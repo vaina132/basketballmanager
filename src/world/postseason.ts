@@ -15,10 +15,14 @@ import type { EuropeanFormatId } from '../domain/world';
  * Sources and the assumptions taken where a rule is not published are listed per format and in
  * docs/competition-rules-2026.md.
  */
-export type PostseasonFormatId = 'bbl-2026-1' | 'bsl-2026-1' | 'tbl-2026-1' | 'acb-2026-1' | 'primera-feb-2026-1' | 'lba-2026-1' | 'serie-a2-2026-1' | 'lnb-elite-2026-1' | 'lnb-elite2-2026-1' | 'gbl-2026-1' | 'top4-1' | 'test-tier1-1' | 'test-tier2-1' | 'test-tier2-2';
+export type PostseasonFormatId = 'nba-2026-1' | 'bbl-2026-1' | 'bsl-2026-1' | 'tbl-2026-1' | 'acb-2026-1' | 'primera-feb-2026-1' | 'lba-2026-1' | 'serie-a2-2026-1' | 'lnb-elite-2026-1' | 'lnb-elite2-2026-1' | 'gbl-2026-1' | 'top4-1' | 'test-tier1-1' | 'test-tier2-1' | 'test-tier2-2';
 
 /** A series participant: a regular-season place (of this league, or of the other division of the country; negative places count from the bottom, -1 being last), or the winner or loser of an earlier series. `rank` is the bracket seed used for home advantage; by default the place, or the earlier series' seed. */
-export type PostseasonRef = { place: number; rank?: number; otherTier?: true } | { winner: string; rank?: number } | { loser: string; rank?: number };
+/**
+ * NBA step 5: `group` takes the place within a group's table (a conference; `PostseasonInput.groupOrders`), and
+ * `byLeague` seeds a series winner by its place in the whole league (the NBA Finals' home court).
+ */
+export type PostseasonRef = { place: number; rank?: number; otherTier?: true; group?: string } | { winner: string; rank?: number; byLeague?: true } | { loser: string; rank?: number };
 export interface PostseasonSeriesSpec {
   id: string;
   stage: Exclude<CompetitionStage, 'regular'>;
@@ -64,9 +68,33 @@ export const bracket = (seeds: readonly PostseasonRef[], [qf, sf, final]: readon
   ];
 };
 export const places = (...values: number[]): PostseasonRef[] => values.map(place => ({ place }));
+/** NBA step 5: one conference's play-in (7-8, 9-10, then the loser of the first against the winner of the second) and its bracket. */
+const nbaConference = (group: 'east' | 'west'): PostseasonSeriesSpec[] => {
+  const id = (name: string) => `${group}-${name}`, place = (n: number) => ({ place: n, group });
+  return [
+    { id: id('pi-a'), stage: 'play-in', step: 'play-in-1', bestOf: 1, a: place(7), b: place(8) },
+    { id: id('pi-b'), stage: 'play-in', step: 'play-in-1', bestOf: 1, a: place(9), b: place(10) },
+    { id: id('pi-c'), stage: 'play-in', step: 'play-in-2', bestOf: 1, a: { loser: id('pi-a') }, b: { winner: id('pi-b') } },
+    { id: id('r1-a'), stage: 'round-of-16', step: 'first-round', bestOf: 7, a: place(1), b: { winner: id('pi-c'), rank: 8 } },
+    { id: id('r1-b'), stage: 'round-of-16', step: 'first-round', bestOf: 7, a: place(4), b: place(5) },
+    { id: id('r1-c'), stage: 'round-of-16', step: 'first-round', bestOf: 7, a: place(2), b: { winner: id('pi-a'), rank: 7 } },
+    { id: id('r1-d'), stage: 'round-of-16', step: 'first-round', bestOf: 7, a: place(3), b: place(6) },
+    { id: id('sf-a'), stage: 'quarter-final', step: 'conference-semi', bestOf: 7, a: { winner: id('r1-a') }, b: { winner: id('r1-b') } },
+    { id: id('sf-b'), stage: 'quarter-final', step: 'conference-semi', bestOf: 7, a: { winner: id('r1-c') }, b: { winner: id('r1-d') } },
+    { id: id('cf'), stage: 'semi-final', step: 'conference-final', bestOf: 7, a: { winner: id('sf-a') }, b: { winner: id('sf-b') } },
+  ];
+};
+
 const LNB = 'LNB 2026/27 competition regulations, articles 151-161: https://cdn.lnb.fr/uploads/content-library/39111ddae9f1edf9b1c739b6c69d3203ba0936c6d444634fa341d83db9fcc283.pdf';
 
 export const POSTSEASON_FORMATS: Readonly<Record<PostseasonFormatId, PostseasonFormat>> = Object.freeze({
+  'nba-2026-1': {
+    id: 'nba-2026-1', label: 'NBA play-in and playoffs', verified: true,
+    source: 'NBA play-in tournament and playoff format (NBA.com, 2025-26, unchanged for 2026-27): in each conference 7 v 8 and 9 v 10, then the loser of 7 v 8 against the winner of 9 v 10 for the eighth seed; first round 1-8, 4-5, 2-7, 3-6, conference semi-finals, conference finals and the NBA Finals, every series best of seven (2-2-1-1-1), home court to the better seed (in the Finals the better regular-season record). No promotion or relegation. Games every second day from the play-in (simplified calendar).',
+    series: [...nbaConference('east'), ...nbaConference('west'),
+      { id: 'final', stage: 'final', step: 'finals', bestOf: 7, a: { winner: 'east-cf', byLeague: true }, b: { winner: 'west-cf', byLeague: true } }],
+    champion: { series: 'final' }, promoted: [], relegated: [],
+  },
   'bbl-2026-1': {
     id: 'bbl-2026-1', label: 'Basketball Bundesliga playoffs', verified: true,
     source: 'easyCredit BBL Ausschreibung 2026/2027, sections 4.3-4.7: https://cms.easycredit-bbl.de/wp-content/uploads/2026/07/easyCredit-BBL-Ausschreibung-DM-2026_2027.pdf',
@@ -187,9 +215,12 @@ export const POSTSEASON_FORMATS: Readonly<Record<PostseasonFormatId, PostseasonF
 
 /** The highest regular-season place a format refers to in its own league (the league needs at least that many clubs). */
 export function postseasonPlacesNeeded(format: PostseasonFormat): number {
-  const own = [...format.series.flatMap(spec => [spec.a, spec.b]), ...format.promoted, ...format.relegated].flatMap(ref => 'place' in ref && !('otherTier' in ref && ref.otherTier) ? [ref.place] : []);
+  const refs = [...format.series.flatMap(spec => [spec.a, spec.b]), ...format.promoted, ...format.relegated];
+  const own = refs.flatMap(ref => 'place' in ref && !('otherTier' in ref && ref.otherTier) && !('group' in ref && ref.group) ? [ref.place] : []);
+  // NBA step 5: places within a group (a conference of half the league) need twice as many clubs.
+  const grouped = refs.flatMap(ref => 'place' in ref && 'group' in ref && ref.group ? [2 * ref.place] : []);
   // Places counted from the bottom must not reach the places counted from the top.
-  return Math.max(...own.filter(place => place > 0)) + own.filter(place => place < 0).length;
+  return Math.max(0, ...grouped, ...own.filter(place => place > 0)) + own.filter(place => place < 0).length;
 }
 
 /** Whether a league may use this format: its own country's format, or the generic one outside the real-data countries. */
@@ -202,7 +233,7 @@ export function postseasonFormatAllowed(id: string, country: string, tier: numbe
 /** The format each league uses by country and tier (sprint 3 scope). */
 export function postseasonFormatFor(country: string, tier: number): PostseasonFormatId | null {
   const key = `${country}/${tier}`;
-  return ({ 'Germany/1': 'bbl-2026-1', 'France/1': 'lnb-elite-2026-1', 'France/2': 'lnb-elite2-2026-1', 'Turkey/1': 'bsl-2026-1', 'Turkey/2': 'tbl-2026-1', 'Spain/1': 'acb-2026-1', 'Spain/2': 'primera-feb-2026-1', 'Italy/1': 'lba-2026-1', 'Italy/2': 'serie-a2-2026-1', 'Greece/1': 'gbl-2026-1' } as Record<string, PostseasonFormatId>)[key] ?? null;
+  return ({ 'Germany/1': 'bbl-2026-1', 'France/1': 'lnb-elite-2026-1', 'France/2': 'lnb-elite2-2026-1', 'Turkey/1': 'bsl-2026-1', 'Turkey/2': 'tbl-2026-1', 'Spain/1': 'acb-2026-1', 'Spain/2': 'primera-feb-2026-1', 'Italy/1': 'lba-2026-1', 'Italy/2': 'serie-a2-2026-1', 'Greece/1': 'gbl-2026-1', 'USA/1': 'nba-2026-1' } as Record<string, PostseasonFormatId>)[key] ?? null;
 }
 
 const HOSTS: Readonly<Record<1 | 3 | 5 | 7, readonly ('higher' | 'lower')[]>> = { 1: ['higher'], 3: ['higher', 'lower', 'higher'], 5: ['higher', 'higher', 'lower', 'lower', 'higher'], 7: ['higher', 'higher', 'lower', 'lower', 'higher', 'lower', 'higher'] };
@@ -265,6 +296,8 @@ export interface PostseasonInput {
   fixtures: readonly GameRecord[];
   /** A seed for each place's club, for formats seeded across groups (European competitions); the place itself otherwise. */
   rankOf?: (clubId: string) => number;
+  /** NBA step 5: each group's final table (club ids, first to last) for places within a group; null while unfinished. */
+  groupOrders?: Readonly<Record<string, readonly string[] | null>>;
 }
 
 export const postseasonFixtureId = (leagueId: string, seasonNumber: number, seriesId: string, game: number) => `${leagueId}-s${seasonNumber}-${seriesId}-g${game}`;
@@ -277,7 +310,7 @@ export function derivePostseason(input: PostseasonInput): { series: PostseasonSe
   const fixtures: ReturnType<typeof derivePostseason>['fixtures'] = [];
   const resolve = (ref: PostseasonRef): { clubId: string; rank: number } | null => {
     if ('place' in ref) {
-      const table = ref.otherTier ? input.otherOrder ?? null : order;
+      const table = ref.group ? input.groupOrders?.[ref.group] ?? null : ref.otherTier ? input.otherOrder ?? null : order;
       const clubId = table?.[ref.place < 0 ? table.length + ref.place : ref.place - 1];
       return clubId ? { clubId, rank: ref.rank ?? input.rankOf?.(clubId) ?? ref.place } : null;
     }
@@ -285,6 +318,8 @@ export function derivePostseason(input: PostseasonInput): { series: PostseasonSe
     const clubId = source ? ('winner' in ref ? source.winner : source.loser) : null;
     if (!source || !clubId) return null;
     const inherited = source.higher!.clubId === clubId ? source.higher!.rank : source.lower!.rank;
+    // NBA step 5: the Finals' home court goes by the whole league's table.
+    if ('byLeague' in ref && ref.byLeague) { const place = order?.indexOf(clubId) ?? -1; return { clubId, rank: place >= 0 ? place + 1 : inherited }; }
     return { clubId, rank: ref.rank ?? inherited };
   };
   for (const spec of format.series) {

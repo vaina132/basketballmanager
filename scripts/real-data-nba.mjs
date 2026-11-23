@@ -71,6 +71,9 @@ export const seconds = minutes => {
   return Number.isSafeInteger(value) ? value : null;
 };
 
+/** The first day of each regular season (UTC dates of the API-Sports schedule); earlier games are preseason. */
+export const NBA_SEASON_OPENERS = Object.freeze({ '2025-26': '2025-10-21', '2026-27': '2026-10-20' });
+
 /**
  * NBA season totals in the shape of the database view `player_season_totals` (one row per player, club and season),
  * from the cached box scores, with the import's own mapping (field_goals are two-pointers for this provider) and the
@@ -81,7 +84,8 @@ export function nbaSeasonTotals(rawDir) {
   const rows = new Map();
   for (const season of ['2025-2026', '2026-2027']) {
     const label = `${season.slice(0, 4)}-${season.slice(7, 9)}`;
-    const games = JSON.parse(readFileSync(join(rawDir, 'games', `${season}.json`), 'utf8')).response.filter(game => ['FT', 'AOT'].includes(game.status.short) && teams.has(game.teams.home.id) && teams.has(game.teams.away.id));
+    // Preseason games (stars rest, minutes are spread) are left out: only games from the regular season's opening day.
+    const games = JSON.parse(readFileSync(join(rawDir, 'games', `${season}.json`), 'utf8')).response.filter(game => ['FT', 'AOT'].includes(game.status.short) && teams.has(game.teams.home.id) && teams.has(game.teams.away.id) && game.date.slice(0, 10) >= NBA_SEASON_OPENERS[label]);
     const clubGames = new Map();
     const lines = [];
     for (const game of games) {
@@ -99,10 +103,11 @@ export function nbaSeasonTotals(rawDir) {
     }
     for (const { line, team } of lines) {
       const key = `${line.player.id}/${team}/${label}`;
-      const row = rows.get(key) ?? { player_id: String(line.player.id), provider_name: line.player.name, team_id: team, season_label: label, competition: 'NBA', kind: 'domestic', games_played: 0, seconds_played: 0, two_made: 0, two_attempted: 0, three_made: 0, three_attempted: 0, free_made: 0, free_attempted: 0, rebounds: 0, assists: 0, points: 0, club_games: clubGames.get(team) ?? 0, free_made_checked: 0, free_attempted_checked: 0, lines: 0, lines_consistent: 0, two_made_valid: 0, two_attempted_valid: 0, three_made_valid: 0, three_attempted_valid: 0 };
+      const row = rows.get(key) ?? { player_id: String(line.player.id), provider_name: line.player.name, team_id: team, season_label: label, competition: 'NBA', kind: 'domestic', games_played: 0, seconds_played: 0, two_made: 0, two_attempted: 0, three_made: 0, three_attempted: 0, free_made: 0, free_attempted: 0, rebounds: 0, assists: 0, points: 0, starts: 0, club_games: clubGames.get(team) ?? 0, free_made_checked: 0, free_attempted_checked: 0, lines: 0, lines_consistent: 0, two_made_valid: 0, two_attempted_valid: 0, three_made_valid: 0, three_attempted_valid: 0 };
       const s = seconds(line.minutes) ?? 0, v = value => Number(value ?? 0);
       const two = v(line.field_goals?.total), twoA = v(line.field_goals?.attempts), three = v(line.threepoint_goals?.total), threeA = v(line.threepoint_goals?.attempts), free = v(line.freethrows_goals?.total), freeA = v(line.freethrows_goals?.attempts), points = v(line.points);
       if (s > 0) row.games_played += 1;
+      if (s > 0 && line.type === 'starters') row.starts += 1;
       row.seconds_played += s; row.two_made += two; row.two_attempted += twoA; row.three_made += three; row.three_attempted += threeA; row.free_made += free; row.free_attempted += freeA;
       row.rebounds += v(line.rebounds?.total); row.assists += v(line.assists); row.points += points; row.lines += 1;
       const consistent = line.points != null && line.field_goals?.total != null && points === 2 * two + 3 * three + free && free <= freeA;

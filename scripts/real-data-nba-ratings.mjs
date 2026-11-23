@@ -25,7 +25,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RATING_RULES, NBA_LEVEL_RULES, computeRatings, fitCompetitionLevel, trustedFreeThrowSeasons, describeLevels } from './real-data-ratings.mjs';
-import { overallRating } from '../src/world/overall-rating.ts';
+import { overallRating, OVR_SCALE } from '../src/world/overall-rating.ts';
+import { roundProfile, weightedLevel } from '../supabase/functions/publish-starter-pack/rating-balance.ts';
 
 /** Each European competition's rating-3 conversion (dataset version 2026.11-world-1). */
 export const EUROPE_LEVELS = Object.freeze({
@@ -65,6 +66,90 @@ export const EUROPE_SCALE = Object.freeze({
   medians: { guardAssists: 4.64, forwardRebounds: 6.75, forwardThrees: 4.59 },
 });
 
+/**
+ * rating-4 NBA impact (23 November 2026): the abilities come from production per 40 minutes, so on the European scale
+ * a bench shooter on a good team matched a star (32 players at 99 overall). Each rated NBA player's overall level is
+ * set instead from an impact score: production per game (a Game Score without steals, blocks, turnovers and fouls,
+ * which the provider does not give), the per-40 rating itself, minutes per game and the share of games started, each
+ * standardised over the NBA players with 300+ weighted minutes. The score reads off a line (`centre` + `spread` x
+ * score) whose top is bent (from `bend` upwards, towards `top`), so a 99 needs a far higher score than a 90. The
+ * player's whole skill profile moves by the same amount, so his strengths and weaknesses stay; Europe is not touched.
+ * Preseason games are not counted (scripts/real-data-nba.mjs). The publishing function's position balance still runs
+ * afterwards on the NBA alone: it keeps this order within each position and the overall spread, but gives the best
+ * player of every position about the same overall, so `top` is set for about one 99 per position (5) and the second
+ * of a crowded position (point guards: Dončić, Gilgeous-Alexander, Cunningham) stays at 96-98.
+ */
+export const NBA_IMPACT_RULES = Object.freeze({
+  weights: Object.freeze({ production: 0.45, rating: 0.25, minutes: 0.15, starts: 0.15 }),
+  /** Game Score: points + 0.4 field goals made - 0.7 attempted - 0.4 missed free throws + 0.4 rebounds + 0.7 assists. */
+  gameScore: Object.freeze({ fieldMade: 0.4, fieldAttempted: -0.7, freeMissed: -0.4, rebounds: 0.4, assists: 0.7 }),
+  /** Few games say little: production and minutes per game start from a fringe player's, starts from none. */
+  priorGames: 15, priorGameScore: 3, priorMinutes: 10,
+  centre: 74, spread: 12, bend: 88, top: 104,
+});
+
+/** Recency-weighted NBA totals per player (regular season and playoffs), with Game Score, minutes and starts. */
+export function nbaImpactTotals(totals, rules = NBA_IMPACT_RULES) {
+  const byPlayer = new Map(), g = rules.gameScore;
+  for (const row of totals) {
+    if (row.competition !== 'NBA') continue;
+    const weight = RATING_RULES.recency[row.season_label] ?? 0.5, entry = byPlayer.get(row.player_id) ?? { games: 0, minutes: 0, starts: 0, gameScore: 0 };
+    const made = Number(row.two_made) + Number(row.three_made), attempted = Number(row.two_attempted) + Number(row.three_attempted);
+    entry.games += weight * Number(row.games_played); entry.minutes += weight * Number(row.seconds_played) / 60; entry.starts += weight * Number(row.starts ?? 0);
+    entry.gameScore += weight * (Number(row.points) + g.fieldMade * made + g.fieldAttempted * attempted + g.freeMissed * (Number(row.free_attempted) - Number(row.free_made)) + g.rebounds * Number(row.rebounds) + g.assists * Number(row.assists));
+    byPlayer.set(row.player_id, entry);
+  }
+  return new Map([...byPlayer].map(([id, entry]) => [id, {
+    ...entry,
+    production: (entry.gameScore + rules.priorGameScore * rules.priorGames) / (entry.games + rules.priorGames),
+    minutesPerGame: (entry.minutes + rules.priorMinutes * rules.priorGames) / (entry.games + rules.priorGames),
+    startShare: entry.starts / (entry.games + rules.priorGames),
+  }]));
+}
+
+/** The target overall for an impact score: the line, its top bent towards `top` above `bend`. */
+export function impactOverall(score, rules = NBA_IMPACT_RULES) {
+  const straight = rules.centre + rules.spread * score;
+  if (straight <= rules.bend) return straight;
+  const room = rules.top - rules.bend;
+  return rules.bend + room * Math.tanh((straight - rules.bend) / room);
+}
+
+/**
+ * Moves each rated NBA player's abilities (in place, on the rating rows of `byId`) so that his overall level is the one
+ * his impact score gives (NBA_IMPACT_RULES); returns the score and its inputs by API-Sports id for the report.
+ */
+export function applyNbaImpact(standard, byId, totals, positionOf, rules = NBA_IMPACT_RULES) {
+  const totalsById = nbaImpactTotals(totals, rules);
+  const entries = standard.filter(player => byId.has(player.apiPlayerId) && totalsById.has(player.apiPlayerId)).map(player => {
+    const rating = byId.get(player.apiPlayerId), position = positionOf(player), age = rating.method.age;
+    const penalty = age && age > RATING_RULES.staminaAge ? Math.min(4, age - RATING_RULES.staminaAge) : 0;
+    const base = Object.fromEntries(Object.entries(GAME_KEYS).map(([key, game]) => [game, rating.unclamped[key] - (key === 'stamina' ? penalty : 0)]));
+    return { player, rating, position, base, totals: totalsById.get(player.apiPlayerId), level: weightedLevel(base, position) };
+  });
+  const pool = entries.filter(entry => entry.rating.method.weightedMinutes >= RATING_RULES.scaleMinutes);
+  const feature = { production: entry => entry.totals.production, rating: entry => entry.level, minutes: entry => entry.totals.minutesPerGame, starts: entry => entry.totals.startShare };
+  const scales = Object.fromEntries(Object.entries(feature).map(([name, read]) => {
+    const values = pool.map(read), m = values.reduce((a, b) => a + b, 0) / values.length, s = Math.sqrt(values.reduce((a, b) => a + (b - m) ** 2, 0) / values.length) || 1;
+    return [name, value => (value - m) / s];
+  }));
+  const clamp = value => Math.max(1, Math.min(20, value));
+  const out = new Map();
+  for (const entry of entries) {
+    const score = Object.entries(rules.weights).reduce((sum, [name, weight]) => sum + weight * scales[name](feature[name](entry)), 0);
+    const target = impactOverall(score, rules), level = (target - OVR_SCALE.offset) / OVR_SCALE.perSkillPoint;
+    // The same move for every skill, found by bisection because skills stop at 1 and 20.
+    let low = -25, high = 25;
+    for (let step = 0; step < 60; step += 1) { const middle = (low + high) / 2; if (weightedLevel(Object.fromEntries(Object.entries(entry.base).map(([key, value]) => [key, clamp(value + middle)])), entry.position) < level) low = middle; else high = middle; }
+    const moved = Object.fromEntries(Object.entries(entry.base).map(([key, value]) => [key, clamp(value + high)]));
+    const attributes = roundProfile(moved, entry.position);
+    for (const [key, game] of Object.entries(GAME_KEYS)) entry.rating[key] = attributes[game];
+    const round = value => Math.round(value * 100) / 100;
+    out.set(entry.player.apiPlayerId, { score: round(score), target: round(target), production: round(entry.totals.production), minutesPerGame: round(entry.totals.minutesPerGame), startShare: round(entry.totals.startShare), games: round(entry.totals.games), per40Overall: round(OVR_SCALE.perSkillPoint * entry.level + OVR_SCALE.offset) });
+  }
+  return out;
+}
+
 const GAME_KEYS = { two_point: 'twoPoint', three_point: 'threePoint', free_throw: 'freeThrow', passing: 'passing', defense: 'defense', rebounding: 'rebounding', stamina: 'stamina' };
 const GROUP = { PG: 'Guard', SG: 'Guard', SF: 'Forward', PF: 'Forward', C: 'Center' };
 const OPENING = '2026-09-05';
@@ -76,7 +161,7 @@ const withinGroup = (group, method) => {
   return { G: 'SG', GF: 'SF', FG: 'SF', F: 'SF', FC: 'PF', CF: 'PF', C: 'C' }[group] ?? 'SF';
 };
 
-export function rateNba(data, europeRows, rules = NBA_LEVEL_RULES) {
+export function rateNba(data, europeRows, rules = NBA_LEVEL_RULES, impactRules = NBA_IMPACT_RULES) {
   const competitions = [...EUROPE_COMPETITIONS, { name: 'NBA', kind: 'domestic', tier: 1 }];
   const fixed = new Map(Object.entries(EUROPE_LEVELS).map(([name, level]) => [name, { ...level, measured: true }]));
   const europe = europeRows.map(([apiId, , , season, competition, secondsPlayed, games, clubGames, twoMade, twoAtt, threeMade, threeAtt, freeMade, freeAtt, rebounds, assists]) => ({
@@ -95,6 +180,7 @@ export function rateNba(data, europeRows, rules = NBA_LEVEL_RULES) {
   const ids = new Set(profiles.map(profile => profile.id));
   const ratings = computeRatings(rows.filter(row => ids.has(row.player_id)), profiles, levels, trusted, { competitions, scale: EUROPE_SCALE, unclamped: true });
   const byId = new Map(ratings.map(rating => [rating.player_id, rating]));
+  const impacts = applyNbaImpact(standard, byId, data.totals, player => player.position ?? withinGroup(player.group, byId.get(player.apiPlayerId)?.method), impactRules);
   // Players without statistics start from the NBA's average profile of their position (the game lifts them to their club's level).
   const averages = {};
   for (const position of ['PG', 'SG', 'SF', 'PF', 'C']) {
@@ -110,7 +196,7 @@ export function rateNba(data, europeRows, rules = NBA_LEVEL_RULES) {
     if (!player.weightKg) estimated.push('weight_kg');
     const attributes = rating ? Object.fromEntries(Object.entries(GAME_KEYS).map(([key, game]) => [game, rating[key]])) : { ...averages[position] };
     return {
-      ...player, position, positionSource: player.position ? 'provider' : 'estimated', attributes, ...(rating ? { unclamped: rating.unclamped, ratingMinutes: Math.round(rating.method.weightedMinutes), ratingGames: Math.round(rating.method.weightedGames * 10) / 10, method: rating.method } : {}),
+      ...player, position, positionSource: player.position ? 'provider' : 'estimated', attributes, ...(rating ? { unclamped: rating.unclamped, ratingMinutes: Math.round(rating.method.weightedMinutes), ratingGames: Math.round(rating.method.weightedGames * 10) / 10, method: rating.method } : {}), ...(impacts.has(player.apiPlayerId) ? { impact: impacts.get(player.apiPlayerId) } : {}),
       age: player.birthDate ? ageOn(player.birthDate) : null, estimated: [...new Set(estimated)].sort(), overall: overallRating(attributes, position),
     };
   });

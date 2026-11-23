@@ -32,7 +32,7 @@ export function wikiPlayers(text) {
     const position = strip(params.pos).toUpperCase();
     if (!name || !position) continue;
     const height = Number(String(params.m ?? '').replace(',', '.')), born = /^\d{4}$/.test(params.year ?? '') && /^\d{1,2}$/.test(params.month ?? '') && /^\d{1,2}$/.test(params.date ?? params.day ?? '') ? `${params.year}-${params.month.padStart(2, '0')}-${(params.date ?? params.day).padStart(2, '0')}` : undefined;
-    players.push({ name, number: /^\d{1,2}$/.test(params.num ?? '') ? Number(params.num) : null, position, ...(height >= 1.5 && height <= 2.4 ? { heightCm: Math.round(height * 100) } : {}), ...(born && Number.isFinite(Date.parse(born)) ? { birthDate: born } : {}) });
+    players.push({ name, number: /^\d{1,2}$/.test(params.num ?? '') ? Number(params.num) : null, position, ...(height >= 1.5 && height <= 2.4 ? { heightCm: Math.round(height * 100) } : {}), ...(born && Number.isFinite(Date.parse(born)) ? { birthDate: born } : {}), ...(strip(params.nat) ? { nationality: strip(params.nat) } : {}) });
   }
   return players;
 }

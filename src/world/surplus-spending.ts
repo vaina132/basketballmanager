@@ -7,6 +7,7 @@ import { getSpendablePosition } from './payroll-policy';
 import { seasonSalaryBudget } from './board-consequences';
 import { derivePresidentTraits } from './presidents';
 import { seasonEndNets, successNeed, SPENDING_BALANCE_RULES, usesSpendingBalance } from './spending-balance';
+import { isCapClub } from './club-roster-policy';
 
 /**
  * Format 88 (owner decision, 23 November 2026: "Rich clubs can spend more on wages, more on signing new players and
@@ -181,6 +182,8 @@ export function anchoredSurplus(state: SpendingContext & { seasonNumber: number 
  */
 export function surplusWageRoom(state: SpendingContext & { seasonNumber: number }, clubId: string, seasonNumber: number): number {
   if (!usesSurplusSpending(state) || !state.world || clubId === state.managedClubId || seasonNumber > state.seasonNumber + 1 || seasonNumber < state.seasonNumber) return 0;
+  // Format 92: an NBA club's payroll stays within its owner's ceiling and the cap rules; spare cash adds no wage room.
+  if (isCapClub(state, clubId)) return 0;
   const appetite = clubAppetite(state, clubId, 'squad');
   if (appetite <= 0) return 0;
   const plan = anchoredSurplus(state, clubId) * appetite * SURPLUS_SPENDING_RULES.seasonSpendShare;

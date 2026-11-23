@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { nbaGames } from './helpers/nba-calibration';
 
 /**
- * NBA step 3: NBA match calibration on NBA-strength squads (tests/helpers/nba-calibration.ts: twelve squads 2.5-4 skill
- * points above the European regulars, every pair home and away twice, play model with match flow, NBA rules). Targets
+ * NBA step 3: NBA match calibration on NBA-strength squads (tests/helpers/nba-calibration.ts: twelve squads on the real
+ * NBA rotations' position profiles, every pair home and away twice, play model with match flow, NBA rules). Targets
  * per team per game (src/engine/calibration.ts, NBA_CALIBRATION): points 114, pace 99, FG 47%, 37 three-point attempts
  * at 36% (42% of shots), 21.5 free throws at 78%, 44 rebounds (11 offensive), 26.5 assists, 14 turnovers, 8 steals,
  * 5 blocks, 19 fouls, 6% overtime, home teams win 54-55%, starters 30-34 minutes.

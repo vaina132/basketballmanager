@@ -12,12 +12,12 @@ const POSITION_MEANS: Readonly<Record<Position, PlayerAttributes>> = {
 const HEIGHTS: Readonly<Record<Position, number>> = { PG: 188, SG: 194, SF: 200, PF: 206, C: 211 };
 const SQUAD: readonly Position[] = ['PG', 'SG', 'SF', 'SF', 'C', 'PG', 'SG', 'SF', 'PF', 'C', 'SF', 'PF'];
 /** A generated twelve-player calibration squad `strength` skill points above the regulars' mean (same generator as the calibration test). */
-export function calibrationTeam(index: number, strength: number): Team {
+export function calibrationTeam(index: number, strength: number, means: Readonly<Record<Position, PlayerAttributes>> = POSITION_MEANS): Team {
   let state = 0x9e3779b9 ^ (index + 1) * 2654435761;
   const random = () => { state ^= state << 13; state ^= state >>> 17; state ^= state << 5; return (state >>> 0) / 0x1_0000_0000; };
   const players: Player[] = SQUAD.map((position, slot) => {
     const depth = slot < 5 ? 0 : slot < 9 ? -1 : -2;
-    const attributes = Object.fromEntries(Object.entries(POSITION_MEANS[position]).map(([key, mean]) => [key, Math.max(1, Math.min(20, Math.round(mean + strength + depth + (random() - .5) * 4)))])) as unknown as PlayerAttributes;
+    const attributes = Object.fromEntries(Object.entries(means[position]).map(([key, mean]) => [key, Math.max(1, Math.min(20, Math.round(mean + strength + depth + (random() - .5) * 4)))])) as unknown as PlayerAttributes;
     const id = `cal-${index}-${slot}`;
     return { id, name: `Player ${index}-${slot}`, number: slot + 4, position, heightCm: HEIGHTS[position], weightKg: 95, skinTone: '#9aa0a8', hairColor: '#3b3f45', attributes: withExtraAttributes({ id, position, heightCm: HEIGHTS[position], attributes }) };
   });

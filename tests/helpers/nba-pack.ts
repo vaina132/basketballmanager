@@ -1,5 +1,6 @@
 import type { DataPack, DataPackCompetition, DataPackPlayer } from '../../src/world/data-pack';
 import { economyPack, type EconomyPackLeague } from './economy-pack';
+import { REAL_NBA_COACH_POSTS } from '../../src/data/real-coaches';
 
 /**
  * A synthetic NBA pack for tests (the real NBA data is not published yet): the 30 clubs with their real names,
@@ -17,6 +18,21 @@ const DIVISIONS: readonly (readonly [conference: 'east' | 'west', id: string, na
 const positions = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
 
 export const NBA_CLUB_IDS: readonly string[] = DIVISIONS.flatMap(([, , , clubs]) => clubs.map(([id]) => `nba-${id}`));
+
+/** NBA step 10: a club's id in the real pack (the id its real head coach's post names), from its synthetic id. */
+export function realNbaClubId(syntheticId: string): string {
+  const name = DIVISIONS.flatMap(([, , , clubs]) => clubs).find(([id]) => `nba-${id}` === syntheticId)![1];
+  const post = REAL_NBA_COACH_POSTS.find(item => item.team === name || item.team === name.replace(/^LA /, 'Los Angeles '));
+  if (!post) throw new Error(`No real NBA post for ${name}.`);
+  return post.teamId;
+}
+
+/** NBA step 10: the synthetic pack with the real pack's NBA club ids (so their real head coaches are found). */
+export function realIdNbaPack(european: readonly EconomyPackLeague[] = [], euroleague: Parameters<typeof economyPack>[1] = null): DataPack {
+  let text = JSON.stringify(nbaPack(european, euroleague));
+  for (const id of NBA_CLUB_IDS) text = text.replaceAll(`"${id}"`, `"${realNbaClubId(id)}"`).replaceAll(`"${id}-p`, `"${realNbaClubId(id)}-p`);
+  return JSON.parse(text) as DataPack;
+}
 
 /** Fifteen players a club; `level` (16-19) sets its best player's abilities, each next player one lower (at least 7). */
 function nbaSquad(clubId: string, level: number): DataPackPlayer[] {
@@ -41,8 +57,8 @@ export function nbaCompetition(): DataPackCompetition {
 }
 
 /** The synthetic NBA, with European leagues from `economyPack` when given. */
-export function nbaPack(european: readonly EconomyPackLeague[] = []): DataPack {
-  const base = european.length ? economyPack(european) : null;
+export function nbaPack(european: readonly EconomyPackLeague[] = [], euroleague: Parameters<typeof economyPack>[1] = null): DataPack {
+  const base = european.length ? economyPack(european, euroleague) : null;
   const clubs = DIVISIONS.flatMap(([, , , list]) => list).map(([id, name, short, arena, seats], index) => {
     const clubId = `nba-${id}`, players = nbaSquad(clubId, 16 + (index * 7) % 4);
     return { club: { id: clubId, name, shortName: short, country: 'USA', city: null, arena, color: '#1d428a', secondaryColor: null, identitySource: null, playerIds: players.map(player => player.id), capacity: seats }, players };

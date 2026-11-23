@@ -36,6 +36,7 @@ const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:0
 
 function titlesText(coach: HeadCoach): string[] {
   const t = coach.titles, lines: string[] = []
+  if (t.nba) lines.push(`${t.nba} NBA championship${t.nba > 1 ? 's' : ''}`)
   if (t.euroleague) lines.push(`${t.euroleague} EuroLeague title${t.euroleague > 1 ? 's' : ''}`)
   if (t.europe) lines.push(`${t.europe} other European title${t.europe > 1 ? 's' : ''}`)
   if (t.league) lines.push(`${t.league} league title${t.league > 1 ? 's' : ''}`)

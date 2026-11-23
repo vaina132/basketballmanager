@@ -158,6 +158,12 @@ export interface CareerWorld {
   surplusSpending?: true;
   /** NBA step 4 (format 90, new careers with the option `nba`): the NBA league of this world. */
   nba?: NbaWorld;
+  /**
+   * NBA step 10 (format 92, new careers with the NBA and the option `nbaJobs`): NBA careers. NBA clubs start with their
+   * real head coaches, NBA jobs rank above EuroLeague jobs, which rank above other top-division jobs, and an NBA job asks
+   * for a reputation of about 60-70 (`src/world/nba-jobs.ts`). Only worlds with the NBA carry it.
+   */
+  nbaJobs?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

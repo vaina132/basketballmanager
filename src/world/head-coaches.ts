@@ -4,12 +4,13 @@ import type { ManagerProfile } from '../domain/manager';
 import type { SeasonState } from '../domain/season';
 import type { Player, Tactics, Team } from '../domain/types';
 import type { CareerWorld, WorldContext } from '../domain/world';
-import { REAL_COACHES, REAL_COACH_POSTS, type RealCoach } from '../data/real-coaches';
+import { REAL_COACHES, REAL_COACH_POSTS, REAL_NBA_COACHES, REAL_NBA_COACH_POSTS, type RealCoach } from '../data/real-coaches';
 import { NATIONAL_TEAMS } from '../data/national-teams';
 import { countryName, nameCapacity, NAME_COUNTRIES } from '../data/people-names';
 import { COACH_LEVELS, coachAge, coachHash, coachOverall, estimateCoach, NO_TITLES } from './coach-ratings';
 import { careerPointKey } from './career-rules';
-import { clubCountry, seasonRounds, worldOf } from './career-world';
+import { clubCountry, isNbaClub, seasonRounds, worldOf } from './career-world';
+import { isNbaJob, nbaCoachFacts, usesNbaJobs } from './nba-jobs';
 import { overallRating } from './overall-rating';
 import { managedClubFor } from './career';
 import { seasonVerdict } from './board-consequences';
@@ -58,9 +59,14 @@ export const headCoachWorld = (world: CareerWorld): boolean => world.source === 
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const realById = new Map(REAL_COACHES.map(coach => [coach.id, coach]));
+// NBA step 10 (format 92): the NBA's head coaches, rated at the NBA job level with their NBA championships counted apart.
+let nbaFacts: Map<string, RealCoach> | null = null;
+const nbaById = () => nbaFacts ??= new Map(REAL_NBA_COACHES.map(coach => [coach.id, nbaCoachFacts(coach)]));
 
 /** The level of a world club for a generated coach: its league's tier and European competition. */
 export function worldClubLevel(world: CareerWorld, clubId: string): number {
+  // NBA step 10 (format 92): an NBA club is the highest coaching job.
+  if (isNbaJob(world, clubId)) return COACH_LEVELS.nba;
   const europe = world.europeanCompetitions?.filter(competition => competition.clubIds.includes(clubId)) ?? [];
   if (europe.some(competition => competition.kind === 'euroleague')) return COACH_LEVELS.euroleague;
   const league = world.domesticLeagues?.find(item => item.clubIds.includes(clubId)) ?? world.backgroundLeagues?.find(item => item.clubIds.includes(clubId));
@@ -99,10 +105,13 @@ export function coachWorld(world: CareerWorld): CoachWorld {
   const known = coachWorlds.get(world);
   if (known) return known;
   const coaches = new Map<string, HeadCoach>(), opening = new Map<string, string>(), national = new Map<string, string>(), pull = new Map<string, number>();
-  const taken = new Set<string>([...REAL_COACHES.map(coach => coach.name)]);
+  const nbaJobs = usesNbaJobs(world);
+  const taken = new Set<string>([...REAL_COACHES.map(coach => coach.name), ...(nbaJobs ? REAL_NBA_COACHES.map(coach => coach.name) : [])]);
   const real = (coach: RealCoach) => { if (!coaches.has(coach.id)) coaches.set(coach.id, estimateCoach(coach.id, coach, coach.level, world.startDate)); return coaches.get(coach.id)!; };
   for (const club of world.clubs) {
-    const post = REAL_COACH_POSTS.find(item => item.teamId === club.id), facts = post && realById.get(post.coachId);
+    // NBA step 10 (format 92): NBA clubs of an NBA career start with their real head coaches.
+    const nbaPost = nbaJobs && isNbaClub(world, club.id) ? REAL_NBA_COACH_POSTS.find(item => item.teamId === club.id) : undefined;
+    const post = nbaPost ?? REAL_COACH_POSTS.find(item => item.teamId === club.id), facts = post && (nbaPost ? nbaById() : realById).get(post.coachId);
     const used = facts && [...opening.values()].includes(facts.id);
     if (facts && !used) {
       const coach = real(facts);

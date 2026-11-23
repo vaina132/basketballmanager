@@ -7,9 +7,10 @@ import { COACH_ATTRIBUTES, type CoachAttribute, type CoachAttributes, type Coach
  *
  * 1. Record R = 4 EuroLeague titles + 1.2 other European titles + 0.3 league titles (at most 8 count) + 0.12 cups (at most
  *    8 count) + 1 per national medal (gold counts 1.5) + 0.3 coach-of-the-year awards. European titles weigh most because
- *    domestic titles in a weaker league are easier to win.
+ *    domestic titles in a weaker league are easier to win. NBA step 10 (format 92): an NBA championship counts 4, like a
+ *    EuroLeague title.
  * 2. Level L of his current job (`COACH_LEVELS`): EuroLeague club 4, top division club in a European cup 3, top division 2,
- *    second division 0.5; national teams by level 3.5, 2.5, 1.5.
+ *    second division 0.5; national teams by level 3.5, 2.5, 1.5. NBA step 10 (format 92): an NBA club 4.5.
  * 3. Experience X = min(2, years as head coach / 8), 6 years when unknown.
  * 4. Quality Q = 7.5 + L + min(4, 1.1 √R) + X, between 6 and 18.5.
  * 5. Attribute = Q + personal lean (seeded from the name, -2 to +2, adding up to zero) + age + "known for" hints, rounded, 1-20.
@@ -18,7 +19,7 @@ import { COACH_ATTRIBUTES, type CoachAttribute, type CoachAttributes, type Coach
 export const COACH_RATING_MODEL = 'coach-ratings-1' as const;
 
 /** The level of a coach's job used by the formula. */
-export const COACH_LEVELS = Object.freeze({ euroleague: 4, european: 3, top: 2, second: 0.5, national1: 3.5, national2: 2.5, national3: 1.5 });
+export const COACH_LEVELS = Object.freeze({ nba: 4.5, euroleague: 4, european: 3, top: 2, second: 0.5, national1: 3.5, national2: 2.5, national3: 1.5 });
 
 /** What a coach is widely known for (game estimate), each adding to an attribute and to the style. */
 export type CoachHint = 'defence' | 'offence' | 'pace' | 'threes' | 'youth' | 'discipline' | 'motivation' | 'tactics';
@@ -54,7 +55,7 @@ export function coachAge(born: string | null, date: string): number | null {
 }
 
 export function recordScore(titles: CoachTitles): number {
-  return 4 * titles.euroleague + 1.2 * titles.europe + 0.3 * Math.min(8, titles.league) + 0.12 * Math.min(8, titles.cup) + titles.national + 0.3 * titles.awards;
+  return 4 * titles.euroleague + 4 * (titles.nba ?? 0) + 1.2 * titles.europe + 0.3 * Math.min(8, titles.league) + 0.12 * Math.min(8, titles.cup) + titles.national + 0.3 * titles.awards;
 }
 
 /** Years as a head coach in the season starting on `date` (6 when unknown), and the experience term X. */

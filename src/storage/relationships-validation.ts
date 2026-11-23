@@ -36,6 +36,24 @@ function seasonRecords(state: SeasonState, year: number) {
   return source;
 }
 
+/**
+ * The career's head-coach record as the season change froze morale: the rollover freezes the new season's first matchday
+ * before it records the manager's change of attributes for the completed season (`rolloverSeason`), so his Motivation
+ * (format 86) still counts without that change there. Later matchdays read the record as saved.
+ */
+const rolloverCoachesCache = new WeakMap<NonNullable<SeasonState['coaches']>, Map<number, NonNullable<SeasonState['coaches']>>>();
+function rolloverFreezeCoaches(coaches: NonNullable<SeasonState['coaches']>, seasonNumber: number): NonNullable<SeasonState['coaches']> {
+  if (!coaches.manager.seasons.some(season => season.seasonNumber >= seasonNumber - 1)) return coaches;
+  let bySeason = rolloverCoachesCache.get(coaches);
+  if (!bySeason) { bySeason = new Map(); rolloverCoachesCache.set(coaches, bySeason); }
+  let result = bySeason.get(seasonNumber);
+  if (!result) {
+    result = { ...coaches, manager: { ...coaches.manager, seasons: coaches.manager.seasons.filter(season => season.seasonNumber < seasonNumber - 1) } };
+    bySeason.set(seasonNumber, result);
+  }
+  return result;
+}
+
 /** Reconstruct only sporting evidence already committed when the player decision was made. */
 function contextAt(state: SeasonState, anchor: RelationshipAnchor, relationships: SeasonRelationships): SeasonState {
   const source = seasonRecords(state, anchor.seasonNumber);
@@ -201,6 +219,8 @@ export function validateRelationships(state: SeasonState, version: number): void
       replay = { ...replay, negotiations: { ...replay.negotiations, records: records.slice(0, count) } };
     }
     if (emptied) emptiedEvents.add(index);
+    // The rollover's freeze of a new season's first matchday comes before the manager's season change is recorded.
+    if (event.type === 'prepare' && current.round === 1 && current.seasonNumber >= 2 && replay.coaches) replay = { ...replay, coaches: rolloverFreezeCoaches(replay.coaches, current.seasonNumber) };
     const applied = emptied ? { ...event, ...preparationValues(replay) } as RelationshipEvent : event;
     try { replay = applyRelationshipEvent(replay, applied); } catch (error) { fail(path, `does not follow the relationship rules: ${error instanceof Error ? error.message : 'invalid command'}`); }
     previous = current;

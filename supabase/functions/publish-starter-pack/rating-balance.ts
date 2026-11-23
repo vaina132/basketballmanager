@@ -300,3 +300,21 @@ export function balanceRatings<T extends BalancePlayer>(players: readonly T[], c
   };
   return { players: out, summary };
 }
+
+/**
+ * v8 (NBA, 23 November 2026): one country's clubs (the USA: the NBA) are balanced on their own and every other club
+ * exactly as before. The NBA's ratings are already on the shared European scale (rating-4), so its own pool keeps its
+ * level and spread while its positions are lined up and its bench roles cost what they cost in Europe; the other
+ * players, competitions and their order are those of a pack without that country, so they get identical ratings.
+ * Without clubs of that country the result is exactly balanceRatings on the whole pack.
+ */
+export function balanceBySeparateCountry<T extends BalancePlayer>(players: readonly T[], competitions: readonly (BalanceCompetition & { country?: string | null })[], country: string, options: BalanceOptions<T> = {}): { players: T[]; summary: RatingBalanceSummary; usa: RatingBalanceSummary | null } {
+  const own = competitions.filter(competition => competition.country === country);
+  const ownClubs = new Set(own.flatMap(competition => competition.clubIds));
+  const inside = players.filter(player => ownClubs.has(player.clubId));
+  if (!inside.length) { const result = balanceRatings(players, competitions, options); return { ...result, usa: null }; }
+  const rest = balanceRatings(players.filter(player => !ownClubs.has(player.clubId)), competitions.filter(competition => competition.country !== country), options);
+  const separate = balanceRatings(inside, own, options);
+  const byId = new Map<string, T>([...rest.players, ...separate.players].map(player => [player.id, player]));
+  return { players: players.map(player => byId.get(player.id)!), summary: rest.summary, usa: separate.summary };
+}

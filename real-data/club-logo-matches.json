@@ -1,5 +1,5 @@
 {
- "source": "API-Sports team lists 2026-27, matched 22 November 2026",
+ "source": "API-Sports team lists 2026-27, matched 22 November 2026; NBA clubs from the API-Sports league 12 team list 2026-27, matched 23 November 2026",
  "clubs": [
   {
    "clubId": "club-b5b3bb06-6c4c-4625-947f-66525fac1051",
@@ -1561,6 +1561,216 @@
    "apiSportsTeamId": 1159,
    "apiSportsTeam": "Zamora",
    "logo": true
+  },
+  {
+   "clubId": "club-4125871b-579a-50ca-8ab8-ffcfb4123ea8",
+   "club": "Atlanta Hawks",
+   "apiSportsTeamId": 132,
+   "apiSportsTeam": "Atlanta Hawks",
+   "logo": true
+  },
+  {
+   "clubId": "club-a92a6c41-e031-55af-b6c5-47fec3ae505a",
+   "club": "Boston Celtics",
+   "apiSportsTeamId": 133,
+   "apiSportsTeam": "Boston Celtics",
+   "logo": true
+  },
+  {
+   "clubId": "club-830e2a9d-0f43-5352-8fb4-8ccfc07c77a1",
+   "club": "Brooklyn Nets",
+   "apiSportsTeamId": 134,
+   "apiSportsTeam": "Brooklyn Nets",
+   "logo": true
+  },
+  {
+   "clubId": "club-77492a01-e8e3-5f84-8bd4-9a21bf201465",
+   "club": "Charlotte Hornets",
+   "apiSportsTeamId": 135,
+   "apiSportsTeam": "Charlotte Hornets",
+   "logo": true
+  },
+  {
+   "clubId": "club-1ed033d3-4c4f-5bf0-ab1b-2ee5ef84ab75",
+   "club": "Chicago Bulls",
+   "apiSportsTeamId": 136,
+   "apiSportsTeam": "Chicago Bulls",
+   "logo": true
+  },
+  {
+   "clubId": "club-3f26292f-b1ef-5c9a-ab3c-3c88c3705d15",
+   "club": "Cleveland Cavaliers",
+   "apiSportsTeamId": 137,
+   "apiSportsTeam": "Cleveland Cavaliers",
+   "logo": true
+  },
+  {
+   "clubId": "club-ce3ade59-2551-509d-91d5-ae22f3a27de8",
+   "club": "Dallas Mavericks",
+   "apiSportsTeamId": 138,
+   "apiSportsTeam": "Dallas Mavericks",
+   "logo": true
+  },
+  {
+   "clubId": "club-e15ae643-4bf6-550e-b417-3ac1c45a133c",
+   "club": "Denver Nuggets",
+   "apiSportsTeamId": 139,
+   "apiSportsTeam": "Denver Nuggets",
+   "logo": true
+  },
+  {
+   "clubId": "club-83db9394-2dba-500b-8185-7a8cc1c93084",
+   "club": "Detroit Pistons",
+   "apiSportsTeamId": 140,
+   "apiSportsTeam": "Detroit Pistons",
+   "logo": true
+  },
+  {
+   "clubId": "club-d39ade85-d627-593b-90b5-8e8b111a4ef7",
+   "club": "Golden State Warriors",
+   "apiSportsTeamId": 141,
+   "apiSportsTeam": "Golden State Warriors",
+   "logo": true
+  },
+  {
+   "clubId": "club-69f03c76-1b4a-5367-9883-7fcc016b1960",
+   "club": "Houston Rockets",
+   "apiSportsTeamId": 142,
+   "apiSportsTeam": "Houston Rockets",
+   "logo": true
+  },
+  {
+   "clubId": "club-41cd990d-0d9b-5237-94dc-f4ef21f0ce56",
+   "club": "Indiana Pacers",
+   "apiSportsTeamId": 143,
+   "apiSportsTeam": "Indiana Pacers",
+   "logo": true
+  },
+  {
+   "clubId": "club-20f743c1-d700-5724-bfb2-6f4dec1e489c",
+   "club": "Los Angeles Clippers",
+   "apiSportsTeamId": 144,
+   "apiSportsTeam": "Los Angeles Clippers",
+   "logo": true
+  },
+  {
+   "clubId": "club-86d4c2de-6b24-58dd-8827-bff0727cacb2",
+   "club": "Los Angeles Lakers",
+   "apiSportsTeamId": 145,
+   "apiSportsTeam": "Los Angeles Lakers",
+   "logo": true
+  },
+  {
+   "clubId": "club-b23af187-c94a-57bb-8c30-eb848206ee53",
+   "club": "Memphis Grizzlies",
+   "apiSportsTeamId": 146,
+   "apiSportsTeam": "Memphis Grizzlies",
+   "logo": true
+  },
+  {
+   "clubId": "club-065e21cd-5922-54f2-8876-cfb487f3983f",
+   "club": "Miami Heat",
+   "apiSportsTeamId": 147,
+   "apiSportsTeam": "Miami Heat",
+   "logo": true
+  },
+  {
+   "clubId": "club-2437b21b-117d-5ac7-b271-3c55a90e4907",
+   "club": "Milwaukee Bucks",
+   "apiSportsTeamId": 148,
+   "apiSportsTeam": "Milwaukee Bucks",
+   "logo": true
+  },
+  {
+   "clubId": "club-ab516174-eaca-517e-98e3-3a10b7acfde2",
+   "club": "Minnesota Timberwolves",
+   "apiSportsTeamId": 149,
+   "apiSportsTeam": "Minnesota Timberwolves",
+   "logo": true
+  },
+  {
+   "clubId": "club-36461718-fb23-55c9-ba55-3c427cb0ccbf",
+   "club": "New Orleans Pelicans",
+   "apiSportsTeamId": 150,
+   "apiSportsTeam": "New Orleans Pelicans",
+   "logo": true
+  },
+  {
+   "clubId": "club-b550ac60-c880-5afe-8817-903473c9b581",
+   "club": "New York Knicks",
+   "apiSportsTeamId": 151,
+   "apiSportsTeam": "New York Knicks",
+   "logo": true
+  },
+  {
+   "clubId": "club-9a1dd034-0fa3-5705-bed9-122194afcf18",
+   "club": "Oklahoma City Thunder",
+   "apiSportsTeamId": 152,
+   "apiSportsTeam": "Oklahoma City Thunder",
+   "logo": true
+  },
+  {
+   "clubId": "club-31072f53-a341-5868-9432-641b9738609b",
+   "club": "Orlando Magic",
+   "apiSportsTeamId": 153,
+   "apiSportsTeam": "Orlando Magic",
+   "logo": true
+  },
+  {
+   "clubId": "club-f13a007c-7961-53a5-a900-59e81e16f4f4",
+   "club": "Philadelphia 76ers",
+   "apiSportsTeamId": 154,
+   "apiSportsTeam": "Philadelphia 76ers",
+   "logo": true
+  },
+  {
+   "clubId": "club-9e010b81-f165-5951-93b0-05fdbe77b759",
+   "club": "Phoenix Suns",
+   "apiSportsTeamId": 155,
+   "apiSportsTeam": "Phoenix Suns",
+   "logo": true
+  },
+  {
+   "clubId": "club-d0395b5b-85d7-5c81-bff7-18d83940f178",
+   "club": "Portland Trail Blazers",
+   "apiSportsTeamId": 156,
+   "apiSportsTeam": "Portland Trail Blazers",
+   "logo": true
+  },
+  {
+   "clubId": "club-e95f7480-24ae-5646-b4d1-5bd893b9f9b2",
+   "club": "Sacramento Kings",
+   "apiSportsTeamId": 157,
+   "apiSportsTeam": "Sacramento Kings",
+   "logo": true
+  },
+  {
+   "clubId": "club-2c0486a0-6dd0-55bb-9ef4-170bb2682cc0",
+   "club": "San Antonio Spurs",
+   "apiSportsTeamId": 158,
+   "apiSportsTeam": "San Antonio Spurs",
+   "logo": true
+  },
+  {
+   "clubId": "club-c3237741-cf1a-5159-af4f-d11c603e4650",
+   "club": "Toronto Raptors",
+   "apiSportsTeamId": 159,
+   "apiSportsTeam": "Toronto Raptors",
+   "logo": true
+  },
+  {
+   "clubId": "club-c4a26c1b-d828-5546-a6d0-405aa2ee8582",
+   "club": "Utah Jazz",
+   "apiSportsTeamId": 160,
+   "apiSportsTeam": "Utah Jazz",
+   "logo": true
+  },
+  {
+   "clubId": "club-72c7553c-6609-5ee3-a8e8-7c4c298f97a0",
+   "club": "Washington Wizards",
+   "apiSportsTeamId": 161,
+   "apiSportsTeam": "Washington Wizards",
+   "logo": true
   }
  ],
  "competitions": [
@@ -1640,6 +1850,12 @@
    "competitionId": "competition-ff4b0e63-3238-42be-83de-288a0119bae6",
    "competition": "Lega Basket Serie A",
    "apiSportsLeagueId": 52,
+   "logo": true
+  },
+  {
+   "competitionId": "competition-d14c969c-700c-5b34-991a-6171d901146b",
+   "competition": "NBA",
+   "apiSportsLeagueId": 12,
    "logo": true
   }
  ]

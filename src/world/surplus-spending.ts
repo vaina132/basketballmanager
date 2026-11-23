@@ -110,8 +110,8 @@ function recruitsAutomatically(context: SpendingContext, clubId: string): boolea
   return clubId !== context.managedClubId || !!context.employment?.delegated;
 }
 
-// One reading per club for each unchanged money state (finance, payroll, market, recruitment, employment, facilities,
-// week): the surplus feeds the contract guard, which automatic recruitment asks for many candidates.
+// One reading per club for each unchanged state it depends on (money, wages, offers, staff, facilities, schedule, week):
+// automatic recruitment asks for it for many candidates. Every input is a key, so a reloaded save reads the same value.
 const surplusCache = new WeakMap<object, { keys: readonly unknown[]; values: Map<string, number> }>();
 /**
  * Format 88: a club's surplus in cents: its projected season-end cash (spendable position less what the rest of the
@@ -120,7 +120,8 @@ const surplusCache = new WeakMap<object, { keys: readonly unknown[]; values: Map
  */
 export function clubSurplus(state: SpendingContext, clubId: string): number {
   if (!usesSurplusSpending(state) || !state.finance || !state.payroll) return 0;
-  const keys = [state.payroll, (state as Partial<SeasonState>).market, (state as Partial<SeasonState>).recruitment, state.employment, (state as Partial<SeasonState>).facilities, state.round, state.status, state.seasonNumber, state.economySeasons];
+  const full = state as Partial<SeasonState>;
+  const keys = [state.payroll, full.market, full.recruitment, state.employment, full.facilities, full.coaching, full.scouts, full.fitness, full.physio, full.assistant, full.youth, full.fixtures, full.board, state.world, state.round, state.status, state.seasonNumber, state.economySeasons];
   let entry = surplusCache.get(state.finance);
   if (!entry || entry.keys.length !== keys.length || entry.keys.some((key, index) => key !== keys[index])) { entry = { keys, values: new Map() }; surplusCache.set(state.finance, entry); }
   const known = entry.values.get(clubId);

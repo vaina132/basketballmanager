@@ -182,4 +182,24 @@ describe('rich clubs spend part of their surplus over a long career (format 88)'
       requireWorldContexts(false);
     }
   }, 900_000);
+
+  it('plays on identically from a reloaded save while clubs spend from their surplus', () => {
+    // Two seasons and an offseason build up surpluses; the third season and its offseason are played from the live
+    // state and from its strict-checked save, and must end the same (spending reads only what the save keeps).
+    let state = delegate(career(moneyWorld(), 12));
+    for (let year = 1; year <= 2; year += 1) {
+      while (state.status === 'active') state = advanceSeason(play(state));
+      for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
+      state = delegate(rolloverSeason(state));
+    }
+    expect(fullWorldClubsIn(state, 3).some(club => plannedSurplusSpend(state, club.id) > 0)).toBe(true);
+    const onward = (from: SeasonState) => {
+      let next = from;
+      while (next.status === 'active') next = advanceSeason(play(next));
+      for (let steps = 0; steps < 120 && getMarketStartReason(next); steps += 1) next = advanceMarket(next);
+      return next;
+    };
+    const live = onward(state), reloaded = onward(roundTrip(state));
+    expect(serializeSeasonCompact(reloaded)).toBe(serializeSeasonCompact(live));
+  }, 900_000);
 });

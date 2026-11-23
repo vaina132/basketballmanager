@@ -1,0 +1,486 @@
+{
+  "description": "FIBA golden matches captured before the per-competition rulesets (NBA step 3, 23 November 2026). Regenerate only with an intended FIBA engine change.",
+  "count": 60,
+  "matches": {
+    "exhibition rules-2 1": {
+      "events": "bcd52cc81c3458c6001104b1",
+      "boxScore": "05bdbaded82a679bb9209c25",
+      "state": "9f2aeecabc66ff13c8003399",
+      "score": "92-82",
+      "periods": 4,
+      "steps": 205
+    },
+    "exhibition rules-2 42": {
+      "events": "e4f08701bb33cd1b89012b3e",
+      "boxScore": "f62e1fe5aeaaa0a5786b49c8",
+      "state": "1b6edf6290274c5042dbde4c",
+      "score": "73-88",
+      "periods": 4,
+      "steps": 200
+    },
+    "exhibition rules-2 777": {
+      "events": "d6fc7b1c42f4cff4fa2e4fb5",
+      "boxScore": "2d7b4b76765ede5c5032b734",
+      "state": "36a5fb6490fe05bba1e54e4d",
+      "score": "75-91",
+      "periods": 4,
+      "steps": 202
+    },
+    "exhibition possession-3 1": {
+      "events": "27a8c811ff9ab1235ec60510",
+      "boxScore": "e89aee83ed713df5580c5381",
+      "state": "2c08abdcca4db9aed52e98d8",
+      "score": "115-100",
+      "periods": 4,
+      "steps": 567
+    },
+    "exhibition possession-3 42": {
+      "events": "72437f925dd84d94b3738a20",
+      "boxScore": "b1cb1b11d2c73f2b492bee78",
+      "state": "afdcc167b0147fbfe73d2045",
+      "score": "92-76",
+      "periods": 4,
+      "steps": 569
+    },
+    "exhibition possession-3 777": {
+      "events": "bad23320e11584fc8f7f28b6",
+      "boxScore": "f6b29dda00063cbff848271a",
+      "state": "c3369cec081f590727e37dd6",
+      "score": "88-103",
+      "periods": 4,
+      "steps": 560
+    },
+    "possession standard 0": {
+      "events": "82a2e490e11b3c479a08e5b5",
+      "boxScore": "1278891a20be17535a995e15",
+      "state": "92ec8055e0dc549c00d281f5",
+      "score": "94-85",
+      "periods": 4,
+      "steps": 565
+    },
+    "possession reduced 1": {
+      "events": "4fd52c9262fb4a5f36e29dd9",
+      "boxScore": "9f955aa263eabf89f6a54c25",
+      "state": "71271e6acf368d8074cb52e1",
+      "score": "107-104",
+      "periods": 6,
+      "steps": 706
+    },
+    "possession off 2": {
+      "events": "1dcc2a649b2fd38518320aaa",
+      "boxScore": "6233a5905fe0fc00f0ccfb87",
+      "state": "356ff3664fb6d4f328be2636",
+      "score": "95-104",
+      "periods": 4,
+      "steps": 564
+    },
+    "possession standard 3": {
+      "events": "2077dd9ce1b57096a061f10c",
+      "boxScore": "c35a36a9a2ab0ece4642bc76",
+      "state": "eb67ca96cc06120c1f1c2fdb",
+      "score": "81-96",
+      "periods": 4,
+      "steps": 564
+    },
+    "possession standard 4": {
+      "events": "ffd553ddb6ee43dbee50a35c",
+      "boxScore": "7e8e7b4fc05a108036c33589",
+      "state": "4d158e98b814d9acd24f1462",
+      "score": "109-80",
+      "periods": 4,
+      "steps": 565
+    },
+    "possession off 5": {
+      "events": "9ae18c5c85940d904fd8a91d",
+      "boxScore": "7340f1d28824a9e36b0af5a6",
+      "state": "6f94f393c4601fdfda8c14f8",
+      "score": "102-86",
+      "periods": 4,
+      "steps": 565
+    },
+    "possession pre-existing injuries": {
+      "events": "adf90128b06866a667d97ea9",
+      "boxScore": "ed8d38b427e4ba972dad0643",
+      "state": "08600ea3cb36882be6716760",
+      "score": "92-95",
+      "periods": 4,
+      "steps": 563
+    },
+    "possession tactics and conditions": {
+      "events": "0c9ed22e0e795fdf91bf9760",
+      "boxScore": "edf0065079227ce7b8b42f74",
+      "state": "4b6253105f10c7586adfef0f",
+      "score": "91-94",
+      "periods": 4,
+      "steps": 570
+    },
+    "possession neutral venue": {
+      "events": "c0eed87709136211c6ee130d",
+      "boxScore": "354d471d6e20e820c7d9c78e",
+      "state": "cce54c04948a0b1b9e18e85f",
+      "score": "95-78",
+      "periods": 4,
+      "steps": 565
+    },
+    "plays-2 0": {
+      "events": "4b9bbd0cebbc66ac406e2b92",
+      "boxScore": "31524147c036c1a81cbd26d0",
+      "state": "98275a54606eef661e4ecc21",
+      "score": "111-109",
+      "periods": 6,
+      "steps": 411
+    },
+    "plays-2 1": {
+      "events": "5af8351893b2d6cec48eb7b6",
+      "boxScore": "6f1f79221663154181f38c2a",
+      "state": "2896c9af03ecb1a247e14887",
+      "score": "77-85",
+      "periods": 4,
+      "steps": 330
+    },
+    "plays-2 2": {
+      "events": "04bb14e5de6c3667a31c3874",
+      "boxScore": "b4a93c7a6b77ddf01a2546b6",
+      "state": "deea5417b4e75f7571a8f29e",
+      "score": "77-71",
+      "periods": 4,
+      "steps": 324
+    },
+    "plays-2 3": {
+      "events": "1a22d98e4c6efe91d7463780",
+      "boxScore": "ff0cac65457e5fe19f9eb4df",
+      "state": "e5015a138c594ffdff966468",
+      "score": "87-85",
+      "periods": 4,
+      "steps": 326
+    },
+    "plays-2 4": {
+      "events": "f282161aa000a611a9bcd525",
+      "boxScore": "4478190d792d5674e700fe40",
+      "state": "0cf5aa789f7e11a5c62bf9ef",
+      "score": "74-85",
+      "periods": 4,
+      "steps": 316
+    },
+    "plays-2 5": {
+      "events": "b4b7cea90bdbad85077ec4e8",
+      "boxScore": "606dfdf47505111272551ee1",
+      "state": "9c798223e7b1527452f7dfa6",
+      "score": "82-77",
+      "periods": 4,
+      "steps": 320
+    },
+    "plays-3 0": {
+      "events": "8fb556051ec3415267d44e14",
+      "boxScore": "6c63e5a41d1a36edf9db7b63",
+      "state": "55ca83f36657e9b0291ca500",
+      "score": "84-83",
+      "periods": 4,
+      "steps": 361
+    },
+    "plays-3 1": {
+      "events": "7d99a8ba24d7a3d55b29883f",
+      "boxScore": "b130705848605a8b66985552",
+      "state": "ff09a4ac8671ab44c8e65f1e",
+      "score": "88-102",
+      "periods": 4,
+      "steps": 346
+    },
+    "plays-3 2": {
+      "events": "1004f60afdfe6846ea6ac61c",
+      "boxScore": "443d8e9f7b81769c57aca6bc",
+      "state": "c03bd2de73aff75dff1bf34a",
+      "score": "91-87",
+      "periods": 4,
+      "steps": 364
+    },
+    "plays-3 3": {
+      "events": "1314f3cd5bf6792c0412b4a3",
+      "boxScore": "47fef39120319f8f164a5451",
+      "state": "e95241d1413b2cb993a59fe2",
+      "score": "98-88",
+      "periods": 4,
+      "steps": 367
+    },
+    "plays-3 4": {
+      "events": "ecbfecc3c90f8cfac8a454f9",
+      "boxScore": "fa5d79b1e17c1860605ba361",
+      "state": "e7ec0371fb658154cb66383a",
+      "score": "87-94",
+      "periods": 4,
+      "steps": 362
+    },
+    "plays-3 5": {
+      "events": "064e96797b3641695b11df0b",
+      "boxScore": "69d1ff3b76cb10a7aacdcee9",
+      "state": "75d6c49f837fa40d905a325a",
+      "score": "93-65",
+      "periods": 4,
+      "steps": 353
+    },
+    "plays-3 6": {
+      "events": "b88c082a624fa52de13b432e",
+      "boxScore": "55f27843b776052a11a350b2",
+      "state": "b49b95ef6eec848a74b2dc5f",
+      "score": "83-106",
+      "periods": 4,
+      "steps": 374
+    },
+    "plays-3 7": {
+      "events": "a7f2e7c473c08fc838b44c57",
+      "boxScore": "77c0ac069cd3d2a365fbf9f5",
+      "state": "877b371f19172468ea99868f",
+      "score": "91-89",
+      "periods": 4,
+      "steps": 354
+    },
+    "plays-3 8": {
+      "events": "b3f184228047180470ae39e0",
+      "boxScore": "dc7d37a349f778b0e0666da1",
+      "state": "53e33bb089dbad945c6b8d3c",
+      "score": "81-76",
+      "periods": 4,
+      "steps": 357
+    },
+    "plays-3 9": {
+      "events": "886f7910e04d0b5d8c766429",
+      "boxScore": "f9bb015f088979c0201457fa",
+      "state": "06f1909fb52b142a9ccb7729",
+      "score": "102-98",
+      "periods": 4,
+      "steps": 386
+    },
+    "plays-3 10": {
+      "events": "5880a29ce3ca26d251c36a24",
+      "boxScore": "4d63839042e26f8444c32199",
+      "state": "8a44f5340a5a40c0eb6c10de",
+      "score": "95-78",
+      "periods": 4,
+      "steps": 355
+    },
+    "plays-3 11": {
+      "events": "3d5ed7ad8e7a0d1801caab9b",
+      "boxScore": "e29eb2ae40a1aeafb0237adc",
+      "state": "e844387c2e2def349ae0a1b0",
+      "score": "99-103",
+      "periods": 4,
+      "steps": 369
+    },
+    "plays-3 12": {
+      "events": "a393984f4f0521ffe734a08a",
+      "boxScore": "ad4109ab3b972f49ae5ecd57",
+      "state": "9baefe3647f532d6854af66c",
+      "score": "105-118",
+      "periods": 4,
+      "steps": 373
+    },
+    "plays-3 13": {
+      "events": "a558d855177e0294704b05fc",
+      "boxScore": "fb248299efbcf965cf6e8789",
+      "state": "3bb07752809748b3ba5fbb21",
+      "score": "74-79",
+      "periods": 4,
+      "steps": 354
+    },
+    "plays-3 14": {
+      "events": "32d0049cce3c7e9401218335",
+      "boxScore": "be17a2aba5081f13adf43984",
+      "state": "f2f3635de1f57919855d600f",
+      "score": "78-86",
+      "periods": 4,
+      "steps": 361
+    },
+    "coach rotation 0": {
+      "events": "daaeeeff52100004d34bc9d2",
+      "boxScore": "32375f1fcfaa85021167574b",
+      "state": "10b97a1e416af3b1a458b50b",
+      "score": "78-98",
+      "periods": 4,
+      "steps": 324
+    },
+    "coach rotation 1": {
+      "events": "74936669e273a792da029943",
+      "boxScore": "d360d6350371ce7434e51548",
+      "state": "eff38358169086ed3f5f66f9",
+      "score": "88-82",
+      "periods": 4,
+      "steps": 320
+    },
+    "coach rotation 2": {
+      "events": "c67be50966e68e4f8e39b7aa",
+      "boxScore": "6d11137deaa16115af52b17b",
+      "state": "7cdf70489a87a34d66a02dae",
+      "score": "98-91",
+      "periods": 4,
+      "steps": 349
+    },
+    "coach rotation 3": {
+      "events": "0df1c61bcc5fbc52aac7bd70",
+      "boxScore": "8bd0318ab1ce0a4d2bd4e58d",
+      "state": "563cc478805fe643bdbea7dc",
+      "score": "107-91",
+      "periods": 4,
+      "steps": 364
+    },
+    "coach rotation 4": {
+      "events": "fb67b6ab2bb6b016589ea434",
+      "boxScore": "8c8abcd0a7c204d3c71817ea",
+      "state": "dbb8a39c90ac206e4e407c9b",
+      "score": "106-76",
+      "periods": 4,
+      "steps": 353
+    },
+    "coach rotation 5": {
+      "events": "7902f65b3c118e6154e54153",
+      "boxScore": "7afd08ef009eaef9f407575c",
+      "state": "d181b800fa591f2faa00c724",
+      "score": "77-85",
+      "periods": 4,
+      "steps": 357
+    },
+    "coach rotation 6": {
+      "events": "7854316eb8b4271dc7f3eaaf",
+      "boxScore": "634678d759eaaa156a7a8771",
+      "state": "8c616591356e10860622cfcf",
+      "score": "105-93",
+      "periods": 4,
+      "steps": 346
+    },
+    "coach rotation 7": {
+      "events": "c6b4175366e15a69ef9bf106",
+      "boxScore": "d29c29b408c3d4d1c7e296b4",
+      "state": "c8c398e0ca3d3c046bf621ec",
+      "score": "99-111",
+      "periods": 5,
+      "steps": 395
+    },
+    "neutral venue 0": {
+      "events": "3c90beb879f0489c28e0b76e",
+      "boxScore": "821a28748d0b140e906f0401",
+      "state": "a264093cc408674fd86534da",
+      "score": "68-91",
+      "periods": 4,
+      "steps": 358
+    },
+    "neutral venue 1": {
+      "events": "6d10eb61c083acedf62900f6",
+      "boxScore": "94f56a5d7a2ab22947ba6332",
+      "state": "db4ded940e277a77db37faa1",
+      "score": "66-102",
+      "periods": 4,
+      "steps": 322
+    },
+    "neutral venue 2": {
+      "events": "e0352df0484f537fffb0f1d8",
+      "boxScore": "a776b71727d46590aeb4a642",
+      "state": "d4805b4b17bbfe5af5f3a4c8",
+      "score": "86-97",
+      "periods": 4,
+      "steps": 347
+    },
+    "neutral venue 3": {
+      "events": "cad3cccd863864463e3fc88f",
+      "boxScore": "54284b8f80e1d0611e812081",
+      "state": "57df0826de74a22a377f1def",
+      "score": "98-70",
+      "periods": 4,
+      "steps": 322
+    },
+    "youth 0": {
+      "events": "e0dc3629df237e6d8cb35464",
+      "boxScore": "1dffcf41e42abaf729412431",
+      "state": "38558f0310cc4ffa10df21c9",
+      "score": "74-85",
+      "periods": 4,
+      "steps": 565
+    },
+    "youth 1": {
+      "events": "dca8a51faeff0ffd7455114c",
+      "boxScore": "18199e6e814b9b7a8c8c888b",
+      "state": "48590bd0b68c67147ec96958",
+      "score": "73-86",
+      "periods": 4,
+      "steps": 565
+    },
+    "youth 2": {
+      "events": "b0747fd5c685334879d45777",
+      "boxScore": "2a3f48f23b4df92d57a8373d",
+      "state": "4f4e3c90e8b4153425b325fe",
+      "score": "73-77",
+      "periods": 4,
+      "steps": 566
+    },
+    "youth 3": {
+      "events": "acc1fd0e73515c39cabbb49c",
+      "boxScore": "f492e8955b877c610eab6dc8",
+      "state": "1b072819d03223329961591d",
+      "score": "81-71",
+      "periods": 4,
+      "steps": 560
+    },
+    "morale 0": {
+      "events": "cdf68745a618950b2f5503ed",
+      "boxScore": "d801bcfd7c129038c9a904c7",
+      "state": "a55bf9c171ebc008e8b9f61f",
+      "score": "77-64",
+      "periods": 4,
+      "steps": 565
+    },
+    "morale 1": {
+      "events": "e060bcf81190bcfecba2e22e",
+      "boxScore": "39f63d77ba89fce944226158",
+      "state": "b4ed4b2fd17a8119bdae6c8f",
+      "score": "96-77",
+      "periods": 4,
+      "steps": 356
+    },
+    "circles plays-3": {
+      "events": "f86334053a4ee68bcbbedcd2",
+      "boxScore": "90a80421462762a302bf7914",
+      "state": "105d6def404182fa80d37929",
+      "score": "91-102",
+      "periods": 4,
+      "steps": 354
+    },
+    "circles possession": {
+      "events": "3a90d3ce1f7a894f6ff1df90",
+      "boxScore": "4a7ba9962a06e68b78f2b656",
+      "state": "b2cd04643816066e71d116dd",
+      "score": "78-80",
+      "periods": 4,
+      "steps": 564
+    },
+    "manual possession": {
+      "events": "07ff06ab83b99922bf9ac569",
+      "boxScore": "727ca224163878cebef02505",
+      "state": "1e9bf241712f2ecda0aa1b5f",
+      "score": "93-76",
+      "periods": 4,
+      "steps": 574
+    },
+    "manual plays-2": {
+      "events": "c36d0659009c98a8e53d0338",
+      "boxScore": "2c0ce83b17bcee6f7d4ebccd",
+      "state": "e771684f48e65219d7540fe8",
+      "score": "92-89",
+      "periods": 4,
+      "steps": 321
+    },
+    "manual plays-3": {
+      "events": "eb8f7b5b04b69c3d72fc631e",
+      "boxScore": "8c65df764fc1a974a194e13f",
+      "state": "969d1f7a9b6318c839c05dbe",
+      "score": "114-107",
+      "periods": 4,
+      "steps": 367
+    },
+    "manual plays-3 strong": {
+      "events": "0eb9fce6d2454d80b103c499",
+      "boxScore": "5a40787b6930cfaa4d453ee0",
+      "state": "6e49da8be2124bb00f3ea63d",
+      "score": "102-87",
+      "periods": 4,
+      "steps": 349
+    }
+  }
+}

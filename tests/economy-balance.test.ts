@@ -33,7 +33,7 @@ function moneyWorld(): CareerWorld {
 const play = (state: SeasonState) => state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state;
 const roundTrip = (state: SeasonState) => parseSeason(serializeSeasonCompact(state));
 // Format-87 rules as they were (the format-89 look-ahead wage limit is covered in tests/spending-balance.test.ts).
-const career = (world: CareerWorld, seed: number, economyBalance = true) => setEmploymentDelegation(createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, economyBalance, spendingBalance: false }), true);
+const career = (world: CareerWorld, seed: number, economyBalance = true) => setEmploymentDelegation(createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, economyBalance, spendingBalance: false, careerBalance: false }), true);
 /** Everything automatic: recruitment, facilities, wage prepayments and sponsorship of the manager's club too. */
 const delegate = (state: SeasonState) => state.clubs.some(club => club.id === state.managedClubId) ? setSponsorshipDelegation(setPayrollDelegation(setFacilityDelegation(setEmploymentDelegation(state, true), true), true), true) : state;
 

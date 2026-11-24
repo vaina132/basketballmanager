@@ -651,3 +651,13 @@ Owner decisions (23 November): add the look-ahead fix; careful clubs "can spend 
 
 The release data check found three top-division squads weak for their league (Scafati, Vikos, Körfez) and a large strength gap between Turkey's top and second divisions (best-eight averages 66.7 and 38.2). The owner decided to keep them as the real data shows: no artificial strengthening.
 
+
+## Manager careers: board and career balance (format 99, provisional number; owner decision, 24 November 2026, reversible)
+
+Ten-season automatic careers found a delegated manager of a mid club dismissed after his second season in three of four worlds, and in a world of the NBA alone a dismissed manager never worked again. New careers in worlds with domestic leagues carry `world.careerBalance` (`src/world/career-balance.ts`); older careers keep their rules exactly.
+
+- Results targets follow the squad's rank in its league: an expected share falling evenly from 72% (strongest) to 28% (weakest), 64% to 36% for NBA clubs (squad strength separates NBA results less in this game), less a 3-point margin; the president's ambition moves it 3 points per step (bounds 25-72%). A club ranked 9th of 18 is asked 45-51%.
+- Reviews judge wins against the pace as a share of the games counted (at least half the season's games): 4 points of tolerance, then 2.5 assessment points per percentage point, capped at 30. Three wins short in a 34-game season is Concerned; five or six short is Under pressure.
+- Without a club a good name fades at most 10 points below the reputation left with (still towards 30).
+- In a world of the NBA alone, NBA clubs in the lower half of the record ask an unemployed manager 3 points less every five weeks, down to 30. In combined worlds European jobs remain the way back.
+- Measured on the live pack (delegated managers at mid clubs, 5-6 seasons): computer clubs ending Under pressure fell from 15-44% of club-seasons to 3-17%; Spain, Turkey and NBA managers kept their jobs through the average seasons that had cost them before, and the NBA manager dismissed after a poor fourth season was hired by an NBA club a year later.

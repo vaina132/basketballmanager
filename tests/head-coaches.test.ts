@@ -163,7 +163,7 @@ describe('real head coaches (format 82)', () => {
     before86.formatVersion = 85; before86.state.schemaVersion = 85;
     expect(() => parseSeason(JSON.stringify(before86))).toThrow(/format 86/);
     // Format 82's guard, on a career without steering (format 86) at its opening.
-    const older = JSON.parse(serializeSeason(create({ coachSteering: false })));
+    const older = JSON.parse(serializeSeason(create({ coachSteering: false, careerBalance: false })));
     older.formatVersion = 80; older.state.schemaVersion = 80;
     delete older.state.coaching.fullStaff; // format 84's staffing rule, refused on its own in a format-80 save delete older.state.world.neutralVenues; delete older.state.world.nextDivisionCountries;
     expect(() => parseSeason(JSON.stringify(older))).toThrow(/format 82/);

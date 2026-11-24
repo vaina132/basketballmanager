@@ -80,9 +80,10 @@ export function isUnemployed(state: { managedClubId: string; career?: Pick<Seaso
  * Career-3: reputation after `days` without a club, from the reputation the manager left with. It moves
  * `unemployedFadePoints` every `unemployedFadeDays` towards `unemployedReputationLevel` and never passes it.
  */
-export function fadedReputation(base: number, days: number): number {
+export function fadedReputation(base: number, days: number, floor: number = CAREER_RULES.unemployedReputationLevel): number {
   const level = CAREER_RULES.unemployedReputationLevel, steps = Math.floor(Math.max(0, days) / CAREER_RULES.unemployedFadeDays) * CAREER_RULES.unemployedFadePoints;
-  return base > level ? Math.max(level, base - steps) : Math.min(level, base + steps);
+  // Format 99 (`career-balance.ts`): a good name may stop above the resting level (`floor`).
+  return base > level ? Math.max(Math.max(level, floor), base - steps) : Math.min(level, base + steps);
 }
 
 /** Regular-season games a club must have played before an in-season review can end its coach's job. */

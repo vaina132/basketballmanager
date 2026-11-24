@@ -4,7 +4,7 @@ import type { Team } from '../domain/types';
 import { careerMovesGovern, managedClubAtRound, managedClubFor } from './career';
 import { seasonVerdict, verdictForConfidence, type SeasonVerdict } from './board-consequences';
 import { getStandings, nbaStandings } from './season';
-import { fullWorldClubsIn, seasonRounds } from './career-world';
+import { fullWorldClubsIn, nbaClubIds, seasonRounds } from './career-world';
 import { seasonLeagues } from './divisions';
 import type { WorldContext } from '../domain/world';
 import { allowsUnemployment, CAREER_RULES, careerPointKey, coachProtected, fadedReputation, isUnemployed, midSeasonMinimumGames, NO_CLUB, resignationsCounting, restartsBefore, startingConfidence, usesCareerRules } from './career-rules';
@@ -13,6 +13,7 @@ import { dateForRound } from './season';
 import { managerCoachingReputation } from './head-coaches';
 import { europeanEntrants } from './europe';
 import { isNbaJob, NBA_JOB_RULES, nbaVacancyRequirement, usesNbaJobs } from './nba-jobs';
+import { fadeFloor, isNbaOnlyWorld, nbaSecondChanceRequirement, usesCareerBalance } from './career-balance';
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
@@ -389,7 +390,9 @@ export function unemployedReputation(state: CareerContext, prior: readonly Caree
   const resignations = prior.filter(move => move.reason === 'resigned' && move.seasonNumber <= at.seasonNumber && move.seasonNumber > at.seasonNumber - CAREER_RULES.resignationSeasons).length;
   const base = Math.max(0, raw.value - resignations * CAREER_RULES.resignationReputationCost);
   const days = Math.max(0, calendarDaysBetween(start.date, at.date));
-  return { value: fadedReputation(base, days), seasons: raw.seasons, ...(resignations ? { resignations } : {}), base, since: start.date, days };
+  // Format 99 (`career-balance.ts`): a good name fades at most a few points below the reputation left with.
+  const value = usesCareerBalance(state) ? fadedReputation(base, days, fadeFloor(base, CAREER_RULES.unemployedReputationLevel)) : fadedReputation(base, days);
+  return { value, seasons: raw.seasons, ...(resignations ? { resignations } : {}), base, since: start.date, days };
 }
 
 /** Career-3: a job open to an unemployed manager, and until when. */
@@ -429,6 +432,11 @@ export function jobMarketAt(state: CareerContext, prior: readonly CareerMove[], 
     const outlook = seasonEndOutlook(state, point.seasonNumber);
     const vacancies = outlook ? outlook.vacancies : unemployedSeasonEndVacancies(state, point.seasonNumber);
     for (const vacancy of vacancies) found.set(vacancy.clubId, { ...vacancy, opened: 'end', seasonNumber: point.seasonNumber, round: rounds, openUntil: null, offered: false });
+  }
+  // Format 99 (`career-balance.ts`): in a world of the NBA alone, the weaker records' NBA jobs ask less after a wait.
+  if (usesCareerBalance(state) && isNbaOnlyWorld(state.world)) {
+    const nbaClubs = nbaClubIds(state.world!).size;
+    for (const [clubId, vacancy] of found) if (isNbaJob(state.world, clubId)) found.set(clubId, { ...vacancy, requirement: nbaSecondChanceRequirement(vacancy.requirement, vacancy.position, nbaClubs, reputation.days) });
   }
   // The same offer rule as at a season end: reserve teams never offer the job, and only the best fits offer it.
   const open = [...found.values()].filter(vacancy => offersJob(seasonClubs, vacancy.clubId));

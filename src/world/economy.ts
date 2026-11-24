@@ -534,7 +534,7 @@ function balancedFigures(band: EconomyBand, country: string, budget: number, tic
 }
 
 /**
- * Format 98 (`cash-balance.ts`, a new career's world given `cashBalance`): NBA clubs' opening figures on the trimmed
+ * Format 99 (`cash-balance.ts`, a new career's world given `cashBalance`): NBA clubs' opening figures on the trimmed
  * revenue range (`NBA_ECONOMY.cashBalanceRevenueUsd`), with the same expected gate and the owner's payroll ceiling. Worlds
  * without the NBA's money rules are returned unchanged.
  */

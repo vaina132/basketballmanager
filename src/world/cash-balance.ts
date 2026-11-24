@@ -5,7 +5,7 @@ import { derivePresidentTraits } from './presidents';
 import { financeLedgerEntries, type FinanceLedgerSource } from './finance-ledger';
 
 /**
- * Format 98 (owner decision, 24 November 2026: fix "cash piles up"; reversible game defaults, not researched figures).
+ * Format 99 (owner decision, 24 November 2026: fix "cash piles up"; reversible game defaults, not researched figures).
  * New careers in worlds with researched club money (marker `world.cashBalance`, option `cashBalance`); worlds without the
  * marker (format 97 and earlier) keep their rules exactly, so their saves replay unchanged.
  *
@@ -41,7 +41,7 @@ export const CASH_BALANCE_RULES = Object.freeze({
   step: 10_000,
 });
 
-/** Format 98: whether the career's world carries the cash balance (new careers of worlds with researched money). */
+/** Format 99: whether the career's world carries the cash balance (new careers of worlds with researched money). */
 export function usesCashBalance(context: WorldContext | undefined): boolean {
   return context?.world?.cashBalance === true && !!context.world.economy;
 }
@@ -49,7 +49,7 @@ export function usesCashBalance(context: WorldContext | undefined): boolean {
 const lerp = (low: number, high: number, t: number) => low + (high - low) * t;
 const traitShare = (level: number) => Math.max(0, Math.min(1, (level - 1) / 4));
 
-/** Format 98: the share of its season budget a club keeps in cash at a season opening, from its president's ambition. */
+/** Format 99: the share of its season budget a club keeps in cash at a season opening, from its president's ambition. */
 export function cashKeepShare(world: CareerWorld, clubId: string, nba: boolean): number {
   const president = world.presidents.find(item => item.clubId === clubId);
   const ambition = (president?.traits ?? derivePresidentTraits(clubId)).ambition;
@@ -57,7 +57,7 @@ export function cashKeepShare(world: CareerWorld, clubId: string, nba: boolean):
   return lerp(low, high, traitShare(ambition));
 }
 
-/** Format 98: the share of the excess cash a club's owner takes back, from the president's generosity (3 without one). */
+/** Format 99: the share of the excess cash a club's owner takes back, from the president's generosity (3 without one). */
 export function dividendTakeShare(world: CareerWorld, clubId: string): number {
   const generosity = world.presidents.find(item => item.clubId === clubId)?.generosity ?? 3;
   const [low, high] = CASH_BALANCE_RULES.takeShare;
@@ -91,7 +91,7 @@ export function netsBeforeEachSeason(ledger: readonly Pick<FinanceEntry, 'clubId
 }
 
 /**
- * Format 98: the owner's dividend a club pays at the opening of the context's season (cents, taken from that season's
+ * Format 99: the owner's dividend a club pays at the opening of the context's season (cents, taken from that season's
  * funding `funding`): `takeShare` of its net before the opening (`net`) above `keepShare` of the season budget, in EUR 100
  * steps, at most the funding. 0 without the cash balance, in a career's first season or without club money.
  */
@@ -105,7 +105,7 @@ export function ownerDividend(context: WorldContext & { seasonNumber: number }, 
   return Math.min(funding, Math.floor((net - keep) * dividendTakeShare(world, clubId) / step) * step);
 }
 
-/** Format 98, for the screens: the dividend a club's owner took at `season`'s opening (cents; 0 without the cash balance). */
+/** Format 99, for the screens: the dividend a club's owner took at `season`'s opening (cents; 0 without the cash balance). */
 export function seasonOwnerDividend(state: WorldContext & { finance: FinanceLedgerSource }, clubId: string, season: number, funding: number): number {
   if (!usesCashBalance(state) || season < 2) return 0;
   return ownerDividend({ ...state, seasonNumber: season }, clubId, netsBeforeSeason(state.finance, season).get(clubId), funding);

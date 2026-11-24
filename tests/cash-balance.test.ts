@@ -23,7 +23,7 @@ import { nbaOwnerCeiling } from '../src/world/nba-owner';
 import { NBA_ECONOMY, nbaRevenueEuros } from '../src/world/nba-economy';
 
 /**
- * Format 98 (owner decision 24 November 2026, `world.cashBalance`): cash no longer piles up. At each season opening the
+ * Format 99 (owner decision 24 November 2026, `world.cashBalance`): cash no longer piles up. At each season opening the
  * owner takes back part of a club's cash above what it keeps (from the season funding), with per-club variety from the
  * president; NBA revenue is trimmed so wages are about half of it. Worlds without the marker keep their rules.
  */
@@ -54,10 +54,10 @@ function secondSeason(cashBalance: boolean): SeasonState {
 }
 const fundingOf = (state: SeasonState, clubId: string, season: number) => [...financeLedgerEntries(state.finance)].find(entry => entry.clubId === clubId && entry.kind === 'sponsor' && entry.sourceId === fundingSourceId(season))?.amount ?? 0;
 
-describe('the cash balance marker (format 98)', () => {
+describe('the cash balance marker (format 99)', () => {
   const world = moneyWorld();
 
-  it('marks new careers with researched money, and format 97 refuses the marker', () => {
+  it('marks new careers with researched money, and format 98 refuses the marker', () => {
     const state = createSeason({ seed: 5, world, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS });
     expect(state.world!.cashBalance).toBe(true);
     expect(usesCashBalance(state)).toBe(true);
@@ -65,10 +65,10 @@ describe('the cash balance marker (format 98)', () => {
     expect(createSeason({ seed: 5, ...NEW_CAREER_SYSTEMS }).world?.cashBalance).toBeUndefined();
     expect(() => createSeason({ seed: 5, world, cashBalance: 'yes' as unknown as boolean })).toThrow(/cash balance setting/);
     const envelope = JSON.parse(serializeSeason(state));
-    envelope.formatVersion = 97; envelope.state.schemaVersion = 97;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/cashBalance.*format 98/);
+    envelope.formatVersion = 98; envelope.state.schemaVersion = 98;
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/cashBalance.*format 99/);
     const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, cashBalance: false })));
-    older.formatVersion = 97; older.state.schemaVersion = 97;
+    older.formatVersion = 98; older.state.schemaVersion = 98;
     expect(parseSeason(JSON.stringify(older)).world!.cashBalance).toBeUndefined();
     const bad = JSON.parse(serializeSeason(state));
     bad.state.world.cashBalance = 'yes';
@@ -76,7 +76,7 @@ describe('the cash balance marker (format 98)', () => {
   });
 });
 
-describe('the owner\'s dividend (format 98)', () => {
+describe('the owner\'s dividend (format 99)', () => {
   const world = { ...moneyWorld(), cashBalance: true as const };
   const withTraits = (generosity: 1 | 2 | 3 | 4 | 5, ambition: 1 | 2 | 3 | 4 | 5): CareerWorld => ({ ...world, presidents: world.presidents.map(president => president.clubId === RICH ? { ...president, generosity, traits: { ...president.traits!, ambition } } : president) });
 
@@ -113,7 +113,7 @@ describe('the owner\'s dividend (format 98)', () => {
     for (const season of [2, 3, 4, 5]) expect(netsBeforeSeason({ ledger: ledger as never }, season)).toEqual(all.get(season));
   });
 
-  it('takes a dividend from the rich club\'s season-2 funding only, saves strictly, and format 97 pays the full funding', () => {
+  it('takes a dividend from the rich club\'s season-2 funding only, saves strictly, and format 98 pays the full funding', () => {
     requireWorldContexts(true);
     try {
       const balanced = secondSeason(true), older = secondSeason(false);
@@ -147,10 +147,10 @@ describe('the owner\'s dividend (format 98)', () => {
   }, 900_000);
 });
 
-describe('NBA revenue (format 98)', () => {
+describe('NBA revenue (format 99)', () => {
   const world = worldFromPack(nbaPack(), 'nba');
 
-  it('opens NBA clubs on the trimmed revenue range, with the same payroll ceiling, and leaves format 97 worlds alone', () => {
+  it('opens NBA clubs on the trimmed revenue range, with the same payroll ceiling, and leaves format 98 worlds alone', () => {
     const state = createSeason({ seed: 7, world, managedClubId: NBA_CLUB_IDS[4]!, ...NEW_CAREER_SYSTEMS });
     const older = createSeason({ seed: 7, world, managedClubId: NBA_CLUB_IDS[4]!, ...NEW_CAREER_SYSTEMS, cashBalance: false });
     expect(state.world!.cashBalance).toBe(true);

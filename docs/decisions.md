@@ -647,7 +647,7 @@ Owner decisions (23 November): add the look-ahead fix; careful clubs "can spend 
 - A computer club that agreed to sell a player withdraws its pending offers that no longer fit its wage budget, as a recorded step.
 - Measured over five automatic seasons (real Turkey seeds 7, 11; Spain 5, 11; synthetic): no unpaid costs; lowest season-end cash about 10% (was 0-1%); Efes 113% -> 85%; Breogán still 128-143% (open).
 
-## Cash balance (format 98, provisional number, 24 November 2026, reversible)
+## Cash balance (format 99, provisional number, 24 November 2026, reversible)
 
 Owner decision (24 November): fix "cash piles up" (ten-season careers: EuroLeague clubs 68-176% of budget in cash, some clubs 240-375%; NBA median $654M, richest over $1B, wages about 38% of revenue); some clubs may still hold a lot, but not absurd amounts. New careers with researched club money only (`world.cashBalance`; `CASH_BALANCE_RULES` in `src/world/cash-balance.ts`):
 
@@ -655,9 +655,19 @@ Owner decision (24 November): fix "cash piles up" (ten-season careers: EuroLeagu
 - Kept share by the president's ambition: 75% (ambition 1) to 125% (ambition 5) of the budget; NBA clubs 25-50% of revenue (NBA owners take their profits every season). Share of the excess taken by generosity: all of it (1) to half (5).
 - Applies to every club, the manager's too: it is the owner's money and decision, as in real clubs, and it only touches cash well above anything a season needs. Money spent on players, staff or facilities is never taken. Chosen instead of raising the budget target: surplus spending (format 88) already offers rich clubs more to spend, but a club with a full squad cannot turn wage room into wages, so more room would not stop the pile-up.
 - NBA revenue by market $260M / $360M / $600M (was $300M / $450M / $750M), so player wages are about half of revenue; payroll ceilings unchanged.
-- Measured, ten automatic seasons (Spain seed 11; NBA alone seed 7), season-end cash in season 10, format 97 -> 98: EuroLeague median/max 65/163% -> 63/121%; top-division upper half 56/255% -> 61/171%; lower half 48/111% -> 65/65%; second division 68/354% -> 69/179%; NBA median $648M -> $217M, max $1,006M -> $372M (57/77% of revenue), wages 39% -> 47% of revenue. No unpaid costs; every strict save check passed. Spain was identical to format 97 for six seasons (no club above its kept share). Knob if the tail should be lower: `takeShare` [1, 0.5] -> [1, 0.75].
+- Measured, ten automatic seasons (Spain seed 11; NBA alone seed 7), season-end cash in season 10, before -> after: EuroLeague median/max 65/163% -> 63/121%; top-division upper half 56/255% -> 61/171%; lower half 48/111% -> 65/65%; second division 68/354% -> 69/179%; NBA median $648M -> $217M, max $1,006M -> $372M (57/77% of revenue), wages 39% -> 47% of revenue. No unpaid costs; every strict save check passed. Spain was identical to format 97 for six seasons (no club above its kept share). Knob if the tail should be lower: `takeShare` [1, 0.5] -> [1, 0.75].
 
 ## Weak squads and the Turkish division gap (owner decision, 23 November 2026)
 
 The release data check found three top-division squads weak for their league (Scafati, Vikos, Körfez) and a large strength gap between Turkey's top and second divisions (best-eight averages 66.7 and 38.2). The owner decided to keep them as the real data shows: no artificial strengthening.
 
+
+## Manager careers: board and career balance (format 98; owner decision, 24 November 2026, reversible)
+
+Ten-season automatic careers found a delegated manager of a mid club dismissed after his second season in three of four worlds, and in a world of the NBA alone a dismissed manager never worked again. New careers in worlds with domestic leagues carry `world.careerBalance` (`src/world/career-balance.ts`); older careers keep their rules exactly.
+
+- Results targets follow the squad's rank in its league: an expected share falling evenly from 72% (strongest) to 28% (weakest), 64% to 36% for NBA clubs (squad strength separates NBA results less in this game), less a 3-point margin; the president's ambition moves it 3 points per step (bounds 25-72%). A club ranked 9th of 18 is asked 45-51%.
+- Reviews judge wins against the pace as a share of the games counted (at least half the season's games): 4 points of tolerance, then 2.5 assessment points per percentage point, capped at 30. Three wins short in a 34-game season is Concerned; five or six short is Under pressure.
+- Without a club a good name fades at most 10 points below the reputation left with (still towards 30).
+- In a world of the NBA alone, NBA clubs in the lower half of the record ask an unemployed manager 3 points less every five weeks, down to 30. In combined worlds European jobs remain the way back.
+- Measured on the live pack (delegated managers at mid clubs, 5-6 seasons): computer clubs ending Under pressure fell from 15-44% of club-seasons to 3-17%; Spain, Turkey and NBA managers kept their jobs through the average seasons that had cost them before, and the NBA manager dismissed after a poor fourth season was hired by an NBA club a year later.

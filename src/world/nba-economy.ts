@@ -21,7 +21,7 @@ export const NBA_ECONOMY = Object.freeze({
   /** [S] Team revenue, dollars: [weakest squad, median, strongest]. */
   revenueUsd: Object.freeze([300e6, 450e6, 750e6] as const),
   /**
-   * [E] Format 98 (`cash-balance.ts`, worlds with `world.cashBalance`): team revenue by market, dollars, trimmed so player
+   * [E] Format 99 (`cash-balance.ts`, worlds with `world.cashBalance`): team revenue by market, dollars, trimmed so player
    * wages are about half of revenue, as under the NBA's revenue split (the format-92 range left wages at about 38%).
    */
   cashBalanceRevenueUsd: Object.freeze([260e6, 360e6, 600e6] as const),
@@ -106,7 +106,7 @@ export const NBA_PAYROLL_RULES = Object.freeze({
 
 /** NBA step 6: a club's market (0-1), 0.5 when unknown. */
 export const nbaMarket = (name: string): number => NBA_MARKETS[nbaName(name)] ?? 0.5;
-/** NBA step 6: a club's revenue in euros from its market (format 98, `trimmed`: on the cash-balance range). */
+/** NBA step 6: a club's revenue in euros from its market (format 99, `trimmed`: on the cash-balance range). */
 export function nbaRevenueEuros(name: string, trimmed = false): number {
   const t = nbaMarket(name), [r0, r1, r2] = trimmed ? NBA_ECONOMY.cashBalanceRevenueUsd : NBA_ECONOMY.revenueUsd;
   return usdToEur(t < 0.5 ? r0 + (r1 - r0) * t * 2 : r1 + (r2 - r1) * (t * 2 - 1));

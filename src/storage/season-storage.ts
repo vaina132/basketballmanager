@@ -152,7 +152,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -2991,7 +2991,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
   const schedules = new Map<number, readonly (SeasonFixture | ArchivedFixture)[]>(archives.map(archive => [archive.seasonNumber, archive.fixtures]));
   schedules.set(seasonNumber, fixtures);
   const add = (entry: RequiredEvent) => required.set(origin(entry.clubId, entry.kind, entry.sourceId), entry);
-  // Format 98: each club's net before every season opening, from the stored ledger (worked out once, when first needed).
+  // Format 99: each club's net before every season opening, from the stored ledger (worked out once, when first needed).
   let netsBefore: Map<number, Map<string, number>> | undefined;
   const netsBeforeAll = () => netsBefore ??= netsBeforeEachSeason(fields.ledger as FinanceEntry[]);
   for (const clubId of openingsIn(firstYear)) add({ clubId, seasonNumber: firstYear, round: firstRound, kind: 'opening', sourceId: 'opening', amount: openingCashFor(yearContext(firstYear), clubId) });
@@ -3000,7 +3000,7 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     const fromRound = year === firstYear ? firstRound : 1, throughRound = year === seasonNumber ? committedRound : seasonLength;
     if (!commercialGovernsSeason(commercial, year)) for (const club of clubsIn(year)) add({ clubId: club.id, seasonNumber: year, round: fromRound, kind: 'sponsor', sourceId: `sponsor-s${year}`, amount: year === firstYear ? Math.floor(annualSponsorshipFor(yearContext(year), club.id) * (seasonLength + 1 - firstRound) / seasonLength) : annualSponsorshipFor(yearContext(year), club.id) });
     // Format 62: season funding follows the sponsors at every season opening (pro-rated in the activation season).
-    // Format 98 (`cash-balance.ts`): from the second season, the owner's dividend comes off the season funding.
+    // Format 99 (`cash-balance.ts`): from the second season, the owner's dividend comes off the season funding.
     const nets = year > firstYear && usesCashBalance({ world }) ? netsBeforeAll().get(year) : undefined;
     for (const club of clubsIn(year)) { const annual = annualFundingFor(yearContext(year), club.id), funding = nets ? annual - ownerDividend(yearContext(year) as WorldContext & { seasonNumber: number }, club.id, nets.get(club.id), annual) : annual; if (funding > 0) add({ clubId: club.id, seasonNumber: year, round: fromRound, kind: 'sponsor', sourceId: fundingSourceId(year), amount: year === firstYear && firstRound > 1 ? seasonFundingShare(funding, seasonLength, firstRound) : funding }); }
     for (let playedRound = fromRound; playedRound <= throughRound; playedRound += 1) for (const club of clubsIn(year)) add({ clubId: club.id, seasonNumber: year, round: playedRound, kind: 'operations', sourceId: `operations-s${year}-r${playedRound}`, amount: -roundOperatingCostFor(yearContext(year), club.id) });
@@ -3722,8 +3722,10 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 96 && world.nba && Object.hasOwn(world.nba, 'balance')) fail('world.nba.balance', 'requires format 96 or later');
   // Format 97 (release check "long careers"): its fixes are rules of new careers only.
   if (version < 97 && Object.hasOwn(world, 'longCareers')) fail('world.longCareers', 'requires format 97 or later');
-  // Format 98 (owner decision 24 November 2026): the cash balance is a rule of new careers only.
-  if (version < 98 && Object.hasOwn(world, 'cashBalance')) fail('world.cashBalance', 'requires format 98 or later');
+  // Format 98: the board and career balance is a rule of new careers only.
+  if (version < 98 && Object.hasOwn(world, 'careerBalance')) fail('world.careerBalance', 'requires format 98 or later');
+  // Format 99 (owner decision 24 November 2026): the cash balance is a rule of new careers only.
+  if (version < 99 && Object.hasOwn(world, 'cashBalance')) fail('world.cashBalance', 'requires format 99 or later');
   if (usesNbaDraft({ world }) !== Object.hasOwn(state, 'draft')) fail('draft', 'must be recorded exactly in worlds with the NBA draft');
   const draft = Object.hasOwn(state, 'draft') ? validateDraftShape(state.draft, state as unknown as SeasonState) : undefined;
   // Format 91: NBA careers (real NBA head coaches, NBA job rules).

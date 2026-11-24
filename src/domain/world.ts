@@ -206,7 +206,13 @@ export interface CareerWorld {
    */
   longCareers?: true;
   /**
-   * Format 98 (owner decision 24 November 2026, new careers in worlds with researched club money, option `cashBalance`):
+   * Format 98 (owner decision, 24 November 2026, new careers with the option `careerBalance`): board
+   * targets in proportion to the squad's rank, patient results judgement, a floor on the unemployed manager's fading
+   * reputation and a way back into NBA jobs in a world of the NBA alone (`src/world/career-balance.ts`).
+   */
+  careerBalance?: true;
+  /**
+   * Format 99 (owner decision 24 November 2026, new careers in worlds with researched club money, option `cashBalance`):
    * cash no longer piles up (`src/world/cash-balance.ts`): the owner's dividend at each season opening takes part of a
    * club's cash above what it keeps, and NBA revenue is trimmed so player wages are about half of it.
    */

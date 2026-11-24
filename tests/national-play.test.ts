@@ -163,7 +163,7 @@ describe('national windows in play (format 80)', () => {
     // format-80 career played its matches on the plays-2 engine (the match flow of format 81 came later), so this career
     // keeps it on purpose.
     // Nor did it have head coaches who steer computer clubs (format 86).
-    const played = playUntil(createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, matchFlow: false, coachSteering: false }), state => state.round === 13);
+    const played = playUntil(createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, matchFlow: false, coachSteering: false, careerBalance: false }), state => state.round === 13);
     expect(played.injuries.some(injury => isNationalFixtureId(injury.fixtureId))).toBe(false);
     const hired = acceptNationalOffer(offerNationalJob(played, 'nation-tur'), `national-offer-test-nation-tur-${played.date}`);
     // The earlier shape: results without injury records, the national record without earnings.

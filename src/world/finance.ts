@@ -462,7 +462,7 @@ export function startFinanceSeason(state: SeasonState): SeasonState {
  */
 function bookSeasonFunding(state: SeasonState, share: number): SeasonState {
   let next = state;
-  // Format 98 (`cash-balance.ts`): at a season opening, the owner's dividend comes off the funding of a club holding more cash than it keeps.
+  // Format 99 (`cash-balance.ts`): at a season opening, the owner's dividend comes off the funding of a club holding more cash than it keeps.
   const nets = share === 1 && usesCashBalance(state) ? netsBeforeSeason(state.finance, state.seasonNumber) : null;
   for (const club of state.clubs) {
     const annual = annualFundingFor(state, club.id);

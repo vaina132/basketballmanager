@@ -10,7 +10,7 @@ import { sealCompletedHistory } from './sealed-history';
 import { fixturePlayerEvidence, summarizeSeniorHistory } from './senior-history';
 import { createRivalries, enableRivalries } from './rivalries';
 import { createGrownRivalries, growRivalries } from './rivalry-growth';
-import { computeEconomySeasons, createEconomySeasons, growEconomy, type EconomyForesight } from './economy';
+import { computeEconomySeasons, createEconomySeasons, growEconomy, withCashBalanceNbaRevenue, type EconomyForesight } from './economy';
 import { appointFromUnemployment, appointManager, createCareer, enableCareerMoves, lastManagedClub, leaveClub, matchClubFor, restartBoard, transferManager, currentMovePhase } from './career';
 import { jobOfferRefusal, jobRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, unemployedSeasonEndVacancies, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
 import { allowsUnemployment, CAREER_RULES, coachProtected, isUnemployed, NO_CLUB, startingConfidence, usesCareerRules } from './career-rules';
@@ -652,6 +652,11 @@ export interface SeasonSystems {
    * with researched club money (`world.longCareers`, `src/world/long-careers.ts`). New careers only.
    */
   longCareers?: boolean;
+  /**
+   * Format 98 (owner decision 24 November 2026): cash no longer piles up, in worlds with researched club money
+   * (`world.cashBalance`, `src/world/cash-balance.ts`). New careers only.
+   */
+  cashBalance?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -665,7 +670,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, cashBalance: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -706,6 +711,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.nbaJobs !== undefined && typeof options.nbaJobs !== 'boolean') throw new Error('Choose a valid NBA careers setting.');
   if (options.nbaTrades !== undefined && typeof options.nbaTrades !== 'boolean') throw new Error('Choose a valid NBA trades setting.');
   if (options.longCareers !== undefined && typeof options.longCareers !== 'boolean') throw new Error('Choose a valid long careers setting.');
+  if (options.cashBalance !== undefined && typeof options.cashBalance !== 'boolean') throw new Error('Choose a valid cash balance setting.');
   if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
@@ -752,7 +758,7 @@ const withTrades = (state: SeasonState): SeasonState => usesTrades(state) && sta
  * division. The built-in league and worlds without such games or divisions stay as given.
  */
 function ruledWorld(options: SeasonOptions): CareerWorld {
-  const world = options.world ?? DEVELOPMENT_WORLD;
+  let world = options.world ?? DEVELOPMENT_WORLD;
   if (world.id === DEVELOPMENT_WORLD.id) return world;
   const oneVenue = !!world.domesticLeagues?.some(league => league.postseason && POSTSEASON_FORMATS[league.postseason].series.some(spec => spec.neutral)) || !!world.europeanCompetitions?.some(competition => competition.format && competition.kind !== 'eurocup');
   const neutral = !!options.neutralVenues && !world.neutralVenues && oneVenue, countries = !!options.clubCountries && !world.nextDivisionCountries && !!world.lowerDivisions?.some(isMemberList);
@@ -768,6 +774,8 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   const nbaTrades = !!options.nbaTrades && !world.nbaTrades && world.nba?.cap === 'nba-cap-1';
   // Format 97: the long-careers fixes, in worlds with researched club money only.
   const longCareers = !!options.longCareers && !world.longCareers && !!world.economy;
+  // Format 98: the cash balance, in worlds with researched club money only (NBA clubs open on the trimmed revenue range).
+  if (options.cashBalance && !world.cashBalance && world.economy) world = { ...withCashBalanceNbaRevenue(world), cashBalance: true as const };
   return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}) } : world;
 }
 

@@ -512,7 +512,13 @@ function clubFigures(band: EconomyBand, place: EconomyPlace, competition: Europe
   const european = !competition?.format ? 0 : kind === 'euroleague' ? competition.clubIds.length - 1 : kind === 'eurocup' ? Math.max(1, competition.clubIds.length / rules.europeanHomeGames.eurocupGroups - 1) : rules.europeanHomeGames.bcl;
   const homeGames = band === 'nba' ? NBA_ECONOMY.homeGames + rules.playoffHomeGames : (place.league ? place.size - 1 + rules.playoffHomeGames : 0) + european;
   const tickets = Math.round(homeGames * capacity * ticketPrice * (referenceDemand / capacity) ** (1 / 1.4));
-  const mix = revenueMixFor(band, place.country);
+  return balancedFigures(band, place.country, budget, tickets, ticketPrice, nbaBill);
+}
+
+/** A club's figures from its budget and expected gate income (cents): sponsorship and funding balance the budget with the gate. */
+function balancedFigures(band: EconomyBand, country: string, budget: number, tickets: number, ticketPrice: number, nbaBill?: number): { economy: ClubEconomy; playerBill: number } {
+  const rules = REAL_ECONOMY_RULES;
+  const mix = revenueMixFor(band, country);
   const sponsorship = Math.round(budget * mix.sponsorship / 100 / 10_000) * 10_000;
   const funding = Math.max(0, Math.round((budget - sponsorship - tickets) / 10_000) * 10_000);
   // Costs: player wages, the staff allocation (head coach and support staff), a reserve and operating costs.
@@ -525,6 +531,24 @@ function clubFigures(band: EconomyBand, place: EconomyPlace, competition: Europe
     economy: { band, budget, sponsorship, funding, openingCash: Math.round(budget * rules.openingCashPercent / 100 / 10_000) * 10_000, ticketPrice, operatingCost, scale: Math.max(1, Math.round(staff / STAFF_BUDGET * PER_MILLE)) },
     playerBill,
   };
+}
+
+/**
+ * Format 98 (`cash-balance.ts`, a new career's world given `cashBalance`): NBA clubs' opening figures on the trimmed
+ * revenue range (`NBA_ECONOMY.cashBalanceRevenueUsd`), with the same expected gate and the owner's payroll ceiling. Worlds
+ * without the NBA's money rules are returned unchanged.
+ */
+export function withCashBalanceNbaRevenue(world: CareerWorld): CareerWorld {
+  if (!world.economy || !world.nba?.cap) return world;
+  const names = new Map(world.clubs.map(club => [club.id, club.name]));
+  const finances = world.finances.map(definition => {
+    const economy = definition.economy;
+    if (!economy || economy.band !== 'nba') return definition;
+    const tickets = Math.max(0, economy.budget - economy.sponsorship - economy.funding);
+    const budget = budgetCents(nbaRevenueEuros(names.get(definition.clubId)!, true));
+    return { ...definition, economy: balancedFigures('nba', clubCountry(world, definition.clubId) ?? 'USA', budget, tickets, economy.ticketPrice, nbaOwnerCeiling(world, definition.clubId)).economy };
+  });
+  return { ...world, finances };
 }
 
 /** The player wage bill (cents) a club's figures fund, as `withRealEconomy` sets it from the budget and band. */
@@ -661,7 +685,7 @@ export function computeEconomySeasons(context: EconomySeasonsContext, next?: Eco
       const opening = openingEconomy(world, clubId)!, known = knownClubBudget(names.get(clubId)!);
       // A published budget describes the club at its opening level; elsewhere the strength placement applies.
       const capped = band === 'nba' && !!world.nba?.cap;
-      let budget = budgetCents(capped ? nbaRevenueEuros(names.get(clubId)!) : known !== null && band === opening.band ? known : placedBudget(band, item.country, layout.budgetT.get(clubId)!));
+      let budget = budgetCents(capped ? nbaRevenueEuros(names.get(clubId)!, world.cashBalance === true) : known !== null && band === opening.band ? known : placedBudget(band, item.country, layout.budgetT.get(clubId)!));
       if (BAND_RANK[band] < BAND_RANK[prior.band]) budget = Math.min(budget, prior.budget);
       else if (BAND_RANK[band] > BAND_RANK[prior.band]) budget = Math.max(budget, prior.budget);
       // The club's own arena and usual crowd, at its new league's ticket yield.

@@ -8,9 +8,10 @@ import { DEVELOPMENT_SCOUTS } from '../data/development-scouts'
 import { DEVELOPMENT_FITNESS_COACHES } from '../data/development-fitness'
 import { DEVELOPMENT_PHYSIOS } from '../data/development-physios'
 import { DEVELOPMENT_ASSISTANTS } from '../data/development-assistants'
-import { financeLedgerRows, forecastGate, fundingSourceId, getFinanceBalance, maxTicketPriceFor, openingCashFor, recommendTicketPrice, roundOperatingCostFor, TICKET_PRICE_STEP } from '../world/finance'
+import { annualFundingFor, financeLedgerRows, forecastGate, fundingSourceId, getFinanceBalance, maxTicketPriceFor, openingCashFor, recommendTicketPrice, roundOperatingCostFor, TICKET_PRICE_STEP } from '../world/finance'
 import { clubEconomy } from '../world/economy'
 import { usesEconomyBalance } from '../world/economy-balance'
+import { seasonOwnerDividend } from '../world/cash-balance'
 import { formatMoney, formatExactMoney } from './money-format'
 import { dateForRound, seasonLabel } from '../world/season'
 import { getTransferPayments } from '../world/transfer-payments'
@@ -144,7 +145,7 @@ export function ClubWorkspace({ season, onEnable, onPlanChange, onEnableFaciliti
     if (entry.namingRights) { const agreement = season.commercial.naming?.agreements.find(item => item.id === entry.namingRights!.agreementId); return `${agreement?.arenaName ?? getDevelopmentSponsor(entry.namingRights.sponsorId).name} · ${seasonLabel(entry.seasonNumber)} · ${entry.namingRights.installment === 1 ? 'Matchday 6 installment' : 'Final matchday installment'}` }
     if (entry.sponsorExit) return `${getDevelopmentSponsor(entry.sponsorExit.sponsorId).name} · ${entry.sponsorExit.contract === 'naming' ? 'Arena naming rights' : 'Main sponsor'} · ${entry.sponsorExit.by === 'sponsor' ? 'Exit payment after the sponsor ended the agreement early' : 'Termination fee for ending the agreement early'}`
     if (entry.sponsorship) return `${getDevelopmentSponsor(entry.sponsorship.sponsorId).name} · ${seasonLabel(entry.seasonNumber)} · ${entry.sponsorship.installment === 'bonus' ? 'Top-half bonus' : entry.sponsorship.installment === 1 ? 'Opening installment' : 'Matchday 6 installment'}`
-    if (entry.kind === 'sponsor' && entry.sourceId === fundingSourceId(entry.seasonNumber)) return `Season funding: league and European distributions${usesEconomyBalance(season) ? ' (with league solidarity money for smaller clubs)' : ''}, public money and the owner's contribution · ${seasonLabel(entry.seasonNumber)}`
+    if (entry.kind === 'sponsor' && entry.sourceId === fundingSourceId(entry.seasonNumber)) { const dividend = seasonOwnerDividend(season, entry.clubId, entry.seasonNumber, annualFundingFor({ ...season, seasonNumber: entry.seasonNumber }, entry.clubId)); return `Season funding: league and European distributions${usesEconomyBalance(season) ? ' (with league solidarity money for smaller clubs)' : ''}, public money and the owner's contribution${dividend > 0 ? `, less ${money(dividend)} the owner took back from the club's spare cash` : ''} · ${seasonLabel(entry.seasonNumber)}` }
     if (entry.kind === 'sponsor') return `${definition.sponsor} · ${seasonLabel(entry.seasonNumber)}`
     if (entry.kind === 'operations') return `Matchday ${entry.round} club operations`
     return 'Club finances activated'

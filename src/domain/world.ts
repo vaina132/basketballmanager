@@ -205,6 +205,12 @@ export interface CareerWorld {
    * club the manager takes over during an offseason keeps its spending room for the rest of that recruitment window.
    */
   longCareers?: true;
+  /**
+   * Format 98 (owner decision 24 November 2026, new careers in worlds with researched club money, option `cashBalance`):
+   * cash no longer piles up (`src/world/cash-balance.ts`): the owner's dividend at each season opening takes part of a
+   * club's cash above what it keeps, and NBA revenue is trimmed so player wages are about half of it.
+   */
+  cashBalance?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

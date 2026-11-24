@@ -161,8 +161,9 @@ describe('bounded financial archive expansion', () => {
     const finance = archiveCompletedFinance(flat(1), 2), block = finance.archives[0], one = block.rows[0];
     expect(() => expandFinanceForValidation({ ...finance, archives: [{ ...block, rows: Array(20_001).fill(one) }] }, 2)).toThrow();
     expect(() => expandFinanceForValidation({ ...finance, archives: Array(101).fill(block) }, 102)).toThrow();
-    const rows = Array(20_000).fill(one), blocks = Array.from({ length: 10 }, (_, i) => ({ ...block, seasonNumber: i + 1, firstIndex: i * 20_000, rows }));
-    expect(MAX_FINANCE_LOGICAL_ENTRIES).toBe(200_000);
-    expect(() => expandFinanceForValidation({ ...finance, archives: blocks, ledger: [row(200_000, 11)] }, 11)).toThrow(/expansion limit/);
+    // Save growth (24 November 2026): 600,000 transactions keep 20+ seasons of the largest worlds.
+    const rows = Array(20_000).fill(one), blocks = Array.from({ length: 30 }, (_, i) => ({ ...block, seasonNumber: i + 1, firstIndex: i * 20_000, rows }));
+    expect(MAX_FINANCE_LOGICAL_ENTRIES).toBe(600_000);
+    expect(() => expandFinanceForValidation({ ...finance, archives: blocks, ledger: [row(600_000, 31)] }, 31)).toThrow(/expansion limit/);
   });
 });

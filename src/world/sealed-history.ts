@@ -7,6 +7,7 @@ import type { Side } from '../domain/types';
 import type { YouthCompetitionSeason, YouthFixture, YouthFixtureSealed } from '../domain/youth-competition';
 import { managedClubFor } from './career';
 import { archivedSidePlayerIds, fixturePlayerEvidence } from './senior-history';
+import { isPlayerRetired } from './lifecycle-policy';
 
 /**
  * Format 73 (step 3.7, save size): completed seasons are sealed at each rollover, so a save stops growing by every
@@ -20,7 +21,8 @@ import { archivedSidePlayerIds, fixturePlayerEvidence } from './senior-history';
  * - Academy weeks of completed seasons keep each prospect's last report of the season (its accumulated points at the
  *   season end), every week's identity and the final week's staff.
  * - Scouting reports of the seasons whose senior games are sealed keep their observer and evidence but not the
- *   ledger position at assignment (an audit anchor nothing reads later).
+ *   ledger position at assignment (an audit anchor nothing reads later). Since 24 November 2026 (save growth) they also
+ *   keep only what a later report reading uses (`pruneSealedScouting`).
  * - Only the latest board review lists each club's counted games, and only the latest morale snapshot frozen before a
  *   matchday keeps its values: nothing reads earlier ones (`withoutCountedGames`, `withoutEarlierMorale`, also applied
  *   every week).
@@ -110,6 +112,47 @@ export function withoutEarlierMorale(events: readonly RelationshipEvent[]): Rela
   return changed ? next : events as RelationshipEvent[];
 }
 
+/**
+ * Save growth (owner decision, 24 November 2026): scouting reports of sealed seasons were about an eighth of a long
+ * career's save. A club's knowledge of a player reads his observed reports only (the latest one's ratings and date, and
+ * the evidence of all of them, which reaches the top level after three), so in sealed seasons:
+ * - reports of players who have retired, and reports without minutes (no ratings), are dropped;
+ * - the managed club keeps every observed report of players still playing (the scouting screen counts them);
+ * - other clubs keep, per player, their latest `SEALED_SCOUTING_REPORTS` observed reports across sealed seasons.
+ * The save checks accept any such subset: each kept report is still checked against its registration, game and
+ * observer, and the development checks read whatever reports remain. Reports of the latest completed season and the
+ * current one are untouched.
+ */
+export const SEALED_SCOUTING_REPORTS = 3;
+function pruneSealedScouting(state: SeasonState, through: number): SeasonState {
+  if (!state.scouting?.enabledSince || through < 1) return state;
+  const retired = new Map<string, boolean>();
+  const isRetired = (playerId: string) => { let value = retired.get(playerId); if (value === undefined) { value = isPlayerRetired(state, playerId); retired.set(playerId, value); } return value; };
+  let changed = false;
+  const clubs: Record<string, ClubScouting> = {};
+  for (const [clubId, club] of Object.entries(state.scouting.clubs)) {
+    const managed = clubId === state.managedClubId, kept = new Map<string, number>();
+    const keep = new Array<boolean>(club.reviews.length);
+    let dropped = false;
+    for (let index = club.reviews.length - 1; index >= 0; index -= 1) {
+      const review = club.reviews[index]!;
+      if (review.seasonNumber > through) { keep[index] = true; continue; }
+      let retain = review.outcome === 'observed' && !isRetired(review.playerId);
+      if (retain && !managed) {
+        const count = kept.get(review.playerId) ?? 0;
+        retain = count < SEALED_SCOUTING_REPORTS;
+        if (retain) kept.set(review.playerId, count + 1);
+      }
+      keep[index] = retain;
+      dropped ||= !retain;
+    }
+    if (!dropped) { clubs[clubId] = club; continue; }
+    changed = true;
+    clubs[clubId] = { ...club, reviews: club.reviews.filter((_review, index) => keep[index]) };
+  }
+  return changed ? { ...state, scouting: { ...state.scouting, clubs } } : state;
+}
+
 /** Seal every completed season as described above. Idempotent and immutable. */
 export function sealCompletedHistory(state: SeasonState): SeasonState {
   let next = state;
@@ -146,6 +189,7 @@ export function sealCompletedHistory(state: SeasonState): SeasonState {
       }) } : club]));
     next = { ...next, scouting: { ...next.scouting, clubs } };
   }
+  next = pruneSealedScouting(next, through);
   if (next.board?.reviews.length) {
     const reviews = withoutCountedGames(next.board.reviews.slice(0, -1));
     if (reviews.some((review, index) => review !== next.board.reviews[index])) next = { ...next, board: { ...next.board, reviews: [...reviews, next.board.reviews.at(-1)!] } };

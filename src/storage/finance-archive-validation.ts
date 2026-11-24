@@ -25,7 +25,7 @@ export function expandFinanceForValidation(value: unknown, currentSeason: unknow
       for (const key of ['ticket', 'coach', 'payroll']) if (Object.hasOwn(row[5], key) && row[5][key] === null) fail('must omit implicit null payloads');
     }
     count += block.rows.length;
-    if (count + value.ledger.length > MAX_FINANCE_LOGICAL_ENTRIES) fail('exceed the 200000-transaction expansion limit');
+    if (count + value.ledger.length > MAX_FINANCE_LOGICAL_ENTRIES) fail(`exceed the ${MAX_FINANCE_LOGICAL_ENTRIES}-transaction expansion limit`);
     lastYear = block.seasonNumber as number;
   }
   for (const row of value.ledger) if (!object(row) || typeof row.seasonNumber !== 'number' || row.seasonNumber <= lastYear) fail('must end before the active ledger begins');

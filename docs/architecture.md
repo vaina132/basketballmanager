@@ -94,6 +94,8 @@ Write a new revision transactionally, verify it, then move the active-save point
 
 Import treats files as untrusted data: size limits, JSON/schema validation, finite/ranged numbers, entity references, allowed versions and identifiers. No executable script, HTML insertion, arbitrary asset fetch, or prototype mutation from a save. Validate entirely before replacing the active world. A checksum detects accidental corruption, not malicious authenticity.
 
+Save size (24 November 2026): the game writes the compact-3 layout (`compact-json.ts`, packed records in `save-packing.ts`, completed seasons sealed at rollover in `sealed-history.ts`) and stores that text compressed (`compact-3-deflate`: raw DEFLATE in base64 inside a readable envelope; `save-compression.ts`, dependency-free coder in `deflate.ts`). Compression is lossless and applies to every save the game writes, older careers included; the inner text must be a compact-3 save of the same format and passes the same checks. The 32 MB limit applies to the stored text; the compact text inside may reach 128 MB. Sealed seasons also keep only the scouting reports later readings use (observed reports of players still playing; all of the managed club's, the latest three per player elsewhere). Ten-season careers store about 2.6-4 MB instead of 11-16 MB and grow by about 0.25-0.5 MB a season.
+
 Multi-tab play uses one writer lease with conflict detection; a second tab can view or take over explicitly. Reload, canceled simulation and season rollover must recover from a completed revision rather than repeat an event.
 
 ## 8. Data and assets

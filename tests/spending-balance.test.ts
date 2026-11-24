@@ -39,7 +39,7 @@ function moneyWorld(): CareerWorld {
 }
 const play = (state: SeasonState) => state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state;
 const roundTrip = (state: SeasonState) => parseSeason(serializeSeasonCompact(state));
-// Measured on the format-89 board rules: format 99's career balance changes the results targets this spending follows.
+// Measured on the format-89 board rules: format 98's career balance changes the results targets this spending follows.
 const career = (world: CareerWorld, seed: number, spendingBalance = true) => createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, spendingBalance, careerBalance: false });
 /** Everything automatic: recruitment, facilities, wage prepayments and sponsorship of the manager's club too. */
 const delegate = (state: SeasonState) => state.clubs.some(club => club.id === state.managedClubId) ? setSponsorshipDelegation(setPayrollDelegation(setFacilityDelegation(setEmploymentDelegation(state, true), true), true), true) : state;

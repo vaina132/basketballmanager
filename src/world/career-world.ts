@@ -522,7 +522,7 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
   // NBA step 9 (format 94): the NBA trades marker, only on worlds with the NBA's money rules.
   // Format 97: the long-careers fixes marker, only on worlds with researched money.
   if (Object.hasOwn(world, 'longCareers') && (world.longCareers !== true || !Object.hasOwn(world, 'economy'))) fail('world.longCareers', 'must be true and needs researched club money');
-  // Format 99 (provisional number): the board and career balance marker.
+  // Format 98: the board and career balance marker.
   if (Object.hasOwn(world, 'careerBalance') && (world.careerBalance !== true || !Object.hasOwn(world, 'domesticLeagues'))) fail('world.careerBalance', 'must be true and needs domestic leagues');
   if (Object.hasOwn(world, 'nbaTrades') && (world.nbaTrades !== true || world.nba?.cap !== 'nba-cap-1')) fail('world.nbaTrades', 'must be true and needs the NBA\'s money rules');
   if (Object.hasOwn(world, 'rosterModel') && world.rosterModel !== FULL_ROSTER_MODEL) fail('world.rosterModel', 'has an unsupported value');

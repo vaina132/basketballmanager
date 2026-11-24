@@ -96,7 +96,7 @@ export function buildBoardMandate<T extends BoardCalculationContext>(state: T, s
     const rivals = league ? resources.filter(other => league.clubIds.includes(other.clubId)) : resources;
     const games = league ? state.fixtures.filter(fixture => isRegularFixture(fixture) && fixture.round >= startsRound && [fixture.homeClubId, fixture.awayClubId].includes(resource.clubId)).length : legacyGames;
     const resourceRank = 1 + rivals.filter(other => other.strength > resource.strength).length;
-    // Format 99 (`career-balance.ts`): the target follows the squad's rank in its league, not its third.
+    // Format 98 (`career-balance.ts`): the target follows the squad's rank in its league, not its third.
     const balanced = usesCareerBalance(state);
     const baseRate = balanced ? balancedWinRate(resourceRank, rivals.length, null, isNbaClub(worldOf(state), resource.clubId)) : resourceRank <= Math.ceil(rivals.length / 3) ? 0.6 : resourceRank <= Math.ceil(rivals.length * 2 / 3) ? 0.5 : 0.4;
     const mandate = { rosterId: resource.rosterId, resourceRank, targetWins: Math.ceil(games * baseRate), games, startingUnpaid: boardUnpaidCosts(state, resource.clubId) };
@@ -172,7 +172,7 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     const targetPace = objective.games ? objective.targetWins * played / objective.games : 0;
     const difference = wins - targetPace;
     const sportingDelta = Math.sign(difference) * Math.max(0, Math.abs(difference) - BOARD_WIN_TOLERANCE);
-    // Format 99 (`career-balance.ts`): the gap to the pace as a share of the games counted, judged more patiently.
+    // Format 98 (`career-balance.ts`): the gap to the pace as a share of the games counted, judged more patiently.
     const resultsImpact = played < BOARD_SPORTING_GRACE_GAMES ? 0 : balancedResults ? balancedResultsImpact(wins, targetPace, played, objective.games) : Math.round(clamp(sportingDelta * 10, -30, 30)) || 0;
     let carriedAbsences = 0, rosterPlaces = 0;
     for (const fixture of games) {

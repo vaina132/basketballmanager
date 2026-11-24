@@ -239,8 +239,8 @@ export interface DomesticDivisions {
 /** Format 95 (NBA step 8, provisional number): the NBA draft in new NBA worlds (`world.nba.draft`, `state.draft`): generated prospects, the lottery, two rounds of picks on draft day with rookie contracts (`kind` 'drafted'). */
 /** Format 96 (NBA step 12, provisional number): the measured NBA balance in new NBA worlds (`world.nba.balance`, ruleset `nba-2026b`). */
 /** Format 97 (release check "long careers"): fixes for new careers in worlds with researched club money (`world.longCareers`, `src/world/long-careers.ts`). */
-/** Format 99 (provisional number; manager careers): board and career balance for new careers (`world.careerBalance`, `src/world/career-balance.ts`). */
-export const SEASON_SCHEMA_VERSION = 99;
+/** Format 98 (manager careers): board and career balance for new careers (`world.careerBalance`, `src/world/career-balance.ts`). */
+export const SEASON_SCHEMA_VERSION = 98;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

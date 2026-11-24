@@ -195,7 +195,7 @@ describe('a manager appointed by a club promoted from the next division', () => 
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      // Format 99's career balance keeps this manager in his job, so the scenario runs on the earlier board rules.
+      // Format 98's career balance keeps this manager in his job, so the scenario runs on the earlier board rules.
       let state = setEmploymentDelegation(createSeason({ seed: 91, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, careerBalance: false }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);

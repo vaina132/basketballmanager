@@ -3,7 +3,7 @@ import type { PresidentTraits } from '../data/development-presidents';
 import { isNbaClub } from './career-world';
 
 /**
- * Format 99 (provisional number; owner decision, 24 November 2026: "fix manager careers"; new careers only, marker
+ * Format 98 (owner decision, 24 November 2026: "fix manager careers"; new careers only, marker
  * `world.careerBalance`, option `careerBalance`). Ten-season automatic careers found that a manager of a mid club who
  * delegates everything was dismissed after his second season in three of four worlds (Spain: a club ranked 9th of 18
  * was asked for 56% wins), and that in a world of the NBA alone a dismissed manager never worked again (NBA jobs ask a
@@ -82,7 +82,7 @@ export function nbaSecondChanceRequirement(requirement: number, leaguePosition: 
   return Math.min(requirement, Math.max(reliefFloor, requirement - relief));
 }
 
-/** Plain-English additions to the career rules for careers with the balance (format 99), shown after the fade rule. */
+/** Plain-English additions to the career rules for careers with the balance (format 98), shown after the fade rule. */
 export function careerBalanceNote(context: WorldContext | undefined | null): string {
   if (!usesCareerBalance(context)) return '';
   const { maxFade, reliefPoints, reliefDays, reliefFloor } = CAREER_BALANCE_RULES;
@@ -90,14 +90,14 @@ export function careerBalanceNote(context: WorldContext | undefined | null): str
   return ` A good name never fades more than ${maxFade} points below the reputation you left with.${nba}`;
 }
 
-/** Plain-English results target rule for careers with the balance (format 99). */
+/** Plain-English results target rule for careers with the balance (format 98). */
 export function balancedTargetText(): string {
   const { bestRate, worstRate, nbaBestRate, nbaWorstRate, margin, ambitionStep } = CAREER_BALANCE_RULES;
   const share = (rate: number) => Math.round((rate - margin) * 100);
   return `The target follows the squad's rank in its league: about ${share(bestRate)}% of counted games for the strongest squad, falling evenly to about ${share(worstRate)}% for the weakest (${share(nbaBestRate)}% to ${share(nbaWorstRate)}% in the NBA), moved by ${Math.round(ambitionStep * 100)} points for each point of the president's ambition above or below the middle`;
 }
 
-/** Plain-English results review rule for careers with the balance (format 99). */
+/** Plain-English results review rule for careers with the balance (format 98). */
 export function balancedReviewText(): string {
   const { tolerance, pointsPerShare, cap } = CAREER_BALANCE_RULES;
   return `Reviews compare wins with the expected pace as a share of the games counted (at least half the season's games). Within ${Math.round(tolerance * 100)} points of the pace there is no change; beyond it, each percentage point counts ${pointsPerShare / 100} assessment points, capped at ${cap} in either direction.`;

@@ -390,7 +390,7 @@ export function unemployedReputation(state: CareerContext, prior: readonly Caree
   const resignations = prior.filter(move => move.reason === 'resigned' && move.seasonNumber <= at.seasonNumber && move.seasonNumber > at.seasonNumber - CAREER_RULES.resignationSeasons).length;
   const base = Math.max(0, raw.value - resignations * CAREER_RULES.resignationReputationCost);
   const days = Math.max(0, calendarDaysBetween(start.date, at.date));
-  // Format 99 (`career-balance.ts`): a good name fades at most a few points below the reputation left with.
+  // Format 98 (`career-balance.ts`): a good name fades at most a few points below the reputation left with.
   const value = usesCareerBalance(state) ? fadedReputation(base, days, fadeFloor(base, CAREER_RULES.unemployedReputationLevel)) : fadedReputation(base, days);
   return { value, seasons: raw.seasons, ...(resignations ? { resignations } : {}), base, since: start.date, days };
 }
@@ -433,7 +433,7 @@ export function jobMarketAt(state: CareerContext, prior: readonly CareerMove[], 
     const vacancies = outlook ? outlook.vacancies : unemployedSeasonEndVacancies(state, point.seasonNumber);
     for (const vacancy of vacancies) found.set(vacancy.clubId, { ...vacancy, opened: 'end', seasonNumber: point.seasonNumber, round: rounds, openUntil: null, offered: false });
   }
-  // Format 99 (`career-balance.ts`): in a world of the NBA alone, the weaker records' NBA jobs ask less after a wait.
+  // Format 98 (`career-balance.ts`): in a world of the NBA alone, the weaker records' NBA jobs ask less after a wait.
   if (usesCareerBalance(state) && isNbaOnlyWorld(state.world)) {
     const nbaClubs = nbaClubIds(state.world!).size;
     for (const [clubId, vacancy] of found) if (isNbaJob(state.world, clubId)) found.set(clubId, { ...vacancy, requirement: nbaSecondChanceRequirement(vacancy.requirement, vacancy.position, nbaClubs, reputation.days) });

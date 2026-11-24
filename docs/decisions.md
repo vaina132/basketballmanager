@@ -652,7 +652,7 @@ Owner decisions (23 November): add the look-ahead fix; careful clubs "can spend 
 The release data check found three top-division squads weak for their league (Scafati, Vikos, Körfez) and a large strength gap between Turkey's top and second divisions (best-eight averages 66.7 and 38.2). The owner decided to keep them as the real data shows: no artificial strengthening.
 
 
-## Manager careers: board and career balance (format 99, provisional number; owner decision, 24 November 2026, reversible)
+## Manager careers: board and career balance (format 98; owner decision, 24 November 2026, reversible)
 
 Ten-season automatic careers found a delegated manager of a mid club dismissed after his second season in three of four worlds, and in a world of the NBA alone a dismissed manager never worked again. New careers in worlds with domestic leagues carry `world.careerBalance` (`src/world/career-balance.ts`); older careers keep their rules exactly.
 

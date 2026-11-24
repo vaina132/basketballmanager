@@ -17,7 +17,7 @@ import { addCalendarDays } from '../src/world/competition-calendar';
 import { verdictOnLine } from '../src/world/board-consequences';
 
 /**
- * Format 99 (provisional number; owner decision, 24 November 2026: "fix manager careers", `world.careerBalance`):
+ * Format 98 (owner decision, 24 November 2026: "fix manager careers", `world.careerBalance`):
  * results targets in proportion to the squad's rank in its league, patient results judgement, a floor on a fading good
  * name and, in a world of the NBA alone, a way back into NBA jobs after a wait. Careers without the marker keep their rules.
  */
@@ -25,7 +25,7 @@ const SPAIN = { id: 'acb', name: 'Liga Endesa', country: 'Spain', tier: 1 as con
 const withoutMarker = (world: CareerWorld): CareerWorld => { const { careerBalance: _marker, ...rest } = world; return rest as CareerWorld; };
 const play = (state: SeasonState) => advanceSeason(state.activeMatch && state.activeMatch.status !== 'finished' ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
 
-describe('the rules (format 99)', () => {
+describe('the rules (format 98)', () => {
   it('sets a mid club about 45-50% wins, moved a little by ambition, and follows the squad rank evenly', () => {
     expect(balancedWinRate(9, 18, { ambition: 3 })).toBe(0.48);
     expect(balancedWinRate(9, 18, { ambition: 4 })).toBe(0.51);
@@ -83,7 +83,7 @@ describe('the rules (format 99)', () => {
   });
 });
 
-describe('the career balance marker (format 99)', () => {
+describe('the career balance marker (format 98)', () => {
   const world = worldFromPack(economyPack([SPAIN]), 'acb');
 
   it('marks new careers, keeps older careers unchanged, and format 98 refuses the marker', () => {
@@ -97,7 +97,7 @@ describe('the career balance marker (format 99)', () => {
     const envelope = JSON.parse(serializeSeason(state));
     expect(parseSeason(JSON.stringify(envelope))).toEqual(state);
     envelope.formatVersion = 97; envelope.state.schemaVersion = 97;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/careerBalance.*format 99/);
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/careerBalance.*format 98/);
     const plain = JSON.parse(serializeSeason(older));
     plain.formatVersion = 97; plain.state.schemaVersion = 97;
     expect(parseSeason(JSON.stringify(plain)).world!.careerBalance).toBeUndefined();
@@ -133,7 +133,7 @@ describe('the career balance marker (format 99)', () => {
   }, 300_000);
 });
 
-describe('a way back into NBA jobs in a world of the NBA alone (format 99)', () => {
+describe('a way back into NBA jobs in a world of the NBA alone (format 98)', () => {
   const world = worldFromPack(nbaPack(), 'nba');
   let complete: SeasonState;
 

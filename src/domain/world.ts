@@ -206,7 +206,7 @@ export interface CareerWorld {
    */
   longCareers?: true;
   /**
-   * Format 99 (provisional number; owner decision, 24 November 2026, new careers with the option `careerBalance`): board
+   * Format 98 (owner decision, 24 November 2026, new careers with the option `careerBalance`): board
    * targets in proportion to the squad's rank, patient results judgement, a floor on the unemployed manager's fading
    * reputation and a way back into NBA jobs in a world of the NBA alone (`src/world/career-balance.ts`).
    */

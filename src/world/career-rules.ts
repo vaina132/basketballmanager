@@ -82,7 +82,7 @@ export function isUnemployed(state: { managedClubId: string; career?: Pick<Seaso
  */
 export function fadedReputation(base: number, days: number, floor: number = CAREER_RULES.unemployedReputationLevel): number {
   const level = CAREER_RULES.unemployedReputationLevel, steps = Math.floor(Math.max(0, days) / CAREER_RULES.unemployedFadeDays) * CAREER_RULES.unemployedFadePoints;
-  // Format 99 (`career-balance.ts`): a good name may stop above the resting level (`floor`).
+  // Format 98 (`career-balance.ts`): a good name may stop above the resting level (`floor`).
   return base > level ? Math.max(Math.max(level, floor), base - steps) : Math.min(level, base + steps);
 }
 

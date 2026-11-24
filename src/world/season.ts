@@ -653,7 +653,7 @@ export interface SeasonSystems {
    */
   longCareers?: boolean;
   /**
-   * Format 99 (provisional number; owner decision, 24 November 2026): board targets in proportion to the squad's rank,
+   * Format 98 (owner decision, 24 November 2026): board targets in proportion to the squad's rank,
    * patient results judgement and a way back into work after a dismissal (`world.careerBalance`,
    * `src/world/career-balance.ts`). New careers in worlds with domestic leagues (every real-data world) only.
    */
@@ -775,7 +775,7 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   const nbaTrades = !!options.nbaTrades && !world.nbaTrades && world.nba?.cap === 'nba-cap-1';
   // Format 97: the long-careers fixes, in worlds with researched club money only.
   const longCareers = !!options.longCareers && !world.longCareers && !!world.economy;
-  // Format 99 (provisional number): the board and career balance, in worlds with domestic leagues (every real-data world).
+  // Format 98: the board and career balance, in worlds with domestic leagues (every real-data world).
   const careerBalance = !!options.careerBalance && !world.careerBalance && !!world.domesticLeagues;
   return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers || careerBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}), ...(careerBalance ? { careerBalance: true as const } : {}) } : world;
 }

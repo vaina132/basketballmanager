@@ -8,8 +8,10 @@ import { playerAgeOnDate } from '../data/development-player-profiles';
 import { roundKey, seasonRounds, worldOf } from './career-world';
 import { memoizePure } from './pure-cache';
 import { draftDateOfBirth, draftProspect } from './draft-index';
+import { birthdaySetback, declineBetween, developmentTraits, fractionalAge, playerGrowthRate, usesPlayerDevelopment } from './player-development';
+import { DEFAULT_PLAYER_AGE } from '../data/development-player-profiles';
 
-export type LifecycleContext = Partial<Pick<SeasonState, 'lifecycle' | 'academy' | 'seasonNumber' | 'round' | 'date' | 'draft'>> & WorldContext;
+export type LifecycleContext = Partial<Pick<SeasonState, 'lifecycle' | 'academy' | 'seasonNumber' | 'round' | 'date' | 'draft' | 'seed'>> & WorldContext;
 /** An original player's profile in the career's world, if the player is one. */
 const originalProfile = (context: LifecycleContext, playerId: string) => { const profiles = worldOf(context).playerProfiles; return Object.hasOwn(profiles, playerId) ? profiles[playerId] : undefined; };
 const ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
@@ -80,11 +82,38 @@ export function retirementTargetAge(seed: number, playerId: string): number {
   return 37 + hash % 4;
 }
 
+/** Format 101: the career seed, which development traits and setbacks are drawn from. */
+function developmentSeed(context: LifecycleContext): number {
+  if (!Number.isInteger(context.seed)) throw new Error('Player development needs the career seed.');
+  return context.seed!;
+}
+
+/**
+ * Format 101: a player's decline and setbacks from his aging start to a date, hundredths per skill (key: seed, player,
+ * birth date, aging start and the date). Setbacks fall on birthdays after the aging start.
+ */
+const developmentLoss = memoizePure((key: string): TrainingPoints => {
+  const [seedText, playerId, dateOfBirth, startedOn, until] = key.split('|') as [string, string, string, string, string];
+  const seed = Number(seedText), traits = developmentTraits(seed, playerId), from = fractionalAge(dateOfBirth, startedOn), to = fractionalAge(dateOfBirth, until);
+  const loss = zeroPoints();
+  for (const skill of ATTRIBUTES) loss[skill] = Math.floor(declineBetween(skill, traits, from, to));
+  for (let age = Math.max(1, Math.floor(from)); age <= Math.floor(to) + 1; age += 1) {
+    const day = birthday(dateOfBirth, age);
+    if (day <= startedOn || day > until) continue;
+    const setback = birthdaySetback(seed, playerId, age);
+    for (const skill of ATTRIBUTES) loss[skill] += setback[skill];
+  }
+  return loss;
+});
+
 /** Smooth age curves affect real practice only, expressed in integer basis points. */
 export function ageTrainingRate(context: LifecycleContext, playerId: string, onDate: string): number {
   const dateOfBirth = lifecycleDateOfBirth(context, playerId);
+  if (!dateOfBirth && usesPlayerDevelopment(context) && context.lifecycle?.enabledSince && onDate >= context.lifecycle.enabledSince.date) return playerGrowthRate(developmentSeed(context), playerId, DEFAULT_PLAYER_AGE);
   if (!dateOfBirth || !agingStart(context, playerId, onDate)) return 10_000;
   if (getPlayerRetirement(context, playerId, onDate).status === 'retired') return 0;
+  // Format 101 (`player-development.ts`): the realistic age curve with the player's own traits.
+  if (usesPlayerDevelopment(context)) return playerGrowthRate(developmentSeed(context), playerId, fractionalAge(dateOfBirth, onDate));
   const at = dateNumber(onDate), at16 = dateNumber(birthday(dateOfBirth, 16)), at23 = dateNumber(birthday(dateOfBirth, 23)), at29 = dateNumber(birthday(dateOfBirth, 29)), at39 = dateNumber(birthday(dateOfBirth, 39));
   if (at <= at16) return 12_500;
   if (at < at23) return 12_500 - Math.floor(2_500 * (at - at16) / (at23 - at16));
@@ -99,7 +128,10 @@ export function getPlayerAging(context: LifecycleContext, playerId: string, onDa
   const lossPoints = zeroPoints(), skillLoss = zeroPoints();
   const retirement = getPlayerRetirement(context, playerId, onDate);
   const until = retirement.status === 'retired' ? retirement.notice!.retiredOn : onDate;
-  if (startedOn && dateOfBirth) for (const key of ATTRIBUTES) {
+  if (startedOn && dateOfBirth && usesPlayerDevelopment(context)) {
+    const loss = developmentLoss(`${developmentSeed(context)}|${playerId}|${dateOfBirth}|${startedOn}|${until}`);
+    for (const key of ATTRIBUTES) { lossPoints[key] = loss[key]; skillLoss[key] = Math.floor(loss[key] / 100); }
+  } else if (startedOn && dateOfBirth) for (const key of ATTRIBUTES) {
     const rule = AGING_RATES[key], threshold = birthday(dateOfBirth, rule.fromAge);
     const from = threshold > startedOn ? threshold : startedOn;
     const days = Math.max(0, Math.round((dateNumber(until) - dateNumber(from)) / DAY_MS));

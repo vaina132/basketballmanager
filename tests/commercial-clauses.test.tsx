@@ -111,7 +111,7 @@ describe('exit clause and naming-rights rules', () => {
 describe('naming rights and early termination in a new career', () => {
   let opening: SeasonState, renewal: SeasonState, signed: SeasonState, nextOpening: SeasonState, nextRenewal: SeasonState;
   beforeAll(() => {
-    opening = createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', ...NEW_CAREER_SYSTEMS });
+    opening = createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, playerDevelopment: false });
     renewal = advanceTo(opening, 6);
     const namingOffer = naming(renewal).offers.find(offer => offer.clubId === club)!;
     signed = acceptNamingOffer(acceptSponsorshipOffer(renewal, renewal.commercial.offers.find(offer => offer.clubId === club)!.id), namingOffer.id);
@@ -217,7 +217,7 @@ describe('a sponsor leaving after relegation', () => {
     // Seed 3 (2 before head coaches steered computer clubs, format 86; 1 before the match flow, real coaches and European entry of formats 81-83, when seed 1 also had a sponsor
     // leave a club that was not relegated; 9 before the manager's next game started from the planned five, 16 November
     // 2026): sponsors leave relegated clubs, and only them.
-    complete = setEmploymentDelegation(createSeason({ seed: 3, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+    complete = setEmploymentDelegation(createSeason({ seed: 3, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false }), true);
     while (complete.status === 'active') complete = advance(complete);
   }, 240_000);
 
@@ -279,7 +279,7 @@ describe('automatic control leaving a poor agreement (format 64)', () => {
     requireWorldContexts(true);
     try {
       // Seed 9 was found under the facilities-2 money flows; six-level facilities (format 74) change computer clubs' spending.
-      let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, simpleFacilities: false }), true);
+      let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, simpleFacilities: false }), true);
       state = rolloverSeason(finishSeason(state));
       const before = advanceTo(state, 5), renewal = advanceTo(before, 6);
       const exits = renewal.commercial.agreements.filter(agreement => agreement.exit?.by === 'club');
@@ -306,7 +306,7 @@ describe('automatic control leaving a poor agreement (format 64)', () => {
 
 describe('older careers keep the original sponsorship rules', () => {
   it('creates no naming rights, objectives or clauses without the format-64 model', () => {
-    const legacy = advanceTo(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, namingRights: false }), 6);
+    const legacy = advanceTo(createSeason({ seed: 227, managedClubId: club, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, playerDevelopment: false, namingRights: false }), 6);
     expect(legacy.commercial.model).toBe('commercial-1');
     expect(Object.hasOwn(legacy.commercial, 'naming')).toBe(false);
     expect(legacy.commercial.offers.every(offer => !Object.hasOwn(offer, 'objective'))).toBe(true);

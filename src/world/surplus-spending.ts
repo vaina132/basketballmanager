@@ -8,6 +8,7 @@ import { seasonSalaryBudget } from './board-consequences';
 import { derivePresidentTraits } from './presidents';
 import { seasonEndNets, successNeed, SPENDING_BALANCE_RULES, usesSpendingBalance } from './spending-balance';
 import { isCapClub } from './club-roster-policy';
+import { usesLongCareers } from './long-careers';
 
 /**
  * Format 88 (owner decision, 23 November 2026: "Rich clubs can spend more on wages, more on signing new players and
@@ -81,7 +82,7 @@ export const SURPLUS_SPENDING_RULES = Object.freeze({
   facilityUpkeepShare: 0.035,
 });
 
-type SpendingContext = WorldContext & Partial<Pick<SeasonState, 'finance' | 'payroll' | 'managedClubId' | 'employment' | 'status' | 'round' | 'board'>>;
+type SpendingContext = WorldContext & Partial<Pick<SeasonState, 'finance' | 'payroll' | 'managedClubId' | 'employment' | 'status' | 'round' | 'board' | 'career'>>;
 
 /** Format 88: whether the career's world carries surplus spending (new careers with the economy balance). */
 export function usesSurplusSpending(context: WorldContext | undefined): boolean {
@@ -181,7 +182,7 @@ export function anchoredSurplus(state: SpendingContext & { seasonNumber: number 
  * the reserve, later seasons and careers without surplus spending.
  */
 export function surplusWageRoom(state: SpendingContext & { seasonNumber: number }, clubId: string, seasonNumber: number): number {
-  if (!usesSurplusSpending(state) || !state.world || clubId === state.managedClubId || seasonNumber > state.seasonNumber + 1 || seasonNumber < state.seasonNumber) return 0;
+  if (!usesSurplusSpending(state) || !state.world || clubId === state.managedClubId && !takenOverThisOffseason(state, clubId) || seasonNumber > state.seasonNumber + 1 || seasonNumber < state.seasonNumber) return 0;
   // Format 92: an NBA club's payroll stays within its owner's ceiling and the cap rules; spare cash adds no wage room.
   if (isCapClub(state, clubId)) return 0;
   const appetite = clubAppetite(state, clubId, 'squad');
@@ -190,6 +191,15 @@ export function surplusWageRoom(state: SpendingContext & { seasonNumber: number 
   if (plan <= 0) return 0;
   const cap = seasonSalaryBudget(state, clubId, seasonNumber) * SURPLUS_SPENDING_RULES.maxWageRaise;
   return Math.floor(Math.min(cap, plan * SURPLUS_SPENDING_RULES.wageShare) / 50_000) * 50_000;
+}
+
+/**
+ * Format 97 (`long-careers.ts`): a club the manager took over during this offseason keeps a computer club's wage room for
+ * the rest of that recruitment window, so the offers it made before he arrived still fit when they are answered (and when
+ * the save check replays the window with him in charge).
+ */
+function takenOverThisOffseason(state: SpendingContext & { seasonNumber: number }, clubId: string): boolean {
+  return usesLongCareers(state) && state.status === 'complete' && !!state.career?.moves.some(move => move.toClubId === clubId && move.seasonNumber === state.seasonNumber && move.phase === 'offseason');
 }
 
 /** Format 88: the most the save check accepts above a season's salary ceiling for a club (any club, any season). */

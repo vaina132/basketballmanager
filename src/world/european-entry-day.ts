@@ -1,7 +1,8 @@
 import type { SeasonEurope, SeasonState } from '../domain/season';
 import type { WorldContext } from '../domain/world';
 import { managedClubAtRound } from './career';
-import { clubCountry, clubFinanceDefinition, seasonRounds, worldOf } from './career-world';
+import { clubCountry, clubFinanceDefinition, nbaClubIds, seasonRounds, worldOf } from './career-world';
+import { usesLongCareers } from './long-careers';
 import { seasonLeagues } from './divisions';
 import { clubEconomy, moneyAt } from './economy';
 import { backgroundSide, getEuropeanCompetitions } from './europe';
@@ -78,13 +79,16 @@ export function placesDayInput(state: PlacesDayState, options: PlacesDayOptions 
   const background = world.backgroundLeagues ?? [];
   const leagueClubs = new Set([...(world.domesticLeagues ?? []).flatMap(league => league.clubIds), ...(world.lowerDivisions ?? []).flatMap(list => 'clubIds' in list ? list.clubIds : []), ...leaguesNow.flatMap(league => league.clubIds), ...background.flatMap(league => league.clubIds)]);
   const europeanOnly = world.clubs.map(club => club.id).filter(clubId => !leagueClubs.has(clubId));
-  const topNow = new Set([...leaguesNow.filter(league => league.tier === 1).flatMap(league => league.clubIds), ...background.flatMap(league => league.clubIds), ...europeanOnly]);
-  const topNext = new Set([...leaguesNext.filter(league => league.tier === 1).flatMap(league => league.clubIds), ...background.flatMap(league => league.clubIds), ...europeanOnly]);
+  // Format 97 (`long-careers.ts`): NBA clubs take no European places: they count as outside every top division here.
+  const nba = usesLongCareers(state) ? nbaClubIds(world) : new Set<string>();
+  const european = (league: { tier: number; clubIds: readonly string[] }) => league.tier === 1 && !league.clubIds.some(clubId => nba.has(clubId));
+  const topNow = new Set([...leaguesNow.filter(european).flatMap(league => league.clubIds), ...background.flatMap(league => league.clubIds), ...europeanOnly]);
+  const topNext = new Set([...leaguesNext.filter(european).flatMap(league => league.clubIds), ...background.flatMap(league => league.clubIds), ...europeanOnly]);
   // Each country's final ranking: the chosen top division's (after its playoffs) or the estimated table.
   const rankings = new Map<string, readonly string[]>();
   const postseasons = getPostseasons(state as Parameters<typeof getPostseasons>[0], N);
   const standings = getStandings(state as Parameters<typeof getStandings>[0]);
-  for (const league of leaguesNow.filter(item => item.tier === 1)) {
+  for (const league of leaguesNow.filter(european)) {
     const post = postseasons.find(entry => entry.league.id === league.id);
     const order = post?.order ?? standings.filter(row => league.clubIds.includes(row.clubId)).sort((a, b) => a.position - b.position).map(row => row.clubId);
     rankings.set(league.country, post ? finalRanking(order, post.series, post.outcome.champion) : order);

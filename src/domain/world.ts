@@ -217,6 +217,12 @@ export interface CareerWorld {
    * club's cash above what it keeps, and NBA revenue is trimmed so player wages are about half of it.
    */
   cashBalance?: true;
+  /**
+   * Format 102 (owner decision 24 November 2026, provisional number; new careers with domestic leagues and a EuroLeague,
+   * without the NBA, option `euroleagueJobs`): clubs in that season's EuroLeague are bigger jobs than other top-division
+   * clubs: they offer first and ask more of a manager (`src/world/euroleague-jobs.ts`).
+   */
+  euroleagueJobs?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

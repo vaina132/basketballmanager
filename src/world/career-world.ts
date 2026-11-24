@@ -18,6 +18,7 @@ import { EUROPEAN_FORMATS, europeanWeeks, fieldFits } from './european-formats';
 import type { EconomyBand } from '../domain/world';
 import { CLUB_ECONOMY_KEYS, ECONOMY_BANDS, MAX_ECONOMY_AMOUNT, REAL_ECONOMY_RULES } from './economy';
 import { isPresidentTraits } from '../data/development-presidents';
+import { euroleagueJobsWorld } from './euroleague-jobs';
 
 /**
  * The world a career plays in. Careers in the built-in fictional league carry no world and use DEVELOPMENT_WORLD;
@@ -507,7 +508,7 @@ function checkLowerDivisions(world: CareerWorld, clubIds: ReadonlySet<string>): 
 export function validateWorld(value: unknown): asserts value is CareerWorld {
   if (isObject(value) && !Object.hasOwn(value, 'domesticLeagues') && validated.has(value)) return;
   const fail = (path: string, reason: string): never => { throw new Error(`Invalid career world: ${path} ${reason}.`); };
-  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : []), ...(isObject(value) && Object.hasOwn(value, 'europeanCompetitions') ? ['europeanCompetitions'] : []), ...(['europeanPlaces', 'backgroundLeagues', 'economy', 'neutralVenues', 'nextDivisionCountries', 'economyBalance', 'surplusSpending', 'spendingBalance', 'nba', 'nbaJobs', 'nbaTrades', 'longCareers', 'careerBalance', 'cashBalance'] as const).filter(key => isObject(value) && Object.hasOwn(value, key))])) fail('world', 'must contain exactly the world fields');
+  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : []), ...(isObject(value) && Object.hasOwn(value, 'europeanCompetitions') ? ['europeanCompetitions'] : []), ...(['europeanPlaces', 'backgroundLeagues', 'economy', 'neutralVenues', 'nextDivisionCountries', 'economyBalance', 'surplusSpending', 'spendingBalance', 'nba', 'nbaJobs', 'nbaTrades', 'longCareers', 'careerBalance', 'cashBalance', 'euroleagueJobs'] as const).filter(key => isObject(value) && Object.hasOwn(value, key))])) fail('world', 'must contain exactly the world fields');
   const world = value as unknown as CareerWorld;
   // Format 85: rule markers of new careers, true when recorded.
   for (const key of ['neutralVenues', 'nextDivisionCountries'] as const) if (Object.hasOwn(world, key) && world[key] !== true) fail(`world.${key}`, 'must be true when recorded');
@@ -523,6 +524,8 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
   // Format 97: the long-careers fixes marker, only on worlds with researched money.
   if (Object.hasOwn(world, 'longCareers') && (world.longCareers !== true || !Object.hasOwn(world, 'economy'))) fail('world.longCareers', 'must be true and needs researched club money');
   // Format 98: the board and career balance marker.
+  // Format 102: the EuroLeague jobs marker, only on worlds with domestic leagues and a EuroLeague, without the NBA.
+  if (Object.hasOwn(world, 'euroleagueJobs') && (world.euroleagueJobs !== true || !euroleagueJobsWorld(world))) fail('world.euroleagueJobs', 'must be true and needs a EuroLeague without the NBA');
   if (Object.hasOwn(world, 'careerBalance') && (world.careerBalance !== true || !Object.hasOwn(world, 'domesticLeagues'))) fail('world.careerBalance', 'must be true and needs domestic leagues');
   // Format 99: the cash balance marker, only on worlds with researched money.
   if (Object.hasOwn(world, 'cashBalance') && (world.cashBalance !== true || !Object.hasOwn(world, 'economy'))) fail('world.cashBalance', 'must be true and needs researched club money');

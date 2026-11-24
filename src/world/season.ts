@@ -11,6 +11,7 @@ import { fixturePlayerEvidence, summarizeSeniorHistory } from './senior-history'
 import { createRivalries, enableRivalries } from './rivalries';
 import { createGrownRivalries, growRivalries } from './rivalry-growth';
 import { computeEconomySeasons, createEconomySeasons, growEconomy, withCashBalanceNbaRevenue, type EconomyForesight } from './economy';
+import { euroleagueJobsWorld } from './euroleague-jobs';
 import { appointFromUnemployment, appointManager, createCareer, enableCareerMoves, lastManagedClub, leaveClub, matchClubFor, restartBoard, transferManager, currentMovePhase } from './career';
 import { jobOfferRefusal, jobRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, unemployedSeasonEndVacancies, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
 import { allowsUnemployment, CAREER_RULES, coachProtected, isUnemployed, NO_CLUB, startingConfidence, usesCareerRules } from './career-rules';
@@ -663,6 +664,12 @@ export interface SeasonSystems {
    * (`world.cashBalance`, `src/world/cash-balance.ts`). New careers only.
    */
   cashBalance?: boolean;
+  /**
+   * Format 102 (owner decision 24 November 2026, provisional number): clubs in that season's EuroLeague are bigger jobs
+   * than other top-division clubs in worlds without the NBA (`world.euroleagueJobs`, `src/world/euroleague-jobs.ts`).
+   * New careers only.
+   */
+  euroleagueJobs?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -676,7 +683,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true, euroleagueJobs: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -719,6 +726,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.longCareers !== undefined && typeof options.longCareers !== 'boolean') throw new Error('Choose a valid long careers setting.');
   if (options.careerBalance !== undefined && typeof options.careerBalance !== 'boolean') throw new Error('Choose a valid career balance setting.');
   if (options.cashBalance !== undefined && typeof options.cashBalance !== 'boolean') throw new Error('Choose a valid cash balance setting.');
+  if (options.euroleagueJobs !== undefined && typeof options.euroleagueJobs !== 'boolean') throw new Error('Choose a valid EuroLeague jobs setting.');
   if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
@@ -785,6 +793,8 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   const careerBalance = !!options.careerBalance && !world.careerBalance && !!world.domesticLeagues;
   // Format 99: the cash balance, in worlds with researched club money only (NBA clubs open on the trimmed revenue range).
   if (options.cashBalance && !world.cashBalance && world.economy) world = { ...withCashBalanceNbaRevenue(world), cashBalance: true as const };
+  // Format 102: EuroLeague clubs are bigger jobs, in worlds with a EuroLeague and without the NBA only.
+  if (options.euroleagueJobs && !world.euroleagueJobs && euroleagueJobsWorld(world)) world = { ...world, euroleagueJobs: true as const };
   return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers || careerBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}), ...(careerBalance ? { careerBalance: true as const } : {}) } : world;
 }
 

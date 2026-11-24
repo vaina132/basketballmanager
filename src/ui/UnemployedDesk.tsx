@@ -13,6 +13,7 @@ import { Icon } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
 import './unemployed-desk.css'
 import { careerBalanceNote } from '../world/career-balance'
+import { euroleagueJobsNote } from '../world/euroleague-jobs'
 import { ClubBadge } from './ClubLogo'
 
 interface UnemployedDeskProps {
@@ -94,7 +95,7 @@ export function UnemployedDesk({ season, busy, onAccept, onOpenCompetitions, onO
             </div>
           </li>
         })}</ul> : <p className="unemployed-empty">No club is looking for a head coach right now. Boards replace their head coach after a review below {CAREER_RULES.midSeasonDismissalBelow} once a third of the season is played, and when a season ends Under pressure; those jobs appear here.</p>}
-        <p className="unemployed-note">Clubs look for a reputation of {VACANCY_BASE_REQUIREMENT} for last place and {VACANCY_STEP} more for each place higher. {CAREER_RULES_TEXT.offers} {CAREER_RULES_TEXT.unemployed}</p>
+        <p className="unemployed-note">Clubs look for a reputation of {VACANCY_BASE_REQUIREMENT} for last place and {VACANCY_STEP} more for each place higher. {CAREER_RULES_TEXT.offers}{euroleagueJobsNote(season.world)} {CAREER_RULES_TEXT.unemployed}</p>
       </section>
 
       <div className="unemployed-side">

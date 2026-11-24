@@ -238,7 +238,8 @@ export interface DomesticDivisions {
 /** Format 94 (NBA step 9): trades between NBA clubs in new NBA worlds (`world.nbaTrades`): the `trades-1` journal of the manager's offers (`state.trades`), completed trades (`employment.trades`) and `trade` contracts that carry each traded player's terms on unchanged. */
 /** Format 95 (NBA step 8, provisional number): the NBA draft in new NBA worlds (`world.nba.draft`, `state.draft`): generated prospects, the lottery, two rounds of picks on draft day with rookie contracts (`kind` 'drafted'). */
 /** Format 96 (NBA step 12, provisional number): the measured NBA balance in new NBA worlds (`world.nba.balance`, ruleset `nba-2026b`). */
-export const SEASON_SCHEMA_VERSION = 96;
+/** Format 97 (release check "long careers"): fixes for new careers in worlds with researched club money (`world.longCareers`, `src/world/long-careers.ts`). */
+export const SEASON_SCHEMA_VERSION = 97;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

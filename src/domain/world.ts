@@ -199,6 +199,12 @@ export interface CareerWorld {
   nbaJobs?: true;
   /** NBA step 9 (format 94, new careers with the NBA's money rules and the option `nbaTrades`): player-for-player trades between NBA clubs (`src/world/trades.ts`). */
   nbaTrades?: true;
+  /**
+   * Format 97 (release check "long careers", new careers in worlds with researched club money, option `longCareers`):
+   * fixes found by ten-season automatic careers (`src/world/long-careers.ts`): NBA clubs take no European places, and a
+   * club the manager takes over during an offseason keeps its spending room for the rest of that recruitment window.
+   */
+  longCareers?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

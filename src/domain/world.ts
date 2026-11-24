@@ -223,6 +223,12 @@ export interface CareerWorld {
    * clubs: they offer first and ask more of a manager (`src/world/euroleague-jobs.ts`).
    */
   euroleagueJobs?: true;
+  /**
+   * Format 102 (owner decision 24 November 2026, new careers with the spending balance, option `squadRefresh`): a club run
+   * automatically with spending room and a full squad releases a weak player to sign a clearly better one
+   * (`src/world/squad-refresh.ts`).
+   */
+  squadRefresh?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

@@ -36,6 +36,7 @@ import type { DataPack } from './world/data-pack'
 import { loadLocalMatch, MAX_SAVE_BYTES, parseMatch, saveLocalMatch, serializeMatch } from './storage/match-storage'
 import { Avatar } from './ui/Avatar'
 import { CreditsDialog } from './ui/CreditsDialog'
+import { canAdvance, LICENSING_BUY_URL, LICENSING_ENABLED, loadEntitlement, notConfiguredVerifier, saveEntitlement, type Entitlement, type FreePlayLimit } from './licensing'
 import { CurrencySetting } from './ui/CurrencySetting'
 import { useDisplayCurrency } from './ui/use-currency'
 import { Icon } from './ui/Icon'
@@ -96,6 +97,8 @@ import { CareerSaveHistory } from './ui/CareerSaveHistory'
 import { isWorkerLoadFailure, PageError, PageErrorBoundary } from './ui/PageErrorBoundary'
 import { listenForMissingPageFiles, reloadForNewVersion } from './ui/newVersionReload'
 import { SeasonEndChoice } from './ui/SeasonEndChoice'
+// The paid version's unlock screen (owner decision, 24 November 2026): loaded only when licensing is on and Continue is refused.
+const UnlockGame = lazy(() => import('./ui/UnlockGame').then(module => ({ default: module.UnlockGame })))
 const RealClubFriendly = lazy(() => import('./ui/RealClubFriendly').then(module => ({ default: module.RealClubFriendly })))
 import { fetchBuiltInPack } from './world/built-in-pack'
 import { SeasonCalendar } from './ui/SeasonCalendar'
@@ -200,6 +203,9 @@ export default function App() {
   // The one Continue (owner request, 16 November 2026): the run in progress, and the manager's request to stop it.
   const [continueRun, setContinueRun] = useState<ContinueRunView | null>(null)
   const continueStopRequested = useRef(false)
+  // The licence in this browser and the unlock screen (owner decision, 24 November 2026; off while LICENSING_ENABLED is false).
+  const [entitlement, setEntitlement] = useState<Entitlement>(() => loadEntitlement())
+  const [unlock, setUnlock] = useState<{ limit: FreePlayLimit | null } | null>(null)
   const [creatingCareer, setCreatingCareer] = useState(false)
   // The board's season-end decision and job offers, shown before the final matchday is committed.
   const [seasonEnd, setSeasonEnd] = useState<SeasonEndOutlook | null>(null)
@@ -842,6 +848,9 @@ export default function App() {
     const current = sessionRef.current
     if (seasonWorker.current || persistenceBusy.current || current.kind !== 'season') return
     const start = current.season, action = continueAction(start)
+    // The paid version's one gate (`canAdvance`): always open while licensing is off.
+    const gate = canAdvance(start, entitlement)
+    if (!gate.allowed) { setUnlock({ limit: gate.limit }); return }
     // The manager's match opens first; on the match screen it is watched or simulated as before.
     if (action.kind === 'match') {
       if (page !== 'match') navigate('match')
@@ -874,6 +883,9 @@ export default function App() {
       // Format 63: the board's decision (a dismissal or job offers) is answered before the week is committed.
       if ('outlook' in data) { end(); setWorkerFailure(null); if (data.outlook) setSeasonEnd(data.outlook); return }
       steps += 1
+      // The free part ends inside a run (licensing on, no licence): the run stops at the day that reached it.
+      const gate = canAdvance(data.state, entitlement)
+      if (!gate.allowed) { finish(data.state, { kind: 'blocked', message: 'The free part of the game ends here. Unlock the full game to continue this career.' }); setUnlock({ limit: gate.limit }); return }
       const stop = continueStop(previous, data.state) ?? (continueStopRequested.current ? stoppedRun(data.state) : null)
       previous = data.state
       // Manual saves (owner, 18 November 2026): days, weeks and matches are not saved by themselves. The one safety copy
@@ -906,7 +918,7 @@ export default function App() {
   }
   // Space presses Continue when no field or control has focus and no dialog is open (AGENTS.md: keyboard access).
   const continueShortcut = useRef<(() => void) | null>(null)
-  continueShortcut.current = season && !entryView && !saveHistoryOpen && !creditsOpen && !seasonEnd && !friendlyOpen ? () => continueCareer() : null
+  continueShortcut.current = season && !entryView && !saveHistoryOpen && !creditsOpen && !seasonEnd && !friendlyOpen && !unlock ? () => continueCareer() : null
   useEffect(() => {
     const press = (event: KeyboardEvent) => {
       if (!continueShortcut.current || !isContinueShortcut(event) || seasonWorker.current || document.querySelector('dialog[open]')) return
@@ -939,6 +951,7 @@ export default function App() {
     {seasonEnd && season && <SeasonEndChoice season={season} outlook={seasonEnd} busy={advancing || saving} onChoose={clubId => { setSeasonEnd(null); continueCareer({ decision: clubId !== null ? { moveTo: clubId } : undefined }) }} onClose={() => setSeasonEnd(null)} />}
     {saveHistoryOpen && <CareerSaveHistory entries={saveHistory?.entries ?? []} loading={historyLoading} error={historyError} busy={saving} onRefresh={() => { void refreshSaveHistory() }} onRestore={revision => { void restoreCheckpoint(revision) }} onClose={closeSaveHistory} />}
     {creditsOpen && <CreditsDialog onClose={() => setCreditsOpen(false)} />}
+    {LICENSING_ENABLED && unlock && season && <Suspense fallback={null}><UnlockGame limit={unlock.limit} verifier={notConfiguredVerifier} buyUrl={LICENSING_BUY_URL} busy={saving || advancing} onSave={() => { void save() }} onClose={() => setUnlock(null)} onUnlocked={licence => { saveEntitlement(licence); setEntitlement(licence); setUnlock(null); setNotice({ message: 'The full game is unlocked. Continue moves your career on.' }) }} /></Suspense>}
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
   </>
   if (entryView) return <><PageErrorBoundary key={entryView} title={entryView === 'menu' ? 'The main menu' : entryView === 'profile' ? 'Manager profile' : 'New career'} savesFirst={false} onReload={() => window.location.reload()} autoReload={autoReload} fullScreen><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing || creatingCareer} starting={creatingCareer} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} packSource={packSource} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense></PageErrorBoundary>{overlays}</>

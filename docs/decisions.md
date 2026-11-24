@@ -694,7 +694,7 @@ In careers without the NBA, clubs playing in that season's EuroLeague now rank a
 - As with NBA jobs, a EuroLeague job beyond the manager's reputation is never the job of last resort while another club can take him, so the format-98 way back through ordinary clubs stays.
 - Board expectations do not read the job order and are unchanged. Coach ratings and the head-coach market already rated EuroLeague clubs above other top-division clubs in every world (format 82). Worlds with the NBA keep the format-91 rules (there a EuroLeague club asks the usual requirement).
 
-## Player development (format 101, provisional number; owner decision, 24 November 2026, reversible)
+## Player development (format 101; owner decision, 24 November 2026, reversible)
 
 Owner decision (24 November): "fix player ratings rising over the years in a good, logical way: players constantly raising their stats is not logical. Some will rise, some will fall." Ten-season careers had shown practice filling every player's potential within two or three seasons at any age (median of contracted players +10 to +30, NBA players at 99 from 5 to 48) and decline starting late and gently. New real-data careers carry `world.playerDevelopment` (`PLAYER_DEVELOPMENT_RULES` in `src/world/player-development.ts`); older careers keep their rules exactly.
 

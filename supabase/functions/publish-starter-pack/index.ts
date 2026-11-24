@@ -25,6 +25,14 @@
 // from 23 November 2026, only such leagues become unchosen top divisions of a European world; older game builds would
 // add the 30-club NBA to European worlds that way, so a pack with the NBA is published only once that build is live.
 //
+// rating-5 (v9, owner decision 24 November 2026; ./rating-model.mjs, STRENGTH_RULES): statistics produced against
+// weaker opposition, or as the focal point of a weak team, count a little less. The function reads the box scores
+// (games, player_game_stats), rates every European player with rating-3 as published (checked against the stored
+// rating rows) and again on season lines put in a neutral team and opposition setting, on the same scale, and adds
+// the difference of each unrounded ability to the stored one, before the rating balance. Squads, positions, builds,
+// estimates, minutes and games come from the stored rows exactly as before; the NBA (added players, rating-4) is not
+// touched. To undo, redeploy v8 (index.ts and rating-balance.ts without rating-model.mjs, git history).
+//
 // It acts only on an authorised request: a pending, unexpired `publish-pack` row in `data_change_requests` (written
 // only by the service role or the owner's dashboard), which names the new version. `preview` returns the built pack
 // for checking with the game's own parser; `publish` uploads it only if its checksum equals the request's
@@ -33,6 +41,8 @@
 //   POST /functions/v1/publish-starter-pack   body: { "request": <id>, "mode": "preview" | "publish" }
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { balanceBySeparateCountry } from './rating-balance.ts';
+// @ts-ignore plain JavaScript module shared with scripts/real-data-ratings.mjs
+import { ABILITY_KEYS, STRENGTH_RULES, describeLevels, seasonLines, strengthRatings, teamStrengths } from './rating-model.mjs';
 
 const VERSION = '2026.11-world-1', SEASON = '2026-27', OBJECT = 'real-pack.json';
 const ABILITIES = ['two_point', 'three_point', 'free_throw', 'passing', 'defense', 'rebounding', 'stamina'];
@@ -97,6 +107,43 @@ Deno.serve(async request => {
     // Current squads (18 November 2026): players on a club's current roster who are not in the provider's data.
     const clubRows = await all('manual_overrides', 'entity_id,field,value', query => query.eq('entity_type', 'club').eq('field', 'added_players').order('id'));
     const rules = [...new Set(ratings.map(rating => rating.method?.rules).filter(Boolean))].sort().join(', ');
+
+    // rating-5: every season line from the box scores (as the view player_season_totals sums them, with the club kept),
+    // each club's strength per competition season, then rating-3 and rating-5 side by side.
+    const allSeasons = await all('seasons', 'id,label,competitions(name,kind,tier)');
+    const seasonById = new Map(allSeasons.map(row => [row.id, { label: row.label, competition: row.competitions.name, kind: row.competitions.kind }]));
+    const games = await all('games', 'id,season_id,home_club_id,away_club_id,home_score,away_score,stats_rows', query => query.order('id'));
+    const { count: statCount, error: countError } = await client.from('player_game_stats').select('game_id', { count: 'exact', head: true });
+    if (countError || !Number.isSafeInteger(statCount)) throw new Error(`player_game_stats: ${countError?.message ?? 'no count'}`);
+    const stats: any[] = [];
+    const page = async (from: number) => {
+      const { data, error } = await client.from('player_game_stats').select('g:game_id,p:player_id,c:club_id,s:seconds_played,tm:two_made,ta:two_attempted,hm:three_made,ha:three_attempted,fm:free_made,fa:free_attempted,r:rebounds,a:assists,pt:points').order('game_id').order('player_id').range(from, from + 999);
+      if (error) throw new Error(`player_game_stats: ${error.message}`);
+      return data;
+    };
+    for (let from = 0; from < statCount!; from += 8000) {
+      const pages = await Promise.all(Array.from({ length: 8 }, (_, index) => from + index * 1000).filter(start => start < statCount!).map(page));
+      for (const rows of pages) for (const x of rows) stats.push({ game_id: x.g, player_id: x.p, club_id: x.c, seconds_played: x.s, two_made: x.tm, two_attempted: x.ta, three_made: x.hm, three_attempted: x.ha, free_made: x.fm, free_attempted: x.fa, rebounds: x.r, assists: x.a, points: x.pt });
+    }
+    if (stats.length !== statCount) throw new Error(`player_game_stats: read ${stats.length} of ${statCount} rows`);
+    const ratingCompetitions = await all('competitions', 'name,kind,tier');
+    // A preview may try other weights (body.strength: teamWeight, opponentWeight, priorGames); a publish always uses STRENGTH_RULES.
+    const tuning = mode === 'preview' && body?.strength && typeof body.strength === 'object' ? body.strength : {};
+    const tuned = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 3 ? value : fallback;
+    const strengthRules = { ...STRENGTH_RULES, teamWeight: tuned(tuning.teamWeight, STRENGTH_RULES.teamWeight), opponentWeight: tuned(tuning.opponentWeight, STRENGTH_RULES.opponentWeight), priorGames: tuned(tuning.priorGames / 10, STRENGTH_RULES.priorGames / 10) * 10 };
+    const strengthModel = strengthRatings(seasonLines(stats, games, seasonById), players.filter(player => !player.merged_into), ratingCompetitions, teamStrengths(games, strengthRules), strengthRules);
+    const deltaOf: Map<string, Record<string, number>> = strengthModel.deltas;
+    // The check: rating-3 recomputed from the box scores against the stored rating rows of dataset version VERSION.
+    const recomputed = new Map(strengthModel.base.map((rating: any) => [rating.player_id, rating]));
+    let identical = 0, differing = 0, missing = 0, largest = 0;
+    for (const rating of ratings) {
+      const again: any = recomputed.get(rating.player_id);
+      if (!again) { missing += 1; continue; }
+      const gap = Math.max(...ABILITY_KEYS.map((key: string) => Math.abs(Number(again[key]) - Number(rating[key]))));
+      if (gap === 0) identical += 1; else differing += 1;
+      largest = Math.max(largest, gap);
+    }
+    const strengthCheck = { storedRows: ratings.length, identical, differing, missing, largestDifference: largest };
     const source = { provider: 'API-SPORTS (API-BASKETBALL)', importRun: versionRow.source_run_id, ratings: rules || 'unknown', ratingsNote: versionRow.notes };
 
     const clubById = new Map(clubs.map(club => [club.id, club]));
@@ -139,7 +186,9 @@ Deno.serve(async request => {
       if (fix && estimatedBuild) [height, weight] = BUILD[position];
       if (fix?.height_cm) height = fix.height_cm.value;
       if (fix?.weight_kg) weight = fix.weight_kg.value;
-      const attributes = Object.fromEntries(ABILITIES.map(key => [GAME_KEYS[key], rating ? rating[key] : UNRATED.ability]));
+      // rating-5 (v9): the change of each unrounded ability from team and opposition strength, added to the stored ability.
+      const delta = useOverrides && rating ? deltaOf.get(row.player_id) : undefined;
+      const attributes = Object.fromEntries(ABILITIES.map(key => [GAME_KEYS[key], rating ? Number(rating[key]) + (delta?.[key] ?? 0) : UNRATED.ability]));
       const born = fix?.birth_date?.value as string | undefined;
       const age = born ? Number(opening.slice(0, 4)) - Number(born.slice(0, 4)) - Number(opening.slice(5) < born.slice(5)) : player.age_observed ?? null;
       const cleared = new Set([...(fix?.height_cm ? ['height_cm'] : []), ...(fix?.weight_kg ? ['weight_kg'] : []), ...(born ? ['age-unverified', 'age'] : [])]);
@@ -191,13 +240,25 @@ Deno.serve(async request => {
     // Rating balance by position and minutes, on the finished squads and positions (squads do not depend on abilities).
     // v8: the USA (the NBA) is balanced on its own, so every European player gets exactly the ratings he had before.
     const { players: packPlayers, summary: ratingBalance, usa: ratingBalanceUsa } = balanceBySeparateCountry(correctedPlayers as any[], packCompetitions as any[], 'USA');
+    // Every ability is a whole number after the balance (it rounds every rated profile); refuse anything else.
+    const unrounded = packPlayers.filter(player => Object.values(player.attributes).some(value => !Number.isInteger(value)));
+    if (unrounded.length) throw new Error(`${unrounded.length} players with unrounded abilities, for example ${unrounded[0].id}`);
     const corrected = packPlayers.filter(player => player.profileEvidence);
+    const strengthPlayers = correctedPlayers.filter(player => player.ratingMinutes !== undefined && !player.estimated.includes('all-abilities') && deltaOf.has(player.id.replace(/^player-/, '')));
+    const ratingStrength = {
+      model: STRENGTH_RULES.id, players: strengthPlayers.length, check: strengthCheck,
+      rules: { priorGames: strengthRules.priorGames, limit: strengthRules.limit, team: strengthRules.team, opponent: strengthRules.opponent, teamWeight: strengthRules.teamWeight, opponentWeight: strengthRules.opponentWeight },
+      conversion: describeLevels(strengthModel.neutralLevels),
+      note: 'rating-5: before rating-3 runs, each season line is put in a neutral setting (an average team of its competition against average opposition): per point of team strength (margin per game, opponent- and home-adjusted, pulled to the average over six games) two-point attempts -1.0%, minutes per game -1.8%, threes and assists a little, counted at half weight; per point of opposition strength rebounds -0.8%, assists -1.2%, shooting -0.3 to -0.45 points, as measured in the box scores (club changes within a competition, and game lines against season averages). The change of each unrounded ability is added to the stored rating-3 ability, before the rating balance (owner decision, 24 November 2026).',
+    };
     const profileCorrections = { model: 'profile-overrides-1', players: corrected.length, currentSquads: { moved: overrideRows.filter(row => row.field === 'club_id').length, left: overrideRows.filter(row => row.field === 'squad_status').length, added: clubRows.reduce((sum, row) => sum + row.value.value.length, 0) }, exactPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'official').length, reportedPositions: corrected.filter(player => player.profileEvidence?.positionSource === 'provider').length, estimatedPositions: packPlayers.filter(player => player.estimated.includes('game_position')).length, note: 'Official EuroLeague/EuroCup registrations and official league and club roster pages; Wikipedia rosters and player articles (CC BY-SA 4.0) where no official page gives an exact position, shown as reported; a broad role (Guard, Forward) keeps the exact position an estimate.' };
-    const pack = { format: 'basketball-manager-data-pack', formatVersion: 1, version: ask.version, season: SEASON, source: { ...source, profileCorrections, ratingBalance, ...(ratingBalanceUsa ? { ratingBalanceUsa, nbaRatings: 'rating-4: NBA box scores (API-SPORTS league 12, 2025-26 and 2026-27) on the European scale of rating-3, the NBA level fitted with the European levels fixed (scripts/real-data-nba-ratings.mjs); NBA facts from Wikipedia (CC BY-SA 4.0) and Wikidata.' } : {}) }, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026). Player positions, heights, birth dates and names corrected from official competition and club sources where available (16 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
+    const pack = { format: 'basketball-manager-data-pack', formatVersion: 1, version: ask.version, season: SEASON, source: { ...source, profileCorrections, ratingStrength, ratingBalance, ...(ratingBalanceUsa ? { ratingBalanceUsa, nbaRatings: 'rating-4: NBA box scores (API-SPORTS league 12, 2025-26 and 2026-27) on the European scale of rating-3, the NBA level fitted with the European levels fixed (scripts/real-data-nba-ratings.mjs); NBA facts from Wikipedia (CC BY-SA 4.0) and Wikidata.' } : {}) }, notice: 'Real club data from API-SPORTS, published with the game by its owner (15 November 2026). Player positions, heights, birth dates and names corrected from official competition and club sources where available (16 November 2026).', competitions: packCompetitions, clubs: packClubs, players: packPlayers };
     const checksum = await sha256(JSON.stringify(pack));
-    const summary = { version: pack.version, checksum, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, profileCorrections, ratingBalance: { model: ratingBalance.model, changedPlayers: ratingBalance.changedPlayers, playersWithGames: ratingBalance.role.playersWithGames, clubsWithStarters: ratingBalance.role.clubsWithStarters }, ...(ratingBalanceUsa ? { ratingBalanceUsa: { poolPlayers: ratingBalanceUsa.poolPlayers, changedPlayers: ratingBalanceUsa.changedPlayers, playersWithGames: ratingBalanceUsa.role.playersWithGames, clubsWithStarters: ratingBalanceUsa.role.clubsWithStarters } } : {}), cut, matchesRecordedChecksum: recorded === versionRow.checksum, replaces: existingVersion };
+    const summary = { version: pack.version, checksum, competitions: packCompetitions.length, clubs: packClubs.length, players: packPlayers.length, profileCorrections, ratingStrength: { model: ratingStrength.model, players: ratingStrength.players, check: strengthCheck, rules: ratingStrength.rules }, ratingBalance: { model: ratingBalance.model, changedPlayers: ratingBalance.changedPlayers, playersWithGames: ratingBalance.role.playersWithGames, clubsWithStarters: ratingBalance.role.clubsWithStarters }, ...(ratingBalanceUsa ? { ratingBalanceUsa: { poolPlayers: ratingBalanceUsa.poolPlayers, changedPlayers: ratingBalanceUsa.changedPlayers, playersWithGames: ratingBalanceUsa.role.playersWithGames, clubsWithStarters: ratingBalanceUsa.role.clubsWithStarters } } : {}), cut, matchesRecordedChecksum: recorded === versionRow.checksum, replaces: existingVersion };
     const text = JSON.stringify({ checksum, writtenAt: new Date().toISOString(), pack });
-    if (mode === 'preview') return new Response(JSON.stringify({ status: 'preview', ...summary, envelope: JSON.parse(text) }), { headers: { 'Content-Type': 'application/json' } });
+    // Preview only: each rated player's strength context (team, opposition) and his ability changes before the balance, for the review.
+    const strengthReport = Object.fromEntries(strengthPlayers.map(player => { const id = player.id.replace(/^player-/, ''), context = strengthModel.contexts.get(id); return [player.id, { team: context?.team ?? 0, schedule: context?.schedule ?? 0, delta: deltaOf.get(id) }]; }));
+    if (mode === 'preview') return new Response(JSON.stringify({ status: 'preview', ...summary, strengthReport, envelope: JSON.parse(text) }), { headers: { 'Content-Type': 'application/json' } });
     if (checksum !== ask.expected_sha256) return json({ status: 'refused', error: 'The built pack does not match the requested checksum; preview and check it again.', ...summary }, 409);
     // Keep the current file before replacing it; an existing backup is never overwritten.
     let backup: string | null = null;

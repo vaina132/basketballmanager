@@ -2,6 +2,7 @@ import type { SeasonState } from '../domain/season'
 import type { EconomyBand, EconomyChangeReason } from '../domain/world'
 import { economyChange, REAL_ECONOMY_RULES } from '../world/economy'
 import { worldOf } from '../world/career-world'
+import { cashKeepShare, dividendTakeShare, usesCashBalance } from '../world/cash-balance'
 import { seasonLabel } from '../world/season'
 import { formatMoney } from './money-format'
 import { Icon } from './Icon'
@@ -36,6 +37,6 @@ export function ClubMoneyPanel({ season }: { season: SeasonState }) {
       <div><dt>Budget this season</dt><dd>{formatMoney(budget)}</dd></div>
       <div><dt>{previous ? `Change from ${seasonLabel(season.seasonNumber - 1)}` : 'Change'}</dt><dd data-club-money-change={difference}>{previous ? <>{difference > 0 ? '+' : difference < 0 ? '−' : ''}{formatMoney(Math.abs(difference))}{percent ? ` (${percent > 0 ? '+' : ''}${percent}%)` : ''}<small>{why}</small></> : <>Opening figures<small>Estimated from published club budgets</small></>}</dd></div>
     </dl>
-    <details className="game-disclosure"><summary><Icon name="clock" size={15} />How the budget changes</summary><div className="club-note"><p>Each new season the club’s division, European competition and squad strength set the budget it is heading for{target !== budget ? `: ${formatMoney(target)} this season` : ''}. Sponsorship, season funding, ticket prices, staff costs and the player wages budget move {Math.round(REAL_ECONOMY_RULES.seasons.share * 100)}% of the way there each season, so promotion and relegation take effect over two or three seasons.</p><p>Signed contracts keep their agreed wages. New figures apply when the next season starts.</p></div></details>
+    <details className="game-disclosure"><summary><Icon name="clock" size={15} />How the budget changes</summary><div className="club-note"><p>Each new season the club’s division, European competition and squad strength set the budget it is heading for{target !== budget ? `: ${formatMoney(target)} this season` : ''}. Sponsorship, season funding, ticket prices, staff costs and the player wages budget move {Math.round(REAL_ECONOMY_RULES.seasons.share * 100)}% of the way there each season, so promotion and relegation take effect over two or three seasons.</p><p>Signed contracts keep their agreed wages. New figures apply when the next season starts.</p>{usesCashBalance(season) && <p data-club-money-dividend>The owner lets the club keep up to {Math.round(cashKeepShare(worldOf(season), season.managedClubId, band === 'nba') * 100)}% of its budget in cash when a season starts. Above that, the owner takes back {Math.round(dividendTakeShare(worldOf(season), season.managedClubId) * 100)}% of the extra from the season funding. Money spent on players, staff and facilities is never taken.</p>}</div></details>
   </section>
 }

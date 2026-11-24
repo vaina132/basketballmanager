@@ -211,6 +211,12 @@ export interface CareerWorld {
    * reputation and a way back into NBA jobs in a world of the NBA alone (`src/world/career-balance.ts`).
    */
   careerBalance?: true;
+  /**
+   * Format 99 (owner decision 24 November 2026, new careers in worlds with researched club money, option `cashBalance`):
+   * cash no longer piles up (`src/world/cash-balance.ts`): the owner's dividend at each season opening takes part of a
+   * club's cash above what it keeps, and NBA revenue is trimmed so player wages are about half of it.
+   */
+  cashBalance?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

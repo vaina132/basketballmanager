@@ -647,6 +647,16 @@ Owner decisions (23 November): add the look-ahead fix; careful clubs "can spend 
 - A computer club that agreed to sell a player withdraws its pending offers that no longer fit its wage budget, as a recorded step.
 - Measured over five automatic seasons (real Turkey seeds 7, 11; Spain 5, 11; synthetic): no unpaid costs; lowest season-end cash about 10% (was 0-1%); Efes 113% -> 85%; Breogán still 128-143% (open).
 
+## Cash balance (format 99, provisional number, 24 November 2026, reversible)
+
+Owner decision (24 November): fix "cash piles up" (ten-season careers: EuroLeague clubs 68-176% of budget in cash, some clubs 240-375%; NBA median $654M, richest over $1B, wages about 38% of revenue); some clubs may still hold a lot, but not absurd amounts. New careers with researched club money only (`world.cashBalance`; `CASH_BALANCE_RULES` in `src/world/cash-balance.ts`):
+
+- The owner's dividend: at each season opening (from season 2) a club whose net cash just before the opening is above its kept share of the new budget gets less season funding: the owner takes back part of the excess, at most the whole funding. Shown on the funding row of the club's ledger and under Club budget, "How the budget changes".
+- Kept share by the president's ambition: 75% (ambition 1) to 125% (ambition 5) of the budget; NBA clubs 25-50% of revenue (NBA owners take their profits every season). Share of the excess taken by generosity: all of it (1) to half (5).
+- Applies to every club, the manager's too: it is the owner's money and decision, as in real clubs, and it only touches cash well above anything a season needs. Money spent on players, staff or facilities is never taken. Chosen instead of raising the budget target: surplus spending (format 88) already offers rich clubs more to spend, but a club with a full squad cannot turn wage room into wages, so more room would not stop the pile-up.
+- NBA revenue by market $260M / $360M / $600M (was $300M / $450M / $750M), so player wages are about half of revenue; payroll ceilings unchanged.
+- Measured, ten automatic seasons (Spain seed 11; NBA alone seed 7), season-end cash in season 10, before -> after: EuroLeague median/max 65/163% -> 63/121%; top-division upper half 56/255% -> 61/171%; lower half 48/111% -> 65/65%; second division 68/354% -> 69/179%; NBA median $648M -> $217M, max $1,006M -> $372M (57/77% of revenue), wages 39% -> 47% of revenue. No unpaid costs; every strict save check passed. Spain was identical to format 97 for six seasons (no club above its kept share). Knob if the tail should be lower: `takeShare` [1, 0.5] -> [1, 0.75].
+
 ## Weak squads and the Turkish division gap (owner decision, 23 November 2026)
 
 The release data check found three top-division squads weak for their league (Scafati, Vikos, Körfez) and a large strength gap between Turkey's top and second divisions (best-eight averages 66.7 and 38.2). The owner decided to keep them as the real data shows: no artificial strengthening.

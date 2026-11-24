@@ -35,6 +35,7 @@ import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTO
 import { appendFinanceLedgerEntry, financeLedgerCount, financeLedgerEntries, financeLedgerTicket } from './finance-ledger';
 import { clubEconomy, REAL_ECONOMY_RULES, staffFee } from './economy';
 import { solidarityPayment } from './economy-balance';
+import { netsBeforeSeason, ownerDividend, usesCashBalance } from './cash-balance';
 import { ledgerClubBalance } from './finance-ledger-index';
 import type { SeasonMedia } from '../domain/media';
 import type { SeasonRelationships } from '../domain/relationships';
@@ -461,8 +462,11 @@ export function startFinanceSeason(state: SeasonState): SeasonState {
  */
 function bookSeasonFunding(state: SeasonState, share: number): SeasonState {
   let next = state;
+  // Format 99 (`cash-balance.ts`): at a season opening, the owner's dividend comes off the funding of a club holding more cash than it keeps.
+  const nets = share === 1 && usesCashBalance(state) ? netsBeforeSeason(state.finance, state.seasonNumber) : null;
   for (const club of state.clubs) {
-    const funding = annualFundingFor(state, club.id);
+    const annual = annualFundingFor(state, club.id);
+    const funding = nets ? annual - ownerDividend(state, club.id, nets.get(club.id), annual) : annual;
     if (funding > 0) next = book(next, club.id, 'sponsor', share === 1 ? funding : seasonFundingShare(funding, seasonRounds(state), state.round), fundingSourceId(state.seasonNumber));
   }
   return next;

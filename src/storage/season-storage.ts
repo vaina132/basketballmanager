@@ -3637,7 +3637,7 @@ function validateTraining(value: unknown, clubs: readonly Team[], fixtures: Seas
     training: { ...training, plans: appliedPlans, points: pointsBefore, lastWeek: null }, clubs: intervalClubs, conditions: conditionsBefore,
     // Final-round injuries happen after the last training day and must not be replayed into it.
     injuries: injuries.filter(injury => injury.occurredOn <= (report.fromDate as string)),
-    seasonNumber, afterRound, fromDate: report.fromDate as string, toDate: report.toDate as string, coaching: appliedCoaching, rosters, fitness, physio, lifecycle: context.lifecycle, academy: context.academy, facilities: context.facilities,
+    seasonNumber, afterRound, fromDate: report.fromDate as string, toDate: report.toDate as string, coaching: appliedCoaching, rosters, fitness, physio, lifecycle: context.lifecycle, academy: context.academy, facilities: context.facilities, fixtures, ...(context.draft ? { draft: context.draft } : {}),
     // Format 80: called-up players' national duty, from the stored national squads and minutes.
     ...(context.national ? { nationalDuty: nationalDutyDays(context.national, report.fromDate as string, report.toDate as string) } : {}),
   });
@@ -3731,6 +3731,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 100 && Object.hasOwn(world, 'euroleagueJobs')) fail('world.euroleagueJobs', 'requires format 100 or later');
   // Format 102 (owner decision 24 November 2026): the squad refresh is a rule of new careers only.
   if (version < 102 && Object.hasOwn(world, 'squadRefresh')) fail('world.squadRefresh', 'requires format 102 or later');
+  // Format 101 (owner decision 24 November 2026): realistic player development is a rule of new careers only.
+  if (version < 101 && Object.hasOwn(world, 'playerDevelopment')) fail('world.playerDevelopment', 'requires format 101 or later');
   if (usesNbaDraft({ world }) !== Object.hasOwn(state, 'draft')) fail('draft', 'must be recorded exactly in worlds with the NBA draft');
   const draft = Object.hasOwn(state, 'draft') ? validateDraftShape(state.draft, state as unknown as SeasonState) : undefined;
   // Format 91: NBA careers (real NBA head coaches, NBA job rules).

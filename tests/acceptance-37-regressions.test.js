@@ -41,7 +41,7 @@ describe('step 3.7 acceptance careers in the strict save check', () => {
     expect(() => validateWorld(world)).not.toThrow();
     // Seed 14 (11 before head coaches steered computer clubs, format 86; 5 before the full new-career rules of 22 November 2026, 11 before the planned starting five of 16 November
     // 2026): the final ends in a sweep, so the season's last week has no game; sponsors leave at the season end.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 14, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ world, seed: 14, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false }), true);
     while (state.status === 'active') state = play(state);
     const rounds = seasonRounds(state);
     expect(state.fixtures.some(fixture => fixture.round === rounds)).toBe(false);
@@ -60,7 +60,7 @@ describe('step 3.7 acceptance careers in the strict save check', () => {
     // with 3 and 7 players over their new allocation, and the season-four offseason never closed). In this world clubs
     // start season two's offseason short of eight players and over their fallen allocation.
     const world = moneyWorld();
-    let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ seed: 9, world, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false }), true);
     while (state.status === 'active') state = play(state);
     for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
     state = rolloverSeason(state);
@@ -84,7 +84,7 @@ describe('step 3.7 acceptance careers in the strict save check', () => {
     // season's final club (none) for the president's earlier requests and the season-opening objectives.
     let state;
     for (let seed = 1; seed <= 30 && !state; seed += 1) {
-      let career = setEmploymentDelegation(createSeason({ seed, managedClubId: 'adriatic-comets', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS }), true);
+      let career = setEmploymentDelegation(createSeason({ seed, managedClubId: 'adriatic-comets', injuryMode: 'standard', ...NEW_CAREER_SYSTEMS, playerDevelopment: false }), true);
       while (career.status === 'active' && !(career.board.requests ?? []).length) career = play(career);
       if (career.status === 'active') state = career;
     }

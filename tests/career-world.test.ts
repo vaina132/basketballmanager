@@ -38,7 +38,7 @@ let opening: SeasonState, complete: SeasonState, nextSeason: SeasonState;
 beforeAll(() => {
   // Any rule that lost the career's world fails instead of quietly using the built-in league.
   requireWorldContexts(true);
-  opening = createSeason({ seed: 227, managedClubId: 'w-rhine-falcons', injuryMode: 'standard', world, ...NEW_CAREER_SYSTEMS });
+  opening = createSeason({ seed: 227, managedClubId: 'w-rhine-falcons', injuryMode: 'standard', world, ...NEW_CAREER_SYSTEMS, playerDevelopment: false });
   let state = setEmploymentDelegation(opening, true);
   while (state.status === 'active') state = advance(state);
   for (let steps = 0; steps < 80 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
@@ -100,7 +100,7 @@ describe('careers in another world', () => {
   });
 
   it('keep careers in the built-in league free of a stored world', () => {
-    const builtIn = createSeason({ seed: 227, ...NEW_CAREER_SYSTEMS });
+    const builtIn = createSeason({ seed: 227, ...NEW_CAREER_SYSTEMS, playerDevelopment: false });
     expect(builtIn.dataPackId).toBe('development-league-1');
     expect(Object.hasOwn(builtIn, 'world')).toBe(false);
     expect(Object.hasOwn(JSON.parse(serializeSeason(builtIn)).state, 'world')).toBe(false);

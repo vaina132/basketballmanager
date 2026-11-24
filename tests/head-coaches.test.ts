@@ -38,7 +38,7 @@ function realWorld(): CareerWorld {
   return JSON.parse(text) as CareerWorld;
 }
 const world = realWorld();
-const create = (options: Record<string, unknown> = {}) => createSeason({ seed: 11, world, managedClubId: FENERBAHCE, ...NEW_CAREER_SYSTEMS, manager: { name: 'Test Manager', dateOfBirth: '1980-05-01', nationality: 'Turkey' }, ...options });
+const create = (options: Record<string, unknown> = {}) => createSeason({ seed: 11, world, managedClubId: FENERBAHCE, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, manager: { name: 'Test Manager', dateOfBirth: '1980-05-01', nationality: 'Turkey' }, ...options });
 
 describe('real head coaches (format 82)', () => {
   it('keeps the gathered facts complete and the formula reproducible', () => {
@@ -93,7 +93,7 @@ describe('real head coaches (format 82)', () => {
     expect(Object.keys(places.clubs)).toHaveLength(world.clubs.length);
     // Older careers and worlds without job changes are unchanged.
     expect(create({ realCoaches: false }).coaches).toBeUndefined();
-    expect(createSeason({ seed: 11, ...NEW_CAREER_SYSTEMS }).coaches).toBeUndefined();
+    expect(createSeason({ seed: 11, ...NEW_CAREER_SYSTEMS, playerDevelopment: false }).coaches).toBeUndefined();
   });
 
   it('replaces coaches through the board\'s changes: a sacked coach is free and the club hires from the market', () => {

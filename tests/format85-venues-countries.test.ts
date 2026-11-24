@@ -52,7 +52,7 @@ describe('format 85: no home advantage at one venue', () => {
     expect(worldOf(opening).neutralVenues).toBe(true);
     expect(worldOf(opening).nextDivisionCountries).toBe(true);
     expect(playsAtNeutralVenue(opening, fixture)).toBe(true);
-    const older = createSeason({ seed: 3, world: packWorld, managedClubId: 'feb-3', ...NEW_CAREER_SYSTEMS, neutralVenues: false, clubCountries: false, economyBalance: false, longCareers: false, careerBalance: false, cashBalance: false, squadRefresh: false });
+    const older = createSeason({ seed: 3, world: packWorld, managedClubId: 'feb-3', ...NEW_CAREER_SYSTEMS, neutralVenues: false, clubCountries: false, economyBalance: false, longCareers: false, careerBalance: false, cashBalance: false, squadRefresh: false, playerDevelopment: false });
     expect(worldOf(older)).toBe(packWorld);
     expect(playsAtNeutralVenue(older, fixture)).toBe(false);
     const envelope = JSON.parse(serializeSeason(opening));

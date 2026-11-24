@@ -9,7 +9,9 @@ import { managedClubFor } from '../src/world/career';
 import { setEmploymentDelegation } from '../src/world/employment';
 import { advanceMarket } from '../src/world/market';
 import { getMarketStartReason } from '../src/world/market-policy';
-import { isSealedSeniorResult, isSealedYouthFixture } from '../src/world/sealed-history';
+import { isSealedSeniorResult, isSealedYouthFixture, sealCompletedHistory, SEALED_SCOUTING_REPORTS } from '../src/world/sealed-history';
+import { isPlayerRetired } from '../src/world/lifecycle-policy';
+import { getPlayerKnowledge } from '../src/world/scouting-policy';
 import { createSeason, getStandings, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
 import { advanceMatchday } from './helpers/board-funding';
 
@@ -20,6 +22,7 @@ function playSeason(state: SeasonState): SeasonState {
   for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state);
   return state;
 }
+const managedOfficeOf = (clubs: SeasonState['scouting']['clubs'], clubId: string) => clubs[clubId]!;
 const withoutSummaryGames = (rows: ReturnType<typeof getSeasonPerformance>) => rows.map(({ summaryGames: _games, ...row }) => row);
 const archiveTable = (state: SeasonState, seasonNumber: number) => {
   const archive = state.history.find(item => item.seasonNumber === seasonNumber)!;
@@ -88,6 +91,39 @@ describe('sealed completed seasons (format 73)', () => {
     expect(snapshots.slice(0, -1).every(event => event.type === 'prepare' && Object.keys(event.values).length === 0)).toBe(true);
     expect(snapshots.at(-1)!.seasonNumber).toBe(3);
     expect(Object.keys((snapshots.at(-1) as Extract<typeof snapshots[number], { type: 'prepare' }>).values).length).toBeGreaterThan(0);
+    // Save growth (24 November 2026): scouting reports of the sealed season keep only observed reports of players still
+    // playing (all of the managed club's, the latest three per player elsewhere); later seasons' reports are untouched.
+    const before = end2.scouting.clubs, after = state.scouting.clubs;
+    let dropped = 0;
+    for (const [clubId, office] of Object.entries(after)) {
+      const sealedReports = office.reviews.filter(review => review.seasonNumber === 1);
+      expect(sealedReports.every(review => review.outcome === 'observed' && !isPlayerRetired(state, review.playerId))).toBe(true);
+      expect(office.reviews.filter(review => review.seasonNumber > 1)).toEqual(before[clubId]!.reviews.filter(review => review.seasonNumber > 1));
+      if (clubId !== state.managedClubId) {
+        const perPlayer = new Map<string, number>();
+        for (const review of sealedReports) perPlayer.set(review.playerId, (perPlayer.get(review.playerId) ?? 0) + 1);
+        expect([...perPlayer.values()].every(count => count <= SEALED_SCOUTING_REPORTS)).toBe(true);
+      } else expect(sealedReports).toEqual(before[clubId]!.reviews.filter(review => review.seasonNumber === 1 && review.outcome === 'observed' && !isPlayerRetired(state, review.playerId)));
+      dropped += before[clubId]!.reviews.length - office.reviews.length;
+    }
+    expect(dropped).toBeGreaterThanOrEqual(0);
+    // The rule itself on a rival office with more than three observed reports of one player in the sealed season, one
+    // without minutes and one of a retired player (sealing is a pure function of the state).
+    const rivalId = Object.keys(after).find(clubId => clubId !== state.managedClubId && after[clubId]!.reviews.some(review => review.seasonNumber === 1 && review.outcome === 'observed'))!;
+    const sample = after[rivalId]!.reviews.find(review => review.seasonNumber === 1 && review.outcome === 'observed')!;
+    const retiredId = state.lifecycle.notices.find(notice => isPlayerRetired(state, notice.playerId))?.playerId;
+    const injected = [1, 2, 3, 4, 5].map(round => ({ ...sample, round })).concat([{ ...sample, round: 6, outcome: 'no-minutes' as const, attributes: null }], retiredId ? [{ ...sample, playerId: retiredId, round: 7 }] : []);
+    const resealed = sealCompletedHistory({ ...state, scouting: { ...state.scouting, clubs: { ...after, [rivalId]: { ...after[rivalId]!, reviews: injected } } } });
+    expect(resealed.scouting.clubs[rivalId]!.reviews.map(review => review.round)).toEqual([3, 4, 5]);
+    const ownInjected = injected.map(review => ({ ...review }));
+    const ownResealed = sealCompletedHistory({ ...state, scouting: { ...state.scouting, clubs: { ...after, [state.managedClubId]: { ...managedOfficeOf(after, state.managedClubId), reviews: ownInjected } } } });
+    expect(ownResealed.scouting.clubs[state.managedClubId]!.reviews.map(review => review.round)).toEqual([1, 2, 3, 4, 5]);
+    // The manager's knowledge of every player still playing reads the same.
+    const managedOffice = after[state.managedClubId]!;
+    const unpruned = { ...state, scouting: { ...state.scouting, clubs: { ...after, [state.managedClubId]: { ...managedOffice, reviews: before[state.managedClubId]!.reviews } } } };
+    for (const playerId of new Set(before[state.managedClubId]!.reviews.map(review => review.playerId))) {
+      if (!isPlayerRetired(state, playerId)) expect(getPlayerKnowledge(state, playerId)).toEqual(getPlayerKnowledge(unpruned, playerId));
+    }
     // Season leaders, club tables, player career rows and youth tables of the sealed season are unchanged.
     expect(archiveTable(state, 1)).toEqual(table1);
     expect(withoutSummaryGames(getSeasonPerformance(state, 1))).toEqual(withoutSummaryGames(performance1));

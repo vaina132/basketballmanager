@@ -128,6 +128,7 @@ import { FIBA_2024, gameSeconds, rulesetById, type Ruleset } from '../engine/rul
 import { MAX_SEASON_COLLECTION_ENTRIES, MAX_SEASON_SAVE_BYTES, MAX_SEASON_SAVE_VALUES } from './season-limits';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffMember } from '../data/staff-directory';
 import { COMPACT_JSON_3_ENCODING, COMPACT_JSON_ENCODING, LEGACY_COMPACT_JSON_ENCODING, compactJson3, expandJson, expandJson3 } from './compact-json';
+import { COMPRESSED_ENVELOPE_KEYS, COMPRESSED_SAVE_ENCODING, compressSaveText, decompressSaveText } from './save-compression';
 import { cachedCalculation, withCalculationCache } from '../world/pure-cache';
 import { ledgerBoundaryIndex } from './ledger-boundaries';
 import { appendFinanceLedgerEntry, financeAtLedgerBoundary, financeLedgerCount, financeLedgerEntry, financeLedgerSlice } from '../world/finance-ledger';
@@ -4151,7 +4152,8 @@ function encodeSeasonCompact(state: SeasonState): string {
   const envelope = { format: FORMAT, formatVersion: SEASON_SCHEMA_VERSION, engineVersion: 'possession-3', encoding: COMPACT_JSON_3_ENCODING, strings, shapes, nodes, state: value };
   // Encoded tables, object markers and the envelope must fit the reader's limits too.
   checkJsonTree(envelope);
-  const text = JSON.stringify(envelope);
+  // Save growth (24 November 2026): the compact-3 text is stored compressed (`save-compression.ts`).
+  const text = compressSaveText(envelope, JSON.stringify(envelope));
   checkSize(text);
   return text;
 }
@@ -4274,6 +4276,7 @@ function decodeSeasonText(text: string): { version: SeasonFormatVersion; state: 
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { throw new Error('This is not a valid JSON season file.'); }
   checkJsonTree(parsed);
+  parsed = decompressedEnvelope(parsed);
   // Plain envelopes remain readable for tools. Each compact encoding belongs to an explicit format version.
   const fields = parsed !== null && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
   const compact = SUPPORTED_FORMATS.includes(fields.formatVersion as number) && (fields.formatVersion as number) >= 40 && Object.hasOwn(fields, 'encoding');
@@ -4290,6 +4293,24 @@ function decodeSeasonText(text: string): { version: SeasonFormatVersion; state: 
   }
   // Format 80 saves from before national injuries and career earnings keep loading (none recorded yet).
   return { version: envelope.formatVersion as SeasonFormatVersion, state: envelope.formatVersion === 80 ? withEarlierNationalFields(envelope.state) : envelope.state };
+}
+
+/**
+ * A compressed save (`compact-3-deflate`, formats 73 on) gives back the compact-3 envelope it carries, which must name
+ * the same format and engine; any other envelope is returned as it is.
+ */
+function decompressedEnvelope(parsed: unknown): unknown {
+  const fields = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  if (fields.encoding !== COMPRESSED_SAVE_ENCODING) return parsed;
+  const envelope = record(parsed, 'envelope', COMPRESSED_ENVELOPE_KEYS);
+  if (envelope.format !== FORMAT || !SUPPORTED_FORMATS.includes(envelope.formatVersion as number) || envelope.engineVersion !== 'possession-3') throw new Error('This season file uses an unsupported save format or engine version.');
+  if ((envelope.formatVersion as number) < PACKED_SAVE_FORMAT) throw new Error('This season file uses an unsupported save encoding.');
+  let inner: unknown;
+  try { inner = JSON.parse(decompressSaveText(envelope)); } catch (error) { throw error instanceof SyntaxError ? new Error('Invalid season save: the compressed data is not valid JSON.') : error; }
+  checkJsonTree(inner);
+  const innerFields = inner !== null && typeof inner === 'object' && !Array.isArray(inner) ? inner as Record<string, unknown> : {};
+  if (innerFields.format !== FORMAT || innerFields.formatVersion !== envelope.formatVersion || innerFields.engineVersion !== envelope.engineVersion || innerFields.encoding !== COMPACT_JSON_3_ENCODING) fail('envelope', 'must carry a compact-3 save of the same format');
+  return inner;
 }
 
 /** Format 73: careers of real-data worlds follow the closed money gaps (staff pay, reserves, capital and offers by season money). */

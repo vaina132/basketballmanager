@@ -71,8 +71,8 @@ describe('genuine format-42 youth fixture history', () => {
   it('preserves youth outcomes through strict portable saves and verified local reloads', async () => {
     for (const name of names) {
       const text = serializeSeasonCompact(states[name]);
-      // Format 73 writes every save, older careers included, in the compact-3 layout.
-      expect(JSON.parse(text)).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-3' });
+      // Format 73 writes every save, older careers included, in the compact-3 layout, stored compressed since 24 November 2026.
+      expect(JSON.parse(text)).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-3-deflate' });
       expect(parseSeason(text)).toEqual(states[name]);
       expect(await sealMatches(text, await saveSeal(text))).toBe(true);
       expect(parseSealedSeason(text)).toEqual(states[name]);

@@ -4,7 +4,8 @@ import type { SeasonState } from '../domain/season';
 /** Per-segment limits bound active work; total expanded evidence also has a separate finite limit. */
 export const MAX_FINANCE_SEGMENT_ENTRIES = 20_000;
 export const MAX_FINANCE_ARCHIVE_BLOCKS = 100;
-export const MAX_FINANCE_LOGICAL_ENTRIES = 200_000;
+/** Save growth (24 November 2026): 600,000 (was 200,000) keeps 20+ seasons of the largest worlds (up to ~15,000 a season). */
+export const MAX_FINANCE_LOGICAL_ENTRIES = 600_000;
 
 export function expandFinanceArchiveRow(block: FinanceArchiveBlock, index: number): FinanceEntry {
   const [clubId, round, kind, amount, sourceId, details] = block.rows[index]!;

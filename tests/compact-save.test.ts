@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compactJson, expandJson } from '../src/storage/compact-json';
 import { parseSeason, serializeSeason, serializeSeasonCompact } from '../src/storage/season-storage';
+import { compactSaveEnvelope, compressSaveText } from '../src/storage/save-compression';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS } from '../src/world/season';
 import { testWorld } from './world-fixtures';
@@ -40,14 +41,29 @@ describe('the compact save layout', () => {
     expect(parseSeason(compact)).toEqual(state);
     expect(parseSeason(plain)).toEqual(state);
     expect(compact.length).toBeLessThan(plain.length * 0.5);
-    const file = JSON.parse(compact);
+    // Since 24 November 2026 the compact-3 text is stored compressed; the compact layout inside is unchanged.
+    expect(JSON.parse(compact)).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-3-deflate' });
+    const file = compactSaveEnvelope(compact) as any;
     // Format 73 writes the compact-3 layout: the state is `[shape, ...values]`, with the finance ledger packed.
     expect(file).toMatchObject({ formatVersion: SEASON_SCHEMA_VERSION, encoding: 'compact-3' });
+    // The uncompressed compact-3 text stays readable.
+    expect(parseSeason(JSON.stringify(file))).toEqual(state);
     expect(() => parseSeason(JSON.stringify({ ...file, encoding: 'other' }))).toThrow(/unsupported save encoding/);
     expect(() => parseSeason(JSON.stringify({ ...file, encoding: 'compact-2' }))).toThrow(/unsupported save encoding/);
     // Change the managed club's seed field inside the compact state: the ordinary checks must still notice.
     const seedIndex = file.shapes[file.state[0]].indexOf('seed');
     const changed = structuredClone(file); changed.state[seedIndex + 1] = file.state[seedIndex + 1] + 1;
     expect(() => parseSeason(JSON.stringify(changed))).toThrow(/Invalid season save/);
+    expect(() => parseSeason(compressSaveText(changed, JSON.stringify(changed)))).toThrow(/Invalid season save/);
+    // A compressed save must carry a compact-3 save of its own format, and its data must be intact.
+    const outer = JSON.parse(compact);
+    expect(() => parseSeason(compressSaveText({ ...file, formatVersion: SEASON_SCHEMA_VERSION - 1 }, JSON.stringify(file)))).toThrow(/same format/);
+    expect(() => parseSeason(compressSaveText(file, JSON.stringify({ ...file, encoding: 'compact-2' })))).toThrow(/same format/);
+    expect(() => parseSeason(compressSaveText(file, compressSaveText(file, JSON.stringify(file))))).toThrow(/same format/);
+    expect(() => parseSeason(JSON.stringify({ ...outer, formatVersion: 72 }))).toThrow(/unsupported save encoding/);
+    expect(() => parseSeason(JSON.stringify({ ...outer, bytes: outer.bytes + 1 }))).toThrow(/Invalid season save/);
+    expect(() => parseSeason(JSON.stringify({ ...outer, data: outer.data.slice(0, -8) }))).toThrow(/Invalid season save/);
+    expect(() => parseSeason(JSON.stringify({ ...outer, extra: 1 }))).toThrow(/Invalid season save/);
+    expect(() => parseSeason(JSON.stringify({ ...outer, bytes: 2 ** 40 }))).toThrow(/invalid size/);
   }, 300_000);
 });

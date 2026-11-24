@@ -1,4 +1,5 @@
 import { stripRosterHistory } from './helpers/legacy-season';
+import { compactSaveEnvelope } from '../src/storage/save-compression';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SEASON_SCHEMA_VERSION } from './helpers/season-format';
 import type { SeasonState } from '../src/domain/season';
@@ -170,7 +171,9 @@ describe('checkpoint restore and append', () => {
     storage.writeSeasonCheckpoint.mockResolvedValue(saved);
     expect(await saveCareerCheckpoint(state, 1, 'manual')).toEqual(saved);
     const serialized = storage.writeSeasonCheckpoint.mock.calls[0]![0] as string;
-    expect(Object.keys(JSON.parse(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'encoding', 'strings', 'shapes', 'nodes', 'state']);
+    // Stored compressed since 24 November 2026; the compact-3 envelope inside keeps the same portable fields.
+    expect(Object.keys(JSON.parse(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'encoding', 'bytes', 'data']);
+    expect(Object.keys(compactSaveEnvelope(serialized))).toEqual(['format', 'formatVersion', 'engineVersion', 'encoding', 'strings', 'shapes', 'nodes', 'state']);
     expect(JSON.parse(serialized).formatVersion).toBe(SEASON_SCHEMA_VERSION);
     expect(parseSeason(serialized)).toEqual(state);
     expect(state).toEqual(before);

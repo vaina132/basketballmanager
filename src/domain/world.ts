@@ -217,6 +217,12 @@ export interface CareerWorld {
    * club's cash above what it keeps, and NBA revenue is trimmed so player wages are about half of it.
    */
   cashBalance?: true;
+  /**
+   * Format 101 (owner decision 24 November 2026, new careers with the spending balance, option `squadRefresh`): a club run
+   * automatically with spending room and a full squad releases a weak player to sign a clearly better one
+   * (`src/world/squad-refresh.ts`).
+   */
+  squadRefresh?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

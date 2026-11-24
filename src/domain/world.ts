@@ -235,6 +235,12 @@ export interface CareerWorld {
    * gains at high skill levels, earlier and faster decline, and occasional setbacks.
    */
   playerDevelopment?: true;
+  /**
+   * Format 104 (owner request 24 November 2026, new careers with player development, option `backgroundSquads`):
+   * background clubs' squads develop, age, retire and are renewed at each season change, derived from the seed
+   * (`src/world/background-squads.ts`).
+   */
+  backgroundSquads?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

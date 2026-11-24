@@ -12,6 +12,7 @@ import { EUROPEAN_FORMATS, knockoutOf, playedEuropeanCompetitions, qualification
 import { overallRating } from './overall-rating';
 import { isRecovering } from './health';
 import { applyAgingAttributes, isPlayerRetired, type LifecycleContext } from './lifecycle-policy';
+import { developedBackgroundPlayers, usesBackgroundSquads } from './background-squads';
 import { derivePostseason, postseasonOutcome, type PostseasonFormat, type PostseasonRef, type PostseasonSeriesSpec } from './postseason';
 import type { SeasonPhysio } from '../domain/physio';
 
@@ -311,6 +312,9 @@ export function backgroundSide(context: EuropeContext, clubId: string, seasonNum
   const world = worldOf(context), identity = world.clubs.find(club => club.id === clubId);
   if (!identity) throw new Error('A European game refers to a club outside this world.');
   const record = backgroundClubsIn(context.background, seasonNumber).find(club => club.id === clubId);
+  // Format 104: background clubs' squads develop, age and are renewed at each season change (`background-squads.ts`).
+  const developed = !record && usesBackgroundSquads(context) ? developedBackgroundPlayers(context, clubId, seasonNumber) : null;
+  if (developed) return { id: identity.id, name: identity.name, shortName: identity.shortName, color: identity.color, players: developed };
   const players = record ? record.players.filter(player => !isPlayerRetired(context, player.id, seasonNumber, 1)) : identity.players;
   const date = seasonStart(seasonNumber);
   return { id: identity.id, name: identity.name, shortName: identity.shortName, color: identity.color, players: players.map(player => ({ ...player, attributes: applyAgingAttributes(context, player.id, player.attributes, date) })) };

@@ -244,7 +244,8 @@ export interface DomesticDivisions {
 /** Format 100 (owner decision 24 November 2026, provisional number): EuroLeague clubs are bigger jobs than other top-division clubs in new careers without the NBA (`world.euroleagueJobs`, `src/world/euroleague-jobs.ts`). */
 /** Format 101 (owner decision 24 November 2026): realistic player development in new real-data careers (`world.playerDevelopment`, `src/world/player-development.ts`). */
 /** Format 102 (owner decision 24 November 2026, provisional number): rich clubs with a full squad refresh it in new careers with the spending balance (`world.squadRefresh`, `src/world/squad-refresh.ts`). */
-export const SEASON_SCHEMA_VERSION = 102;
+/** Format 104 (owner request 24 November 2026, provisional number; 103 is kept for another change): background clubs' squads develop, age, retire and are renewed at each season change in new careers with player development (`world.backgroundSquads`, `src/world/background-squads.ts`). */
+export const SEASON_SCHEMA_VERSION = 104;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

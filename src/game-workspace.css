@@ -198,3 +198,4 @@
 /* NBA step 6: the currency setting in the workspace footer. */
 .currency-setting { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .currency-setting .segmented > button[aria-pressed='true'] { background: var(--surface-3); color: var(--text); }
+.money-input-euros { font-size: 12px; line-height: 1.5; color: var(--muted); }

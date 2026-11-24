@@ -663,6 +663,11 @@ export interface SeasonSystems {
    * (`world.cashBalance`, `src/world/cash-balance.ts`). New careers only.
    */
   cashBalance?: boolean;
+  /**
+   * Format 100 (owner decision 24 November 2026): realistic player development in real-data worlds
+   * (`world.playerDevelopment`, `src/world/player-development.ts`). New careers only.
+   */
+  playerDevelopment?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -676,7 +681,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true, playerDevelopment: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -719,6 +724,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.longCareers !== undefined && typeof options.longCareers !== 'boolean') throw new Error('Choose a valid long careers setting.');
   if (options.careerBalance !== undefined && typeof options.careerBalance !== 'boolean') throw new Error('Choose a valid career balance setting.');
   if (options.cashBalance !== undefined && typeof options.cashBalance !== 'boolean') throw new Error('Choose a valid cash balance setting.');
+  if (options.playerDevelopment !== undefined && typeof options.playerDevelopment !== 'boolean') throw new Error('Choose a valid player development setting.');
   if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
@@ -785,6 +791,8 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   const careerBalance = !!options.careerBalance && !world.careerBalance && !!world.domesticLeagues;
   // Format 99: the cash balance, in worlds with researched club money only (NBA clubs open on the trimmed revenue range).
   if (options.cashBalance && !world.cashBalance && world.economy) world = { ...withCashBalanceNbaRevenue(world), cashBalance: true as const };
+  // Format 100: realistic player development, in every real-data world.
+  if (options.playerDevelopment && !world.playerDevelopment) world = { ...world, playerDevelopment: true as const };
   return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers || careerBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}), ...(careerBalance ? { careerBalance: true as const } : {}) } : world;
 }
 
@@ -1174,7 +1182,7 @@ function prepareNextMatchday(state: SeasonState, committed: SeasonState, coachCh
   if (next.training.enabledSince) {
     // Format 86: each club's head coach during this training (changes before the next week's games come after it).
     const headCoaches = trainingCoaches(next, next.seasonNumber, next.round - 1);
-    const trained = processTrainingWeek({ ...storedWorld(worldOf(next)), ...(nationalDuty ? { nationalDuty } : {}), ...(headCoaches ? { headCoaches } : {}), dataPackId: next.dataPackId, seed: next.seed, facilities: next.facilities, training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, lifecycle: next.lifecycle, academy: next.academy, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: trainedFrom, toDate: next.date });
+    const trained = processTrainingWeek({ ...storedWorld(worldOf(next)), ...(nationalDuty ? { nationalDuty } : {}), ...(headCoaches ? { headCoaches } : {}), dataPackId: next.dataPackId, seed: next.seed, facilities: next.facilities, training: next.training, coaching: next.coaching, fitness: next.fitness, physio: next.physio, lifecycle: next.lifecycle, academy: next.academy, clubs: next.clubs, rosters: next.rosters, conditions: next.conditions, injuries: next.injuries, seasonNumber: next.seasonNumber, afterRound: next.round - 1, fromDate: trainedFrom, toDate: next.date, fixtures: next.fixtures, ...(next.draft ? { draft: next.draft } : {}) });
     next.training = trained.training; next.conditions = trained.conditions;
   } else {
     recoverConditions(next.conditions, calendarDaysBetween(trainedFrom, next.date));

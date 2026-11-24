@@ -89,7 +89,7 @@ const REQUEST_TERMS: Readonly<Record<BoardRequest['kind'], readonly string[]>> =
 
 /** Format 70 (board-2): shape checks of the president's requests; the review replay then rebuilds them (`replayRequests`). */
 function validateBoardRequests(state: SeasonState, raw: unknown): BoardRequest[] {
-  if (!Array.isArray(raw) || raw.length > PRESIDENT_RULES.requests.maxPerSeason * state.seasonNumber) fail('board.requests', 'must be a bounded list');
+  if (!Array.isArray(raw) || raw.length > PRESIDENT_RULES.requests.maxPerSeason * 3 * state.seasonNumber) fail('board.requests', 'must be a bounded list');
   const rules = PRESIDENT_RULES.requests, rounds = seasonRounds(state);
   const lastReview = state.board.reviews.at(-1);
   let previous = 0, open = 0;
@@ -109,7 +109,9 @@ function validateBoardRequests(state: SeasonState, raw: unknown): BoardRequest[]
     const at = ordinal(year, round, rounds);
     if (at < previous) fail(path, 'must keep chronological order');
     previous = at;
-    const key = `${year}`;
+    // Per club and season, as the president asks (`requestDraw`): a manager who changes clubs mid-season can be asked by
+    // both presidents (a ten-season career found it after a dismissal and a new job in season four).
+    const key = `${year}|${entry.clubId as string}`;
     perSeason.set(key, (perSeason.get(key) ?? 0) + 1);
     if (perSeason.get(key)! > rules.maxPerSeason) fail(path, 'exceeds the requests allowed in a season');
     if (kind === 'raise-ticket-price') { const price = integer(entry.ticketPrice, `${path}.ticketPrice`, TICKET_PRICE_STEP, maxTicketPriceFor(state, entry.clubId as string)); if (price % TICKET_PRICE_STEP) fail(`${path}.ticketPrice`, 'must be whole euros'); }

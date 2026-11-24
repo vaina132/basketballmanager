@@ -14,6 +14,7 @@ import { Icon } from './Icon'
 import { StaminaMeter } from './StaminaMeter'
 import { LifecycleTrainingControl, PlayerCareerStatus, practiceAgeLabel } from './PlayerLifecycle'
 import { getPlayerAging } from '../world/lifecycle-policy'
+import { usesPlayerDevelopment } from '../world/player-development'
 import { FacilityPracticeContribution, FacilityPracticeEffect } from './FacilityPractice'
 import './training-workspace.css'
 import { seasonRounds } from '../world/career-world'
@@ -112,7 +113,7 @@ export function TrainingWorkspace({ season, onEnable, onEnableLifecycle, onOpenF
               <th scope="row"><button className="training-player" onClick={() => onSelectPlayer(player.id)} disabled={busy} aria-label={`View ${player.name}`}><Avatar player={player} color={club.color} size={28} /><span><strong>{player.name}</strong><small>{player.position} · #{player.number}{aging.age !== null && <> · {aging.age} years</>}</small></span><Icon name="chevron" size={13} /></button><PlayerCareerStatus season={season} playerId={player.id} compact /></th>
               <td><StaminaMeter value={conditions[player.id]!} label={`${player.name} current condition`} compact /></td>
               <td><select data-player-focus={player.id} value={individual} aria-label={`${player.name} training focus`} onChange={event => onPlanChange({ ...plan, individual: { ...plan.individual, [player.id]: event.target.value as TrainingFocus | 'team' } })} disabled={busy}><FocusOptions individual /></select></td>
-              <td>{focus === 'balanced' ? <div className="training-skill"><span>Balanced practice</span><small>Shared across all skills</small></div> : <div className="training-skill"><div><span>{TRAINING_FOCUS_LABELS[focus]}</span><strong>{player.attributes[focus]} / 20</strong></div>{capped ? <small>{player.attributes[focus] === 20 ? 'Maximum rating reached' : 'Training cap reached'}</small> : <><progress value={points! % 100} max={100} aria-label={`${player.name} ${TRAINING_FOCUS_LABELS[focus]} progress to next rating`} /><small>{points! % 100} / 100 practice points</small></>}</div>}{aging.active && <span className="training-age-line" data-training-age-rate={player.id}>{practiceAgeLabel(aging.trainingPercent)}</span>}</td>
+              <td>{focus === 'balanced' ? <div className="training-skill"><span>Balanced practice</span><small>Shared across all skills</small></div> : <div className="training-skill"><div><span>{TRAINING_FOCUS_LABELS[focus]}</span><strong>{player.attributes[focus]} / 20</strong></div>{capped ? <small>{player.attributes[focus] === 20 ? 'Maximum rating reached' : 'Training cap reached'}</small> : <><progress value={points! % 100} max={100} aria-label={`${player.name} ${TRAINING_FOCUS_LABELS[focus]} progress to next rating`} /><small>{points! % 100} / 100 practice points</small></>}</div>}{aging.active && <span className="training-age-line" data-training-age-rate={player.id}>{practiceAgeLabel(aging.trainingPercent, usesPlayerDevelopment(season))}</span>}</td>
               <td><span className={injury ? 'training-injured' : ''}>{availableDays === null ? 'Next season' : `${availableDays} / 7 days`}</span><small>{injury ? `Injured · return ${formatDate(injury.effectiveReturnOn)}` : 'Available now'}</small></td>
             </tr>
           })}</tbody></table>

@@ -217,6 +217,12 @@ export interface CareerWorld {
    * club's cash above what it keeps, and NBA revenue is trimmed so player wages are about half of it.
    */
   cashBalance?: true;
+  /**
+   * Format 100 (owner decision 24 November 2026, new real-data careers, option `playerDevelopment`): realistic player
+   * development (`src/world/player-development.ts`): growth by age with individual traits and seasonal form, harder
+   * gains at high skill levels, earlier and faster decline, and occasional setbacks.
+   */
+  playerDevelopment?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

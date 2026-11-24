@@ -241,7 +241,8 @@ export interface DomesticDivisions {
 /** Format 97 (release check "long careers"): fixes for new careers in worlds with researched club money (`world.longCareers`, `src/world/long-careers.ts`). */
 /** Format 98 (manager careers): board and career balance for new careers (`world.careerBalance`, `src/world/career-balance.ts`). */
 /** Format 99 (owner decision 24 November 2026, provisional number): cash no longer piles up in new careers with researched club money (`world.cashBalance`, `src/world/cash-balance.ts`). */
-export const SEASON_SCHEMA_VERSION = 99;
+/** Format 100 (owner decision 24 November 2026): realistic player development in new real-data careers (`world.playerDevelopment`, `src/world/player-development.ts`). */
+export const SEASON_SCHEMA_VERSION = 100;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

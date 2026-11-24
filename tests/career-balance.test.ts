@@ -90,7 +90,7 @@ describe('the career balance marker (format 98)', () => {
     const state = createSeason({ seed: 5, world, managedClubId: 'acb-9', ...NEW_CAREER_SYSTEMS });
     expect(worldOf(state).careerBalance).toBe(true);
     expect(usesCareerBalance(state)).toBe(true);
-    const older = createSeason({ seed: 5, world, managedClubId: 'acb-9', ...NEW_CAREER_SYSTEMS, careerBalance: false, cashBalance: false });
+    const older = createSeason({ seed: 5, world, managedClubId: 'acb-9', ...NEW_CAREER_SYSTEMS, careerBalance: false, cashBalance: false, playerDevelopment: false });
     expect(worldOf(older).careerBalance).toBeUndefined();
     expect(createSeason({ seed: 5, ...NEW_CAREER_SYSTEMS }).world?.careerBalance).toBeUndefined();
     expect(() => createSeason({ seed: 5, world, careerBalance: 'yes' as unknown as boolean })).toThrow(/career balance setting/);

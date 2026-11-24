@@ -17,6 +17,10 @@ import { EXTRA_MATCH, storedExtras } from './extra-attributes';
 import type { CareerWorld } from '../domain/world';
 import { potentialPointCap, trainingHeadroom, type PotentialContext } from './potential';
 import { COACH_STEERING, coachTrainingPlan, isSteeringYoung, practicePercent, type SteeringCoach } from './coach-steering';
+import { fractionalAge, levelFactor, minutesFactor, seasonForm, stochasticShare, usesPlayerDevelopment } from './player-development';
+import { lifecycleDateOfBirth } from './lifecycle-policy';
+import type { SeasonFixture } from '../domain/season';
+import { DEFAULT_PLAYER_AGE } from '../data/development-player-profiles';
 
 export const TRAINING_ATTRIBUTES = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 export const TRAINING_FOCUSES = ['balanced', ...TRAINING_ATTRIBUTES] as const;
@@ -149,10 +153,36 @@ export interface TrainingWeekInput {
    * computer club's delegated week (`coachTrainingPlan`); every head coach's Development adds a little practice.
    */
   headCoaches?: Readonly<Record<string, SteeringCoach>>;
+  /**
+   * Format 100 (`world.playerDevelopment`): the season's games, for the minutes each player played in the week's games
+   * (`weekMinutes`). Required in careers with that model.
+   */
+  fixtures?: readonly Pick<SeasonFixture, 'round' | 'homeClubId' | 'awayClubId' | 'result' | 'stage'>[];
+  /** Format 100: the NBA draft record, for drafted players' birth dates (read only in careers with that model). */
+  draft?: SeasonState['draft'];
+}
+
+/**
+ * Format 100: each player's average minutes a game in the games of one round he could have played (his club's games),
+ * null for a player whose club played none. Players without a line in a played game count zero minutes for it.
+ */
+export function weekMinutes(fixtures: NonNullable<TrainingWeekInput['fixtures']>, round: number, clubs: readonly Team[]): Record<string, number | null> {
+  const games = new Map<string, number>(), seconds = new Map<string, number>();
+  for (const fixture of fixtures) {
+    if (fixture.round !== round || fixture.stage || !fixture.result) continue;
+    for (const clubId of [fixture.homeClubId, fixture.awayClubId]) games.set(clubId, (games.get(clubId) ?? 0) + 1);
+    for (const [playerId, line] of Object.entries(fixture.result.stats ?? {})) seconds.set(playerId, (seconds.get(playerId) ?? 0) + (line?.secondsPlayed ?? 0));
+  }
+  return Object.fromEntries(clubs.flatMap(club => club.players.map(player => {
+    const count = games.get(club.id) ?? 0;
+    return [player.id, count ? (seconds.get(player.id) ?? 0) / 60 / count : null];
+  })));
 }
 
 /** One authoritative weekly pass updates every club; it consumes no match RNG. */
-export function processTrainingWeek(input: TrainingWeekInput): { training: SeasonTraining; conditions: Record<string, number> } {
+export function processTrainingWeek(given: TrainingWeekInput): { training: SeasonTraining; conditions: Record<string, number> } {
+  // Careers before format 100 never read the draft here (their drafted players keep the default age), so they replay exactly.
+  const input: TrainingWeekInput = usesPlayerDevelopment(given) || !given.draft ? given : { ...given, draft: undefined };
   const { training, clubs, conditions, injuries, seasonNumber, afterRound, fromDate, toDate } = input;
   if (!training.enabledSince) throw new Error('Enable training before resolving a training week.');
   if (!Number.isInteger(seasonNumber) || seasonNumber < 1 || !Number.isInteger(afterRound) || afterRound < 1 || afterRound > seasonRounds(input) - 1) throw new Error('Training requires a supported season and a matchday before the final one.');
@@ -166,6 +196,13 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
   const report: TrainingWeekReport = { seasonNumber, afterRound, fromDate, toDate, rosterIds: {}, plans: {}, players: {}, coaching: appliedCoaching, ...(appliedFitness ? { fitness: appliedFitness } : {}) };
   const agingActive = !!input.lifecycle?.enabledSince && fromDate >= input.lifecycle.enabledSince.date;
   const facilitiesActive = !!input.facilities?.enabledSince && fromDate >= input.facilities.enabledSince.date;
+  // Format 100 (`player-development.ts`): practice turns into skill by the player's age, traits, form, skill level and minutes.
+  const developing = agingActive && usesPlayerDevelopment(input);
+  if (developing && !input.fixtures) throw new Error('Player development needs the season\'s games.');
+  const minutes = developing ? weekMinutes(input.fixtures!, afterRound, clubs) : {};
+  // A short interval (after a midweek game day) counts as a whole week of learning, so growth depends on age, not on the
+  // calendar; a skill never gains more in an interval than a full week's practice would give it.
+  const dayScale = developing ? 7 / dates.length : 1;
   for (const club of clubs) {
     const registered = rosterForRound(rosters, club.id, afterRound);
     const registeredIds = new Set(registered.players.map(player => player.id));
@@ -191,7 +228,8 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
           availableDays += 1;
           const practice = condition < 70 ? Math.floor(workload.points / 2) : workload.points;
           budget += practice;
-          const ageRate = agingActive ? ageTrainingRate(input, player.id, date) : 10_000;
+          // Format 100: the age curve applies to each skill's share below, with the player's form and minutes.
+          const ageRate = agingActive && !developing ? ageTrainingRate(input, player.id, date) : 10_000;
           weightedBudget += practice * ageRate;
           if (facilitiesActive) facilityUnits += practice * ageRate * facilityPracticeBonusPercent(input, 'training', club.id, date);
         }
@@ -202,7 +240,7 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
       }
       const ordinaryPracticePoints = budget;
       if (agingActive) budget = Math.floor(weightedBudget / 10_000);
-      const aging = agingActive ? { ordinaryPracticePoints, adjustedPracticePoints: budget, rateBasisPoints: ordinaryPracticePoints > 0 ? Math.floor(weightedBudget / ordinaryPracticePoints) : ageTrainingRate(input, player.id, toDate) } : undefined;
+      const aging = agingActive ? { ordinaryPracticePoints, adjustedPracticePoints: budget, rateBasisPoints: developing ? ageTrainingRate(input, player.id, fromDate) : ordinaryPracticePoints > 0 ? Math.floor(weightedBudget / ordinaryPracticePoints) : ageTrainingRate(input, player.id, toDate) } : undefined;
       // Format 86: the head coach's Development (-3% to +4%), before the player's own Discipline.
       if (practicePlus) budget = Math.max(0, Math.floor(budget * (100 + practicePlus) / 100));
       // Discipline (stored in careers started with the five abilities): 2% more practice per point above 10, less below.
@@ -229,6 +267,17 @@ export function processTrainingWeek(input: TrainingWeekInput): { training: Seaso
         for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = facilitySign * Math.floor(facilityMagnitude / TRAINING_ATTRIBUTES.length);
         for (let index = 0; index < facilityMagnitude % TRAINING_ATTRIBUTES.length; index += 1) facilityDesired[TRAINING_ATTRIBUTES[(afterRound - 1 + budget % TRAINING_ATTRIBUTES.length + index) % TRAINING_ATTRIBUTES.length]!] += facilitySign;
       } else facilityDesired[focus] = facilityPoints;
+      if (developing) {
+        const dateOfBirth = lifecycleDateOfBirth(input, player.id), age = dateOfBirth ? fractionalAge(dateOfBirth, fromDate) : DEFAULT_PLAYER_AGE;
+        const personal = ageTrainingRate(input, player.id, fromDate) * seasonForm(input.seed, player.id, seasonNumber) / 10_000 * minutesFactor(age, minutes[player.id] ?? null) / 10_000 * dayScale;
+        for (const attribute of TRAINING_ATTRIBUTES) {
+          const reached = Math.min(20, player.attributes[attribute] + Math.floor((previous?.[attribute] ?? 0) / 100));
+          const basis = Math.min(Math.floor(10_000 * dayScale), Math.floor(personal * levelFactor(reached) / 10_000)), key = `development-practice:${player.id}:${seasonNumber}:${afterRound}:${attribute}`;
+          desired[attribute] = stochasticShare(desired[attribute], basis, input.seed, `${key}:own`);
+          bonusDesired[attribute] = stochasticShare(bonusDesired[attribute], basis, input.seed, `${key}:coach`);
+          if (facilityDesired[attribute] > 0) facilityDesired[attribute] = stochasticShare(facilityDesired[attribute], basis, input.seed, `${key}:facility`);
+        }
+      }
       const progress = emptyPoints(), headroom = trainingHeadroom(input, player.id);
       for (const attribute of TRAINING_ATTRIBUTES) {
         const points = previous?.[attribute], cap = potentialPointCap(headroom, player.attributes[attribute]);

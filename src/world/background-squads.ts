@@ -49,26 +49,28 @@ export const BACKGROUND_SQUAD_RULES = Object.freeze({
   moveAges: Object.freeze([22, 31] as const),
   /** At most this many players leave a club in one season change, retirements aside. */
   maxDepartures: 3,
-  /** A newcomer's level: the role's level plus `drift` x (starting strength - current strength), within `maxDrift`. */
-  drift: 1,
-  maxDrift: 8,
+  /**
+   * A newcomer's level: the role's level plus the club's shortfall from its level for the season (best eight), spread
+   * over the vacancies (x 8 / vacancies, as each moves the best eight's mean by an eighth), within `maxDrift`.
+   */
+  maxDrift: 10,
   /**
    * Good and bad spells: each club's level moves from its starting strength by a seeded cycle, each season keeping
    * `cycleKeep` of the last one plus up to `cycleStep` either way, never beyond `cycleMax` (overall points).
    */
   cycleKeep: 0.7,
-  cycleStep: 3,
-  cycleMax: 5,
+  cycleStep: 4,
+  cycleMax: 8,
   /**
    * A club this far above its level for the season sells its best player; this far below it, it releases its weakest
-   * to sign a better one (overall points of the best eight).
+   * to sign a better one (two players at twice the gap; overall points of the best eight).
    */
-  trackGap: 2,
+  trackGap: 1.5,
   /** A departing player is signed when his overall is within `window` of the level sought. */
   window: 3,
   /** Generated newcomers: overall within `noise` either way of the level sought, aged `ages[0]` to `ages[1]`. */
   noise: 3,
-  ages: Object.freeze([20, 29] as const),
+  ages: Object.freeze([21, 30] as const),
   /** One generated player in this share (basis points) has an international name; the rest a name of the club's country. */
   foreignNameShare: 4_000,
 });
@@ -262,9 +264,13 @@ function nextSeason(book: Book, world: CareerWorld, seasonNumber: number): Map<s
     const club = book.clubs.get(clubId)!;
     const excess = strengthWith([...rated.map(row => row.rating), ...open.map(slot => slot.role)]) - club.strength - clubCycle(book, club, seasonNumber + 1);
     if (Math.abs(excess) >= rules.trackGap && rated.length) {
-      const ranked = [...rated].sort((a, b) => b.rating - a.rating || a.index - b.index), pick = excess > 0 ? ranked[0]! : ranked.at(-1)!;
-      const known = candidates.find(row => row.index === pick.index);
-      if (known) known.priority = Math.max(known.priority, 2.5); else candidates.push({ ...pick, priority: 2.5 });
+      const ranked = [...rated].sort((a, b) => b.rating - a.rating || a.index - b.index);
+      // Two players when the club is twice the gap away from its level.
+      const picks = (excess > 0 ? ranked : [...ranked].reverse()).slice(0, Math.abs(excess) >= 2 * rules.trackGap ? 2 : 1);
+      for (const pick of picks) {
+        const known = candidates.find(row => row.index === pick.index);
+        if (known) known.priority = Math.max(known.priority, 2.5); else candidates.push({ ...pick, priority: 2.5 });
+      }
     }
     const leaving = candidates.sort((a, b) => b.priority - a.priority || Math.abs(b.rating - b.member.role) - Math.abs(a.rating - a.member.role) || a.index - b.index).slice(0, rules.maxDepartures);
     for (const { member, index, rating } of leaving) {
@@ -282,7 +288,7 @@ function nextSeason(book: Book, world: CareerWorld, seasonNumber: number): Map<s
     const club = book.clubs.get(clubId)!, kept = stay.get(clubId)!, open = vacancies.get(clubId)!;
     const ratings = kept.flatMap(member => member ? [ratingOn(book, member, next)] : []);
     const shortfall = club.strength + clubCycle(book, club, seasonNumber + 1) - strengthWith([...ratings, ...open.map(slot => slot.role)]);
-    const nudge = Math.max(-rules.maxDrift, Math.min(rules.maxDrift, Math.round(rules.drift * shortfall)));
+    const nudge = Math.max(-rules.maxDrift, Math.min(rules.maxDrift, Math.round(shortfall * 8 / Math.max(1, open.length))));
     const numbers = new Set(kept.flatMap(member => member ? [member.player.number] : []));
     let generated = 0;
     for (const slot of open) {

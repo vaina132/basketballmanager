@@ -36,10 +36,12 @@ interface PageErrorProps {
    * part of the game that could not be downloaded ("the part of the game that plays matchdays").
    */
   step?: { failed: string; part: string }
+  /** The career is being saved and the game reloaded by itself (a page file missing after a new version went live). */
+  reloading?: boolean
 }
 
 /** Says plainly what failed and what to do next; a page that fails to show never changes the career. */
-export function PageError({ title, error, onReload, savesFirst, onRetry, step }: PageErrorProps) {
+export function PageError({ title, error, onReload, savesFirst, onRetry, step, reloading = false }: PageErrorProps) {
   const download = !!step || isLoadFailure(error)
   const detail = error instanceof Error && error.message ? error.message : String(error)
   const retry = !download && onRetry
@@ -47,7 +49,7 @@ export function PageError({ title, error, onReload, savesFirst, onRetry, step }:
   return <section className="panel page-error" role="alert" aria-labelledby={id} data-page-error={step ? 'worker' : download ? 'download' : 'render'}>
     <h2 id={id}><Icon name="close" size={17} />{title} {step?.failed ?? 'could not be opened'}</h2>
     <p>{download ? `The game could not download ${step?.part ?? 'this page'}. A new version of the game may have been published while it was open, or the internet connection dropped.${step ? ' Trying again cannot help; your career has not changed.' : ''}` : 'Something on this page failed while it was being shown. Nothing in your career was changed.'}</p>
-    <p>{savesFirst ? 'Choose Save and reload: your career is saved first, then the game reloads and you continue from that save.' : 'Reload the page. A saved career carries on from its last save: choose Continue saved career.'}{retry ? ' Try again shows this page once more.' : ''}</p>
+    {reloading ? <p role="status">{savesFirst ? 'Saving your career and loading the new version of the game…' : 'Loading the new version of the game…'}</p> : <p>{savesFirst ? 'Choose Save and reload: your career is saved first, then the game reloads and you continue from that save.' : 'Reload the page. A saved career carries on from its last save: choose Continue saved career.'}{retry ? ' Try again shows this page once more.' : ''}</p>}
     <div className="page-error-actions">
       <button type="button" className="button primary" onClick={onReload}><Icon name="restart" size={15} />{savesFirst ? 'Save and reload' : 'Reload page'}</button>
       {retry && <button type="button" className="button" onClick={onRetry}>Try again</button>}
@@ -62,19 +64,32 @@ interface BoundaryProps extends Omit<PageErrorProps, 'error' | 'onRetry'> {
   fullScreen?: boolean
   /** Offer Try again (default). The outermost boundary would only start the game afresh, which a reload does better. */
   retry?: boolean
+  /**
+   * Called once when the page file could not be downloaded: saves and reloads by itself (see newVersionReload.ts).
+   * Resolves false when no reload started; the message with its Save and reload button stays as the fallback.
+   */
+  autoReload?: () => Promise<boolean>
 }
+
+interface BoundaryState { error: unknown; reloading?: boolean }
 
 /**
  * Keeps a failing page from blanking the whole game: the error is shown in place of the page and the navigation keeps
  * working. Give it a `key` per page so that opening another page starts afresh.
  */
-export class PageErrorBoundary extends Component<BoundaryProps, { error: unknown }> {
-  state: { error: unknown } = { error: null }
+export class PageErrorBoundary extends Component<BoundaryProps, BoundaryState> {
+  state: BoundaryState = { error: null }
   static getDerivedStateFromError(error: unknown) { return { error: error ?? new Error('Unknown error.') } }
+  componentDidCatch(error: unknown) {
+    const { autoReload } = this.props
+    if (!autoReload || !isLoadFailure(error)) return
+    this.setState({ reloading: true })
+    autoReload().then(started => { if (!started) this.setState({ reloading: false }) }, () => this.setState({ reloading: false }))
+  }
   render() {
     if (this.state.error === null) return this.props.children
     const { title, onReload, savesFirst, fullScreen = false, retry = true } = this.props
-    const page = <PageError title={title} error={this.state.error} onReload={onReload} savesFirst={savesFirst} onRetry={retry ? () => this.setState({ error: null }) : undefined} />
+    const page = <PageError title={title} error={this.state.error} onReload={onReload} savesFirst={savesFirst} reloading={!!this.state.reloading} onRetry={retry ? () => this.setState({ error: null, reloading: false }) : undefined} />
     return fullScreen ? <main className="page-error-screen">{page}</main> : page
   }
 }

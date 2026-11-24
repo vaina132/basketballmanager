@@ -94,6 +94,7 @@ import { readSeasonJournal, SeasonSaveConflictError } from './storage/season-ind
 import type { CheckpointReason } from './storage/season-indexed-db'
 import { CareerSaveHistory } from './ui/CareerSaveHistory'
 import { isWorkerLoadFailure, PageError, PageErrorBoundary } from './ui/PageErrorBoundary'
+import { listenForMissingPageFiles, reloadForNewVersion } from './ui/newVersionReload'
 import { SeasonEndChoice } from './ui/SeasonEndChoice'
 const RealClubFriendly = lazy(() => import('./ui/RealClubFriendly').then(module => ({ default: module.RealClubFriendly })))
 import { fetchBuiltInPack } from './world/built-in-pack'
@@ -536,11 +537,23 @@ export default function App() {
   }
   /** A page that could not be opened offers a reload; a career is saved first so that nothing is lost. */
   async function saveAndReload() {
-    const current = sessionRef.current
-    if (current.kind === 'season' && !await persistSeason(current.season, 'manual')) return
-    reloadingSaved.current = sessionRef.current === current
-    window.location.reload()
+    if (await saveForReload()) window.location.reload()
   }
+  /**
+   * Saves the career before a reload; false when it could not be saved (the reload must not lose it). Only the open
+   * career is written: a page that failed to download never changed it. Without a career there is nothing to save.
+   */
+  async function saveForReload(): Promise<boolean> {
+    const current = sessionRef.current
+    if (current.kind === 'season' && !await persistSeason(current.season, 'manual')) return false
+    reloadingSaved.current = sessionRef.current === current
+    return true
+  }
+  // A page file missing after a new version went live: save and reload once by itself (owner, 23 November 2026).
+  const saveForReloadRef = useRef(saveForReload)
+  saveForReloadRef.current = saveForReload
+  const autoReload = useCallback(() => reloadForNewVersion(() => saveForReloadRef.current()), [])
+  useEffect(() => listenForMissingPageFiles(window, () => saveForReloadRef.current()), [])
   async function refreshSaveHistory() {
     const request = ++historyRequest.current
     setHistoryLoading(true); setHistoryError(null)
@@ -928,7 +941,7 @@ export default function App() {
     {creditsOpen && <CreditsDialog onClose={() => setCreditsOpen(false)} />}
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'close' : 'check'} size={19} /><span>{notice.message}</span><button aria-label="Dismiss message" className="icon-button" onClick={() => setNotice(null)}><Icon name="close" size={16} /></button></div>}
   </>
-  if (entryView) return <><PageErrorBoundary key={entryView} title={entryView === 'menu' ? 'The main menu' : entryView === 'profile' ? 'Manager profile' : 'New career'} savesFirst={false} onReload={() => window.location.reload()} fullScreen><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing || creatingCareer} starting={creatingCareer} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} packSource={packSource} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense></PageErrorBoundary>{overlays}</>
+  if (entryView) return <><PageErrorBoundary key={entryView} title={entryView === 'menu' ? 'The main menu' : entryView === 'profile' ? 'Manager profile' : 'New career'} savesFirst={false} onReload={() => window.location.reload()} autoReload={autoReload} fullScreen><Suspense fallback={<main className="career-entry-loading" role="status">Opening game menu…</main>}><CareerStart key={entryView} view={entryView} busy={saving || advancing || creatingCareer} starting={creatingCareer} error={entryError ?? (entryView === 'menu' ? historyError : null)} hasSession={hasSession} currentCareer={hasSession && season ? careerSummary(season) : null} savedCareer={savedCareer ? careerSummary(savedCareer) : null} savesLoading={historyLoading} initialManager={entryView === 'profile' ? season?.manager : null} onContinue={() => { void loadSeason() }} onResume={resumeSession} onNewCareer={() => { void openEntry('new-career') }} onLoad={openSaveHistory} onImport={() => importRef.current?.click()} onExhibition={() => { void restart() }} onCancel={cancelEntry} onStart={startSeason} pack={realPack} onPackLoaded={setRealPack} packSource={packSource} onSaveProfile={profile => { void saveManagerProfile(profile) }} onExport={exportSave} /></Suspense></PageErrorBoundary>{overlays}</>
 
   // The Match center (format 80: also an unemployed manager's national game).
   const matchScreen = <>
@@ -962,7 +975,7 @@ export default function App() {
         <main id="main" tabIndex={-1} inert={saving}>
           <div className={view === 'match' ? 'sr-only' : 'page-heading'}><h1>{view === 'home' ? 'Unemployed desk' : pageNames[view]}</h1></div>
           {workerFailure && <PageError title={workerFailure.title} error={workerFailure.error} step={{ failed: workerFailure.failed, part: 'the file that runs this step' }} savesFirst onReload={() => { void saveAndReload() }} />}
-          <PageErrorBoundary key={view} title={view === 'home' ? 'Unemployed desk' : pageNames[view]} savesFirst onReload={() => { void saveAndReload() }}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
+          <PageErrorBoundary key={view} title={view === 'home' ? 'Unemployed desk' : pageNames[view]} savesFirst onReload={() => { void saveAndReload() }} autoReload={autoReload}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
             {view === 'match' && season.national?.activeMatch && matchScreen}
             {view === 'home' && season.national?.job && <NationalJobCard season={season} onOpen={() => navigate('national')} />}
             {view === 'national' && season.national?.job && <NationalTeamPage season={season} busy={advancing || saving} onSelect={ids => updateCareer(state => setNationalSelection(state, ids), undefined, true)} onResign={() => updateCareer(resignNationalJob, 'You resigned as national head coach.', true)} onOpenCompetitions={() => navigate(NATIONAL_TEAMS_LINK)} />}
@@ -1001,7 +1014,7 @@ export default function App() {
 
         {/* Owner feedback (22 November 2026): the season strip only on the Desk; the top bar carries the key facts elsewhere. */}
         {season && showsSeasonStrip(page) && <SeasonProgress season={season} onCompetition={() => navigate('season')} />}
-        <PageErrorBoundary key={page} title={pageNames[page]} savesFirst={!!season} onReload={() => { void saveAndReload() }}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
+        <PageErrorBoundary key={page} title={pageNames[page]} savesFirst={!!season} onReload={() => { void saveAndReload() }} autoReload={autoReload}><Suspense fallback={<p className="panel" style={{ padding: 16 }} role="status">Opening workspace…</p>}>
         {page === 'season' && competitionsTabs}
         {page === 'season' && shownCompetitions === 'calendar' && season && <SeasonCalendar season={season} />}
         {page === 'season' && shownCompetitions === 'international' && season && <InternationalWorkspace season={season} competitionId={internationalCompetition} onCompetitionChange={setInternationalCompetition} />}

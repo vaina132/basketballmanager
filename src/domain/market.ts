@@ -45,7 +45,11 @@ export interface MarketOffer {
 export type MarketEvent =
   | { type: 'offer'; id: string; date: string; clubId: string; playerId: string; seasonWage: number; seasons: number; transferFee?: number; transferPaymentPlan?: TransferPaymentPlan; releaseFee?: number; transferMode?: 'release-clause'; role?: SquadRole }
   | { type: 'buyout'; id: string; date: string; clubId: string; playerId: string }
-  | { type: 'withdraw'; date: string; offerId: string }
+  /**
+   * Format 107: `budgetSeason` marks the manager's offer withdrawn by the game because that season's wage budget no longer
+   * covers it when the player answers; `soldPlayerId` names the player whose agreed sale was pending at the time.
+   */
+  | { type: 'withdraw'; date: string; offerId: string; budgetSeason?: number; soldPlayerId?: string }
   | { type: 'club-decision'; date: string; offerId: string; response: 'accept' | 'reject' | 'counter' }
   | { type: 'advance'; date: string }
   /** Format 95 (NBA step 8): `picks` draft picks on draft day; with `playerId`, the first is the manager's own choice. */

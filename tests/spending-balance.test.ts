@@ -41,7 +41,7 @@ const play = (state: SeasonState) => state.activeMatch ? { ...state, activeMatch
 const roundTrip = (state: SeasonState) => parseSeason(serializeSeasonCompact(state));
 // Measured on the format-89 board rules: format 98's career balance changes the results targets this spending follows,
 // and format 101's squad refresh spends the same surplus.
-const career = (world: CareerWorld, seed: number, spendingBalance = true) => createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, spendingBalance, careerBalance: false, squadRefresh: false });
+const career = (world: CareerWorld, seed: number, spendingBalance = true) => createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, spendingBalance, careerBalance: false, squadRefresh: false, managerOfferWithdrawal: false });
 /** Everything automatic: recruitment, facilities, wage prepayments and sponsorship of the manager's club too. */
 const delegate = (state: SeasonState) => state.clubs.some(club => club.id === state.managedClubId) ? setSponsorshipDelegation(setPayrollDelegation(setFacilityDelegation(setEmploymentDelegation(state, true), true), true), true) : state;
 /** `share` of a club's budget booked to it in week 1 of season 1 (a test lever: one entry more at the ledger's head). */

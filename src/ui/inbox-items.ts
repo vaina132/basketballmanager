@@ -171,6 +171,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   items.push(...nationalInboxItems(season))
   items.push(...europeanInboxItems(season))
   items.push(...tradeInboxItems(season))
+  items.push(...offerWithdrawalInboxItems(season))
   return items.sort((a, b) => Number(b.needsAction) - Number(a.needsAction) || compare(b.date, a.date) || compare(a.id, b.id))
 }
 
@@ -262,4 +263,21 @@ function tradeInboxItems(season: SeasonState): InboxItem[] {
           : `${terms}.${proposal.reason ? ` ${proposal.reason}` : ''}`
     return { id: proposal.id, date: proposal.settledOn ?? proposal.proposedOn, category: 'players' as const, title, detail, needsAction: false, target: 'trades' as const }
   })
+}
+
+/**
+ * Format 107: the manager's offers the game withdrew because his club's wage budget no longer covered them when the player
+ * was due to answer (recorded `withdraw` events with `budgetSeason`).
+ */
+export function offerWithdrawalInboxItems(season: SeasonState): InboxItem[] {
+  const clubId = season.managedClubId
+  if (!clubId) return []
+  return (season.market?.windows ?? []).flatMap(window => window.events.flatMap((event, index) => {
+    if (event.type !== 'withdraw' || event.budgetSeason === undefined) return []
+    const offer = window.offers.find(item => item.id === event.offerId)
+    if (!offer || offer.clubId !== clubId) return []
+    const player = getCareerPlayer(season, offer.playerId).name
+    const cause = event.soldPlayerId ? `after the sale of ${getCareerPlayer(season, event.soldPlayerId).name} the club's wage budget for ${seasonLabel(event.budgetSeason)} no longer covers it` : `the club's wage budget for ${seasonLabel(event.budgetSeason)} no longer covers it`
+    return [{ id: `offer-withdrawn-${window.seasonNumber}-${index}`, date: event.date, category: 'players' as const, title: `Offer withdrawn · ${player}`, detail: `Your offer to ${player} was withdrawn: ${cause}. Review your offers in Transfers.`, needsAction: false, target: 'bid' as const, playerId: offer.playerId }]
+  }))
 }

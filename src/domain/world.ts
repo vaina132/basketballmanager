@@ -229,6 +229,12 @@ export interface CareerWorld {
    * (`src/world/squad-refresh.ts`).
    */
   squadRefresh?: true;
+  /**
+   * Format 107 (new careers with the spending balance, option `managerOfferWithdrawal`): the manager's pending offers that
+   * no longer fit his club's wage budget on the day the player answers are withdrawn the day before, as a recorded step,
+   * and the Inbox says which and why (`src/world/offer-withdrawals.ts`).
+   */
+  managerOfferWithdrawal?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

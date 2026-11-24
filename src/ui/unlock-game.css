@@ -1,0 +1,18 @@
+.unlock-dialog{width:min(560px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);margin:auto;padding:0;border:2px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);font-size:13px;overflow:hidden}
+.unlock-dialog[open]{display:flex;flex-direction:column}
+.unlock-dialog::backdrop{background:#05070bb8}
+.unlock-dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2);flex:none}
+.unlock-dialog-heading h2{display:flex;align-items:center;gap:8px;margin:0;font-size:14px;font-weight:600}
+.unlock-dialog-heading h2 svg{color:var(--accent)}
+.unlock-dialog-body{min-height:0;overflow:auto;padding:12px 14px 14px;line-height:1.5}
+.unlock-dialog-body>p{margin:0 0 10px}
+.unlock-kept{display:flex;gap:8px;align-items:flex-start;color:var(--muted)}
+.unlock-kept svg{flex:none;margin-top:2px}
+.unlock-form{display:grid;gap:6px;margin:12px 0;padding:10px;border:1px solid var(--border);background:var(--surface-2)}
+.unlock-form label{font-weight:600}
+.unlock-form-row{display:flex;gap:8px}
+.unlock-form-row input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.unlock-message{margin:0;color:var(--muted)}
+.unlock-message-error{color:#e4a28e}
+.unlock-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.unlock-no-shop{color:var(--muted)}

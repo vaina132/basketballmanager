@@ -3,7 +3,7 @@ import type { WorldContext } from '../domain/world';
 import { worldOf } from './career-world';
 
 /**
- * Format 100 (owner decision 24 November 2026, new careers in real-data worlds, marker `world.playerDevelopment`):
+ * Format 101 (owner decision 24 November 2026, new careers in real-data worlds, marker `world.playerDevelopment`):
  * realistic player development. Ten-season careers had shown every player's ratings rising year after year (median
  * +10 to +30, NBA players at 99 from 5 to 48), because practice filled each player's potential within two or three
  * seasons at any age and decline began late and gently. In this model:
@@ -64,7 +64,7 @@ export const PLAYER_DEVELOPMENT_RULES = Object.freeze({
 const SKILLS = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 const YEAR_DAYS = 365.25;
 
-/** Whether the career develops players with this model (format 100). */
+/** Whether the career develops players with this model (format 101). */
 export function usesPlayerDevelopment(context: WorldContext | undefined): boolean {
   return !!context && worldOf(context).playerDevelopment === true;
 }

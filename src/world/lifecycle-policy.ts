@@ -82,14 +82,14 @@ export function retirementTargetAge(seed: number, playerId: string): number {
   return 37 + hash % 4;
 }
 
-/** Format 100: the career seed, which development traits and setbacks are drawn from. */
+/** Format 101: the career seed, which development traits and setbacks are drawn from. */
 function developmentSeed(context: LifecycleContext): number {
   if (!Number.isInteger(context.seed)) throw new Error('Player development needs the career seed.');
   return context.seed!;
 }
 
 /**
- * Format 100: a player's decline and setbacks from his aging start to a date, hundredths per skill (key: seed, player,
+ * Format 101: a player's decline and setbacks from his aging start to a date, hundredths per skill (key: seed, player,
  * birth date, aging start and the date). Setbacks fall on birthdays after the aging start.
  */
 const developmentLoss = memoizePure((key: string): TrainingPoints => {
@@ -112,7 +112,7 @@ export function ageTrainingRate(context: LifecycleContext, playerId: string, onD
   if (!dateOfBirth && usesPlayerDevelopment(context) && context.lifecycle?.enabledSince && onDate >= context.lifecycle.enabledSince.date) return playerGrowthRate(developmentSeed(context), playerId, DEFAULT_PLAYER_AGE);
   if (!dateOfBirth || !agingStart(context, playerId, onDate)) return 10_000;
   if (getPlayerRetirement(context, playerId, onDate).status === 'retired') return 0;
-  // Format 100 (`player-development.ts`): the realistic age curve with the player's own traits.
+  // Format 101 (`player-development.ts`): the realistic age curve with the player's own traits.
   if (usesPlayerDevelopment(context)) return playerGrowthRate(developmentSeed(context), playerId, fractionalAge(dateOfBirth, onDate));
   const at = dateNumber(onDate), at16 = dateNumber(birthday(dateOfBirth, 16)), at23 = dateNumber(birthday(dateOfBirth, 23)), at29 = dateNumber(birthday(dateOfBirth, 29)), at39 = dateNumber(birthday(dateOfBirth, 39));
   if (at <= at16) return 12_500;

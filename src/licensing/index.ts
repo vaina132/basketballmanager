@@ -1,0 +1,5 @@
+export { LICENSING_BUY_URL, LICENSING_ENABLED } from './config'
+export { ENTITLEMENT_STORAGE_KEY, loadEntitlement, parseEntitlement, saveEntitlement, UNLICENSED, type Entitlement, type EntitlementStorage, type LicensedEntitlement } from './entitlement'
+export { freePlayLimit, isPastFreeLimit, type FreeLimitState, type FreePlayLimit } from './free-limit'
+export { canAdvance, type AdvanceCheck } from './gate'
+export { notConfiguredVerifier, type LicenceVerifier, type VerifyResult } from './verifier'

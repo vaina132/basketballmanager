@@ -218,7 +218,13 @@ export interface CareerWorld {
    */
   cashBalance?: true;
   /**
-   * Format 100 (owner decision 24 November 2026, new real-data careers, option `playerDevelopment`): realistic player
+   * Format 100 (owner decision 24 November 2026, provisional number; new careers with domestic leagues and a EuroLeague,
+   * without the NBA, option `euroleagueJobs`): clubs in that season's EuroLeague are bigger jobs than other top-division
+   * clubs: they offer first and ask more of a manager (`src/world/euroleague-jobs.ts`).
+   */
+  euroleagueJobs?: true;
+  /**
+   * Format 101 (owner decision 24 November 2026, new real-data careers, option `playerDevelopment`): realistic player
    * development (`src/world/player-development.ts`): growth by age with individual traits and seasonal form, harder
    * gains at high skill levels, earlier and faster decline, and occasional setbacks.
    */

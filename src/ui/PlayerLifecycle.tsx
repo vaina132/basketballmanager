@@ -8,7 +8,7 @@ import { scoutingDate } from './ScoutingKnowledge'
 import './player-lifecycle.css'
 
 export function practiceAgeLabel(percent: number, developing = false): string {
-  // Format 100 (`player-development.ts`): the share of practice his age and talent turn into skill.
+  // Format 101 (`player-development.ts`): the share of practice his age and talent turn into skill.
   if (developing) return `Learns from practice: ${Math.round(percent)}%`
   const difference = Math.round(percent) - 100
   return difference === 0 ? 'Standard practice' : `Age effect: ${difference > 0 ? '+' : '−'}${Math.abs(difference)}% practice`

@@ -17,7 +17,7 @@ import {
 } from '../src/world/player-development';
 
 /**
- * Format 100 (owner decision 24 November 2026, `world.playerDevelopment`): realistic player development. Young players
+ * Format 101 (owner decision 24 November 2026, `world.playerDevelopment`): realistic player development. Young players
  * grow toward their potential, most quickly before 22; growth fades by the late twenties; decline starts with the
  * athletic skills around 29-30 and speeds up; each player has his own traits and each season its own form; high skills
  * are harder to raise; and over ten seasons a league keeps its level while individuals move a lot.
@@ -27,8 +27,8 @@ const packWorld = worldFromPack(economyPack([SPAIN]), 'acb');
 const median = (values: number[]) => { const sorted = [...values].sort((a, b) => a - b); return sorted[Math.floor((sorted.length - 1) / 2)]!; };
 const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
 
-describe('the player development marker (format 100)', () => {
-  it('marks new real-data careers only, and format 99 refuses the marker', () => {
+describe('the player development marker (format 101)', () => {
+  it('marks new real-data careers only, and format 100 refuses the marker', () => {
     const state = createSeason({ seed: 5, world: packWorld, managedClubId: 'acb-6', ...NEW_CAREER_SYSTEMS });
     expect(state.world!.playerDevelopment).toBe(true);
     expect(usesPlayerDevelopment(state)).toBe(true);
@@ -38,10 +38,10 @@ describe('the player development marker (format 100)', () => {
     expect(() => createSeason({ seed: 5, world: packWorld, playerDevelopment: 'yes' as unknown as boolean })).toThrow(/player development setting/);
     expect(parseSeason(serializeSeason(state)).world!.playerDevelopment).toBe(true);
     const envelope = JSON.parse(serializeSeason(state));
-    envelope.formatVersion = 99; envelope.state.schemaVersion = 99;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/playerDevelopment.*format 100/);
+    envelope.formatVersion = 100; envelope.state.schemaVersion = 100;
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/playerDevelopment.*format 101/);
     const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world: packWorld, managedClubId: 'acb-6', ...NEW_CAREER_SYSTEMS, playerDevelopment: false })));
-    older.formatVersion = 99; older.state.schemaVersion = 99;
+    older.formatVersion = 100; older.state.schemaVersion = 100;
     expect(parseSeason(JSON.stringify(older)).world!.playerDevelopment).toBeUndefined();
   }, 120_000);
 });
@@ -260,7 +260,7 @@ describe('training still matters within the curve', () => {
     const older = { ...world }; delete (older as { playerDevelopment?: true }).playerDevelopment;
     const veteran = clubs.flatMap(club => club.players).find(item => world.playerProfiles[item.id]!.dateOfBirth.startsWith('1990-'))!;
     expect(ageTrainingRate({ world: older, lifecycle }, veteran.id, date)).toBeGreaterThan(5_000);
-    // The new decline is stronger than the format-99 rule for a 34-year-old over two seasons.
+    // The new decline is stronger than the format-100 rule for a 34-year-old over two seasons.
     const later = dateForRound(1, 3);
     const lossNew = getPlayerAging({ world, seed: SEED, lifecycle }, veteran.id, later).lossPoints, lossOld = getPlayerAging({ world: older, lifecycle }, veteran.id, later).lossPoints;
     expect(Object.values(lossNew).reduce((a, b) => a + b, 0)).toBeGreaterThan(Object.values(lossOld).reduce((a, b) => a + b, 0));

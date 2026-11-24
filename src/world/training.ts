@@ -154,16 +154,16 @@ export interface TrainingWeekInput {
    */
   headCoaches?: Readonly<Record<string, SteeringCoach>>;
   /**
-   * Format 100 (`world.playerDevelopment`): the season's games, for the minutes each player played in the week's games
+   * Format 101 (`world.playerDevelopment`): the season's games, for the minutes each player played in the week's games
    * (`weekMinutes`). Required in careers with that model.
    */
   fixtures?: readonly Pick<SeasonFixture, 'round' | 'homeClubId' | 'awayClubId' | 'result' | 'stage'>[];
-  /** Format 100: the NBA draft record, for drafted players' birth dates (read only in careers with that model). */
+  /** Format 101: the NBA draft record, for drafted players' birth dates (read only in careers with that model). */
   draft?: SeasonState['draft'];
 }
 
 /**
- * Format 100: each player's average minutes a game in the games of one round he could have played (his club's games),
+ * Format 101: each player's average minutes a game in the games of one round he could have played (his club's games),
  * null for a player whose club played none. Players without a line in a played game count zero minutes for it.
  */
 export function weekMinutes(fixtures: NonNullable<TrainingWeekInput['fixtures']>, round: number, clubs: readonly Team[]): Record<string, number | null> {
@@ -181,7 +181,7 @@ export function weekMinutes(fixtures: NonNullable<TrainingWeekInput['fixtures']>
 
 /** One authoritative weekly pass updates every club; it consumes no match RNG. */
 export function processTrainingWeek(given: TrainingWeekInput): { training: SeasonTraining; conditions: Record<string, number> } {
-  // Careers before format 100 never read the draft here (their drafted players keep the default age), so they replay exactly.
+  // Careers before format 101 never read the draft here (their drafted players keep the default age), so they replay exactly.
   const input: TrainingWeekInput = usesPlayerDevelopment(given) || !given.draft ? given : { ...given, draft: undefined };
   const { training, clubs, conditions, injuries, seasonNumber, afterRound, fromDate, toDate } = input;
   if (!training.enabledSince) throw new Error('Enable training before resolving a training week.');
@@ -196,7 +196,7 @@ export function processTrainingWeek(given: TrainingWeekInput): { training: Seaso
   const report: TrainingWeekReport = { seasonNumber, afterRound, fromDate, toDate, rosterIds: {}, plans: {}, players: {}, coaching: appliedCoaching, ...(appliedFitness ? { fitness: appliedFitness } : {}) };
   const agingActive = !!input.lifecycle?.enabledSince && fromDate >= input.lifecycle.enabledSince.date;
   const facilitiesActive = !!input.facilities?.enabledSince && fromDate >= input.facilities.enabledSince.date;
-  // Format 100 (`player-development.ts`): practice turns into skill by the player's age, traits, form, skill level and minutes.
+  // Format 101 (`player-development.ts`): practice turns into skill by the player's age, traits, form, skill level and minutes.
   const developing = agingActive && usesPlayerDevelopment(input);
   if (developing && !input.fixtures) throw new Error('Player development needs the season\'s games.');
   const minutes = developing ? weekMinutes(input.fixtures!, afterRound, clubs) : {};
@@ -228,7 +228,7 @@ export function processTrainingWeek(given: TrainingWeekInput): { training: Seaso
           availableDays += 1;
           const practice = condition < 70 ? Math.floor(workload.points / 2) : workload.points;
           budget += practice;
-          // Format 100: the age curve applies to each skill's share below, with the player's form and minutes.
+          // Format 101: the age curve applies to each skill's share below, with the player's form and minutes.
           const ageRate = agingActive && !developing ? ageTrainingRate(input, player.id, date) : 10_000;
           weightedBudget += practice * ageRate;
           if (facilitiesActive) facilityUnits += practice * ageRate * facilityPracticeBonusPercent(input, 'training', club.id, date);

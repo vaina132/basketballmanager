@@ -5,6 +5,7 @@ import { BOARD_VERDICT_EFFECTS } from '../world/board-consequences'
 import { CAREER_RULES, CAREER_RULES_TEXT } from '../world/career-rules'
 import { seasonLabel } from '../world/season'
 import { Icon } from './Icon'
+import { careerBalanceNote } from '../world/career-balance'
 import './season-end-choice.css'
 
 interface SeasonEndChoiceProps {
@@ -74,7 +75,7 @@ export function SeasonEndChoice({ season, outlook, busy = false, onChoose, onClo
       ? `${CAREER_RULES_TEXT.freshStart} Your first season there is protected. The new club's games from the next matchday are yours; contracts, staff and results stay where they are.`
       : 'Your choice takes effect when the final matchday is recorded: the new club runs this offseason, including recruitment, and the next seasons. Contracts, staff and results stay where they are.'
   // What waiting without a club means, in plain words (career-3).
-  const unemployedNote = `${CAREER_RULES_TEXT.unemployed} ${CAREER_RULES_TEXT.fade}`
+  const unemployedNote = `${CAREER_RULES_TEXT.unemployed} ${CAREER_RULES_TEXT.fade}${careerBalanceNote(season)}`
   const place = (offer: ClubVacancy) => timing && season.status !== 'complete' ? `${ordinal(offer.position)} in the table` : `Finished ${ordinal(offer.position)}`
 
   return <dialog ref={dialog} id="season-end-choice" className="season-end-choice" aria-labelledby="season-end-choice-title" aria-describedby="season-end-choice-lead" data-dismissed={outlook.dismissed} data-timing={timing ?? 'season-end'} onCancel={event => { event.preventDefault(); onClose() }}>

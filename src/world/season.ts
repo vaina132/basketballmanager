@@ -652,6 +652,12 @@ export interface SeasonSystems {
    * with researched club money (`world.longCareers`, `src/world/long-careers.ts`). New careers only.
    */
   longCareers?: boolean;
+  /**
+   * Format 98 (owner decision, 24 November 2026): board targets in proportion to the squad's rank,
+   * patient results judgement and a way back into work after a dismissal (`world.careerBalance`,
+   * `src/world/career-balance.ts`). New careers in worlds with domestic leagues (every real-data world) only.
+   */
+  careerBalance?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -665,7 +671,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -706,6 +712,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.nbaJobs !== undefined && typeof options.nbaJobs !== 'boolean') throw new Error('Choose a valid NBA careers setting.');
   if (options.nbaTrades !== undefined && typeof options.nbaTrades !== 'boolean') throw new Error('Choose a valid NBA trades setting.');
   if (options.longCareers !== undefined && typeof options.longCareers !== 'boolean') throw new Error('Choose a valid long careers setting.');
+  if (options.careerBalance !== undefined && typeof options.careerBalance !== 'boolean') throw new Error('Choose a valid career balance setting.');
   if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
@@ -768,7 +775,9 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   const nbaTrades = !!options.nbaTrades && !world.nbaTrades && world.nba?.cap === 'nba-cap-1';
   // Format 97: the long-careers fixes, in worlds with researched club money only.
   const longCareers = !!options.longCareers && !world.longCareers && !!world.economy;
-  return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}) } : world;
+  // Format 98: the board and career balance, in worlds with domestic leagues (every real-data world).
+  const careerBalance = !!options.careerBalance && !world.careerBalance && !!world.domesticLeagues;
+  return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers || careerBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}), ...(careerBalance ? { careerBalance: true as const } : {}) } : world;
 }
 
 /** Format 82: the career's coaches (the manager's starting attributes) and the national teams' real coaches. */

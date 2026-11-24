@@ -25,6 +25,7 @@ import { withoutCountedGames } from './sealed-history';
 import { europeanAimProgress, europeanAims } from './board-europe';
 import { usesEuropeanEntry } from './european-entry';
 import type { SeasonEurope } from '../domain/season';
+import { balancedResultsImpact, balancedWinRate, usesCareerBalance } from './career-balance';
 
 export const BOARD_REVIEW_STEP = 8;
 export const BOARD_SPORTING_GRACE_GAMES = 3;
@@ -95,11 +96,14 @@ export function buildBoardMandate<T extends BoardCalculationContext>(state: T, s
     const rivals = league ? resources.filter(other => league.clubIds.includes(other.clubId)) : resources;
     const games = league ? state.fixtures.filter(fixture => isRegularFixture(fixture) && fixture.round >= startsRound && [fixture.homeClubId, fixture.awayClubId].includes(resource.clubId)).length : legacyGames;
     const resourceRank = 1 + rivals.filter(other => other.strength > resource.strength).length;
-    const baseRate = resourceRank <= Math.ceil(rivals.length / 3) ? 0.6 : resourceRank <= Math.ceil(rivals.length * 2 / 3) ? 0.5 : 0.4;
+    // Format 98 (`career-balance.ts`): the target follows the squad's rank in its league, not its third.
+    const balanced = usesCareerBalance(state);
+    const baseRate = balanced ? balancedWinRate(resourceRank, rivals.length, null, isNbaClub(worldOf(state), resource.clubId)) : resourceRank <= Math.ceil(rivals.length / 3) ? 0.6 : resourceRank <= Math.ceil(rivals.length * 2 / 3) ? 0.5 : 0.4;
     const mandate = { rosterId: resource.rosterId, resourceRank, targetWins: Math.ceil(games * baseRate), games, startingUnpaid: boardUnpaidCosts(state, resource.clubId) };
     if (!usesPresidentBoard(state.board)) return [resource.clubId, mandate];
     // Format 70: the president's ambition moves the results target; patience and the youth and culture objectives are frozen here.
-    const rate = ambitionWinRate(baseRate, presidentTraits(worldOf(state), resource.clubId));
+    const traits = presidentTraits(worldOf(state), resource.clubId);
+    const rate = balanced ? balancedWinRate(resourceRank, rivals.length, traits, isNbaClub(worldOf(state), resource.clubId)) : ambitionWinRate(baseRate, traits);
     const playerIds = rosterForRound(state.rosters, resource.clubId, state.round).players.map(player => player.id);
     return [resource.clubId, { ...mandate, targetWins: Math.ceil(games * rate), ...presidentMandate(state, { clubId: resource.clubId, seasonNumber: state.seasonNumber, date: state.date, games, tier: clubTier(resourceRank, rivals.length), playerIds }) }];
   })) };
@@ -159,6 +163,7 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
   // Format 83: the European aim's progress from the season's European games (and the places day at the last review).
   const europeAim = usesEuropeanEntry(state.europe) ? europeanAimProgress(state) : null;
   const playoffAim = usesNbaCap(state) ? nbaPlayoffAimProgress(state) : null;
+  const balancedResults = usesCareerBalance(state);
   for (const club of state.clubs) {
     const objective = mandate.clubs[club.id];
     if (!objective) throw new Error('Review a club with a communicated sporting objective.');
@@ -167,7 +172,8 @@ export function buildBoardReview<T extends BoardCalculationContext>(state: T, ma
     const targetPace = objective.games ? objective.targetWins * played / objective.games : 0;
     const difference = wins - targetPace;
     const sportingDelta = Math.sign(difference) * Math.max(0, Math.abs(difference) - BOARD_WIN_TOLERANCE);
-    const resultsImpact = played < BOARD_SPORTING_GRACE_GAMES ? 0 : Math.round(clamp(sportingDelta * 10, -30, 30)) || 0;
+    // Format 98 (`career-balance.ts`): the gap to the pace as a share of the games counted, judged more patiently.
+    const resultsImpact = played < BOARD_SPORTING_GRACE_GAMES ? 0 : balancedResults ? balancedResultsImpact(wins, targetPace, played, objective.games) : Math.round(clamp(sportingDelta * 10, -30, 30)) || 0;
     let carriedAbsences = 0, rosterPlaces = 0;
     for (const fixture of games) {
       const roster = rosterForRound(state.rosters, club.id, fixture.round);
@@ -294,7 +300,7 @@ export function getBoardSummary(state: SeasonState, clubId = state.managedClubId
   let sportingStatus: BoardSummary['sportingStatus'] = 'waiting';
   if (latest && objective) {
     const result = latest.club;
-    sportingStatus = result.played === objective.games ? result.wins >= objective.targetWins ? 'met' : 'missed' : result.played < BOARD_SPORTING_GRACE_GAMES ? 'building' : result.wins + BOARD_WIN_TOLERANCE >= result.targetPace ? 'on-track' : 'behind';
+    sportingStatus = result.played === objective.games ? result.wins >= objective.targetWins ? 'met' : 'missed' : result.played < BOARD_SPORTING_GRACE_GAMES ? 'building' : (usesCareerBalance(state) ? result.resultsImpact >= 0 : result.wins + BOARD_WIN_TOLERANCE >= result.targetPace) ? 'on-track' : 'behind';
   }
   const financeStatus: BoardSummary['financeStatus'] = !objective || objective.startingUnpaid === null ? 'unassessed' : !latest ? 'waiting' : latest.club.unpaid !== null && latest.club.unpaid > objective.startingUnpaid ? 'behind' : 'on-track';
   const restarts = (state.board.restarts ?? []).filter(restart => restart.clubId === clubId);

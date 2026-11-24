@@ -146,9 +146,9 @@ describe('season persistence boundaries', () => {
 
 describe('malformed season imports', () => {
   const cases: Array<[string, (envelope: Envelope) => void]> = [
-    ['unsupported format version', e => { e.formatVersion = 99; }],
+    ['unsupported format version', e => { e.formatVersion = 999; }],
     ['unsupported envelope engine', e => { e.engineVersion = 'rules-2'; }],
-    ['unsupported state version', e => { (e.state as unknown as Record<string, unknown>).schemaVersion = 99; }],
+    ['unsupported state version', e => { (e.state as unknown as Record<string, unknown>).schemaVersion = 999; }],
     ['unknown data pack', e => { (e.state as unknown as Record<string, unknown>).dataPackId = 'real-league'; }],
     ['unknown state field', e => { (e.state as unknown as Record<string, unknown>).extra = true; }],
     ['invalid seed', e => { e.state.seed = -1; }],

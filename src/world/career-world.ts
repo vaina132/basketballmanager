@@ -507,7 +507,7 @@ function checkLowerDivisions(world: CareerWorld, clubIds: ReadonlySet<string>): 
 export function validateWorld(value: unknown): asserts value is CareerWorld {
   if (isObject(value) && !Object.hasOwn(value, 'domesticLeagues') && validated.has(value)) return;
   const fail = (path: string, reason: string): never => { throw new Error(`Invalid career world: ${path} ${reason}.`); };
-  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : []), ...(isObject(value) && Object.hasOwn(value, 'europeanCompetitions') ? ['europeanCompetitions'] : []), ...(['europeanPlaces', 'backgroundLeagues', 'economy', 'neutralVenues', 'nextDivisionCountries', 'economyBalance', 'surplusSpending', 'spendingBalance', 'nba', 'nbaJobs', 'nbaTrades', 'longCareers'] as const).filter(key => isObject(value) && Object.hasOwn(value, key))])) fail('world', 'must contain exactly the world fields');
+  if (!exactKeys(value, [...WORLD_KEYS, ...(isObject(value) && Object.hasOwn(value, 'rosterModel') ? ['rosterModel'] : []), ...(isObject(value) && Object.hasOwn(value, 'domesticLeagues') ? ['domesticLeagues'] : []), ...(isObject(value) && Object.hasOwn(value, 'playerContracts') ? ['playerContracts'] : []), ...(isObject(value) && Object.hasOwn(value, 'lowerDivisions') ? ['lowerDivisions'] : []), ...(isObject(value) && Object.hasOwn(value, 'europeanCompetitions') ? ['europeanCompetitions'] : []), ...(['europeanPlaces', 'backgroundLeagues', 'economy', 'neutralVenues', 'nextDivisionCountries', 'economyBalance', 'surplusSpending', 'spendingBalance', 'nba', 'nbaJobs', 'nbaTrades', 'longCareers', 'careerBalance'] as const).filter(key => isObject(value) && Object.hasOwn(value, key))])) fail('world', 'must contain exactly the world fields');
   const world = value as unknown as CareerWorld;
   // Format 85: rule markers of new careers, true when recorded.
   for (const key of ['neutralVenues', 'nextDivisionCountries'] as const) if (Object.hasOwn(world, key) && world[key] !== true) fail(`world.${key}`, 'must be true when recorded');
@@ -522,6 +522,8 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
   // NBA step 9 (format 94): the NBA trades marker, only on worlds with the NBA's money rules.
   // Format 97: the long-careers fixes marker, only on worlds with researched money.
   if (Object.hasOwn(world, 'longCareers') && (world.longCareers !== true || !Object.hasOwn(world, 'economy'))) fail('world.longCareers', 'must be true and needs researched club money');
+  // Format 98: the board and career balance marker.
+  if (Object.hasOwn(world, 'careerBalance') && (world.careerBalance !== true || !Object.hasOwn(world, 'domesticLeagues'))) fail('world.careerBalance', 'must be true and needs domestic leagues');
   if (Object.hasOwn(world, 'nbaTrades') && (world.nbaTrades !== true || world.nba?.cap !== 'nba-cap-1')) fail('world.nbaTrades', 'must be true and needs the NBA\'s money rules');
   if (Object.hasOwn(world, 'rosterModel') && world.rosterModel !== FULL_ROSTER_MODEL) fail('world.rosterModel', 'has an unsupported value');
   if (!isText(world.id, 80) || !ID.test(world.id)) fail('world.id', 'must be a supported identifier');

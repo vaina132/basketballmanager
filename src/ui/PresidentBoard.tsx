@@ -9,6 +9,7 @@ import { getCareerPlayer } from '../world/player-catalog'
 import { dateForRound, seasonLabel } from '../world/season'
 import { Icon, type IconName } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
+import { CAREER_BALANCE_RULES, usesCareerBalance } from '../world/career-balance'
 import { formatMoney } from './money-format'
 
 /** Format 70 (board-2 careers): the president's profile, youth and culture objectives and requests on the Board page. */
@@ -29,7 +30,7 @@ function Status({ label, state }: { label: string; state: 'waiting' | 'concern' 
 export function PresidentProfile({ season }: { season: SeasonState }) {
   const clubId = season.managedClubId, world = worldOf(season), president = clubPresident(world, clubId), traits = presidentTraits(world, clubId)
   const terms = boardFundingTerms(season, clubId)
-  const ambition = Math.round((ambitionWinRate(0.5, traits) - 0.5) * 100)
+  const ambition = usesCareerBalance(season) ? (traits.ambition - 3) * Math.round(CAREER_BALANCE_RULES.ambitionStep * 100) : Math.round((ambitionWinRate(0.5, traits) - 0.5) * 100)
   const chance = Math.round(PRESIDENT_RULES.requests.weeklyChance[traits.interference - 1]! * 100)
   const salary = (['confident', 'concerned', 'pressure'] as const).map(verdict => salaryVerdictPercent(president.generosity, verdict))
   return <div className="board-president board-president-profile" data-board-president-profile={clubId}>

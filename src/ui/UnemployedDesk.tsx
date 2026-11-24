@@ -12,6 +12,7 @@ import { careerMoveOutcome } from './career-text'
 import { Icon } from './Icon'
 import { medicalDate } from './SeasonMedicalReport'
 import './unemployed-desk.css'
+import { careerBalanceNote } from '../world/career-balance'
 import { ClubBadge } from './ClubLogo'
 
 interface UnemployedDeskProps {
@@ -104,7 +105,7 @@ export function UnemployedDesk({ season, busy, onAccept, onOpenCompetitions, onO
             <div><dt>Based on</dt><dd>{reputation.seasons.map(item => `${seasonLabel(item.seasonNumber)}: ${item.confidence}`).join(' · ') || 'No final board review'}{reputation.resignations ? ` · −${reputation.resignations * CAREER_RULES.resignationReputationCost} for ${reputation.resignations === 1 ? 'a resignation' : `${reputation.resignations} resignations`}` : ''}</dd></div>
             <div><dt>Now</dt><dd>{reputation.value}<small>{reputation.value === reputation.base ? ' · unchanged so far' : ` · ${reputation.value < reputation.base ? 'faded' : 'recovered'} by ${Math.abs(reputation.base - reputation.value)}`}</small></dd></div>
           </dl>}
-          <p className="unemployed-note">{CAREER_RULES_TEXT.fade}</p>
+          <p className="unemployed-note">{CAREER_RULES_TEXT.fade}{careerBalanceNote(season)}</p>
         </section>
 
         <section className="panel unemployed-fixtures" aria-labelledby="unemployed-fixtures-title">

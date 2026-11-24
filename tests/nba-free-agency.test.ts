@@ -32,7 +32,7 @@ const world = worldFromPack(nbaPack([SPAIN]), ['acb', 'nba']);
 const play = (state: SeasonState) => advanceSeason(state.activeMatch && state.activeMatch.status !== 'finished' ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
 
 describe('the rules of NBA free agency and NBA-Europe moves', () => {
-  const state = createSeason({ seed: 3, world, managedClubId: 'acb-1', ...NEW_CAREER_SYSTEMS });
+  const state = createSeason({ seed: 3, world, managedClubId: 'acb-1', ...NEW_CAREER_SYSTEMS, playerDevelopment: false });
   const nbaPlayers = NBA_CLUB_IDS.flatMap(id => world.clubs.find(club => club.id === id)!.players.map(player => player.id));
   const star = nbaPlayers.find(id => isNbaLevel(state, id))!, fringe = nbaPlayers.find(id => !isNbaLevel(state, id))!;
   const opens = dateForRound(seasonRounds(state), 1), closes = addMarketDays(opens, MARKET_WINDOW_DAYS);
@@ -106,7 +106,7 @@ describe('the rules of NBA free agency and NBA-Europe moves', () => {
     envelope.formatVersion = 92; envelope.state.schemaVersion = 92;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/world\.nba\.moves.*format 93 or later/);
     const { cap: _cap, ...uncapped } = world.nba!;
-    expect(() => createSeason({ seed: 3, world: { ...world, nba: uncapped }, managedClubId: 'acb-1', ...NEW_CAREER_SYSTEMS })).toThrow(/world\.nba/);
+    expect(() => createSeason({ seed: 3, world: { ...world, nba: uncapped }, managedClubId: 'acb-1', ...NEW_CAREER_SYSTEMS, playerDevelopment: false })).toThrow(/world\.nba/);
   });
 });
 
@@ -114,7 +114,7 @@ describe('one automatic season and offseason of the NBA with Spain', () => {
   let complete: SeasonState, offseason: SeasonState, next: SeasonState;
   const nba = (clubId: string) => isNbaClub(world, clubId);
   beforeAll(() => {
-    let state = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: 'acb-1', ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: 'acb-1', ...NEW_CAREER_SYSTEMS, playerDevelopment: false }), true);
     const started = performance.now();
     while (state.status === 'active') state = play(state);
     complete = state;

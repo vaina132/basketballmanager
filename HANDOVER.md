@@ -85,7 +85,7 @@ This file holds only the current state, the next steps and the rules that must n
 
 **Code baseline:**
 - Save format **96** (`SEASON_SCHEMA_VERSION`; 89 spending balance, 90 the NBA, 91 NBA jobs, 92 NBA cap, 93 NBA moves, 94 NBA trades, 95 NBA draft, 96 NBA balance; older real-club careers are refused with a start-a-new-career message), `compact-3` encoding, `SAVE_CHECKS_VERSION` 6. (Formats 81 match flow, 82 real coaches, 83 European entry, all new careers only.)
-- Last verification (cloud, Linux, 23 November 2026, after format 88): full suite **3,287 passed, 300 files** (about 11 min, `--maxWorkers=4`), no stopgaps left from formats 86-88; `npm run build` passes with the known chunk-size advisory.
+- Last verification (cloud, Linux, 24 November 2026, release check after format 96 and the save-check fixes): full suite **3,484 passed, 324 files** (about 44 min, `--maxWorkers=3`, loaded machine); `npm run build` passes with the known chunk-size advisory. Release data check done (world-15). Long careers (10 seasons) running.
 - Cloud sessions: Node 24.22.3 in `/opt/node24` (put it first in `PATH`).
 
 **Sprint 3 in short** (details in `docs/handover-history.md`, search the step number): all 13 competitions imported and rated (3.1); save scaling (3.2); one shared calendar with byes and gates (3.3); each league's ranking rule, postseason, promotion and relegation, next divisions with real names (3.4); the EuroLeague, EuroCup and BCL in their real formats with background sides, estimated tables and European places (3.5); setup screen with flags, strength, Europe lists and measured speed and save size (3.6).

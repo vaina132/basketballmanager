@@ -243,7 +243,8 @@ export interface DomesticDivisions {
 /** Format 99 (owner decision 24 November 2026, provisional number): cash no longer piles up in new careers with researched club money (`world.cashBalance`, `src/world/cash-balance.ts`). */
 /** Format 100 (owner decision 24 November 2026, provisional number): EuroLeague clubs are bigger jobs than other top-division clubs in new careers without the NBA (`world.euroleagueJobs`, `src/world/euroleague-jobs.ts`). */
 /** Format 102 (owner decision 24 November 2026, provisional number): rich clubs with a full squad refresh it in new careers with the spending balance (`world.squadRefresh`, `src/world/squad-refresh.ts`). */
-export const SEASON_SCHEMA_VERSION = 102;
+/** Format 106 (owner data check 24 November 2026, provisional number; formats 103-105 are reserved for parallel work): generated people have nationalities and unique names from larger lists in new real-club careers (`world.generatedPeople`, `src/world/generated-people.ts`). */
+export const SEASON_SCHEMA_VERSION = 106;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

@@ -229,6 +229,12 @@ export interface CareerWorld {
    * (`src/world/squad-refresh.ts`).
    */
   squadRefresh?: true;
+  /**
+   * Format 106 (owner data check 24 November 2026, new real-club careers, option `generatedPeople`): generated people
+   * have a nationality and names from much larger lists, and no full name is used twice in the world
+   * (`src/world/generated-people.ts`, `src/data/generated-names.ts`).
+   */
+  generatedPeople?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

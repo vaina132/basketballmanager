@@ -113,6 +113,8 @@ import { NO_CLUB } from '../world/career-rules';
 import { createNegotiations } from '../world/negotiations';
 import { applyMarketEvent, createMarket } from '../world/market';
 import { usesNbaDraft } from '../world/nba-draft-policy';
+import { usesGeneratedPeople } from '../world/generated-people';
+import { countryFlagCode } from '../data/country-flags';
 import { rookieContract } from '../world/nba-draft';
 import type { DraftClass, SeasonDraft } from '../domain/draft';
 import { applyInSeasonEvent, createInSeasonRecruitment as createRecruitment } from '../world/recruitment';
@@ -153,7 +155,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 | 101 | 102;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 | 101 | 102 | 103 | 104 | 105 | 106;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -967,7 +969,10 @@ function validateAcademyShape(value: unknown, state: SeasonState, version: numbe
   const identities = new Set<string>();
   for (const [index, item] of (fields.prospects as unknown[]).entries()) {
     const path = `academy.prospects[${index}]`;
-    const prospect = record(item, path, ['player', 'dateOfBirth', 'seasonWage', 'clubId', 'intakeSeason', 'intakeRound']);
+    // Format 106 (`world.generatedPeople`): every prospect has a nationality with a flag; never in older careers.
+    const people = usesGeneratedPeople(state.world);
+    const prospect = record(item, path, ['player', 'dateOfBirth', 'seasonWage', 'clubId', 'intakeSeason', 'intakeRound', ...(people ? ['nationality'] : [])]);
+    if (people && (typeof prospect.nationality !== 'string' || !countryFlagCode(prospect.nationality))) fail(`${path}.nationality`, 'must name a country with a flag');
     const player = record(prospect.player, `${path}.player`, ['id', 'name', 'number', 'position', 'heightCm', 'weightKg', 'skinTone', 'hairColor', 'attributes']);
     if (typeof player.id !== 'string' || identities.has(player.id) || worldPlayer(worldOf(state), player.id)) fail(`${path}.player.id`, 'must identify a unique prospect outside the original player catalog');
     identities.add(player.id);
@@ -4135,6 +4140,9 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Format 79 guard: careers created with the richer play model (`plays-2`) need format 79 or later.
   // Format 81 guard: careers created with the dead balls of a real game (`plays-3`) need format 81 or later.
   if (Object.hasOwn(state, 'matchModel') && (state.matchModel === 'plays-3' ? version < 81 : state.matchModel !== 'plays-2' || version < 79)) fail('matchModel', 'must be plays-2 (format 79 or later) or plays-3 (format 81 or later)');
+  // Format 106 (owner data check 24 November 2026): nationalities and unique names of generated people are a rule of new
+  // careers only. Checked last, so an older file's own format checks report first.
+  if (version < 106 && state.world && Object.hasOwn(state.world, 'generatedPeople')) fail('world.generatedPeople', 'requires format 106 or later');
 }
 
 /** Validate every reference and committed round before replacing any live season. */

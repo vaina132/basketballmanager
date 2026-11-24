@@ -7,6 +7,8 @@ import type { CareerWorld, WorldContext } from '../domain/world';
 import { REAL_COACHES, REAL_COACH_POSTS, REAL_NBA_COACHES, REAL_NBA_COACH_POSTS, type RealCoach } from '../data/real-coaches';
 import { NATIONAL_TEAMS } from '../data/national-teams';
 import { countryName, nameCapacity, NAME_COUNTRIES } from '../data/people-names';
+import { generatedNationality, generatedPersonName, nameKey } from '../data/generated-names';
+import { peopleCountry, reservedNames, usesGeneratedPeople } from './generated-people';
 import { COACH_LEVELS, coachAge, coachHash, coachOverall, estimateCoach, NO_TITLES } from './coach-ratings';
 import { careerPointKey } from './career-rules';
 import { clubCountry, isNbaClub, seasonRounds, worldOf } from './career-world';
@@ -98,6 +100,16 @@ function generatedName(country: string | null, key: string, taken: Set<string>):
   return { name: `Coach ${taken.size + 1}`, nationality: chosen };
 }
 
+/**
+ * Format 106 (`world.generatedPeople`): a generated coach's nationality (the club's country 80% of the time, else a
+ * coaching country) and a name of the larger lists for his kind (`coach` for opening and market coaches, `coach-hire`
+ * for coaches created when nobody is free), clear of `taken` (name keys: the world's reserved names and coaches so far).
+ */
+function generatedPerson(country: string | null, key: string, kind: 'coach' | 'coach-hire', taken: Set<string>): { name: string; nationality: string } {
+  const nationality = generatedNationality('coach', country, coachHash(`coach-nationality|${key}`));
+  return { name: generatedPersonName(nationality, kind, coachHash(`coach-person|${key}`), taken), nationality };
+}
+
 /** A generated coach's birth year: 38 to 61 at the career's start, from his key. */
 const generatedBorn = (key: string, startDate: string) => String(Number(startDate.slice(0, 4)) - 38 - coachHash(`born|${key}`) % 24);
 
@@ -107,6 +119,9 @@ export function coachWorld(world: CareerWorld): CoachWorld {
   const coaches = new Map<string, HeadCoach>(), opening = new Map<string, string>(), national = new Map<string, string>(), pull = new Map<string, number>();
   const nbaJobs = usesNbaJobs(world);
   const taken = new Set<string>([...REAL_COACHES.map(coach => coach.name), ...(nbaJobs ? REAL_NBA_COACHES.map(coach => coach.name) : [])]);
+  // Format 106: name keys of every name in use (the world's reserved names include every real coach).
+  const people = usesGeneratedPeople(world) ? new Set(reservedNames(world)) : null;
+  const name = (country: string | null, key: string) => people ? generatedPerson(country, key, 'coach', people) : generatedName(country, key, taken);
   const real = (coach: RealCoach) => { if (!coaches.has(coach.id)) coaches.set(coach.id, estimateCoach(coach.id, coach, coach.level, world.startDate)); return coaches.get(coach.id)!; };
   for (const club of world.clubs) {
     // NBA step 10 (format 91): NBA clubs of an NBA career start with their real head coaches.
@@ -120,9 +135,9 @@ export function coachWorld(world: CareerWorld): CoachWorld {
       continue;
     }
     const level = worldClubLevel(world, club.id), key = `club|${club.id}`;
-    const country = world.domesticLeagues?.find(league => league.clubIds.includes(club.id))?.country ?? world.backgroundLeagues?.find(league => league.clubIds.includes(club.id))?.country ?? world.lowerDivisions?.find(division => 'clubIds' in division ? division.clubIds.includes(club.id) : division.clubs.some(item => item.id === club.id))?.country ?? null;
-    const { name, nationality } = generatedName(country, key, taken);
-    const coach = estimateCoach(`coach-gen-${club.id}`, { name, born: generatedBorn(key, world.startDate), nationality, since: null, titles: NO_TITLES }, level, world.startDate, true);
+    const country = world.domesticLeagues?.find(league => league.clubIds.includes(club.id))?.country ?? world.backgroundLeagues?.find(league => league.clubIds.includes(club.id))?.country ?? world.lowerDivisions?.find(division => 'clubIds' in division ? division.clubIds.includes(club.id) : division.clubs.some(item => item.id === club.id))?.country ?? (people ? peopleCountry(world, club.id) : null);
+    const { name: coachName, nationality } = name(country, key);
+    const coach = estimateCoach(`coach-gen-${club.id}`, { name: coachName, born: generatedBorn(key, world.startDate), nationality, since: null, titles: NO_TITLES }, level, world.startDate, true);
     coaches.set(coach.id, coach);
     opening.set(club.id, coach.id);
     pull.set(club.id, Math.max(coach.reputation, levelPull(level)));
@@ -136,16 +151,18 @@ export function coachWorld(world: CareerWorld): CoachWorld {
   const marketIds = (seasonNumber: number) => {
     let ids = marketCache.get(seasonNumber);
     if (ids) return ids;
+    // Format 106: earlier markets first, so a market's names never depend on which season was asked for first.
+    if (people && seasonNumber > 1) marketIds(seasonNumber - 1);
     const count = seasonNumber === 1 ? COACH_RULES.openingMarket : COACH_RULES.seasonMarket;
     ids = [];
     for (let k = 1; k <= count; k += 1) {
       const id = `coach-market-s${seasonNumber}-${k}`, key = `market|${seasonNumber}|${k}`;
       if (!coaches.has(id)) {
         const country = countries.length ? countries[coachHash(key) % countries.length]! : null;
-        const { name, nationality } = generatedName(country, key, taken);
+        const { name: coachName, nationality } = name(country, key);
         const born = String(Number(world.startDate.slice(0, 4)) + seasonNumber - 1 - 36 - coachHash(`born|${key}`) % 20);
         const level = [COACH_LEVELS.second, COACH_LEVELS.top, COACH_LEVELS.top, COACH_LEVELS.european][coachHash(`level|${key}`) % 4]!;
-        coaches.set(id, estimateCoach(id, { name, born, nationality, since: null, titles: NO_TITLES }, level, world.startDate, true));
+        coaches.set(id, estimateCoach(id, { name: coachName, born, nationality, since: null, titles: NO_TITLES }, level, world.startDate, true));
       }
       ids.push(id);
     }
@@ -254,8 +271,11 @@ function hireFromMarket(world: CareerWorld, pool: CoachWorld, free: readonly str
   if (!pool.coaches.has(id)) {
     const taken = new Set([...pool.coaches.values()].map(coach => coach.name)), key = `hire|${id}`;
     // Format 85: a promoted next-division club has its country (`clubCountry`); older careers find only opening leagues.
-    const country = clubCountry(world, restart.clubId);
-    const { name, nationality } = generatedName(country, key, taken);
+    const country = clubCountry(world, restart.clubId) ?? (usesGeneratedPeople(world) ? peopleCountry(world, restart.clubId) : null);
+    // Format 106: a coach of the larger lists, clear of the world's names and of every coach so far.
+    const { name, nationality } = usesGeneratedPeople(world)
+      ? generatedPerson(country, key, 'coach-hire', new Set([...reservedNames(world), ...[...pool.coaches.values()].map(coach => nameKey(coach.name))]))
+      : generatedName(country, key, taken);
     (pool.coaches as Map<string, HeadCoach>).set(id, estimateCoach(id, { name, born: generatedBorn(key, world.startDate), nationality, since: null, titles: NO_TITLES }, worldClubLevel(world, restart.clubId), world.startDate, true));
   }
   return id;

@@ -8,6 +8,7 @@ import type { Team } from '../domain/types';
 import type { TrainingFocus, TrainingPoints } from '../domain/training';
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { generateAcademyProspects } from './academy-generation';
+import { academyTakenNames, peopleCountry, usesGeneratedPeople } from './generated-people';
 import { ACADEMY_GRADUATION_AGE, ACADEMY_WEEKLY_POINTS, academyPointCap, developAcademyPlayer, emptyAcademyPoints, getAcademyCapacity, getAcademyProspect } from './academy-policy';
 import { submitInSeasonOffer, withdrawInSeasonOffer } from './recruitment';
 import { dateForRound } from './season';
@@ -23,13 +24,15 @@ export function createAcademy(): SeasonAcademy { return { model: 'academy-1', en
 
 function intake(state: SeasonState, initial: boolean): SeasonState {
   let academy = state.academy;
+  // Format 106: nationalities and names clear of every name in use (built once, then each new prospect's name joins).
+  const world = worldOf(state), taken = usesGeneratedPeople(world) ? academyTakenNames(world, academy) : null;
   for (const club of state.clubs) {
     // NBA step 4: NBA clubs have no academy (their young players come through the draft).
     if (!clubHasAcademy(worldOf(state), club.id)) continue;
     if (academy.intakes.some(record => record.clubId === club.id && record.seasonNumber === state.seasonNumber && !record.source)) continue;
     const active = academy.prospects.filter(prospect => prospect.clubId === club.id && !academy.graduates.some(graduate => graduate.prospectId === prospect.player.id)).length;
     const count = initial ? 3 : Math.min(2, Math.max(0, getAcademyCapacity(state) - active));
-    const prospects = prospectsWithExtras(worldOf(state), generateAcademyProspects(state.seed, club.id, state.seasonNumber, state.round, initial, count), state.date);
+    const prospects = prospectsWithExtras(worldOf(state), generateAcademyProspects(state.seed, club.id, state.seasonNumber, state.round, initial, count, taken ? { country: peopleCountry(world, club.id), taken } : undefined), state.date);
     academy = { ...academy, prospects: [...academy.prospects, ...prospects], intakes: [...academy.intakes, { id: `academy-intake-${academy.intakes.length + 1}`, clubId: club.id, seasonNumber: state.seasonNumber, round: state.round, date: state.date, initial, prospectIds: prospects.map(prospect => prospect.player.id) }], focus: { ...academy.focus, ...Object.fromEntries(prospects.map(prospect => [prospect.player.id, 'balanced' as const])) }, points: { ...academy.points, ...Object.fromEntries(prospects.map(prospect => [prospect.player.id, emptyAcademyPoints()])) } };
   }
   return academy === state.academy ? state : { ...state, academy };

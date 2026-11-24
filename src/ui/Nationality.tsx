@@ -2,6 +2,7 @@ import type { SeasonState } from '../domain/season'
 import { countryFlagCode } from '../data/country-flags'
 import { staffNationality } from '../data/staff-directory'
 import { worldOf } from '../world/career-world'
+import { careerPlayerNationality } from '../world/generated-people'
 import { CountryFlag } from './CountryFlag'
 import { NATIONALITY_SUGGESTIONS } from './nationality-suggestions'
 
@@ -13,8 +14,8 @@ import { NATIONALITY_SUGGESTIONS } from './nationality-suggestions'
  */
 export function playerNationality(season: SeasonState | null, playerId: string): string | null {
   if (!season) return null
-  const profiles = worldOf(season).playerProfiles
-  const country = Object.hasOwn(profiles, playerId) ? profiles[playerId]!.nationality : undefined
+  // Format 106: academy prospects and draft prospects carry their own nationality (`careerPlayerNationality`).
+  const country = careerPlayerNationality({ academy: season.academy, ...(season.draft ? { draft: season.draft } : {}), world: worldOf(season) }, playerId)
   return countryFlagCode(country) ? country! : null
 }
 

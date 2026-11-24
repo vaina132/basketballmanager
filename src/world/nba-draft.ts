@@ -7,6 +7,9 @@ import { withExtraAttributes } from './extra-attributes';
 import { realWorldWage } from './real-world';
 import { NBA_SALARY_CAP, NBA_LOWEST_MINIMUM } from './nba-cap';
 import { memoizePure } from './pure-cache';
+import type { CareerWorld } from '../domain/world';
+import { generatedNationality, generatedPersonName, nameKey, peopleHash } from '../data/generated-names';
+import { reservedNames } from './generated-people';
 
 /**
  * NBA step 8 (format 95, provisional): the NBA draft's pure rules: the generated prospects of a class, the lottery and
@@ -103,8 +106,8 @@ export const draftProspectId = (seasonNumber: number, n: number) => `nba-draft-s
  * and the season like `generateLowerDivisionSquad`, so the save check derives the same class again.
  */
 export const generateDraftClass = memoizePure((key: string): readonly DraftProspect[] => {
-  const [seedText, seasonText, draftDay, extrasText] = key.split('|');
-  const seed = Number(seedText), seasonNumber = Number(seasonText), extras = extrasText === '1', year = Number(draftDay!.slice(0, 4));
+  const [seedText, seasonText, draftDay, extrasText, peopleText] = key.split('|');
+  const seed = Number(seedText), seasonNumber = Number(seasonText), extras = extrasText === '1', people = peopleText === 'g', year = Number(draftDay!.slice(0, 4));
   const rules = NBA_DRAFT_RULES, totalWeight = rules.ages.reduce((sum, [, weight]) => sum + weight, 0);
   const usedNames = new Set<string>();
   const prospects: DraftProspect[] = [];
@@ -119,6 +122,20 @@ export const generateDraftClass = memoizePure((key: string): readonly DraftProsp
     const target = Math.round(rankRating(n) + value('rating', rules.ratingSpread * 2 + 1) - rules.ratingSpread);
     const skills = attributesFor(target, position, key => key === 'stamina' ? rules.staminaShift + value('stamina', 3) - 1 : value(key, 3) - 1);
     const [low, high] = HEIGHTS[position], heightCm = low + value('height', high - low + 1);
+    // Format 106 (`world.generatedPeople`): the nationality from the weighted international list; the name is given by
+    // `draftClassProspects` from the world's names in use.
+    if (people) {
+      const nationality = draftNationality(seed, seasonNumber, n);
+      const attributes = extras ? withExtraAttributes({ id, position, heightCm, attributes: skills, age, minutes: 0 }) : skills;
+      const positionIndex = POSITIONS.indexOf(position);
+      const player: Player = {
+        id, name: id, number: value('number', 100), position, heightCm, weightKg: 84 + positionIndex * 6 + value('weight', 10),
+        skinTone: ['#e8b58e', '#c98c62', '#a96f49', '#774d35', '#edc5a1'][value('skin', 5)]!, hairColor: ['#29201b', '#553b29', '#191919', '#8b6744'][value('hair', 4)]!, attributes,
+      };
+      const birthday = `${String(1 + value('month', 12)).padStart(2, '0')}-${String(1 + value('day', 28)).padStart(2, '0')}`;
+      prospects.push({ player, dateOfBirth: `${year - age - (birthday > draftDay!.slice(5) ? 1 : 0)}-${birthday}`, nationality, wage: realWorldWage(overallRating(attributes, position)) });
+      continue;
+    }
     const international = value('international', 1000) < rules.internationalShare * 1000;
     const country = international ? INTERNATIONAL[value('country', INTERNATIONAL.length)]! : 'United States';
     let name: string | null = null;
@@ -138,8 +155,44 @@ export const generateDraftClass = memoizePure((key: string): readonly DraftProsp
   return Object.freeze(prospects);
 });
 
-/** The class of a career's season (see `generateDraftClass`). */
-export const draftClassProspects = (seed: number, seasonNumber: number, draftDay: string, extras: boolean): readonly DraftProspect[] => generateDraftClass(`${seed}|${seasonNumber}|${draftDay}|${extras ? 1 : 0}`);
+/** Format 106: a prospect's nationality, from the career seed and his place in the class only (never the draft day). */
+export function draftNationality(seed: number, seasonNumber: number, n: number): string {
+  return generatedNationality('draft', 'USA', peopleHash(seed, `${draftProspectId(seasonNumber, n)}:nationality`));
+}
+
+const draftNames = new WeakMap<CareerWorld, Map<string, readonly string[]>>();
+/**
+ * Format 106: the names of a class, in class order: from the larger name lists by nationality, clear of the world's
+ * reserved names and of every earlier class (derived again from the seed), so no draft prospect ever repeats a name.
+ */
+export function draftClassNames(world: CareerWorld, seed: number, seasonNumber: number): readonly string[] {
+  let byWorld = draftNames.get(world);
+  if (!byWorld) { byWorld = new Map(); draftNames.set(world, byWorld); }
+  const key = `${seed}|${seasonNumber}`, known = byWorld.get(key);
+  if (known) return known;
+  const taken = new Set(reservedNames(world));
+  for (let earlier = 1; earlier < seasonNumber; earlier += 1) for (const name of draftClassNames(world, seed, earlier)) taken.add(nameKey(name));
+  const names = Array.from({ length: NBA_DRAFT_RULES.prospects }, (_, index) => {
+    const n = index + 1;
+    return generatedPersonName(draftNationality(seed, seasonNumber, n), 'draft', peopleHash(seed, `${draftProspectId(seasonNumber, n)}:name`), taken);
+  });
+  byWorld.set(key, names);
+  return names;
+}
+
+const namedClasses = new WeakMap<CareerWorld, Map<string, readonly DraftProspect[]>>();
+/** The class of a career's season (see `generateDraftClass`); format-106 worlds (`world.generatedPeople`) name it with `draftClassNames`. */
+export function draftClassProspects(seed: number, seasonNumber: number, draftDay: string, extras: boolean, world?: CareerWorld): readonly DraftProspect[] {
+  if (!world?.generatedPeople) return generateDraftClass(`${seed}|${seasonNumber}|${draftDay}|${extras ? 1 : 0}`);
+  let byWorld = namedClasses.get(world);
+  if (!byWorld) { byWorld = new Map(); namedClasses.set(world, byWorld); }
+  const key = `${seed}|${seasonNumber}|${draftDay}|${extras ? 1 : 0}|g`, known = byWorld.get(key);
+  if (known) return known;
+  const names = draftClassNames(world, seed, seasonNumber);
+  const named = Object.freeze(generateDraftClass(key).map((prospect, index) => ({ ...prospect, player: { ...prospect.player, name: names[index]! } })));
+  byWorld.set(key, named);
+  return named;
+}
 
 /**
  * The lottery (2019 odds): four picks drawn among the 14 clubs outside the playoffs (worst record first), each draw

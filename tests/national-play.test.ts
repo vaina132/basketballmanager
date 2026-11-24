@@ -31,7 +31,7 @@ function playUntil(start: SeasonState, until: (state: SeasonState) => boolean, o
 }
 
 describe('national windows in play (format 80)', () => {
-  const start = createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false });
+  const start = createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, positionProfiles: false });
 
   it('calls up players, plays the November window and replays national duty in the strict training check', () => {
     // At round 11 the November window is within two weeks: the club sees who would be called up.
@@ -107,7 +107,7 @@ describe('national windows in play (format 80)', () => {
   it('records injuries from national games: the player returns to his club injured (strict check included)', () => {
     // Seed 24 (11 before head coaches steered computer clubs, format 86): a player of the manager's club is injured with
     // his national team in the November window, and so is a computer club's player.
-    const career = createSeason({ seed: 24, world, managedClubId: world.clubs[4]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false });
+    const career = createSeason({ seed: 24, world, managedClubId: world.clubs[4]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, positionProfiles: false });
     const after = playUntil(career, state => state.round === 13);
     const national = after.injuries.filter(injury => isNationalFixtureId(injury.fixtureId));
     const own = national.find(injury => injury.clubId === after.managedClubId)!;
@@ -131,7 +131,7 @@ describe('national windows in play (format 80)', () => {
   }, 600_000);
 
   it('an unemployed manager plays his national games live: Continue stops for them in the Match center', () => {
-    const career = createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false });
+    const career = createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, positionProfiles: false });
     let state = resignManager(career, NO_CLUB);
     expect(isUnemployed(state)).toBe(true);
     state = offerNationalJob(state, 'nation-tur');
@@ -163,7 +163,7 @@ describe('national windows in play (format 80)', () => {
     // format-80 career played its matches on the plays-2 engine (the match flow of format 81 came later), so this career
     // keeps it on purpose.
     // Nor did it have head coaches who steer computer clubs (format 86).
-    const played = playUntil(createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, matchFlow: false, coachSteering: false, careerBalance: false }), state => state.round === 13);
+    const played = playUntil(createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, positionProfiles: false, matchFlow: false, coachSteering: false, careerBalance: false }), state => state.round === 13);
     expect(played.injuries.some(injury => isNationalFixtureId(injury.fixtureId))).toBe(false);
     const hired = acceptNationalOffer(offerNationalJob(played, 'nation-tur'), `national-offer-test-nation-tur-${played.date}`);
     // The earlier shape: results without injury records, the national record without earnings.

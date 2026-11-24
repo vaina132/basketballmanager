@@ -67,7 +67,7 @@ describe('the cash balance marker (format 99)', () => {
     const envelope = JSON.parse(serializeSeason(state));
     envelope.formatVersion = 98; envelope.state.schemaVersion = 98;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/cashBalance.*format 99/);
-    const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, cashBalance: false, squadRefresh: false, playerDevelopment: false })));
+    const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, cashBalance: false, squadRefresh: false, playerDevelopment: false, positionProfiles: false })));
     older.formatVersion = 98; older.state.schemaVersion = 98;
     expect(parseSeason(JSON.stringify(older)).world!.cashBalance).toBeUndefined();
     const bad = JSON.parse(serializeSeason(state));

@@ -235,6 +235,12 @@ export interface CareerWorld {
    * gains at high skill levels, earlier and faster decline, and occasional setbacks.
    */
   playerDevelopment?: true;
+  /**
+   * Format 105 (new real-data careers, option `positionProfiles`): generated players (academy prospects, NBA draft
+   * prospects) are shaped like real players of their position (`src/world/position-profiles.ts`), so league shooting
+   * profiles stay realistic as real players retire.
+   */
+  positionProfiles?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

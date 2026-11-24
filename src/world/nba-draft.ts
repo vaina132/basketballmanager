@@ -2,6 +2,7 @@ import type { DraftLottery, DraftProspect } from '../domain/draft';
 import type { Player, Position } from '../domain/types';
 import { countryName, nameCapacity, NAME_COUNTRIES } from '../data/people-names';
 import { attributesFor } from './lower-division';
+import { profiledAttributesFor } from './position-profiles';
 import { overallRating } from './overall-rating';
 import { withExtraAttributes } from './extra-attributes';
 import { realWorldWage } from './real-world';
@@ -103,8 +104,8 @@ export const draftProspectId = (seasonNumber: number, n: number) => `nba-draft-s
  * and the season like `generateLowerDivisionSquad`, so the save check derives the same class again.
  */
 export const generateDraftClass = memoizePure((key: string): readonly DraftProspect[] => {
-  const [seedText, seasonText, draftDay, extrasText] = key.split('|');
-  const seed = Number(seedText), seasonNumber = Number(seasonText), extras = extrasText === '1', year = Number(draftDay!.slice(0, 4));
+  const [seedText, seasonText, draftDay, extrasText, profilesText] = key.split('|');
+  const seed = Number(seedText), seasonNumber = Number(seasonText), extras = extrasText === '1', profiles = profilesText === 'p', year = Number(draftDay!.slice(0, 4));
   const rules = NBA_DRAFT_RULES, totalWeight = rules.ages.reduce((sum, [, weight]) => sum + weight, 0);
   const usedNames = new Set<string>();
   const prospects: DraftProspect[] = [];
@@ -117,7 +118,9 @@ export const generateDraftClass = memoizePure((key: string): readonly DraftProsp
     let age: number = rules.ages[0]![0];
     for (const [candidate, weight] of rules.ages) { if (ageRoll < weight) { age = candidate; break; } ageRoll -= weight; }
     const target = Math.round(rankRating(n) + value('rating', rules.ratingSpread * 2 + 1) - rules.ratingSpread);
-    const skills = attributesFor(target, position, key => key === 'stamina' ? rules.staminaShift + value('stamina', 3) - 1 : value(key, 3) - 1);
+    // Format 105 (`world.positionProfiles`): shaped like real NBA players of the position at the target rating, whose
+    // stamina already sits low at a rookie's rating (so no extra stamina shift).
+    const skills = profiles ? profiledAttributesFor(target, position, 'nba', key => value(key, 3) - 1) : attributesFor(target, position, key => key === 'stamina' ? rules.staminaShift + value('stamina', 3) - 1 : value(key, 3) - 1);
     const [low, high] = HEIGHTS[position], heightCm = low + value('height', high - low + 1);
     const international = value('international', 1000) < rules.internationalShare * 1000;
     const country = international ? INTERNATIONAL[value('country', INTERNATIONAL.length)]! : 'United States';
@@ -139,7 +142,7 @@ export const generateDraftClass = memoizePure((key: string): readonly DraftProsp
 });
 
 /** The class of a career's season (see `generateDraftClass`). */
-export const draftClassProspects = (seed: number, seasonNumber: number, draftDay: string, extras: boolean): readonly DraftProspect[] => generateDraftClass(`${seed}|${seasonNumber}|${draftDay}|${extras ? 1 : 0}`);
+export const draftClassProspects = (seed: number, seasonNumber: number, draftDay: string, extras: boolean, profiles = false): readonly DraftProspect[] => generateDraftClass(`${seed}|${seasonNumber}|${draftDay}|${extras ? 1 : 0}${profiles ? '|p' : ''}`);
 
 /**
  * The lottery (2019 odds): four picks drawn among the 14 clubs outside the playoffs (worst record first), each draw

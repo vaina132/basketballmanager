@@ -40,7 +40,7 @@ describe('the player development marker (format 101)', () => {
     const envelope = JSON.parse(serializeSeason(state));
     envelope.formatVersion = 100; envelope.state.schemaVersion = 100;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/playerDevelopment.*format 101/);
-    const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world: packWorld, managedClubId: 'acb-6', ...NEW_CAREER_SYSTEMS, playerDevelopment: false })));
+    const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world: packWorld, managedClubId: 'acb-6', ...NEW_CAREER_SYSTEMS, playerDevelopment: false, squadRefresh: false, positionProfiles: false })));
     older.formatVersion = 100; older.state.schemaVersion = 100;
     expect(parseSeason(JSON.stringify(older)).world!.playerDevelopment).toBeUndefined();
   }, 120_000);

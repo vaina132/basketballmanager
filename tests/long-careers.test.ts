@@ -38,7 +38,7 @@ describe('the long-careers marker (format 97)', () => {
     envelope.formatVersion = 96; envelope.state.schemaVersion = 96;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/longCareers.*format 97/);
     // A format-96 career (no marker) still loads.
-    const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world, managedClubId: 'acb-9', ...NEW_CAREER_SYSTEMS, longCareers: false, careerBalance: false, cashBalance: false, squadRefresh: false, playerDevelopment: false })));
+    const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world, managedClubId: 'acb-9', ...NEW_CAREER_SYSTEMS, longCareers: false, careerBalance: false, cashBalance: false, squadRefresh: false, playerDevelopment: false, positionProfiles: false })));
     older.formatVersion = 96; older.state.schemaVersion = 96;
     expect(parseSeason(JSON.stringify(older)).world!.longCareers).toBeUndefined();
     const unpriced = JSON.parse(serializeSeason(state));

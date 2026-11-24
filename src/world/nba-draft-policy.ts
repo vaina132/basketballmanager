@@ -10,6 +10,7 @@ import { clubRosterLimit } from './club-roster-policy';
 import { draftClassOf, isDraftComplete, nbaDraftDay, NBA_DRAFT_PICKS } from './draft-index';
 import { contractForSeason, getClubContractSummary } from './employment-policy';
 import { storesExtraAttributes } from './extra-attributes';
+import { usesPositionProfiles } from './position-profiles';
 import { addMarketDays, getMarketWindow, isLiveMarketOffer, MARKET_WINDOW_DAYS } from './market-policy';
 import type { MarketOffer } from '../domain/market';
 import { bestAvailable, draftClassProspects, draftOrder, drawLottery, NBA_DRAFT_RULES, rookieContract, type DraftCandidate } from './nba-draft';
@@ -88,7 +89,7 @@ export function openDraft(state: SeasonState): SeasonState {
   const standings = draftStandings(seasonGames(state), state.seasonNumber);
   if (!standings) throw new Error('The draft needs the NBA\'s final standings.');
   const lottery = drawLottery(state.seed, state.seasonNumber, standings.lottery);
-  const prospects = draftClassProspects(state.seed, state.seasonNumber, state.date, storesExtraAttributes(worldOf(state)));
+  const prospects = draftClassProspects(state.seed, state.seasonNumber, state.date, storesExtraAttributes(worldOf(state)), usesPositionProfiles(worldOf(state)));
   const europeans = europeanProspects(state);
   const entry: DraftClass = { seasonNumber: state.seasonNumber, date: state.date, lottery, order: draftOrder(lottery, standings.worstFirst), prospects: [...prospects], ...(europeans.length ? { europeans } : {}), picks: [] };
   const conditions = { ...state.conditions };
@@ -244,7 +245,7 @@ export function draftVisible(state: SeasonState): boolean {
 /** This season's prospects: the recorded class, or the class that draft day will bring (the same players). */
 export function seasonProspects(state: SeasonState): readonly DraftProspect[] {
   const recorded = draftClassOf(state, state.seasonNumber);
-  return recorded?.prospects ?? draftClassProspects(state.seed, state.seasonNumber, draftDayOf(state), storesExtraAttributes(worldOf(state)));
+  return recorded?.prospects ?? draftClassProspects(state.seed, state.seasonNumber, draftDayOf(state), storesExtraAttributes(worldOf(state)), usesPositionProfiles(worldOf(state)));
 }
 
 /** The lottery and order once the play-in has decided the field (the recorded ones from draft day). */

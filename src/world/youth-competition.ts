@@ -1,6 +1,7 @@
 import type { WorldContext } from '../domain/world';
 import { clubHasAcademy, worldOf } from './career-world';
 import { prospectsWithExtras } from './extra-attributes';
+import { usesPositionProfiles } from './position-profiles';
 import { financeLedgerCount } from './finance-ledger';
 import type { SeasonAcademy } from '../domain/academy';
 import type { SeasonInjury, SeasonState, Standing } from '../domain/season';
@@ -127,7 +128,7 @@ function supplement(state: SeasonState): { academy: SeasonAcademy; intakeIds: st
     if (!clubHasAcademy(worldOf(state), club.id)) continue;
     if (academy.intakes.some(entry => entry.clubId === club.id && entry.seasonNumber === state.seasonNumber && entry.source === 'youth-squad')) throw new Error('Supplement each youth squad at most once per season.');
     const current = academy.prospects.filter(prospect => prospect.clubId === club.id && getAcademyProspect({ ...state, academy }, prospect.player.id));
-    const prospects = prospectsWithExtras(worldOf(state), generateYouthSquadProspects(state.seed, club.id, state.seasonNumber, state.round, current, Math.max(0, YOUTH_SQUAD_SIZE - current.length)), state.date);
+    const prospects = prospectsWithExtras(worldOf(state), generateYouthSquadProspects(state.seed, club.id, state.seasonNumber, state.round, current, Math.max(0, YOUTH_SQUAD_SIZE - current.length), usesPositionProfiles(worldOf(state))), state.date);
     const id = `academy-intake-${academy.intakes.length + 1}`;
     academy = { ...academy, prospects: [...academy.prospects, ...prospects], intakes: [...academy.intakes, { id, clubId: club.id, seasonNumber: state.seasonNumber, round: state.round, date: state.date, initial: false, source: 'youth-squad', prospectIds: prospects.map(prospect => prospect.player.id) }], points: { ...academy.points, ...Object.fromEntries(prospects.map(prospect => [prospect.player.id, emptyAcademyPoints()])) }, focus: { ...academy.focus, ...Object.fromEntries(prospects.map(prospect => [prospect.player.id, 'balanced' as const])) } };
     intakeIds.push(id);
